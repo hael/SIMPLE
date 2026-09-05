@@ -267,6 +267,51 @@ void f2cstr(char* f_str, char* c_str, unsigned length)
     /* fprintf (stderr, "f2cstr out '%s'\n", c_str); */
 }
 
+int simple_sync_file_path(const char *path)
+{
+#ifdef _WIN32
+    HANDLE handle = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    int status;
+    if(handle == INVALID_HANDLE_VALUE) return -1;
+    status = FlushFileBuffers(handle) ? 0 : -1;
+    CloseHandle(handle);
+    return status;
+#else
+    int fd = open(path, O_RDONLY);
+    int status;
+    if(fd < 0) return -1;
+    status = fsync(fd);
+    if(close(fd) != 0 && status == 0) status = -1;
+    return status;
+#endif
+}
+
+int simple_sync_directory_path(const char *path)
+{
+#ifdef _WIN32
+    (void)path;
+    return 0;
+#else
+    int fd = open(path, O_RDONLY);
+    int status;
+    if(fd < 0) return -1;
+    status = fsync(fd);
+    if(close(fd) != 0 && status == 0) status = -1;
+    return status;
+#endif
+}
+
+int simple_atomic_replace_path(const char *source, const char *destination)
+{
+#ifdef _WIN32
+    return MoveFileExA(source, destination,
+        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) ? 0 : -1;
+#else
+    return rename(source, destination);
+#endif
+}
+
 int simple_redirect_output(char *path, int *len)
 {
 #ifdef _WIN32

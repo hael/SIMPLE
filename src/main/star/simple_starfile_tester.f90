@@ -54,7 +54,6 @@ contains
         call test_write_ptcl2D_parallel_vs_serial()
         ! --- verbose flag does not alter output ---
         call test_verbose_flag_no_content_change()
-        call report_summary()
     end subroutine run_all_starfile_tests
 
     !=======================================================================

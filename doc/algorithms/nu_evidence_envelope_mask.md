@@ -1,13 +1,11 @@
-# NU-Evidence Envelope Mask in `nu_filt3D`
+# NU-Evidence Envelope Masking
 
-## Purpose
+## Problem
 
-`nu_filt3D` can derive a soft molecular envelope from the same cross-half
-prediction errors used by the nonuniform filter. Enable it with:
-
-```text
-nu_envmsk=yes
-```
+Derive a soft molecular envelope from the same cross-half prediction errors
+that drive [nonuniform filtering](nonuniform_filtering.md), so that the mask
+selects voxels where the two half maps *agree* rather than voxels that are
+merely dense. The estimator is opt-in (`nu_envmsk=yes`).
 
 The envelope measures reproducible, locally ordered signal. It is not a density
 threshold and is not the map of selected NU low-pass labels. This distinction
@@ -21,7 +19,7 @@ The even and odd half maps must have the same dimensions and sampling distance.
 objective, evidence statistics, and envelope segmentation; neither a density
 automask nor the resulting evidence envelope can replace it.
 
-The standalone command evaluates the static low-pass bank
+The static low-pass bank is
 
 ```text
 20, 15, 12, 10, 8, 6, 5, 4 A.
@@ -106,16 +104,15 @@ is equivalent to smoothing baseline and best terms identically. It avoids the
 boundary bias that would result from comparing costs smoothed at their
 candidate-dependent NU scales.
 
-The production evidence value is the smoothed absolute improvement:
+The evidence value is the smoothed absolute improvement:
 
 \[
 e(v)=\widetilde D(v).
 \]
 
-This absolute margin matches the candidate-independent, noise-normalized Huber
-objective directly. A scale-free cost-ratio variant remains available inside
-the NU module for diagnostic regression tests, but `nu_filt3D` deliberately
-does not expose it as a second production evidence definition.
+An absolute margin is used, rather than a baseline-to-best ratio, because the
+Huber costs are already noise-normalized and candidate-independent; a ratio
+would let a high-contrast core outvote weak but ordered density.
 
 ## Robust Evidence Score
 
@@ -175,10 +172,9 @@ The binary MRF result is converted to the final soft envelope as follows:
 4. grow the binary field by 1 A; and
 5. apply a cosine soft edge of 6 A.
 
-The two physical lengths are converted independently to the nearest number of
-voxels from the input-map sampling distance, with a minimum of one voxel. Thus
-the current 1-voxel growth and 6-voxel edge are reproduced exactly at 1 A/pixel,
-while the physical finish remains approximately constant for other samplings.
+Both lengths are converted to voxels from the map's sampling distance (at
+least one voxel), so the physical finish is approximately constant across
+samplings.
 
 Keeping components relative to the largest, rather than keeping only one
 component, permits separated ordered domains to survive when their linker is
@@ -207,8 +203,7 @@ The remaining algorithm parameters are fixed but retain explicit roles:
 
 ## Outputs and Interpretation
 
-With envelope generation enabled, `nu_filt3D` writes two additional products
-beside its NU-filtered maps:
+Two products accompany the NU-filtered maps:
 
 - `*_nu_evidence.mrc`: the smoothed absolute evidence margin;
 - `*_nu_envmask.mrc`: the component-filtered, hole-filled, dilated, soft
@@ -220,14 +215,15 @@ the reported signal fraction exceeds 50%, the whole-support median/MAD estimate
 cannot safely be interpreted as a solvent null; increase `mskdiam`, tighten the
 threshold, or use a different null model before consuming the envelope.
 
-The evidence envelope is selected from cross-half agreement. It must not be
-used for FSC solvent correction, and it does not define the NU objective
-support. These roles remain assigned to an independent density automask and the
-spherical `mskdiam` support, respectively.
+The evidence envelope is selected from cross-half agreement, which makes it
+unsuitable for FSC solvent correction: the FSC would then be computed inside a
+region chosen for half-map agreement, biasing it upward. FSC masking uses an
+independent density automask, and the NU objective keeps the spherical
+`mskdiam` support.
 
-## Implementation Locations
+## Implementation
 
-- Command lifecycle and output naming:
+- Command entry point and output naming:
   `src/main/commanders/simple/simple_commanders_resolest.f90`
 - Candidate bank and raw evidence accumulation:
   `src/main/nu_filt/simple_nu_filter_bank.f90`
@@ -240,5 +236,4 @@ spherical `mskdiam` support, respectively.
 - Synthetic regression:
   `production/tests/simple_test_nu_envmask.f90`
 
-Design constraints and deferred workflow integration are discussed separately
-in [`NU-Evidence Envelope Masking`](../implementation_notes/nu_evidence_envelope_masking.md).
+Design constraints: [nu_evidence_envelope_masking.md](../implementation_notes/nu_evidence_envelope_masking.md).

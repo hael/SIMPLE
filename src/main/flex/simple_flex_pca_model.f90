@@ -710,7 +710,7 @@ contains
         integer,          intent(in)    :: pinds(:)
         logical,          intent(out)   :: loaded
         integer :: i, k, iptcl, noris, kto
-        call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, cline, loaded)
+        call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, cline, loaded)
         if( .not. loaded )then
             ! gen_fplane4rec follows norm_noise_taper_edge_pad_fft, so a unit spectrum is the correct fallback
             noris = build%spproj_field%get_noris()

@@ -153,6 +153,7 @@ type(ui_param) :: skip_rejection
 type(ui_param) :: sherr
 type(ui_param) :: sigma
 type(ui_param) :: sigma_est
+type(ui_param) :: sigma_store
 type(ui_param) :: smpd
 type(ui_param) :: smpd_downscale
 type(ui_param) :: smpd_target
@@ -779,6 +780,10 @@ subroutine set_ui_params
     call sigma_est%set_param(      'sigma_est',       'multi',  'Sigma estimation method', &
                                    'Sigma estimation method(group|global){group}','', .false., 'group', &
     &choices=ui_choices([character(len=6) :: 'group', 'global']))
+
+    call sigma_store%set_param(    'sigma_store',     'multi',  'Sigma persistence contract', &
+                                   'Sigma persistence contract(legacy|canonical){legacy}','', .false., 'legacy', &
+    &choices=ui_choices([character(len=9) :: 'legacy', 'canonical']))
 
     call smpd%set_param(           'smpd',            'num',    'Sampling distance', &
                                    'Distance between neighbouring pixels in Angstroms', &

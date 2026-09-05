@@ -129,6 +129,7 @@ contains
         type(string) :: stack_fname, ext, fbody
         type(string), allocatable :: sigma_fnames(:)
         integer :: i, istk
+        if( params%l_sigma_canonical ) return
         if( l_update_sigmas )then
             if( trim(params%sigma_est).eq.'group' )then
                 allocate(sigma_fnames(nstks))

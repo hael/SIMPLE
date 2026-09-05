@@ -217,6 +217,8 @@ contains
         call reg%add_char('select_flag', self%select_flag)
         call reg%add_char('skip_rejection', self%skip_rejection)
         call reg%add_char('sigma_est', self%sigma_est)
+        call reg%add_char('sigma_store', self%sigma_store)
+        call reg%add_char('sigma_action', self%sigma_action)
         call reg%add_char('snapshot', self%snapshot)
         call reg%add_char('sort', self%sort)
         call reg%add_char('sort_asc', self%sort_asc)

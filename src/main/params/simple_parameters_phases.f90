@@ -709,6 +709,19 @@ contains
             case DEFAULT
                 THROW_HARD('internal sigma_transition_ready must be yes or no')
         end select
+        select case(trim(self%sigma_store))
+            case('legacy')
+                self%l_sigma_canonical = .false.
+            case('canonical')
+                self%l_sigma_canonical = .true.
+            case DEFAULT
+                THROW_HARD('sigma_store must be legacy or canonical')
+        end select
+        select case(trim(self%sigma_action))
+            case('','star_import','parts_import','star_export')
+            case DEFAULT
+                THROW_HARD('sigma_action must be star_import, parts_import, or star_export')
+        end select
         if( self%memreport_interval < 1 ) THROW_HARD('memreport_interval must be at least 1 second')
         if( self%walltime <= 0 )then
             THROW_HARD('Walltime cannot be negative!')

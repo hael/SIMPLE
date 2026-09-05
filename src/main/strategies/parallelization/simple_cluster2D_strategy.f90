@@ -10,6 +10,8 @@ use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_group_iter
+use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
+    &sigma2_state_range_path
 implicit none
 
 public :: cluster2D_strategy, cluster2D_inmem_strategy, cluster2D_distr_strategy, create_cluster2D_strategy
@@ -168,6 +170,9 @@ contains
             call build%spproj%read_segment(params%oritype, params%projfile)
         endif
         ! main clustering/alignment step
+        if( params%cc_objfun==OBJFUN_EUCLID .and. params%l_sigma_canonical )then
+            call prepare_canonical_sigma_update(params, build)
+        endif
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
@@ -290,6 +295,14 @@ contains
             call xprob_align2D%execute(cline_prob_align)
             call build%spproj%read_segment(params%oritype, params%projfile)
         endif
+        ! The master creates one generation-scoped candidate after every
+        ! project-state update and before workers read the committed state.
+        ! Each worker emits only its exclusive global particle range; the
+        ! calc_group_sigmas barrier below validates exact coverage and is the
+        ! sole owner of grouped reduction and atomic publication.
+        if( params%cc_objfun==OBJFUN_EUCLID .and. params%l_sigma_canonical )then
+            call prepare_canonical_sigma_update(params, build)
+        endif
         ! Schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, &
                                                      algnfbody=string(ALGN_FBODY), &
@@ -371,6 +384,27 @@ contains
     end subroutine distr_finalize_run
 
     ! private helpers
+
+    subroutine prepare_canonical_sigma_update( params, build )
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: state_path, candidate_path, range_path
+        integer :: ipart, status
+        logical :: found
+        character(len=STDLEN) :: message
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
+        candidate_path = sigma2_state_candidate_path(state_path%to_char())
+        do ipart = 1, params%nparts
+            range_path = sigma2_state_range_path(state_path%to_char(), ipart, params%numlen)
+            call del_file(range_path)
+        enddo
+        call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        call state_path%kill
+        call candidate_path%kill
+        call range_path%kill
+    end subroutine prepare_canonical_sigma_update
 
     !> Initialize references for cluster2D (used by inmem and distr modes).
     subroutine init_cluster2D_refs( cline, params, build )

@@ -141,6 +141,8 @@ contains
             call spproj_field%clean_entry('updatecnt', 'sampled')
             if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
             call spproj%write_segment_inside(params%oritype, params%projfile)
+        else
+            call ensure_resume_sigma_state
         endif
         ! Frequency marching
         do istage = start_stage,stop_stage
@@ -393,6 +395,53 @@ contains
             if( allocated(phase_label) ) deallocate(phase_label)
         end subroutine execute_cluster2D
 
+        subroutine ensure_resume_sigma_state
+            use, intrinsic :: iso_fortran_env, only: int64
+            use simple_sigma2_state, only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+            use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
+                &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
+            type(string) :: state_path
+            integer(int64) :: layout_digest
+            integer :: iptcl, ngroups, status
+            logical :: found, rebuild
+            character(len=STDLEN) :: message
+            if( .not. params%l_sigma_canonical ) return
+            if( params%cc_objfun /= OBJFUN_EUCLID ) return
+            rebuild = .true.
+            call spproj%get_sigma2_state_path(state_path, found)
+            if( found )then
+                call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
+                if( status == 0 )then
+                    layout_digest = sigma2_state_project_layout_digest(spproj, spproj_field)
+                    if( params%l_sigma_glob )then
+                        call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, &
+                            &1, fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
+                            &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
+                            &expected_ngroups=1)
+                    else
+                        ngroups = 0
+                        do iptcl = 1, params%nptcls
+                            if( spproj_field%get_state(iptcl) <= 0 ) cycle
+                            ngroups = max(ngroups, spproj_field%get_int(iptcl, 'stkind'))
+                        enddo
+                        call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, &
+                            &1, fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
+                            &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
+                            &expected_ngroups=ngroups)
+                    endif
+                    rebuild = status /= 0
+                endif
+            endif
+            if( rebuild )then
+                write(logfhandle,'(A)') '>>> ABINITIO2D CHECKPOINT: rebuilding missing or stale canonical sigma2 state'
+                call xcalc_pspec%execute(cline_calc_pspec)
+                call spproj%read_segment('projinfo', params%projfile)
+            else
+                write(logfhandle,'(A)') '>>> ABINITIO2D CHECKPOINT: reusing validated canonical sigma2 state'
+            endif
+            call state_path%kill
+        end subroutine ensure_resume_sigma_state
+
         subroutine execute_terminal_pass( terminal_policy )
             procedure(terminal_cline_policy), optional :: terminal_policy
             type(string) :: terminal_refs
@@ -457,12 +506,14 @@ contains
             call spproj%read_segment('out', params%projfile)
             call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
             call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg', mskdiam=params%mskdiam)
-            if( file_exists(sigma2_star_from_iter(iter)) )then
-                call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
-            else
-                write(logfhandle,'(A,I0,A)') &
-                    '>>> ABINITIO2D: sigma2 metadata unavailable for iteration ', iter, &
-                    '; skipping optional sigma2 project entry'
+            if( .not. params%l_sigma_canonical )then
+                if( file_exists(sigma2_star_from_iter(iter)) )then
+                    call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
+                else
+                    write(logfhandle,'(A,I0,A)') &
+                        '>>> ABINITIO2D: sigma2 metadata unavailable for iteration ', iter, &
+                        '; skipping optional sigma2 project entry'
+                endif
             endif
             call spproj%write_segment_inside('out', params%projfile)
             ! rank based on gold-standard resolution estimates

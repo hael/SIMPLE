@@ -35,6 +35,7 @@ contains
         & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
+        call abinitio3D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
         &'Reconstruction backend from stage 3 onward; stages 1 and 2 always use gridding(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
@@ -178,7 +179,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call abinitio3D_cavgs%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

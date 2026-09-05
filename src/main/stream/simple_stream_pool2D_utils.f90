@@ -63,7 +63,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         class(string),     intent(in)    :: projfilegui
         logical, optional, intent(in)    :: reference_generation
-        type(string)          :: carg
+        type(string)          :: carg, pool_sigma_path
         character(len=STDLEN) :: pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
         integer               :: envlen
         call seed_rnd
@@ -95,6 +95,12 @@ contains
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
+        call pool_proj%projinfo%delete_entry('sigma2_state')
+        if( params%l_sigma_canonical )then
+            pool_sigma_path = string(POOL_DIR)//'sigma2_state.bin'
+            call pool_proj%set_sigma2_state_path(pool_sigma_path)
+            call pool_sigma_path%kill
+        endif
         ! update to computational parameters to pool, will be transferred to chunks upon init
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params%walltime)
         ! commit to disk
@@ -108,6 +114,7 @@ contains
         call cline_cluster2D_pool%set('projfile',  POOL_PROJFILE)
         call cline_cluster2D_pool%set('projname',  get_fbody(POOL_PROJFILE,'simple'))
         call cline_cluster2D_pool%set('sigma_est', params%sigma_est)
+        call cline_cluster2D_pool%set('sigma_store', params%sigma_store)
         if( cline%defined('cls_init') )then
             call cline_cluster2D_pool%set('cls_init', params%cls_init)
         else
@@ -197,6 +204,7 @@ contains
         type(sp_project), allocatable :: pool_proj_history_tmp(:)
         integer(timer_int_kind)       :: t_tot
         integer,          allocatable :: nptcls_per_stk(:), prev_eo_pops(:,:), prev_eo_pops_thread(:,:), clspops(:)
+        type(cmdline), allocatable :: pool_clines(:)
         type(string) :: stkname
         real         :: frac_update, smpd
         integer      :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, npool
@@ -383,7 +391,24 @@ contains
         ! pool stats
         call generate_pool_stats(params)
         ! execution
-        call pool_qenv%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
+        if( params%l_sigma_canonical .and. params%cc_objfun == OBJFUN_EUCLID )then
+            ! Stream pool membership changes invalidate row identity. Rebuild a
+            ! complete canonical bootstrap for the exact pool layout, then run
+            ! clustering in the same queued script so no consumer can observe
+            ! a missing or stale state.
+            allocate(pool_clines(2))
+            pool_clines(1) = cline_cluster2D_pool
+            call pool_clines(1)%set('prg', 'calc_pspec')
+            call pool_clines(1)%set('mkdir', 'no')
+            call pool_clines(1)%delete('stream2d')
+            call pool_clines(1)%delete('update_frac')
+            pool_clines(2) = cline_cluster2D_pool
+            call pool_qenv%exec_simple_prgs_in_queue_async(pool_clines, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
+            call pool_clines(:)%kill
+            deallocate(pool_clines)
+        else
+            call pool_qenv%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
+        endif
         l_pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
@@ -711,7 +736,7 @@ contains
             pool_proj%os_cls2D = spproj%os_cls2D
             call pool_proj%os_cls2D%set_all('pop', real(pops))
             ! updates sigmas
-            if( l_update_sigmas )then
+            if( l_update_sigmas .and. .not. params%l_sigma_canonical )then
                 if( trim(params%sigma_est).eq.'group' )then
                     ! propagate sigma2 changes back to the micrograph/stack document
                     nstks = spproj%os_stk%get_noris()

@@ -53,6 +53,8 @@ contains
     generic            :: update_projinfo => update_projinfo_1, update_projinfo_2
     procedure, private :: update_projinfo_1
     procedure, private :: update_projinfo_2
+    procedure          :: set_sigma2_state_path
+    procedure          :: get_sigma2_state_path
     procedure          :: update_compenv
     procedure          :: append_project
     procedure          :: append_job_descr2jobproc
@@ -226,6 +228,17 @@ interface
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: projfile
     end subroutine update_projinfo_2
+
+    module subroutine set_sigma2_state_path( self, state_path )
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: state_path
+    end subroutine set_sigma2_state_path
+
+    module subroutine get_sigma2_state_path( self, state_path, found )
+        class(sp_project), intent(in)    :: self
+        type(string),      intent(inout) :: state_path
+        logical,           intent(out)   :: found
+    end subroutine get_sigma2_state_path
 
     module subroutine update_compenv( self, cline )
         class(sp_project), intent(inout) :: self

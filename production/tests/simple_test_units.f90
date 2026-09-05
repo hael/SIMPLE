@@ -42,63 +42,91 @@ use simple_motion_gain_tester,    only: run_all_motion_gain_tests
 use simple_bspline_smoother,      only: test_bspline_smoother, test_bspline_smoother_3d
 implicit none
 #include "simple_local_flags.inc"
+abstract interface
+    subroutine no_arg_test()
+    end subroutine no_arg_test
+end interface
 character(8)          :: datestr
 character(len=STDLEN) :: folder
+logical               :: test_failed
+type(string)          :: original_cwd, report_file
 call seed_rnd
 call date_and_time(date=datestr)
-folder = './SIMPLE_TEST_UNITS_'//datestr
+folder = 'SIMPLE_TEST_UNITS_'//datestr
+call simple_getcwd(original_cwd)
+report_file = original_cwd//'/'//trim(folder)//'/simple_test_units_report.txt'
 call simple_mkdir(folder)
 call simple_chdir(folder)
+call reset_test_report(report_file%to_char())
 ! core library tests generated with help from chatgpt
-call run_all_string_tests
-call run_all_syslib_tests
-call run_all_fileio_tests
-call run_all_chash_tests
-call run_all_hash_tests
-call run_all_vrefhash_tests
-call run_all_list_tests
-call run_all_tree_tests
-call run_all_multi_dendro_tests
-call run_all_cmdline_tests
-call run_all_ori_tests
-call run_all_oris_tests
-call run_all_class_compatibility_tests
-call run_all_ptcl_sieve_tests
-call run_all_rec_list_tests
-call run_all_ipc_tcp_socket_tests
-call run_all_forked_process_tests
-call run_all_gui_metadata_tests
-call run_all_gui_assembler_tests
-call run_all_http_post_tests
-call run_all_persistent_worker_server_tests
-call run_all_persistent_worker_message_tests
-call run_all_starfile_tests
-call run_all_project_merge_tests
-call run_all_motion_gain_tests
-call report_summary()
+call run_suite('string',                    run_all_string_tests)
+call run_suite('syslib',                    run_all_syslib_tests)
+call run_suite('fileio',                    run_all_fileio_tests)
+call run_suite('character hash',            run_all_chash_tests)
+call run_suite('hash',                      run_all_hash_tests)
+call run_suite('value-reference hash',      run_all_vrefhash_tests)
+call run_suite('linked list',               run_all_list_tests)
+call run_suite('binary tree',               run_all_tree_tests)
+call run_suite('multi dendrogram',           run_all_multi_dendro_tests)
+call run_suite('command line',               run_all_cmdline_tests)
+call run_suite('orientation',                run_all_ori_tests)
+call run_suite('orientation collection',     run_all_oris_tests)
+call run_suite('class compatibility',        run_all_class_compatibility_tests)
+call run_suite('particle sieve',             run_all_ptcl_sieve_tests)
+call run_suite('record list',                run_all_rec_list_tests)
+call run_suite('IPC TCP socket',             run_all_ipc_tcp_socket_tests)
+call run_suite('forked process',             run_all_forked_process_tests)
+call run_suite('GUI metadata',               run_all_gui_metadata_tests)
+call run_suite('GUI assembler',              run_all_gui_assembler_tests)
+call run_suite('HTTP POST',                  run_all_http_post_tests)
+call run_suite('persistent worker server',   run_all_persistent_worker_server_tests)
+call run_suite('persistent worker message',  run_all_persistent_worker_message_tests)
+call run_suite('STAR file',                  run_all_starfile_tests)
+call run_suite('project merge',              run_all_project_merge_tests)
+call run_suite('motion gain',                run_all_motion_gain_tests)
 ! hand-written unit tests
+call begin_test_suite('UI JSON')
 write(*,*)'VALIDATING UI JSON FILE:'
 call validate_ui_json
 write(*,*)'PASSED UI JSON FILE TEST'
-call test_online_var
-call test_imghead
+call end_test_suite
+call run_suite('online variance',            test_online_var)
+call run_suite('image header',               test_imghead)
+call begin_test_suite('orientation data')
 call test_oris(.false.)
+call end_test_suite
+call begin_test_suite('image')
 call test_image(.false.)
-call test_ftexp_shsrch
-call test_ftiter
+call end_test_suite
+call run_suite('Fourier shift search',        test_ftexp_shsrch)
+call run_suite('Fourier iterator',            test_ftiter)
+call begin_test_suite('B-spline smoother 2D')
 call test_bspline_smoother([64,64,1], 1.0, 0.2)
+call end_test_suite
+call begin_test_suite('B-spline smoother 3D')
 call test_bspline_smoother_3d([64,64,64], 1.0, 0.2)
+call end_test_suite
 ! local test functions
-call test_multinomal
-call test_euler_shift
-call simple_test_fit_line
-call test_aff_prop
-call test_hclust
-call test_srchspace_map2D_io
+call run_suite('multinomial random draw',     test_multinomal)
+call run_suite('Euler shift',                 test_euler_shift)
+call run_suite('straight-line fit',           simple_test_fit_line)
+call run_suite('affinity propagation',        test_aff_prop)
+call run_suite('hierarchical clustering',     test_hclust)
+call run_suite('2D search-space map I/O',     test_srchspace_map2D_io)
+call report_summary(failed=test_failed)
 call simple_chdir( "../" )
+if( test_failed ) error stop 1
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 
 contains
+
+    subroutine run_suite( name, test_proc )
+        character(len=*), intent(in) :: name
+        procedure(no_arg_test)       :: test_proc
+        call begin_test_suite(name)
+        call test_proc
+        call end_test_suite
+    end subroutine run_suite
 
     subroutine test_multinomal
         integer :: i, irnd

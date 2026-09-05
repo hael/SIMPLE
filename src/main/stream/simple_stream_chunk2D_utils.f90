@@ -77,6 +77,7 @@ contains
         call cline_cluster2D_chunk%set('mskdiam',   params%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      params%ncls_start)
         call cline_cluster2D_chunk%set('sigma_est', params%sigma_est)
+        call cline_cluster2D_chunk%set('sigma_store', params%sigma_store)
         call cline_cluster2D_chunk%set('rank_cavgs','yes')
         call cline_cluster2D_chunk%set('chunk',     'yes')
         ! objective function

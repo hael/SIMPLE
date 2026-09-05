@@ -2,7 +2,9 @@
 
 Date: 2026-09-04
 
-Status: proposed for maintainer review; no implementation has started.
+Status: canonical opt-in implementation complete across the current 2D, 3D,
+streaming, reconstruction, project-merge, conversion, and Flex consumers;
+awaiting the consolidated maintainer build and runtime matrix before cutover.
 
 Purpose: single living design, implementation plan, and validation record.
 
@@ -119,9 +121,9 @@ A missing or invalid store is rebuilt with `calc_pspec` for every active
 particle, followed by grouped reduction. This applies to a native-grid
 mismatch and to a reorder for which no trusted map exists.
 
-`sigma2_stage_needs_bootstrap` must be changed to validate the canonical
-header, grid, and layout; existence of an iteration STAR is no longer a
-criterion.
+Canonical workflow bootstrap checks validate the registered header, grid,
+layout, grouping, and committed state. Existence of an iteration STAR is not a
+criterion in canonical mode.
 
 `bootstrap_rec3D` currently derives a grouped curve from half-map differences
 and cannot create the required per-particle state. Therefore:
@@ -171,29 +173,25 @@ Protocol:
    committed file, and syncs the containing directory. A failed validation
    leaves the previous committed file untouched.
 
-Two range-I/O mechanisms share this protocol:
+The implemented range-I/O mechanism is:
 
 - `local` (safe default): each worker writes one exclusive temporary range
   file; the master validates and merges them. This avoids concurrent
   multi-client writes and cache interactions. These files are candidate
   material, not persistent state, so their names may contain worker/range
   information without making the committed state depend on `nparts`.
-- `direct` (validated optimization): workers use GFortran unformatted stream
-  `write(pos=...)` on disjoint candidate ranges. Byte positioning alone does
-  not guarantee correct behavior on every distributed filesystem. Direct
-  mode is allowed only after the production diagnostic has passed on that
-  filesystem and mount configuration.
+- `direct` remains a possible later optimization: workers would use GFortran
+  unformatted stream `write(pos=...)` on disjoint candidate ranges. It has no
+  activation path in this refactor. Adding one requires a production
+  concurrency diagnostic for the exact filesystem and mount configuration.
 
-The master records `range_io=local|direct` in the candidate so every worker
-obeys one decision. Unknown and unvalidated filesystems use `local`. A
-site-level setting may enable `direct` only for a recorded validated mount;
-it is not a workflow parameter and does not change scientific semantics.
+All current workflows therefore use `local`; there is no workflow parameter
+that can opt into unvalidated shared-file writes.
 
-The implementation needs explicit low-level support for
+The implementation provides explicit low-level support for
 `flush -> file fsync -> close`, atomic rename without the delete-first
-behavior of `simple_rename`, and directory fsync. File fsync and rename
-bindings exist; directory-open/fsync support must be added. Filesystem probing
-and mount reporting are optional conveniences, not substitutes for the
+behavior of `simple_rename`, and directory fsync. Filesystem probing and mount
+reporting remain optional conveniences, not substitutes for a future direct-I/O
 diagnostic.
 
 ## 6. STAR Compatibility Converter
@@ -228,25 +226,65 @@ hoc worker environment flag. After all consumers pass and maintainers approve
 cutover, canonical becomes the only runtime path and the temporary selector
 and legacy runtime implementation are removed. The converter remains.
 
-1. **Store and diagnostics:** implement the API, header/layout digest,
-   transaction, local merge path, direct-write diagnostic, converter tests,
-   and a pre-refactor numerical baseline.
-2. **Initialization and reduction:** write particle spectra directly to the
-   store; support append; reduce records blockwise into grouped curves; update
-   bootstrap validity checks.
-3. **3D migration:** migrate matcher range I/O, full/fractional updates,
-   refine3D variants, reconstruction and external-reference paths. Remove the
-   partition-change workaround from the canonical path.
-4. **2D/restoration migration:** migrate cluster2D, abinitio2D,
-   probabilistic assignment, sigma-only passes, and restoration while
-   preserving existing scientific gates.
-5. **Streaming/secondary migration:** give each independent chunk or pool
-   lineage its own store; merge through explicit particle maps; migrate Flex,
-   nano, cleanup, retention, and project-output consumers.
-6. **Cutover:** complete the validation matrix, make canonical state the sole
-   runtime contract, remove part/iteration discovery and runtime STAR I/O,
-   update `doc/policies/sigma_calculation_policy.md`, and retain
-   `sigma2_convert` as the compatibility boundary.
+1. **Store and safe transactions — complete:** API, header/layout digest,
+   local range merge, integrity and recovery, and explicit conversion boundary.
+   Direct shared-file writes are deferred as an optional optimization.
+2. **Initialization and reduction — complete:** per-particle power spectra,
+   prefix-preserving append, blockwise reduction, and bootstrap identity checks.
+3. **3D migration — complete for canonical opt-in:** matcher full/fractional
+   updates, refine3D variants, external-reference emission, and gridding/PCG
+   reconstruction.
+4. **2D/restoration migration — complete for canonical opt-in:** cluster2D,
+   abinitio2D, SGD/checkpoint paths, probabilistic assignment, and class-average
+   restoration.
+5. **Streaming/secondary migration — complete for canonical opt-in:** isolated
+   chunk/pool lineages, safe dynamic-pool rebuild, project concatenation, Flex,
+   cleanup, retention, and project-output behavior. Nano remains correlation-only
+   and therefore has no sigma state to migrate.
+6. **Cutover — pending maintainer validation:** run the consolidated matrix,
+   then decide whether to change the default and remove legacy runtime I/O.
+   `sigma2_convert` remains as the compatibility boundary.
+
+### Implemented scope
+
+The canonical opt-in now provides:
+
+- a versioned binary store with fixed offsets, record and section integrity,
+  order-sensitive particle-layout identity, deep validation, candidate copying,
+  exact local-range coverage, blockwise even/odd group reduction, file and
+  directory sync, and atomic publication;
+- explicit project registration and a typed
+  `sigma_store=legacy|canonical` selector, which remains `legacy` by default;
+- shared-memory and distributed transactions for 2D and 3D matchers, including
+  fractional updates, `update_missing`, probabilistic modes, and the optional
+  CC residual-emission path;
+- power-spectrum initialization and committed-state recovery for abinitio2D,
+  abinitio2D SGD/checkpoint continuation, particle abinitio3D,
+  abinitio3D_cavgs, refine3D variants, direct reconstruct3D,
+  bootstrap_rec3D, and Flex PCA;
+- canonical loading for class-average restoration plus gridding and PCG
+  reconstruction at native and cropped working grids;
+- isolated state ownership for stream chunks and changing pools. Normal append
+  preserves an identity-verified prefix; an arbitrary dynamically selected pool
+  without an explicit old-to-new map is rebuilt from particle power;
+- exact row-wise canonical concatenation and regrouping in chunk aggregation and
+  `merge_projects`. Mixed canonical/legacy general project merges discard the
+  inherited registration so a later workflow rebuilds it rather than consuming
+  a stale first-project path;
+- an explicit `sigma2_convert` developer command for exact legacy part import,
+  lossy grouped-STAR import, and grouped-STAR export, with project identity,
+  native-grid, grouping, and exact-range checks;
+- canonical UI opt-ins on the owning 2D, 3D, stream, reconstruction, and Flex
+  programs. Normal canonical workflows do not create legacy part files or
+  iteration-numbered sigma STAR files.
+
+`simple_test_sigma2_state` covers both grouping policies, prefix identity,
+candidate preparation, exact range merge, commit publication, corruption and
+coverage rejection, and preservation of the prior committed generation.
+
+The safe local-range protocol is the completed production implementation.
+Direct multi-client candidate writes are deliberately deferred as an optional
+performance project; they are not required for canonical semantics or cutover.
 
 ## 8. Acceptance Criteria
 
@@ -282,8 +320,147 @@ Lifecycle and compatibility:
 
 ## 9. Validation Record
 
-No source implementation, compilation, linking, or runtime testing has been
-performed. Per repository policy, the user will compile and run the staged
-validation suites. Record tested operating systems, filesystems and mount
-options, scheduler/backend, direct/local mode, numerical baseline revision,
-and results here before cutover.
+On 2026-09-04, source-only checks for the first implementation slice passed:
+
+- `git diff --check`;
+- repository Fortran source-index generation, including both new modules;
+- command/UI registration audit, with only the three pre-existing unrelated
+  name mismatches.
+
+The maintainer subsequently reported that `simple_test_sigma2_state` passes.
+The first `simple_test_units` run exposed that
+`simple_abspath(..., check_exists=.false.)` does not reliably resolve a future
+file on this platform. Registration was changed to construct an absolute path
+from the current directory when the target does not yet exist, and the
+maintainer then reported that `simple_test_units` passes. Record tested
+operating systems, filesystems and mount options, scheduler/backend,
+direct/local mode, numerical baseline revision, and results here before
+cutover.
+
+After adding the base-`refine3D` opt-in, the source-only checks were repeated:
+
+- `git diff --check` passed;
+- repository Fortran source-index generation completed and the generated
+  module graph remained acyclic;
+- the command/UI registration audit again reported only its three pre-existing
+  unrelated name mismatches.
+
+On 2026-09-05, after the base-`refine3D` plumbing and the added
+update-preparation coverage, the maintainer reran `simple_test_sigma2_state`.
+It completed with `SIMPLE_TEST_SIGMA2_STATE NORMAL STOP`.
+
+Before attempting a production 3D run, the validation order was changed to
+start with a laptop-scale `abinitio2D` comparison. The `refine3D` UI opt-in was
+removed, and the canonical path was connected to shared-memory `abinitio2D`,
+its in-memory `cluster2D` iterations, and final class-average regularization.
+Source-only checks for this pivot passed: focused `git diff --check`, Fortran
+index generation, and an acyclic generated module graph; the UI audit retained
+only its three pre-existing unrelated mismatches. A concurrent user edit in
+`doc/algorithms/abinitio2d.md` has separate trailing whitespace and was left
+untouched. The maintainer subsequently reported that the canonical
+shared-memory `abinitio2D` run completed gracefully and that its class averages
+look excellent, providing the scientific gate for the distributed slice.
+
+The distributed `cluster2D` path now uses the same canonical transaction as the
+shared-memory path: master candidate preparation before worker dispatch,
+partition-local range production, and exact-coverage master consolidation and
+commit. At that intermediate stage checkpoint resume and streaming-SGD were
+still explicitly gated. This
+distributed slice passed focused `git diff --check`, Fortran source-index
+generation with an acyclic module graph, and the UI audit with only its three
+pre-existing unrelated mismatches. The maintainer subsequently reported that
+the distributed test passed.
+
+The first `abinitio3D_cavgs` exposure then passed focused `git diff --check`,
+Fortran source-index generation with an acyclic module graph, and the UI audit
+with the same three pre-existing unrelated mismatches. Compilation and runtime
+validation were left to the maintainer, and docked multi-state canonical mode
+was still explicitly gated for that first 3D slice.
+
+The maintainer's first distributed `abinitio3D_cavgs` run reached normal
+`refine3D` and map-symmetrization completion, then exposed a legacy-only sigma
+file check in the standalone gridding reconstruction child. The shared
+`load_sigma2_groups` boundary now accepts the project explicitly: canonical
+mode resolves the registered committed state, validates native grid, ordered
+layout and grouping identity, and loads its grouped curves; legacy discovery
+and STAR loading remain unchanged. All gridding and PCG reconstruction callers
+were updated through that common boundary. Focused `git diff --check`, Fortran
+index generation with an acyclic module graph, and the unchanged UI audit
+passed. The maintainer subsequently validated both shared-memory and
+distributed `abinitio3D_cavgs` execution with `sigma_store=canonical`, including
+the standalone reconstruction consumer that exposed the original failure.
+
+Post-run artifact inspection found one remaining `sigma2_it_98.star`. The final
+original-sampling reconstruction was rebuilding its child command line from
+selected parameters and omitted `sigma_store`; its missing-STAR check therefore
+entered the legacy half-map bootstrap and wrote an iteration STAR before the
+regularized reconstruction. The final reconstruction now propagates both
+`sigma_store` and `sigma_est`. In canonical mode it validates the registered
+store against the original native grid, project layout, grouping, and committed
+state. A valid store is consumed directly; an invalid native identity is rebuilt
+from the associated particle project with `calc_pspec`, as required by Section
+4. The legacy half-map/STAR bootstrap remains unchanged for legacy mode.
+
+Focused `git diff --check`, Fortran source-index generation, and an acyclic
+generated module graph passed after this correction. The maintainer subsequently
+rebuilt and reran the canonical workflow and confirmed the clean-artifact
+result with no `sigma2_it_*.star` created.
+
+The maintainer then validated an independent multi-state canonical
+`abinitio3D_cavgs` run. The remaining class-average 3D path was the docked
+split. Its old pre-reconstruction `calc_group_sigmas` call exists only to
+materialize the legacy iteration STAR from already current particle sigmas.
+Canonical state needs no equivalent mutation because split relabelling changes
+neither ordered particle identity nor global/stack membership. Canonical docked
+mode now skips that legacy barrier and reuses the committed generation for the
+split reconstruction; the following matcher creates and commits its normal
+candidate transaction. Source-only validation passed, but shared-memory and
+distributed docked runtime tests remain outstanding.
+
+The integration pass then removed the remaining artificial workflow gates and
+completed the canonical opt-in across the current runtime surface. This added
+abinitio2D checkpoint recovery and SGD, refine3D sparse/update-missing and CC
+emission transactions, direct reconstruct3D and bootstrap initialization,
+stream chunk/pool ownership, prefix-preserving append, exact canonical state
+concatenation in both chunk aggregation and `merge_projects`, the explicit
+converter, and Flex initialization. Canonical selectors are exposed on the
+owning 2D, 3D, stream, reconstruction, and Flex programs while the default
+remains legacy until the consolidated runtime matrix passes.
+
+After the integration pass, source-only validation completed successfully:
+
+- focused `git diff --check` for `src/main`, `src/fileio`, and the sigma test;
+- repository Fortran source-index generation;
+- an acyclic generated module graph;
+- command/UI registration audit with only the same three pre-existing unrelated
+  name/instance mismatches.
+
+Compilation and runtime execution were not performed by the agent, in
+accordance with repository policy. The maintainer will run the consolidated
+matrix in Section 10.
+
+## 10. Consolidated Maintainer Test Matrix
+
+1. Build the changed executables and run `simple_test_sigma2_state` plus the
+   normal unit suite.
+2. Run canonical abinitio2D shared and distributed, then resume a checkpoint at
+   a later stage; run the developer SGD variant once.
+3. Run canonical particle abinitio3D and the already established
+   abinitio3D_cavgs cases, including docked multi-state if available.
+4. Run canonical refine3D shared and distributed with a fractional update and
+   `update_missing=yes`; cover an external-reference CC initialization path.
+5. Run direct canonical reconstruct3D and bootstrap_rec3D from a project with no
+   registered state and verify that power-spectrum initialization occurs.
+6. Run a small canonical stream through chunk and pool updates, including one
+   pool membership change and one append.
+7. Exercise `sigma2_convert` exact part import, grouped STAR export/import, and
+   refusal to overwrite an existing canonical output.
+8. Merge two canonical chunk projects and two canonical general projects;
+   verify the merged project owns a new state and runs with a different
+   `nparts`. Also merge a mixed canonical/legacy pair and confirm that no stale
+   state path is retained.
+9. Run canonical Flex PCA once and confirm it either reuses a matching state or
+   initializes one from particle power.
+10. For every canonical workflow, confirm that no `sigma2_noise_part*.dat` or
+    `sigma2_it_*.star` runtime artifacts are produced and that changing
+    `nparts` does not change the registered committed state identity.

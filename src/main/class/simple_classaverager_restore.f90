@@ -94,11 +94,18 @@ contains
     !>  \brief  for loading sigma2
     module subroutine cavger_read_euclid_sigma2
         type(string) :: fname
+        logical :: found
         if( p_ptr%l_ml_reg )then
-            fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
+            if( p_ptr%l_sigma_canonical )then
+                call b_ptr%spproj%get_sigma2_state_path(fname, found)
+                if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
+            else
+                fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
+            endif
             call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
             call b_ptr%esig%read_part(  b_ptr%spproj_field)
             call b_ptr%esig%read_groups(b_ptr%spproj_field)
+            call fname%kill
         end if
     end subroutine cavger_read_euclid_sigma2
 

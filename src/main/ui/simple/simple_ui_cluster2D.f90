@@ -36,6 +36,7 @@ contains
             &'Generate reference-free 2D class averages from particle images', &
             &'is a distributed workflow for generating 2D class averages from particles', &
             &UI_VIS_STANDARD, 'Create 2D Class Averages', 'yes')
+        call abinitio2D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call add_ui_program('abinitio2D', abinitio2D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D
 
@@ -46,6 +47,7 @@ contains
             &'Run experimental streaming-SGD 2D classification from particle images', &
             &'runs the development table-free SGD variant of staged 2D classification', &
             &UI_VIS_DEVELOPER, 'Development 2D SGD', 'no')
+        call abinitio2d_sgd%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call add_abinitio2d_sgd_inputs(abinitio2d_sgd)
         call add_ui_program('abinitio2D_sgd', abinitio2d_sgd, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2d_sgd
@@ -191,6 +193,7 @@ contains
             &Set to 0 to run all chunks in parallel.', &
             &'# of parallel chunks (0=all){1}', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
+        call abinitio2D_chunks%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

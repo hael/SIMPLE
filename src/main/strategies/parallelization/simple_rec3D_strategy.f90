@@ -1,4 +1,5 @@
 module simple_rec3D_strategy
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_builder,              only: builder
 use simple_parameters,           only: parameters
@@ -10,6 +11,9 @@ use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fn
     &refine3D_pcg_raw_accum_fname
 use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared, execute_rec3D_pcg_distributed_master
 use simple_sigma2_files,         only: load_sigma2_groups
+use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
+    &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -177,6 +181,7 @@ contains
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
+        call ensure_canonical_sigma_state(params, build, cline)
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
@@ -200,7 +205,7 @@ contains
         ! Sigma weighting belongs to the Euclidean data objective. ML
         ! regularization is a separate FSC/SSNR prior applied by volassemble.
         if( params%cc_objfun == OBJFUN_EUCLID )then
-            call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, &
+            call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
                 &cline, l_sigma_loaded)
             if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
         endif
@@ -300,6 +305,7 @@ contains
         endif
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
+        call ensure_canonical_sigma_state(params, build, cline)
         ! setup distributed execution
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
@@ -406,6 +412,64 @@ contains
         call self%qenv%kill
         call self%job_descr%kill
     end subroutine distr_cleanup
+
+    subroutine ensure_canonical_sigma_state(params, build, cline)
+        use simple_commanders_euclid, only: commander_calc_pspec
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        class(cmdline),   intent(inout) :: cline
+        type(commander_calc_pspec) :: xcalc_pspec
+        type(cmdline) :: cline_pspec
+        type(string) :: state_path
+        integer(int64) :: layout_digest
+        integer :: iptcl, ngroups, status
+        logical :: found, rebuild
+        character(len=STDLEN) :: message
+        if( .not. params%l_sigma_canonical ) return
+        if( params%cc_objfun /= OBJFUN_EUCLID ) return
+        if( trim(params%oritype) /= 'ptcl3D' ) &
+            &THROW_HARD('canonical sigma2 reconstruction requires oritype=ptcl3D')
+        rebuild = .true.
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( found )then
+            call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
+            if( status == 0 )then
+                layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
+                if( params%l_sigma_glob )then
+                    call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
+                        &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
+                        &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
+                        &expected_ngroups=1)
+                else
+                    ngroups = 0
+                    do iptcl = 1, params%nptcls
+                        if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                        ngroups = max(ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
+                    enddo
+                    call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
+                        &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
+                        &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
+                        &expected_ngroups=ngroups)
+                endif
+                rebuild = status /= 0
+            endif
+        endif
+        if( .not. rebuild )then
+            call state_path%kill
+            return
+        endif
+        write(logfhandle,'(A)') '>>> RECONSTRUCT3D: initializing canonical sigma2 from particle power'
+        cline_pspec = cline
+        call cline_pspec%set('prg', 'calc_pspec')
+        call cline_pspec%set('mkdir', 'no')
+        call cline_pspec%delete('part')
+        call cline_pspec%delete('postprocess')
+        call cline_pspec%delete('trail_rec')
+        call xcalc_pspec%execute(cline_pspec)
+        call build%spproj%read_segment('projinfo', params%projfile)
+        call cline_pspec%kill
+        call state_path%kill
+    end subroutine ensure_canonical_sigma_state
 
     subroutine sync_resolved_rec_params(params, cline)
         type(parameters), intent(in)    :: params

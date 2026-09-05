@@ -18,6 +18,8 @@ public :: commander_abinitio3D_cavgs, commander_abinitio3D
 private
 #include "simple_local_flags.inc"
 
+character(len=*), parameter :: CAVGS_SIGMA2_STATE_FNAME = 'abinitio3D_cavgs_sigma2_state.bin'
+
 type, extends(commander_base) :: commander_abinitio3D_cavgs
     contains
     procedure :: execute => exec_abinitio3D_cavgs
@@ -183,12 +185,21 @@ contains
         work_proj%projinfo = spproj%projinfo
         work_proj%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris() > 0 ) work_proj%jobproc = spproj%jobproc
+        ! The temporary particle lineage must never inherit the input
+        ! project's canonical state. Its class-average rows have a different
+        ! identity and the temporary project is deleted when this workflow
+        ! completes.
+        call work_proj%projinfo%delete_entry('sigma2_state')
         ! name change
         call work_proj%projinfo%delete_entry('projname')
         call work_proj%projinfo%delete_entry('projfile')
         call cline%set('projfile', work_projfile)
         call cline%set('projname', get_fbody(work_projfile,'simple'))
         call work_proj%update_projinfo(cline)
+        if( params%l_sigma_canonical )then
+            call del_file(CAVGS_SIGMA2_STATE_FNAME)
+            call work_proj%set_sigma2_state_path(string(CAVGS_SIGMA2_STATE_FNAME))
+        endif
         ! add stks to temporary project
         call work_proj%add_stk(stk_even, ctfvars)
         call work_proj%add_stk(stk_odd,  ctfvars)
@@ -345,6 +356,7 @@ contains
         call o_even%kill
         call o_odd%kill
         call work_proj%kill
+        if( params%l_sigma_canonical ) call del_file(CAVGS_SIGMA2_STATE_FNAME)
         call del_file(work_projfile)
         call simple_rmdir(string(STKPARTSDIR))
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS NORMAL STOP ****', &

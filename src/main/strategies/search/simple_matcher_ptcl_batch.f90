@@ -21,19 +21,27 @@ contains
         class(builder),    intent(inout) :: build
         logical,           intent(in)    :: l_stream
         type(string)      :: fname
-        logical           :: l_group_only_init
+        logical           :: l_group_only_init, found
         ! cc_emit_sigma is a CC-only update path. CC does not consume sigma,
         ! while Euclidean scoring requires populated grouped sigma values.
         if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
             THROW_HARD('cc_emit_sigma=yes requires objfun=cc; euclid scoring would use unpopulated sigmas')
         endif
         if( params%cc_objfun == OBJFUN_EUCLID .or. trim(params%cc_emit_sigma) == 'yes' )then
-            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            if( params%l_sigma_canonical )then
+                call build%spproj%get_sigma2_state_path(fname, found)
+                if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
+            else
+                fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            endif
             if( trim(params%cc_emit_sigma) == 'yes' .and. .not. file_exists(fname) )then
                 THROW_HARD('CC residual sigma update requires image-bootstrap sigma2')
             endif
             call build%esig%new(params, build%pftc, fname, params%box)
-            if( trim(params%cc_emit_sigma) == 'yes' )then
+            if( params%l_sigma_canonical )then
+                call build%esig%read_part(  build%spproj_field)
+                call build%esig%read_groups(build%spproj_field)
+            else if( trim(params%cc_emit_sigma) == 'yes' )then
                 ! Preserve the image-power bootstrap outside the capped cohort;
                 ! committed CC assignments overwrite only active matching shells.
                 call build%esig%read_part(build%spproj_field)

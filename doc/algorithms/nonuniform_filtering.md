@@ -2,103 +2,132 @@
 
 ## Problem
 
-Construct reference maps whose local bandwidth follows reproducible half-map
-signal rather than one global FSC cutoff. The result is a spatially varying
-low-pass field, filtered even/odd/merged maps, and a matching-bandwidth handoff.
+A single FSC-derived low-pass cutoff filters the whole map at the resolution
+of its *average* voxel. A well-ordered core is then over-smoothed and a
+flexible periphery is left with noise. Nonuniform filtering estimates a
+spatially varying cutoff `c(v)` from the data themselves, so that each voxel
+is filtered at the resolution at which the two independent half maps still
+agree there.
 
-## Support and inputs
+The input is an unfiltered even/odd half pair on one grid. The output is a
+label field `c(v)` over a candidate bank of cutoffs, the filtered halves and
+merged map, and a local-resolution map.
 
-The filter consumes unfiltered even and odd volumes on the same grid. A sphere
-derived from `mskdiam` is the immutable objective support. It is deliberately
-not replaced by a density mask or evidence envelope: the broad sphere keeps the
-candidate objective comparable and retains a solvent population for evidence
-calibration.
+## Model
 
-When ML regularization is active in static mode, a compatible auxiliary half
-pair may conservatively replace the finest discrete bank member. High-resolution
-extension instead owns its own challenger path and does not use that auxiliary
-replacement.
-
-## Candidate bank and whitening
-
-The static low-pass bank is
+Let `E` and `O` be the raw halves and `E_c`, `O_c` their low-pass versions at
+candidate cutoff `c` from the bank
 
 ```text
 20, 15, 12, 10, 8, 6, 5, 4 A.
 ```
 
-For candidate `c`, let `E_c` and `O_c` be the low-pass-filtered halves. The raw
-even/odd difference estimates a radial noise profile `sigma(r)` by shell-wise
-Gaussian-scaled MAD, with gap filling, smoothing, and voxelwise radial
-interpolation. Radial whitening is required because deapodization and tapered
-solve support make reconstruction noise spatially non-stationary.
-
-The cross-half residuals at voxel `v` are
+If the true local resolution at voxel `v` is `c`, then `E_c(v)` predicts
+`O(v)` up to noise, and vice versa; filtering finer than `c` lets through
+noise that the other half does not share, and filtering coarser loses
+signal that it does. The evidence for candidate `c` at `v` is therefore the
+cross-half prediction error
 
 ```text
-r1_c(v) = [E(v)-O_c(v)] / sigma(radius(v))
-r2_c(v) = [E_c(v)-O(v)] / sigma(radius(v)).
+r1_c(v) = [E(v) - O_c(v)] / sigma(|v|),
+r2_c(v) = [E_c(v) - O(v)] / sigma(|v|),
+C_c(v)  = H(r1_c(v)) + H(r2_c(v)),
 ```
 
-Their unary cost is the sum of Huber losses with transition `1.345`. Each
-candidate cost is smoothed over the sphere with a mask-normalized tent kernel
-whose radius is `min(1.5*c,30 A)`. Values outside support cannot influence an
-in-support cost.
+with the Huber loss `H(r) = r^2/2` for `|r| <= 1.345`, else
+`1.345(|r| - 0.6725)`. The transition 1.345 gives 95 percent efficiency at
+the Gaussian; the linear tail stops isolated large residuals (a stray
+strong voxel) from dominating.
 
-## Local label field
+**Whitening.** The noise scale `sigma(r)` is a function of real-space radius,
+estimated once from the raw difference `E - O`: in each radial shell,
 
-The initial label at each supported voxel minimizes the smoothed unary. SIMPLE
-then applies an ordered-label Potts prior on the 26-neighbor lattice. Neighbor
-penalties operate on retained-bank coordinates, tolerate adjacent resolution
-steps, penalize larger jumps with a linear-quadratic hinge, normalize by the
-number of supported neighbors, and preserve the current label on numerical
-ties. Eight-color sweeps make concurrent updates non-neighboring.
+```text
+sigma_j = 1.4826 * median | (E-O)_j - median(E-O)_j |,
+```
 
-This is not an unordered categorical smoother: a 20-to-15 A boundary is less
-severe than a 20-to-4 A jump.
+with gap filling, radial smoothing, and linear interpolation between shell
+centers. A radial profile rather than a global scalar is required because
+the gridding correction and any tapered solve support make reconstruction
+noise grow toward the periphery; a global scale would put central and
+peripheral residuals in different Huber regimes.
 
-## Output synthesis
+**Support.** All statistics are evaluated inside the sphere of diameter
+`mskdiam`. The sphere, rather than a density mask, is used because it keeps
+the candidate objective comparable everywhere and retains a solvent
+population that later serves as a noise reference.
 
-At each voxel, the selected label chooses the corresponding candidate value in
-the even and odd banks. The merged filtered map is the average of the filtered
-halves. A local-resolution map stores the selected Angstrom value inside
-support and zero outside support or beyond Nyquist.
+## Algorithm
 
-The base reconstructed halves remain primary data products. `_nu_filt` and
-`_nu_locres` are derived references and diagnostics.
+1. **Candidate costs.** For each `c`, compute `C_c(v)` on the support and
+   smooth it with a mask-normalized tent kernel of radius `min(1.5 c, 30 A)`.
+   Smoothing at a scale proportional to `c` matches the spatial extent over
+   which a cutoff of `c` is meaningful; voxels outside the support never
+   influence in-support costs.
+2. **Initial labels.** `c(v) = argmin_c C_c^smoothed(v)`.
+3. **Ordered-label Potts smoothing.** Minimize over the 26-neighbor lattice
 
-## High-resolution extension
+   ```text
+   E(c) = sum_v C_{c(v)}(v) + sum_{v~w} phi( |rank(c(v)) - rank(c(w))| ) / deg(v),
+   ```
 
-With `nu_refine=yes`, voxels currently assigned to the finest populated label
-form a frontier. The next unrepresented Fourier shell is challenged only on
-that frontier. It is accepted when at least 5 percent and an absolute minimum
-number of tested voxels prefer it. Accepted contiguous shells may continue;
-the process stops at the first rejected, unsupported, or off-grid shell.
+   where `rank` is the index in the retained bank and `phi` is zero for
+   adjacent ranks and a linear-quadratic hinge for larger jumps. The prior is
+   *ordered*: a 20-to-15 A boundary costs less than a 20-to-4 A jump. Degree
+   normalization keeps the regularization strength uniform at the sphere
+   boundary. Iterated conditional modes with eight-color sweeps (no two
+   concurrently updated voxels are neighbors) and tie preservation.
+4. **Synthesis.** At each voxel take `E_{c(v)}(v)` and `O_{c(v)}(v)`; the
+   merged map is their average; the local-resolution map stores `c(v)` in
+   Angstrom inside the support and zero outside or beyond Nyquist.
 
-The active extension bank is thinned and capped for memory. After accepted
-steps, the complete label field receives the same ordered-label cleanup. The
-accepted depth is persisted for the next iteration.
+When ML regularization is active, the regularized half pair may
+conservatively replace the finest member of the bank, since it is already the
+best available estimate at that cutoff.
 
-## Matching handoff
+## High-resolution extension (`nu_refine=yes`)
 
-FSC reporting and NU filtering have different bandwidth roles. FSC does not
-truncate the candidate bank. After filtering, the finest cutoff selected
-anywhere inside the NU sphere becomes the project-level matching `lp` for the
-next iteration, bounded by explicit user `lp` and `lpstop` policy.
+The bank's finest member bounds what can be selected. Voxels currently at the
+finest populated label form a frontier; the next unrepresented Fourier shell
+is offered as a challenger on that frontier only. It is accepted if at least
+5 percent of the tested voxels (and an absolute minimum count) prefer it.
+Accepted shells may continue outward; the process stops at the first
+rejected, unsupported, or off-grid shell. The complete label field then
+receives the same ordered smoothing, and the accepted depth is carried to the
+next iteration so extension is monotone across a refinement.
 
-Plain `nonuniform` preserves independent even/odd matching and prefers the
-corresponding NU halves. `nonuniform_lpset` promotes the selected limit and uses
-the merged NU reference under LP-set topology. Ordinary low-pass filtering is
-not applied again on top of an NU reference.
+## Handoff to matching
 
-The reproducibility envelope derived from the candidate bank is a separate
-algorithm: see [NU-evidence envelope masking](nu_evidence_envelope_mask.md).
+The FSC and the NU filter answer different questions: the FSC reports the
+average resolution, the NU field reports where the map is better than
+average. After filtering, the finest cutoff selected anywhere in the support
+becomes the matching low-pass for the next iteration, bounded by any explicit
+`lp` and by `lpstop`, so that particles are aligned against all the signal the
+reference actually contains. In plain `nonuniform` mode the even and odd NU
+halves stay separate references; in `nonuniform_lpset` the merged NU map is
+used with a single band. No further low-pass is applied on top of an NU
+reference.
+
+The reproducibility envelope derived from the same candidate costs is a
+separate estimator: [NU-evidence envelope masking](nu_evidence_envelope_mask.md).
+
+## Rationale
+
+- Cross-half prediction error is a direct, model-free test of local
+  resolution: it needs no assumption about the signal, only that the two
+  halves have independent noise.
+- Comparing candidates with one shared whitening profile makes the
+  minimum-cost label meaningful; comparing candidates each smoothed at its
+  own scale would bias the boundary.
+- The ordered Potts prior encodes that resolution varies continuously in
+  space, which is what distinguishes local resolution from voxelwise noise.
 
 ## Implementation
 
-- Filter bank and labels: `src/main/nu_filt/simple_nu_filter*.f90`.
-- Volume lifecycle: `src/main/commanders/simple/simple_commanders_rec_distr.f90`.
-- Matching-reference selection:
+- Bank, costs, labels, extension: `src/main/nu_filt/simple_nu_filter*.f90`.
+- Noise scale and Huber objective: `src/main/image/simple_image_calc.f90`.
+- Integration into volume assembly:
+  `src/main/commanders/simple/simple_commanders_rec_distr.f90`.
+- Matching bandwidth handoff:
   `src/main/strategies/search/simple_matcher_refvol_utils.f90`.
 - Policy: `doc/policies/nonuniform_filtering_policy.md`.
-

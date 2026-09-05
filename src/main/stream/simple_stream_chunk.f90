@@ -107,6 +107,9 @@ contains
         endif
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
+        ! A chunk is an independent particle layout and must never inherit the
+        ! master's canonical-state identity.
+        call self%spproj%projinfo%delete_entry('sigma2_state')
         if( allocated(self%orig_stks) )then
             call self%orig_stks%kill
             deallocate(self%orig_stks)
@@ -271,6 +274,7 @@ contains
         if( self%p_ptr%nparts_chunk > 1 ) call cline_pspec%set('nparts',self%p_ptr%nparts_chunk)
         call cline_pspec%set('projfile', self%projfile_out)
         call cline_pspec%set('projname', CHUNK_PROJNAME)
+        call cline_pspec%set('sigma_store', self%p_ptr%sigma_store)
         call self%spproj%update_projinfo(cline_pspec)
         call self%spproj%write()
         self%available  = .false.
@@ -355,6 +359,7 @@ contains
         type(string), allocatable :: stks(:)
         type(string) :: ext, fbody, fname, dest
         integer      :: i
+        if( self%p_ptr%l_sigma_canonical ) return
         if( trim(self%p_ptr%sigma_est).eq.'group' )then
             ! one star file with # of micrograph/stack groups -> # of micrograph groups files
             allocate(stks(self%nmics))

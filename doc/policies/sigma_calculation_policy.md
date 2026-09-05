@@ -2,404 +2,270 @@
 
 ## Scope
 
-This document defines the current policy for Euclidean sigma calculation and use in SIMPLE.
+This document defines Euclidean sigma calculation, persistence, update, and
+consumption in SIMPLE. It applies to 2D/3D matching, ab initio workflows,
+refine3D, reconstruction, class-average restoration, streaming pools/chunks,
+and secondary consumers such as Flex PCA.
 
-It applies to workflows that run with `objfun='euclid'`, especially:
+The implementation currently supports two persistence contracts selected by
+`sigma_store=legacy|canonical`. `legacy` remains the default until the
+canonical runtime validation matrix is complete. The scientific calculation
+and consumption gates are the same in both modes.
 
-- `cluster2D`
-- `abinitio2D`
-- `refine3D`
-- reconstruction paths that consume Euclidean sigma spectra
-
-## Public policy
+## Scientific gates
 
 Sigma calculation is a Euclidean-objective feature, with one explicit
 wrapper-owned transition for external-reference CC pose initialization.
 
-- If `objfun='euclid'`, SIMPLE computes and persists sigma spectra.
-- If `objfun='cc'`, sigma is normally inactive and is never consumed for
-  scoring.
-- If `objfun='cc'` with internal `cc_emit_sigma='yes'`, the external-reference
-  wrapper has already bootstrapped sigma2 from particle images; the matcher
-  preserves those records and overwrites active matching shells for committed
-  particles with Euclidean residual contributions.
-- Sigma application during restoration/reconstruction is gated separately by `ml_reg='yes'`.
+- `objfun=euclid` computes and updates sigma spectra.
+- `objfun=cc` normally neither computes nor consumes sigma.
+- Internal `cc_emit_sigma=yes` lets an external-reference CC matcher preserve
+  an image-power bootstrap and replace committed particles' active shells with
+  reference-conditioned residuals. This does not make CC scoring consume sigma.
+- Restoration and reconstruction consume sigma only when `ml_reg=yes` and the
+  effective objective is Euclidean.
 
-Two gates must never be conflated:
+The update gate is therefore
 
-- **Sigma calculation/update gate:** `cc_objfun == OBJFUN_EUCLID`, or the
-  internal external-reference transition `cc_emit_sigma='yes'`
-- **ML restoration/reconstruction consumption gate:** `params%l_ml_reg`
+```text
+cc_objfun == OBJFUN_EUCLID or cc_emit_sigma == yes
+```
 
-Probabilistic refinement modes are not an exception. `prob_align`,
-`prob_align2D`, `prob_tab`, `prob_tab2D`, and `prob_tab_neigh` consume the
-current grouped sigma spectra for Euclidean scoring, but they do not produce the
-final residual sigma update for the iteration. The final sigma update is always
-the matcher pass after the probabilistic assignment has been applied to the
-particle orientation/state records. Never guard matcher-side sigma updates with
-`.not. l_prob_align_mode`, and never treat a probabilistic pre-alignment pass as
-a replacement for post-assignment residual sigma calculation.
+while the ML consumption gate remains `params%l_ml_reg`. These gates must not
+be conflated.
 
-The effective reconstruction gate is `params%l_ml_reg`, which is only true when:
+Probabilistic refinement is not an exception. `prob_align*` consumes the
+current grouped model for Euclidean scoring and owns candidate tables and
+assignments, but the following matcher owns the durable residual update after
+the assignment has been applied. Matcher-side sigma calculation must run in
+both probabilistic and non-probabilistic modes.
 
-- `ml_reg='yes'`
-- `cc_objfun == OBJFUN_EUCLID`
+## Runtime ownership
 
-This is enforced in `src/main/params/simple_parameters_phases.f90` during derived-parameter validation.
+`builder%esig` (`euclid_sigma2`) owns the in-memory state:
 
-## Ownership and persistence
+- `sigma2_noise`: grouped spectra expanded onto particle rows for matching and
+  ML reconstruction/restoration;
+- `sigma2_part`: residual spectra produced for updated particles;
+- `sigma2_groups`: the current even/odd grouped model.
 
-The runtime owner of sigma state is `builder%esig`, the `euclid_sigma2` object held by the builder. That object owns:
-
-- `sigma2_noise`: group-expanded per-particle spectra used by alignment/reconstruction
-- `sigma2_part`: per-particle spectra written during the current search/update pass
-- `sigma2_groups`: group spectra loaded from the STAR representation
-
-See [src/main/simple_builder.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_builder.f90:30) and [src/main/simple_euclid_sigma2.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_euclid_sigma2.f90:15).
-
-Persisted sigma data has two forms:
-
-- partition-local binary files: `sigma2_noise_partN.dat`
-- grouped STAR files: `sigma2_it_<iter>.star`
-
-The binary format is defined in [src/fileio/simple_sigma2_binfile.f90](/Users/elmlundho/src/SIMPLE/src/fileio/simple_sigma2_binfile.f90:1).
-
-Probabilistic commanders own candidate-table generation and assignment
-artifacts only. They may load sigma through the normal matcher preparation path,
-but ownership of durable sigma update remains with:
-
-- matcher/search code: per-particle residual spectra after assignment
-- Euclid commanders/strategies: bootstrap and group consolidation
-- reconstruction/restoration code: ML consumption of grouped spectra
+Matcher/search code calculates per-particle residuals. Sigma commanders and
+parallelization strategies own bootstrap and transaction orchestration.
+`simple_sigma2_state` owns canonical validation, identity, reduction, and
+state transitions; `simple_sigma2_state_file` owns byte-level canonical I/O.
+Reconstruction and class restoration are consumers only.
 
 ## Grouping policy
 
-`sigma_est` controls grouping:
+Both current policies remain supported:
 
-- `group`: group by particle `stkind`
-- `global`: use one shared group per even/odd half-set
+- `sigma_est=global`: one spectrum for each even/odd half-set;
+- `sigma_est=group`: one spectrum for each `stkind` and half-set.
 
-This is normalized into `params%l_sigma_glob` in `src/main/params/simple_parameters_phases.f90`.
+Grouping is a derived model. Per-particle residual spectra remain the
+authoritative update state. Regrouping must reduce those records; it must not
+reconstruct unchanged particle records from a group mean.
 
-When group STAR files are loaded, the selected group spectrum is expanded back onto each active particle according to:
+## Native-grid policy
 
-- particle `eo`
-- particle `stkind` unless `l_sigma_glob`
-
-See [src/main/simple_euclid_sigma2.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_euclid_sigma2.f90:171).
-
-## Native-grid and staged-refinement policy
-
-Persistent sigma spectra live on the original particle-image grid, not on a
-stage's cropped working grid:
+Persistent spectra use the original particle grid:
 
 ```text
-native shell k  <->  params%box, params%smpd
-storage range   =    1 : fdim(params%box)-1
+native shell range = 1 : fdim(params%box)-1
+native identity    = params%box, params%smpd
 ```
 
-`calc_pspec`, the matcher residual update, and `euclid_sigma2` all use this
-native shell convention. `box_crop` and `smpd_crop` only determine how much of
-that stored model a stage consumes. A crop change between refine3D stages does
-not change the meaning or size of a stored sigma record and is not a reason to
-recalculate or rewrite it.
+`box_crop` and `smpd_crop` determine only the shells a stage consumes. A crop
+change does not invalidate persistent state. A native `box` or `smpd` change
+does invalidate it and requires a particle-power rebuild; persistence code
+never interpolates records to migrate between native grids.
 
-The native records already contain shells outside an early stage's active
-matching band. When a later stage activates those shells, the normal matcher
-residual update replaces their values. No stage-handoff extrapolation or
-interpolation is required.
+Reconstruction keeps ownership of its existing Fourier-plane grid adaptation.
+Sigma persistence and stage initialization must not add a second interpolation
+path.
 
-Reconstruction already owns the only required grid adaptation.
-`image%gen_fplane4rec` calls `simple_math_ft::upsample_sigma2` to interpolate
-the selected native sigma range onto the padded reconstruction Fourier plane.
-This is an existing parallel consumer path and must not be duplicated in stage
-initialization. See
-[src/main/image/simple_image_ctf.f90](/Users/elmlundho/src/SIMPLE/src/main/image/simple_image_ctf.f90:203)
-and
-[src/utils/math/simple_math_ft.f90](/Users/elmlundho/src/SIMPLE/src/utils/math/simple_math_ft.f90:1).
+## Canonical persistence contract
 
-A change to the original `params%box` or `params%smpd` is a different native
-particle representation and is outside this reuse contract.
+Canonical mode registers one explicit `sigma2_state.bin` path in project
+`projinfo`. Runtime code does not scan for a highest iteration or infer state
+from worker filenames.
 
-## Calculation lifecycle
+The committed store contains:
 
-### 1. Bootstrap spectra
+1. a versioned header with native grid, particle count, grouping, generation,
+   provenance, offsets, state, and integrity metadata;
+2. the derived native-grid even/odd grouped model;
+3. one native-grid spectrum for each physical particle row;
+4. integrity data for records and sections.
 
-`calc_pspec` is the initial image-power-spectrum bootstrap. For refine3D it runs
-on the first sigma-producing stage (`startit <= 1`), after enforcing even/odd
-partitioning. A later staged run (`startit > 1`) reuses the existing
-`sigma2_noise_partN.dat` files instead. The normal first
-`calc_group_sigmas` call then reads those files and creates the grouped model
-for the new iteration.
+Its order-sensitive layout identity is derived from project lineage plus each
+ordered particle's normalized stack reference and stack index. It excludes the
+particle `state` flag, so logical activation changes do not change row identity.
+It also excludes `nparts`, worker number, execution mode, crop, and iteration.
 
-The shared external-reference pose-initialization service is an explicit
-exception to the `startit <= 1` scheduling rule. It always runs `calc_pspec`
-before its CC pass, including when an external-volume `abinitio3D` route enters
-at a later global stage number. This creates native-grid image-power sigma2
-coverage for every active partition record. The CC matcher reads those
-partition files without loading grouped sigma for scoring, preserves records
-outside the capped cohort, and overwrites only the active matching shells of
-particles with committed CC assignments. Missing bootstrap partition files are
-fatal on this path.
+Every committed state must have a valid header and file size, pass integrity
+checks, match the project layout and native grid, contain finite positive active
+records, and have grouped curves equal to reduction of the particle table.
 
-This reuse needs no public command-line mode, controller handoff metadata,
-binary-format extension, file conversion, or new interpolation path. The staged
-controller already advances `startit` and retains the native-grid partition
-files in the working directory. Existing readers remain responsible for file
-validation. A missing or unusable file fails through that established path; it
-must not silently trigger another expensive `calc_pspec` bootstrap. See
-[src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:523).
+## Canonical lifecycle
 
-`abinitio2D` sets `sigma_est='global'` and, unless overridden, uses the default
-Euclidean objective with `ml_reg='yes'`. It runs `calc_pspec` before the first
-`cluster2D` stage, so the first 2D search stage has grouped sigma spectra
-available. See
-[src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:38) and
-[src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:276).
+### Bootstrap and recovery
 
-`abinitio3D` sets `objfun='euclid'` and `sigma_est='global'`, then delegates
-stage execution to `refine3D`. Its first stage bootstraps sigma and later stages
-reuse the residual partition files written by the preceding matcher. See
-[src/main/commanders/simple/simple_commanders_abinitio.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio.f90:444) and
-[src/main/simple_abinitio_utils.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_utils.f90:283).
+`calc_pspec` initializes a missing or invalid canonical state from masked
+particle power. It uses one even/odd-stratified sample of at most 25,000 active
+particles, applies the established average-image subtraction and positivity
+conditioning, propagates the resulting half-set curves to particle records,
+reduces the requested grouping, and commits the first generation.
 
-`calc_pspec` bootstraps two global noise spectra, one for each even/odd half-set,
-from masked particle images. It selects a random, even/odd-stratified sample of
-at most 25,000 active particles across the complete run, and each partition only
-evaluates its intersection with that shared selection. The assembler uses
-the existing global-estimate scaling and propagation path. In the bootstrap
-assembly step:
+Workflow entry points validate the registered state against the current native
+grid, ordered layout, grouping, and committed state. A mismatch rebuilds from
+particle power. Canonical checkpoint continuation reuses a valid committed
+generation and rebuilds only when it is missing or stale.
 
-- sampled spectra are scaled and averaged globally per even/odd half-set
-- the average image power spectrum is subtracted
-- negative values are repaired by neighbor propagation
-- the requested grouped STAR layout is written with identical initial global
-  curves in every group, so existing `sigma_est='group'` readers remain valid
-- the two global curves are propagated to every active record in partition-local
-  `sigma2_noise_partN.dat` files
+Direct `reconstruct3D`, `bootstrap_rec3D`, and Flex PCA initialize canonical
+state when they need Euclidean sigma and the associated particle project has no
+valid state. The legacy half-map-difference STAR bootstrap remains confined to
+legacy `bootstrap_rec3D`.
 
-This is the established `sigma_est='global'` propagation behavior, now used for
-all initial bootstraps. It is not a permanent replacement for group estimation:
-the normal orientation-conditioned matcher residual update and later group
-consolidation specialize the initially shared curves.
+### Search update and commit
 
-The bootstrap runs in shared memory. Once the sample is capped at 25,000
-particles the per-partition work is small enough that scheduling it costs more
-than it saves, chiefly because every worker process re-reads the whole project.
-When `nparts` is set, `calc_pspec` therefore computes all partitions in one
-process, writing the same `init_pspec_partN.dat`, `sum_img_partN` and
-`sigma2_noise_partN.dat` artifacts that distributed workers used to produce.
-Partition ranges are `split_nobjs_even(nptcls, nparts)`, i.e. the ranges
-`qsys_env` derives under `split_mode='even'`, so the on-disk contract seen by
-matchers, reconstructors and `continue='yes'` is unchanged. No submission
-scripts are generated for this step. `part=` on the command line still selects
-the single-partition worker path, which generated scripts rely on.
+During 2D/3D matching, residual sigma is calculated after the particle
+orientation, shift, class, or state assignment is committed:
 
-Images are read once, in batches spanning the whole selection rather than one
-partition at a time, so stack runs are not reopened at partition boundaries.
-Accumulation stays partition-local: because the selection is sorted and the
-ranges are disjoint, each batch is split into the contiguous runs it shares with
-each partition and every run reduces into that partition's own Fourier sum.
-
-See [src/main/strategies/parallelization/simple_calc_pspec_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_calc_pspec_strategy.f90:130) and [src/main/commanders/simple/simple_commanders_euclid_distr.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_euclid_distr.f90:15).
-
-### 2. Per-particle update during search
-
-During Euclidean 2D/3D matching, sigma is recalculated after the particle orientation/shift update.
-
-- 2D uses `refkind='class'`
-- 3D uses `refkind='proj'`
+- 2D uses `refkind=class`;
+- 3D uses `refkind=proj`.
 
 The residual is formed in polar Fourier space after shift, rotation, and CTF
-application, and the per-shell squared residual energy is normalized by
-`2 * pftsz`. See
-[src/main/pftc/simple_polarft_corr.f90](/Users/elmlundho/src/SIMPLE/src/main/pftc/simple_polarft_corr.f90:801).
+application. Per-shell squared residual energy retains the established
+normalization by `2*pftsz`.
 
-Call sites:
+Each canonical iteration is transactional:
 
-- [src/main/strategies/search/simple_strategy2D_matcher.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/search/simple_strategy2D_matcher.f90:153)
-- [src/main/strategies/search/simple_strategy3D_matcher.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/search/simple_strategy3D_matcher.f90:148)
+1. the master creates `sigma2_state.next`, copying the committed generation
+   when unchanged rows must survive;
+2. each worker writes one exclusive temporary range for its assigned global
+   particle rows;
+3. the master verifies generation/layout identity and exact non-overlapping
+   scheduled coverage, merges the ranges, and reduces active records into the
+   grouped model;
+4. commit-time scientific and integrity validation runs;
+5. the candidate is synced and atomically published over the committed file,
+   followed by directory sync.
 
-At the end of the search pass, the updated per-particle spectra are written back to the partition binary file by `build%esig%write_sigma2`.
+A failed or incomplete candidate never replaces the previous committed state.
+The committed format is independent of partition count and number padding.
 
-External-reference CC pose initialization uses the same residual calculation
-after each hard pose/state assignment even though CC does not consume sigma.
-Its `cc_emit_sigma=yes` path begins from the image-bootstrap partition table,
-so unselected particles retain bootstrap values while active matching shells
-for selected particles receive reference-conditioned residuals. Bootstrap
-values remain in shells not yet activated by the frequency schedule.
+Fractional and `update_missing` passes copy untouched records and replace only
+scheduled rows. If a sparse selection contains no rows, workers still provide
+the exact empty/unchanged transaction coverage required for a valid commit.
 
-This update must run in probabilistic and non-probabilistic modes. In
-probabilistic modes, the sequence is:
+The safe implementation always uses exclusive worker range files. Direct
+multi-client writes into one candidate are not exposed; they remain a possible
+future optimization that requires filesystem-specific concurrency validation.
 
-1. consolidate/load the current grouped sigma spectra for the iteration
-2. run `prob_align*` to sample particles, generate probability tables, and write
-   the assignment artifact
-3. run the normal matcher, which consumes the assignment, updates
-   orientation/state/shift records, recalculates per-particle residual sigmas,
-   and writes `sigma2_noise_partN.dat`
-4. consolidate partition sigmas into the next grouped STAR handoff
+### Particle-set changes
 
-The important bug-prevention rule is that step 3 is mandatory for `prob`,
-`prob_state`, and `prob_neigh`. The probabilistic table is an accelerated
-assignment mechanism, not the sigma update mechanism.
+- Append accepts old records only when the old layout digest matches the new
+  layout prefix. It preserves that prefix, initializes the suffix, regroups,
+  and commits.
+- Logical removal retains the row but excludes `state=0` from reduction and
+  ordinary consumption.
+- Equal-size reorder or untrusted compaction fails identity validation and
+  rebuilds unless the owning operation supplies an explicit row map.
+- Canonical chunk and general project concatenation use the known row-wise
+  concatenation map, preserve particle records exactly, remap stack groups,
+  reduce the new grouping, and register a new output-owned state.
+- A mixed canonical/legacy general project merge carries no state path into the
+  output; the next Euclidean workflow rebuilds it. Stream chunk aggregation
+  rejects mixed persistence contracts.
 
-The assignment-only side of this split is visible in
-[src/main/commanders/simple/simple_commanders_prob.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_prob.f90:172) for 3D and
-[src/main/commanders/simple/simple_commanders_prob.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_prob.f90:363) for 2D.
+## Workflow policy
 
-### 3. Iteration consolidation
+### 2D
 
-The policy is that grouped STAR files are the durable handoff artifact between iterations and runs.
+`abinitio2D` and its SGD/checkpoint variants bootstrap at the first stage,
+commit matcher residuals each iteration, and use the same canonical state for
+ML class-average restoration. Shared-memory and distributed paths implement the
+same candidate transaction. Canonical final output does not register or create
+an iteration STAR.
 
-`sigma2_it_<N>.star` is the grouped model consumed by matcher iteration `N`.
-`sigma2_group_iter` encodes this convention for both workflows: consolidation
-before matching writes the current iteration number, while consolidation after
-matching writes the next iteration number.
+Independent `abinitio2D_chunks` give each subset project its own canonical
+lineage. Stream chunks likewise own isolated states rather than inheriting a
+parent project's registration.
 
-Current implementation details differ slightly by workflow:
+The streaming pool owns `pool/sigma2_state.bin`. Because pool membership can
+change without a stable old-to-new row map, the safe policy is to rebuild the
+exact pool layout with `calc_pspec` before its clustering transaction. Ordinary
+append paths outside arbitrary pool selection preserve verified prefixes.
 
-- `cluster2D` consolidates after the iteration and writes `which_iter + 1` for
-  the next iteration. See
-  [src/main/strategies/parallelization/simple_cluster2D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_cluster2D_strategy.f90:285).
-- shared-memory `refine3D` consolidates and writes `which_iter` at iteration entry.
-  See [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:442) ..
-- distributed `refine3D` follows the same policy: current-iteration
-  consolidation before `prob_align*`/worker scheduling. See
-  [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:834).
+### 3D
 
-The authoritative consolidation implementation is `exec_calc_group_sigmas` in [src/main/commanders/simple/simple_commanders_euclid.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_euclid.f90:41).
+Particle `abinitio3D`, `abinitio3D_cavgs`, refine3D, refine3D_auto,
+refine3D_states, and classify3D_refs use the common canonical 3D matcher
+transaction in shared and distributed execution. Full, fractional,
+update-missing, probabilistic, and optional CC residual-emission passes follow
+the same ownership rule.
 
-That implementation:
+`abinitio3D_cavgs` creates a workflow-local state for its temporary class-average
+particle project and never inherits the input project's particle state. Docked
+state relabeling changes only logical activity, so its reconstruction may reuse
+the committed generation before the following matcher opens the next candidate.
 
-- reads all partition `sigma2_noise_partN.dat` files
-- groups by `eo` and either `stkind` or one global bucket
-- computes arithmetic group averages over active particles; each active
-  particle contributes one spectrum to its even/odd and `stkind` (or global)
-  bucket
-- writes `sigma2_it_<which_iter>.star`
+Gridding and PCG reconstruction resolve the registered state through
+`load_sigma2_groups`, validate native grid/layout/grouping, and load the grouped
+model through the same boundary.
 
-For `cc_emit_sigma=yes`, consolidation includes only active particles with
-`updatecnt > 0`. Therefore the STAR handed to the first Euclidean iteration is
-the grouped reference-conditioned cohort residual, while the partition files
-still provide image-bootstrap fallback coverage outside that cohort.
+### Secondary consumers
 
-This is intentionally different from bootstrap `calc_pspec_assemble`, which
-derives spectra from average image-power subtraction and repairs negative
-values before writing its grouped result.
+Flex PCA validates or initializes canonical state and uses the common grouped
+loader for colored-noise whitening. Nano3D explicitly runs correlation mode and
+therefore does not participate in the sigma persistence lifecycle.
 
-## Workflow summaries
+## Legacy compatibility and conversion
 
-### `abinitio2D`
+Legacy mode retains the existing runtime artifacts:
 
-`abinitio2D` is a staged `cluster2D` driver. It sets `sigma_est='global'` and,
-unless the user overrides the objective, uses ML-regularized Euclidean 2D
-output. The first stage bootstraps sigma with `calc_pspec`; each `cluster2D`
-iteration then updates particle assignments, recalculates per-particle residual
-sigma in `cluster2D_exec`, and consolidates grouped sigma for the next
-iteration. Final class-average generation is ML-regularized and records the
-final grouped sigma STAR file in the project output. See
-[src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:347) and
-[src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:358).
+- `sigma2_noise_partN.dat` per-particle partition files;
+- `sigma2_it_<iter>.star` grouped handoff files.
 
-When `abinitio2D` uses a probabilistic `refine='prob*'` mode, `prob_align2D` owns sampling and
-probabilistic class assignment, but `cluster2D_exec` still owns the residual
-sigma update after that assignment is consumed.
+Legacy behavior remains available while `sigma_store` defaults to `legacy`, but
+canonical workflows never read or write those runtime artifacts.
 
-### `abinitio3D`
+`sigma2_convert` is the only explicit format boundary:
 
-`abinitio3D` sets `objfun='euclid'` and `sigma_est='global'`, then executes
-staged `refine3D` runs. The stage controller uses `snhc_smpl` in stage 1,
-`shc_smpl` in stage 2, `prob` in middle stages, and `prob_neigh` in later
-stages; fixed-orientation multivolume mode uses `prob_state`. See
-[src/main/simple_abinitio_controller.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_controller.f90:220).
+- `parts_import` validates and imports a complete, exactly covering legacy part
+  set into per-particle canonical records;
+- `star_import` expands a grouped STAR over the current project membership,
+  labels the state as a lossy STAR seed, reduces it again, and commits it;
+- `star_export` validates project identity and writes only the current grouped
+  section to a user-selected STAR file.
 
-ML consumption is staged separately from sigma calculation. Standard
-`abinitio3D` disables `ml_reg` for stages 1-2 and enables it for stages 3-8,
-while the `abinitio3D_cavgs` route forces `ml_reg='no'` for refinement stages.
-Sigma calculation still follows `objfun='euclid'`; `ml_reg` only decides whether
-the grouped spectra are applied during reconstruction/restoration. See
-[src/main/simple_abinitio_controller.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_controller.f90:216) and
-[src/main/simple_abinitio_controller.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_controller.f90:262).
-
-For every `abinitio3D` stage with a probabilistic refinement mode, the same
-critical invariant applies: `prob_align*` chooses/writes assignments, and the
-following `refine3D_exec` pass must recalculate residual sigma after those
-assignments have been applied.
-
-When `abinitio3D` starts from external volumes, the shared pose-initialization
-service runs `calc_pspec` first, then performs its single fixed-reference CC
-pass with residual emission. The first Euclidean stage consumes the grouped CC
-residuals; particles outside the CC cohort retain image-bootstrap partition
-records until subsequently updated.
+Conversion never runs automatically and refuses to overwrite an existing
+canonical output state.
 
 ## Consumption policy
 
-Grouped sigma spectra are loaded into `builder%esig` and expanded per particle.
-They are consumed in two distinct places:
+Matching consumes `sigma2_noise` whenever the objective is Euclidean.
+Restoration/reconstruction consumes it only when `params%l_ml_reg` is true.
+The loader expands the selected even/odd global or stack group onto particle
+rows. Fourier-plane generation performs the established sigma resampling and
+divides both the complex sample and CTF power contribution by sigma.
 
-- Euclidean objective scoring during 2D/3D matching whenever
-  `cc_objfun == OBJFUN_EUCLID`
-- restoration/reconstruction only when `params%l_ml_reg` is true
+The principal implementation boundaries are:
 
-For matching, sigma enters the polar Fourier objective functions as
-`sigma2_noise`. See
-[src/main/pftc/simple_polarft_corr.f90](/Users/elmlundho/src/SIMPLE/src/main/pftc/simple_polarft_corr.f90:58).
+- `src/main/simple_euclid_sigma2.f90`: in-memory model and legacy translation;
+- `src/main/simple_sigma2_state.f90`: canonical identity and transactions;
+- `src/fileio/simple_sigma2_state_file.f90`: canonical binary I/O;
+- `src/fileio/simple_sigma2_files.f90`: dual-mode consumer boundary;
+- 2D/3D matcher strategies: residual production;
+- Euclid and workflow strategies: bootstrap and commit orchestration;
+- reconstruction and class-average restoration: gated consumption.
 
-For 3D reconstruction, `params%l_ml_reg` causes the sigma groups to be loaded
-before `calc_3Drec`. See
-[src/main/commanders/simple/simple_commanders_rec.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_rec.f90:67) and
-[src/main/strategies/parallelization/simple_rec3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_rec3D_strategy.f90:149).
+## Cutover
 
-For 2D class restoration, the same grouped sigma state is loaded before Fourier-plane generation. See [src/main/class/simple_classaverager_restore.f90](/Users/elmlundho/src/SIMPLE/src/main/class/simple_classaverager_restore.f90:79).
-
-The Fourier-plane policy is:
-
-- upsample sigma from the cropped shell grid to the padded reconstruction grid
-- divide both the complex Fourier sample and its CTF power term by sigma
-
-See [src/main/image/simple_image_ctf.f90](/Users/elmlundho/src/SIMPLE/src/main/image/simple_image_ctf.f90:203) and [src/main/image/simple_image_ctf.f90](/Users/elmlundho/src/SIMPLE/src/main/image/simple_image_ctf.f90:263).
-
-## Current architectural boundary
-
-The current boundary is acceptable and should be preserved:
-
-- `simple_euclid_sigma2`: sigma object model and STAR/binary translation
-- matcher/search code: per-particle sigma updates
-- probabilistic commanders: candidate probability tables and assignment artifacts only
-- Euclid commanders/strategies: bootstrap and iteration-level consolidation
-- refine3D stage initialization: bootstrap once, then retain existing native-grid
-  partition files
-- reconstruction/restoration code: sigma consumption when `l_ml_reg`
-
-The main rule to preserve is simple: sigma remains on the native particle grid.
-Grouped STAR files are the normal cross-iteration model, while the newer
-matcher-written partition files are retained across refine3D stage boundaries
-so the next stage can consolidate them without rerunning `calc_pspec`.
-
-## Forward-looking evolution
-
-The most plausible future simplification is to make all Euclidean sigma
-handling follow the current `sigma_est='global'` policy and remove the
-`sigma_est` option. Bootstrap and steady-state consolidation would then produce
-one spectrum per even/odd half-set rather than separate `stkind` spectra, and
-matching and reconstruction would use those global curves for every active
-particle.
-
-This would not remove the matcher-side per-particle residual calculation. Those
-residuals remain the observations from which the next global even/odd spectra
-are estimated.
-
-This direction is deliberately deferred. Before removing the grouped mode,
-`sigma_est='global'` must be validated in high-resolution refinement against
-the current grouped policy. The comparison must cover representative homogeneous
-and mixed particle populations and demonstrate comparable:
-
-- FSC and reported resolution;
-- high-frequency stability and map quality;
-- orientation, shift, and convergence behavior;
-- robustness when stacks or particle groups have different noise levels.
-
-Until that evidence exists, `sigma_est='group'` and `sigma_est='global'` remain
-supported current behavior. Removal of the option is not part of the present
-stage-reuse refactoring.
+Canonical mode is functionally complete but remains opt-in pending the runtime
+matrix in `doc/refactoring_notes/canonical_sigma2_state_refactoring.md`. After
+that matrix passes, maintainers may change the default and remove legacy runtime
+part/STAR discovery. Both `sigma_est=global` and `sigma_est=group` remain
+scientifically supported; removing grouped estimation is not part of this
+refactor.

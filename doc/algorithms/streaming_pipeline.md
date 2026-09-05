@@ -2,102 +2,141 @@
 
 ## Problem
 
-Process an acquisition while movies are still arriving, yet preserve the same
-scientific stage boundaries used by batch processing. Streaming is an artifact
-flow with restartable stages, not one continuously mutable global estimator.
+Process an acquisition while movies are still arriving, producing corrected
+micrographs, CTF estimates, particle picks, and a global 2D classification
+that improves as data accumulate, with the same estimators the batch
+workflow uses. The online setting changes three things about the algorithms:
+the dataset size is unknown and growing, so schedules cannot be planned in
+advance; contamination must be rejected before it enters a global estimate
+it would otherwise bias; and the cost per unit of new data must stay bounded.
 
 ## Stage graph
 
-The GUI master launches six long-lived stage workers and exchanges framed
-progress/control messages with them. Scientific data move between stages as
-completed project artifacts watched on disk:
+Data flow through six stages, each consuming completed outputs of the one
+before:
 
 ```text
-movies
-  -> P01 preprocessing
-  -> P02 optics assignment
-  -> P03 initial 2D analysis
-  -> P04 reference picking and extraction
-  -> P05 particle sieving
-  -> P06 global pooled 2D classification.
+movies -> preprocessing -> optics groups -> initial 2D analysis
+       -> reference picking and extraction -> particle sieve -> global pooled 2D.
 ```
 
-Each watcher records history so a restart does not import the same completed
-project twice. A stage publishes a project only after its local work is
-complete; downstream stages never consume half-written in-memory state.
+Each stage runs the batch estimator on a bounded set of inputs and publishes
+its result only when that set is finished; a stage never reads a partially
+computed upstream result, and every input is consumed exactly once, so no
+datum is counted twice in any downstream sum.
 
-## P01: preprocessing
+## Preprocessing and optics
 
-Incoming movies are grouped into bounded sets. Each set runs the production
-motion-correction, CTF-estimation, and segmentation-picking algorithms. The
-stage publishes corrected micrographs, CTF/quality metadata, initial
-coordinates, thumbnails, histograms, and time trends. Acquisition metadata and
-fitting policy remain explicit inputs to the same batch-capable commands.
+Movies are grouped into small sets and each set is passed through
+[motion correction](motion_correction.md),
+[CTF estimation](ctf_estimation.md), and the segmentation
+[picker](particle_picking.md). Micrographs failing the CTF-resolution
+(10 A in streaming), ice-fraction (1.0), or astigmatism gates are excluded.
+Accepted micrographs are assigned to optics groups from their acquisition
+metadata; the group is the unit over which the noise model
+and beam-tilt parameters are shared downstream.
 
-## P02: optics assignment
+## Bootstrap: initial 2D analysis
 
-Completed preprocessing projects are imported into a growing micrograph
-project. Micrographs are assigned to optics groups, current optics and
-micrograph STAR products are exported, and a bounded rolling set of optics maps
-is retained. This stage changes grouping metadata, not corrected pixels.
+The segmentation picks are classified once with a small
+[ab initio 2D](abinitio2d.md) run, `ncls = clamp(N/100, 10, 100)` classes at a
+final low-pass of 8 A. Its selected class averages become the reference bank
+for the reference picker. This is what turns a reference-free opening into a
+reference-guided stream, and it is the only stage whose output is consumed
+as a model rather than as data.
 
-## P03: initial analysis
+## Reference picking and extraction
 
-Segmentation-picked particles feed a first 2D classification. Its selected
-class averages provide two products: early quality feedback and the reference
-bank required for stronger reference-based picking. This is the bootstrap that
-turns a reference-free opening into a reference-guided stream.
+With references available, each new micrograph is picked by exhaustive
+Pearson matching against the bank (12 in-plane rotations per reference in
+streaming), and particles are extracted at the box size implied by the
+consensus diameter. Reference revisions replace the bank; micrographs picked
+under an older bank are not repicked.
 
-## P04: reference picking and extraction
+## Particle sieve
 
-The stage watches for eligible micrographs and current picking references,
-runs the exhaustive Pearson reference picker, extracts particle boxes, and
-publishes per-set particle projects. Reference revisions and project cadence
-are explicit stage artifacts rather than hidden shared objects.
+New particles enter a two-tier chunked classification whose purpose is to
+reject junk before it reaches the global pool:
 
-## P05: sieving
+| | coarse chunk | fine chunk |
+|---|---|---|
+| particles per chunk | about 5 000 | about 10 000 |
+| classes | 100 | 100 |
+| sampled particles per iteration | 2 000 | 10 000 |
+| final low-pass | 15 A | 10 A |
 
-New particle projects enter a staged `ptcl_sieve` cycle:
+A coarse chunk closes when its unassigned particles exceed the threshold (the
+micrograph that crosses it is included, keeping slices contiguous); fine
+chunks merge the survivors of rejection-complete coarse chunks. Each chunk
+runs the ab initio 2D schedule on a 128-pixel crop.
 
-1. collect completed chunks and reject low-quality class averages;
-2. generate coarse classification chunks;
-3. promote accepted results to fine chunks unless coarse-only mode is active;
-4. submit pending chunks to the worker queue.
+**Class rejection.** For every class average, 14 features are computed:
+log population, log resolution, centering, log foreground and background
+local variance and their ratio, an FRC proxy, center-to-edge SNR, connected
+component area fraction, presence, band-pass variance in the 100 to 40 A band,
+and a diffuse-signal score. Features are standardized per chunk by median and
+MAD and clipped at four sigma. Hard gates remove classes with population below
+0.35 percent of the chunk, bad pixels, no connected component, or density
+extending beyond the mask. The remaining classes are scored by a logistic
+model with pairwise feature interactions,
 
-The sieve therefore bounds contamination and computational commitment before
-particles enter the global pool. Final-ingestion state is signaled only after
-upstream input has remained idle for the configured interval.
+```text
+eta = b_0 + sum_i b_i z_i + sum_{i<j} g_ij z_i z_j + rho * neighbor signal,
+P(accept) = sigmoid(eta / T),
+```
 
-## P06: global pooled 2D
+and accepted when `P >= 0.5`. Particles of rejected classes are removed from
+the stream. The model rejects on shape statistics, not on resolution alone,
+so early low-resolution chunks are not emptied.
 
-Accepted sieve sets are imported into a growing project and classified with
-sampled stochastic-neighborhood `cluster2D`. Dynamic resolution limits and
-particle thresholds let the pool evolve as data arrive. Stepwise mode imports
-only enough pending sets to reach the next threshold, deferring the rest until
-the pool is ready. Snapshot requests copy stable class products without
-changing the live estimator.
+## Global pooled 2D
 
-## Scientific invariants
+Accepted particles are imported into a growing pool and classified with the
+sampled stochastic-neighborhood [Cluster2D](cluster2d_class_averaging.md)
+estimator, `ncls = 200` by default. Because the dataset grows, the
+coarse-to-fine schedule is expressed in the pool's own iteration count rather
+than in stages:
 
-- Batch and stream stages call the same motion, CTF, picker, extraction, and 2D
-  algorithms wherever their semantics overlap.
-- Stage cadence may differ from batch execution; an artifact becomes visible
-  downstream only after the producing stage completes it.
-- Project/watcher history is part of estimator identity: duplicate import would
-  double-count data.
-- GUI messages report or alter declared stage controls; they are not a second
-  scientific data path.
-- Streaming class rejection and global pooling are distinct. Rejected chunk
-  classes do not silently re-enter the pool.
+```text
+lp(it) = lp_stop + (lp_start - lp_stop) (20 - it) / 20,     it < 20,
+```
+
+with Gaussian-limited references and no shifts for the first 5 iterations,
+then a 5-pixel shift bound; the extremal annealing runs over the same 20
+iterations. From iteration 20 the low-pass follows the class FRCs. The
+first iteration waits until at least `max(20 ncls, 500 x arrival rate)`
+particles are present, and the pool pauses when no new particles have
+arrived, resuming when the count has grown by a rate-dependent margin.
+Beyond 500 000 particles the update becomes fractional,
+`update_frac = (N_old - N_previously_classified) / N_old`, so the cost per
+iteration is bounded by the newly arrived data plus a fixed sample.
+
+Once the pool is at its class limit, has been at Nyquist for five
+consecutive iterations, and a larger box would materially improve Nyquist,
+the crop is enlarged and `lp_stop` lowered accordingly. Snapshot
+requests copy the current class products without disturbing the live
+estimate.
+
+## Rationale
+
+- Running the unchanged batch estimators on bounded sets keeps every
+  streaming result reproducible offline; the only online-specific logic is
+  scheduling and rejection.
+- Rejecting at the chunk level, with a model trained on class-average
+  features, removes contamination when it is cheap to identify (in a small,
+  homogeneous chunk) rather than after it has been absorbed into a
+  200-class pool.
+- Expressing the pool's continuation schedule in iterations rather than
+  stages is what lets the same coarse-to-fine logic work when the dataset
+  has no known final size.
 
 ## Implementation
 
-- Master: `src/main/stream/simple_stream_p00_master.f90`.
 - Stages: `src/main/stream/simple_stream_p01_preprocess_new.f90` through
-  `src/main/stream/simple_stream_p06_pool2D_new.f90`, with
-  `simple_stream_p03_initial_analysis.f90` at stage 3.
-- Watchers/state: `src/main/stream/simple_stream_watcher.f90` and
-  `src/main/stream/simple_stream_state.f90`.
-- Chunk/pool helpers: `src/main/stream/simple_stream_chunk*.f90` and
-  `src/main/stream/simple_stream_pool2D_utils.f90`.
-
+  `src/main/stream/simple_stream_p06_pool2D_new.f90`,
+  `src/main/stream/simple_stream_p03_initial_analysis.f90`.
+- Sieve and chunking: `src/main/sieve/simple_ptcl_sieve.f90`.
+- Class-quality features and model: `src/main/cavg_quality/simple_cavg_quality_*.f90`.
+- Pool schedule: `src/main/stream/simple_stream_pool2D_utils.f90`.
+- Diameter consensus: `src/main/stream/simple_mini_stream_utils.f90`.
+- Policies: `doc/policies/sieving_and_rejection/`.

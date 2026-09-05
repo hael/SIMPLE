@@ -12,12 +12,15 @@
 !  simple_euclid_sigma2, so anything reachable from the sigma2 side must stay
 !  builder-free. Callers pass the pieces (pftc, esig, oris) explicitly.
 module simple_sigma2_files
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_cmdline,       only: cmdline
 use simple_euclid_sigma2, only: euclid_sigma2, sigma2_star_from_iter
 use simple_parameters,    only: parameters
 use simple_polarft_calc,  only: polarft_calc
 use simple_sp_project,    only: sp_project
+use simple_sigma2_state,  only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+use simple_sigma2_state_file, only: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 implicit none
 
 public :: carry_over_prior_sigma_files, pick_sigma_group_file, load_sigma2_groups
@@ -153,38 +156,69 @@ contains
         end do
     end function trailing_iter_from_sigma_group_name
 
-    !>  \brief  Carries over prior sigma2 files, picks the group star file and
-    !!          loads per-particle-per-shell spectra into esig. Returns whether
-    !!          usable spectra were obtained; a .false. result is a normal
-    !!          outcome (no upstream sigma2 available), not an error -- callers
-    !!          decide what that means for them.
+    !>  \brief  Loads grouped sigma2 into esig. Canonical mode resolves and
+    !!          validates the project-registered committed state. Legacy mode
+    !!          carries over prior files and selects the group STAR. Returns
+    !!          whether usable spectra were obtained; a .false. result is a
+    !!          normal legacy outcome -- callers decide what that means.
     !!
     !!          Only acts when objfun=euclid, mirroring the convention that
     !!          objfun=cc needs no sigmas.
     !!
-    !!          NOTE, because it is surprising: this temporarily widens
+    !!          LEGACY NOTE, because it is surprising: this temporarily widens
     !!          params%fromp/top to the whole particle range and forces global
     !!          sigma dispatch. Reused star files from upstream refine/abinitio
     !!          runs are usually single-group, so indexing groups by stkind
     !!          against a 1-group table would be wrong. fromp/top are restored
     !!          before returning; sigma_est is deliberately left set.
-    subroutine load_sigma2_groups( params, pftc, esig, os, cline, loaded )
+    subroutine load_sigma2_groups( params, pftc, esig, project, os, cline, loaded )
         class(parameters),    intent(inout) :: params
         class(polarft_calc),  intent(inout) :: pftc
         class(euclid_sigma2), intent(inout) :: esig
+        class(sp_project),    intent(in)    :: project
         class(oris),          intent(inout) :: os
         class(cmdline),       intent(inout) :: cline
         logical,              intent(out)   :: loaded
-        type(string) :: sigma_part_fname, sigma_group_fname
-        integer      :: fromp_saved, top_saved, noris
-        logical      :: has_group
+        type(string)     :: sigma_part_fname, sigma_group_fname, state_path
+        integer(int64)   :: layout_digest
+        integer          :: fromp_saved, top_saved, noris, expected_grouping, expected_ngroups
+        integer          :: iptcl, status
+        logical          :: has_group, state_path_found
+        character(len=STDLEN) :: message
         loaded = .false.
-        call carry_over_prior_sigma_files(params)
-        call pick_sigma_group_file(params, sigma_group_fname, has_group)
-        if( .not. has_group ) return
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
         noris = os%get_noris()
         if( noris < 1 ) return
+        if( params%l_sigma_canonical )then
+            call project%get_sigma2_state_path(state_path, state_path_found)
+            if( .not. state_path_found ) THROW_HARD('particle project has no canonical sigma2 state path')
+            layout_digest = sigma2_state_project_layout_digest(project, os)
+            if( params%l_sigma_glob )then
+                expected_grouping = SIGMA2_GROUP_GLOBAL
+                expected_ngroups  = 1
+            else
+                expected_grouping = SIGMA2_GROUP_STACK
+                expected_ngroups  = 0
+                do iptcl = 1, noris
+                    if( os%get_state(iptcl) <= 0 ) cycle
+                    expected_ngroups = max(expected_ngroups, os%get_int(iptcl, 'stkind'))
+                enddo
+            endif
+            call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
+                &fdim(params%box)-1, noris, layout_digest, status, message, &
+                &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=expected_grouping, &
+                &expected_ngroups=expected_ngroups)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            call esig%new(params, pftc, state_path, params%box)
+            call esig%read_groups(os)
+            call esig%allocate_ptcls
+            loaded = allocated(esig%sigma2_noise)
+            call state_path%kill
+            return
+        endif
+        call carry_over_prior_sigma_files(params)
+        call pick_sigma_group_file(params, sigma_group_fname, has_group)
+        if( .not. has_group ) return
         sigma_part_fname    = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
         fromp_saved         = params%fromp
         top_saved           = params%top

@@ -2,94 +2,124 @@
 
 ## Problem
 
-Construct stable 2D class averages and assignments from particles without
-assuming trusted input references. The workflow must explore broadly at low
-resolution, introduce probabilistic assignment only after classes become
-meaningful, and finish with complete all-particle metadata.
+Construct stable 2D class averages and assignments from random
+initialization. The alternating estimator in
+[Cluster2D](cluster2d_class_averaging.md) converges to a local optimum, and
+from a random start the nearest local optimum is poor: a few classes capture
+most particles, high-frequency noise is fitted before low-frequency shape, and
+shifts absorb misassignment. Ab initio 2D is a continuation scheme that steers
+the alternation toward a good optimum by controlling three things over time:
+the admitted bandwidth, the amount of stochasticity in the search, and the
+number of particles updated per iteration.
 
-## Stage controller
+## Continuation schedule
 
-`abinitio2D` is a controller around repeated `cluster2D` invocations. It owns
-the low-pass schedule, crop and translation policy, reference initialization,
-search-mode transitions, outer sample size, and final coverage passes. The
-matcher and classaverager retain their ordinary meanings at every stage.
+The run is a sequence of `cluster2D` stages (six by default, five when the
+even/odd final stage is disabled), grouped into two phases: stages 1 to 4 are
+the exploratory phase, stages 5 and 6 the consolidation phase.
 
-The production schedule uses sampled stochastic-neighborhood search in stages
-1 and 2. From stage 3 onward, `refine=prob` uses dense probabilistic candidate
-tables. In `prob_snhc`, intermediate stages retain a sparse neighborhood table,
-but the last staged call becomes dense `prob` so the previous class remains an
-explicit candidate and class-overlap convergence can be measured.
-
-## Initial references and frequency march
-
-Initial class references are generated under the requested initialization
-policy and begin at a coarse automatic low-pass limit. Each later stage admits
-finer frequencies and may change crop and translation limits. A fixed public
-`lp` override begins only when ML-regularized stages are active; the initial
-Gaussian-reference stage keeps its automatic coarse limit so initialization
-regularization remains meaningful.
-
-The workflow is Cartesian. Polar Fourier transforms accelerate matching, but
-there is no public alternative polar workflow branch.
-
-## Outer sample target
-
-The run-local target is
+**Bandwidth.** The low-pass limit starts coarse and halves its distance to the
+target each stage:
 
 ```text
-N_target = nsample, default 200000
-rho      = min(1, min(N_active,N_target)/N_active).
+lp_start = clamp(mskdiam/12, 15, 20) A
+lp_stop  = clamp(mskdiam/22,  6,  8) A
+lp_1 = lp_start,   lp_i = lp_{i-1} - (lp_{i-1} - lp_stop)/2,   lp_{n-1} = lp_stop.
 ```
 
-Stage 1 may use a random subset but never restores old class sums
-fractionally. Later stages use update-count-biased sampling or reproduce the
-subset chosen by probabilistic pre-alignment. When `rho<1`, previous class sums
-are restored using class-local realized fractions.
+The defaults scale with the mask diameter because a larger particle has more
+low-frequency structure to classify on. The final stage does not fix `lp` at
+all: it lets the band follow the class FRCs, so the last iterations match at
+whatever resolution the classes have actually reached.
 
-The probabilistic pre-step chooses the outer subset exactly once. Table workers
-and the matcher reproduce it; none may draw a second particle sample.
+**Search stochasticity.** Stages 1 and 2 use stochastic neighborhood hill
+climbing with sampled in-plane and class choices (`snhc_smpl`), which visits
+only a random fraction of classes per particle and accepts random improvements.
+From stage 3 the search switches to the probabilistic mode: a global
+class-likelihood table is built and particles are assigned to classes by a
+balanced stochastic assignment ([sampling](sampling_and_fractional_updates.md)).
+In `prob_snhc`, the intermediate stages keep that table sparse (only a
+neighborhood of classes is scored per particle) and the last stage densifies it
+so every particle's previous class is an explicit candidate and class-overlap
+statistics are meaningful.
 
-## Candidate sampling
-
-For an active particle, the probability table evaluates an explicit top-K
-class/in-plane support. Euclidean distances are treated as negative log
-weights:
+**Particle subset.** With `N_active` particles and a per-iteration target
+`nsample` (default 200 000),
 
 ```text
-p_j = exp[-(d_j-d_min)] / sum_l exp[-(d_l-d_min)].
+update_frac = min(1, nsample / N_active),
 ```
 
-Correlation mode uses `d=1-clamp(cc,0,1)` as a monotone pseudo-likelihood.
-One candidate is sampled, optionally profile-refined, and written to the
-assignment artifact. The matcher then performs the hard particle update. The
-class average is not a soft weighted sum over all table candidates.
+active when below 0.99. Stage 1 uses one fixed random subset for all its
+iterations (sticky), so that the random references are overwritten by a
+consistent population; stage 2 begins carrying class sums forward
+fractionally; from stage 3 the subset is redrawn every iteration, biased toward
+particles with the fewest updates so coverage evens out. Stage iteration
+counts are stretched when `update_frac` is small so that each particle is
+expected to be visited at least once per phase:
 
-## Continuous in-plane polish
+```text
+nits_coverage = clamp( ceil((1/update_frac - 1)/3), 1, 10 ).
+```
 
-`inpl_cont=yes` replaces callback-style local angle/shift refinement with a
-joint bounded `(sx,sy,theta)` solve after a class/cell decision. Probability
-artifacts remain discrete: they store the rounded in-plane cell and its shift.
-Only the durable hard assignment owns a fractional angle. Search-control
-statistics use discrete cells so sub-grid polish cannot cause premature
-convergence. The complete optimizer contract is in
-[continuous in-plane refinement](continuous_inplane_refinement_abinitio2D.md).
+**Regularization.** Stage 1 references are Gaussian-noise images (or random
+particles, or averages of random labels), band-limited by a Gaussian at `lp_1`
+rather than by an FRC-derived filter, with no shifts, no centering, and no ML
+regularization. Any FRC between random halves would be meaningless there. From
+stage 2 onward class averages are restored as MAP estimates with the
+FRC-derived signal prior, and shifts are allowed up to
+`trs = min(5, max(2, 12 A / smpd_crop))` pixels.
+
+**Sampling grid.** The whole run works on one downscaled copy of the data,
+targeting 2.67 A per pixel with a minimum box of 88 pixels; the field of view
+is preserved. Nothing in the schedule needs finer sampling than `lp_stop`.
+
+## Candidate sampling within a stage
+
+In the probabilistic stages the per-particle candidate distribution over
+classes is
+
+```text
+p_j = exp[-(d_j - d_min)] / sum_l exp[-(d_l - d_min)],
+```
+
+where `d_j` is the whitened Euclidean loss for class `j` at the seed shift
+(for the correlation objective, `d = 1 - clamp(cc, 0, 1)`). Because the losses
+are already noise-normalized log-likelihoods, no temperature is needed; the
+`d_min` shift is only overflow protection. One candidate is drawn, its shift
+is refined, and the matcher commits it as a hard assignment. The class
+average is never a soft weighted sum over all candidates.
 
 ## Coverage and final products
 
-`fillin=yes` during staged work is a coverage guard, not a missing-only
-sampler. After any sampled staged update, `abinitio2D` therefore runs a separate
-dense greedy all-particle pass with fractional update disabled. It refreshes
-class, angle, and shift for every active particle before final class averaging.
+Fractional updates leave some particles with stale poses. After any sampled
+stage, the run therefore ends with a dense, greedy, all-particle pass with
+fractional updates off. Every active particle's class, angle, and shift is
+refreshed before the final class averages are restored, so the published
+averages and FRCs describe the assignments that accompany them.
 
-The workflow publishes final merged/even/odd class stacks, FRCs, ranked class
-products, assignments, distances, sigma state, and updated project segments.
+The run publishes merged, even, and odd class stacks, per-class FRCs, ranked
+class products, and the per-particle assignments, scores, and noise spectra.
+
+## Rationale
+
+- Coarse-to-fine bandwidth is a homotopy: at 20 A the objective is smooth and
+  has few minima, and the solution found there is a good starting point for the
+  sharper objective at 15 A, and so on.
+- Stochastic acceptance early and greedy acceptance late is annealing. The
+  switch to balanced probabilistic assignment at stage 3 addresses the
+  class-collapse failure mode directly: a class cannot take a second particle
+  until it wins another draw, so populations stay comparable.
+- Random noise references are deliberately uninformative, so the first stage's
+  structure comes entirely from the data.
+- Fractional updates make the cost per iteration independent of dataset size;
+  the fill-in pass restores the guarantee that the final products are
+  self-consistent.
 
 ## Implementation
 
+- Stage schedule: `src/main/simple_abinitio2D_controller.f90`.
 - Orchestration: `src/main/commanders/simple/simple_commanders_abinitio2D.f90`.
-- Stage policy: `src/main/simple_abinitio2D_controller.f90`.
 - Iteration execution: `src/main/strategies/parallelization/simple_cluster2D_strategy.f90`.
-- Search and restoration: `src/main/strategies/search/simple_strategy2D_matcher.f90`
-  and `src/main/class/simple_classaverager.f90`.
+- Class-likelihood table: `src/main/simple_eul_prob_tab2D.f90`.
 - Policy: `doc/policies/abinitio2D_policy.md`.
-

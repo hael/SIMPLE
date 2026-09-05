@@ -69,10 +69,12 @@ contains
 
     subroutine exec_bootstrap_rec3D( self, cline )
         use simple_rec3D_pcg_strategy, only: NU_AUTOTARGET_MIN, NU_AUTOTARGET_MAX
+        use simple_commanders_euclid, only: commander_calc_pspec
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(commander_rec3D) :: xrec3D
-        type(cmdline)         :: cline_unreg, cline_reg, cline_nu_calib
+        type(commander_calc_pspec) :: xcalc_pspec
+        type(cmdline)         :: cline_unreg, cline_reg, cline_nu_calib, cline_pspec
         type(parameters)      :: params
         type(string)          :: sigma_star
         real                  :: inherited_nu_supp_target
@@ -104,8 +106,22 @@ contains
         call prepare_bootstrap_rec_cline(cline_unreg, l_regularized=.false.)
         write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 1: UNREGULARIZED EVEN/ODD RECONSTRUCTION'
         call xrec3D%execute(cline_unreg)
-        call write_bootstrap_sigma2_from_halfmaps(sigma_star)
-        write(logfhandle,'(A,1X,A)') '>>> BOOTSTRAP_REC3D WROTE SIGMA STAR:', sigma_star%to_char()
+        if( params%l_sigma_canonical )then
+            cline_pspec = cline
+            call cline_pspec%set('prg',       'calc_pspec')
+            call cline_pspec%set('mkdir',              'no')
+            call cline_pspec%set('objfun',       'euclid')
+            call cline_pspec%set('sigma_est',    'global')
+            call cline_pspec%delete('postprocess')
+            call cline_pspec%delete('combine_eo')
+            call cline_pspec%delete('rec_backend')
+            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D INITIALIZING CANONICAL SIGMA2 FROM PARTICLE POWER'
+            call xcalc_pspec%execute(cline_pspec)
+            call cline_pspec%kill
+        else
+            call write_bootstrap_sigma2_from_halfmaps(sigma_star)
+            write(logfhandle,'(A,1X,A)') '>>> BOOTSTRAP_REC3D WROTE SIGMA STAR:', sigma_star%to_char()
+        endif
         cline_reg = cline
         call prepare_bootstrap_rec_cline(cline_reg, l_regularized=.true.)
         if( l_inherited_nu_supp_target .and. .not. cline_reg%defined('pcg_nu_supp_target') ) &
@@ -428,7 +444,7 @@ contains
             call execute_rec3D_pcg_worker(params, build, cline, pinds)
         else
             if( params%cc_objfun == OBJFUN_EUCLID )then
-                call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, &
+                call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
                     &cline, l_sigma_loaded)
                 if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
             endif

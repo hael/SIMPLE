@@ -2,8 +2,9 @@
 module simple_project_merge_tester
 use simple_projfile_utils, only: merge_selected_project_files, validate_and_repair_project_file, remap_project_paths
 use simple_sp_project,     only: sp_project
+use simple_fileio,         only: filepath
 use simple_string,         only: string
-use simple_syslib,         only: del_file, file_exists, simple_mkdir, simple_rmdir
+use simple_syslib,         only: del_file, file_exists, simple_getcwd, simple_mkdir, simple_rmdir
 use simple_test_utils
 implicit none
 
@@ -19,6 +20,7 @@ contains
         call test_remap_project_paths()
         call test_remap_project_paths_allows_unmatched_scope()
         call test_remap_project_paths_scoped_roots()
+        call test_sigma2_state_path_registration()
     end subroutine run_all_project_merge_tests
 
     subroutine test_merge_pruned_stack_indexing_heterogeneous_ctf()
@@ -310,6 +312,23 @@ contains
         call simple_rmdir(root, status)
         call assert_int(0, status, 'scoped remap test directory cleanup')
     end subroutine test_remap_project_paths_scoped_roots
+
+    subroutine test_sigma2_state_path_registration()
+        type(sp_project) :: proj
+        type(string) :: requested, registered, cwd, expected
+        logical :: found
+        write(*,'(A)') 'test_sigma2_state_path_registration'
+        requested = 'sigma2_state.bin'
+        call simple_getcwd(cwd)
+        expected = filepath(cwd, requested)
+        call proj%get_sigma2_state_path(registered, found)
+        call assert_false(found, 'canonical sigma2 path initially absent')
+        call proj%set_sigma2_state_path(requested)
+        call proj%get_sigma2_state_path(registered, found)
+        call assert_true(found, 'canonical sigma2 path registered')
+        call assert_string_eq(expected%to_char(), registered, 'canonical sigma2 path retained')
+        call proj%kill
+    end subroutine test_sigma2_state_path_registration
 
     subroutine create_empty_file( fname )
         class(string), intent(in) :: fname

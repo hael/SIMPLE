@@ -518,27 +518,29 @@ contains
                     call it%next()
                 enddo
                 nimported = count(l_include_now)
-                ! average all previously imported sigmas
-                l_imported  = setslist%get_included_flags()
-                allocate(sigmas(count(l_imported)))
-                i  = 0
-                it = setslist%begin()
-                do iset = 1,setslist%size()
-                    call it%get(crec)
-                    if( .not.l_imported(iset) )then
-                        ! move iterator
+                if( .not. params%l_sigma_canonical )then
+                    ! Legacy pools seed the next layout from imported grouped
+                    ! STAR files. Canonical pools rebuild a state for the exact
+                    ! selected particle layout in iterate_pool.
+                    l_imported  = setslist%get_included_flags()
+                    allocate(sigmas(count(l_imported)))
+                    i  = 0
+                    it = setslist%begin()
+                    do iset = 1,setslist%size()
+                        call it%get(crec)
+                        if( .not.l_imported(iset) )then
+                            call it%next()
+                            cycle
+                        endif
+                        i         = i+1
+                        ind       = crec%id
+                        call spprojs(iset)%read_segment('out', crec%projfile)
+                        call spprojs(iset)%get_sigma2(sigmas(i))
                         call it%next()
-                        cycle
-                    endif
-                    i         = i+1
-                    ind       = crec%id
-                    call spprojs(iset)%read_segment('out', crec%projfile)
-                    call spprojs(iset)%get_sigma2(sigmas(i))
-                    ! move iterator
-                    call it%next()
-                enddo
-                call average_sigma2_groups(sigma2_star_from_iter(get_pool_iter()+1), sigmas)
-                deallocate(sigmas)
+                    enddo
+                    call average_sigma2_groups(sigma2_star_from_iter(get_pool_iter()+1), sigmas)
+                    deallocate(sigmas)
+                endif
                 ! initialize fundamental parameters & clustering
                 if( nptcls_glob == 0 )then
                     params%smpd = pool%get_smpd()

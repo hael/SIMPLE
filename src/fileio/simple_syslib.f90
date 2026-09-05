@@ -9,11 +9,30 @@ use simple_string_utils
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 implicit none
+private :: c_sync_file_path, c_sync_directory_path, c_atomic_replace_path, syslib_c_path
 ! local version of throw_hard to enable public feature
 #define THROW_ERROR(msg) call simple_exception(msg, __FILENAME__ , __LINE__)
 
 !> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
 interface
+
+    function c_sync_file_path(path) bind(c, name="simple_sync_file_path")
+        import :: c_char, c_int
+        character(kind=c_char), dimension(*), intent(in) :: path
+        integer(c_int) :: c_sync_file_path
+    end function c_sync_file_path
+
+    function c_sync_directory_path(path) bind(c, name="simple_sync_directory_path")
+        import :: c_char, c_int
+        character(kind=c_char), dimension(*), intent(in) :: path
+        integer(c_int) :: c_sync_directory_path
+    end function c_sync_directory_path
+
+    function c_atomic_replace_path(source, destination) bind(c, name="simple_atomic_replace_path")
+        import :: c_char, c_int
+        character(kind=c_char), dimension(*), intent(in) :: source, destination
+        integer(c_int) :: c_atomic_replace_path
+    end function c_atomic_replace_path
 
     function rmdir(dirname) bind(C, name="rmdir")
         use, intrinsic :: iso_c_binding
@@ -566,6 +585,72 @@ contains
         endif
         deallocate(f1,f2)
     end subroutine simple_rename
+
+    !> Flush a named file through the operating system. The file must already exist.
+    subroutine simple_sync_file( file, status )
+        class(*),         intent(in)  :: file
+        integer, optional, intent(out) :: status
+        character(kind=c_char, len=:), allocatable :: path
+        integer(c_int) :: cstat
+        call syslib_c_path(file, path)
+        cstat = c_sync_file_path(path)
+        if( present(status) )then
+            status = int(cstat)
+        else if( cstat /= 0 )then
+            call simple_error_check(int(cstat), 'simple_sync_file failed for '//path)
+        endif
+    end subroutine simple_sync_file
+
+    !> Flush directory metadata after an atomic publication.
+    subroutine simple_sync_dir( directory, status )
+        class(*),         intent(in)  :: directory
+        integer, optional, intent(out) :: status
+        character(kind=c_char, len=:), allocatable :: path
+        integer(c_int) :: cstat
+        call syslib_c_path(directory, path)
+        cstat = c_sync_directory_path(path)
+        if( present(status) )then
+            status = int(cstat)
+        else if( cstat /= 0 )then
+            call simple_error_check(int(cstat), 'simple_sync_dir failed for '//path)
+        endif
+    end subroutine simple_sync_dir
+
+    !> Atomically replace destination with source without deleting destination first.
+    subroutine simple_atomic_replace( source, destination, status )
+        class(*),         intent(in)  :: source, destination
+        integer, optional, intent(out) :: status
+        character(kind=c_char, len=:), allocatable :: src, dst
+        integer(c_int) :: cstat
+        if( .not. file_exists(source) )then
+            if( present(status) )then
+                status = 1
+                return
+            endif
+            THROW_ERROR('atomic-replace source does not exist')
+        endif
+        call syslib_c_path(source, src)
+        call syslib_c_path(destination, dst)
+        cstat = c_atomic_replace_path(src, dst)
+        if( present(status) )then
+            status = int(cstat)
+        else if( cstat /= 0 )then
+            call simple_error_check(int(cstat), 'simple_atomic_replace failed for '//src)
+        endif
+    end subroutine simple_atomic_replace
+
+    subroutine syslib_c_path( input_path, output_path )
+        class(*), intent(in) :: input_path
+        character(kind=c_char, len=:), allocatable, intent(out) :: output_path
+        select type(input_path)
+            type is(string)
+                output_path = trim(input_path%to_char())//c_null_char
+            type is(character(*))
+                output_path = trim(adjustl(input_path))//c_null_char
+            class default
+                call simple_exception('Unsupported path type', __FILENAME__, __LINE__)
+        end select
+    end subroutine syslib_c_path
 
     function simple_chmod( pathname, mode ) result( status )
         class(*),         intent(in) :: pathname

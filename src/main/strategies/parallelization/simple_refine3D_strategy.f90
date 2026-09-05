@@ -1,4 +1,5 @@
 module simple_refine3D_strategy
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_refine3D_fnames
 use simple_matcher_refvol_utils
@@ -11,6 +12,10 @@ use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap, sigma2_star_from_iter
+use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
+    &sigma2_state_project_layout_digest, sigma2_state_range_path, sigma2_state_validate_identity
+use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
+    &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, get_pcg_nu_evidence_bench_seconds
 implicit none
 
@@ -599,7 +604,7 @@ contains
         endif
         if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
         ! objfun=euclid initialisation
-        self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
+        self%l_sigma = sigma_update_enabled(params)
         self%l_sigma_transition_ready = trim(params%sigma_transition_ready) == 'yes'
         self%cline_calc_group_sigmas = cline
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
@@ -610,7 +615,17 @@ contains
                 call build%spproj_field%partition_eo
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( sigma2_stage_needs_bootstrap(startit) )then
+            if( params%l_sigma_canonical )then
+                if( canonical_sigma2_needs_bootstrap(params, build) )then
+                    cline_calc_pspec = cline
+                    call strip_refine3D_search_only_args(cline_calc_pspec)
+                    call cline_calc_pspec%set('prg', 'calc_pspec')
+                    call xcalc_pspec%execute(cline_calc_pspec)
+                    call build%spproj%read_segment('projinfo', params%projfile)
+                else
+                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
+                endif
+            else if( sigma2_stage_needs_bootstrap(startit) )then
                 cline_calc_pspec = cline
                 call strip_refine3D_search_only_args(cline_calc_pspec)
                 call cline_calc_pspec%set('prg', 'calc_pspec')
@@ -699,7 +714,9 @@ contains
         call materialize_reprojection_model(params, cline, current_build=build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! Per-iteration sigma update (euclid)
-        if( self%l_sigma .and. self%l_sigma_transition_ready )then
+        if( self%l_sigma .and. params%l_sigma_canonical )then
+            ! Canonical grouped state is committed immediately after each matcher pass.
+        else if( self%l_sigma .and. self%l_sigma_transition_ready )then
             if( trim(params%sigma_transition_ready) == 'yes' )then
                 write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
             else
@@ -758,7 +775,14 @@ contains
             call remove_partial_rec_files(params)
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
+        if( self%l_sigma .and. params%l_sigma_canonical ) call prepare_canonical_sigma_update(params, build)
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
+        if( self%l_sigma .and. params%l_sigma_canonical )then
+            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
+            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
+        endif
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
@@ -984,7 +1008,7 @@ contains
                         call chain_files(2)%kill
                     enddo
                 endif
-                if( params%cc_objfun==OBJFUN_EUCLID )then
+                if( params%cc_objfun==OBJFUN_EUCLID .and. .not. params%l_sigma_canonical )then
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -1000,7 +1024,7 @@ contains
                 ! continued run keeps its trailed statistics instead of
                 ! re-seeding from the previous halfmaps
                 if( params%l_trail_rec ) call carry_over_trail_rec_chains(params, prev_refine_path)
-                if( params%cc_objfun==OBJFUN_EUCLID )then
+                if( params%cc_objfun==OBJFUN_EUCLID .and. .not. params%l_sigma_canonical )then
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -1009,6 +1033,14 @@ contains
                         call simple_copy_file(list(i), target_name)
                     end do
                     deallocate(list)
+                endif
+            endif
+            if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+                if( canonical_sigma2_needs_bootstrap(params, build) )then
+                    call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+                    call build%spproj%read_segment('projinfo', params%projfile)
+                else
+                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
                 endif
             endif
         else
@@ -1020,8 +1052,15 @@ contains
             endif
             ! Base objfun=cc never reads sigmas. Wrapper-owned external-reference
             ! transitions bootstrap before entering this strategy.
-            if( params%cc_objfun == OBJFUN_EUCLID )then
-                if( sigma2_stage_needs_bootstrap(params%startit) )then
+            if( sigma_update_enabled(params) )then
+                if( params%l_sigma_canonical )then
+                    if( canonical_sigma2_needs_bootstrap(params, build) )then
+                        call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+                        call build%spproj%read_segment('projinfo', params%projfile)
+                    else
+                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
+                    endif
+                else if( sigma2_stage_needs_bootstrap(params%startit) )then
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
                 else
                     ! A grouped sigma file is partition-independent. Skip the
@@ -1086,7 +1125,7 @@ contains
             endif
             call invalidate_fresh_start_refs_from_volumes(params, cline, params%startit)
             ! euclid first-sigmas
-            if( params%cc_objfun==OBJFUN_EUCLID )then
+            if( sigma_update_enabled(params) )then
                 call self%cline_calc_group_sigmas%set('nthr', self%nthr_master)
             endif
         endif
@@ -1104,6 +1143,70 @@ contains
         call vol%kill
         call fsc_file%kill
     end subroutine distr_initialize
+
+    logical function canonical_sigma2_needs_bootstrap(params, build) result(needs_bootstrap)
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: state_path
+        integer(int64) :: layout_digest
+        integer :: expected_ngroups, iptcl, status
+        logical :: found
+        character(len=STDLEN) :: message
+        needs_bootstrap = .true.
+        if( trim(params%oritype) /= 'ptcl3D' ) &
+            &THROW_HARD('canonical sigma2 currently requires oritype=ptcl3D')
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) return
+        call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
+        if( status /= 0 )then
+            write(logfhandle,'(A)') '>>> SIGMA2 INIT: rebuilding canonical state: '//trim(message)
+            call state_path%kill
+            return
+        endif
+        layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
+        if( layout_digest == 0_int64 ) return
+        if( params%l_sigma_glob )then
+            expected_ngroups = 1
+            call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
+                &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
+                &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
+                &expected_ngroups=expected_ngroups)
+        else
+            expected_ngroups = 0
+            do iptcl = 1, params%nptcls
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                expected_ngroups = max(expected_ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
+            enddo
+            call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
+                &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
+                &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
+                &expected_ngroups=expected_ngroups)
+        endif
+        needs_bootstrap = status /= 0
+        if( needs_bootstrap ) write(logfhandle,'(A)') '>>> SIGMA2 INIT: rebuilding canonical state: '//trim(message)
+        call state_path%kill
+    end function canonical_sigma2_needs_bootstrap
+
+    subroutine prepare_canonical_sigma_update(params, build)
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: state_path, candidate_path, range_path
+        integer :: ipart, status
+        logical :: found
+        character(len=STDLEN) :: message
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
+        candidate_path = sigma2_state_candidate_path(state_path%to_char())
+        do ipart = 1, params%nparts
+            range_path = sigma2_state_range_path(state_path%to_char(), ipart, params%numlen)
+            call del_file(range_path)
+        enddo
+        call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        call state_path%kill
+        call candidate_path%kill
+        call range_path%kill
+    end subroutine prepare_canonical_sigma_update
 
     ! Grouped sigmas do not depend on the worker partition layout. Once they
     ! are selected as the startup source, remove every stale partition-local
@@ -1165,7 +1268,9 @@ contains
         call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! per-iteration group sigmas (euclid)
-        if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
+        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+            ! Canonical grouped state is committed immediately after each matcher pass.
+        else if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
             if( trim(params%sigma_transition_ready) == 'yes' )then
                 write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
             else
@@ -1223,10 +1328,17 @@ contains
             call remove_partial_rec_files(params)
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
+        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+            call prepare_canonical_sigma_update(params, build)
+        endif
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+        endif
         do state = 1, params%nstates
             call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
         enddo
@@ -1360,6 +1472,11 @@ contains
         if( allocated(state_pops) ) deallocate(state_pops)
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
+
+    pure logical function sigma_update_enabled(params) result(enabled)
+        type(parameters), intent(in) :: params
+        enabled = params%cc_objfun == OBJFUN_EUCLID .or. trim(params%cc_emit_sigma) == 'yes'
+    end function sigma_update_enabled
 
     subroutine distr_finalize_iteration(self, params, build)
         class(refine3D_distr_strategy), intent(inout) :: self

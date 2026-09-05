@@ -1,62 +1,118 @@
-# Motion Correction in SIMPLE
+# Motion Correction
 
-## Overview
+## Problem
 
-SIMPLE performs movie motion correction in two stages: a global translational alignment stage followed by a local deformation-modeling stage. The algorithm first reads the movie frames from the detector stack and preprocesses them by optional EER fractionation, gain correction, defective-pixel suppression, optional dose-based truncation of the frame series, and optional Fourier downscaling before alignment begins. By default, the algorithm uses the central frame as the alignment reference.
+A dose-fractionated movie records `n` frames of the same field of view while
+the specimen drifts and deforms under the beam. The task is to estimate a
+displacement field `u(x, y, t)` and produce an integrated micrograph in which
+every frame has been warped by `-u` before summation. The estimate is made in
+two stages: a single translation per frame for the whole field of view, then a
+smooth space-time polynomial for the residual local motion. A model is only
+accepted if it reproduces the measured data within tolerance; otherwise the
+simpler model is used.
 
-## Global Alignment
+## Preprocessing
 
-In the first stage, SIMPLE estimates a single global translational trajectory for the full field of view. It does so with a hybrid iterative registration scheme that combines a coarse semi-discrete correlation search with a continuous Fourier-space refinement.
+Frames are gain-corrected, optionally EER-fractionated, hot-pixel cured
+(values outside 6 standard deviations replaced by a local window average),
+optionally truncated by dose, and Fourier-cropped to the smallest FFT-friendly
+box that still supports the final alignment resolution `lp_stop`. The central
+frame is the fixed reference (frame 1 under the RELION convention).
 
-During the discrete phase, the algorithm shifts frames according to the current translation estimates, forms a weighted reference average, and re-registers each frame to update the translations. As the iterations proceed, it tightens the alignment resolution from an initial low-pass limit to a final low-pass limit and updates frame weights from the per-frame correlations.
+## Global alignment
 
-The algorithm then refines the global translations by continuous per-frame optimization in Fourier space against leave-one-out references. After this stage, SIMPLE applies the estimated global shifts to all frames before proceeding to local motion estimation.
+**Objective.** With frame transforms `F_j` and per-frame weights `w_j`, the
+shift vector `d = (d_1..d_n)` maximizes the leave-one-out correlation of each
+frame with the weighted sum of the others,
 
-## Local Patch Alignment
+```text
+J(d) = sum_i corr( F_i shifted by d_i ,  sum_{j != i} w_j F_j shifted by d_j ),
+```
 
-In the second stage, SIMPLE estimates residual nonuniform motion from a regular grid of image patches. It chooses the patch grid automatically from the physical micrograph dimensions using a target patch size of about 200 A while enforcing a minimum patch size in pixels after any movie scaling.
+evaluated in a band `[hp, lp]` with a cosine-tapered band-pass and an
+optional B-factor envelope `exp(-B s^2 / 4)` (`B = 50 A^2` by default in
+preprocessing). Leaving frame `i` out of its own reference removes the
+trivial self-correlation that would otherwise bias `d_i` to zero.
 
-SIMPLE then aligns each patch stack independently with the same hybrid translational alignment engine used in the global stage, thereby obtaining a local shift trajectory for each patch across frames.
+**Discrete phase.** Iterate (3 to 10 times): form the weighted reference,
+compute the full cross-correlation map of each frame by FFT, take the integer
+peak within `[-trs, trs]^2`, and refine to sub-pixel precision by parabolic
+interpolation along each axis, `delta = (a - c) / (2(a + c - 2b))`. The band
+tightens from `lp_start = 8 A` to `lp_stop = 5 A` over the iterations, and
+the weights are recomputed from the correlations:
 
-## Deformation Model
+```text
+cc_i <- max(cc_i, 0);  normalize to [0, 1] if max/min >= 1.5;
+w_i = exp(-(1 - cc_i)) / sum_j exp(-(1 - cc_j)).
+```
 
-SIMPLE regularizes the patch trajectories by fitting a smooth deformation model separately for the x- and y-displacement components. Let \(x\) and \(y\) denote normalized patch-center coordinates and let \(t\) denote the frame index relative to the fixed reference frame. The algorithm expands each displacement component in the 18-term basis
+Convergence is an inter-iteration shift RMSD below 0.5 pixels after the band
+has reached `lp_stop`. When a movie has fewer than 12 frames, shifts are
+additionally constrained to a cubic polynomial in frame index.
 
-\[
-\{t,\ t^2,\ t^3,\ xt,\ xt^2,\ xt^3,\ x^2t,\ x^2t^2,\ x^2t^3,\ yt,\ yt^2,\ yt^3,\ y^2t,\ y^2t^2,\ y^2t^3,\ xyt,\ xyt^2,\ xyt^3\}.
-\]
+**Continuous phase.** The same objective is then optimized per frame in
+Fourier space by L-BFGS-B, where a shift is a phase ramp and the gradient is
+analytic, within `+/- 5` pixels, for 2 to 5 iterations until the correlation
+gain falls below 0.1 percent and the RMSD below 0.1 pixels. The global shifts
+are applied to all frames before local estimation.
 
-Accordingly, for each component \(u_d(x,y,t)\), with \(d \in \{x,y\}\),
+## Local patch alignment
 
-\[
-u_d(x,y,t) = \sum_{k=1}^{18} c_{d,k}\,\phi_k(x,y,t),
-\]
+The field of view is tiled into patches of about 200 A on a side (at least
+200 pixels after scaling), `n_x = floor(width / 200 A)`, and the same hybrid
+aligner is run on each patch stack independently, yielding a measured
+trajectory `d_p(t)` per patch center `(x_p, y_p)`.
 
-where the coefficients \(c_{d,k}\) come from a least-squares fit to the measured patch trajectories. This is the model first put forward in
-MotionCor2 (Nat Methods 14, 331–332 (2017). https://doi.org/10.1038/nmeth.4193)
+## Deformation model
 
-## Patch-Refine Variant
+The residual displacement is modeled separately in `x` and `y` as a
+polynomial that is cubic in time and quadratic in space, with 18 terms:
 
-In the optional `patch_refine` mode, SIMPLE inserts an additional model-guided refinement step. It first performs a robust trimmed fit to the initially estimated patch trajectories, then evaluates the fitted deformation field at each patch center to generate predicted local trajectories, and finally uses those predicted trajectories to initialize a further patch-level refinement before fitting the final deformation model.
+```text
+u_d(x, y, t) = sum_{k=1}^{18} c_{d,k} phi_k(x, y, t),
+phi in { t, t^2, t^3 } (x) { 1, x, x^2, y, y^2, xy },
+```
 
-## Model Acceptance and Fallback
+in normalized patch coordinates with `t` measured from the fixed frame, so
+that `u = 0` there by construction. The coefficients are the least-squares
+solution (by SVD) against the measured patch trajectories. Quadratic in space
+captures the dome-like doming of the support film under the beam; cubic in
+time captures the fast initial burst and slow later drift. This is the
+MotionCor2 model (Zheng et al., Nature Methods 14, 331 (2017)).
 
-SIMPLE evaluates the adequacy of the fitted deformation model by computing the root-mean-square deviation between fitted and measured patch shifts separately along x and y. If the fit exceeds the acceptance threshold, the algorithm reduces the number of patches and retries the fit. If the fit remains unsatisfactory, it discards the local model and falls back to the global translational correction.
+**Robust variant.** `patch_refine` first fits on a padded grid, trims the 10
+percent of points with the largest residuals, refits, evaluates the fitted
+field at the patch centers to seed a second patch alignment, and fits the
+final model to that.
 
-## Final Frame Integration
+## Model acceptance
 
-When the local model passes the acceptance test, SIMPLE uses the fitted deformation field to warp the full movie frames and generate both an unweighted integrated image for CTF estimation and a frame-weighted corrected micrograph. If dose weighting is enabled, it applies dose weighting before warping the individual movie frames.
+The fit is judged by the root-mean-square deviation between fitted and
+measured patch shifts, per axis, over all frames and patches. Both axes must
+be below 4 pixels (5 under the RELION convention). If not, the patch grid is
+halved in each direction and the fit retried once; if it still fails, the
+local model is discarded and the global translation alone is applied. A
+polynomial that cannot reproduce the patch trajectories is more likely to be
+fitting patch-alignment failures than real motion.
 
-## Compact Summary
+## Dose weighting and integration
 
-SIMPLE first estimates whole-frame translational motion by iterative frame-to-average registration using a hybrid discrete/continuous correlation optimizer. It then partitions the image into patches, estimates local translational trajectories for each patch, and fits those trajectories with a smooth polynomial deformation field defined over image coordinates and frame time. The algorithm accepts the local solution only if the fitted model reproduces the measured patch trajectories within a prescribed tolerance. Otherwise, it reduces model complexity and ultimately falls back to the global solution. When accepted, the fitted deformation field warps the original movie frames and produces both the corrected micrograph and the companion sum for CTF estimation.
+When dose weighting is on, each frame is filtered before warping by the
+Grant and Grigorieff critical-exposure model. With cumulative exposure `e_i`
+at frame `i` and critical exposure `N_e(k) = 0.245 k^{-1.665} + 2.81`
+electrons per square Angstrom at spatial frequency `k` (scaled by 0.8 at
+200 kV and 0.64 at 100 kV), the per-frame Fourier weight is
+`q_i(k) = q_1 r^{i-1}` with `r = exp(-dose_per_frame / (2 N_e))`, normalized so
+that `sum_i q_i^2 = 1` at every frequency. The frames are then warped through
+the accepted deformation field, weighted by `w_i`, and summed. A second
+uniform-weight, non-dose-weighted sum is produced for CTF estimation, where
+the high-frequency Thon rings that dose weighting attenuates are needed.
 
 ## Implementation
 
-- Workflow: `src/main/motion/simple_motion_correct.f90` and
+- Workflow and integration: `src/main/motion/simple_motion_correct.f90`,
   `src/main/motion/simple_motion_correct_iter.f90`.
-- Hybrid registration: `src/main/motion/simple_motion_align_hybrid.f90`.
-- Patch trajectories and deformation model:
-  `src/main/motion/simple_motion_patched.f90`.
-- Shared preprocessing and integration helpers:
-  `src/main/motion/simple_motion_correct_utils.f90`.
+- Hybrid discrete/continuous aligner: `src/main/motion/simple_motion_align_hybrid.f90`.
+- Patch trajectories and deformation model: `src/main/motion/simple_motion_patched.f90`.
+- Frame weights: `src/utils/math/simple_stat.f90`; dose weighting:
+  `src/main/image/simple_image_ops.f90`.

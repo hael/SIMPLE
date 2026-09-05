@@ -18,6 +18,7 @@ contains
         call test_simple_touch_and_file_exists()
         call test_simple_mkdir_dir_exists_rmdir()
         call test_simple_rename_and_del_file()
+        call test_simple_atomic_replace_and_sync()
         call test_simple_rmfile()
         call test_syslib_symlink()
         call test_simple_file_stat()
@@ -113,6 +114,37 @@ contains
         call del_file(dst)
         call assert_true(.not. file_exists(dst), 'rename: dst deleted with del_file')
     end subroutine test_simple_rename_and_del_file
+
+    subroutine test_simple_atomic_replace_and_sync()
+        type(string) :: src, dst
+        integer :: funit, io_stat, sync_stat
+        character(len=8) :: value
+        write(*,'(A)') 'test_simple_atomic_replace_and_sync'
+        src = 'atomic_src.txt'
+        dst = 'atomic_dst.txt'
+        open(newunit=funit, file=src%to_char(), status='replace', action='write', iostat=io_stat)
+        call assert_int(0, io_stat, 'atomic replace: source open')
+        write(funit,'(A)') 'new'
+        close(funit)
+        open(newunit=funit, file=dst%to_char(), status='replace', action='write', iostat=io_stat)
+        call assert_int(0, io_stat, 'atomic replace: destination open')
+        write(funit,'(A)') 'old'
+        close(funit)
+        call simple_sync_file(src, sync_stat)
+        call assert_int(0, sync_stat, 'atomic replace: source sync')
+        call simple_atomic_replace(src, dst, io_stat)
+        call assert_int(0, io_stat, 'atomic replace: publication')
+        call simple_sync_dir('.', sync_stat)
+        call assert_int(0, sync_stat, 'atomic replace: directory sync')
+        open(newunit=funit, file=dst%to_char(), status='old', action='read', iostat=io_stat)
+        call assert_int(0, io_stat, 'atomic replace: destination read')
+        read(funit,'(A)',iostat=io_stat) value
+        close(funit)
+        call assert_int(0, io_stat, 'atomic replace: destination contents')
+        call assert_char('new', trim(value), 'atomic replace: new contents published')
+        call assert_true(.not. file_exists(src), 'atomic replace: source consumed')
+        call del_file(dst)
+    end subroutine test_simple_atomic_replace_and_sync
 
     !---------------- simple_rmfile ----------------
 

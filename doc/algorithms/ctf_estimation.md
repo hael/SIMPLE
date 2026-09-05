@@ -2,96 +2,122 @@
 
 ## Problem
 
-Estimate the microscope contrast transfer function (CTF) of each corrected
-micrograph so downstream picking, class averaging, matching, and reconstruction
-can interpret phase reversals and frequency-dependent attenuation.
+Estimate, for each micrograph, the defocus pair `(dfx, dfy)`, the
+astigmatism angle, and optionally the additional phase shift of a phase
+plate, from the oscillation pattern (Thon rings) in the micrograph's power
+spectrum. Every downstream comparison of images with references depends on
+these parameters through the contrast transfer function.
 
-## Microscope model
+## Model
 
-For squared spatial frequency `s^2` and azimuth `theta`, SIMPLE uses the
-astigmatic defocus
-
-```text
-d(theta) = 1/2 [dfx + dfy + cos(2(theta-angast))(dfx-dfy)].
-```
-
-With electron wavelength `lambda`, spherical aberration `Cs`, additive phase
-shift `phi`, and amplitude-contrast phase `alpha`, the phase aberration is
+The astigmatic defocus in direction `theta` is
 
 ```text
-chi(s,theta) = pi*lambda*s^2 [d(theta) - 1/2 lambda^2*s^2*Cs] + phi
-CTF(s,theta) = sin(chi(s,theta) + alpha).
+d(theta) = 1/2 [ dfx + dfy + (dfx - dfy) cos 2(theta - angast) ],
 ```
 
-Underfocus is positive. `phi` is always supplied explicitly and canonicalized
-to `[0,2*pi)`. The 1D initializer and final continuous power-spectrum model use
-`|CTF|`, so phase windows spanning approximately `pi` admit sign-opposite
-equivalent solutions; SIMPLE warns when a fitted phase lies at such a window
-edge. The intermediate global 2D search uses the signed positive-part model
-described below only to find continuous starts.
+and with wavelength `lambda`, spherical aberration `Cs`, phase shift `phi`,
+and amplitude-contrast phase `alpha`, the phase aberration and CTF at
+spatial frequency `s` are
+
+```text
+chi(s, theta) = pi lambda s^2 [ d(theta) - 1/2 lambda^2 s^2 Cs ] + phi,
+CTF(s, theta) = sin( chi(s, theta) + alpha ).
+```
+
+Underfocus is positive. The power spectrum of the micrograph is proportional
+to `CTF^2` times the specimen and envelope power, so the fitting target is
+the modulation `|CTF|`. Because `|sin|` is invariant to a sign flip of its
+argument, phase windows spanning about `pi` admit sign-opposite equivalent
+solutions; a warning is issued when a fitted phase lies at such a window
+edge.
 
 ## Spectrum construction
 
-The micrograph is tiled. Each tile is transformed to a power spectrum, the
-central Fourier cross is damped, and a slowly varying local background is
-subtracted. Averaging the prepared tiles gives the global 2D spectrum. A
-rotational average supplies a cheaper 1D spectrum for initialization.
+The micrograph is tiled with `512`-pixel tiles at half-tile stride (50
+percent overlap). Each tile is normalized, edge-averaged to zero, Fourier
+transformed, and its power spectrum accumulated. The mean tile spectrum
+then has its central cross damped and a slowly varying background removed:
+the background at each pixel is the mean over a square window of side
+`~1.4 x` the high-pass radius, computed with a summed-area table. What
+remains is the oscillatory part. The spectrum is normalized to zero mean and
+unit variance inside the annulus `[hp, lp]` so that the fitting objective is
+a correlation rather than a power comparison. A rotational average gives a
+cheaper 1D spectrum for initialization.
 
-Only the requested high/low-resolution annulus participates. The prepared data
-are normalized in that annulus so the fitting objective is a correlation, not
-an arbitrary power-scale comparison.
+## Algorithm
 
-## Coarse search
+1. **Coarse 1D search.** Evaluate 200 mean-defocus values on `[dfmin,
+   dfmax]` (default 0.2 to 5 um) against the rotational average, and if phase
+   fitting is enabled, a grid of phase values at each. The score is the
+   centered cosine correlation between `|CTF|` and the normalized spectrum.
+2. **Multi-start selection.** Divide the defocus range into six bins and
+   promote the best sample from each bin. A single best start would often
+   sit in a narrow basin created by ring aliasing; six starts from distinct
+   defocus regions make the global optimum reachable.
+3. **Global 2D search.** From each start, differential evolution over
+   `(dfx, dfy, angast[, phi])` with population 136, up to 400 generations,
+   within `+/- 2 max(astigtol, df_step)` of the start in defocus. The
+   objective is
 
-The initializer evaluates 200 mean-defocus values over `[dfmin,dfmax]` on the
-rotational average. If phase fitting is enabled, it also evaluates the
-requested phase grid. For model samples `t_j=|CTF_j|` and normalized spectrum
-samples `p_j`, the 1D score is the centered cosine correlation; the minimized
-cost is its negative.
+   ```text
+   cost = - corr(P, |CTF|)  +  ((dfx - dfy) / astigtol)^2 / (2 N),
+   ```
 
-The defocus range is divided into six bins. The best initializer from each bin
-is promoted to a full 2D fit, preventing one narrow coarse basin from being the
-only continuous start.
+   with `N` the number of Fourier pixels in the annulus and `astigtol`
+   defaulting to 0.05 um; solutions with `|dfx - dfy| > 2 astigtol` are
+   rejected outright. The penalty regularizes implausible astigmatism without
+   forcing equality.
+4. **Local refinement.** L-BFGS-B on the same parameters with analytic
+   gradients of the normalized correlation (quotient rule), angle within
+   `+/- 30` degrees and phase within `+/- pi/6` of the start.
+5. **Selection.** The best final correlation among the six refined solutions
+   is the estimate. Axes are ordered and the angle canonicalized before
+   publication.
 
-## Astigmatic refinement
+## Diagnostics
 
-Each promoted start first undergoes bounded differential-evolution search over
-`(dfx,dfy,angast)` and, when enabled, `phi`. This coarse 2D route clamps the
-signed CTF model below at a small positive floor. Its objective is
+**CTF resolution.** The spectrum is resampled to at most 1.4 A per pixel and
+normalized between the third and fourth zeros. Along the mid-astigmatism
+direction, two 1D profiles are formed, the observed spectrum and `|CTF|`,
+both rank-normalized within each half-period so that amplitude decay does not
+dominate. A sliding-window Pearson correlation between them is computed with a
+window that widens with the density of extrema. Starting at 10 percent of
+Nyquist, the first shell at which the correlation drops below 0.1 after three
+shells above it, below 0.5 after three shells above it, or below 0.5 in more
+than three of the last five shells, defines the resolution to which the
+fitted model explains the observed rings.
 
-```text
-cost = -corr(P, max(CTF,epsilon))
-       + ((dfx-dfy)/astigtol)^2 / (2N),
-```
+**Ice fraction.** When the sampling admits 3.7 A, the ratio of the spectrum
+amplitude at the crystalline-ice peak (3.7 A, searched within 10 shells) to
+the amplitude of the first CTF maximum, each averaged over 3 shells, measures
+ice contamination. If the CTF resolution is better than 3.8 A, half the CTF
+peak is subtracted from the ice peak to correct for Thon-ring overlap.
 
-where `N` is the number of Fourier pixels in the fitting annulus. The penalty
-regularizes implausibly large astigmatism without imposing equality.
-
-A bounded analytic-gradient refinement then optimizes the same parameters
-locally against the absolute CTF model `|CTF|`, including the quotient-rule
-derivative of its normalized correlation. The best final correlation among the
-six promoted solutions becomes the global estimate. Axis ordering and angle
-are canonicalized before publication.
+**Astigmatism** is reported as `|dfx - dfy| / mean(dfx, dfy)`.
 
 ## Patch CTF
 
-With `ctfpatch=yes`, overlapping local spectra are formed as Gaussian-weighted
-mixtures of nearby tiles. Each patch fits local defocus near the global
-solution while holding the global microscope constants and phase policy. A
-10-term spatial polynomial is fit to the patch estimates, yielding a smooth
-defocus surface rather than independent noisy patch values.
+With `ctfpatch=yes`, local spectra are formed at half the tile-grid density
+as Gaussian-weighted mixtures of nearby tiles (`w = exp(-(r/box)^2 / 2)`), and
+each is fitted for `(dfx, dfy)` alone within 1 um of the global solution,
+holding angle and phase. The patch values are then regressed onto a 10-term
+polynomial in normalized position,
 
-## Outputs and diagnostics
+```text
+{ 1, x, x^2, x^3, y, y^2, y^3, xy, xy^2, x^2y },
+```
 
-The micrograph record receives `dfx`, `dfy`, mean defocus, astigmatism angle,
-phase shift, fit correlation, CTF resolution, ice fraction, and astigmatism
-magnitude. Diagnostic images show the observed and fitted spectra; patch mode
-also writes the polynomial document used to evaluate local CTF values.
+giving a smooth defocus surface that can be evaluated at any particle
+coordinate. Tilted or bent specimens produce a defocus gradient of a few
+hundred nanometers across a micrograph; the polynomial captures it without
+propagating the noise of independent patch fits.
 
 ## Implementation
 
 - Model: `src/main/ctf/simple_ctf.f90`.
-- Objectives: `src/main/ctf/simple_ctf_estimate_cost.f90`.
-- Spectrum, search, patch fit, and diagnostics:
-  `src/main/ctf/simple_ctf_estimate_fit.f90`.
-- Per-micrograph lifecycle: `src/main/ctf/simple_ctf_estimate_iter.f90`.
+- Objectives and gradients: `src/main/ctf/simple_ctf_estimate_cost.f90`.
+- Spectrum, search, patch fit, diagnostics: `src/main/ctf/simple_ctf_estimate_fit.f90`.
+- Per-micrograph driver: `src/main/ctf/simple_ctf_estimate_iter.f90`.
+- Differential evolution: `src/main/opt/simple_opt_de.f90`.
+- Policy: `doc/policies/phase_shift_ctf_policy.md`.

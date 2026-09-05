@@ -40,7 +40,7 @@ PATH_PLACEHOLDER_SUFFIXES = {
     "filetab": (".txt",),
     "fsc": (".bin",),
     "gainref": (".mrc", ".mrcs"),
-    "infile": (".txt", ".bin"),
+    "infile": (".txt", ".bin", ".star"),
     "oritab": (".txt", ".simple"),
     "oritab2": (".txt", ".simple"),
     "outstk": (".mrc", ".mrcs", ".spi"),

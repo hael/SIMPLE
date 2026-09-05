@@ -39,6 +39,7 @@ subroutine new_abinitio2D_stream( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
+        call abinitio2D_stream%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call abinitio2D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
         call abinitio2D_stream%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
@@ -170,6 +171,7 @@ subroutine new_abinitio2D_stream( prgtab )
         call master%add_input(UI_PARM, 'flipgain',       'multi',         'Gain processing', 'Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}', '', .false., 'none', &
         &choices=ui_choices([character(len=9) :: 'none', 'flip_auto', 'flip_x', 'flip_y', 'flip_xy', 'generate']), &
         &visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '', &
         &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '', &
@@ -397,6 +399,7 @@ subroutine new_abinitio2D_stream( prgtab )
         ! <empty>
         ! search controls
         call sieve_cavgs%add_input(UI_SRCH, ncls,                                     group="cluster 2D", visibility=UI_VIS_STANDARD)
+        call sieve_cavgs%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., group="cluster 2D", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_SRCH, nchunksperset,                                                      visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_SRCH, 'nptcls_coarse', 'num', 'Target coarse-pass particle count', &

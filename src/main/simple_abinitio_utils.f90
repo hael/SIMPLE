@@ -1,5 +1,6 @@
 !@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
 use simple_commanders_rec,       only: commander_bootstrap_rec3D
 use simple_commanders_volops,    only: commander_symmetrize_map
@@ -11,6 +12,9 @@ use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname
+use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
+    &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_vol_pproc_policy,     only: state_mask_is_compatible
 implicit none
 #include "simple_local_flags.inc"
@@ -761,14 +765,20 @@ contains
         call cline_refine3D%set(     'nstates', params%nstates)
         call cline_reconstruct3D%set('nstates', params%nstates)
         call cline_reproject%set(    'nstates', params%nstates)
-        ! Sigma2 need be to consolidated because we bypass the general
-        ! path to reconstruct new volumes
+        ! Legacy reconstruction selects an iteration STAR, so materialize it
+        ! before this matcher-bypassing reconstruction. Canonical state is
+        ! already committed and state relabelling does not change its row
+        ! identity or global/stack grouping; reconstruct3D consumes it directly.
         if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
-            cline_calc_group_sigmas = cline_refine3D
-            call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
-            call strip_pcg_backend_keys(cline_calc_group_sigmas)
-            call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
-            call cline_calc_group_sigmas%kill
+            if( params%l_sigma_canonical )then
+                write(logfhandle,'(A)') '>>> DOCKED SPLIT: reusing committed canonical sigmas'
+            else
+                cline_calc_group_sigmas = cline_refine3D
+                call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
+                call strip_pcg_backend_keys(cline_calc_group_sigmas)
+                call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
+                call cline_calc_group_sigmas%kill
+            endif
         endif
         ! Multi-state reconstruction
         if( l_reconstruct_states ) call calc_rec(params, projfile, xrec3D, istage)
@@ -817,6 +827,7 @@ contains
     end subroutine configure_final_pcg_solve_budget
 
     subroutine calc_final_rec( params, spproj, projfile, xrec3D, l_postprocess )
+        use simple_commanders_euclid, only: commander_calc_pspec
         class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
@@ -824,6 +835,8 @@ contains
         logical,               intent(in)    :: l_postprocess
         type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star, vol_envmsk
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
+        type(commander_calc_pspec) :: xcalc_pspec
+        type(cmdline) :: cline_calc_pspec
         integer      :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, sigma_iter, bootstrap_sigma_iter
         real         :: smpd
         logical      :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
@@ -837,8 +850,25 @@ contains
         smpd = spproj%os_stk%get(stkind, 'smpd')
         write(logfhandle,'(A,I0,A,F8.4)') '>>> FINAL RECONSTRUCTION SAMPLING: box=', ldim(1), ' smpd=', smpd
         call prep_final_rec_cline(cline_reconstruct3D, 'reconstruct3D')
-        sigma_iter = final_rec_sigma_iter()
-        l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
+        if( params%l_sigma_canonical .and. final_stage_uses_ml_reg() )then
+            if( canonical_final_rec_needs_bootstrap() )then
+                cline_calc_pspec = cline_reconstruct3D
+                call cline_calc_pspec%set('prg', 'calc_pspec')
+                write(logfhandle,'(A)') &
+                    &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas at original sampling'
+                call xcalc_pspec%execute(cline_calc_pspec)
+                call spproj%read(projfile)
+                call cline_calc_pspec%kill
+            else
+                write(logfhandle,'(A)') &
+                    &'>>> FINAL RECONSTRUCTION: reusing committed canonical sigmas'
+            endif
+            sigma_iter        = 0
+            l_bootstrap_sigmas = .false.
+        else
+            sigma_iter = final_rec_sigma_iter()
+            l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
+        endif
         if( sigma_iter > 0 .and. .not. l_bootstrap_sigmas )then
             call cline_reconstruct3D%set('which_iter', sigma_iter)
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION SIGMA ITERATION: ', sigma_iter
@@ -939,6 +969,49 @@ contains
                 endif
             end function final_rec_needs_bootstrap_sigmas
 
+            logical function canonical_final_rec_needs_bootstrap() result( l_bootstrap )
+                type(string) :: state_path
+                integer(int64) :: layout_digest
+                integer :: expected_grouping, expected_ngroups, iptcl, nprojptcls, status
+                logical :: found
+                character(len=STDLEN) :: message
+                l_bootstrap = .true.
+                call spproj%get_sigma2_state_path(state_path, found)
+                if( .not. found )then
+                    write(logfhandle,'(A)') &
+                        &'>>> FINAL RECONSTRUCTION: canonical sigma state is not registered'
+                    return
+                endif
+                call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
+                if( status /= 0 )then
+                    write(logfhandle,'(A)') &
+                        &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
+                    call state_path%kill
+                    return
+                endif
+                nprojptcls   = spproj%os_ptcl3D%get_noris()
+                layout_digest = sigma2_state_project_layout_digest(spproj, spproj%os_ptcl3D)
+                if( params%l_sigma_glob )then
+                    expected_grouping = SIGMA2_GROUP_GLOBAL
+                    expected_ngroups  = 1
+                else
+                    expected_grouping = SIGMA2_GROUP_STACK
+                    expected_ngroups  = 0
+                    do iptcl = 1, nprojptcls
+                        if( spproj%os_ptcl3D%get_state(iptcl) <= 0 ) cycle
+                        expected_ngroups = max(expected_ngroups, spproj%os_ptcl3D%get_int(iptcl, 'stkind'))
+                    enddo
+                endif
+                call sigma2_state_validate_identity(state_path%to_char(), ldim(1), smpd, 1, &
+                    &fdim(ldim(1))-1, nprojptcls, layout_digest, status, message, &
+                    &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=expected_grouping, &
+                    &expected_ngroups=expected_ngroups)
+                l_bootstrap = status /= 0
+                if( l_bootstrap ) write(logfhandle,'(A)') &
+                    &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
+                call state_path%kill
+            end function canonical_final_rec_needs_bootstrap
+
             integer function final_rec_bootstrap_sigma_iter( sigma_iter ) result( iter )
                 integer, intent(in) :: sigma_iter
                 iter = 1
@@ -962,6 +1035,8 @@ contains
                 call child_cline%set('prg',      prg)
                 call child_cline%set('mkdir',    'no')
                 call child_cline%set('projfile', projfile)
+                call child_cline%set('sigma_store', params%sigma_store)
+                call child_cline%set('sigma_est',   params%sigma_est)
                 ! volassemble appends _STATENN and writes the extension-less
                 ! resolution document next to rec_final_stateNN.mrc.
                 call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')

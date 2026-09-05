@@ -147,6 +147,40 @@ contains
         call self%projinfo%set(1, 'cwd', cwd%to_char())
     end subroutine update_projinfo_2
 
+    module subroutine set_sigma2_state_path( self, state_path )
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: state_path
+        type(string) :: absolute_path, cwd
+        character(len=:), allocatable :: raw_path
+        logical :: l_absolute
+        if( self%projinfo%get_noris() /= 1 ) call self%projinfo%new(1, is_ptcl=.false.)
+        raw_path = trim(state_path%to_char())
+        if( len(raw_path) == 0 ) THROW_HARD('canonical sigma2 state path cannot be blank')
+        l_absolute = raw_path(1:1) == '/' .or. raw_path(1:1) == '\'
+        if( len(raw_path) >= 2 ) l_absolute = l_absolute .or. raw_path(2:2) == ':'
+        if( file_exists(state_path) )then
+            absolute_path = simple_abspath(state_path)
+        else if( l_absolute )then
+            absolute_path = raw_path
+        else
+            call simple_getcwd(cwd)
+            absolute_path = filepath(cwd, state_path)
+        endif
+        call self%projinfo%set(1, 'sigma2_state', absolute_path%to_char())
+        call cwd%kill
+        call absolute_path%kill
+    end subroutine set_sigma2_state_path
+
+    module subroutine get_sigma2_state_path( self, state_path, found )
+        class(sp_project), intent(in)    :: self
+        type(string),      intent(inout) :: state_path
+        logical,           intent(out)   :: found
+        call state_path%kill
+        found = self%projinfo%get_noris() == 1
+        if( found ) found = self%projinfo%isthere(1, 'sigma2_state')
+        if( found ) call self%projinfo%getter(1, 'sigma2_state', state_path)
+    end subroutine get_sigma2_state_path
+
     module subroutine update_compenv( self, cline )
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline

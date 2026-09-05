@@ -353,6 +353,8 @@ type :: parameters
     character(len=STDLEN)     :: sgd_path='stream'    !< internal SGD assignment path(stream){stream}
     character(len=STDLEN)     :: sgd_stage4_mode='off' !< staged stream policy(off|on|alternate){off}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
+    character(len=STDLEN)     :: sigma_store='legacy' !< sigma persistence contract(legacy|canonical){legacy}
+    character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|parts_import|star_export)
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -701,6 +703,7 @@ type :: parameters
     logical :: sgd_diagnostic    = .false.
     logical :: l_ptcl_src_den    = .false.
     logical :: l_sigma_glob      = .false.
+    logical :: l_sigma_canonical = .false.
     logical :: l_sticky_class_sampling = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided

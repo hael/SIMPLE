@@ -100,6 +100,14 @@ contains
         if( nptcls2update < 1 )then
             if( p_ptr%l_update_missing )then
                 write(logfhandle,'(A)') '>>> MATCH3D: no missing particles selected for update'
+                ! Canonical consolidation still expects one range from every
+                ! scheduled partition. Emit the unchanged committed slice so
+                ! an empty update is a valid transaction rather than a
+                ! missing-file failure.
+                if( p_ptr%l_sigma_canonical .and. ctrl%do_emit_sigma )then
+                    call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+                    call b_ptr%esig%write_sigma2
+                endif
                 converged = .true.
                 call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
                 return

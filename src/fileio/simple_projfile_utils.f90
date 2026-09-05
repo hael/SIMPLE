@@ -1,10 +1,17 @@
 !@descr: project file utilities
 module simple_projfile_utils
+use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_core_module_api
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 use simple_oris,          only: oris
 use simple_euclid_sigma2, only: average_sigma2_groups
+use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
+    &sigma2_state_project_layout_digest, sigma2_state_reduce_groups
+use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
+    &sigma2_state_init_header, sigma2_state_read_header, sigma2_state_read_particles, &
+    &sigma2_state_validate_file, sigma2_state_write_particles, SIGMA2_GROUP_GLOBAL, &
+    &SIGMA2_GROUP_STACK, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
 use simple_class_frcs
 implicit none
 #include "simple_local_flags.inc"
@@ -22,7 +29,7 @@ contains
         class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
         class(string), optional, intent(in)    :: sigma2_out      ! name for combined sigma2 file
         type(sp_project), allocatable :: chunks(:)
-        type(string),     allocatable :: chunks_sigma2(:)
+        type(string),     allocatable :: chunks_sigma2(:), chunks_sigma2_state(:)
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
         type(class_frcs) :: frcs, frcs_chunk
@@ -33,7 +40,9 @@ contains
         real             :: smpd
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
+        logical, allocatable :: chunks_have_canonical(:)
         logical          :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs, l_merge_sigma2
+        logical          :: l_merge_canonical
         logical          :: frcs_initialised
         l_write_proj     = .true.
         l_cavgs_replace  = .false.
@@ -43,8 +52,10 @@ contains
         if( present( cavgs_replace  )) l_cavgs_replace  = cavgs_replace
         if( present( update_classno )) l_update_classno = update_classno
         nchunks = size(chunk_fnames)
+        if( nchunks < 1 ) THROW_HARD('merge_chunk_projfiles requires at least one chunk project')
         allocate(chunks(nchunks))
-        allocate(chunks_sigma2(nchunks))
+        allocate(chunks_sigma2(nchunks), chunks_sigma2_state(nchunks), chunks_have_canonical(nchunks))
+        chunks_have_canonical = .false.
         dir = folder%to_char()//'/'
         if( present(projname_out) )then
             projfile_out = dir%to_char()//projname_out%to_char()//trim(METADATA_EXT)
@@ -85,6 +96,8 @@ contains
         do ic = 1,nchunks
             projname = chunk_fnames(ic)
             call chunks(ic)%read_data_info(projname, nmics, nstks, nptcls)
+            call chunks(ic)%read_segment('projinfo', projname)
+            call chunks(ic)%get_sigma2_state_path(chunks_sigma2_state(ic), chunks_have_canonical(ic))
             nallmics  = nallmics  + nmics
             nallstks  = nallstks  + nstks
             nallptcls = nallptcls + nptcls
@@ -125,10 +138,15 @@ contains
                 endif
             enddo
         enddo
+        l_merge_canonical = all(chunks_have_canonical)
+        if( any(chunks_have_canonical) .and. .not. l_merge_canonical ) &
+            &THROW_HARD('cannot merge a mixture of canonical and legacy sigma2 chunk projects')
+        if( l_merge_canonical ) l_merge_sigma2 = .false.
         call img%kill
         if( .not. l_merge_evenodd ) THROW_WARN('merge_chunk_projfiles: missing even/odd class-average stacks; skipping even/odd merge')
         if( .not. l_merge_frcs )    THROW_WARN('merge_chunk_projfiles: missing frc2D data; skipping FRC merge')
-        if( .not. l_merge_sigma2 )  THROW_WARN('merge_chunk_projfiles: missing sigma2 data; skipping sigma2 merge')
+        if( .not. l_merge_sigma2 .and. .not. l_merge_canonical ) &
+            &THROW_WARN('merge_chunk_projfiles: missing sigma2 data; skipping sigma2 merge')
         ncls_tot = icls
         ! micrographs
         if( nallmics > 0 )then
@@ -155,8 +173,9 @@ contains
         do ic = 1,nchunks
             projname = chunk_fnames(ic)
             call chunks(ic)%read_segment('stk', projname)
-            call absolutize_project_stack_paths(chunks(ic), simple_abspath(projname, check_exists=.false.))
             call chunks(ic)%read_segment('ptcl2D',projname)
+            if( l_merge_canonical ) call validate_chunk_canonical_identity(ic)
+            call absolutize_project_stack_paths(chunks(ic), simple_abspath(projname, check_exists=.false.))
             ! classes frcs & info
             ncls = chunks(ic)%os_cls2D%get_noris()
             if( l_merge_frcs )then
@@ -201,7 +220,7 @@ contains
             enddo
             deallocate(clsmap)
             ! sigma2
-            if( l_merge_sigma2 )then
+            if( l_merge_sigma2 .and. .not. l_merge_canonical )then
                 call chunks(ic)%get_sigma2(chunks_sigma2(ic))
             else
                 chunks_sigma2(ic) = NIL
@@ -241,7 +260,12 @@ contains
             call average_sigma2_groups(sigma2_fname, chunks_sigma2)
             if( file_exists(sigma2_fname) ) call merged_proj%add_sigma22os_out(sigma2_fname)
         endif
-        deallocate(chunks_sigma2)
+        if( l_merge_canonical )then
+            call merged_proj%update_projinfo(projfile_out)
+            call concatenate_canonical_states
+        endif
+        call chunks_sigma2_state(:)%kill
+        deallocate(chunks_sigma2, chunks_sigma2_state, chunks_have_canonical)
         ! propagate 2D states to 3D
         states = merged_proj%os_cls2D%get_all('state')
         call merged_proj%os_cls3D%new(ncls_tot, .false.)
@@ -255,6 +279,100 @@ contains
             call frcs%kill
             call frcs_chunk%kill
         endif
+      contains
+
+        subroutine concatenate_canonical_states
+            type(sigma2_state_header) :: source_header, target_header
+            type(string) :: target_path, candidate_path
+            real(real32), allocatable :: block(:,:)
+            logical, allocatable :: active(:)
+            integer, allocatable :: eo_ids(:), group_ids(:)
+            integer(int64) :: layout_digest, generation
+            integer :: irow, offset, status, ngroups
+            character(len=STDLEN) :: message
+            generation = 1_int64
+            offset = 0
+            do irow = 1, nchunks
+                call sigma2_state_validate_file(chunks_sigma2_state(irow)%to_char(), status, message, deep=.true.)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call sigma2_state_read_header(chunks_sigma2_state(irow)%to_char(), source_header, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                if( irow == 1 )then
+                    target_header = source_header
+                else
+                    if( source_header%box /= target_header%box .or. &
+                        &source_header%kfrom /= target_header%kfrom .or. &
+                        &source_header%kto /= target_header%kto .or. &
+                        &source_header%grouping /= target_header%grouping .or. &
+                        &abs(real(source_header%smpd-target_header%smpd)) > 1.e-5 ) &
+                        &THROW_HARD('canonical sigma2 chunk states use incompatible native grids or grouping')
+                endif
+                generation = max(generation, source_header%generation + 1_int64)
+                offset = offset + int(source_header%nptcls)
+            enddo
+            if( offset /= nallptcls ) THROW_HARD('canonical sigma2 chunk rows do not match merged project')
+            allocate(active(nallptcls), eo_ids(nallptcls), group_ids(nallptcls))
+            ngroups = 0
+            do irow = 1, nallptcls
+                active(irow)    = merged_proj%os_ptcl2D%get_state(irow) > 0
+                eo_ids(irow)    = merged_proj%os_ptcl2D%get_eo(irow)
+                group_ids(irow) = merged_proj%os_ptcl2D%get_int(irow, 'stkind')
+                if( active(irow) ) ngroups = max(ngroups, group_ids(irow))
+            enddo
+            if( target_header%grouping == SIGMA2_GROUP_GLOBAL )then
+                ngroups = 1
+                group_ids = 1
+            else if( target_header%grouping /= SIGMA2_GROUP_STACK )then
+                THROW_HARD('unsupported canonical sigma2 grouping in chunk merge')
+            endif
+            layout_digest = sigma2_state_project_layout_digest(merged_proj, merged_proj%os_ptcl2D)
+            if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
+            target_path = dir//'sigma2_state.bin'
+            candidate_path = sigma2_state_candidate_path(target_path%to_char())
+            call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
+                &nallptcls, int(target_header%box), real(target_header%smpd), ngroups, &
+                &target_header%grouping, generation, layout_digest, SIGMA2_PROV_RESIDUAL)
+            call sigma2_state_create_candidate(candidate_path%to_char(), target_header, status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            offset = 0
+            do irow = 1, nchunks
+                call sigma2_state_read_header(chunks_sigma2_state(irow)%to_char(), source_header, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call sigma2_state_read_particles(chunks_sigma2_state(irow)%to_char(), 1, &
+                    &int(source_header%nptcls), block, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call sigma2_state_write_particles(candidate_path%to_char(), offset+1, block, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                offset = offset + int(source_header%nptcls)
+                deallocate(block)
+            enddo
+            call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            call sigma2_state_commit(candidate_path%to_char(), target_path%to_char(), active, eo_ids, &
+                &group_ids, status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            call merged_proj%set_sigma2_state_path(target_path)
+            deallocate(active, eo_ids, group_ids)
+            call target_path%kill
+            call candidate_path%kill
+        end subroutine concatenate_canonical_states
+
+        subroutine validate_chunk_canonical_identity( ichunk )
+            integer, intent(in) :: ichunk
+            type(sigma2_state_header) :: source_header
+            integer(int64) :: source_digest
+            integer :: status
+            character(len=STDLEN) :: message
+            call sigma2_state_validate_file(chunks_sigma2_state(ichunk)%to_char(), status, message, deep=.true.)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            call sigma2_state_read_header(chunks_sigma2_state(ichunk)%to_char(), source_header, status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            source_digest = sigma2_state_project_layout_digest(chunks(ichunk), chunks(ichunk)%os_ptcl2D)
+            if( source_digest == 0_int64 .or. source_digest /= source_header%layout_digest .or. &
+                &source_header%nptcls /= chunks(ichunk)%os_ptcl2D%get_noris(consider_state=.false.) ) &
+                &THROW_HARD('canonical sigma2 chunk state does not match its project layout')
+        end subroutine validate_chunk_canonical_identity
+
     end subroutine merge_chunk_projfiles
 
     subroutine merge_selected_project_files( project_fnames, projfile_out, merged_proj, write_proj )
@@ -264,6 +382,7 @@ contains
         logical, optional, intent(in)    :: write_proj        ! write project file
         real, parameter :: SMPD_TOL = 0.001
         type(sp_project), allocatable :: projects(:)
+        type(string), allocatable :: project_sigma2_states(:)
         type(string) :: projfile_abs, projdir, stage_dir, projfile_stage
         type(binoris_seginfo), allocatable :: seginfos(:), hint_infos(:)
         integer, allocatable :: nmics(:), nstks(:), nptcl2Ds(:), nptcl3Ds(:), noptics(:)
@@ -277,8 +396,10 @@ contains
         integer :: stk_offset, ptcl2D_offset, ptcl3D_offset
         integer :: fromp, top, range_offset
         integer :: ogid_offset, ogid_glob_max, ogid
+        logical, allocatable :: projects_have_canonical(:)
         logical :: l_write_proj, l_has_mics, l_has_stks, l_has_ptcl2D, l_has_ptcl3D
         logical :: l_has_optics, l_has_any_data
+        logical :: l_merge_canonical_sigma
         nprojs = size(project_fnames)
         if( nprojs < 2 ) THROW_HARD('merge_selected_project_files requires at least two input projects')
         if( fname2format(projfile_out) /= 'O' )then
@@ -287,6 +408,8 @@ contains
         l_write_proj = .false.
         if( present(write_proj) ) l_write_proj = write_proj
         allocate(projects(nprojs), nmics(nprojs), nstks(nprojs), nptcl2Ds(nprojs), nptcl3Ds(nprojs), noptics(nprojs))
+        allocate(project_sigma2_states(nprojs), projects_have_canonical(nprojs))
+        projects_have_canonical = .false.
         do iproj = 1,nprojs
             projfile_abs = simple_abspath(project_fnames(iproj))
             call projects(iproj)%read_segments_info(projfile_abs, seginds, seginfos)
@@ -324,7 +447,6 @@ contains
                             nmics(iproj) = projects(iproj)%os_mic%get_noris()
                         case(STK_SEG)
                             call projects(iproj)%read_segment('stk', projfile_abs)
-                            call absolutize_project_stack_paths(projects(iproj), projfile_abs)
                             nstks(iproj) = projects(iproj)%os_stk%get_noris()
                         case(PTCL2D_SEG)
                             call projects(iproj)%read_segment('ptcl2D', projfile_abs)
@@ -347,6 +469,9 @@ contains
                 enddo
                 deallocate(seginds, seginfos)
             endif
+            call projects(iproj)%get_sigma2_state_path(project_sigma2_states(iproj), projects_have_canonical(iproj))
+            if( projects_have_canonical(iproj) ) call validate_selected_source_sigma(iproj)
+            if( nstks(iproj) > 0 ) call absolutize_project_stack_paths(projects(iproj), projfile_abs)
         enddo
         call validate_field_presence(nmics,   'mic')
         call validate_field_presence(nstks,   'stk')
@@ -358,6 +483,10 @@ contains
         l_has_ptcl2D  = nptcl2Ds(1) > 0
         l_has_ptcl3D  = nptcl3Ds(1) > 0
         l_has_optics  = noptics(1)  > 0
+        l_merge_canonical_sigma = all(projects_have_canonical) .and. (l_has_ptcl2D .or. l_has_ptcl3D)
+        if( any(projects_have_canonical) .and. .not. l_merge_canonical_sigma )then
+            THROW_WARN('merge_projects: canonical sigma2 is not present for every particle project; rebuilding is required')
+        endif
         l_has_any_data = l_has_mics .or. l_has_stks .or. l_has_ptcl2D .or. l_has_ptcl3D .or. l_has_optics
         if( .not.l_has_any_data )then
             do iproj = 1,nprojs
@@ -374,6 +503,7 @@ contains
         if( l_has_mics .and. .not.l_has_stks ) call validate_mic_sampling
         call merged_proj%kill
         call merged_proj%projinfo%copy(projects(1)%projinfo)
+        if( merged_proj%projinfo%isthere('sigma2_state') ) call merged_proj%projinfo%delete_entry('sigma2_state')
         call merged_proj%jobproc%copy(projects(1)%jobproc)
         call merged_proj%compenv%copy(projects(1)%compenv)
         call merged_proj%update_projinfo(projfile_out)
@@ -480,10 +610,122 @@ contains
             enddo
             !$omp end parallel do
         endif
+        if( l_merge_canonical_sigma ) call merge_selected_canonical_states
         call validate_source_project(merged_proj, 0)
         if( l_write_proj ) call merged_proj%write(projfile_out)
+        call project_sigma2_states(:)%kill
+        deallocate(project_sigma2_states, projects_have_canonical)
 
         contains
+
+            subroutine validate_selected_source_sigma( isource )
+                integer, intent(in) :: isource
+                type(sigma2_state_header) :: source_header
+                integer(int64) :: source_digest
+                integer :: status
+                character(len=STDLEN) :: message
+                call sigma2_state_validate_file(project_sigma2_states(isource)%to_char(), status, message, deep=.true.)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call sigma2_state_read_header(project_sigma2_states(isource)%to_char(), source_header, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                if( source_header%state /= SIGMA2_STATE_COMMITTED ) &
+                    &THROW_HARD('merge_projects requires committed canonical sigma2 input')
+                if( int(source_header%nptcls) == nptcl3Ds(isource) .and. nptcl3Ds(isource) > 0 )then
+                    source_digest = sigma2_state_project_layout_digest(projects(isource), projects(isource)%os_ptcl3D)
+                else if( int(source_header%nptcls) == nptcl2Ds(isource) .and. nptcl2Ds(isource) > 0 )then
+                    source_digest = sigma2_state_project_layout_digest(projects(isource), projects(isource)%os_ptcl2D)
+                else
+                    THROW_HARD('canonical sigma2 rows do not match a particle field in merge_projects input')
+                endif
+                if( source_digest == 0_int64 .or. source_digest /= source_header%layout_digest ) &
+                    &THROW_HARD('canonical sigma2 input does not match its project particle layout')
+            end subroutine validate_selected_source_sigma
+
+            subroutine merge_selected_canonical_states
+                if( l_has_ptcl3D )then
+                    call merge_selected_canonical_field(merged_proj%os_ptcl3D)
+                else
+                    call merge_selected_canonical_field(merged_proj%os_ptcl2D)
+                endif
+            end subroutine merge_selected_canonical_states
+
+            subroutine merge_selected_canonical_field( target_particles )
+                class(oris), intent(in) :: target_particles
+                type(sigma2_state_header) :: source_header, target_header
+                type(string) :: target_dir, target_path, candidate_path
+                real(real32), allocatable :: block(:,:)
+                logical, allocatable :: active(:)
+                integer, allocatable :: eo_ids(:), group_ids(:)
+                integer(int64) :: layout_digest, generation
+                integer :: ip, irow, offset, nrows, ngroups, status
+                character(len=STDLEN) :: message
+                nrows = target_particles%get_noris(consider_state=.false.)
+                generation = 1_int64
+                offset = 0
+                do ip = 1, nprojs
+                    call sigma2_state_read_header(project_sigma2_states(ip)%to_char(), source_header, status, message)
+                    if( status /= 0 ) THROW_HARD(trim(message))
+                    if( ip == 1 )then
+                        target_header = source_header
+                    else
+                        if( source_header%box /= target_header%box .or. &
+                            &source_header%kfrom /= target_header%kfrom .or. &
+                            &source_header%kto /= target_header%kto .or. &
+                            &source_header%grouping /= target_header%grouping .or. &
+                            &abs(real(source_header%smpd-target_header%smpd)) > 1.e-5 ) &
+                            &THROW_HARD('merge_projects canonical sigma2 inputs use incompatible grids or grouping')
+                    endif
+                    generation = max(generation, source_header%generation + 1_int64)
+                    offset = offset + int(source_header%nptcls)
+                enddo
+                if( offset /= nrows ) THROW_HARD('canonical sigma2 rows do not cover the merged project')
+                allocate(active(nrows), eo_ids(nrows), group_ids(nrows))
+                ngroups = 0
+                do irow = 1, nrows
+                    active(irow)    = target_particles%get_state(irow) > 0
+                    eo_ids(irow)    = target_particles%get_eo(irow)
+                    group_ids(irow) = target_particles%get_int(irow, 'stkind')
+                    if( active(irow) ) ngroups = max(ngroups, group_ids(irow))
+                enddo
+                if( target_header%grouping == SIGMA2_GROUP_GLOBAL )then
+                    ngroups = 1
+                    group_ids = 1
+                else if( target_header%grouping /= SIGMA2_GROUP_STACK )then
+                    THROW_HARD('unsupported canonical sigma2 grouping in merge_projects')
+                endif
+                layout_digest = sigma2_state_project_layout_digest(merged_proj, target_particles)
+                if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
+                target_dir = get_fpath(projfile_out)
+                target_path = target_dir//'sigma2_state.bin'
+                candidate_path = sigma2_state_candidate_path(target_path%to_char())
+                call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
+                    &nrows, int(target_header%box), real(target_header%smpd), ngroups, &
+                    &target_header%grouping, generation, layout_digest, SIGMA2_PROV_RESIDUAL)
+                call sigma2_state_create_candidate(candidate_path%to_char(), target_header, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                offset = 0
+                do ip = 1, nprojs
+                    call sigma2_state_read_header(project_sigma2_states(ip)%to_char(), source_header, status, message)
+                    if( status /= 0 ) THROW_HARD(trim(message))
+                    call sigma2_state_read_particles(project_sigma2_states(ip)%to_char(), 1, &
+                        &int(source_header%nptcls), block, status, message)
+                    if( status /= 0 ) THROW_HARD(trim(message))
+                    call sigma2_state_write_particles(candidate_path%to_char(), offset+1, block, status, message)
+                    if( status /= 0 ) THROW_HARD(trim(message))
+                    offset = offset + int(source_header%nptcls)
+                    deallocate(block)
+                enddo
+                call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call sigma2_state_commit(candidate_path%to_char(), target_path%to_char(), active, eo_ids, &
+                    &group_ids, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call merged_proj%set_sigma2_state_path(target_path)
+                deallocate(active, eo_ids, group_ids)
+                call target_dir%kill
+                call target_path%kill
+                call candidate_path%kill
+            end subroutine merge_selected_canonical_field
 
             logical function data_segments_present( segments )
                 integer, allocatable, intent(in) :: segments(:)
