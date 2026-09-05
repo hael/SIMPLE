@@ -63,14 +63,6 @@ real(dp), parameter :: COV_SAMPLES_PER_PARAM = 10.0d0
 !> probe stops when successive bases agree to this mean principal-angle cosine: tight enough that the
 !! remaining rotation cannot move a state target, and it fires at the measured knee rather than
 !! running the tuned count out.
-!> Amplitude of the project-level pose degradation, if any. Recorded so the pose block can report
-!! how much of a KNOWN error it removed, which is the only honest way to ask that on a dataset whose
-!! poses are ground truth to begin with.
-real :: COV_PROJ_PERTURB_ROT = 0.0, COV_PROJ_PERTURB_SH = 0.0, COV_PROJ_PERTURB_DIR = 0.0
-!> Viewing directions BEFORE the degradation, kept so the direction search can be scored against
-!! truth. A direction is 2 DOF on a sphere, so unlike the in-plane angle it cannot be reconstructed
-!! from the hash alone without also knowing the frame it was tilted in.
-real, allocatable :: COV_TRUTH_NRM(:,:)
 real(dp), parameter :: COV_PROBE_CONV    = 0.97d0
 !> Convergence is declared when the REPRODUCIBLE dimension -- the sum of principal-angle cosines
 !! between the even and odd half-bases, which the M-step already produces every iteration -- has
@@ -84,16 +76,6 @@ real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
 ! Accumulate the columns against the unscaled mean (a==1) rather than the per-particle ML contrast a_i.
 ! Subtracting a_i*T*mu also deletes the component of the conformational signal parallel to T*mu.
 logical,  parameter :: COV_UNIT_CONTRAST  = .true.
-! Runtime override of COV_UNIT_CONTRAST (SIMPLE_COV_CONTRAST=1): accumulate deviations against the
-! per-particle fitted scale a_i = Re<Tmu,y>/Re<Tmu,Tmu> instead of a==1. JUSTIFICATION (RECOVAR,
-! PNAS 2025, Appendix A.4): with per-image contrast a_i, the unscaled covariance "is corrupted by a
-! rank-one component" -- a mean-shaped spurious principal component that embeds contrast in the
-! latent "along with the heterogeneity, resulting in poor interpretability". That is this dataset's
-! measured signature (all-positive PC1; latents tracking fitted contrast). Synthetic data has
-! uniform contrast, which is why the defect never shows there. Set ONCE before any parallel region.
-logical :: cov_fit_contrast_rt = .false.
-! cross-halfset generalizing rank (consumed by auto-neigs)
-integer :: cov_d_gen_rt = 0
 ! Grid-search the per-particle contrast in the embedding instead of using the closed-form estimate.
 logical,  parameter :: COV_EMBED_CONTRAST_GRID = .false.
 integer,  parameter :: COV_CG_MAXIT = 2000     ! CG iteration cap; convergence is reported, not assumed
@@ -121,16 +103,11 @@ real, parameter :: COV_MASK_MARGIN = 1.4
 ! bias survives into the half-set column FSC and the Wiener shrinkage deletes the low-frequency band.
 logical, parameter :: COV_COLUMN_NOISE_DEBIAS = .true.
 
-! Width of the RIGHT kernel -- the one that reads each image's value AT the column frequency
-! (gather_column_values). Zero uses the shared 3-tap KB backprojection stencil for both, whose support is
-! |d| <= 1.5 per axis against |d| < 2, so it gathers roughly half as many image samples into each column.
 character(len=*), parameter :: COV_UTILDE_FBODY = 'flex_pca_utilde'
 character(len=*), parameter :: COV_UTILDE_META  = 'flex_pca_utilde.txt'
 !> master -> probe-worker handoff: the basis dimension, its prior variances and the whitened-noise
 !! level. The basis volumes themselves are already on disk as flex_pca_pc*.mrc.
 character(len=*), parameter :: COV_PROBE_META   = 'flex_pca_probe.txt'
-real :: COV_RIGHT_KERNEL_W = 0.0
-logical :: cov_rkw_read = .false.
 ! Half-width of the KB backprojection stencil in grid units, as cov_kb_weights derives it.
 integer, parameter :: COV_KB_IWINSZ = ceiling(KBWINSZ - 0.5)
 

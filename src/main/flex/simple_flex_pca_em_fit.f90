@@ -26,32 +26,13 @@ contains
         !! held-out (cross-halfset) embedding to align two independently fitted bases
         type(image), allocatable, optional, intent(out) :: basis_imgs(:)
         character(len=*),        optional, intent(in)  :: fprefix
-        integer,   allocatable :: col_hkl(:,:), col_lookup(:,:,:)
-        complex,   allocatable :: Bcol_e(:,:,:,:), Bcol_o(:,:,:,:), colvol(:,:,:,:)
-        real,      allocatable :: Hcol_e(:,:,:,:), Hcol_o(:,:,:,:), col_fsc(:)
-        type(image), allocatable :: realvols(:), utilde_real(:)
         type(reconstructor) :: work
-        type(reconstructor), allocatable :: utilde(:)
-        !> capped, halfset-balanced particle subset the column-subspace initialiser runs on. Equals
-        !! pinds when the cap is off, which is the default.
-        integer, allocatable :: bpinds(:)
-        integer :: nbp, nparts_sub
-        !> reproducibility-weighted column pruning (SIMPLE_COV_COLFSC_W / _MIN)
-        integer :: vcolw, vcolmin, s_keep, s_src, ngood_col
-        real    :: colfsc_thresh, colfsc_w
         !> probe-worker handoff, read back from the master's flex_pca_probe.txt
         real(dp),            allocatable :: eig_probe(:)
         real(dp),            allocatable :: zw(:,:), contrastw(:), precw(:,:,:), rew(:), rmew(:)
         real(dp) :: sig2_probe
         integer  :: ncomp_probe
-        real(dp), allocatable :: vred(:,:)
-        integer :: ncol, nreal, s, lb(3), ub(3), nyq_rec, d_tilde, q, directsvd
-        !> optional solve-specific subset (SIMPLE_COV_SOLVE_MAX/_STRIDE); defaults to bpinds
-        integer, allocatable :: spinds_solve(:)
-        integer :: nsolve
-        integer(timer_int_kind) :: t_blk
-        logical :: l_cols_ok
-        real(dp), allocatable :: svals(:)
+        integer :: s, lb(3), ub(3), nyq_rec
         ! one work reconstructor defines the expanded lattice / Nyquist / grid correction
         call init_basis_reconstructor(params, build, work)
         lb      = lbound(work%cmat_exp)

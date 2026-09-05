@@ -82,7 +82,7 @@ contains
         integer(kind=8) :: nvox_acc
         real(dp) :: acc_mb_fused, acc_budget_mb
         integer(timer_int_kind) :: t_ins, t_sec
-        real    :: sec_read, sec_prep, sec_ins
+        real(timer_int_kind) :: sec_read, sec_prep, sec_ins
         l_floor_rho = .false.
         if( present(floor_rho) ) l_floor_rho = floor_rho
         l_fuse = present(outvol_even) .and. present(outvol_odd)

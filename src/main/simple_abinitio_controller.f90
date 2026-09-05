@@ -519,11 +519,17 @@ contains
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_sticky_class_sampling
         character(len=STDLEN) :: ptcl_src_eff
-        real :: lp_eff
+        real :: lp_eff, lpstop_eff
         logical :: l_full_update_stage
         l_full_update_stage = force_full_sampling_mode(params)
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
+        lpstop_eff          = lpinfo(istage)%lp
+        ! lpinfo normally incorporates an explicit lpstop while constructing
+        ! the ladder. Retain the command-line value as an independent guard so
+        ! a coarser user ceiling cannot be lost when the stage cline is rebuilt.
+        if( .not. l_cavgs .and. l_refine3D_lpstop_override ) &
+            &lpstop_eff = max(lpstop_eff, params%lpstop)
         call cline_refine3D%set('prg',    'refine3D')
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
@@ -572,13 +578,16 @@ contains
         endif
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
-        call cline_refine3D%delete('lpstop')
+        ! The planned ab-initio ladder is the highest resolution permitted in
+        ! this stage. NU evidence may retain a coarser working limit, but it
+        ! must not promote matching beyond the printed stage boundary.
+        call cline_refine3D%set('lpstop',                 lpstop_eff)
         call cline_refine3D%set('automsk',                cfg%automsk)
         call cline_refine3D%set('envfsc',                 cfg%envfsc)
         call cline_refine3D%set('envmsklp',               params%envmsklp)
         if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
             ! Past this point, NU filtering promotes the selected matching
-            ! bandwidth; the controller no longer injects schedule LP.
+            ! bandwidth; the schedule remains only as the lpstop ceiling.
             call cline_refine3D%delete('lp')
         else
             call cline_refine3D%set('lp',                 lp_eff)

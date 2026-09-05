@@ -68,7 +68,7 @@ contains
         real(dp), allocatable, intent(out) :: svals(:)
         real, pointer :: ri(:,:,:), rj(:,:,:)
         real(dp), allocatable :: Gee(:,:), Goo(:,:), Geo(:,:), We(:,:), Wo(:,:)
-        real(dp), allocatable :: ev(:), vec(:,:), M(:,:), MtM(:,:), V2(:,:), ev2(:)
+        real(dp), allocatable :: M(:,:), MtM(:,:), V2(:,:), ev2(:)
         integer  :: i, j, nrot
         real(dp) :: lam
         allocate(Gee(n,n), Goo(n,n), Geo(n,n), source=0.d0)

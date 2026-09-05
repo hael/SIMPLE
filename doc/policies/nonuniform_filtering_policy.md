@@ -482,6 +482,14 @@ In multi-state runs, the populated state with the finest valid NU-selected
 limit determines the single project-level matching bandwidth, matching the
 classical global-bandwidth policy.
 
+Staged `abinitio3D` additionally passes its current planned `lpstages` value as
+`lpstop`. Consequently, an NU-selected project limit may keep matching coarser
+than the plan but cannot promote matching beyond the current ab-initio stage
+boundary. This workflow constraint does not change the evidence-driven update
+policy used by `refine3D_auto`. When the user explicitly supplies a coarser
+`lpstop`, the staged workflow uses the coarser of that value and the planned
+stage boundary.
+
 That project `lp` is consumed as follows:
 
 - every nonuniform mode may use it in later non-fresh iterations

@@ -9,6 +9,10 @@ use simple_flex_projected_latent_model, only: prep_imgs4projected_model
 implicit none
 #include "simple_local_flags.inc"
 
+! Runtime override of COV_UNIT_CONTRAST (SIMPLE_COV_CONTRAST=1): accumulate deviations against the
+! per-particle fitted scale instead of unit contrast. Set once before any parallel region.
+logical :: cov_fit_contrast_rt = .false.
+
 contains
 
     !> Single entry point for the covariance mean.

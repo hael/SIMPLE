@@ -806,6 +806,8 @@ contains
                 call set_lplims_from_frcs(params, spproj, l_cavgs=.false.)
             endif
         endif
+        if( l_user_lpstop ) write(logfhandle,'(A,F8.3,A)') &
+            &'>>> ABINITIO3D COMMAND-LINE LPSTOP CEILING: ', params%lpstop, ' A'
         ! starting volume logics
         if( .not. l_ini3D )then
             call reset_ptcl3D_from_ptcl2D_selection

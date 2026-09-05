@@ -75,7 +75,7 @@ contains
         real, allocatable :: state_weights(:,:), half_weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer :: nptcls, ncomp, nstates, min_neff, state_axis, col_sep, neigs_req, nkern
         integer :: q, i, r, s, nfinch
-        integer :: nstates_merged, kmix
+        integer :: nstates_merged
         integer, allocatable :: merge_label(:)
         real,    allocatable :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
         real(dp), allocatable :: state_mass(:), merged_mass(:)
@@ -89,7 +89,7 @@ contains
         real(dp) :: aw_b2
         real(dp), allocatable :: pviews(:,:)     ! per-particle viewing AXIS, for the GMM orientation term
         character(len=:), allocatable :: cachedir, cachestr
-        real(dp) :: sig2_eff, snr_best
+        real(dp) :: sig2_eff
         logical :: sigma_loaded, l_resume, l_split_eo
         integer(timer_int_kind) :: t_blk
 
@@ -1373,11 +1373,11 @@ contains
         real(dp) :: Bsum(nk,nk), scat(nk,nk), mnum(nk,nstates), Nbar(nk,nk)
         real(dp) :: ySy, ySm, lmax, lsum, ll, prev_ll, logdet, lam, sumw, sumw2, vq, trS
         real(dp) :: bicval, ent, dmin, d2pair, cdec, gbytes, ldet, evfloor
-        real(dp) :: trS_now, prev_trS
+        real(dp) :: prev_trS
         integer  :: nfree, nrespawn, kmin, kdrop, iworst, ndegen, maxit_eff
         integer  :: i, q, r, state, it, nrot, errflg
         integer(kind=8) :: nact_tot
-        logical  :: l_orient, l_deconv, l_conv
+        logical  :: l_orient, l_deconv
         lam      = 0.d0
         if( present(orient_lam) ) lam = orient_lam
         l_orient = present(views) .and. lam > 0.d0
@@ -3608,12 +3608,4 @@ contains
             &', state count=',auto_state_count(335240,2000),', min_neff both regimes)'
     end subroutine test_flex_pca_auto_settings
 
-    !> deterministic centred unit-variance pseudo-random draw, so the tests do not depend on an RNG
-    real(dp) function punit( n ) result( u )
-        integer, intent(in) :: n
-        real(dp) :: t
-        t = sin(real(n,dp)*12.9898d0)*43758.5453d0
-        u = t - floor(t)                               ! uniform(0,1)
-        u = (2.d0*u - 1.d0)*sqrt(3.d0)                 ! centred, unit variance
-    end function punit
 end module simple_flex_pca_model

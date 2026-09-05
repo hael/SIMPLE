@@ -51,7 +51,7 @@ contains
         integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
         real(dp) :: a, a_best, a_keep, a_num, a_den, e_yy, e_mm, best_res, res, aa, sig2
         real(dp), allocatable :: Ainv_th(:,:,:)     ! posterior covariance, for the tr(G A^-1) term
-        integer  :: icm, ncm_contrast
+        integer  :: icm
         integer(timer_int_kind) :: t_phase
         real(dp), allocatable :: Gth(:,:,:), Ath(:,:,:), zth(:,:), zbest(:,:), cth(:,:), bth(:,:), myth(:)
         real(dp), allocatable :: Gtilth(:,:,:)   ! per-thread noise-whitened projected Gram

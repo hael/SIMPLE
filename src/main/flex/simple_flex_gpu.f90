@@ -335,6 +335,7 @@ interface
 end interface
 #endif
 
+#ifdef USE_FLEX_CUDA
 integer    :: g_lb(3) = 0, g_ub(3) = 0, g_ncomp = 0, g_lfny = 0
 integer(8) :: g_nvox = 0
 integer    :: g2_lb(3) = 0, g2_ub(3) = 0, g2_ncomp = 0, g2_nrho = 0, g2_lfny = 0
@@ -343,6 +344,7 @@ integer    :: gc_lb(3) = 0, gc_ub(3) = 0, gc_ncol = 0
 integer(8) :: gc_nvox = 0
 integer    :: gs_lb(3) = 0, gs_ub(3) = 0
 integer(8) :: gs_nvox = 0
+#endif
 logical    :: l_prep_dev_ready = .false.   ! device prep begun and not yet freed
 
 contains
@@ -2292,7 +2294,7 @@ contains
         real,    allocatable :: xws_ref(:,:), xws1_ref(:,:), xws2_ref(:,:), wr_ref(:,:)
         real,    allocatable :: xws_gpu(:,:), xws1_gpu(:,:), xws2_gpu(:,:), wr_gpu(:,:)
         real,    allocatable :: pw_gpu(:), taz_gpu(:)
-        real     :: cav(TEST_NREC), sav(TEST_NREC), taz_ref(TEST_NREC), ang, tazim
+        real     :: cav(TEST_NREC), sav(TEST_NREC), taz_ref(TEST_NREC), ang
         real(dp) :: pw_ref(TEST_NREC), cnt_ref
         logical  :: valid(TEST_NREC)
         integer  :: lims_pd(3,2), i, j, h, k, hp, kp, kfrom, kto, knfrom, knto, hlo, hhi, klo

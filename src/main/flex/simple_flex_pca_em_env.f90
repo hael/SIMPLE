@@ -5,6 +5,11 @@ use simple_flex_gpu,        only: flex_gpu_available, flex_gpu_prep_begin_f, fle
 implicit none
 #include "simple_local_flags.inc"
 
+! Width of the RIGHT kernel -- the one that reads each image's value at the column frequency.
+! Zero uses the shared three-tap KB backprojection stencil for both sides.
+real    :: COV_RIGHT_KERNEL_W = 0.0
+logical :: cov_rkw_read = .false.
+
 contains
 
 

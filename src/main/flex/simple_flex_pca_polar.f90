@@ -335,7 +335,7 @@ contains
         !> the two INDEPENDENT half-fields, by Cartesian lattice parity (see below)
         complex, optional,  intent(out) :: xw1(:), xw2(:)
         type(kbinterpol) :: kbwin
-        integer :: j, r, ir, nang
+        integer :: j, ir, nang
         real    :: hu, ku, c1, s1, t2, tm, tv
         complex :: yv, tv_c
         kbwin = kbinterpol(KBWINSZ, KBALPHA)

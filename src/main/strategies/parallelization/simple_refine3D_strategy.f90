@@ -317,6 +317,9 @@ contains
                 params%lp         = promoted_lp
                 params%l_lpset    = .true.
                 call cline%set('lp', params%lp)
+                ! Persist the effective value after applying lpstop, not the
+                ! potentially finer raw NU handoff read from the project.
+                call build%spproj_field%set_all2single('lp', params%lp)
                 if( l_log_promotion )then
                     write(logfhandle,'(A,F8.3,A)') &
                         &'>>> NU filter promoted matching low-pass to command line: ', params%lp, ' A'

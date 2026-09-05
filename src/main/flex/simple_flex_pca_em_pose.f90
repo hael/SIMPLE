@@ -14,6 +14,12 @@ use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_proje
 implicit none
 #include "simple_local_flags.inc"
 
+! Amplitude of the project-level pose degradation, retained so the pose block can report how much
+! of a known error it removed.
+real :: COV_PROJ_PERTURB_ROT = 0.0, COV_PROJ_PERTURB_SH = 0.0, COV_PROJ_PERTURB_DIR = 0.0
+! Viewing directions before degradation, retained so the direction search can be scored against truth.
+real, allocatable :: COV_TRUTH_NRM(:,:)
+
 contains
 
 
@@ -121,7 +127,7 @@ contains
         real,    allocatable :: Usall(:,:,:), pose_rot(:), pose_shx(:), pose_shy(:)
         integer, allocatable :: dnn(:,:), ndmove_thr(:)
         real(dp),allocatable :: dangle_thr(:), dq0_thr(:), dq1_thr(:)
-        logical :: l_p2
+        logical :: l_p2, l_fit_contrast
         integer :: nnn_dir, jdacc
         real(dp),allocatable :: Cfall(:,:,:), Cm0all(:,:,:), c00all(:,:)
         real(dp),allocatable :: pose_e0(:), pose_e1(:)
@@ -140,7 +146,7 @@ contains
         type(string) :: fn_pose
         real(dp):: pw1, cnt1, cc, aa, e_yy, e_mm, myv, res
         integer(timer_int_kind) :: t_a, t_b, t_es
-        real :: sec_eread, sec_eprep, sec_esamp
+        real(timer_int_kind) :: sec_eread, sec_eprep, sec_esamp
         ! device polar sampler (SIMPLE_COV_GPU=1); pose refinement forces the CPU path
         logical  :: l_gpu_eps, l_eps_res, l_devprep
         integer  :: vps_e
@@ -148,6 +154,7 @@ contains
         logical, allocatable :: vmask_e(:)
         real,   parameter :: A_LO_C = 0.1, A_HI_C = 5.0
         nthr   = nthr_glob
+        l_fit_contrast = cov_env_int_on('SIMPLE_COV_CONTRAST')
         nvalid = 0
         pf     = OSMPL_PAD_FAC
         call mean_rec%expand_exp
@@ -695,7 +702,7 @@ contains
                             end do
                         end do
                         resid_mean_energy(row) = e_yy - 2.d0*myv + e_mm
-                        if( COV_UNIT_CONTRAST .and. .not. cov_fit_contrast_rt )then
+                        if( COV_UNIT_CONTRAST .and. .not. l_fit_contrast )then
                             cc = 1.d0
                         else
                             cc = max(real(A_LO_C,dp), min(real(A_HI_C,dp), myv/max(e_mm,DTINY)))
@@ -831,7 +838,7 @@ contains
         real(dp) :: h1s, h2s, h1f, h2f, hfull, best2, logdet, logdet2, bestd, e_mm2
         real(dp), allocatable :: Ach2(:,:), cvec2(:)
         real     :: drot2, dshx2, dshy2, caj, saj
-        integer  :: q, r, ir, info, it, ish, jsh, iround, ic, jd, jdir0
+        integer  :: q, info, it, ish, jsh, iround, ic, jd, jdir0
         allocate(xw0(pg%nsamp), xw1(pg%nsamp), xtrial(nsamp2), bq(0:ncomp))
         allocate(Ach(ncomp,ncomp), uvec(ncomp), cvec(ncomp))
         allocate(Ach2(ncomp,ncomp), cvec2(ncomp))

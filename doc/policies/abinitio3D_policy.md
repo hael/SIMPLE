@@ -129,6 +129,18 @@ Stage 1 of `abinitio3D` never runs with a low-pass limit finer than 20 A.
 low-pass and crop ladder, preserving gradual frequency marching. Explicit
 external-volume schedules use `lpstages_setlims` and are unchanged.
 
+The controller passes the current `lpinfo(istage)%lp` to each staged
+`refine3D` child as the stage `lpstop` ceiling alongside the effective planned
+matching limit. NU evidence may keep the working matching limit coarser, but it
+cannot promote matching to a resolution finer than the printed stage limit.
+This bound applies throughout every iteration in the stage, including the NU
+stages, rather than only when the stage command is first constructed.
+An explicitly supplied, coarser command-line `lpstop` is folded into the
+ladder and is also retained as an independent ceiling when the staged child
+command is rebuilt; the effective ceiling is the coarser of the two limits.
+The workflow logs the acknowledged command-line ceiling before entering the
+stage loop.
+
 Saved `_stageNN_lp.mrc` diagnostic volumes are filtered to the current state
 FSC resolution when an FSC exists. The planned stage LP is only a fallback.
 
@@ -327,7 +339,8 @@ staged and final reconstruction commands; its default is
 in staged and final reconstruction commands. The controller keeps a scheduled
 `lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
 `nonuniform` is promoted to `nonuniform_lpset`, so the NU frontier can feed an
-explicit merged-reference LP-set matching run.
+explicit merged-reference LP-set matching run, bounded at the high-resolution
+end by the current `lpstages` limit.
 
 Phase randomization corrects mask-induced correlation; it does not make the
 non-independent ab initio half maps a gold-standard validation pair. FSC-derived

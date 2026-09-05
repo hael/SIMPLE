@@ -152,7 +152,8 @@ contains
         real,     allocatable :: xws_es(:,:), wr_es(:,:), Reb_es(:,:)
         real(dp), allocatable :: wrd_es(:,:)
         real(dp) :: pw_es, cnt_es
-        real     :: taz_es, sec_bank
+        real     :: taz_es
+        real(timer_int_kind) :: sec_bank
         integer(timer_int_kind) :: t_bank
         !> DEVICE polar E-step (stage 2), SIMPLE_COV_POLAR_GPU=1 (requires POLAR_ESTEP=1): the
         !! host-built bank + ring Gram tables upload once per iteration; per batch the RAW
@@ -258,10 +259,9 @@ contains
         logical  :: l_online, l_focus_annulus
         integer  :: vonl_pr, nb_online, ob_lo, ob_hi, b_online, b_win, it_win, vfoc_r1, vfoc_ed
         real     :: foc_r1, foc_edge
-        real(dp) :: gam_onl
         complex, allocatable :: oh_cme(:,:,:,:), oh_cmo(:,:,:,:)
         real,    allocatable :: oh_rhe(:,:,:,:), oh_rho(:,:,:,:)
-        real(dp), allocatable :: oh_gam(:), ut_hist(:,:), r_onl(:,:)
+        real(dp), allocatable :: oh_gam(:), ut_hist(:,:)
         logical  :: l_oh_live
         logical  :: l_probe_mls
         real(dp) :: qml, nll_mix_add
@@ -278,7 +278,7 @@ contains
         logical  :: l_onl_final
         type(string) :: fname
         integer(timer_int_kind) :: t_it, t_sec
-        real    :: sec_read, sec_prep, sec_estep, sec_ins
+        real(timer_int_kind) :: sec_read, sec_prep, sec_estep, sec_ins
         real(dp) :: twp0, twp1, twp2
         real(dp), allocatable :: sec_proj_thr(:), sec_gram_thr(:)
         ! banked FORWARD: shared raw projections per direction segment; data aligned into the
@@ -2107,8 +2107,7 @@ contains
                 if( l_mix_active )then
                     block
                         real(dp), allocatable :: rr_sr(:), rr_sm(:,:), rr_smm(:,:,:), rr_sai(:,:)
-                        real(dp) :: g_mx, pi_floor, best_d, dmin, dsq
-                        integer  :: tt, kk3, kkp, ii2, best_i
+                        integer  :: tt, kk3
                         allocate(rr_sr(kmix_pr), rr_sm(ncomp,kmix_pr), &
                             &rr_smm(ncomp,ncomp,kmix_pr), rr_sai(ncomp,ncomp))
                         rr_sr = 0.d0; rr_sm = 0.d0; rr_smm = 0.d0; rr_sai = 0.d0
@@ -2247,7 +2246,6 @@ contains
                 block
                     real,     pointer     :: onl_pr(:,:,:)
                     real(dp), allocatable :: Mo(:,:), MtMo(:,:), Vo(:,:), evo(:)
-                    real,     allocatable :: ut_now(:,:,:,:)
                     complex,  allocatable :: tcme(:,:,:,:), tcmo(:,:,:,:)
                     real,     allocatable :: trhe(:,:,:,:), trho(:,:,:,:)
                     real(dp), allocatable :: tgam(:)
