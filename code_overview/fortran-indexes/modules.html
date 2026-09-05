@@ -1,0 +1,7582 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/code_overview/fortran-indexes/modules.html">
+      
+      
+        <link rel="prev" href="module_index.html">
+      
+      
+        <link rel="next" href="../../for_developers/preserving_legacy_inplane_path.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Module Index - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#module-index" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Module Index
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="modules.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/pcg_nonuniform_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code review: PCG reconstruction with nonuniform regularization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/pcg_priors.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG priors: experiment record and the NU-evidence prior design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/pfcrt_audit_a6ae317ae_vs_head.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PfCRT audit: what changed between a6ae317ae and HEAD (2026-09-02)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_30" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_30" id="__nav_10_30_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_30_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_30">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="module-index">Module Index<a class="headerlink" href="#module-index" title="Permanent link">&para;</a></h1>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Files</th>
+<th># Procedures</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CPlot2D_wrapper_module</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/CPlot2D/simple_CPlot2D_wrapper.f90</td>
+<td>51</td>
+</tr>
+<tr>
+<td><code>curl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/curl/src/curl.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>curl_easy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/curl/src/curl_easy.f90</td>
+<td>35</td>
+</tr>
+<tr>
+<td><code>curl_multi</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/curl/src/curl_multi.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>curl_urlapi</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/curl/src/curl_urlapi.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>curl_util</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/curl/src/curl_util.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>elemental</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_arith.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>FoX_common</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/FoX_common.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>FoX_dom</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/FoX_dom.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_abort_flush</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_abort_flush.F90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_array_str</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_array_str.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_count_parse_input</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_format</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_format.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_parse_input</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_realtypes</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_realtypes.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_string</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_string.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>fox_m_fsys_string_list</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_string_list.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>fox_m_utils_mtprng</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/utils/fox_m_utils_mtprng.F90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>fox_m_utils_uri</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/utils/fox_m_utils_uri.F90</td>
+<td>42</td>
+</tr>
+<tr>
+<td><code>fox_m_utils_uuid</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/utils/fox_m_utils_uuid.F90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>FoX_sax</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/FoX_sax.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>FoX_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/utils/FoX_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>FoX_wcml</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/FoX_wcml.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>FoX_wkml</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/FoX_wkml.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>FoX_wxml</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wxml/FoX_wxml.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>function</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_fit.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_mean.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_arith.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_checks.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_fft.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_filt.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_freq_anal.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_geom.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_seg.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_state.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_dists.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_getters.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_life.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_neig.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_sampling.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_stats.f90<br>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters.f90<br>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_memo.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_cls.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_io.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_mic.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_stk.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio_controller.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>gnufor2</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/gnufor/gnufor2.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>integer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_bank.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_potts.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_state.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_mic.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_out.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_ptcl.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_stk.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>json_file_module</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_file_module.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>json_kinds</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_kinds.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>json_module</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_module.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>json_parameters</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_parameters.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>json_string_utilities</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_string_utilities.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>json_value_module</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_value_module.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>logical</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_checks.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_evidence.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_potts.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_state.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_mic.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_out.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_ptcl.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_attrs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_attrs.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_buffer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_buffer.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_charset</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_charset.F90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>m_common_content_model</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_content_model.F90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>m_common_element</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_element.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_elstack</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_elstack.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_entities</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_entities.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_entity_expand</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_entity_expand.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>m_common_error</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_error.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_io.F90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>m_common_namecheck</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_namecheck.F90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>m_common_namespaces</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_namespaces.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_common_notations</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_notations.F90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>m_common_struct</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_struct.F90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>m_contours</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_contours.F90</td>
+<td>30</td>
+</tr>
+<tr>
+<td><code>m_dom_dom</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_dom.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_dom_error</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_error.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>m_dom_extras</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_extras.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_dom_parse</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_parse.f90</td>
+<td>25</td>
+</tr>
+<tr>
+<td><code>m_dom_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_utils.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>m_ieee</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/m_ieee.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>m_sax_operate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/m_sax_operate.F90</td>
+<td>31</td>
+</tr>
+<tr>
+<td><code>m_sax_parser</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/m_sax_parser.F90</td>
+<td>45</td>
+</tr>
+<tr>
+<td><code>m_sax_reader</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/m_sax_reader.F90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>m_sax_tokenizer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/m_sax_tokenizer.F90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>m_sax_types</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/m_sax_types.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_sax_xml_source</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/sax/m_sax_xml_source.F90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>m_wcml_coma</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_coma.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wcml_core</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_core.F90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>m_wcml_geometry</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_geometry.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wcml_lattice</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_lattice.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wcml_lists</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_lists.F90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>m_wcml_metadata</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_metadata.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>m_wcml_molecule</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_molecule.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wcml_parameter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_parameter.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wcml_property</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_property.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wcml_stml</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_stml.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_chart</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_chart.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_color</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_color.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_color_def</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_color_def.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_contours</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_contours.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_core</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_core.F90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>m_wkml_coverage</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_coverage.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_features</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_features.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_lowlevel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_lowlevel.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wkml_styling</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_styling.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wxml_core</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wxml/m_wxml_core.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>m_wxml_escape</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wxml/m_wxml_escape.F90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>m_wxml_overloads</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wxml/m_wxml_overloads.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>mod_phasecorr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_test_mod_phasecorr.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>procedure</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_type_defs.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/curl/src/curl_easy.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/gnufor/gnufor2.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_file_module.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_string_utilities.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/json/json_value_module.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix.f90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_attrs.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_buffer.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_element.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_elstack.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_entities.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_error.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/common/m_common_namespaces.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_dom.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/dom/m_dom_extras.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_array_str.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_format.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/fsys/fox_m_fsys_string_list.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_coma.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_geometry.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_lattice.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_molecule.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_parameter.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_property.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wcml/m_wcml_stml.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_chart.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_color.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_contours.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_coverage.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_features.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_lowlevel.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wkml/m_wkml_styling.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wxml/m_wxml_core.F90<br>/home/hossainm7/hael_SIMPLE/src/extlibs/xml/wxml/m_wxml_overloads.F90<br>/home/hossainm7/hael_SIMPLE/src/fileio/simple_fileio.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ctf/simple_ctf.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_ftiter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_edges_sqwins.f90<br>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_kbinterpol.f90<br>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_winfuns.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_ori.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio_controller.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_eul_prob_tab_utils.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_sym.f90<br>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_ptcl_io.f90<br>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_watcher.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_butterworth.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_opt_filter.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_linalg.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_math.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_math_ft.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_neighs.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_ran_tabu.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_rnd.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_srch_sort_loc.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_stat.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_ctrl.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_funs.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_corrmat.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_gauss2Dfit.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_gpu_utils.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_imgarr_utils.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_is_check_assert.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_jiffys.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_magic_boxes.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_sauron.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_segmentation.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_string.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/simple_string_utils.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_chash.f90<br>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_hash.f90</td>
+<td>2305</td>
+</tr>
+<tr>
+<td><code>pure</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/class/simple_classaverager.f90<br>/home/hossainm7/hael_SIMPLE/src/main/class/simple_classaverager_restore.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_arith.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_checks.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_dists.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_getters.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_geom.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>real</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_bank.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_envmask.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_evidence.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_potts.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_state.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_stats.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_neig.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_corr.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_core.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>recursive</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_geom.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_abinitio2D_controller</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio2D_controller.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_abinitio3D_split_checkpoint</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio3D_split_checkpoint.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_abinitio_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_aff_prop</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/clustering/simple_aff_prop.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_ansi_ctrls</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_ansi_ctrls.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_atoms</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/simple_atoms.f90</td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>simple_binary_tree</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_binary_tree.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_binary_tree_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_binary_tree_tester.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_binoris</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_binoris.f90</td>
+<td>21</td>
+</tr>
+<tr>
+<td><code>simple_binoris_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_binoris_io.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_block_tree</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_block_tree.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_block_tree_corr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_block_tree_corr.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_block_tree_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_block_tree_io.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_bspline_smoother</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_bspline_smoother.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_builder</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_builder.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_butterworth</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_butterworth.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_calc_pspec_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_calc_pspec_strategy.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_cartesian_fourier</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_cartesian_fourier.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_cartesian_pose_refiner</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_cartesian_pose_refiner.f90</td>
+<td>34</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_analysis</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_analysis.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_feats</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_feats.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_helpers</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_helpers.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_learn</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_learn.f90</td>
+<td>49</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_model</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_model.f90</td>
+<td>39</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_relations</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_relations.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_stats</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_stats.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_cavg_quality_types</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_types.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_chash</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_chash.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_chash_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_chash_tester.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_class_compatibility</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/class/simple_class_compatibility.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_class_compatibility_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/class/simple_class_compatibility_tester.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_class_frcs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/class/simple_class_frcs.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_class_sample_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_class_sample_io.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_classaverager</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/class/simple_classaverager.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_cls_split_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_cls_split_strategy.f90</td>
+<td>41</td>
+</tr>
+<tr>
+<td><code>simple_cluster2D_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_cluster2D_strategy.f90</td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>simple_cluster_seed</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/clustering/simple_cluster_seed.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_clustering_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/clustering/simple_clustering_utils.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_cmdline</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_cmdline.f90</td>
+<td>27</td>
+</tr>
+<tr>
+<td><code>simple_cmdline_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_cmdline_tester.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commander_base</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commander_base.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_commanders_abinitio</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_abinitio.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_commanders_abinitio2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_commanders_abinitio2d_sgd</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2d_sgd.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_commanders_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_commanders_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_commanders_atoms</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_atoms.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_commanders_cavgs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_cavgs.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_commanders_checks</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_checks.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_commanders_cluster2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_cluster2D.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_commanders_denoise</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_denoise.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_commanders_distr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_distr.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_commanders_euclid</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_euclid.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_commanders_euclid_distr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_euclid_distr.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_commanders_flex_pca</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_flex_pca.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_commanders_imgops</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_imgops.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_commanders_imgproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_imgproc.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_commanders_mask</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_mask.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_commanders_misc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_misc.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_mkcavgs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_mkcavgs.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_commanders_ori</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_ori.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_pick</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_pick.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_commanders_postprocess_nu</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_postprocess_nu.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_commanders_preprocess</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_preprocess.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_commanders_prob</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_prob.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_commanders_project_cls</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_project_cls.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_commanders_project_core</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_project_core.f90</td>
+<td>23</td>
+</tr>
+<tr>
+<td><code>simple_commanders_project_mov</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_project_mov.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_commanders_project_ptcl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_project_ptcl.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_rec</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_rec.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_commanders_rec_distr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_rec_distr.f90</td>
+<td>52</td>
+</tr>
+<tr>
+<td><code>simple_commanders_refine3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_refine3D.f90</td>
+<td>45</td>
+</tr>
+<tr>
+<td><code>simple_commanders_relion</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_relion.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_commanders_reproject</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_reproject.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_commanders_resolest</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_resolest.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_sieve</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_sieve.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_commanders_sim</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_sim.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_commanders_starproject</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_starproject.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_commanders_stkops</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_stkops.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_class</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_class.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_fft</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_fft.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_geometry</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_geometry.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_highlevel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_highlevel.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_io.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_masks</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_masks.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_network</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_network.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_numerics</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_numerics.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_optimize</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_optimize.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_parallel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_parallel.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_single</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_single.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_stats</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_stats.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_stream</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_stream.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_commanders_test_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/test/simple_commanders_test_utils.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_commanders_validate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_validate.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_commanders_volops</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/simple/simple_commanders_volops.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_complex_ppca</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_complex_ppca.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_convergence</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_convergence.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_core_module_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_core_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_corrmat</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_corrmat.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ctf</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ctf/simple_ctf.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ctf_estimate_cost</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ctf/simple_ctf_estimate_cost.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_ctf_estimate_fit</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ctf/simple_ctf_estimate_fit.f90</td>
+<td>33</td>
+</tr>
+<tr>
+<td><code>simple_ctf_estimate_iter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ctf/simple_ctf_estimate_iter.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_ctf_estimate_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_ctf_estimate_strategy.f90</td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>simple_decay_funs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_decay_funs.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_default_clines</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_default_clines.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_defs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_defs_atoms</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_atoms.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_defs_conv</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_conv.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_defs_environment</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_environment.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_defs_fname</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_fname.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_defs_ori</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_ori.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_defs_stream</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_stream.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_defs_string</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_defs_string.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_denoise_movies</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_denoise_movies.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_denoise_project_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_denoise_project_strategy.f90</td>
+<td>46</td>
+</tr>
+<tr>
+<td><code>simple_diff_map_denoise</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_diff_map_denoise.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_diff_map_graphs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_diff_map_graphs.f90</td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>simple_diffusion_maps</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_diffusion_maps.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_discrete_stack_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_discrete_stack_io.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_distr_comm</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_distr_comm.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_dock_vols</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_dock_vols.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_edges_sqwins</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_edges_sqwins.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_eer_factory</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_eer_factory.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_error</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_error.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_estimate_ssnr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_estimate_ssnr.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_euclid_sigma2</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_euclid_sigma2.f90</td>
+<td>26</td>
+</tr>
+<tr>
+<td><code>simple_eul_prob_tab</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_eul_prob_tab.f90</td>
+<td>40</td>
+</tr>
+<tr>
+<td><code>simple_eul_prob_tab2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_eul_prob_tab2D.f90</td>
+<td>37</td>
+</tr>
+<tr>
+<td><code>simple_eul_prob_tab_neigh</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_eul_prob_tab_neigh.f90</td>
+<td>46</td>
+</tr>
+<tr>
+<td><code>simple_eul_prob_tab_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_eul_prob_tab_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_eulspace_neigh_map</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_eulspace_neigh_map.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_exec_abinitio3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_abinitio3D.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_exec_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_exec_cavgproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_cavgproc.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_cluster2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_cluster2D.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_denoise</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_denoise.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_dock</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_dock.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_filter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_filter.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_helpers</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_exec_helpers.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_exec_image</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_image.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_mask</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_mask.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_ori</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_ori.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_other</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_other.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_preproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_preproc.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_print</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_print.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_project</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_project.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_refine3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_refine3D.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_res</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_res.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_sieve</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_sieve.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_sim</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_sim.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_sym</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_sym.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_validate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_validate.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_exec_volume</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_exec_volume.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_external_reference_pose_initialization</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_external_reference_pose_initialization.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_extract_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_extract_strategy.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_fftw3</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_fftw3.f90</td>
+<td>39</td>
+</tr>
+<tr>
+<td><code>simple_fileio</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_fileio.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_fileio_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_fileio_tester.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_finch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/clustering/simple_finch.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_flex_gpu</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_gpu.f90</td>
+<td>55</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_distr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_distr.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_em</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_merge</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_merge.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_model</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_model.f90</td>
+<td>40</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_parts</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_parts.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_polar</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_polar.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_flex_pca_rec3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_rec3D.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_flex_projected_latent_model</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_projected_latent_model.f90</td>
+<td>18</td>
+</tr>
+<tr>
+<td><code>simple_flex_reconstructor_latent_ops</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_reconstructor_latent_ops.f90</td>
+<td>18</td>
+</tr>
+<tr>
+<td><code>simple_forked_process</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_forked_process.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_forked_process_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_forked_process_tester.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_fsc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_fsc.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_ft_expanded</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_ft_expanded.f90</td>
+<td>27</td>
+</tr>
+<tr>
+<td><code>simple_ftexp_shsrch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_ftexp_shsrch.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_ftiter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_ftiter.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_gauss2Dfit</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_gauss2Dfit.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_gen_pspecs_and_thumbs_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_gen_pspecs_and_thumbs_strategy.f90</td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>simple_gpu_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_gpu_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_gridding</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_gridding.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_gui_assembler</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/simple_gui_assembler.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_gui_assembler_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/simple_gui_assembler_tester.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_gui_metadata_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_base</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_base.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_cavg2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_cavg2D.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_histogram</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_histogram.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_micrograph</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_micrograph.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_optics_group</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_optics_group.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_opening2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_opening2D.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_optics_assignment</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_optics_assignment.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_particle_sieving</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_particle_sieving.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_picking</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_picking.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_pool2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_pool2D_snapshot</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D_snapshot.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_preprocess</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_preprocess.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_stream_update</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/stream/simple_gui_metadata_stream_update.f90</td>
+<td>23</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_tester.f90</td>
+<td>45</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_timeplot</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_timeplot.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_types</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_types.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_gui_metadata_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/metadata/simple_gui_metadata_utils.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_gui_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/simple_gui_utils.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_guistats</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/simple_guistats.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_halfmap_diagnostics</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_halfmap_diagnostics.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_hash</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_hash.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_hash_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_hash_tester.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_hclust</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/clustering/simple_hclust.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_histogram</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_histogram.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_http_post</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_http_post.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_http_post_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_http_post_tester.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_image</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_image_bin</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_bin.f90</td>
+<td>39</td>
+</tr>
+<tr>
+<td><code>simple_image_msk</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_msk.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_imgarr_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_imgarr_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_imgfile</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_imgfile.f90</td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>simple_imghead</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_imghead.f90</td>
+<td>39</td>
+</tr>
+<tr>
+<td><code>simple_imgproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_imgproc.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_ipc_tcp_socket_client</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_ipc_tcp_socket_client.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ipc_tcp_socket_helpers</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_ipc_tcp_socket_helpers.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ipc_tcp_socket_server</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_ipc_tcp_socket_server.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_ipc_tcp_socket_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_ipc_tcp_socket_tester.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_is_check_assert</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_is_check_assert.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_jiffys</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_jiffys.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_jpg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/jpg/simple_jpg.f90</td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>simple_kbinterpol</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_kbinterpol.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_kd_tree</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_kd_tree.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_kmedoids</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/clustering/simple_kmedoids.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_kpca_svd</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_kpca_svd.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_linalg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_linalg.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_linked_list</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_linked_list.f90</td>
+<td>30</td>
+</tr>
+<tr>
+<td><code>simple_linked_list_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_linked_list_tester.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_magic_boxes</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_magic_boxes.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_make_cavgs_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_make_cavgs_strategy.f90</td>
+<td>34</td>
+</tr>
+<tr>
+<td><code>simple_map_reduce</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_map_reduce.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_matcher_2Dprep</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_2Dprep.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_matcher_3Drec</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_3Drec.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_matcher_pftc_prep</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_pftc_prep.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_matcher_ptcl_batch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_ptcl_batch.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_matcher_ptcl_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_ptcl_io.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_matcher_refvol_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_refvol_utils.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_matcher_smpl_and_lplims</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_matcher_smpl_and_lplims.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_math</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_math.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_math_ctf</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_math_ctf.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_math_ft</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_math_ft.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_mem_estimator</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_mem_estimator.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_memoize_ft_maps</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_memoize_ft_maps.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_memory_monitor</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_memory_monitor.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_micproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_micproc.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_micrograph_generator</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_micrograph_generator.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_mini_stream_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_mini_stream_utils.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_molecule_data</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/simple_molecule_data.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_motion_align_hybrid</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_align_hybrid.f90</td>
+<td>32</td>
+</tr>
+<tr>
+<td><code>simple_motion_align_nano</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_align_nano.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_motion_correct</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_correct.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_motion_correct_iter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_correct_iter.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_motion_correct_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_motion_correct_strategy.f90</td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>simple_motion_correct_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_correct_utils.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_motion_gain_analysis</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_gain_analysis.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_motion_gain_helpers</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_gain_helpers.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_motion_gain_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_gain_tester.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_motion_patched</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_motion_patched.f90</td>
+<td>27</td>
+</tr>
+<tr>
+<td><code>simple_multi_dendro</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_multi_dendro.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_multi_dendro_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_multi_dendro_tester.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_nanoparticle</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/simple_nanoparticle.f90</td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>simple_nanoparticle_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/simple_nanoparticle_utils.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_neighs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_neighs.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_nice</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/gui/simple_nice.f90</td>
+<td>38</td>
+</tr>
+<tr>
+<td><code>simple_nrtxtfile</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_nrtxtfile.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_nu_filter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_online_var</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_online_var.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_opt_bfgs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_bfgs.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_opt_bfgs2</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_bfgs2.f90</td>
+<td>21</td>
+</tr>
+<tr>
+<td><code>simple_opt_bforce</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_bforce.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_opt_de</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_de.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_opt_factory</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_factory.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_opt_filter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_opt_filter.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_opt_fr_cg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_fr_cg.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_opt_helpers</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_helpers.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_opt_image_weights</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/motion/simple_opt_image_weights.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_opt_lbfgsb</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_lbfgsb.f90</td>
+<td>27</td>
+</tr>
+<tr>
+<td><code>simple_opt_mask</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_opt_mask.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_opt_particle_swarm</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_particle_swarm.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_opt_powell</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_powell.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_opt_pr_cg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_pr_cg.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_opt_simplex</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_simplex.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_opt_spec</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_spec.f90</td>
+<td>31</td>
+</tr>
+<tr>
+<td><code>simple_opt_stde</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_stde.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_opt_subs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_opt_subs.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_optimizer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/opt/simple_optimizer.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_ori</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_ori.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ori_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_ori_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ori_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_ori_tester.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_ori_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_ori_utils.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_oris</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_oris_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_tester.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_parameters</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_parameters_registry</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters_registry.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_particle_extractor</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_particle_extractor.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_pca</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_pca.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_pca_svd</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_pca_svd.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_base</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_base.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_heartbeat</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_heartbeat.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_status</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_status.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_task</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_task.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_terminate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_terminate.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_tester.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_message_types</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_types.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_server</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/simple_persistent_worker_server.f90</td>
+<td>23</td>
+</tr>
+<tr>
+<td><code>simple_persistent_worker_server_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/simple_persistent_worker_server_tester.f90</td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>simple_pftc_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_pftc_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_pftc_shsrch_grad</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_pftc_shsrch_grad.f90</td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>simple_pftc_srch_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_pftc_srch_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_pick_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_pick_strategy.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_picker_iter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pick/simple_picker_iter.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_picker_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pick/simple_picker_utils.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_pickref</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pick/simple_pickref.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_pickref_corr_batch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pick/simple_pickref_corr_batch.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_pickseg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pick/simple_pickseg.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_picksegdiam</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pick/simple_picksegdiam.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_polarft_calc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ppca</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/pca/simple_ppca.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_preprocess_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_preprocess_strategy.f90</td>
+<td>17</td>
+</tr>
+<tr>
+<td><code>simple_private_exec_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_private_exec_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_private_prgs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_private_prgs.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_procimgstk</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_procimgstk.f90</td>
+<td>29</td>
+</tr>
+<tr>
+<td><code>simple_progress</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_progress.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_project_merge_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/project/simple_project_merge_tester.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_projector</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_projector.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_projector_pft</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_projector_pft.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_projector_pft_batch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/image/simple_projector_pft_batch.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_projfile_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_projfile_utils.f90</td>
+<td>32</td>
+</tr>
+<tr>
+<td><code>simple_pspec_thumb_iter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_pspec_thumb_iter.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_pspecs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_pspecs.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_ptcl_cache</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_ptcl_cache.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_ptcl_sieve</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/sieve/simple_ptcl_sieve.f90</td>
+<td>25</td>
+</tr>
+<tr>
+<td><code>simple_ptcl_sieve_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/sieve/simple_ptcl_sieve_tester.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_ptcl_sieve_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/sieve/simple_ptcl_sieve_utils.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_qsys_base</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_base.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_qsys_coarray</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_coarray.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_qsys_ctrl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_ctrl.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_qsys_env</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_env.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_qsys_factory</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_factory.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_qsys_funs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_funs.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_qsys_local</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_local.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_qsys_lsf</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_lsf.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_qsys_pbs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_pbs.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_qsys_persistent_worker</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_persistent_worker.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_qsys_sge</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_sge.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_qsys_slurm</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/qsys/simple_qsys_slurm.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_r8lib</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_r8lib.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ran_tabu</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_ran_tabu.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_rec3D_pcg_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90</td>
+<td>47</td>
+</tr>
+<tr>
+<td><code>simple_rec3D_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_rec3D_strategy.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_rec_list</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_rec_list.f90</td>
+<td>37</td>
+</tr>
+<tr>
+<td><code>simple_rec_list_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_rec_list_tester.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_reconstructor</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor.f90</td>
+<td>42</td>
+</tr>
+<tr>
+<td><code>simple_reconstructor_openmpoffload</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor_openmpoffload.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_reconstructor_pcg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor_pcg.f90</td>
+<td>84</td>
+</tr>
+<tr>
+<td><code>simple_reextract_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_reextract_strategy.f90</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>simple_refine3D_fnames</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_refine3D_fnames.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_refine3D_stage_plan</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_refine3D_stage_plan.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_refine3D_strategy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90</td>
+<td>32</td>
+</tr>
+<tr>
+<td><code>simple_relion</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_relion.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_rnd</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_rnd.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_sauron</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_sauron.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_segmentation</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_segmentation.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_sigma2_binfile</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_sigma2_binfile.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_sigma2_files</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_sigma2_files.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_simple_volinterp</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_volinterp.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_simulator</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_simulator.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_socket_comm</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_socket_comm.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_sp_project</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_srch_sort_loc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_srch_sort_loc.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_srchspace_map</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_srchspace_map.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_srchspace_map2D_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_srchspace_map2D_io.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_stack_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_stack_io.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_stackops</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_stackops.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_starfile</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starfile.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_starfile_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starfile_tester.f90</td>
+<td>29</td>
+</tr>
+<tr>
+<td><code>simple_starfile_wrappers</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starfile_wrapper.f90</td>
+<td>63</td>
+</tr>
+<tr>
+<td><code>simple_starproject</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starproject.f90</td>
+<td>33</td>
+</tr>
+<tr>
+<td><code>simple_starproject_stream</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starproject_stream.f90</td>
+<td>26</td>
+</tr>
+<tr>
+<td><code>simple_starproject_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starproject_tester.f90</td>
+<td>28</td>
+</tr>
+<tr>
+<td><code>simple_starproject_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/star/simple_starproject_utils.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_stat</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_stat.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_alloc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_alloc.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_eval</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_eval.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_greedy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_greedy.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_greedy_smpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_greedy_smpl.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_inpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_inpl.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_inpl_smpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_inpl_smpl.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_matcher</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_matcher.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_prob</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_prob.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_snhc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_snhc.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_snhc_smpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_snhc_smpl.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_snhc_smpl_many</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_snhc_smpl_many.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_srch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_srch.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_tseries</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_tseries.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy2D_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy2D_utils.f90</td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_alloc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_alloc.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_eval</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_eval.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_greedy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_greedy.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_greedy_inpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_greedy_inpl.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_greedy_smpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_greedy_smpl.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_greedy_sub</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_greedy_sub.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_matcher</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_matcher.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_prob</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_prob.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_shc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_shc.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_shc_smpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_shc_smpl.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_snhc_smpl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_snhc_smpl.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_srch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_srch.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_strategy3D_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_strategy3D_utils.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_stream2D_state</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream2D_state.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_stream_abinitio2D_chunks</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_abinitio2D_chunks.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_stream_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_stream_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_stream_chunk</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_chunk.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_stream_chunk2D_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_chunk2D_utils.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_stream_cluster2D_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_cluster2D_utils.f90</td>
+<td>21</td>
+</tr>
+<tr>
+<td><code>simple_stream_communicator</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/comm/simple_stream_communicator.f90</td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>simple_stream_p00_master</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p00_master.f90</td>
+<td>36</td>
+</tr>
+<tr>
+<td><code>simple_stream_p01_preprocess_new</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p01_preprocess_new.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_stream_p02_assign_optics_new</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p02_assign_optics_new.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_stream_p03_initial_analysis</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p03_initial_analysis.f90</td>
+<td>25</td>
+</tr>
+<tr>
+<td><code>simple_stream_p04_refpick_extract_new</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p04_refpick_extract_new.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_stream_p05_sieve_cavgs_new</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p05_sieve_cavgs_new.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_stream_p06_pool2D_new</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_p06_pool2D_new.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_stream_pool2D_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_pool2D_utils.f90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>simple_stream_state</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_state.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_stream_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_utils.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_stream_watcher</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/stream/simple_stream_watcher.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_string</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_string.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_string_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_string_tester.f90</td>
+<td>22</td>
+</tr>
+<tr>
+<td><code>simple_string_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_string_utils.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_sym</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_sym.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_symanalyzer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/simple_symanalyzer.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_syslib</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_syslib.f90</td>
+<td>53</td>
+</tr>
+<tr>
+<td><code>simple_syslib_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_syslib_tester.f90</td>
+<td>24</td>
+</tr>
+<tr>
+<td><code>simple_tent_smooth</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/filter/simple_tent_smooth.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/simple_test_exec_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_class</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_class.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_fft</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_fft.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_geometry</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_geometry.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_highlevel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_highlevel.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_io.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_masks</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_masks.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_network</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_network.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_numerics</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_numerics.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_optimize</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_optimize.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_parallel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_parallel.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_single</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_single.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_stats</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_stats.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_stream</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_stream.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_exec_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/simple_test_exec_utils.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_class</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_class.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_fft</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_fft.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_geometry</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_geometry.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_highlevel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_highlevel.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_io</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_io.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_masks</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_masks.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_network</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_network.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_numerics</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_numerics.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_optimize</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_optimize.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_parallel</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_parallel.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_single</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_single.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_stats</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_stats.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_stream</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_stream.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_test_ui_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_test/simple_test_ui_utils.f90</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>simple_test_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_test_utils.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_testfuns</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/math/simple_testfuns.f90</td>
+<td>34</td>
+</tr>
+<tr>
+<td><code>simple_tifflib</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/fileio/simple_tifflib.f90</td>
+<td>30</td>
+</tr>
+<tr>
+<td><code>simple_timer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_timer.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_timer_omp</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/simple_timer_omp.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_tseries_graphene_subtr</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/simple_tseries_graphene_subtr.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_type_defs</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/defs/simple_type_defs.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ui</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui.f90</td>
+<td>16</td>
+</tr>
+<tr>
+<td><code>simple_ui_abinitio3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_abinitio3D.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_ui_cavgproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_cavgproc.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_ui_cluster2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_cluster2D.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_ui_denoise</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_denoise.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_ui_descriptor_types</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_descriptor_types.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_dock</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_dock.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ui_filter</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_filter.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_ui_hash</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_hash.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_ui_image</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_image.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_ui_mask</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_mask.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ui_modules</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_modules.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>simple_ui_ori</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_ori.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_ui_other</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_other.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_ui_param</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_param.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_ui_params_common</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_params_common.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_preproc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_preproc.f90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>simple_ui_print</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_print.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_ui_program</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_program.f90</td>
+<td>37</td>
+</tr>
+<tr>
+<td><code>simple_ui_project</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_project.f90</td>
+<td>23</td>
+</tr>
+<tr>
+<td><code>simple_ui_refine3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_refine3D.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>simple_ui_res</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_res.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_ui_sim</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_sim.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>simple_ui_simple_group</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_simple_group.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_single_group</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_single_group.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_stream</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_stream.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>simple_ui_stream_group</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_stream_group.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_sym</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_sym.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ui_test_group</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_test_group.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_utils</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_utils.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_validate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_validation.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_ui_visibility</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple_ui_visibility.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>simple_ui_volume</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/simple/simple_ui_volume.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_vol_pproc_policy</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_vol_pproc_policy.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>simple_volanalyzer</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_volanalyzer.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>simple_volcluster</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_volcluster.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>simple_volpft_corrcalc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_volpft_corrcalc.f90</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>simple_volpft_symsrch</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/volume/simple_volpft_symsrch.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>simple_vrefhash</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_vrefhash.f90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>simple_vrefhash_tester</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/utils/structs/simple_vrefhash_tester.f90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>simple_winfuns</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/interp/simple_winfuns.f90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>single_commanders_experimental</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/single/single_commanders_experimental.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>single_commanders_nano2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/single/single_commanders_nano2D.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>single_commanders_nano3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/single/single_commanders_nano3D.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>single_commanders_trajectory</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/single/single_commanders_trajectory.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>single_commanders_tseries</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/commanders/single/single_commanders_tseries.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>single_exec_api</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/apis/single_exec_api.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>single_exec_atom</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_atom.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_exec_map</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_map.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_exec_nano2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_nano2D.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_exec_nano3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_nano3D.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_exec_trajectory</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_trajectory.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_exec_tseries</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_tseries.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_exec_validate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/exec/single_exec_validate.f90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>single_tseries_extractor</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/single_tseries_extractor.f90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>single_tseries_tracker</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/nano/single_tseries_tracker.f90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>single_ui_atom</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_atom.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>single_ui_map</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_map.f90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>single_ui_nano2D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_nano2D.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>single_ui_nano3D</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_nano3D.f90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>single_ui_trajectory</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_trajectory.f90</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>single_ui_tseries</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_tseries.f90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>single_ui_validate</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/ui/single/single_ui_validate.f90</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>subroutine</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/main/class/simple_classaverager.f90<br>/home/hossainm7/hael_SIMPLE/src/main/class/simple_classaverager_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/class/simple_classaverager_restore.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_basis.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_embed.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_env.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_fit.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_iter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_mean.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_pose.f90<br>/home/hossainm7/hael_SIMPLE/src/main/flex/simple_flex_pca_em_solve.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_arith.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_ctf.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_fft.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_filt.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_freq_anal.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_geom.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_io.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_norm.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_ops.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_polar.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_seg.f90<br>/home/hossainm7/hael_SIMPLE/src/main/image/simple_image_vis.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_apply.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_bank.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_envmask.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_evidence.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_extend.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_potts.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_sharpen.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_state.f90<br>/home/hossainm7/hael_SIMPLE/src/main/nu_filt/simple_nu_filter_stats.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_dists.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_getters.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_io.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_life.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_neig.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_reshape.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_sampling.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_setters.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_stats.f90<br>/home/hossainm7/hael_SIMPLE/src/main/ori/simple_oris_transform.f90<br>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters.f90<br>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters_parse.f90<br>/home/hossainm7/hael_SIMPLE/src/main/params/simple_parameters_phases.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_access.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_calc.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_corr.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_ctf.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_geom.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_memo.f90<br>/home/hossainm7/hael_SIMPLE/src/main/pftc/simple_polarft_ops_io.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_cls.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_core.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_io.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_mic.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_optics.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_out.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_ptcl.f90<br>/home/hossainm7/hael_SIMPLE/src/main/project/simple_sp_project_stk.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio_controller.f90<br>/home/hossainm7/hael_SIMPLE/src/main/simple_abinitio_utils.f90</td>
+<td>87</td>
+</tr>
+<tr>
+<td><code>unix</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix.f90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>unix_dirent</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_dirent.F90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>unix_errno</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_errno.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>unix_fcntl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_fcntl.F90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>unix_inet</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_inet.F90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>unix_ioctl</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_ioctl.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>unix_ipc</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_ipc.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>unix_mqueue</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_mqueue.F90</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>unix_msg</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_msg.F90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>unix_netdb</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_netdb.F90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>unix_pthread</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_pthread.F90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>unix_regex</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_regex.F90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>unix_semaphore</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_semaphore.F90</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>unix_signal</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_signal.F90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>unix_socket</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_socket.F90</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>unix_stat</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_stat.F90</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>unix_stdio</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_stdio.F90</td>
+<td>19</td>
+</tr>
+<tr>
+<td><code>unix_stdlib</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_stdlib.F90</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>unix_string</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_string.F90</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>unix_syslog</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_syslog.F90</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>unix_termios</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_termios.F90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>unix_time</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_time.F90</td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>unix_types</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_types.F90</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>unix_unistd</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_unistd.F90</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>unix_utsname</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_utsname.F90</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>unix_wait</code></td>
+<td>/home/hossainm7/hael_SIMPLE/src/extlibs/unix/src/unix_wait.F90</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

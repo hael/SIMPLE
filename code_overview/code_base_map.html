@@ -1,0 +1,5211 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/code_overview/code_base_map.html">
+      
+      
+        <link rel="prev" href="../algorithms/streaming_pipeline.html">
+      
+      
+        <link rel="next" href="fortran-indexes/api_index.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Code base map - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#simple-codebase-map" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Code base map
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="code_base_map.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_nonuniform_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code review: PCG reconstruction with nonuniform regularization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_priors.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG priors: experiment record and the NU-evidence prior design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pfcrt_audit_a6ae317ae_vs_head.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PfCRT audit: what changed between a6ae317ae and HEAD (2026-09-02)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_30" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_30" id="__nav_10_30_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_30_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_30">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!-- AUTO-GENERATED by scripts/generate_codeoverview.pl; do not manually edit. -->
+
+<h1 id="simple-codebase-map">SIMPLE Codebase Map<a class="headerlink" href="#simple-codebase-map" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>SIMPLE/</strong></li>
+<li><strong>production/</strong> — home of executables<ul>
+<li><code>simple_exec.f90</code> — executes SIMPLE workflows</li>
+<li><code>simple_persistent_worker.f90</code> — SIMPLE distributed worker process</li>
+<li><code>simple_private_exec.f90</code> — executes shared-memory parallelized programs executed by distributed commanders</li>
+<li><code>simple_private_exec_driver.f90</code> — callable driver for simple_private_exec private commander dispatch</li>
+<li><code>simple_stream.f90</code> — executes SIMPLE stream workflows</li>
+<li><code>simple_test_exec.f90</code> — executes SIMPLE tests workflows</li>
+<li><code>single_exec.f90</code> — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows</li>
+<li><strong>tests/</strong> — home of executable unit tests</li>
+<li><code>simple_cartesian_fourier_kb_gather_test.f90</code></li>
+<li><code>simple_cartesian_fourier_kb_test.f90</code></li>
+<li><code>simple_cartesian_fourier_neutral_extract_test.f90</code> — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks</li>
+<li><code>simple_cartesian_fourier_test_helpers.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_halfset_gridding.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_halfset_matrix.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_halfset_support.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_halfset_test.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_noise_gauran_test.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_noise_observation_test.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_noise_support.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_noise_test.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_noise_volume_test.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_test_helpers.f90</code></li>
+<li><code>simple_continuous_3D_pcg_reconstruction_volume_test.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_baseline.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_direct.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_joint.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_metadata.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_policy.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_recovery.f90</code></li>
+<li><code>simple_continuous_inplane_refine3D_state.f90</code></li>
+<li><code>simple_pose_cont_refinement_batch_helpers.f90</code></li>
+<li><code>simple_pose_cont_refinement_calibration_helpers.f90</code></li>
+<li><code>simple_pose_cont_refinement_calibration_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_configuration_matrix_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_ctf_sigma_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_fixed_reference_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_forward_hierarchy_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_forward_path_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_lm_transactions_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_matched_window_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_objective_normals_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_operator_contract_support.f90</code></li>
+<li><code>simple_pose_cont_refinement_operator_contract_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_pose_capture_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_pose_contract_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_pose_mechanism_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_recovery_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_reference_bias_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_reference_support.f90</code></li>
+<li><code>simple_pose_cont_refinement_rotation_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_shift_polish_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_shift_test.f90</code></li>
+<li><code>simple_pose_cont_refinement_test_helpers.f90</code></li>
+<li><code>simple_sgd_base_suite_baseline_test.f90</code></li>
+<li><code>simple_sgd_base_suite_direct_test.f90</code></li>
+<li><code>simple_sgd_base_suite_helpers.f90</code></li>
+<li><code>simple_sgd_base_suite_sampling_restore_test.f90</code></li>
+<li><code>simple_sgd_base_suite_v2_test.f90</code></li>
+<li><code>simple_sgd_base_suite_v3_test.f90</code></li>
+<li><code>simple_sgd_base_suite_v4_test.f90</code></li>
+<li><code>simple_test_abinitio2d_sgd_dispatch.f90</code> — focused dispatch and command-line contract test for the development abinitio2D_sgd commander</li>
+<li><code>simple_test_angres.f90</code> — angular resolution as a function of number of projection directions</li>
+<li><code>simple_test_ansi_colors.f90</code></li>
+<li><code>simple_test_atomfit.f90</code></li>
+<li><code>simple_test_binoris.f90</code></li>
+<li><code>simple_test_binoris_io.f90</code></li>
+<li><code>simple_test_block_tree.f90</code> — test for block-tree search space decomposition and mapping</li>
+<li><code>simple_test_block_tree2D.f90</code></li>
+<li><code>simple_test_block_tree_io.f90</code></li>
+<li><code>simple_test_bounds_from_mask3D.f90</code></li>
+<li><code>simple_test_cartesian_fourier.f90</code></li>
+<li><code>simple_test_cavg_quality_relations.f90</code></li>
+<li><code>simple_test_cavg_registration.f90</code></li>
+<li><code>simple_test_cc_connectivity.f90</code></li>
+<li><code>simple_test_class_sample.f90</code></li>
+<li><code>simple_test_clustering.f90</code></li>
+<li><code>simple_test_cmdline.f90</code></li>
+<li><code>simple_test_coarrays.f90</code></li>
+<li><code>simple_test_continuous_3D_pcg_reconstruction.f90</code></li>
+<li><code>simple_test_continuous_inplane_cc_grad.f90</code></li>
+<li><code>simple_test_continuous_inplane_hybrid_grad.f90</code></li>
+<li><code>simple_test_continuous_inplane_refine3D.f90</code></li>
+<li><code>simple_test_continuous_inplane_rotation2D.f90</code></li>
+<li><code>simple_test_continuous_inplane_rotation2D_metadata.f90</code></li>
+<li><code>simple_test_continuous_inplane_rotation2D_route_identity.f90</code></li>
+<li><code>simple_test_continuous_inplane_rotation2D_stage1_validation.f90</code></li>
+<li><code>simple_test_corrs2weights.f90</code></li>
+<li><code>simple_test_create_gain.f90</code></li>
+<li><code>simple_test_ctf.f90</code></li>
+<li><code>simple_test_diff_map_graphs.f90</code> — validates the shared angularly gated kNN diffusion-map graph engine</li>
+<li><code>simple_test_discrete_stack_io.f90</code></li>
+<li><code>simple_test_eigh.f90</code></li>
+<li><code>simple_test_eo_diff.f90</code> — tests randomization of phases below noise power</li>
+<li><code>simple_test_eul_prob_tab2D_io.f90</code> — validates streamed dense/sparse 2D probability-table merge and assignment</li>
+<li><code>simple_test_eval_polarftcc.f90</code></li>
+<li><code>simple_test_extr_frac.f90</code></li>
+<li><code>simple_test_flex_gpu.f90</code> — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)</li>
+<li><code>simple_test_flex_pca.f90</code> — validates the flex_pca embedding cache and the kernel/state-weight contracts</li>
+<li><code>simple_test_flex_projected_latent_model.f90</code> — validates flex projection-aware latent-model I/O, Fourier operations, and canonicalization</li>
+<li><code>simple_test_ft_expanded.f90</code></li>
+<li><code>simple_test_gencorrs_fft.f90</code></li>
+<li><code>simple_test_graphene_mask.f90</code></li>
+<li><code>simple_test_gui_assembler.f90</code></li>
+<li><code>simple_test_gui_metadata.f90</code></li>
+<li><code>simple_test_image_bin.f90</code></li>
+<li><code>simple_test_imgfile.f90</code></li>
+<li><code>simple_test_inside_write.f90</code></li>
+<li><code>simple_test_install.f90</code> — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests</li>
+<li><code>simple_test_io.f90</code></li>
+<li><code>simple_test_io_parallel.f90</code></li>
+<li><code>simple_test_kbinterpol_fast.f90</code></li>
+<li><code>simple_test_lbfgsb.f90</code></li>
+<li><code>simple_test_lbfgsb_cosine.f90</code></li>
+<li><code>simple_test_lplims.f90</code></li>
+<li><code>simple_test_lpstages.f90</code></li>
+<li><code>simple_test_mask.f90</code></li>
+<li><code>simple_test_maxnloc.f90</code></li>
+<li><code>simple_test_mini_stream.f90</code> — test for running the mini stream across multiple data sets</li>
+<li><code>simple_test_mrc2jpeg.f90</code></li>
+<li><code>simple_test_mrc_validate.f90</code></li>
+<li><code>simple_test_msk_routines.f90</code></li>
+<li><code>simple_test_multinomal.f90</code></li>
+<li><code>simple_test_nano_mask.f90</code></li>
+<li><code>simple_test_neigh.f90</code> — test for refine=neigh modes</li>
+<li><code>simple_test_nice.f90</code></li>
+<li><code>simple_test_nu_envmask.f90</code></li>
+<li><code>simple_test_nu_filter.f90</code></li>
+<li><code>simple_test_openacc.f90</code></li>
+<li><code>simple_test_openmp.f90</code></li>
+<li><code>simple_test_openmp_offload.f90</code></li>
+<li><code>simple_test_opt_lp.f90</code></li>
+<li><code>simple_test_order_corr.f90</code></li>
+<li><code>simple_test_ori.f90</code></li>
+<li><code>simple_test_oris.f90</code></li>
+<li><code>simple_test_otsu.f90</code></li>
+<li><code>simple_test_pca_all.f90</code></li>
+<li><code>simple_test_pca_imgvar.f90</code></li>
+<li><code>simple_test_pdb2mrc.f90</code></li>
+<li><code>simple_test_phase_rand_fsc.f90</code></li>
+<li><code>simple_test_phasecorr.f90</code></li>
+<li><code>simple_test_phshift_policy.f90</code></li>
+<li><code>simple_test_phshift_star.f90</code></li>
+<li><code>simple_test_pose_cont_refinement.f90</code></li>
+<li><code>simple_test_projdir_accumulator.f90</code></li>
+<li><code>simple_test_project_merge.f90</code></li>
+<li><code>simple_test_ptcl_center.f90</code></li>
+<li><code>simple_test_qsys_ctrl.f90</code></li>
+<li><code>simple_test_qsys_env.f90</code></li>
+<li><code>simple_test_rank_weights.f90</code></li>
+<li><code>simple_test_rec3D_backend.f90</code></li>
+<li><code>simple_test_rnd_shuffle.f90</code></li>
+<li><code>simple_test_rotate_ref.f90</code></li>
+<li><code>simple_test_search_gain_flips.f90</code></li>
+<li><code>simple_test_serialize.f90</code></li>
+<li><code>simple_test_sgd_base_suite.f90</code></li>
+<li><code>simple_test_simd.f90</code></li>
+<li><code>simple_test_socket_client.f90</code></li>
+<li><code>simple_test_socket_io.f90</code></li>
+<li><code>simple_test_socket_server.f90</code></li>
+<li><code>simple_test_sp_project.f90</code></li>
+<li><code>simple_test_stack_io.f90</code></li>
+<li><code>simple_test_star_export.f90</code></li>
+<li><code>simple_test_starfile.f90</code></li>
+<li><code>simple_test_stream_initial_analysis.f90</code> — smoke test that invokes stream p03 initial analysis commander</li>
+<li><code>simple_test_stringmatch.f90</code></li>
+<li><code>simple_test_sym.f90</code></li>
+<li><code>simple_test_ui_visibility.f90</code></li>
+<li><code>simple_test_uniform_euler.f90</code></li>
+<li><code>simple_test_uniform_rot.f90</code> — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361</li>
+<li><code>simple_test_units.f90</code> — runs all implemented unit tests</li>
+<li><code>test_socket_comm_distr.f90</code></li>
+<li><strong>pose_cont_capture/</strong></li>
+</ul>
+</li>
+<li><strong>scripts/</strong> — home of scripts and code generators<ul>
+<li><strong>memory/</strong></li>
+</ul>
+</li>
+<li><strong>src/</strong> — main source code folder<ul>
+<li><strong>defs/</strong> — home of singleton modules with parameter and type definitions</li>
+<li><code>simple_ansi_ctrls.f90</code> — ANSI C control parameters for text formatting</li>
+<li><code>simple_default_clines.f90</code> — setting command line defaults</li>
+<li><code>simple_defs.f90</code> — eclectic mix of definitions</li>
+<li><code>simple_defs_atoms.f90</code> — covalent atomic radii and lattice parameter definitions</li>
+<li><code>simple_defs_conv.f90</code> — parameters controlling convergence of 2D and 3D orientation search</li>
+<li><code>simple_defs_environment.f90</code> — environment variable flag definitions</li>
+<li><code>simple_defs_fname.f90</code> — standard file name, body, suffix, and extension definitions</li>
+<li><code>simple_defs_ori.f90</code> — static orientation record value enumerators and flag conversions</li>
+<li><code>simple_defs_stream.f90</code> — constants used in streaming</li>
+<li><code>simple_defs_string.f90</code> — string constants</li>
+<li><code>simple_fftw3.f90</code> — FFTW3 interface. See www.fftw.org and /usr/include/fftw3.f03</li>
+<li><code>simple_refine3D_fnames.f90</code> — filename helpers for refine3D output artifacts</li>
+<li><code>simple_type_defs.f90</code> — type and enumerator definitions</li>
+<li><strong>fileio/</strong> — home of modules for i/o related to project files, mrc files, eer movies, star files etc.</li>
+<li><code>simple_binoris.f90</code> — for managing orientation data using binary files</li>
+<li><code>simple_binoris_io.f90</code> — high-level binoris i/o routines</li>
+<li><code>simple_block_tree_io.f90</code> — for storing block tree information on disk</li>
+<li><code>simple_class_sample_io.f90</code> — for storing class sampling information on disk</li>
+<li><code>simple_discrete_stack_io.f90</code> — for cached non-contiguous reading of image stacks</li>
+<li><code>simple_eer_factory.f90</code> — for eer movie format i/o</li>
+<li><code>simple_error.f90</code> — exception handling</li>
+<li><code>simple_fileio.f90</code> — system file handling module</li>
+<li><code>simple_fileio_tester.f90</code> — unit tests for fileio module</li>
+<li><code>simple_imgfile.f90</code> — class to deal with image files on disks</li>
+<li><code>simple_imghead.f90</code> — type and method definitions to deal with image file headers</li>
+<li><code>simple_nrtxtfile.f90</code> — deals with text files of numbers</li>
+<li><code>simple_projfile_utils.f90</code> — project file utilities</li>
+<li><code>simple_sigma2_binfile.f90</code> — sigma2 file i/o class</li>
+<li><code>simple_sigma2_files.f90</code> — discovery, carry-over and group loading of sigma2 files.</li>
+<li><code>simple_srchspace_map2D_io.f90</code> — for storing search-space maps on disk</li>
+<li><code>simple_stack_io.f90</code> — This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes</li>
+<li><code>simple_syslib.f90</code> — System utilities &amp; POSIX/OS wrappers</li>
+<li><code>simple_syslib_tester.f90</code> — unit tests for the syslib module</li>
+<li><code>simple_tifflib.f90</code> — Fortran wrapper for libtiff, edited from Unblur</li>
+<li><strong>inc/</strong> — home of *.inc files containing macro definitions and enumerations</li>
+<li><strong>main/</strong> — main source code directory</li>
+<li><code>simple_abinitio2D_controller.f90</code> — utility routines for ab initio 2D cluster2D staging and limits</li>
+<li><code>simple_abinitio3D_split_checkpoint.f90</code> — reusable construction of the abinitio3D docked multi-state split checkpoint</li>
+<li><code>simple_abinitio_controller.f90</code></li>
+<li><code>simple_abinitio_utils.f90</code> — utilities for ab initio 3D reconstruction used by commanders_abinitio</li>
+<li><code>simple_builder.f90</code> — centralized builder (the main object constructor in SIMPLE)</li>
+<li><code>simple_cmdline.f90</code> — the class implementing command line parsing</li>
+<li><code>simple_cmdline_tester.f90</code> — unit test routines for command line class</li>
+<li><code>simple_convergence.f90</code> — for checking convergence of 2D and 3D search</li>
+<li><code>simple_euclid_sigma2.f90</code> — the abstract data type for sigma2 used when objfun=euclid</li>
+<li><code>simple_eul_prob_tab.f90</code> — the core probability table routines used for probabilistic 3D search</li>
+<li><code>simple_eul_prob_tab2D.f90</code> — 2D probability table routines for multi-reference class assignment with probabilistic sampling</li>
+<li><code>simple_eul_prob_tab_neigh.f90</code> — neighborhood extension of probabilistic 3D search table.</li>
+<li><code>simple_eul_prob_tab_utils.f90</code> — shared utility routines for probabilistic alignment tables</li>
+<li><code>simple_external_reference_pose_initialization.f90</code> — fixed-reference CC pose initialization shared by 3D refinement workflows</li>
+<li><code>simple_micrograph_generator.f90</code> — used for generating dose fractionated micrographs from movies</li>
+<li><code>simple_particle_extractor.f90</code> — core functionality for extracting particles from micrographs</li>
+<li><code>simple_pspec_thumb_iter.f90</code> — iterator for pspec_thumb for power spectrum and thumbnails generation</li>
+<li><code>simple_pspecs.f90</code> — abstract data type for power spectra</li>
+<li><code>simple_refine3D_stage_plan.f90</code> — workflow-neutral frequency-stage planning for refine3D wrappers</li>
+<li><code>simple_simulator.f90</code> — simulation of single-particle images</li>
+<li><code>simple_sym.f90</code> — defines protein point-group symmetries</li>
+<li><code>simple_symanalyzer.f90</code> — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis</li>
+<li><strong>apis/</strong> — application programming interfaces for cleaner use inclusion and faster compilation<ul>
+<li><code>simple_commanders_api.f90</code> — API for the commanders</li>
+<li><code>simple_core_api.f90</code> — API for the core modules</li>
+<li><code>simple_exec_api.f90</code> — Aggregated public API for simple_exec</li>
+<li><code>simple_gui_metadata_api.f90</code> — Aggregated public API for gui metadata modules</li>
+<li><code>simple_ori_api.f90</code></li>
+<li><code>simple_pftc_api.f90</code></li>
+<li><code>simple_pftc_srch_api.f90</code> — Facade pattern API to avoid circular dependencies involving polarft_calc</li>
+<li><code>simple_private_exec_api.f90</code> — Aggregated public API for simple_private_exec.</li>
+<li><code>simple_stream_api.f90</code> — Aggregated public API for stream_exec.</li>
+<li><code>simple_test_exec_api.f90</code> — Aggregated public API for simple_test_exec</li>
+<li><code>single_exec_api.f90</code> — Aggregated public API for single_exec</li>
+</ul>
+</li>
+<li><strong>cavg_quality/</strong> — class-average quality feature extraction, analysis, and decision models<ul>
+<li><code>simple_cavg_quality_analysis.f90</code> — evaluation and analyze-mode reporting for class-average quality analysis</li>
+<li><code>simple_cavg_quality_feats.f90</code> — feature inventory and feature extraction for 2D class-average quality</li>
+<li><code>simple_cavg_quality_helpers.f90</code> — helper utilities for class-average quality workflows</li>
+<li><code>simple_cavg_quality_learn.f90</code> — learn-mode training-table reader and model search for class-average quality</li>
+<li><code>simple_cavg_quality_model.f90</code> — instantiable class-average quality decision model</li>
+<li><code>simple_cavg_quality_relations.f90</code> — one promoted pairwise-neighbour feature for class-average quality</li>
+<li><code>simple_cavg_quality_stats.f90</code> — binary classification statistics for class-average quality analysis</li>
+<li><code>simple_cavg_quality_types.f90</code> — shared types for class-average quality analysis</li>
+</ul>
+</li>
+<li><strong>class/</strong> — class-oriented abstract data types, mainly averagers<ul>
+<li><code>simple_class_compatibility.f90</code> — class-average compatibility analysis, support-model fitting, and size-based rejection</li>
+<li><code>simple_class_compatibility_tester.f90</code> — unit test routines for the class_compatibility support model</li>
+<li><code>simple_class_frcs.f90</code> — for Fourier Ring Correlation bookkeeping for class averages in memory and on disk</li>
+<li><code>simple_classaverager.f90</code> — Types and interfaces for production of Cartesian class averages</li>
+<li><code>simple_classaverager_core.f90</code> — Implementations of core types and routines underpinning cavg restoration</li>
+<li><code>simple_classaverager_restore.f90</code> — Routines to perform the classes restoration and processing</li>
+</ul>
+</li>
+<li><strong>commanders/</strong> — object-oriented command pattern implementations<ul>
+<li><strong>simple/</strong> — home of the simple commanders implementing high-level application code</li>
+<li><code>simple_commander_base.f90</code> — abstract base commander</li>
+<li><code>simple_commanders_abinitio.f90</code> — abinitio 3D reconstruction in single- and multi-particle mode</li>
+<li><code>simple_commanders_abinitio2D.f90</code> — ab initio 2D analysis</li>
+<li><code>simple_commanders_abinitio2d_sgd.f90</code> — developer wrapper for table-free streaming-SGD ab initio 2D classification</li>
+<li><code>simple_commanders_atoms.f90</code> — operations on atoms, mostly used in SINGLE</li>
+<li><code>simple_commanders_cavgs.f90</code> — analysis of class averages</li>
+<li><code>simple_commanders_checks.f90</code> — checking info about images, project, or checking update calculations</li>
+<li><code>simple_commanders_cluster2D.f90</code> — simultaneous 2D alignment and clustering of single-particle images</li>
+<li><code>simple_commanders_denoise.f90</code> — denoising and class split commanders</li>
+<li><code>simple_commanders_distr.f90</code> — for managing distributed SIMPLE execution</li>
+<li><code>simple_commanders_euclid.f90</code> — for sigma2 calculations in objfun=euclid 2D and 3D refinement</li>
+<li><code>simple_commanders_euclid_distr.f90</code> — for distributed sigma2 calculations in objfun=euclid 2D and 3D refinement</li>
+<li><code>simple_commanders_flex_pca.f90</code> — projection-aware covariance heterogeneity commander</li>
+<li><code>simple_commanders_imgops.f90</code> — standard image operations: binarize, filter, denoise, normalize, scale etc.</li>
+<li><code>simple_commanders_imgproc.f90</code> — standard EM image processing</li>
+<li><code>simple_commanders_mask.f90</code> — masking and auto-masking</li>
+<li><code>simple_commanders_misc.f90</code> — stuff that didn't fit elsewhere</li>
+<li><code>simple_commanders_mkcavgs.f90</code> — for producing class averages</li>
+<li><code>simple_commanders_ori.f90</code> — for operating on orientations</li>
+<li><code>simple_commanders_pick.f90</code> — for picking, extraction, and making picking references</li>
+<li><code>simple_commanders_postprocess_nu.f90</code> — NU-evidence nonuniform postprocessing (isolated from the standard postprocess path)</li>
+<li><code>simple_commanders_preprocess.f90</code> — for pre-processing (motion correction, CTF estimation etc.)</li>
+<li><code>simple_commanders_prob.f90</code></li>
+<li><code>simple_commanders_project_cls.f90</code> — project commanders for dealing with 2D class-related things</li>
+<li><code>simple_commanders_project_core.f90</code> — commanders for operating on projects (spproject) and associated files, the core stuff</li>
+<li><code>simple_commanders_project_mov.f90</code> — project commanders for movie-related things</li>
+<li><code>simple_commanders_project_ptcl.f90</code> — project commanders for particle-related things</li>
+<li><code>simple_commanders_rec.f90</code> — 3D reconstruction and associated things</li>
+<li><code>simple_commanders_rec_distr.f90</code></li>
+<li><code>simple_commanders_refine3D.f90</code> — supporting 3D orientation search</li>
+<li><code>simple_commanders_relion.f90</code> — supporting interoperability with RELION</li>
+<li><code>simple_commanders_reproject.f90</code> — reprojection commanders</li>
+<li><code>simple_commanders_resolest.f90</code> — for resolution estimation</li>
+<li><code>simple_commanders_sieve.f90</code> — analysis of class averages</li>
+<li><code>simple_commanders_sim.f90</code> — for simulating noise, particles, movies, atoms, etc.</li>
+<li><code>simple_commanders_starproject.f90</code> — starproject import, export, etc.</li>
+<li><code>simple_commanders_stkops.f90</code> — operations on image stacks</li>
+<li><code>simple_commanders_validate.f90</code> — validation of stream functionalities in batch execution mode</li>
+<li><code>simple_commanders_volops.f90</code> — operations on volumes</li>
+<li><strong>single/</strong> — home of the single commanders implementing high-level application code</li>
+<li><code>single_commanders_experimental.f90</code> — experimental commanders under development</li>
+<li><code>single_commanders_nano2D.f90</code> — 2D analysis commanders used in SINGLE for nanoparticle processing</li>
+<li><code>single_commanders_nano3D.f90</code> — 3D refinement and reconstruction commanders used in SINGLE for nanoparticle processing</li>
+<li><code>single_commanders_trajectory.f90</code> — commanders operating on extracted time-trajectories, used in SINGLE for nanoparticle processing</li>
+<li><code>single_commanders_tseries.f90</code> — commanders operating on the full time-series field of view, used in SINGLE for nanoparticle processing</li>
+<li><strong>test/</strong> — home of the test commanders implementing high-level testing code</li>
+<li><code>simple_commanders_test_class.f90</code> — for all class tests</li>
+<li><code>simple_commanders_test_fft.f90</code> — for all fft tests</li>
+<li><code>simple_commanders_test_geometry.f90</code> — for all geometry tests</li>
+<li><code>simple_commanders_test_highlevel.f90</code> — for all highlevel tests</li>
+<li><code>simple_commanders_test_io.f90</code> — for all input/output tests</li>
+<li><code>simple_commanders_test_masks.f90</code> — for all masks tests</li>
+<li><code>simple_commanders_test_network.f90</code> — for all network tests</li>
+<li><code>simple_commanders_test_numerics.f90</code> — for all numerics tests</li>
+<li><code>simple_commanders_test_optimize.f90</code> — for all optimize tests</li>
+<li><code>simple_commanders_test_parallel.f90</code> — for all parallel tests</li>
+<li><code>simple_commanders_test_single.f90</code> — tests for single</li>
+<li><code>simple_commanders_test_stats.f90</code> — for all stats tests</li>
+<li><code>simple_commanders_test_stream.f90</code> — tests for SIMPLE_stream workflows</li>
+<li><code>simple_commanders_test_utils.f90</code> — for all utils tests</li>
+<li><code>simple_test_mod_phasecorr.f90</code></li>
+</ul>
+</li>
+<li><strong>ctf/</strong> — home of the modules for estimation and application of the contrast transfer function<ul>
+<li><code>simple_ctf.f90</code> — defines the Contrast Transfer Function (CTF) of the electron microscope</li>
+<li><code>simple_ctf_estimate_cost.f90</code> — cost functions for CTF fitting</li>
+<li><code>simple_ctf_estimate_fit.f90</code> — routines for anisotroic (patched) CTF estimation</li>
+<li><code>simple_ctf_estimate_iter.f90</code> — does one iteration of CTF estimation</li>
+</ul>
+</li>
+<li><strong>exec/</strong><ul>
+<li><code>simple_exec_abinitio3D.f90</code> — execution of abinitio3D commanders</li>
+<li><code>simple_exec_cavgproc.f90</code> — execution of cavgs processing commanders</li>
+<li><code>simple_exec_cluster2D.f90</code> — execution of cluster2D commanders</li>
+<li><code>simple_exec_denoise.f90</code> — execution of denoising commanders</li>
+<li><code>simple_exec_dock.f90</code> — execution of map docking commanders</li>
+<li><code>simple_exec_filter.f90</code> — execution of filtering commanders</li>
+<li><code>simple_exec_image.f90</code> — execution of image processing commanders</li>
+<li><code>simple_exec_mask.f90</code> — execution of masking commanders</li>
+<li><code>simple_exec_ori.f90</code> — execution of orientation commanders</li>
+<li><code>simple_exec_other.f90</code> — execution of other commanders</li>
+<li><code>simple_exec_preproc.f90</code> — execution of preprocessing commanders</li>
+<li><code>simple_exec_print.f90</code> — execution of printing commanders</li>
+<li><code>simple_exec_project.f90</code> — execution of project management commanders</li>
+<li><code>simple_exec_refine3D.f90</code> — execution of 3D refinement commanders</li>
+<li><code>simple_exec_res.f90</code> — execution of resolution estimation commanders</li>
+<li><code>simple_exec_sieve.f90</code> — execution of project management commanders</li>
+<li><code>simple_exec_sim.f90</code> — execution of simulation commanders</li>
+<li><code>simple_exec_sym.f90</code> — execution of symmetry-related commanders</li>
+<li><code>simple_exec_validate.f90</code> — execution of validation commanders</li>
+<li><code>simple_exec_volume.f90</code> — execution of volume manipulation commanders</li>
+<li><code>simple_test_exec_class.f90</code> — execution of test class processing commanders</li>
+<li><code>simple_test_exec_fft.f90</code> — execution of test fft processing commanders</li>
+<li><code>simple_test_exec_geometry.f90</code> — execution of test geometry processing commanders</li>
+<li><code>simple_test_exec_highlevel.f90</code> — execution of test highlevel processing commanders</li>
+<li><code>simple_test_exec_io.f90</code> — execution of test input/output processing commanders</li>
+<li><code>simple_test_exec_masks.f90</code> — execution of test masks processing commanders</li>
+<li><code>simple_test_exec_network.f90</code> — execution of test network processing commanders</li>
+<li><code>simple_test_exec_numerics.f90</code> — execution of test numerics processing commanders</li>
+<li><code>simple_test_exec_optimize.f90</code> — execution of test optimize processing commanders</li>
+<li><code>simple_test_exec_parallel.f90</code> — execution of test parallel processing commanders</li>
+<li><code>simple_test_exec_single.f90</code> — execution of test single processing commanders</li>
+<li><code>simple_test_exec_stats.f90</code> — execution of test stats processing commanders</li>
+<li><code>simple_test_exec_stream.f90</code> — execution of stream test programs</li>
+<li><code>simple_test_exec_utils.f90</code> — execution of test utils processing commanders</li>
+<li><code>single_exec_atom.f90</code></li>
+<li><code>single_exec_map.f90</code></li>
+<li><code>single_exec_nano2D.f90</code></li>
+<li><code>single_exec_nano3D.f90</code></li>
+<li><code>single_exec_trajectory.f90</code></li>
+<li><code>single_exec_tseries.f90</code></li>
+<li><code>single_exec_validate.f90</code></li>
+</ul>
+</li>
+<li><strong>flex/</strong><ul>
+<li><code>simple_flex_gpu.f90</code> — CUDA-C GPU path for the flex_pca insertion family (P1 of the polar/GPU plan)</li>
+<li><code>simple_flex_pca_distr.f90</code> — distributed-execution context for flex_pca stage fan-out</li>
+<li><code>simple_flex_pca_em.f90</code> — EM estimation of the low-rank flex_pca covariance model: basis fit, latent embedding and mean estimation</li>
+<li><code>simple_flex_pca_em_basis.f90</code> — flex_pca EM: eigenvolume realization, orthonormalization, alignment and bagging</li>
+<li><code>simple_flex_pca_em_embed.f90</code> — flex_pca EM: per-particle latent embedding with contrast fitting</li>
+<li><code>simple_flex_pca_em_env.f90</code> — flex_pca EM: environment overrides, memory/dimension budgets and run-stage subsampling</li>
+<li><code>simple_flex_pca_em_fit.f90</code> — flex_pca EM: basis-fit driver, noise-prior calibration, probe-state I/O and band selection</li>
+<li><code>simple_flex_pca_em_iter.f90</code> — flex_pca EM: the subspace EM iteration (E-step accumulation, M-step update)</li>
+<li><code>simple_flex_pca_em_mean.f90</code> — flex_pca EM: consensus mean estimation, mean scale and Fourier-plane accumulation</li>
+<li><code>simple_flex_pca_em_pose.f90</code> — flex_pca EM: polar pose refinement, pose perturbation and banded plane projections</li>
+<li><code>simple_flex_pca_em_solve.f90</code> — flex_pca EM: dense SPD/ECM/MCFA solvers and subspace-angle diagnostics</li>
+<li><code>simple_flex_pca_merge.f90</code> — Two-gate agglomerative merge of over-provisioned flex_pca states.</li>
+<li><code>simple_flex_pca_model.f90</code> — Standalone projection-aware low-rank covariance workflow for heterogeneous SPA data</li>
+<li><code>simple_flex_pca_parts.f90</code> — versioned part-file contracts for distributed flex_pca stage reductions</li>
+<li><code>simple_flex_pca_polar.f90</code> — polar-Fourier shared-direction basis bank for flex_pca</li>
+<li><code>simple_flex_pca_rec3D.f90</code> — kernel-weighted state reconstruction for flex_pca</li>
+<li><code>simple_flex_projected_latent_model.f90</code> — Projection-aware latent volume model kernels for flex_analysis</li>
+<li><code>simple_flex_reconstructor_latent_ops.f90</code> — Latent-volume projection/backprojection helpers for flex_analysis</li>
+<li><strong>cuda/</strong></li>
+</ul>
+</li>
+<li><strong>image/</strong> — home of the submodules of the image class, its extensions, and its variants<ul>
+<li><code>simple_ft_expanded.f90</code> — expanded Fourier transform class for improved cache utilisation</li>
+<li><code>simple_ftexp_shsrch.f90</code> — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)</li>
+<li><code>simple_ftiter.f90</code> — Fourier index loop range generator and mapping of logical indexing to physical indexing</li>
+<li><code>simple_image.f90</code> — the abstract image data type and its methods. 2D/3D &amp; FT/real all implemented by this class and FTs done in-place to reduce memory usage</li>
+<li><code>simple_image_access.f90</code> — image class getters, setters, serializers etc.</li>
+<li><code>simple_image_arith.f90</code> — arithmetics on images</li>
+<li><code>simple_image_bin.f90</code> — extension of the image class for binary images</li>
+<li><code>simple_image_calc.f90</code> — calculating stuff from images</li>
+<li><code>simple_image_checks.f90</code> — checking image stuff</li>
+<li><code>simple_image_core.f90</code> — core image functionality, such as constructors/object lifecycle</li>
+<li><code>simple_image_ctf.f90</code> — for applying CTF to images</li>
+<li><code>simple_image_fft.f90</code> — core fft routines as well as fused optimized operations involving ffts</li>
+<li><code>simple_image_filt.f90</code> — image filtering and denoising</li>
+<li><code>simple_image_freq_anal.f90</code> — image frequency domain analysis, power spectrum etc.</li>
+<li><code>simple_image_geom.f90</code> — geometrical image operations: window, shift, pad, clip etc.</li>
+<li><code>simple_image_io.f90</code> — for reading and writing images from/to disk</li>
+<li><code>simple_image_msk.f90</code> — extension of the image class to provide 2D/3D envelope and adaptive masking</li>
+<li><code>simple_image_norm.f90</code> — image normalization routines</li>
+<li><code>simple_image_ops.f90</code> — operations on images not fitting elsewhere: noise, zero, background, CTF division etc.</li>
+<li><code>simple_image_polar.f90</code> — polar 2D Fourier transform generation by convolution interpolation (gridding)</li>
+<li><code>simple_image_seg.f90</code> — image segmentation related stuff to support masking</li>
+<li><code>simple_image_vis.f90</code> — for supporting visualization of images in various ways</li>
+<li><code>simple_projector.f90</code> — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms</li>
+<li><code>simple_projector_pft.f90</code> — projector-to-polarft adapters kept outside simple_projector to avoid module cycles</li>
+<li><code>simple_projector_pft_batch.f90</code> — fused projection helpers that operate on projector data without polarft class dependencies</li>
+</ul>
+</li>
+<li><strong>interp/</strong> — home of the window functions for Fourier gridding interpolation<ul>
+<li><code>simple_cartesian_fourier.f90</code> — neutral Cartesian Fourier lattice embedding, extraction, and packed KB gathers</li>
+<li><code>simple_edges_sqwins.f90</code> — square windows and mask edges</li>
+<li><code>simple_gridding.f90</code> — utilities for convolution interpolation (gridding)</li>
+<li><code>simple_kbinterpol.f90</code> — Kaiser-Bessel interpolation kernel</li>
+<li><code>simple_winfuns.f90</code> — window functions for Fourier interpolation</li>
+</ul>
+</li>
+<li><strong>motion/</strong> — home of modules for movie motion correction<ul>
+<li><code>simple_denoise_movies.f90</code> — diffusion-map denoising helpers for real-space image stacks</li>
+<li><code>simple_motion_align_hybrid.f90</code> — discrete/continuous hybrid 2D registration to support motion correction</li>
+<li><code>simple_motion_align_nano.f90</code> — motion correction for movies of nanoparticles with aberation-corrected TEM</li>
+<li><code>simple_motion_correct.f90</code> — motion correction, dose-weighting and frame-weighting of direct electron detector movies</li>
+<li><code>simple_motion_correct_iter.f90</code> — iterator for motion_correct</li>
+<li><code>simple_motion_correct_utils.f90</code> — utility functions for motion correction</li>
+<li><code>simple_motion_gain_analysis.f90</code></li>
+<li><code>simple_motion_gain_helpers.f90</code></li>
+<li><code>simple_motion_gain_tester.f90</code> — unit tests for motion gain helper and analyzer</li>
+<li><code>simple_motion_patched.f90</code> — patched-based anisotropic motion correction</li>
+<li><code>simple_opt_image_weights.f90</code> — numerically find optimal weights for frames</li>
+</ul>
+</li>
+<li><strong>nano/</strong> — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE<ul>
+<li><code>simple_atoms.f90</code> — atomic structures and pdb parser</li>
+<li><code>simple_molecule_data.f90</code> — example of molecule data used for simple testing</li>
+<li><code>simple_nanoparticle.f90</code> — the nanoparticle abstract data type, used for automated atomic model building in SINGLE</li>
+<li><code>simple_nanoparticle_utils.f90</code> — nanoparticle utilities, mostly operations on atomic coordinates</li>
+<li><code>simple_tseries_graphene_subtr.f90</code> — graphene background subtraction in SINGLE</li>
+<li><code>single_tseries_extractor.f90</code> — Extractions routine for nanoparticles time series intended for frames and given per frame coordinates</li>
+<li><code>single_tseries_tracker.f90</code> — time series tracker intended for movies of nanoparticles spinning in solution</li>
+</ul>
+</li>
+<li><strong>nu_filt/</strong><ul>
+<li><code>simple_nu_filter.f90</code> — volume-domain nonuniform filtering of even/odd volumes</li>
+<li><code>simple_nu_filter_apply.f90</code> — simple nu filter apply implementation for volume-domain nonuniform filtering</li>
+<li><code>simple_nu_filter_bank.f90</code> — simple nu filter bank implementation for volume-domain nonuniform filtering</li>
+<li><code>simple_nu_filter_envmask.f90</code> — NU-evidence-driven envelope masking for volume-domain nonuniform filtering</li>
+<li><code>simple_nu_filter_evidence.f90</code> — compact immutable evidence state for the direct NU-conditioned PCG replay</li>
+<li><code>simple_nu_filter_extend.f90</code> — simple nu filter extend implementation for volume-domain nonuniform filtering</li>
+<li><code>simple_nu_filter_potts.f90</code> — simple nu filter potts implementation for volume-domain nonuniform filtering</li>
+<li><code>simple_nu_filter_sharpen.f90</code> — NU-evidence nonuniform postprocessing, v2 (classical pipeline, local)</li>
+<li><code>simple_nu_filter_state.f90</code> — simple nu filter state implementation for volume-domain nonuniform filtering</li>
+<li><code>simple_nu_filter_stats.f90</code> — simple nu filter stats implementation for volume-domain nonuniform filtering</li>
+</ul>
+</li>
+<li><strong>opt/</strong> — home of modules implementing various non-linear optimizations of a scalar objective function<ul>
+<li><code>simple_opt_bfgs.f90</code> — function minimization by L-BFGS (Limited memory Broyden-Fletcher-Goldfarb-Shannon optimization)</li>
+<li><code>simple_opt_bfgs2.f90</code> — function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)</li>
+<li><code>simple_opt_bforce.f90</code> — brute force function minimisation</li>
+<li><code>simple_opt_de.f90</code> — continuous function optimisation by differential evolution</li>
+<li><code>simple_opt_factory.f90</code> — factory pattern class for the SIMPLE optimisers</li>
+<li><code>simple_opt_fr_cg.f90</code> — function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4</li>
+<li><code>simple_opt_helpers.f90</code> — helper routines and definitions for certain optimizer routines (those taken from the gsl library)</li>
+<li><code>simple_opt_lbfgsb.f90</code> — memory limited bound-constained BFGS optimiser</li>
+<li><code>simple_opt_particle_swarm.f90</code> — continuous particle swarm optimisation</li>
+<li><code>simple_opt_powell.f90</code> — continuous function optimisation by Powell's method of conjugate search directions</li>
+<li><code>simple_opt_pr_cg.f90</code> — function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4</li>
+<li><code>simple_opt_simplex.f90</code> — The Nelder-Mead simplex method for continuous function minimisation</li>
+<li><code>simple_opt_spec.f90</code> — optimiser specification</li>
+<li><code>simple_opt_stde.f90</code> — function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)</li>
+<li><code>simple_opt_subs.f90</code> — optimisation algorithm utilities, line searches etc.</li>
+<li><code>simple_optimizer.f90</code> — abstract optimizer defining an interface for the extending optimization classes</li>
+</ul>
+</li>
+<li><strong>ori/</strong> — home of modules for metadata (orientation) management<ul>
+<li><code>simple_ori.f90</code> — an orientation (abstract data type for per-particle data)</li>
+<li><code>simple_ori_tester.f90</code> — unit test routines for the ori class</li>
+<li><code>simple_ori_utils.f90</code> — Euler angle and rotation matrix utilities for the ori and oris classes</li>
+<li><code>simple_oris.f90</code> — an agglomeration of orientations</li>
+<li><code>simple_oris_dists.f90</code> — distance calculators and related functions for oris</li>
+<li><code>simple_oris_getters.f90</code> — getters/queries for oris object</li>
+<li><code>simple_oris_io.f90</code> — input/output routines for oris object</li>
+<li><code>simple_oris_life.f90</code> — life-cycle management of oris object (constructors, destructors, etc.)</li>
+<li><code>simple_oris_neig.f90</code> — routines for identifying neighbors of oris and calculating correlations/overlaps/distances between oris</li>
+<li><code>simple_oris_reshape.f90</code> — reshaping/partitioning/remapping routines for oris object</li>
+<li><code>simple_oris_sampling.f90</code> — sampling and updatecnt related routines for oris</li>
+<li><code>simple_oris_setters.f90</code> — setters/mutators for oris</li>
+<li><code>simple_oris_stats.f90</code> — routines for calculating statistics of oris (e.g. mean, median, min, max, etc.)</li>
+<li><code>simple_oris_tester.f90</code> — unit test routines for the oris class</li>
+<li><code>simple_oris_transform.f90</code> — transform/offset/rotation routines for oris object</li>
+<li><code>simple_oris_weights.f90</code> — retired orientation particle-weight hooks kept as an empty submodule</li>
+</ul>
+</li>
+<li><strong>params/</strong><ul>
+<li><code>simple_parameters.f90</code> — public parameters type and interfaces for parameter parsing and derivation phases</li>
+<li><code>simple_parameters_core.f90</code> — core helpers for SIMPLE parameter defaults and utility procedures</li>
+<li><code>simple_parameters_parse.f90</code> — generic command-line parsing for SIMPLE parameters using typed input bindings</li>
+<li><code>simple_parameters_phases.f90</code> — constructor and semantic execution, source, derivation, and validation phases for SIMPLE parameters</li>
+<li><code>simple_parameters_registry.f90</code> — typed registry used to bind command-line arguments onto the flat SIMPLE parameters object</li>
+</ul>
+</li>
+<li><strong>pca/</strong> — home of modules implementing principal component analysis: SVD, probabilistic, and nonlinear kernel variants<ul>
+<li><code>simple_complex_ppca.f90</code> — complex/Hermitian probabilistic PCA for Fourier-domain vectors</li>
+<li><code>simple_diff_map_denoise.f90</code> — CSR graph coefficient-projection denoising helpers</li>
+<li><code>simple_diff_map_graphs.f90</code> — CSR graph construction helpers for diffusion-map class splitting</li>
+<li><code>simple_diffusion_maps.f90</code> — sparse diffusion-map embeddings for class-split graphs</li>
+<li><code>simple_kpca_svd.f90</code> — kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs</li>
+<li><code>simple_pca.f90</code> — abstract pca strategy base class</li>
+<li><code>simple_pca_svd.f90</code> — PCA using standard SVD</li>
+<li><code>simple_ppca.f90</code> — Bishop/Tipping probabilistic PCA with explicit isotropic noise</li>
+</ul>
+</li>
+<li><strong>pftc/</strong> — home of the polar FT calc submodules and modules for operations on polar FTs<ul>
+<li><code>simple_pftc_shsrch_grad.f90</code> — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer</li>
+<li><code>simple_polarft_access.f90</code> — polarft class accessors submodule</li>
+<li><code>simple_polarft_calc.f90</code> — polarft class complete interface</li>
+<li><code>simple_polarft_core.f90</code> — polarft class core submodule: object lifecycle etc.</li>
+<li><code>simple_polarft_corr.f90</code> — polarft class submodule for objective function evaluations</li>
+<li><code>simple_polarft_ctf.f90</code> — polarft class submodule for dealing with CTF-related things</li>
+<li><code>simple_polarft_geom.f90</code> — polarft class submodule for geometry-related things: shift, rotate, mirror etc.</li>
+<li><code>simple_polarft_memo.f90</code> — polarft class submodule for memoization for performance</li>
+<li><code>simple_polarft_ops_io.f90</code> — particle polar Fourier line streaming I/O</li>
+</ul>
+</li>
+<li><strong>pick/</strong> — home of modules for particle picking<ul>
+<li><code>simple_picker_iter.f90</code> — particle picker iterator</li>
+<li><code>simple_picker_utils.f90</code> — routines for executing reference-based, segmentation-based, and Gaussian picking</li>
+<li><code>simple_pickref.f90</code> — the abstract data type implementing particle picking using templates</li>
+<li><code>simple_pickref_corr_batch.f90</code> — bounded BLAS-backed Pearson correlation for reference picking</li>
+<li><code>simple_pickseg.f90</code> — the abstract data type implementing the original version of segmentation-based picking</li>
+<li><code>simple_picksegdiam.f90</code> — the abstract data type implementing the version of segmentation-based picking used in the stream</li>
+</ul>
+</li>
+<li><strong>project/</strong> — home of the submodules of the single-particle project class for managing project information in memory and on disk<ul>
+<li><code>simple_project_merge_tester.f90</code> — unit tests for SIMPLE project merging</li>
+<li><code>simple_sp_project.f90</code> — single-particle project, the complete interface and abstract data type</li>
+<li><code>simple_sp_project_cls.f90</code> — single-particle project routines for managing 2D class info</li>
+<li><code>simple_sp_project_core.f90</code> — single-particle project core routines, lifecycle, accessors, modifiers etc.</li>
+<li><code>simple_sp_project_io.f90</code> — single-particle project I/O routines</li>
+<li><code>simple_sp_project_mic.f90</code> — single-particle project routines for managing micrograph and move information</li>
+<li><code>simple_sp_project_optics.f90</code> — single-particle project routines for managing optics information</li>
+<li><code>simple_sp_project_out.f90</code> — single-particle project routines for managing outputs from various processes</li>
+<li><code>simple_sp_project_ptcl.f90</code> — single-particle project routines for managing particle-level information</li>
+<li><code>simple_sp_project_stk.f90</code> — single-particle project routines for managing stack-level information</li>
+</ul>
+</li>
+<li><strong>sieve/</strong> — particle-sieve chunk generation and coarse/fine rejection orchestration utilities<ul>
+<li><code>simple_ptcl_sieve.f90</code> — multi-tier particle sieve with coarse/fine 2D chunking and rejection</li>
+<li><code>simple_ptcl_sieve_tester.f90</code> — unit test routines for the ptcl_sieve orchestrator</li>
+<li><code>simple_ptcl_sieve_utils.f90</code> — helper routines for sieve sub-project partitioning and chunk-map generation</li>
+</ul>
+</li>
+<li><strong>star/</strong> — home of modules for star file and star project handling<ul>
+<li><code>simple_relion.f90</code> — for interoperability with RELION</li>
+<li><code>simple_starfile.f90</code> — STAR file I/O â writes optics, micrograph, and 2D-particle tables for RELION-compatible STAR files.</li>
+<li><code>simple_starfile_tester.f90</code> — unit tests for simple_starfile</li>
+<li><code>simple_starfile_wrapper.f90</code> — maps starfile C code to fortran callable routines</li>
+<li><code>simple_starproject.f90</code> — abstract data type implementing starproject</li>
+<li><code>simple_starproject_stream.f90</code> — for star project management in streaming applications</li>
+<li><code>simple_starproject_tester.f90</code> — unit test routines for starproject</li>
+<li><code>simple_starproject_utils.f90</code> — starproject utilities</li>
+</ul>
+</li>
+<li><strong>strategies/</strong> — object-oriented strategy pattern implementations<ul>
+<li><strong>parallelization/</strong> — home of strategies for different parallelization modes (distributed, shared-memory etc.)</li>
+<li><code>simple_calc_pspec_strategy.f90</code></li>
+<li><code>simple_cls_split_strategy.f90</code></li>
+<li><code>simple_cluster2D_strategy.f90</code></li>
+<li><code>simple_ctf_estimate_strategy.f90</code></li>
+<li><code>simple_denoise_project_strategy.f90</code></li>
+<li><code>simple_extract_strategy.f90</code></li>
+<li><code>simple_gen_pspecs_and_thumbs_strategy.f90</code></li>
+<li><code>simple_make_cavgs_strategy.f90</code></li>
+<li><code>simple_motion_correct_strategy.f90</code></li>
+<li><code>simple_pick_strategy.f90</code></li>
+<li><code>simple_preprocess_strategy.f90</code></li>
+<li><code>simple_rec3D_pcg_strategy.f90</code> — shared-memory production strategy body for kernel PCG reconstruct3D</li>
+<li><code>simple_rec3D_strategy.f90</code></li>
+<li><code>simple_reextract_strategy.f90</code></li>
+<li><code>simple_refine3D_strategy.f90</code></li>
+<li><strong>search/</strong> — home of strategies for 2D and 3D orientation search</li>
+<li><code>simple_matcher_2Dprep.f90</code> — common routines used by the high-level strategy 2D and 3D matchers</li>
+<li><code>simple_matcher_3Drec.f90</code> — Cartesian online/offline 3D reconstruction module</li>
+<li><code>simple_matcher_pftc_prep.f90</code> — reference preparation helpers for matcher workflows</li>
+<li><code>simple_matcher_ptcl_batch.f90</code> — particle batch preparation helpers for matcher workflows</li>
+<li><code>simple_matcher_ptcl_io.f90</code> — particle image batch I/O routines shared by matcher workflows</li>
+<li><code>simple_matcher_refvol_utils.f90</code> — shared helpers for reading, masking, filtering and reprojecting reference volumes</li>
+<li><code>simple_matcher_smpl_and_lplims.f90</code> — search-space and particle-selection policy routines for matcher workflows</li>
+<li><code>simple_ptcl_cache.f90</code> — downscaled particle cache shared by the 2D and 3D matcher workflows</li>
+<li><code>simple_strategy2D.f90</code> — abstract base class defining the common strategy2D interface</li>
+<li><code>simple_strategy2D_alloc.f90</code> — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads</li>
+<li><code>simple_strategy2D_eval.f90</code> — 2D strategy for objective function evaluation</li>
+<li><code>simple_strategy2D_greedy.f90</code> — 2D strategy for exhaustive projection matching with greedy in-plane search</li>
+<li><code>simple_strategy2D_greedy_smpl.f90</code> — 2D strategy for exhaustive projection matching with probabilistic in-plane search</li>
+<li><code>simple_strategy2D_inpl.f90</code> — 2D strategy for in-plane refinement</li>
+<li><code>simple_strategy2D_inpl_smpl.f90</code> — 2D strategy for in-plane refinement with probabilistic sampling</li>
+<li><code>simple_strategy2D_matcher.f90</code> — high-level search routines for the cluster2D and abinitio2D applications</li>
+<li><code>simple_strategy2D_prob.f90</code> — 2D strategy for probabilistic class assignment (precomputed by prob_align2D/prob_tab2D)</li>
+<li><code>simple_strategy2D_snhc.f90</code> — 2D strategy for stochastic neighborhood hill climbing</li>
+<li><code>simple_strategy2D_snhc_smpl.f90</code> — 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search</li>
+<li><code>simple_strategy2D_snhc_smpl_many.f90</code> — 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search</li>
+<li><code>simple_strategy2D_srch.f90</code> — common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class</li>
+<li><code>simple_strategy2D_tseries.f90</code> — 2D strategy for time-restrained search, used in SINGLE</li>
+<li><code>simple_strategy2D_utils.f90</code> — utility routines for 2D class average processing</li>
+<li><code>simple_strategy3D.f90</code> — abstract base class defining the common strategy3D interface</li>
+<li><code>simple_strategy3D_alloc.f90</code> — array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads</li>
+<li><code>simple_strategy3D_eval.f90</code> — 3D strategy for objective function evaluation</li>
+<li><code>simple_strategy3D_greedy.f90</code> — 3D strategy for exhaustive projection matching</li>
+<li><code>simple_strategy3D_greedy_inpl.f90</code> — 3D strategy for exhaustive in-plane matching of a single re-projection</li>
+<li><code>simple_strategy3D_greedy_smpl.f90</code> — 3D strategy for exhaustive projection matching with probabilistic in-plane search</li>
+<li><code>simple_strategy3D_greedy_sub.f90</code> — 3D strategy for neighborhood projection matching with exhaustive subspace initialization</li>
+<li><code>simple_strategy3D_matcher.f90</code> — high-level particle matching and partial-reconstruction orchestration for refine3D workers</li>
+<li><code>simple_strategy3D_prob.f90</code> — 3D strategy for probabilistic projection matching</li>
+<li><code>simple_strategy3D_shc.f90</code> — 3D strategy for projection matching by stochastic hill climbing</li>
+<li><code>simple_strategy3D_shc_smpl.f90</code> — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search</li>
+<li><code>simple_strategy3D_snhc_smpl.f90</code> — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search</li>
+<li><code>simple_strategy3D_srch.f90</code> — common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class</li>
+<li><code>simple_strategy3D_utils.f90</code> — utility routines for 3D strategies</li>
+</ul>
+</li>
+<li><strong>stream/</strong> — home of the stream task commanders in the pipelined stream application and their utilities<ul>
+<li><code>simple_mini_stream_utils.f90</code> — utilities for running the mini batch version of the stream</li>
+<li><code>simple_stream2D_state.f90</code> — singleton for common state variables across the stream modules</li>
+<li><code>simple_stream_abinitio2D_chunks.f90</code> — splits a project into stack-bound, particle-balanced subsets and runs independent abinitio2D jobs</li>
+<li><code>simple_stream_chunk.f90</code> — abstract data type for the stream_chunk, defining a chunk of data processed in parallel</li>
+<li><code>simple_stream_chunk2D_utils.f90</code> — utilities for chunk-based 2D clustering in stream</li>
+<li><code>simple_stream_cluster2D_utils.f90</code> — utilities for running 2D clustering in the stream</li>
+<li><code>simple_stream_p00_master.f90</code> — task 00 in the stream pipeline: master controller used when running from GUI</li>
+<li><code>simple_stream_p01_preprocess_new.f90</code> — task 1 in the stream pipeline: pre-processing (movie registration, CTF estimation, segmentation-based picking)</li>
+<li><code>simple_stream_p02_assign_optics_new.f90</code> — task 2 in the stream pipeline: assign optics groups to streamed micrographs</li>
+<li><code>simple_stream_p03_initial_analysis.f90</code> — task 3 in the stream pipeline: the first 2D analysis from segmentation picked particles used for initial screening and generation of picking references</li>
+<li><code>simple_stream_p04_refpick_extract_new.f90</code> — task 4 in the stream pipeline: reference-based picking and extraction</li>
+<li><code>simple_stream_p05_sieve_cavgs_new.f90</code> — stream task 5: continuous particle-sieving with staged chunk generation and class-average rejection</li>
+<li><code>simple_stream_p06_pool2D_new.f90</code> — stream pipeline stage 6 â global 2D classification of pooled particles from sieving</li>
+<li><code>simple_stream_pool2D_utils.f90</code> — utilities for running the pool 2D refinement</li>
+<li><code>simple_stream_state.f90</code> — global stream master pipe descriptors for IPC</li>
+<li><code>simple_stream_utils.f90</code> — various stream utilities</li>
+<li><code>simple_stream_watcher.f90</code> — movie watcher for stream processing</li>
+</ul>
+</li>
+<li><strong>ui/</strong><ul>
+<li><code>simple_ui.f90</code> — the main user interface module</li>
+<li><code>simple_ui_descriptor_types.f90</code> — shared presentation-only value types for the command descriptor layer</li>
+<li><code>simple_ui_hash.f90</code> — extension type providing typed convenience accessors for ui_param &amp; ui_program</li>
+<li><code>simple_ui_modules.f90</code> — module aggregating ui utility modules</li>
+<li><code>simple_ui_param.f90</code> — module defining the ui_param type, which is used to define input parameters for the simple_ui_program interface</li>
+<li><code>simple_ui_params_common.f90</code> — module defining the common parameters for all simple_ui_program interfaces</li>
+<li><code>simple_ui_program.f90</code> — module defining the main user interface program type and associated methods</li>
+<li><code>simple_ui_simple_group.f90</code> — aggregates SIMPLE (non-stream) ui program constructors</li>
+<li><code>simple_ui_single_group.f90</code> — aggregates SINGLE ui program constructors</li>
+<li><code>simple_ui_stream_group.f90</code> — aggregates SIMPLE stream ui program constructors</li>
+<li><code>simple_ui_test_group.f90</code> — aggregates SIMPLE TEST ui program constructors</li>
+<li><code>simple_ui_utils.f90</code> — module defining utility procedures for the simple_ui modules</li>
+<li><code>simple_ui_visibility.f90</code> — typed visibility levels for command-descriptor presentation</li>
+<li><strong>simple/</strong></li>
+<li><code>simple_ui_abinitio3D.f90</code> — module defining the user interfaces for ab initio 3D reconstruction programs in the simple_exec suite</li>
+<li><code>simple_ui_cavgproc.f90</code> — module defining the user interfaces for class average processing programs in the simple_exec suite</li>
+<li><code>simple_ui_cluster2D.f90</code> — module defining the user interfaces for 2D clustering and related programs in the simple_exec suite</li>
+<li><code>simple_ui_denoise.f90</code> — module defining the user interfaces for denoising programs in the simple_exec suite</li>
+<li><code>simple_ui_dock.f90</code> — module defining the user interfaces for docking programs in the simple_exec suite</li>
+<li><code>simple_ui_filter.f90</code> — module defining the user interfaces for filtering programs in the simple_exec suite</li>
+<li><code>simple_ui_image.f90</code> — module defining the user interfaces for general image processing programs in the simple_exec suite</li>
+<li><code>simple_ui_mask.f90</code> — module defining the user interfaces for masking programs in the simple_exec suite</li>
+<li><code>simple_ui_ori.f90</code> — module defining the user interfaces for orientation processing programs in the simple_exec suite</li>
+<li><code>simple_ui_other.f90</code> — module defining the user interfaces for miscellaneous programs in the simple_exec suite</li>
+<li><code>simple_ui_preproc.f90</code> — module defining the user interfaces for pre-processing programs in the simple_exec suite</li>
+<li><code>simple_ui_print.f90</code> — module defining the user interfaces for printing programs in the simple_exec suite</li>
+<li><code>simple_ui_project.f90</code> — module defining the user interfaces for project management programs in the simple_exec suite</li>
+<li><code>simple_ui_refine3D.f90</code> — module defining the user interfaces for 3D refinement programs in the simple_exec suite</li>
+<li><code>simple_ui_res.f90</code> — module defining the user interfaces for resolution estimation programs in the simple_exec suite</li>
+<li><code>simple_ui_sim.f90</code> — module defining the user interfaces for simulation programs in the simple_exec suite</li>
+<li><code>simple_ui_stream.f90</code> — module defining the user interfaces for streaming workflows in the simple_exec suite</li>
+<li><code>simple_ui_sym.f90</code> — module defining the user interfaces for symmetry-related programs in the simple_exec suite</li>
+<li><code>simple_ui_validation.f90</code> — module defining the user interfaces for validation programs in the simple_exec suite</li>
+<li><code>simple_ui_volume.f90</code> — module defining the user interfaces for volume processing programs in the simple_exec suite</li>
+<li><strong>simple_test/</strong></li>
+<li><code>simple_test_ui_class.f90</code> — module defining the user interfaces for per class test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_fft.f90</code> — module defining the user interfaces for fft testprograms in the simple_test_exec suite</li>
+<li><code>simple_test_ui_geometry.f90</code> — module defining the user interfaces for geometry test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_highlevel.f90</code> — module defining the user interfaces for highlevel test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_io.f90</code> — module defining the user interfaces for input/output test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_masks.f90</code> — module defining the user interfaces for masks test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_network.f90</code> — module defining the user interfaces for network test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_numerics.f90</code> — module defining the user interfaces for numerics programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_optimize.f90</code> — module defining the user interfaces for optimize test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_parallel.f90</code> — module defining the user interfaces for parallel test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_single.f90</code> — module defining the user interfaces for single test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_stats.f90</code> — module defining the user interfaces for statistics test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_stream.f90</code> — module defining the user interfaces for stream test programs in the simple_test_exec suite</li>
+<li><code>simple_test_ui_utils.f90</code> — module defining the user interfaces for utils programs in the simple_test_exec suite</li>
+<li><strong>single/</strong></li>
+<li><code>single_ui_atom.f90</code> — module defining the user interfaces for atom-related programs in the single_exec suite</li>
+<li><code>single_ui_map.f90</code> — module defining the user interfaces for map-related programs in the single_exec suite</li>
+<li><code>single_ui_nano2D.f90</code> — module defining the user interfaces for 2D analysis of nanoparticle time-series in the single_exec suite</li>
+<li><code>single_ui_nano3D.f90</code> — module defining the user interfaces for 3D analysis of nanoparticles in the single_exec suite</li>
+<li><code>single_ui_trajectory.f90</code> — module defining the user interfaces for trajectory analysis of nanoparticles in the single_exec suite</li>
+<li><code>single_ui_tseries.f90</code> — module defining the user interfaces for time-series analysis in the single_exec suite</li>
+<li><code>single_ui_validate.f90</code> — module defining the user interfaces for validation programs in the single_exec suite</li>
+</ul>
+</li>
+<li><strong>volume/</strong> — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search<ul>
+<li><code>simple_cartesian_pose_refiner.f90</code> — Fixed-volume Cartesian Fourier particle-pose refinement numerics</li>
+<li><code>simple_dock_vols.f90</code> — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery</li>
+<li><code>simple_halfmap_diagnostics.f90</code> — backend-neutral half-map FSC, cFAR, and resolution diagnostics shared by the gridding and PCG reconstruction paths</li>
+<li><code>simple_reconstructor.f90</code> — 3D reconstruction from projections using convolution interpolation (gridding)</li>
+<li><code>simple_reconstructor_openmpoffload.f90</code> — provides one routine for gpu-accelerated reconstruction</li>
+<li><code>simple_reconstructor_pcg.f90</code> — CTF/sigma-weighted Fourier-projection operator and</li>
+<li><code>simple_vol_pproc_policy.f90</code> — per-state automask policy decisions consumed by volume assembly</li>
+<li><code>simple_volanalyzer.f90</code> — for analyzing sets of ab initio volumes, current implementation just outputting the medoid</li>
+<li><code>simple_volcluster.f90</code> — clustering of pre-docked volumes from Fourier-shell correlations</li>
+<li><code>simple_volinterp.f90</code> — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms, high-level routines</li>
+<li><code>simple_volpft_corrcalc.f90</code> — fast cross-correlation calculation between Fourier volumes using defined sampling space geometries</li>
+<li><code>simple_volpft_symsrch.f90</code> — symmetry search using polar volume representation</li>
+</ul>
+</li>
+<li><strong>utils/</strong> — utilities source code directory</li>
+<li><code>simple_block_tree.f90</code></li>
+<li><code>simple_block_tree_corr.f90</code></li>
+<li><code>simple_corrmat.f90</code> — for calculation of correlation matrices</li>
+<li><code>simple_eulspace_neigh_map.f90</code></li>
+<li><code>simple_exec_helpers.f90</code> — helpers for restarted execution, asynchronous execution, script-based execution etc.</li>
+<li><code>simple_forked_process.f90</code> — POSIX fork-based child-process manager with timestamps, auto-restart, and status polling</li>
+<li><code>simple_forked_process_tester.f90</code> — unit tests for simple_forked_process (lifecycle, signals, restart, timestamps, I/O)</li>
+<li><code>simple_gauss2Dfit.f90</code> — Module for fitting the intensity distributions of 2D particle image arrays with 2D multivariate Gaussians</li>
+<li><code>simple_gpu_utils.f90</code> — contains utilities for gpu offloading with OpenMP and</li>
+<li><code>simple_imgarr_utils.f90</code> — utilities for image arrays</li>
+<li><code>simple_imgproc.f90</code> — various image processing routines</li>
+<li><code>simple_is_check_assert.f90</code> — assertions</li>
+<li><code>simple_jiffys.f90</code> — jiffy = the time it takes light to travel one centimeter in vacuum</li>
+<li><code>simple_magic_boxes.f90</code> — box sizes optimised for FFTW perfomance</li>
+<li><code>simple_map_reduce.f90</code> — routines for distributed SIMPLE execution</li>
+<li><code>simple_mem_estimator.f90</code> — job ram usage estimation</li>
+<li><code>simple_memoize_ft_maps.f90</code> — Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly</li>
+<li><code>simple_memory_monitor.f90</code> — opt-in process memory telemetry for all SIMPLE commanders and processing phases</li>
+<li><code>simple_micproc.f90</code> — operations on micrographs</li>
+<li><code>simple_opt_mask.f90</code> — optimization(search)-based masking</li>
+<li><code>simple_private_prgs.f90</code> — private program interface defintions (those executed by simple_private_exec)</li>
+<li><code>simple_procimgstk.f90</code> — stack image processing routines, applying a subset of image class methods to stacks</li>
+<li><code>simple_progress.f90</code> — job progress estimation</li>
+<li><code>simple_sauron.f90</code> — SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook</li>
+<li><code>simple_segmentation.f90</code> — segmentation routines: peak detection, edge detection, otsu's algorithm, Hough transform, Sauvola etc.</li>
+<li><code>simple_srchspace_map.f90</code></li>
+<li><code>simple_stackops.f90</code> — stack image processing routines</li>
+<li><code>simple_string.f90</code> — the string class that replaces intrinsic allocatable strings in SIMPLE</li>
+<li><code>simple_string_tester.f90</code> — unit test subroutines for the string class</li>
+<li><code>simple_string_utils.f90</code> — contains various string manipulation subroutines and functions</li>
+<li><code>simple_test_utils.f90</code> — utilities for unit testing, assertions etc.</li>
+<li><code>simple_timer.f90</code> — Simple timer module: High resolution (nanoseconds) timer in Fortran</li>
+<li><code>simple_timer_omp.f90</code> — very precise timer for use in OpenMP sections</li>
+<li><strong>clustering/</strong> — algorithms for clustering a distance matrix<ul>
+<li><code>simple_aff_prop.f90</code> — clustering of a similartity matrix using affinity propagation</li>
+<li><code>simple_cluster_seed.f90</code> — seeding methods for state labelling</li>
+<li><code>simple_clustering_utils.f90</code> — tools and metrics for clustering analysis</li>
+<li><code>simple_finch.f90</code> — FINCH clustering hierarchy using deterministic exact first-neighbor search</li>
+<li><code>simple_hclust.f90</code> — agglomerative hierarchical clustering of a distance matrix using nearest-neighbor chain</li>
+<li><code>simple_kmedoids.f90</code> — k-medoids clustering of a similarity matrix</li>
+</ul>
+</li>
+<li><strong>comm/</strong> — utilities for interprocess communication<ul>
+<li><code>simple_distr_comm.f90</code> — for initializing a server for direct socket communication</li>
+<li><code>simple_http_post.f90</code> — libcurl-based HTTP POST client with response capture</li>
+<li><code>simple_http_post_tester.f90</code> — unit tests for simple_http_post (lifecycle, body-less POST, POST with body, response reset)</li>
+<li><code>simple_ipc_tcp_socket_client.f90</code></li>
+<li><code>simple_ipc_tcp_socket_helpers.f90</code></li>
+<li><code>simple_ipc_tcp_socket_server.f90</code></li>
+<li><code>simple_ipc_tcp_socket_tester.f90</code> — unit tests for IPC TCP client/helpers/server split modules</li>
+<li><code>simple_socket_comm.f90</code> — abstract data type for a web socket</li>
+<li><code>simple_stream_communicator.f90</code> — the abstract data type for the http communicator used in the stream</li>
+</ul>
+</li>
+<li><strong>filter/</strong> — utilities for filtering and regularization<ul>
+<li><code>simple_bspline_smoother.f90</code> — quadratic B-spline Laplacian smoother (Tikhonov regularization, Fourier-domain solve).</li>
+<li><code>simple_butterworth.f90</code> — Butterworth low-pass filtering kernel</li>
+<li><code>simple_estimate_ssnr.f90</code> — spectral signal-to-noise ratio estimation routines</li>
+<li><code>simple_fsc.f90</code> — various Fourier Shell Correlation utilities</li>
+<li><code>simple_opt_filter.f90</code> — optimization(search)-based filtering</li>
+<li><code>simple_tent_smooth.f90</code></li>
+</ul>
+</li>
+<li><strong>gui/</strong> — utilities for feeding information to the GUI<ul>
+<li><code>simple_gui_assembler.f90</code> — Assembles GUI metadata objects into a compact JSON document and sends it to the NICE frontend</li>
+<li><code>simple_gui_assembler_tester.f90</code> — Unit tests for gui_assembler â lifecycle, hash suppression, and all assemble_stream_* procedures</li>
+<li><code>simple_gui_utils.f90</code> — various GUI utility functions</li>
+<li><code>simple_guistats.f90</code> — abstract data type for generating various stats for the gui</li>
+<li><code>simple_nice.f90</code> — the module implementing New Interface for Cryo-Em (NICE)</li>
+<li><strong>metadata/</strong> — metadata structures for passing between processes and generating json for sending to nice</li>
+<li><code>simple_gui_metadata_base.f90</code> — Abstract base type for GUI metadata objects.</li>
+<li><code>simple_gui_metadata_cavg2D.f90</code> — GUI metadata type for a single 2D class average entry (sprite-sheet position + stats).</li>
+<li><code>simple_gui_metadata_histogram.f90</code> — GUI metadata type for a labelled histogram.</li>
+<li><code>simple_gui_metadata_micrograph.f90</code> — GUI metadata type for a single micrograph and its particle coordinates.</li>
+<li><code>simple_gui_metadata_optics_group.f90</code> — GUI metadata type for an optics group and its beam-shift scatter plot.</li>
+<li><code>simple_gui_metadata_tester.f90</code> — Unit tests for all gui_metadata types â lifecycle, serialisation, and JSON serialisation</li>
+<li><code>simple_gui_metadata_timeplot.f90</code> — GUI metadata type for a time-series plot with one or two data traces.</li>
+<li><code>simple_gui_metadata_types.f90</code> — Integer type-tag constants for all GUI metadata kinds.</li>
+<li><code>simple_gui_metadata_utils.f90</code> — Utility functions for GUI metadata types.</li>
+<li><strong>stream/</strong> — stream related metadata structures<ul>
+<li><code>simple_gui_metadata_stream_opening2D.f90</code> — GUI metadata for the stream opening-2D stage â particle counts, masking parameters, and user-input flag</li>
+<li><code>simple_gui_metadata_stream_optics_assignment.f90</code> — GUI metadata for the stream optics-assignment stage â micrograph and optics-group assignment counts</li>
+<li><code>simple_gui_metadata_stream_particle_sieving.f90</code> — GUI metadata for the stream particle-sieving stage â particle counts, masking parameters, and user-input flag</li>
+<li><code>simple_gui_metadata_stream_picking.f90</code> — GUI metadata for the stream initial-picking stage â micrograph counts, particle yield, and import timestamp</li>
+<li><code>simple_gui_metadata_stream_pool2D.f90</code> — GUI metadata for the stream pool-2D stage â particle counts, mask geometry, initial reference selection, and user-input flag</li>
+<li><code>simple_gui_metadata_stream_pool2D_snapshot.f90</code> — GUI metadata for a pool-2D snapshot â id, filename, particle count, and timestamp</li>
+<li><code>simple_gui_metadata_stream_preprocess.f90</code> — GUI metadata for the stream preprocessing stage â movie counts, CTF quality averages, and acceptance cutoffs</li>
+<li><code>simple_gui_metadata_stream_update.f90</code> — GUI metadata for a stream quality update â thresholds and user selections broadcast from the GUI</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>math/</strong> — home of mathematical and statistical utility routines<ul>
+<li><code>simple_decay_funs.f90</code> — decay functions for annealing</li>
+<li><code>simple_histogram.f90</code> — abstract data type for histogram generation</li>
+<li><code>simple_linalg.f90</code> — SIMPLE linear algebra helpers with BLAS/LAPACK-backed kernels.</li>
+<li><code>simple_math.f90</code> — various mathematical subroutines and functions</li>
+<li><code>simple_math_ctf.f90</code> — CTF-related math routines</li>
+<li><code>simple_math_ft.f90</code> — Fourier transform-related math routines</li>
+<li><code>simple_neighs.f90</code> — pixel neighborhood definitions and generation</li>
+<li><code>simple_online_var.f90</code> — online moments estimation</li>
+<li><code>simple_r8lib.f90</code> — cholesky decompositions and solvers</li>
+<li><code>simple_ran_tabu.f90</code> — routines for generation of directed random numbers</li>
+<li><code>simple_rnd.f90</code> — random number generation module</li>
+<li><code>simple_srch_sort_loc.f90</code> — searching ordered tables, sorting, locate etc.</li>
+<li><code>simple_stat.f90</code> — statistics utility functions</li>
+<li><code>simple_testfuns.f90</code> — provides 20 mathematical test functions for evaluating unconstrained optimization procedures</li>
+</ul>
+</li>
+<li><strong>persistent_worker/</strong><ul>
+<li><code>simple_persistent_worker_server.f90</code></li>
+<li><code>simple_persistent_worker_server_tester.f90</code> — unit tests for simple_persistent_worker_server</li>
+<li><strong>message/</strong></li>
+<li><code>simple_persistent_worker_message_base.f90</code></li>
+<li><code>simple_persistent_worker_message_heartbeat.f90</code></li>
+<li><code>simple_persistent_worker_message_status.f90</code></li>
+<li><code>simple_persistent_worker_message_task.f90</code></li>
+<li><code>simple_persistent_worker_message_terminate.f90</code></li>
+<li><code>simple_persistent_worker_message_tester.f90</code> — unit tests for persistent-worker wire message modules</li>
+<li><code>simple_persistent_worker_message_types.f90</code></li>
+</ul>
+</li>
+<li><strong>qsys/</strong> — utilities for controlling queue systems in distributed computing environments<ul>
+<li><code>simple_qsys_base.f90</code> — batch-processing manager - abstract interface</li>
+<li><code>simple_qsys_coarray.f90</code> — batch-processing manager - Fortran coarray launcher backend</li>
+<li><code>simple_qsys_ctrl.f90</code> — batch-processing manager - script generation, job scheduling, and persistent worker dispatch</li>
+<li><code>simple_qsys_env.f90</code> — Queue-system execution environment with optional persistent worker dispatch</li>
+<li><code>simple_qsys_factory.f90</code> — batch-processing manager - Factory class</li>
+<li><code>simple_qsys_funs.f90</code> — batch-processing manager - functions</li>
+<li><code>simple_qsys_local.f90</code> — batch-processing manager - Local system</li>
+<li><code>simple_qsys_lsf.f90</code> — batch-processing manager - LSF</li>
+<li><code>simple_qsys_pbs.f90</code> — batch-processing manager - PBS</li>
+<li><code>simple_qsys_persistent_worker.f90</code> — SIMPLE worker backend submission/environment manager module</li>
+<li><code>simple_qsys_sge.f90</code> — batch-processing manager - SunGrid Engine</li>
+<li><code>simple_qsys_slurm.f90</code> — batch-processing manager - SLURM</li>
+</ul>
+</li>
+<li><strong>structs/</strong> — implementation of various standard and non-standard data structures<ul>
+<li><code>simple_binary_tree.f90</code> — simple binary tree structure for hierarchical clustering results</li>
+<li><code>simple_binary_tree_tester.f90</code> — unit test routines for refactored simple_binary_tree class (no subsets; node-only getters)</li>
+<li><code>simple_chash.f90</code> — Character hash</li>
+<li><code>simple_chash_tester.f90</code> — unit test routines for chash class</li>
+<li><code>simple_hash.f90</code> — real hash data structure</li>
+<li><code>simple_hash_tester.f90</code> — unit test routines for hash class</li>
+<li><code>simple_kd_tree.f90</code> — deterministic flat-array k-d tree and exact Euclidean k-nearest-neighbor queries</li>
+<li><code>simple_linked_list.f90</code> — polymorphic linked list class</li>
+<li><code>simple_linked_list_tester.f90</code> — unit test routines for linked list class</li>
+<li><code>simple_multi_dendro.f90</code> — simple multi-dendrogram structure to hold multiple hierarchical clusterings</li>
+<li><code>simple_multi_dendro_tester.f90</code> — unit test routines for simple_multi_dendro class (matches current minimal API)</li>
+<li><code>simple_rec_list.f90</code> — polymorphic linked list implementation for derived types (specified in the class header)</li>
+<li><code>simple_rec_list_tester.f90</code> — unit test routines for class rec_list</li>
+<li><code>simple_vrefhash.f90</code> — string-key, polymorphic <em>reference</em> hash (stores pointers; updates are visible)</li>
+<li><code>simple_vrefhash_tester.f90</code> — unit test routines for vrefhash (string-&gt;polymorphic reference hash)</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

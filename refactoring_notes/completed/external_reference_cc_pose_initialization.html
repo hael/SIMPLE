@@ -1,0 +1,5604 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/completed/external_reference_cc_pose_initialization.html">
+      
+      
+        <link rel="prev" href="euclid_build_new_policy.html">
+      
+      
+        <link rel="next" href="multi_microscope_parameters.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Initialize Poses Against External References Before Euclidean Refinement - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#initialize-poses-against-external-references-before-euclidean-refinement" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Initialize Poses Against External References Before Euclidean Refinement
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/pcg_nonuniform_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code review: PCG reconstruction with nonuniform regularization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/pcg_priors.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG priors: experiment record and the NU-evidence prior design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/pfcrt_audit_a6ae317ae_vs_head.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PfCRT audit: what changed between a6ae317ae and HEAD (2026-09-02)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_30" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_30" id="__nav_10_30_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_30_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_30">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="external_reference_cc_pose_initialization.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approved-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approved Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-is-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Is Needed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why This Is Needed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#external-references-are-not-initially-on-the-data-models-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External references are not initially on the data model's scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sigma-statistics-should-be-accumulated-during-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sigma statistics should be accumulated during pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#populated-orientations-are-not-evidence-of-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Populated orientations are not evidence of pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#early-subset-reconstruction-changes-the-question-for-later-particles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Early subset reconstruction changes the question for later particles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-simple-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented SIMPLE Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-provenance-is-the-application-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Provenance Is the Application Boundary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference Provenance Is the Application Boundary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trusted-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trusted-pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-reference-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External-reference pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ambiguous-callers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ambiguous callers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pose-initialization-stage-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pose-Initialization Stage Contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pose-Initialization Stage Contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-validate-and-prepare-the-supplied-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Validate and prepare the supplied references
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-bootstrap-sigma2-from-particle-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Bootstrap sigma2 from particle images
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-run-one-capped-cohort-cc-pass-against-the-fixed-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Run one capped-cohort CC pass against the fixed references
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-establish-a-data-derived-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Establish a data-derived checkpoint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-consolidate-euclidean-statistics-from-the-cc-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Consolidate Euclidean statistics from the CC pass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-switch-to-euclidean-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Switch to Euclidean refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Consequences
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow Consequences">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classify3d_refs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        classify3D_refs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refine3d_states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        refine3D_states
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refine3d_auto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        refine3D_auto
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#abinitio3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        abinitio3D
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Criteria
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation Criteria">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#static-and-policy-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static and policy validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coverage-and-artifact-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage and artifact validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scientific-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scientific validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-review-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved Review Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approved-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approved Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-is-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Is Needed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why This Is Needed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#external-references-are-not-initially-on-the-data-models-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External references are not initially on the data model's scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sigma-statistics-should-be-accumulated-during-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sigma statistics should be accumulated during pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#populated-orientations-are-not-evidence-of-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Populated orientations are not evidence of pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#early-subset-reconstruction-changes-the-question-for-later-particles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Early subset reconstruction changes the question for later particles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-simple-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented SIMPLE Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-provenance-is-the-application-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Provenance Is the Application Boundary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference Provenance Is the Application Boundary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trusted-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trusted-pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-reference-pose-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External-reference pose initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ambiguous-callers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ambiguous callers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pose-initialization-stage-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pose-Initialization Stage Contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pose-Initialization Stage Contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-validate-and-prepare-the-supplied-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Validate and prepare the supplied references
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-bootstrap-sigma2-from-particle-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Bootstrap sigma2 from particle images
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-run-one-capped-cohort-cc-pass-against-the-fixed-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Run one capped-cohort CC pass against the fixed references
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-establish-a-data-derived-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Establish a data-derived checkpoint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-consolidate-euclidean-statistics-from-the-cc-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Consolidate Euclidean statistics from the CC pass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-switch-to-euclidean-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Switch to Euclidean refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Consequences
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow Consequences">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classify3d_refs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        classify3D_refs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refine3d_states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        refine3D_states
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refine3d_auto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        refine3D_auto
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#abinitio3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        abinitio3D
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Criteria
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation Criteria">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#static-and-policy-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static and policy validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coverage-and-artifact-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage and artifact validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scientific-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scientific validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-review-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved Review Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="initialize-poses-against-external-references-before-euclidean-refinement">Initialize Poses Against External References Before Euclidean Refinement<a class="headerlink" href="#initialize-poses-against-external-references-before-euclidean-refinement" title="Permanent link">&para;</a></h1>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p>Implemented in the working tree, 2026-08-31, updated 2026-09-01 to add the
+particle-image sigma2 bootstrap before CC residual emission, and updated
+2026-09-02 to permit a caller-selected common pose-initialization bandwidth.
+The shared external-reference CC pose-initialization service and its three
+callers are present; compilation and runtime validation remain user-owned. This note is a focused companion to
+<code>refine3d_state_and_reference_workflow_refactor.md</code>. That document owns the
+application boundaries and approved names; this document owns only the policy
+for introducing reference volumes that may not share the particles' alignment
+history.</p>
+<h2 id="approved-decision">Approved Decision<a class="headerlink" href="#approved-decision" title="Permanent link">&para;</a></h2>
+<p>When reference volumes are independent of the particle alignment, SIMPLE does
+not begin with noise-normalized Euclidean matching. It first runs a
+reference-conditioned pose-initialization stage with cross-correlation as one pass
+over the existing capped pose initialization cohort of at most 100,000 particles:</p>
+<ol>
+<li>run the normal native-grid <code>calc_pspec</code> bootstrap from particle images and
+   propagate its global even/odd curves to every active partition record;</li>
+<li>normalize, validate, and low-pass filter every supplied reference to one
+   common caller-resolved limit; the shared default is 15 A, while
+   <code>classify3D_refs</code> supplies its parsed <code>lpstart</code> value;</li>
+<li>keep those references fixed;</li>
+<li>select the normal pose initialization cohort, capped at 100,000 particles, and
+   match that cohort competitively with <code>objfun=cc</code> in exactly one pass
+   (<code>volrec=no</code>, <code>trail_rec=no</code>, no fractional-update scheme);</li>
+<li>preserve bootstrap sigma2 outside the cohort and replace active matching
+   shells in cohort records with Euclidean residual contributions after each
+   hard pose/state assignment;</li>
+<li>reconstruct checkpoint state maps from the committed assignments and
+   consolidate the accumulated sigma statistics;</li>
+<li>switch to <code>objfun=euclid</code> and start the ordinary frequency-marched
+   refinement.</li>
+</ol>
+<p>The pose initialization invariant is defined over the selected cohort, not the full
+active population when more than 100,000 particles are available:</p>
+<pre><code class="language-text">one CC pose initialization pass  =&gt;  each particle in the capped cohort matched once
+                              against the fixed reference set
+</code></pre>
+<p>No fractional pose initialization schedule, pose initialization coverage counter, or
+missing-particle sweep is required. The 100,000-particle cap is the existing
+scientific sampling policy, not an update fraction to be completed over later
+passes. This is the SIMPLE analogue of RELION's first-iteration
+cross-correlation policy, adapted to SIMPLE's existing capped initial-mapping
+cohort.</p>
+<p>References from the same project lineage, accompanied by a trusted particle
+pose scaffold, may start directly with Euclidean refinement. The policy is
+therefore based on reference/pose provenance, not merely on whether <code>vol1</code> was
+supplied.</p>
+<h2 id="why-this-is-needed">Why This Is Needed<a class="headerlink" href="#why-this-is-needed" title="Permanent link">&para;</a></h2>
+<h3 id="external-references-are-not-initially-on-the-data-models-scale">External references are not initially on the data model's scale<a class="headerlink" href="#external-references-are-not-initially-on-the-data-models-scale" title="Permanent link">&para;</a></h3>
+<p>An independently produced map may differ from the particles' working model in
+normalization, amplitude scale, filtering, masking, and reconstruction
+convention. A Euclidean residual interprets those differences as evidence.
+Cross-correlation is the safer pose initialization objective because the initial task
+is to find pose and state correspondence before estimating meaningful residual
+noise statistics.</p>
+<p>RELION exposes the same distinction through <code>do_firstiter_cc</code>: its source
+describes the first iteration as using the signal cross-product instead of the
+Gaussian objective. Its refinement tutorial also treats first-iteration
+greyscale correction and initial low-pass filtering as explicit reference
+initialization concerns:</p>
+<ul>
+<li><a href="https://github.com/3dem/relion/blob/master/src/ml_optimiser.h">https://github.com/3dem/relion/blob/master/src/ml_optimiser.h</a></li>
+<li><a href="https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html">https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html</a></li>
+</ul>
+<h3 id="sigma-statistics-should-be-accumulated-during-pose-initialization">Sigma statistics should be accumulated during pose initialization<a class="headerlink" href="#sigma-statistics-should-be-accumulated-during-pose-initialization" title="Permanent link">&para;</a></h3>
+<p>The CC pass establishes each cohort particle's pose and state only as that
+particle is matched, so a separate fixed-pose sigma pass cannot assume that a
+complete trusted pose set existed before pose initialization. After each hard CC
+assignment, the matcher should therefore accumulate the corresponding
+Euclidean residual contribution during the same particle read. CC does not
+consume those sigmas; it only supplies the committed assignment at which the
+bootstrap residual is evaluated.</p>
+<p>The image-power bootstrap and the CC residual update serve different purposes.
+<code>calc_pspec</code> establishes finite native-grid sigma2 coverage for every active
+partition record before reference-conditioned assignments exist. Reference
+normalization and the common resolved low-pass limit then reduce the initial scale
+mismatch while the CC matcher replaces active matching shells in committed
+cohort records with pose-conditioned residuals. Bootstrap values remain in
+shells outside the active band. The grouped cohort result seeds the first
+Euclidean stage; the image bootstrap remains fallback partition state for
+particles outside the capped cohort.</p>
+<h3 id="populated-orientations-are-not-evidence-of-pose-initialization">Populated orientations are not evidence of pose initialization<a class="headerlink" href="#populated-orientations-are-not-evidence-of-pose-initialization" title="Permanent link">&para;</a></h3>
+<p>Base <code>refine3D</code> randomizes virgin orientations during initialization. After
+that operation, the orientation fields are structurally populated even though
+no particle has yet been compared with the input references. State labels may
+likewise be seeded before matching.</p>
+<p>In the single-pass design this concern is handled structurally: the wrapper
+owns the pose initialization stage and its capped cohort, so completion of that stage
+— not any inherited metadata — is the evidence that the cohort was initialized.
+Random Euler angles and random initial state labels are search seeds only.</p>
+<h3 id="early-subset-reconstruction-changes-the-question-for-later-particles">Early subset reconstruction changes the question for later particles<a class="headerlink" href="#early-subset-reconstruction-changes-the-question-for-later-particles" title="Permanent link">&para;</a></h3>
+<p>A fractional pose initialization could map a subset of particles and then replace the
+supplied references with reconstructions from that subset. Particles
+encountered later would no longer be classified against the same models as
+particles encountered early. The single capped pass with <code>volrec=no</code> and
+<code>trail_rec=no</code> removes this failure mode: the supplied references remain
+immutable for the entire pass, and the first data-derived reconstruction uses
+the complete assigned pose initialization cohort.</p>
+<h2 id="implemented-simple-behavior">Implemented SIMPLE Behavior<a class="headerlink" href="#implemented-simple-behavior" title="Permanent link">&para;</a></h2>
+<p>The working-tree implementation centralizes the policy:</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Implemented policy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Base <code>refine3D</code></td>
+<td>Remains mechanism-only and does not infer reference provenance.</td>
+</tr>
+<tr>
+<td><code>refine3D_auto</code> with <code>vol1</code></td>
+<td>Exposes <code>ref_pose_init=cc|none</code>; <code>none</code> warns prominently that the external map is trusted without CC initialization, while <code>cc</code> uses the shared 15 A default.</td>
+</tr>
+<tr>
+<td><code>refine3D_states</code></td>
+<td>Starts directly with Euclidean matching because its contract requires a same-lineage pose scaffold and references.</td>
+</tr>
+<tr>
+<td><code>classify3D_refs</code></td>
+<td>Requires a complete external reference set, always performs the shared CC pose-initialization stage, and supplies <code>lpstart</code> as its common initialization bandwidth.</td>
+</tr>
+<tr>
+<td><code>abinitio3D</code> with input volumes</td>
+<td>Dispatches the shared CC pose-initialization service at its 15 A default before entering its Euclidean stage ladder.</td>
+</tr>
+</tbody>
+</table>
+<p>Some startup and final reconstruction commands set <code>objfun=cc</code>. Those are
+reconstruction-policy settings and do not constitute CC particle-to-reference
+matching.</p>
+<p>Relevant current sources are:</p>
+<ul>
+<li><code>src/main/params/simple_parameters.f90</code> for the default objective;</li>
+<li><code>src/main/strategies/parallelization/simple_refine3D_strategy.f90</code> for
+  random orientation initialization and objective-dependent sigma setup;</li>
+<li><code>src/main/strategies/search/simple_strategy3D_matcher.f90</code> for the
+  matcher-side sigma guards and the existing fixed-pose <code>refine=sigma</code> mode;</li>
+<li><code>src/main/simple_external_reference_pose_initialization.f90</code> for the shared
+  fixed-reference service;</li>
+<li><code>src/main/commanders/simple/simple_commanders_refine3D.f90</code> for the
+  <code>refine3D_auto</code>, <code>refine3D_states</code>, and <code>classify3D_refs</code> callers;</li>
+<li><code>src/main/commanders/simple/simple_commanders_abinitio.f90</code> for the
+  <code>abinitio3D</code> input-volume route;</li>
+<li>the canonical state- and reference-workflow policy documents for wrapper
+  and coverage contracts.</li>
+</ul>
+<h2 id="reference-provenance-is-the-application-boundary">Reference Provenance Is the Application Boundary<a class="headerlink" href="#reference-provenance-is-the-application-boundary" title="Permanent link">&para;</a></h2>
+<h3 id="trusted-pose-initialization">Trusted-pose initialization<a class="headerlink" href="#trusted-pose-initialization" title="Permanent link">&para;</a></h3>
+<p>Use this path when:</p>
+<ul>
+<li>particle orientations are meaningful;</li>
+<li>the references and orientations come from the same reconstruction lineage;</li>
+<li>the next task is fixed-pose or bounded-local state refinement.</li>
+</ul>
+<p>The target <code>refine3D_states</code> workflow belongs here. It may start directly with
+<code>objfun=euclid</code> because the initial residuals are evaluated around an existing
+pose scaffold and compatible maps.</p>
+<p>Supplying a same-lineage volume through <code>vol1</code> does not turn the run into
+external-reference pose initialization.</p>
+<h3 id="external-reference-pose-initialization">External-reference pose initialization<a class="headerlink" href="#external-reference-pose-initialization" title="Permanent link">&para;</a></h3>
+<p>Use this path when:</p>
+<ul>
+<li>references may have been produced independently of the particles;</li>
+<li>existing particle poses were not established against those references;</li>
+<li>broad pose and state correspondence is part of the scientific task.</li>
+</ul>
+<p>The target <code>classify3D_refs</code> workflow belongs here. Its normal contract should
+always include the single capped-cohort CC pose initialization stage before Euclidean
+refinement.</p>
+<h3 id="ambiguous-callers">Ambiguous callers<a class="headerlink" href="#ambiguous-callers" title="Permanent link">&para;</a></h3>
+<p>Generic applications such as <code>refine3D_auto</code> should not infer provenance from
+the presence or absence of numeric orientation fields. <code>refine3D_auto</code> should
+expose the explicit <code>ref_pose_init=cc|none</code> policy. Untrusted external
+references remain valid inputs to that mode, but the command must emit a
+prominent log and metadata warning that their provenance is untrusted and
+that CC pose initialization is being used before Euclidean refinement. Base
+<code>refine3D</code> should not silently guess the policy; its caller has the scientific
+context needed to select the phase.</p>
+<h2 id="pose-initialization-stage-contract">Pose-Initialization Stage Contract<a class="headerlink" href="#pose-initialization-stage-contract" title="Permanent link">&para;</a></h2>
+<h3 id="1-validate-and-prepare-the-supplied-references">1. Validate and prepare the supplied references<a class="headerlink" href="#1-validate-and-prepare-the-supplied-references" title="Permanent link">&para;</a></h3>
+<p>Before matching:</p>
+<ul>
+<li>require a complete <code>vol1..volN</code> set;</li>
+<li>validate box size, sampling, symmetry, mask assumptions, handedness where it
+  can be checked, and state count;</li>
+<li>normalize references without using particle assignments that do not yet
+  exist;</li>
+<li>resolve one common low-pass limit from the caller override when present and
+  otherwise use the shared 15 A default;</li>
+<li>preserve immutable prepared copies for the complete pose initialization stage.</li>
+</ul>
+<p>Every state must be evaluated at the same effective bandwidth. Per-state
+frequency adaptation would bias competitive assignment and is out of scope.
+<code>classify3D_refs</code> supplies its parsed <code>lpstart</code> value (10 A by default), so its
+CC pass and first Euclidean frequency stage begin from the same configured
+bandwidth. <code>refine3D_auto</code> and <code>abinitio3D</code> omit the override and retain 15 A.</p>
+<h3 id="2-bootstrap-sigma2-from-particle-images">2. Bootstrap sigma2 from particle images<a class="headerlink" href="#2-bootstrap-sigma2-from-particle-images" title="Permanent link">&para;</a></h3>
+<p>Before CC matching, the wrapper runs the established <code>calc_pspec</code> service on
+the native particle grid with global even/odd estimation. Its capped random
+image sample produces two bootstrap curves that are propagated to every active
+record in <code>sigma2_noise_partN.dat</code>. This bootstrap is unconditional for a new
+external-reference transition, even when the caller's global stage number is
+greater than one.</p>
+<p>The image-power selection is independent of the capped pose-initialization
+cohort. Missing or incompatible partition files are fatal before CC residual
+emission.</p>
+<h3 id="3-run-one-capped-cohort-cc-pass-against-the-fixed-references">3. Run one capped-cohort CC pass against the fixed references<a class="headerlink" href="#3-run-one-capped-cohort-cc-pass-against-the-fixed-references" title="Permanent link">&para;</a></h3>
+<p>The wrapper launches a single <code>refine3D</code> iteration with:</p>
+<ul>
+<li><code>objfun=cc</code>;</li>
+<li>the existing pose initialization cohort selection, capped at 100,000 particles;</li>
+<li>no fractional-update schedule or follow-up coverage pass;</li>
+<li>broad angular, in-plane, and translational candidate preparation;</li>
+<li>all supplied states evaluated competitively;</li>
+<li>one hard pose and state assignment committed per particle;</li>
+<li><code>volrec=no</code> and <code>trail_rec=no</code>, so no partial or trailing reconstruction can
+  modify the supplied references;</li>
+<li>Euclidean residual sigma contributions accumulated after each committed CC
+  assignment, even though CC itself does not consume them.</li>
+</ul>
+<p>The CC matcher reads the existing image-bootstrap partition table, does not
+load grouped sigma for scoring, and overwrites only active matching shells in
+records with committed assignments. Particles outside the selected cohort, and
+inactive shells within cohort records, retain their image-bootstrap values.</p>
+<p>The ordinary matcher continues to own candidate scoring and pose/state
+updates. The wrapper owns the fixed-reference stage and the objective
+transition. Random Euler angles and random initial state labels may be used
+only as search seeds.</p>
+<p>For very large datasets, the added work is the normal image-power bootstrap
+sample of at most 25,000 particles on the native grid, followed by one CC pass
+over at most 100,000 particles at the resolved common bandwidth. The
+100,000-particle cap is final for pose initialization: the workflow must not
+reinterpret it as the first fraction of a multi-pass coverage scheme.</p>
+<h3 id="4-establish-a-data-derived-checkpoint">4. Establish a data-derived checkpoint<a class="headerlink" href="#4-establish-a-data-derived-checkpoint" title="Permanent link">&para;</a></h3>
+<p>After the capped pass:</p>
+<ul>
+<li>validate that every particle in the pose initialization cohort has a valid state and
+  pose;</li>
+<li>report state populations and reject empty states;</li>
+<li>reconstruct all state maps from the complete assigned pose initialization cohort;</li>
+<li>produce the normal even/odd, FSC, and reference artifacts;</li>
+<li>record the transition as a restartable phase boundary.</li>
+</ul>
+<p>This full reconstruction places the working references on SIMPLE's particle
+and reconstruction scale. It must not be a trailing blend with the independent
+input maps.</p>
+<h3 id="5-consolidate-euclidean-statistics-from-the-cc-pass">5. Consolidate Euclidean statistics from the CC pass<a class="headerlink" href="#5-consolidate-euclidean-statistics-from-the-cc-pass" title="Permanent link">&para;</a></h3>
+<p>The pose initialization matcher writes per-partition sigma contributions calculated
+at each particle's newly committed pose/state assignment. After matching:</p>
+<ul>
+<li>consolidate those contributions with the ordinary group-sigma service so
+  the sigma star required by the first Euclidean iteration is in place;</li>
+<li>use global residual statistics for this capped-cohort transition, because
+  the cohort is not required to cover every acquisition group;</li>
+<li>do not run a separate fixed-pose sigma pass;</li>
+<li>include only particles with committed pose-initialization updates in the
+  grouped residual model handed to the first Euclidean iteration.</li>
+</ul>
+<p>The underlying residual computation (<code>gen_sigma_contrib</code> in
+<code>simple_polarft_corr.f90</code>) is objective-agnostic. The required implementation
+work is to permit the CC pose initialization matcher to emit these Euclidean residual
+contributions without making CC depend on sigma values, preserve the
+image-bootstrap records for particles outside the cohort, then preserve
+iteration-number continuity so the first Euclidean iteration resolves the
+consolidated residual star.</p>
+<h3 id="6-switch-to-euclidean-refinement">6. Switch to Euclidean refinement<a class="headerlink" href="#6-switch-to-euclidean-refinement" title="Permanent link">&para;</a></h3>
+<ul>
+<li>reset iteration/update-epoch fields deliberately for the refinement phase
+  while preserving the initialized pose and state checkpoint;</li>
+<li>switch the effective matching objective to <code>objfun=euclid</code>;</li>
+<li>begin the shared frequency-marching plan;</li>
+<li>permit ordinary reconstruction, trailing updates, masking, and
+  postprocessing from this point onward.</li>
+</ul>
+<p>Because the CC pass has already emitted and consolidated sigma contributions,
+the first Euclidean stage takes the existing "reuse existing particle sigma
+files" initialization branch; it does not repeat the power-spectrum bootstrap.
+The CC-to-Euclidean transition is a wrapper-controlled stage boundary, not a
+hidden objective change inside the matcher.</p>
+<h2 id="workflow-consequences">Workflow Consequences<a class="headerlink" href="#workflow-consequences" title="Permanent link">&para;</a></h2>
+<h3 id="classify3d_refs"><code>classify3D_refs</code><a class="headerlink" href="#classify3d_refs" title="Permanent link">&para;</a></h3>
+<p>The single capped-cohort CC pose initialization is mandatory for the
+independent-reference workflow. There is no compatibility alias or opt-out in
+<code>classify3D_refs</code>.</p>
+<h3 id="refine3d_states"><code>refine3D_states</code><a class="headerlink" href="#refine3d_states" title="Permanent link">&para;</a></h3>
+<p>No pose initialization stage is required for valid same-lineage inputs with trusted
+orientations. If independently produced references are supplied, the input
+violates the workflow contract and should be rejected or redirected to
+<code>classify3D_refs</code>, not silently treated as same-lineage maps.</p>
+<h3 id="refine3d_auto"><code>refine3D_auto</code><a class="headerlink" href="#refine3d_auto" title="Permanent link">&para;</a></h3>
+<p><code>refine3D_auto</code> exposes <code>ref_pose_init=cc|none</code> for external-reference starts.
+Untrusted references are accepted rather than rejected, but the command makes
+their use conspicuous in logs. The warning identifies that the reference
+provenance is untrusted, that the reference may bias pose initialization, and
+that the run is entering CC pose initialization before Euclidean refinement.</p>
+<h3 id="abinitio3d"><code>abinitio3D</code><a class="headerlink" href="#abinitio3d" title="Permanent link">&para;</a></h3>
+<p><code>abinitio3D</code> continues to accept input volumes, and that route dispatches the
+same shared pose-initialization service rather than owning another implementation.</p>
+<h2 id="implementation-ownership">Implementation Ownership<a class="headerlink" href="#implementation-ownership" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Select trusted versus pose initialization policy</td>
+<td>Public workflow commander</td>
+</tr>
+<tr>
+<td>Validate and prepare external references</td>
+<td>Independent-reference wrapper using existing volume helpers</td>
+</tr>
+<tr>
+<td>Select the capped cohort, force the single pose initialization pass, and own the stage boundary</td>
+<td>Independent-reference wrapper/refinement strategy</td>
+</tr>
+<tr>
+<td>Generate candidates and score with CC</td>
+<td>Base search and matcher layers</td>
+</tr>
+<tr>
+<td>Keep pose initialization references immutable</td>
+<td>Wrapper command construction and artifact policy (<code>volrec=no</code>, <code>trail_rec=no</code>)</td>
+</tr>
+<tr>
+<td>Bootstrap native-grid sigma2 for every active partition record</td>
+<td>Existing <code>calc_pspec</code> service invoked by the wrapper</td>
+</tr>
+<tr>
+<td>Accumulate Euclidean residual sigma contributions after each CC assignment</td>
+<td>Matcher residual path during the pose initialization read</td>
+</tr>
+<tr>
+<td>Preserve bootstrap sigma2 outside the capped CC cohort</td>
+<td>Matcher sigma preparation and partition-file update path</td>
+</tr>
+<tr>
+<td>Reconstruct the pose initialization-cohort checkpoint</td>
+<td>Existing reconstruction and assembly commands</td>
+</tr>
+<tr>
+<td>Consolidate group sigmas</td>
+<td>Existing <code>calc_group_sigmas</code> service</td>
+</tr>
+<tr>
+<td>Run subsequent frequency-marched refinement</td>
+<td>Base <code>refine3D</code> under the owning wrapper</td>
+</tr>
+</tbody>
+</table>
+<p>No new matching formula, fractional scheme, or pose initialization coverage
+bookkeeping is proposed. The change is orchestration and state preservation:
+bootstrap sigma2 from particle images, choose the existing CC objective for one
+capped-cohort pass against fixed references at one resolved common bandwidth,
+replace only active cohort shells with residual contributions after assignment,
+reconstruct, consolidate, and switch to existing Euclidean refinement.</p>
+<h2 id="failure-policy">Failure Policy<a class="headerlink" href="#failure-policy" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Do not honor caller-supplied fractional-update settings inside pose initialization;
+  select at most the existing 100,000-particle cohort and process it once.</li>
+<li>Do not replace or blend the fixed external references at any point during
+  the pose initialization pass.</li>
+<li>Do not enter CC residual emission without complete image-bootstrap partition
+  files, and do not erase bootstrap records outside the capped cohort.</li>
+<li>Write sigma contributions during the CC pass only after a hard assignment;
+  do not make CC consume them or run a second fixed-pose sigma pass.</li>
+<li>Do not continue into Euclidean refinement without the checkpoint
+  reconstruction and consolidated sigma statistics in place.</li>
+<li>Do not allow empty states at the transition without an explicit state
+  recovery policy.</li>
+<li>Do not carry an external input map into trailing reconstruction as if it
+  were a full-data accumulator.</li>
+<li>Preserve the prepared input references and the pose initialization checkpoint for
+  diagnosis and restart. The restartable boundary is: checkpoint volumes plus
+  the consolidated sigma star produced from the CC-pass contributions.</li>
+</ul>
+<h2 id="validation-criteria">Validation Criteria<a class="headerlink" href="#validation-criteria" title="Permanent link">&para;</a></h2>
+<h3 id="static-and-policy-validation">Static and policy validation<a class="headerlink" href="#static-and-policy-validation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Every caller selects trusted-pose or external-reference pose initialization behavior
+  explicitly.</li>
+<li>The pose initialization command line has <code>objfun=cc</code>, <code>volrec=no</code>, and
+  <code>trail_rec=no</code>; the selected cohort is capped at 100,000 and is not advanced
+  through fractional passes.</li>
+<li>Every external state in one transition is prepared at the same resolved
+  low-pass limit; the default is 15 A and a supplied override applies uniformly
+  to every state.</li>
+<li><code>classify3D_refs</code> supplies its parsed <code>lpstart</code> as that override, while
+  <code>refine3D_auto</code> and <code>abinitio3D</code> exercise the 15 A fallback.</li>
+<li><code>calc_pspec</code> runs exactly once before CC and establishes finite native-grid
+  sigma2 coverage for every active partition record.</li>
+<li>Sigma contributions are generated during pose initialization only after assignment,
+  consolidated once, and read by the first Euclidean iteration through the
+  existing reuse branch.</li>
+<li><code>refine3D_auto</code> exposes pose initialization and emits the required warning for
+  untrusted external references.</li>
+<li><code>abinitio3D</code> input volumes dispatch the shared pose initialization implementation.</li>
+<li>Shared-memory and distributed execution implement the same scientific
+  contract.</li>
+<li>Removed command names have no compatibility route.</li>
+</ul>
+<h3 id="coverage-and-artifact-validation">Coverage and artifact validation<a class="headerlink" href="#coverage-and-artifact-validation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The pose initialization iteration processes every selected cohort particle exactly
+  once and never selects more than 100,000 particles.</li>
+<li>The hashes of prepared external references remain unchanged throughout the
+  pose initialization pass.</li>
+<li>No partial or trailing reconstruction replaces the references before the
+  checkpoint.</li>
+<li>The checkpoint reconstruction uses the complete initialized cohort and produces
+  valid per-state even/odd maps and FSC metadata.</li>
+<li>Sigma accumulation does not modify the initialized pose or state assignment.</li>
+<li>Particles outside the capped CC cohort retain their image-bootstrap partition
+  records until a later reference-conditioned update.</li>
+<li>Restart before the pose initialization pass and at the checkpoint preserves phase,
+  fixed references, assignments, and consolidated sigmas without falsely
+  advancing the objective.</li>
+</ul>
+<h3 id="scientific-validation">Scientific validation<a class="headerlink" href="#scientific-validation" title="Permanent link">&para;</a></h3>
+<p>Compare legacy Euclidean initialization with CC pose initialization using:</p>
+<ul>
+<li>same-lineage references and known good poses, where the new path should not
+  be needed;</li>
+<li>independent references rescaled by different multiplicative amplitudes;</li>
+<li>references with different low-pass and masking histories;</li>
+<li>virgin and deliberately perturbed orientations;</li>
+<li>balanced and strongly unequal state populations.</li>
+</ul>
+<p>Measure orientation recovery, state-assignment accuracy or consistency, state
+collapse, sensitivity to reference scaling, initialized map quality, and the
+stability of the first Euclidean stages. Additionally compare the combined
+image-bootstrap plus CC-residual lifecycle against the former CC-residual-only
+transition on the first Euclidean stages.</p>
+<p>Compilation and runtime tests are intentionally deferred to user-side
+validation in accordance with repository policy. Linux and BOX results must
+not be claimed unless their output is observed.</p>
+<h2 id="resolved-review-decisions">Resolved Review Decisions<a class="headerlink" href="#resolved-review-decisions" title="Permanent link">&para;</a></h2>
+<p>Cyril approved and refined the pose initialization contract on 2026-08-31,
+updated its sigma lifecycle on 2026-09-01, and approved caller-selected common
+bandwidth for <code>classify3D_refs</code> on 2026-09-02:</p>
+<ol>
+<li><code>classify3D_refs</code> always initializes poses with CC when references and
+   particles have independent provenance.</li>
+<li>Pose initialization uses the existing cohort cap of 100,000 particles, processes
+   that cohort once, and does not use a fractional scheme.</li>
+<li>Exactly one CC pass is performed before checkpoint reconstruction.</li>
+<li>Before CC, <code>calc_pspec</code> bootstraps sigma2 from particle images and propagates
+   global even/odd curves to every active partition record.</li>
+<li>Euclidean residual sigma contributions are accumulated during the CC pass
+   after each pose/state assignment; active cohort shells replace their
+   bootstrap values, non-cohort records and inactive shells preserve them, and
+   there is no separate fixed-pose pass.</li>
+<li><code>refine3D_auto</code> exposes <code>ref_pose_init=cc|none</code>. Untrusted external references are
+   accepted, with a prominent warning in logs.</li>
+<li><code>abinitio3D</code> continues to accept input volumes and dispatches the same
+   shared pose initialization implementation.</li>
+<li>Every external state in one transition uses the same resolved low-pass;
+   <code>classify3D_refs</code> supplies <code>lpstart</code>, while callers without an override use
+   the shared 15 A default.</li>
+</ol>
+<h2 id="completion-criteria">Completion Criteria<a class="headerlink" href="#completion-criteria" title="Permanent link">&para;</a></h2>
+<p>The design is complete when:</p>
+<ul>
+<li>external-reference and trusted-pose initialization are distinct public
+  contracts;</li>
+<li>independent-reference matching uses one fixed-reference CC pass over the
+  capped pose initialization cohort of at most 100,000 particles;</li>
+<li>all external states in one transition use the same resolved pose-initialization
+  limit, with correct <code>lpstart</code> override and 15 A fallback behavior;</li>
+<li>native-grid image-power sigma2 covers every active partition record before
+  the CC pass;</li>
+<li>the first data-derived reference is reconstructed from the complete assigned
+  pose initialization cohort;</li>
+<li>Euclidean residual sigma contributions are accumulated during the CC pass
+  while non-cohort bootstrap records are preserved, and the cohort residuals
+  are consolidated before the first Euclidean iteration;</li>
+<li><code>refine3D_auto</code> exposes <code>ref_pose_init=cc|none</code> with prominent untrusted-reference
+  warnings, and <code>abinitio3D</code> input volumes reuse the same implementation;</li>
+<li>the objective transition is restartable and visible in logs and metadata;</li>
+<li>user-side scientific validation demonstrates improved robustness without
+  degrading trusted same-lineage refinement.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

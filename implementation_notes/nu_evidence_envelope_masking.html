@@ -1,0 +1,5416 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/nu_evidence_envelope_masking.html">
+      
+      
+        <link rel="prev" href="flex_dominant_basin_bayesian_refinement.html">
+      
+      
+        <link rel="next" href="nu_evidence_local_sharpening.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>NU-Evidence Envelope Masking - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#nu-evidence-envelope-masking" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              NU-Evidence Envelope Masking
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-mask-ownership-one-envelope-per-consumer-not-one-artifact-for-all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Mask ownership: one envelope per consumer, not one artifact for all
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Mask ownership: one envelope per consumer, not one artifact for all">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-why-not-the-fsc-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Why not the FSC path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-why-not-the-nu-support-mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Why not the NU support mask
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-why-the-matching-reference-is-the-right-consumer-and-its-one-trap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Why the matching reference is the right consumer, and its one trap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-required-changes-to-the-routine-before-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Required changes to the routine before integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Required changes to the routine before integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-symmetric-evidence-smoothing-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Symmetric evidence smoothing (done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-collar-based-null-estimation-deferred-with-spherical-only-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Collar-based null estimation (deferred with spherical-only support)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-nu_refine-interaction-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 nu_refine interaction (done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-workflow-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Workflow integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Workflow integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-artifact-and-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Artifact and lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-consumer-plumbing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Consumer plumbing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-hard-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Hard constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-implementation-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Implementation phases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-parameter-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Parameter optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Parameter optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-public-parameter-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Public parameter set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-structure-of-the-two-dimensional-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Structure of the two-dimensional space
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-sweep-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Sweep efficiency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-objective-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Objective functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-do-not-tune-on-the-reported-fsc-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.5 Do not tune on the reported FSC resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#66-prefer-a-plateau-over-a-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.6 Prefer a plateau over a peak
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#67-a-likely-outcome-worth-planning-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.7 A likely outcome worth planning for
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-test-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Test set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-what-to-record-per-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. What to record per run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-current-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Current state
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_nonuniform_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code review: PCG reconstruction with nonuniform regularization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_priors.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG priors: experiment record and the NU-evidence prior design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pfcrt_audit_a6ae317ae_vs_head.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PfCRT audit: what changed between a6ae317ae and HEAD (2026-09-02)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_30" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_30" id="__nav_10_30_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_30_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_30">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-mask-ownership-one-envelope-per-consumer-not-one-artifact-for-all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Mask ownership: one envelope per consumer, not one artifact for all
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Mask ownership: one envelope per consumer, not one artifact for all">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-why-not-the-fsc-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Why not the FSC path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-why-not-the-nu-support-mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Why not the NU support mask
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-why-the-matching-reference-is-the-right-consumer-and-its-one-trap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Why the matching reference is the right consumer, and its one trap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-required-changes-to-the-routine-before-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Required changes to the routine before integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Required changes to the routine before integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-symmetric-evidence-smoothing-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Symmetric evidence smoothing (done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-collar-based-null-estimation-deferred-with-spherical-only-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Collar-based null estimation (deferred with spherical-only support)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-nu_refine-interaction-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 nu_refine interaction (done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-workflow-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Workflow integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Workflow integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-artifact-and-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Artifact and lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-consumer-plumbing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Consumer plumbing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-hard-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Hard constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-implementation-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Implementation phases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-parameter-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Parameter optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Parameter optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-public-parameter-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Public parameter set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-structure-of-the-two-dimensional-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Structure of the two-dimensional space
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-sweep-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Sweep efficiency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-objective-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Objective functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-do-not-tune-on-the-reported-fsc-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.5 Do not tune on the reported FSC resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#66-prefer-a-plateau-over-a-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.6 Prefer a plateau over a peak
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#67-a-likely-outcome-worth-planning-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.7 A likely outcome worth planning for
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-test-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Test set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-what-to-record-per-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. What to record per run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-current-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Current state
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="nu-evidence-envelope-masking">NU-Evidence Envelope Masking<a class="headerlink" href="#nu-evidence-envelope-masking" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>SUPERSEDED (2026-09-02).</strong> The reference-masking decision below is
+retired: matching references are NEVER multiplied with an envelope
+(evidence or density) before reprojection — hard-removing density present
+in the particle images destroys pose discrimination (PfCRT collapse,
+<code>pcg_priors.md</code> item 8). Under <code>automsk=yes</code> the evidence envelope now
+defines the NU filter-field BACKGROUND (heavy background low-pass,
+cisTEM-style), and on the PCG backend that field enters reconstruction
+only through the <code>Q_NU</code> precision prior. The <code>envfsc=yes</code> density-mask FSC
+path described as unfinished here is live. See
+<code>doc/policies/automasking_policy.md</code>,
+<code>doc/policies/nonuniform_filtering_policy.md</code>, and
+<code>doc/implementation_notes/pcg_nonuniform_code_review.md</code> for the current
+contract; the remainder of this note is retained as a historical record.</p>
+<p>Implementation note. The standalone routine is reachable through
+<code>simple_exec prg=nu_filt3D nu_envmsk=yes</code>. The workflow integration described
+in section 4 is implemented in <code>volassemble</code> and matching-reference
+preparation after real-volume validation by Cyril and Hans.</p>
+<p><strong>Support decision:</strong> NU filtering now uses only spherical <code>mskdiam</code> support.
+<code>setup_nu_dmats</code> constructs the sphere internally, so density-derived and
+NU-evidence envelopes cannot enter the normalized Huber objective domain.
+Dilated-envelope support and collar-based null estimation are deferred unless
+the spherical memory cost proves prohibitive in representative runs.</p>
+<p><strong>Reference-masking decision:</strong> the standalone <code>envref</code> control has been
+removed. Matching references are solvent-flattened with the current
+NU-evidence envelope whenever <code>automsk /= no</code>; there is no separate opt-in.
+In refinement workflows <code>automsk=yes|tight</code> is valid only while
+<code>filt_mode=nonuniform|nonuniform_lpset</code>; other filtering modes must use
+<code>automsk=no</code>.
+The lag-by-one envelope is regenerated freely each cycle and is allowed to
+<strong>shrink</strong> as resolution improves. The former monotonic recovery guard and the
+<code>pct_signal &gt; 50%</code> regeneration failsafe have both been removed as too
+conservative.</p>
+<p><strong><code>envfsc</code> is an unfinished branch.</strong> <code>envfsc=yes</code> is not currently supported:
+the density automask that used to feed it is no longer generated in the loop,
+and the NU-evidence envelope must never reach the FSC (section 2.1). The route
+needs a simple, fast density-based mask generated on the fly before it can be
+re-enabled. Until then <code>envfsc=yes</code> exits with a hard error; it never consumes
+a pre-existing mask or silently degrades to the broad-sphere FSC.</p>
+<p><strong>Validation snapshot:</strong> the focused NU test executables build and link. On
+the current synthetic fixture, spherical support contains 44,473 voxels and
+the default absolute margin gives recall 1.000 with solvent false-positive
+rate 0.054. The scale-free cost-improvement ratio gives recall 0.952 with
+solvent false-positive rate 0.008 on the same fixture.</p>
+</blockquote>
+<p>The implemented standalone algorithm is described in
+<a href="../algorithms/nu_evidence_envelope_mask.html"><code>NU-Evidence Envelope Mask in nu_filt3D</code></a>.</p>
+<h2 id="1-summary">1. Summary<a class="headerlink" href="#1-summary" title="Permanent link">&para;</a></h2>
+<p>The nonuniform filter's unary objective is a per-voxel cross-half prediction
+error. In solvent the half maps are uncorrelated at every bandwidth, so no
+candidate should beat the coarsest one systematically; finite noise and taking
+the minimum over several candidates still produce positive voxelwise margins.
+Inside ordered density the objective can have a real minimum at the local SNR
+crossover. The per-voxel improvement over the coarsest baseline is therefore an
+empirical measure of local orderedness, and it is what this routine segments on:</p>
+<pre><code>margin(v) = cost(v, coarsest) - min over candidates of cost(v, c)
+</code></pre>
+<p>Two properties observed on a detergent-solubilised membrane protein:</p>
+<ul>
+<li>the detergent belt is <strong>excluded cleanly</strong>, because it is real density with no
+  cross-half consistency at any bandwidth;</li>
+<li>with symmetric smoothing (section 3) the boundary tracks the protein envelope
+  closely without any density term.</li>
+</ul>
+<p>That combination is what makes the mask interesting: it discriminates <em>ordered</em>
+density from <em>disordered</em> density, which an amplitude threshold cannot do.</p>
+<p>The margin is a best-of-bank statistic. Its solvent distribution depends on
+candidate count, candidate correlation, objective smoothing, and any accepted
+high-resolution extension. The null must therefore be validated for the exact
+bank used to generate an envelope; it is not a universal zero-centered law.</p>
+<p>It is also what makes it dangerous in the wrong consumer. Section 2 is the
+central policy claim of this note.</p>
+<h2 id="2-mask-ownership-one-envelope-per-consumer-not-one-artifact-for-all">2. Mask ownership: one envelope per consumer, not one artifact for all<a class="headerlink" href="#2-mask-ownership-one-envelope-per-consumer-not-one-artifact-for-all" title="Permanent link">&para;</a></h2>
+<p>Before the spherical-support refactor, <code>automask3D_stateNN.mrc</code> was a single
+artifact serving NU support, <code>envfsc</code>, and reference masking. The first role has
+now been removed. That separation should be preserved for the NU-evidence
+envelope:</p>
+<table>
+<thead>
+<tr>
+<th>Consumer</th>
+<th>Mask source</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NU support mask</td>
+<td>spherical <code>mskdiam</code></td>
+<td>needs solvent inside it to estimate the noise scale and evidence null</td>
+</tr>
+<tr>
+<td>Matching reference before reprojection</td>
+<td><strong>NU-evidence envelope</strong>, applied whenever <code>automsk /= no</code></td>
+<td>highest-value use; belt removal is pure gain for alignment</td>
+</tr>
+<tr>
+<td>FSC solvent correction (<code>envfsc</code>)</td>
+<td><strong>unfinished branch; hard error</strong> until a fast density mask can be generated on the fly</td>
+<td>resolution-derived is circular; NU envelope must not enter FSC</td>
+</tr>
+<tr>
+<td>Derived map for display or deposition support</td>
+<td>NU-evidence envelope</td>
+<td>preserve unmasked base/half maps as primary artifacts</td>
+</tr>
+</tbody>
+</table>
+<p>Reference masking is no longer gated by a separate <code>envref</code> control; that
+command-line and library variable has been removed. Whenever automasking is
+enabled (<code>automsk = yes|tight</code>), the matcher solvent-flattens each reference with
+the lagged NU-evidence envelope, falling back to the sphere only until the first
+envelope exists.</p>
+<h3 id="21-why-not-the-fsc-path">2.1 Why not the FSC path<a class="headerlink" href="#21-why-not-the-fsc-path" title="Permanent link">&para;</a></h3>
+<p>Any tight mask inflates FSC by removing uncorrelated solvent, and phase
+randomization exists to correct for exactly that. The correction assumes the
+mask was chosen <strong>independently of the half-map correlation structure</strong>.</p>
+<p>A NU-evidence mask violates that assumption by construction: it is selected to
+contain the voxels where the half maps agree at high frequency. Randomizing the
+phases destroys the very correlation the selection was based on, so the
+randomized-masked curve cannot reproduce the selection bias and the correction
+systematically under-corrects. The result is resolution inflation that appears
+to be properly solvent-corrected.</p>
+<p>A density-derived mask is selected on the local mean rather than on cross-half
+agreement. Density and resolution do correlate, so it is not perfectly
+independent, but it is far less circular and it is the regime phase
+randomization was designed for.</p>
+<p>The density <code>automask3D</code> routine remains available for standalone and legacy
+consumers, but it is no longer generated in the refinement loop. <code>envfsc=yes</code> is
+therefore an <strong>unfinished branch</strong> that exits with a hard error. Re-enabling it
+properly requires a small, fast density-based masker selected on local mean and
+generated on the fly from the current map rather than loaded from persistent
+state. The two masks answer different questions.</p>
+<h3 id="22-why-not-the-nu-support-mask">2.2 Why not the NU support mask<a class="headerlink" href="#22-why-not-the-nu-support-mask" title="Permanent link">&para;</a></h3>
+<p>Two reasons, one statistical and one practical.</p>
+<p>Statistical: the null is estimated from the support itself. If the support is
+the tight envelope, there is no solvent left to estimate it from, and the
+envelope erodes monotonically across iterations while looking plausible at every
+step.</p>
+<p>Practical: <code>dmats_mask</code> is <code>(n_nu_mask, n_candidates)</code> and support size is the
+dominant memory term. Using the envelope as NU support was a deliberate memory
+decision in the former policy. A full <code>mskdiam</code> sphere is not free — on a 300^3
+box an envelope might be ~3M voxels against ~12M for the sphere, roughly 300 MB
+against 1.2 GB at the 24-candidate cap, plus full-grid temporaries.</p>
+<p>The initial implementation accepts this memory cost and uses only spherical
+support. This is the conservative choice for the current normalized Huber
+objective and whole-support evidence-null estimator. A dilated previous
+envelope remains a possible future memory optimization, but only together with
+the null change in section 3.2 and explicit shrinkage guards.</p>
+<h3 id="23-why-the-matching-reference-is-the-right-consumer-and-its-one-trap">2.3 Why the matching reference is the right consumer, and its one trap<a class="headerlink" href="#23-why-the-matching-reference-is-the-right-consumer-and-its-one-trap" title="Permanent link">&para;</a></h3>
+<p>Solvent-flattening the reference is where a good envelope pays off most: the
+detergent belt is noise for alignment, and removing it improves the signal in
+every reprojection.</p>
+<p>The trap is that reference masking makes the mask self-fulfilling. Anything
+zeroed in the reference produces no signal in the reprojections, so particles
+never align that region and it never improves — whether or not it was real. For
+the belt that is the desired outcome. For a flexible domain that fell below
+threshold on one iteration it is a trap that could close permanently.</p>
+<p>The mitigation is not a shrink guard but the opposite: the envelope is
+regenerated from scratch each cycle and is <strong>free to shrink or grow</strong> as the
+evidence changes. Spherical NU support keeps every omitted region observable to
+the evidence calculation, so a domain that recovers reproducible signal at higher
+resolution re-enters the envelope on the next regeneration. A monotonic
+grow-only guard was tried and rejected: it froze early, possibly loose, envelopes
+and defeated the resolution-driven tightening this feature exists to provide.</p>
+<h2 id="3-required-changes-to-the-routine-before-integration">3. Required changes to the routine before integration<a class="headerlink" href="#3-required-changes-to-the-routine-before-integration" title="Permanent link">&para;</a></h2>
+<h3 id="31-symmetric-evidence-smoothing-done">3.1 Symmetric evidence smoothing (done)<a class="headerlink" href="#31-symmetric-evidence-smoothing-done" title="Permanent link">&para;</a></h3>
+<p><code>dmats_mask</code> is smoothed at candidate-dependent radii, <code>min(1.5 x LP, 30 A)</code>:
+30 A for the 20 A baseline against 6 A for the 4 A member. That is correct for
+label selection and wrong for locating a boundary — it blurred the baseline five
+times harder than its competitors and eroded the envelope inward on a 30 A
+scale, removing any domain thinner than ~60 A entirely.</p>
+<p>Fixed by caching the raw coarsest cost and running per-voxel minimum in
+<code>setup_nu_dmats</code> before <code>smooth_nu_objective</code>, then smoothing the <em>difference</em>
+once at a scale set by <code>amsklp</code>. Smoothing the difference is equivalent to
+smoothing both terms with the same kernel. The filter's own label selection is
+untouched.</p>
+<h3 id="32-collar-based-null-estimation-deferred-with-spherical-only-support">3.2 Collar-based null estimation (deferred with spherical-only support)<a class="headerlink" href="#32-collar-based-null-estimation-deferred-with-spherical-only-support" title="Permanent link">&para;</a></h3>
+<p>The current null is the median and MAD over the whole support, which assumes
+solvent is the <strong>majority</strong>. True for a generous sphere, false for a dilated
+envelope where the molecule may be 60-80% of the voxels. The routine warns above
+50% but cannot correct for it.</p>
+<p>Proposed: estimate the null from the <strong>collar</strong> — voxels inside the dilated
+support but outside the previous envelope. That region is solvent by
+construction, since it is precisely what the previous iteration rejected, and it
+removes the majority assumption entirely.</p>
+<p>Failure mode to guard: if one iteration's envelope comes out too tight, the
+collar contains real density, the null inflates, the threshold rises, and the
+next envelope is tighter still. Guards:</p>
+<ul>
+<li>generous dilation (15-20 A), so the collar stays mostly true solvent even when
+  the envelope is somewhat wrong;</li>
+<li>a low quantile within the collar rather than the median;</li>
+<li>a floor on how much the envelope may shrink per iteration.</li>
+</ul>
+<p>This work is not required while NU support remains exclusively spherical. If
+dilated support is reconsidered, bootstrap from the sphere at <code>startit</code>; do not
+use a tight density automask as a substitute for a solvent-containing collar.
+With spherical NU support the envelope is regenerated from scratch each cycle and
+may shrink freely, so no temporal guard is needed on the reference-masking path.</p>
+<h3 id="33-nu_refine-interaction-done">3.3 <code>nu_refine</code> interaction (done)<a class="headerlink" href="#33-nu_refine-interaction-done" title="Permanent link">&para;</a></h3>
+<p>Raw evidence is accumulated over the static bank inside <code>setup_nu_dmats</code>.
+<code>extend_nu_filter_highres_shell_next</code> snapshots each challenger's raw,
+unsmoothed objective and commits it to the evidence minimum only after the shell
+is accepted. The refinement envelope therefore describes the completed accepted
+bank.</p>
+<h2 id="4-workflow-integration">4. Workflow integration<a class="headerlink" href="#4-workflow-integration" title="Permanent link">&para;</a></h2>
+<h3 id="41-artifact-and-lifecycle">4.1 Artifact and lifecycle<a class="headerlink" href="#41-artifact-and-lifecycle" title="Permanent link">&para;</a></h3>
+<p>Introduce a second per-state artifact rather than overloading the existing one:</p>
+<ul>
+<li><code>automask3D_stateNN.mrc</code> — legacy density-derived artifact, no longer
+  generated or consumed by the FSC path in the refinement loop</li>
+<li><code>nu_envmask3D_stateNN.mrc</code> — new, NU-evidence envelope, consumed by
+  reference masking (whenever <code>automsk /= no</code>) and final-map masking</li>
+</ul>
+<p>Lifecycle is <strong>lag-by-one</strong>: iteration <em>N</em>'s evidence writes the envelope used by
+iteration <em>N+1</em>, mirroring how <code>nu_highres_depth_stateNN.txt</code> already persists
+across iterations. This needs no reordering of the assembly sequence and no
+second NU pass. The envelope must be derived before <code>nu_filter_vols</code>, which
+calls <code>release_nu_filter_unary_storage</code> and frees <code>dmats_mask</code>.</p>
+<p>The envelope is regenerated on the ordinary automask cadence and simply
+overwrites the per-state file each time. There is no monotonic recovery guard and
+no <code>pct_signal &gt; 50%</code> failsafe: the envelope is allowed to shrink as resolution
+improves. The over-occupancy condition is still reported in the stats block as a
+diagnostic, but it no longer suppresses regeneration.</p>
+<h3 id="42-consumer-plumbing">4.2 Consumer plumbing<a class="headerlink" href="#42-consumer-plumbing" title="Permanent link">&para;</a></h3>
+<p><code>prepare_matching_reference_mask</code> in
+<code>src/main/strategies/search/simple_matcher_refvol_utils.f90:349</code> reads a
+per-state mask, checks it against <code>box_crop</code>/<code>smpd_crop</code>, and falls back to a
+spherical mask when missing or incompatible. It runs whenever <code>automsk /= no</code>
+(which requires an active NU filtering mode; there is no separate <code>envref</code>
+control) and follows the fallback chain
+<code>nu_envmask3D -&gt; automask3D -&gt; sphere</code>, which also provides the bootstrap at
+<code>startit</code>.</p>
+<h3 id="43-hard-constraints">4.3 Hard constraints<a class="headerlink" href="#43-hard-constraints" title="Permanent link">&para;</a></h3>
+<ul>
+<li>the NU-evidence envelope must never reach <code>envfsc</code> (section 2.1);</li>
+<li>the NU support must remain the spherical <code>mskdiam</code> support (section 2.2);</li>
+<li>the envelope must be free to shrink as resolution improves; no monotonic
+  grow-only guard (section 2.3).</li>
+</ul>
+<h2 id="5-implementation-phases">5. Implementation phases<a class="headerlink" href="#5-implementation-phases" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[x] Phase 0a: make spherical <code>mskdiam</code> support an invariant of the NU setup API.</li>
+<li>[x] Phase 0b: align public policy and repository skills with spherical-only support.</li>
+<li>[x] Phase 0c: validate the standalone routine across representative volumes
+      and fix the public defaults from the parameter study (section 6).</li>
+<li>[x] Phase 1: allow free shrink/grow regeneration; no recovery guard, no
+      <code>pct_signal</code> failsafe (section 2.3, 4.1).</li>
+<li>[ ] Deferred: collar-based null estimation (3.2), only if a future memory
+      optimization reintroduces dilated support.</li>
+<li>[x] Phase 2: feed accepted <code>nu_refine</code> extension shells into the raw evidence
+      baseline (3.3).</li>
+<li>[x] Phase 3: <code>volassemble</code> writes <code>nu_envmask3D_stateNN.mrc</code> under lag-by-one;
+      <code>simple_vol_pproc_policy</code> gains the second artifact in its plan type.</li>
+<li>[x] Phase 4: reference masking (any <code>automsk /= no</code>) reads the new artifact
+      via <code>prepare_matching_reference_mask</code> with the three-step fallback chain;
+      the <code>envref</code> control is removed.</li>
+<li>[x] Phase 5: after workflow validation, promote the NU-evidence artifact and
+      consumer lifecycle to <code>doc/policies/automasking_policy.md</code> and
+      <code>doc/policies/nonuniform_filtering_policy.md</code>.</li>
+<li>[ ] Deferred: <code>envfsc=yes</code> needs a simple, fast density-based masker generated
+      on the fly before it can be re-enabled (section 2.1); until then it throws.</li>
+</ul>
+<h2 id="6-parameter-optimization">6. Parameter optimization<a class="headerlink" href="#6-parameter-optimization" title="Permanent link">&para;</a></h2>
+<h3 id="61-public-parameter-set">6.1 Public parameter set<a class="headerlink" href="#61-public-parameter-set" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nu_msk_sig</code></td>
+<td>3.0</td>
+<td>threshold, in null MADs above the null median</td>
+</tr>
+<tr>
+<td><code>amsklp</code></td>
+<td>8 A</td>
+<td>physical envelope scale; margin smoothing radius is <code>min(1.5 x amsklp, 30 A)</code></td>
+</tr>
+</tbody>
+</table>
+<p>These are the only two public envelope-shape controls. <code>nu_envmsk</code> remains the
+feature toggle and <code>mskdiam</code> remains the mandatory spherical support diameter;
+neither is an envelope tuning constant.</p>
+<p>The secondary choices are fixed production policy:</p>
+<table>
+<thead>
+<tr>
+<th>Constant</th>
+<th style="text-align: right;">Value</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>scale-free evidence</td>
+<td style="text-align: right;">no</td>
+<td>A baseline-to-best ratio can prevent weak but well-ordered density from being outvoted by a high-contrast core; production retains the absolute Huber-cost margin</td>
+</tr>
+<tr>
+<td>density weight</td>
+<td style="text-align: right;">0.0</td>
+<td>A positive local-density weight retains strong but poorly ordered density; zero keeps segmentation evidence-only</td>
+</tr>
+<tr>
+<td>MRF beta</td>
+<td style="text-align: right;">1.0</td>
+<td>Binary MRF boundary smoothness; higher values produce smoother boundaries</td>
+</tr>
+<tr>
+<td>minimum component fraction</td>
+<td style="text-align: right;">0.1</td>
+<td>Smallest connected component kept, expressed as a fraction of the largest</td>
+</tr>
+<tr>
+<td>binary growth</td>
+<td style="text-align: right;">1 A</td>
+<td>slightly expand the accepted support</td>
+</tr>
+<tr>
+<td>cosine edge</td>
+<td style="text-align: right;">6 A</td>
+<td>soften the final mask boundary</td>
+</tr>
+</tbody>
+</table>
+<p>The last two values translate the previous 1-pixel and 6-pixel defaults under
+the requested 1 A/pixel reference sampling. At run time each is converted to
+the nearest voxel count from the actual input sampling, with a minimum of one
+voxel. This changes units and sampling behavior, not the masking sequence.</p>
+<h3 id="62-structure-of-the-two-dimensional-space">6.2 Structure of the two-dimensional space<a class="headerlink" href="#62-structure-of-the-two-dimensional-space" title="Permanent link">&para;</a></h3>
+<p><code>nu_msk_sig</code> and <code>amsklp</code> are the dominant pair and are <strong>coupled</strong>: larger
+<code>amsklp</code> pools evidence over a wider support, which raises the margin in weak
+regions and is therefore equivalent to loosening the threshold. They trade off
+along a ridge and must be swept jointly.</p>
+<p>All secondary values are intentionally frozen. This preserves the validated
+algorithm and makes <code>(nu_msk_sig, amsklp)</code> the complete optimization space.
+The internal NU API retains alternate evidence and segmentation options for
+diagnostic tests, but they are not standalone <code>nu_filt3D</code> controls.</p>
+<h3 id="63-sweep-efficiency">6.3 Sweep efficiency<a class="headerlink" href="#63-sweep-efficiency" title="Permanent link">&para;</a></h3>
+<p>The expensive step is <code>setup_nu_dmats</code>. <code>amsklp</code> changes the evidence field
+(<code>calc_nu_evidence_margin</code>), whereas <code>nu_msk_sig</code> changes only the segmentation
+threshold (<code>calc_nu_evidence_score</code>). The natural sweep is therefore an outer
+loop over <code>amsklp</code> and an inner loop over <code>nu_msk_sig</code>, reusing NU setup and
+cutoff optimization. A dedicated in-process driver can exploit this; a shell
+loop over <code>nu_filt3D</code> repeats setup at every point.</p>
+<h3 id="64-objective-functions">6.4 Objective functions<a class="headerlink" href="#64-objective-functions" title="Permanent link">&para;</a></h3>
+<p>Ranked by how directly they measure what we want, against how available they are.</p>
+<p><strong>Tier 1 — synthetic, ground truth known.</strong> Extend
+<code>production/tests/simple_test_nu_envmask.f90</code>. Report Dice/IoU, recall, and
+solvent false-positive rate, and add:</p>
+<ul>
+<li><strong>mean surface distance</strong> to the true envelope. More sensitive than Dice to the
+  erosion failure mode, which is what bit us — Dice degrades gracefully under
+  uniform erosion while surface distance reports it directly.</li>
+<li><strong>thin-domain retention</strong>: build a fixture with a deliberately thin
+  (30-50 A) lower-resolution appendage and score the fraction retained. This is
+  the specific failure the symmetric-smoothing fix targets and it must have a
+  regression pin.</li>
+<li>Keep the production absolute-margin fixture as the required regression. Any
+  internal scale-free diagnostic belongs in a separate, explicitly
+  low-occupancy fixture and must not change the standalone interface.</li>
+</ul>
+<p><strong>Tier 2 — real data with an atomic model.</strong></p>
+<ul>
+<li><em>Model coverage</em>: fraction of model atoms falling inside the mask. Target 1.0.</li>
+<li><em>Volume ratio</em>: mask volume divided by expected molecular volume. For protein,
+  <code>V(A^3) ~ 1.21 x MW(Da)</code>. Masks legitimately exceed this because of hydration
+  and the soft edge, so the target is a controlled factor (roughly 1.3-2.0),
+  not 1.0.</li>
+<li>Combined scalar: penalise coverage below 1 and volume ratio above target.
+  These two together are a strong and cheap precision/recall pair.</li>
+</ul>
+<p><strong>Tier 3 — real data, no model. This is the general case.</strong></p>
+<ul>
+<li><strong>Half-set reproducibility.</strong> Split the particles into two disjoint halves,
+  reconstruct each into its own gold-standard pair, derive a mask from each
+  independently, and measure Dice between the two masks. A mask driven by real
+  structure is reproducible; one driven by noise is not. This requires no ground
+  truth and directly measures whether the evidence is real rather than fitted.
+  <strong>Recommended as the primary objective for real data.</strong></li>
+<li><em>Solvent flatness</em>: RMS of the map outside the mask compared against RMS in a
+  far-corner region. Elevated RMS outside means the mask is too tight.</li>
+<li><em>Annotated-feature exclusion</em>: for a membrane protein, annotate the belt once
+  and score exclusion on every sweep point thereafter.</li>
+</ul>
+<p><strong>Tier 4 — downstream, expensive and confounded.</strong> Resolution and map quality
+after N <code>refine3D</code> iterations with reference masking active (<code>automsk /= no</code>).
+Use only as a <strong>final confirmation</strong> on the one or two settings that survive
+tiers 1-3. Never as the sweep objective.</p>
+<h3 id="65-do-not-tune-on-the-reported-fsc-resolution">6.5 Do not tune on the reported FSC resolution<a class="headerlink" href="#65-do-not-tune-on-the-reported-fsc-resolution" title="Permanent link">&para;</a></h3>
+<p>Reference masking plus a resolution-derived mask is precisely the loop that
+inflates reported resolution (section 2.1). Optimising parameters against it
+selects for the mask that most aggressively retains only high-resolution voxels —
+the degenerate solution, which is a tight shell around the best-ordered core. It
+will look like a large improvement.</p>
+<p>Tier 3 half-set reproducibility is the honest substitute: it rewards masks that
+are <em>real</em>, not masks that are <em>tight</em>.</p>
+<h3 id="66-prefer-a-plateau-over-a-peak">6.6 Prefer a plateau over a peak<a class="headerlink" href="#66-prefer-a-plateau-over-a-peak" title="Permanent link">&para;</a></h3>
+<p>Report the objective as a surface over <code>(nu_msk_sig, amsklp)</code> and choose the
+<strong>centroid of the region within a few percent of the best</strong>, not the argmax. A
+setting that is optimal but on a knife edge is worse than a slightly suboptimal
+one in a broad basin, because real datasets vary and a knife-edge optimum will
+not transfer.</p>
+<p>Final defaults should be the setting that is <em>acceptable on every</em> test specimen,
+not optimal on any one. Record per-dataset optima alongside the consensus so the
+spread is visible.</p>
+<h3 id="67-a-likely-outcome-worth-planning-for">6.7 A likely outcome worth planning for<a class="headerlink" href="#67-a-likely-outcome-worth-planning-for" title="Permanent link">&para;</a></h3>
+<p>The margin scales with SNR, so a threshold tuned at 3 A with 500k particles may
+not hold at 6 A with 20k. If the sweep shows <code>nu_msk_sig</code> is strongly dataset- or
+SNR-dependent, that is evidence the fixed MAD multiple is the wrong
+parameterisation, and the answer is to make the threshold adaptive — Otsu on the
+margin histogram rather than a fixed multiple of the null scale. That would
+remove the parameter entirely and would mirror what <code>automsk=tight</code> already does
+for density. Treat this as a live design fork, not a fallback.</p>
+<h2 id="7-test-set">7. Test set<a class="headerlink" href="#7-test-set" title="Permanent link">&para;</a></h2>
+<p>The set must span the failure modes, not just the easy case:</p>
+<ol>
+<li><strong>Detergent-solubilised membrane protein</strong> — the belt case. Already
+   validated qualitatively; needs a quantitative baseline.</li>
+<li><strong>Flexible multi-domain complex</strong> — the cut-off-domains case and strongest
+   test of whether the two public controls transfer across local resolution.</li>
+<li><strong>Small rigid globular protein</strong> — baseline sanity; should be easy.</li>
+<li><strong>Map with an internal cavity or channel</strong> — exercises 3D hole filling.</li>
+<li><strong>Low-occupancy or partially-occupied subunit</strong> — tests whether the absolute
+   margin remains useful at weak occupancy.</li>
+<li><strong>One specimen at several particle counts</strong> (for example full, 1/4, 1/16) —
+   the SNR-dependence check underpinning section 6.7.</li>
+</ol>
+<h2 id="8-what-to-record-per-run">8. What to record per run<a class="headerlink" href="#8-what-to-record-per-run" title="Permanent link">&para;</a></h2>
+<p>The routine already logs null median, null MAD, threshold, envelope scale, ICM
+beta and iteration count, seed and signal voxel counts and percentages, and
+component counts kept versus found. Emit these plus the section 6.4 metrics as
+one CSV row per sweep point so surfaces can be plotted directly.</p>
+<p>Watch the signal percentage specifically: above 50% the median/MAD null is not
+trustworthy and the routine says so. Spherical geometry does not guarantee this
+condition: if it triggers, <code>mskdiam</code> is too tight or the whole-support null model
+is unsuitable. This is now reported as a diagnostic only; it no longer blocks
+regeneration, so a persistently high signal percentage is a signal to revisit
+<code>mskdiam</code> or the null model rather than an automatic stop.</p>
+<h2 id="9-current-state">9. Current state<a class="headerlink" href="#9-current-state" title="Permanent link">&para;</a></h2>
+<p>Implemented and reachable through <code>nu_filt3D</code>:</p>
+<ul>
+<li><code>src/main/nu_filt/simple_nu_filter_envmask.f90</code> — evidence margin, null
+  estimation, binary MRF segmentation, diagnostics</li>
+<li><code>src/main/image/simple_image_msk.f90</code> — <code>envmask3D_from_lmask</code>, the topology
+  and morphology tail</li>
+<li><code>src/main/image/simple_image_bin.f90</code> — 3D hole filling unlocked, corner-seed
+  guard added, <code>find_ccs</code> corrected to true 26-connectivity</li>
+<li><code>production/tests/simple_test_nu_envmask.f90</code> — synthetic absolute-margin and
+  scale-free cost-improvement-ratio regressions</li>
+<li><code>production/tests/simple_test_cc_connectivity.f90</code> — connectivity regression</li>
+</ul>
+<p>Outputs <code>&lt;vol&gt;_nu_evidence.mrc</code> (raw margin field) and <code>&lt;vol&gt;_nu_envmask.mrc</code>
+(soft mask). The evidence map is the primary diagnostic: if it does not separate
+solvent from density, no threshold or smoothness setting will rescue the mask.</p>
+<p>Workflow integration now provides <code>nu_envmask3D_stateNN.mrc</code>, lag-by-one
+reference-mask consumption (whenever <code>automsk /= no</code>; the <code>envref</code> control has
+been removed), free shrink/grow regeneration with no recovery guard or
+<code>pct_signal</code> failsafe, and accepted-shell evidence updates. <code>envfsc=yes</code> remains
+an unfinished hard-error branch pending a fast density-based mask generated on
+the fly. A purpose-built
+low-occupancy internal scale-free-evidence regression remains future work.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
