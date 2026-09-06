@@ -14,6 +14,7 @@ fort.*
 .emanlog
 .DS_Store
 SIMPLE_UNIT*
+/SIMPLE_TEST*/
 *.hed
 *.spi
 Makefile_macros
