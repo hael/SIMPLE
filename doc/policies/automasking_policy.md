@@ -89,7 +89,9 @@ assembly pass.
 On the PCG backend, the reconstruction strategy builds the NU-evidence
 envelope while the replay unaries are live and installs it as a fixed
 coarsest-label boundary condition before constructing `Q_NU`. It independently
-builds the conservative density mask used as solve support.
+builds the conservative density mask used as solve support, but only under
+`automsk=yes`; with `automsk=no` no density mask is built and every PCG solve
+runs on the spherical support (policy 2026-09-06).
 
 ### FSC consumers
 

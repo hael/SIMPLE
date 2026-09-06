@@ -129,17 +129,22 @@ Stage 1 of `abinitio3D` never runs with a low-pass limit finer than 20 A.
 low-pass and crop ladder, preserving gradual frequency marching. Explicit
 external-volume schedules use `lpstages_setlims` and are unchanged.
 
-The controller passes the current `lpinfo(istage)%lp` to each staged
-`refine3D` child as the stage `lpstop` ceiling alongside the effective planned
-matching limit. NU evidence may keep the working matching limit coarser, but it
-cannot promote matching to a resolution finer than the printed stage limit.
-This bound applies throughout every iteration in the stage, including the NU
-stages, rather than only when the stage command is first constructed.
+The controller passes an `lpstop` ceiling to each staged `refine3D` child
+alongside the effective planned matching limit. In the non-NU stages the
+ceiling is the current `lpinfo(istage)%lp`, so matching never exceeds the
+printed stage limit. In the NU stages the ceiling is the ladder's final limit
+(`lpfinal`, bounded by `LPSTOP_BOUNDS`, 4.5 A at the fine end): the NU
+evidence handoff may promote matching beyond the per-stage plan, because the
+class-FRC ladder is not informative about the particle map once NU filtering
+is active, but `abinitio3D` runs without gold-standard halves, so the promotion
+is never left open. The bound applies throughout every iteration in the stage.
 An explicitly supplied, coarser command-line `lpstop` is folded into the
 ladder and is also retained as an independent ceiling when the staged child
 command is rebuilt; the effective ceiling is the coarser of the two limits.
 The workflow logs the acknowledged command-line ceiling before entering the
-stage loop.
+stage loop. (Record 2026-09-06: capping the NU stages at the per-stage value
+stalled every NU stage on streptavidin and msp1 on the pcg path; see
+`doc/implementation_notes/pcg_priors.md`, dev item 2.)
 
 Saved `_stageNN_lp.mrc` diagnostic volumes are filtered to the current state
 FSC resolution when an FSC exists. The planned stage LP is only a fallback.

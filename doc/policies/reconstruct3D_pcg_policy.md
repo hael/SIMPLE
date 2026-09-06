@@ -201,7 +201,10 @@ when their soft evidence is accumulated. Discovery stops two shells beyond
 the evidence-pair FSC=0.143 crossing. The matching handoff requires 5% assigned
 support and retains the same two-shell FSC headroom.
 
-Solve support is phase-specific and independent of `automsk`:
+Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
+the default in `abinitio3D`, every PCG solve, base and regularized replay, runs
+on the spherical `mskdiam` support and no density envelope is built. With
+`automsk=yes` the support is phase-specific:
 
 | `envfsc` | Base solve | Regularized replay |
 | --- | --- | --- |
@@ -212,7 +215,9 @@ Before any reconstruction-derived density source exists, the base necessarily
 bootstraps on the sphere for either `envfsc` value and its completed pair
 supplies the conservative replay support. Once a prior reconstruction exists,
 the table applies without exception. No PCG map is multiplied by either mask
-after reconstruction.
+after reconstruction. `envfsc=yes` with `automsk=no` affects only the
+phase-randomized FSC evaluation, never a solve. An explicit `pcg_mskfile`
+remains the development override.
 
 The original-sampling final reconstructions launched by `abinitio3D` and
 `refine3D_auto` are cold solves. They use a PCG iteration budget of at least

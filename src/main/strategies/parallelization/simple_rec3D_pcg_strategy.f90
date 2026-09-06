@@ -765,14 +765,19 @@ contains
         type(image)  :: vol_prev
         l_have = .false.
         call support%kill_bimg
-        ! The density solve support is INDEPENDENT of automsk (code review
-        ! 2026-09-02 P1): automsk selects the filter-field background envelope
-        ! only. Which solves consume the support is decided per solve from
-        ! envfsc and solve phase alone (the regularized replay always, the
-        ! unfil/base pass only under envfsc=yes). Without a lagged reference,
-        ! envfsc=no can still construct the replay support from the completed
-        ! current base pair. The same bootstrap exception applies to
-        ! envfsc=yes because no reconstruction-derived density mask exists yet.
+        ! Density solve support is an automsk feature (policy 2026-09-06,
+        ! reversing the 2026-09-02 "independent of automsk" review item): no
+        ! envelope constrains any PCG solve unless automsk=yes. With automsk
+        ! enabled, the regularized replay takes the envelope and envfsc=yes
+        ! extends it to the unfil/base pass. Without a lagged reference the
+        ! replay support is built from the completed current base pair (the
+        ! base then bootstraps on the sphere for either envfsc value). With
+        ! automsk=no every solve, base and replay, runs on the sphere.
+        if( .not. pcg_density_support_enabled(params) )then
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
+                &', spherical support for base and replay (automsk=no; density envelope disabled)'
+            return
+        endif
         if( params%pcg_mskfile%is_allocated() )then
             ! A non-empty explicit mask wins on development/non-NU routes.
             ! An allocated empty string is not an override and must not
@@ -806,10 +811,19 @@ contains
 
     end subroutine build_pcg_state_support
 
+    !> Density solve support is permitted only under automsk=yes (policy
+    !! 2026-09-06). An explicit pcg_mskfile is the development override and is
+    !! installed by set_pcg_solve_support regardless of this gate.
+    logical function pcg_density_support_enabled( params ) result( l_enabled )
+        class(parameters), intent(in) :: params
+        l_enabled = trim(params%automsk) .ne. 'no'
+    end function pcg_density_support_enabled
+
     !> Construct the conservative density support from an explicit volume.
-    !! Used for the normal lag-one path and, when envfsc=no has no prior
-    !! reference, for the regularized replay after the spherical base pair is
-    !! available. The NU-evidence envelope never enters this routine.
+    !! Used for the normal lag-one path and, when no prior reference exists,
+    !! for the regularized replay after the spherical base pair is available.
+    !! Both callers are gated on automsk=yes. The NU-evidence envelope never
+    !! enters this routine.
     subroutine build_pcg_density_support( params, state_here, volume, support, source )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
@@ -1131,9 +1145,9 @@ contains
             if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
 
             ! One density-envelope support per state, shared with the
-            ! distributed owner. The regularized replay always consumes it;
-            ! envfsc=yes also applies it to the base when a prior
-            ! reconstruction exists.
+            ! distributed owner, and only under automsk=yes: the regularized
+            ! replay consumes it, envfsc=yes also applies it to the base when
+            ! a prior reconstruction exists. automsk=no: sphere throughout.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
             l_base_support_constrained = l_state_support .and. params%l_envfsc
             call collect_state_half(state, 0, n_even, half_pinds)
@@ -1150,7 +1164,7 @@ contains
             call merged%copy(half_even)
             call merged%add(half_odd)
             call merged%mul(0.5)
-            if( params%l_ml_reg .and. .not. l_state_support )then
+            if( params%l_ml_reg .and. .not. l_state_support .and. pcg_density_support_enabled(params) )then
                 call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
                 l_state_support = .true.
             endif
@@ -2362,9 +2376,10 @@ contains
                 l_bootstrap = .not. l_even_chain
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
-            ! Build one conservative support per state. envfsc=yes installs it
-            ! in both solves once a prior reconstruction exists; otherwise the
-            ! base bootstraps on the sphere. The replay always uses density.
+            ! Build one conservative support per state, only under automsk=yes.
+            ! envfsc=yes installs it in both solves once a prior reconstruction
+            ! exists; otherwise the base bootstraps on the sphere and the
+            ! replay uses density. automsk=no: sphere throughout.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
             l_base_support_constrained = l_state_support .and. params%l_envfsc
             call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base')
@@ -2390,7 +2405,7 @@ contains
             call merged%copy(half_even)
             call merged%add(half_odd)
             call merged%mul(0.5)
-            if( params%l_ml_reg .and. .not. l_state_support )then
+            if( params%l_ml_reg .and. .not. l_state_support .and. pcg_density_support_enabled(params) )then
                 call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
                 l_state_support = .true.
             endif
@@ -2748,8 +2763,9 @@ contains
 
             call job%pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA, &
                 &fft_nthreads=pcg_half_nthreads)
-            ! The regularized pass always takes the density envelope; the base
-            ! pass takes it only under envfsc=yes. This call stays outside the
+            ! Under automsk=yes the regularized pass takes the density envelope
+            ! and the base pass only under envfsc=yes; with automsk=no
+            ! l_state_support is false and both run on the sphere. This call stays outside the
             ! parallel region because spherical-mask construction memoizes
             ! coordinates at module scope.
             call set_pcg_solve_support(job%pcgop, params, state_support_msk, &

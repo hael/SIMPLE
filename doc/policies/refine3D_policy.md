@@ -453,11 +453,13 @@ records only the refine3D-side integration contract:
   FSC/SSNR precision; PCG+NU instead freezes the Potts local-resolution field
   from that pair and replays with `Q_NU`.
 - **Solve support.** Only the conservative density envelope may constrain a
-  PCG solve. With `envfsc=yes` it constrains base and replay; with `envfsc=no`
-  the base is spherical and the replay is density-constrained. The
-  NU-evidence envelope never becomes solve support. Before any reconstruction
-  exists, the base necessarily bootstraps on the sphere and its current pair
-  provides the replay density support.
+  PCG solve, and only under `automsk=yes` (policy 2026-09-06). With
+  `automsk=no` base and replay run on the sphere. With `automsk=yes` and
+  `envfsc=yes` the envelope constrains base and replay; with `envfsc=no` the
+  base is spherical and the replay is density-constrained. The NU-evidence
+  envelope never becomes solve support. Before any reconstruction exists, the
+  base necessarily bootstraps on the sphere and its current pair provides the
+  replay density support.
 - **Current exclusions** (hard-errored, not approximated): `projrec=yes`,
   `conical_fsc=yes`, and matrix-free workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.

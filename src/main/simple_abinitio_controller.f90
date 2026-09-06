@@ -524,7 +524,21 @@ contains
         l_full_update_stage = force_full_sampling_mode(params)
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
-        lpstop_eff          = lpinfo(istage)%lp
+        ! Matching-band ceiling. Non-NU stages match at the planned stage
+        ! limit, so the ceiling equals it. NU stages let the evidence handoff
+        ! promote matching beyond the per-stage plan (the class-FRC ladder is
+        ! not informative about the particle map there), but abinitio3D runs
+        ! without gold-standard halves, so the promotion is capped at the
+        ! ladder's FINAL limit (lpfinal, bounded [LPSTOP_BOUNDS]) rather than
+        ! left open. Log-set record 2026-09-06 (pcg_priors.md dev item 2):
+        ! capping at the per-stage value stalled every NU stage on
+        ! streptavidin and msp1; the uncapped finest-label handoff of the
+        ! healthy runs sat between the current map's FSC=0.5 and FSC=0.143.
+        if( cfg%filt_mode .ne. 'none' )then
+            lpstop_eff = lpinfo(active_refine3D_nstages())%lp
+        else
+            lpstop_eff = lpinfo(istage)%lp
+        endif
         ! lpinfo normally incorporates an explicit lpstop while constructing
         ! the ladder. Retain the command-line value as an independent guard so
         ! a coarser user ceiling cannot be lost when the stage cline is rebuilt.
@@ -578,9 +592,9 @@ contains
         endif
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
-        ! The planned ab-initio ladder is the highest resolution permitted in
-        ! this stage. NU evidence may retain a coarser working limit, but it
-        ! must not promote matching beyond the printed stage boundary.
+        ! Non-NU stages: the printed stage limit is the highest resolution
+        ! permitted. NU stages: the evidence handoff may promote matching up
+        ! to the ladder's final limit, never beyond it.
         call cline_refine3D%set('lpstop',                 lpstop_eff)
         call cline_refine3D%set('automsk',                cfg%automsk)
         call cline_refine3D%set('envfsc',                 cfg%envfsc)

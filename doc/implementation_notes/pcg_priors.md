@@ -2437,6 +2437,178 @@ the acceptable-looking outputs do not validate the prior.
      setpoint to ratchet toward its known-good ~60% while shipped
      pairs improve, with no regression vs the fixed-60% runs.
 
+   **AUTO-TARGET COLD START FALSIFIED -- msp1 abinitio3D REGRESSION
+   (2026-09-06).** Ten repeated msp1 abinitio3D runs at dc2eb9a7
+   (rec_backend=pcg, no prior flags): `_lp` stage snapshots normal
+   through stage 6, overfitted from stage 7, final postprocessed maps
+   wrecked. Mechanism, established from the controller law and the
+   recorded dataset operating points (no new instrumentation needed):
+   - msp1 sits at ~60% suppression AT THE DEFAULT lambda_rel=0.1 (the
+     2026-08-28/29 zero-flag verification runs at pinned 0.1 were
+     healthy, 3.86 A Nyquist-limited; the fixed-60% controller held
+     there too). The AIMD outer loop cold-starts the setpoint at 15%,
+     so the very first inner-loop step sees supp ~60% vs target 15%
+     and steps lambda DOWN at the x5 clamp: 0.1 -> 0.02 -> 0.01
+     (floor) within three iterations of stage 6. Under R10 Q_NU is the
+     only replay precision, so lambda at the floor is an effectively
+     UNREGULARIZED ML solve (`PRIOR INERT` banner): the merged matching
+     reference carries un-shrunk in-band noise.
+   - The outer loop cannot recover: it ratchets +5 points only while
+     the shipped-pair FSC=0.143 crossing improves by >= 2 shells, and
+     lp-limited ab initio stages stall (hold) almost immediately, so
+     the setpoint stays near 15% for the rest of the run. Worse, the
+     signal is the FSC of NON-independent halves (merged-reference
+     matching): overfitting inflates it (read as "improved"), and
+     regularization that removes correlated noise deflates it (read as
+     "degraded" -> x0.6 back-off). The loop therefore settles on the
+     weakest prior consistent with the highest correlated-noise FSC.
+   - Compounding factor: with nu_refine=no the matching-band handoff is
+     the RAW finest selected label (min_pct=0, "numerically unchanged
+     vs gridding"), i.e. the static bank's 3.98 A floor whenever a
+     single voxel selects it. On the gridding path that was harmless
+     (the references are NU-filtered); against soft Q_NU references it
+     matches noise. b46f5c257 caps the handoff at the stage ladder
+     (`lpstop` ceiling), which restores the pre-NU matching band.
+   - Stage 6 survives because its first iterations still run at the
+     default strength and the schedule lp; stage 7 (nspace 5000,
+     greedy frac_best 0.85, finer crop, 12 iterations) starts with the
+     prior already at the floor and the project lp already promoted.
+     The final bootstrap_rec3D resumes the floored lambda (its
+     calibration keeps the ~15% target), then auto-B sharpens an
+     unregularized native-grid map.
+   Log evidence (ABINITIO3D_OUTPUT_RESTART1, one of the ten runs),
+   read 2026-09-06, confirming the mechanism with two additions:
+   - stage 6 (LP 7.5): iteration 1 at the default gives supp 42.4%;
+     the inner loop steps 0.1 -> 0.024 at once; the outer loop then
+     reads a one-shell shipped-pair change (4.41 -> 4.54 A) as
+     DEGRADED and backs the setpoint off 15 -> 9; lambda holds at
+     0.024 while the readout decays 11.5 -> 3.8% over ten iterations
+     AT FIXED LAMBDA (the readout is not a steady-state response, see
+     below); one late step to 0.060.
+   - stage 7 (LP 6.7): the crop change re-scales the plant (22.6% at
+     0.060), the outer loop backs off again to 5.4 and the inner loop
+     steps to 0.012. From then on the readout is NEGATIVE (-3 .. -2%,
+     floored to 0.1%) and, because the absolute +/-5 deadband contains
+     the 5% setpoint floor, every iteration logs ON TARGET and holds
+     0.012 for the whole stage: a deadband deadlock at an inert prior.
+     Shipped-pair crossing walks 4.5 -> 6.3 A across the stage.
+   - stage 8 (LP 4.5): two IMPROVED steps raise the setpoint to 15 and
+     the inner loop ramps lambda 0.012 -> 0.06 -> 0.30 -> 1.4 -> 2.3
+     -> 3.7 -> 7.5 -> 12.1 -> 20.0 while the readout never exceeds
+     14%: the plant gain has collapsed, the prior is stiff where it
+     acts and absent elsewhere.
+   - final bootstrap_rec3D: calibration at 0.1 reads 39% on the native
+     grid, adapts to 0.027 for the pinned 15% target, ships at 17.9%.
+   - matching handoff: constant per stage at the finest bank label
+     (4.415 / 4.120 / 4.013 A), i.e. the crop's static-bank floor every
+     iteration of every NU stage, unbounded at this commit.
+   - Readout validity: the ML replay warm-starts from the PREVIOUS
+     iteration's shipped ML half and runs maxits_pcg=2 iterations, so
+     the measured suppression is a lagged property of the iterate
+     (previous orientations, previous lambda), not the response to the
+     current lambda. The one-pole identification is therefore built
+     on a quantity that decays at fixed lambda (stage 6) and cannot
+     follow a 200x lambda ramp (stage 8). Negative readouts are the
+     signature: the warm-started replay carries more evidenced energy
+     than the fresh base.
+   USER VERDICT (2026-09-06): the fine NU handoff must not set the
+   abinitio3D matching band at all; the conservative `lpstages` ladder
+   value is the matching low-pass in the NU stages. b46f5c257 enforces
+   it (the ladder rides as the `lpstop` ceiling on every staged child
+   and the project handoff is clipped to it at every promotion).
+
+   LOG EVIDENCE AGAINST THE CEILING ON THE PCG PATH (2026-09-06, full
+   log sets: msp1 10 runs at dc2eb9a7 vs 10 runs at b46f5c25 (ceiling);
+   streptavidin 10 runs at 9201e797 vs 2 complete runs at a053ee07
+   (ceiling + legacy sigma)). Streptavidin is the clean comparison
+   (identical workflow, full sampling, crop box 88 throughout, sigma
+   init path identical at every stage):
+   - through stage 5 the ceiling runs sit inside the healthy envelope
+     (stage-5 FSC=0.5/0.143 4.29/3.71 in run 2 = the healthy median);
+   - every healthy run improves at stage 6 from 4.29/3.7-3.8 to
+     3.6-3.9/3.2-3.6 A while matching at the bank's finest label 4.04 A
+     (the raw handoff, every iteration of stages 6-8);
+   - both ceiling runs match at the ladder 6.24 A in stages 6 and 7 and
+     do NOT improve at all (run 2: 4.29/3.52 -> 4.29/3.61; run 1:
+     4.57/3.92 -> 4.57/4.04), then stage 8 (ladder 4.5 A) recovers
+     part of the gap (3.92/3.27 vs healthy 3.7-3.8/3.1-3.2) after its
+     full 25 iterations -- the observed "rescued in stage 8" and the
+     ~500 s longer wall time.
+   msp1 shows the same shape with a confound: the healthy set ran the
+   cavg_ini route (nested cavgs stages, per-particle sigma init every
+   stage), the ceiling set a checkpoint start at stage 4 with the
+   group-only sigma init ("reusing existing grouped sigmas") at every
+   stage. Even so: healthy stage 6 matches at 4.98 A and FSC=0.5 goes
+   6.7 -> 4.9 A within the stage; ceiling stage 6 matches at 7.54 A and
+   FSC=0.5 stays at 7.0-7.2 A; ceiling stage 7 (6.72 A, nspace 5000,
+   frac_best 0.85) randomizes the search in all 10 runs (projection
+   distance 34 deg, in-plane 84 deg, shift 4.2 px, SCORE sdev 0.002 vs
+   0.007-0.013 healthy) and ends at FSC 6.575/6.575 A, one shell inside
+   the band; stage 8 recovers to 4.35-4.48 A with the auto-lambda driven
+   to 15-29. All ten healthy runs end at 3.86-3.96 A.
+   Conclusion from the logs: on the pcg + Q_NU path the raw finest-label
+   handoff was the mechanism that carried the NU stages past the ladder;
+   the ladder ceiling removes it and the NU stages stall at the band.
+   The earlier "*LP* overfitted from stage 7" judgement on the dc2eb9a7
+   msp1 set is not supported by its FSC trajectories (ten consistent
+   runs, 3.9 A finals, FSC=0.5 4.0 A); the finest-label matching ran
+   between FSC=0.5 and FSC=0.143 of the current map, not beyond it.
+   Recommendation (not applied, user decision): revert the lpstop
+   ceiling for the pcg path, or replace it with a data-driven cap (e.g.
+   the base-pair FSC=0.5 crossing plus a shell or two) instead of the
+   class-FRC ladder, which is not informative about the particle map
+   once the NU stages begin.
+
+   SOLVE-SUPPORT POLICY CORRECTION (2026-09-06, user-directed). Dev item 5
+   (ca450fe54, 2026-09-01) and the 2026-09-02 review item made the
+   conservative density envelope the replay solve support unconditionally
+   in ML mode, independent of automsk; every msp1 and streptavidin run
+   since 2026-09-01 (including the ten healthy streptavidin runs at
+   9201e797) solved the shipped pair on that envelope while the base pair
+   stayed spherical, so their two FSCs were never comparable. The healthy
+   msp1 set (dc2eb9a7, 2026-08-31) predates it. Rule now: no envelope
+   masking anywhere unless automsk=yes; only then may envfsc=yes extend
+   the envelope to the base solve. Implemented as
+   pcg_density_support_enabled(params) gating build_pcg_state_support and
+   both current-base-pair fallbacks (shared + distributed). The envfsc FSC
+   evaluation itself (phase-randomized masked FSC) is unchanged and still
+   envfsc-only.
+
+   The controller observations above stand as a record; the guard rails
+   below were drafted and then WITHDRAWN (not applied), so the validated
+   adaptive configuration (embb, exp_gate, PfCRT) is unchanged.
+   Withdrawn guard rails (not applied):
+   - Deadband half-width capped at half the setpoint
+     (`min(5, 0.5*target)`), so a readout below half the target always
+     steps the strength up; the 5%-floor deadlock cannot recur.
+   - `NU_AUTOLAMBDA_LAMBDA_MIN` 0.01 -> 0.1 (= the dynamic default).
+     The controller may only STRENGTHEN the prior relative to the
+     validated default; no recorded dataset (PfCRT, 1WCM, bgal,
+     streptavidin, msp1, embb) has a good operating point below it.
+   - Setpoint seeding: at the first controller step the AIMD setpoint
+     is seeded from the suppression the strength in use actually
+     delivers, `max(15%, measured)` (stats-file key
+     PCG_NU_AUTOTARGET_SEEDED, cleared with the stats file). PfCRT-class
+     datasets (3% at the default) still ramp from 15%; msp1-class ones
+     hold at their default operating point and ratchet from there.
+     `NU_AUTOTARGET_COLD_START` replaces the literal 15 in the
+     controller; the parameters default block keeps 15 as provisional.
+   - Open: whether staged abinitio3D should run the controllers at all. The 2026-08-28/29 healthy msp1
+     runs were pinned at 0.1; the readout is warm-start-lagged at
+     maxits_pcg=2 and the reward signal is a merged-reference FSC, so
+     the recommended interim policy is to pin lambda_rel at the default
+     for the staged workflow (or freeze both loops after seeding) and
+     let the controllers act only in gold-standard refine3D_auto.
+   - Open (not changed here): the AIMD reward signal. A shipped-pair
+     FSC from merged-reference (non-gold-standard) matching is not a
+     valid over-regularization diagnostic in abinitio3D; consider
+     freezing the setpoint at the seeded value in staged abinitio3D
+     (adapt only in gold-standard refine3D_auto), or gating the ratchet
+     on the base-pair FSC at the stage ladder limit. Also open: the
+     nu_refine=no raw-finest handoff should use the same 5%-supported
+     percentile as nu_refine=yes on the pcg path, now that the
+     reference is not NU-filtered.
+
    **FINAL-RECONSTRUCTION Q_NU POLICY (2026-08-31, user-directed).**
    The original-sampling final reconstructions of abinitio3D and
    refine3D_auto previously dropped the PCG backend and its prior
