@@ -24,5 +24,5 @@ XXXSIMPLEXXX"""
         dispatchmodels = DispatchModel.objects.all()
         for dispatchmodel in dispatchmodels:
             dispatchmodel.delete()
-        newdispatchmodel = DispatchModel(scmd="nohup", tplt=localtemplate, url="localhost:8000", active=True)
+        newdispatchmodel = DispatchModel(scmd="nohup", tplt=localtemplate, url="localhost:8000", simple_path=options["simple_path"], active=True)
         newdispatchmodel.save()

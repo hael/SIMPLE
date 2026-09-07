@@ -21,20 +21,35 @@ from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nice_project.settings')
 
-# SIMPLE environment variables
-os.environ["SIMPLE_PATH"]     = '@SIMPLE_PATH@'
+# SIMPLE environment variables. Priority: an existing SIMPLE_PATH from the
+# process environment wins; otherwise fall back to the simple_path recorded
+# on the active DispatchModel row (set via the admin / resetsubmissiontemplate
+# management command); otherwise use the path baked in at configure-time.
+if 'SIMPLE_PATH' not in os.environ:
+    try:
+        import django
+        django.setup()
+        from nice_lite.models import DispatchModel
+        dispatchmodel = DispatchModel.objects.filter(active=True).last()
+        if dispatchmodel is not None and dispatchmodel.simple_path:
+            os.environ['SIMPLE_PATH'] = dispatchmodel.simple_path
+    except Exception:
+        # DB may not be migrated/reachable yet - fall through to the
+        # configure-time default below.
+        pass
+os.environ.setdefault('SIMPLE_PATH', '@SIMPLE_PATH@')
 os.environ["SIMPLE_QSYS"]     = 'local'
 os.environ["SIMPLE_EMAIL"]    = 'my.name@uni.edu'
 
 # Update paths so SIMPLE is in them and any other required libraries
 if 'PATH' in os.environ.keys():
-    os.environ["PATH"] = '@SIMPLE_PATH@/bin' + os.pathsep + '@PATH@' + os.pathsep + os.environ["PATH"]
+    os.environ["PATH"] = os.environ["SIMPLE_PATH"] + '/bin' + os.pathsep + '@PATH@' + os.pathsep + os.environ["PATH"]
 else:
-    os.environ["PATH"] = '@SIMPLE_PATH@/bin' + os.pathsep + '@PATH@'
+    os.environ["PATH"] = os.environ["SIMPLE_PATH"] + '/bin' + os.pathsep + '@PATH@'
 
 if 'LD_LIBRARY_PATH' in os.environ.keys():
-    os.environ["LD_LIBRARY_PATH"] = '@SIMPLE_PATH@/lib' + os.pathsep + '@LD_LIBRARY_PATH@' + os.pathsep + os.environ["LD_LIBRARY_PATH"]
+    os.environ["LD_LIBRARY_PATH"] = os.environ["SIMPLE_PATH"] + '/lib' + os.pathsep + '@LD_LIBRARY_PATH@' + os.pathsep + os.environ["LD_LIBRARY_PATH"]
 else:
-    os.environ["LD_LIBRARY_PATH"] = '@SIMPLE_PATH@/lib' + os.pathsep + '@LD_LIBRARY_PATH@'
+    os.environ["LD_LIBRARY_PATH"] = os.environ["SIMPLE_PATH"] + '/lib' + os.pathsep + '@LD_LIBRARY_PATH@'
 
 application = get_wsgi_application()

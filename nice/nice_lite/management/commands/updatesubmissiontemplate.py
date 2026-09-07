@@ -7,9 +7,10 @@ class Command(BaseCommand):
     help = "Updates the job submission template"
 
     def add_arguments(self, parser):
-        parser.add_argument("command", nargs="?", type=str)
-        parser.add_argument("url",     nargs="?", type=str)
-        parser.add_argument("script",  nargs="?", type=str)
+        parser.add_argument("command",     nargs="?", type=str)
+        parser.add_argument("url",         nargs="?", type=str)
+        parser.add_argument("simple_path", nargs="?", type=str)
+        parser.add_argument("script",      nargs="?", type=str)
 
     def handle(self, *args, **options):
         if options["command"] is None:
@@ -18,6 +19,10 @@ class Command(BaseCommand):
             raise CommandError("url missing from arguments")
         if options["script"] is None:
             raise CommandError("script missing from arguments")
+        if options["simple_path"] is None:
+            raise CommandError("simple_path missing from arguments")
+        if not os.path.exists(options["simple_path"]):
+            raise CommandError(options["simple_path"], "does not exist")
         if not os.path.exists(options["script"]):
             raise CommandError(options["script"], "does not exist")
         if not os.path.isfile(options["script"]):
@@ -34,5 +39,5 @@ class Command(BaseCommand):
         for dispatchmodel in dispatchmodels:
             dispatchmodel.active = False
             dispatchmodel.save()     
-        newdispatchmodel = DispatchModel(scmd=options["command"], tplt=template, url=options["url"], active=True)
+        newdispatchmodel = DispatchModel(scmd=options["command"], tplt=template, url=options["url"], simple_path=options["simple_path"], active=True)
         newdispatchmodel.save()
