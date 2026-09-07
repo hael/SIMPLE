@@ -6,7 +6,7 @@
 {% endcomment %}
 {% load humanize %}
 {% with ms=job.preprocessing_stats cs=job.classification_2D_stats ss=job.particle_sieving_stats %}
-<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-zoom-in"
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-zoom-in"
     onclick="this.querySelector('form.viewform').submit();">
 
     <!-- Header: status dot · stream name · open-detail button -->

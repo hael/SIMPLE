@@ -12,14 +12,16 @@ Most panel endpoints are checksum-gated and return HTTP 204 when unchanged.
 import re
 import os
 import json
+import glob
 import hashlib
 import pathlib
+import xml.etree.ElementTree as ET
 
 # django imports
 from django.urls                    import reverse
-from django.http                    import HttpResponseRedirect
+from django.http                    import HttpResponseRedirect, JsonResponse
 from django.shortcuts               import redirect, render
-from django.views.decorators.http   import require_POST
+from django.views.decorators.http   import require_GET, require_POST
 from django.contrib.auth.decorators import login_required
 
 # local imports
@@ -30,6 +32,7 @@ from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
 from ..helpers                   import (
     HttpResponseNoContent,
+    directory_exists,
     get_float,
     get_integer,
     get_job_id,
@@ -151,6 +154,202 @@ def _is_safe_filename(filename):
     return re.fullmatch(r"[A-Za-z0-9._-]+", filename) is not None
 
 
+_IMAGES_DISC_RE = re.compile(r"^Images-Disc\d+$")
+
+
+def _find_images_disc_dir(parent_dir):
+    """Return path to first Images-Disc<N> subdirectory under parent_dir, or None."""
+    try:
+        entries = sorted(os.listdir(parent_dir))
+    except OSError:
+        return None
+    for entry in entries:
+        if _IMAGES_DISC_RE.match(entry) and directory_exists(os.path.join(parent_dir, entry)):
+            return os.path.join(parent_dir, entry)
+    return None
+
+
+def _find_gainref_file(gain_dir):
+    """Return path to preferred gain reference file within gain_dir, or None.
+
+    Preference order: a ``.gain`` file, then an ``.mrc`` file with ``flip``
+    in its name, then any other ``.mrc`` file.
+    """
+    try:
+        entries = sorted(os.listdir(gain_dir))
+    except OSError:
+        return None
+    mrc_flip = None
+    mrc_any = None
+    for entry in entries:
+        full_path = os.path.join(gain_dir, entry)
+        if not os.path.isfile(full_path):
+            continue
+        if entry.endswith(".gain"):
+            return full_path
+        if entry.endswith(".mrc"):
+            if "flip" in entry.lower() and mrc_flip is None:
+                mrc_flip = full_path
+            elif mrc_any is None:
+                mrc_any = full_path
+    return mrc_flip or mrc_any
+
+
+def _find_foilhole_xml(meta_dir):
+    """Return path to first FoilHole*Data*.xml file within meta_dir, or None."""
+    try:
+        matches = sorted(glob.glob(os.path.join(meta_dir, "FoilHole*Data*.xml")))
+    except OSError:
+        return None
+    return matches[0] if matches else None
+
+
+def _get_xml_acceleration_voltage_kv(xml_path):
+    """Return acceleration voltage in kV parsed from an EPU-generated XML file, or None.
+
+    EPU metadata stores the value in volts (e.g. ``300000``) under an
+    ``AccelerationVoltage`` element, regardless of the enclosing namespace.
+    """
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    for elem in root.iter():
+        if elem.tag.split("}")[-1] != "AccelerationVoltage" or not elem.text:
+            continue
+        try:
+            return float(elem.text) / 1000.0
+        except ValueError:
+            return None
+    return None
+
+
+def _get_xml_binning_factor(root):
+    """Return camera binning factor parsed from an EPU-generated XML root, or None.
+
+    EPU metadata stores the camera binning under a ``Binning/x`` element
+    (e.g. ``camera/Binning/x``), regardless of the enclosing namespace.
+    """
+    for elem in root.iter():
+        if elem.tag.split("}")[-1] != "Binning":
+            continue
+        for axis_elem in elem:
+            if axis_elem.tag.split("}")[-1] != "x" or not axis_elem.text:
+                continue
+            try:
+                return float(axis_elem.text)
+            except ValueError:
+                return None
+    return None
+
+
+def _get_xml_pixel_size_angstrom(xml_path):
+    """Return pixel size in angstroms/pixel parsed from an EPU-generated XML file, or None.
+
+    EPU metadata stores pixel size in meters under
+    ``SpatialScale/pixelSize/x/numericValue``, regardless of the enclosing
+    namespace. The reported value is the physical detector pixel size and
+    does not account for camera binning, so it is scaled by the camera's
+    ``Binning/x`` factor (defaulting to 1 when absent) to yield the
+    effective pixel size of the saved image.
+    """
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    pixel_size_m = None
+    for elem in root.iter():
+        if elem.tag.split("}")[-1] != "pixelSize":
+            continue
+        for axis_elem in elem:
+            if axis_elem.tag.split("}")[-1] != "x":
+                continue
+            for value_elem in axis_elem:
+                if value_elem.tag.split("}")[-1] != "numericValue" or not value_elem.text:
+                    continue
+                try:
+                    pixel_size_m = float(value_elem.text)
+                except ValueError:
+                    return None
+    if pixel_size_m is None:
+        return None
+    binning = _get_xml_binning_factor(root)
+    if binning is None:
+        binning = 1.0
+    return round(pixel_size_m / binning * 1.0e10, 3)
+
+
+def _get_xml_custom_data_value(root, key_name):
+    """Return the text of a ``CustomData`` key/value entry matching key_name, or None.
+
+    EPU metadata stores several fields (e.g. ``DoseOnCamera``) as
+    ``CustomData/KeyValueOfstringanyType`` entries with a ``Key``/``Value``
+    child pair, rather than as directly-named elements.
+    """
+    for elem in root.iter():
+        if not elem.tag.split("}")[-1].startswith("KeyValueOf"):
+            continue
+        key_elem = None
+        value_elem = None
+        for child in elem:
+            local_tag = child.tag.split("}")[-1]
+            if local_tag == "Key":
+                key_elem = child
+            elif local_tag == "Value":
+                value_elem = child
+        if key_elem is not None and key_elem.text == key_name and value_elem is not None:
+            return value_elem.text
+    return None
+
+
+def _get_xml_dose_electrons_per_angstrom2(xml_path):
+    """Return dose in electrons/angstrom^2 parsed from an EPU-generated XML file, or None.
+
+    EPU metadata stores the total dose in electrons/pixel under a
+    ``DoseOnCamera`` entry within ``CustomData``, reported per native
+    (unbinned) camera pixel. It is scaled by the camera's ``Binning/x``
+    factor (defaulting to 1 when absent) to yield dose per saved/output
+    pixel, then converted to electrons/angstrom^2 using the
+    (binning-corrected) output pixel area.
+    """
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    raw_value = _get_xml_custom_data_value(root, "DoseOnCamera")
+    if not raw_value:
+        return None
+    try:
+        dose_per_native_px = float(raw_value)
+    except ValueError:
+        return None
+    binning = _get_xml_binning_factor(root)
+    if binning is None:
+        binning = 1.0
+    dose_per_output_px = dose_per_native_px / binning
+    pixel_size_angstrom = _get_xml_pixel_size_angstrom(xml_path)
+    if not pixel_size_angstrom:
+        return None
+    return round(dose_per_output_px / (pixel_size_angstrom ** 2), 1)
+
+
+def _get_xml_phaseplate(xml_path):
+    """Return SIMPLE-style phaseplate flag ("yes"/"no") from an EPU-generated XML file, or None.
+
+    EPU metadata stores phase-plate usage as a boolean under a
+    ``PhasePlateUsed`` element, regardless of the enclosing namespace.
+    """
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    for elem in root.iter():
+        if elem.tag.split("}")[-1] != "PhasePlateUsed" or not elem.text:
+            continue
+        return "yes" if elem.text.strip().lower() == "true" else "no"
+    return None
+
+
 # ------------------------------------------------------------------
 # Stream Lifecycle Actions
 # ------------------------------------------------------------------
@@ -177,6 +376,69 @@ def view_stream_create_stream(request):
     response = redirect("nice_lite:view_stream", jobid=streamjob.id)
     return response
 
+
+@login_required(login_url="/login")
+@require_GET
+def view_stream_test_path(request, path):
+    """Check whether the given filesystem path exists and is a directory."""
+    return_obj = {}
+    return_obj["exists"] = bool(path) and directory_exists(path)
+    if not return_obj["exists"]:
+        return JsonResponse(return_obj)
+
+    normalized_path = os.path.normpath(path)
+    basename        = os.path.basename(normalized_path)
+    if basename == "movies":
+        return_obj["dir_movies"] = normalized_path
+        stem_dir = os.path.dirname(normalized_path)
+    elif _IMAGES_DISC_RE.match(basename):
+        return_obj["dir_movies"] = normalized_path
+        stem_dir = os.path.dirname(normalized_path)
+    elif directory_exists(os.path.join(normalized_path, "movies")):
+        return_obj["dir_movies"] = os.path.join(normalized_path, "movies")
+        stem_dir = normalized_path
+    else:
+        images_disc_dir = _find_images_disc_dir(normalized_path)
+        if images_disc_dir is not None:
+            return_obj["dir_movies"] = images_disc_dir
+            stem_dir = normalized_path
+        else:
+            return_obj["dir_movies"] = normalized_path
+            stem_dir = normalized_path
+
+    if directory_exists(os.path.join(stem_dir, "metadata")):
+        return_obj["dir_meta"] = os.path.join(stem_dir, "metadata")
+    elif _find_images_disc_dir(normalized_path) is not None:
+        return_obj["dir_meta"] = _find_images_disc_dir(normalized_path)
+
+    if "dir_meta" in return_obj:
+        meta_xml = _find_foilhole_xml(return_obj["dir_meta"])
+        if meta_xml is not None:
+            return_obj["cs"] = 2.7 # spherical aberration in mm
+            kv = _get_xml_acceleration_voltage_kv(meta_xml)
+            if kv is not None:
+                return_obj["kv"] = kv
+            smpd = _get_xml_pixel_size_angstrom(meta_xml)
+            if smpd is not None:
+                return_obj["smpd"] = smpd
+            phaseplate = _get_xml_phaseplate(meta_xml)
+            if phaseplate is not None:
+                return_obj["phaseplate"] = phaseplate
+            dose = _get_xml_dose_electrons_per_angstrom2(meta_xml)
+            if dose is not None:
+                return_obj["total_dose"] = dose
+
+    return_obj["fraca"]          = 0.1 
+    return_obj["smpd_downscale"] = 1.3
+    if "smpd" in return_obj:
+        return_obj["smpd_downscale"] = max(1.3, return_obj["smpd"])
+
+    if directory_exists(os.path.join(stem_dir, "gain")):
+        gainref = _find_gainref_file(os.path.join(stem_dir, "gain"))
+        if gainref is not None:
+            return_obj["gainref"] = gainref
+
+    return JsonResponse(return_obj)
 
 @login_required(login_url="/login")
 @require_POST

@@ -95,32 +95,32 @@
                         {% for input in stream_user_inputs %}
                             {% with keytype=input.keytype %}
 
-                            {# Visible label aligned with its control; developer-visibility fields keep their proper widget but stay hidden until Ctrl+Q #}
-                            <label class="text-xs font-medium text-streamtext whitespace-nowrap{% if input.visibility == "developer" %} hidden{% endif %}"
-                                {% if input.visibility == "developer" %}data-toggle-hidden-label="true"{% endif %}
+                            {# Visible label aligned with its control; developer-visibility fields keep their proper widget but stay hidden until Ctrl+Q. Non-developer fields other than dir_movies stay path-gated until testStreamPath confirms the movies directory exists, but still reveal on Ctrl+Q. Fields that already carry a value (e.g. cloning an existing job) are shown immediately instead of waiting on the path gate. #}
+                            <label class="text-xs font-medium text-streamtext whitespace-nowrap{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} hidden{% endif %}"
+                                {% if input.visibility == "developer" %}data-toggle-hidden-label="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-label="true"{% endif %}
                                 for="field_{{ input.key }}">{{ input.label }}</label>
 
-                            <div class="relative flex items-center{% if input.visibility == "developer" %} hidden{% endif %}"
-                                {% if input.visibility == "developer" %}data-toggle-hidden-container="true"{% endif %}>
+                            <div class="relative flex items-center{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} hidden{% endif %}"
+                                {% if input.visibility == "developer" %}data-toggle-hidden-container="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-container="true"{% endif %}>
  
                                     {% if keytype == "int" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="1"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_int }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_int }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
 
                                     {% elif keytype == "float" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="0.0001"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_float:4 }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_float:4 }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
  
                                     {% elif keytype == "multi" %}
                                         <select id="field_{{ input.key }}" name="{{ input.key }}"
                                                 {% if input.required %}required{% endif %}
-                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
                                             {% for option in input.options %}
                                                 <option value="{{ option }}"
                                                     {% if "value" in input and option == input.value %}selected
@@ -150,8 +150,9 @@
                                         {# Directory picker: text input + folder icon + full-screen iframe browser #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
+                                            {% if input.key == "dir_movies" %}onblur="testStreamPath(this);" oninput="this.setCustomValidity('');" data-has-value="{% if "value" in input %}true{% else %}false{% endif %}"{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
                                         <button type="button" title="browse for directory"
                                             onclick="openWorkspaceBrowser('dir', 'field_{{ input.key }}')"
                                                 class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
@@ -165,7 +166,7 @@
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
                                         <button type="button" title="browse for file"
                                             onclick="openWorkspaceBrowser('file', 'field_{{ input.key }}')"
                                                 class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
@@ -179,7 +180,7 @@
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
                                     {% endif %}
 
                             </div>
@@ -667,6 +668,105 @@
             iframe.classList.add("hidden");
         }
 
+        let pathGateVisible = false;
+
+        function updatePathGatedVisibility() {
+            const visible = hiddenInputsVisible || pathGateVisible;
+            const labels = document.querySelectorAll("label[data-toggle-path-label='true']");
+            const containers = document.querySelectorAll("[data-toggle-path-container='true']");
+            labels.forEach((label) => label.classList.toggle("hidden", !visible));
+            containers.forEach((container) => container.classList.toggle("hidden", !visible));
+        }
+
+        const TEST_PATH_RESPONSE_KEYS = [
+            "dir_movies", "dir_meta", "kv", "smpd", "phaseplate",
+            "total_dose", "cs", "fraca", "smpd_downscale", "gainref",
+        ];
+
+        // These values are only best-effort guesses derived from probing the
+        // filesystem/metadata, so flag them as needing user verification via
+        // the native validity mechanism (dir_movies/dir_meta are excluded
+        // since their validity is already governed by directory-existence
+        // checks elsewhere).
+        const TEST_PATH_VERIFY_KEYS = new Set([
+            "kv", "smpd", "phaseplate", "total_dose", "cs", "fraca", "smpd_downscale", "gainref",
+        ]);
+
+        function markFieldForVerification(interactiveEl, visualEl) {
+           // visualEl.classList.remove("border-streamline");
+            visualEl.classList.remove("ring-transparent");
+            visualEl.classList.add("ring-streamaction");
+            const clearHighlight = () => {
+                visualEl.classList.remove("ring-streamaction");
+                visualEl.classList.add("ring-transparent");
+         //       visualEl.classList.add("border-streamline");
+            };
+            interactiveEl.addEventListener("input", clearHighlight, { once: true });
+            interactiveEl.addEventListener("change", clearHighlight, { once: true });
+        }
+
+        function applyTestStreamPathValues(data) {
+            let lastUpdatedField = null;
+            TEST_PATH_RESPONSE_KEYS.forEach((key) => {
+                if (!(key in data)) return;
+                const field = document.getElementById("field_" + key);
+                if (!field) return;
+                const value = data[key];
+                const toggle = document.getElementById("field_" + key + "_toggle");
+                if (toggle) {
+                    toggle.checked = value === "yes";
+                }
+                field.value = value;
+                lastUpdatedField = toggle || field;
+                if (TEST_PATH_VERIFY_KEYS.has(key)) {
+                    markFieldForVerification(toggle || field, toggle ? toggle.nextElementSibling : field);
+                }
+            });
+            return lastUpdatedField;
+        }
+
+        function markLastFieldForVerification(target) {
+            // Show a one-time native validation bubble as a nudge, but clear
+            // the custom validity immediately afterwards so this field can
+            // never block form submission (the user may never touch it) -
+            // the persistent "please verify" signal is the ring highlight
+            // applied in markFieldForVerification, not this message.
+            target.setCustomValidity("auto-detected values populated, please verify highlighted fields");
+            target.reportValidity();
+            target.setCustomValidity("");
+        }
+
+        function testStreamPath(inputEl) {
+            // Skip auto-populate/path-testing entirely when this field was
+            // pre-filled by the server (job clone) - the cloned values are
+            // already correct and shouldn't be overwritten by a fresh probe.
+            if (inputEl.dataset.hasValue === "true") return;
+            const path = inputEl.value.trim();
+            if (!path) return;
+            const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+            const url = "{% url 'nice_lite:test_stream_path' path='PLACEHOLDER' %}".replace("PLACEHOLDER", encodedPath);
+            fetch(url)
+                .then((response) => response.json())
+                .then((data) => {
+                    pathGateVisible = Boolean(data.exists);
+                    updatePathGatedVisibility();
+                    const lastUpdatedField = applyTestStreamPathValues(data);
+                    if (pathGateVisible) {
+                        // Note: do not call reportValidity() here - it forces
+                        // focus back onto the field, which would fight the
+                        // user every time they blur away from it.
+                        inputEl.setCustomValidity("");
+                        if (lastUpdatedField) {
+                            markLastFieldForVerification(lastUpdatedField);
+                        }
+                    } else {
+                        inputEl.setCustomValidity("directory does not exist");
+                        inputEl.reportValidity();
+                    }
+                })
+                .catch((error) => console.error("test_path request failed", error));
+        }
+
         function openWorkspaceBrowser(kind, targetInputId, requiredExtension = "", purpose = "external_input") {
             const workspaceDoc = window.parent && window.parent.document;
             if (!workspaceDoc) return;
@@ -1015,6 +1115,7 @@
                     container.classList.add("hidden");
                 }
             });
+            updatePathGatedVisibility();
         }
 
         document.addEventListener("keydown", function(event) {

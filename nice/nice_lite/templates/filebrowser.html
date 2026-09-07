@@ -216,6 +216,12 @@
                 const targetInput = builderDoc ? builderDoc.getElementById(targetId) : null;
                 if (targetInput) {
                     targetInput.value = selectedpath.value;
+                    // Programmatic value assignment does not fire a native
+                    // blur event, so dispatch one to trigger any onblur
+                    // handler (e.g. dir_movies' testStreamPath) the same way
+                    // it would fire if the user had typed the path and
+                    // tabbed away.
+                    targetInput.dispatchEvent(new Event("blur"));
                 }
                 restoreJobsIframe(iframe);
                 return;

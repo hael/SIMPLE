@@ -49,7 +49,7 @@
             if (el.workspace && el.workspace[key] !== undefined) return el.workspace[key];
             return fallback;
           };
-§
+
           const deleteStream = (button) => {
             const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
             if (confirm("Please confirm that you wish to delete stream " + jobid)) {

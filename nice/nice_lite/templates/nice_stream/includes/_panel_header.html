@@ -42,6 +42,13 @@
         <!-- Title -->
         <span class="text-[10px] font-medium text-streamtext uppercase tracking-widest flex-1">{{ panel_title }}</span>
         
+        {% comment %}
+          relative anchors the absolutely-positioned .status-menu dropdown to this
+          row; without it the menu is positioned against the page's initial
+          containing block and gets clipped by the panel body's overflow-hidden,
+          so it opens but is never visible.
+        {% endcomment %}
+        <div class="relative flex items-center gap-2">
         <!-- Status indicator. Actionable statuses (running/finished/failed) become
              a button that toggles a dropdown with the stop/restart action, unless
              hide_actions is set — see the outside-click handler script at the
@@ -132,8 +139,8 @@
                 </span>
             {% endif %}
         {% elif status == "queued" or status == "terminating" %}
-            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
-                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction">
+                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction flex-shrink-0" title="{{ status }}"></span>
                 {{ status }}
             </span>
         {% elif status == "error" %}
@@ -147,6 +154,7 @@
                 {{ status }}
             </span>
         {% endif %}
+        </div>
 
         {% if zoom_url  and not status == "skipped" %}
             <!-- Zoom button -->

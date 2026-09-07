@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}"></script>
 </head>
-<body class="bg-streambar h-screen overflow-hidden font-sans rounded-xl border {% if status == 'running' %}border-streamaction/20 hover:border-streamaction{% elif status == 'failed' or status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} transition-colors cursor cursor-zoom-in"
+<body class="bg-streambar h-screen overflow-hidden font-sans rounded-xl border {% if status == 'running' or status == 'queued' or status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif status == 'failed' or status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} transition-colors cursor cursor-zoom-in"
     onclick="this.querySelector('form.zoomform')?.submit();" onmouseleave="this.querySelector('.status-menu')?.classList.add('hidden')">
 
     <!-- Loading gauze -->
