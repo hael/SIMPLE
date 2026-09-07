@@ -411,7 +411,10 @@ the strategy dispatches `volassemble`.
   LIMIT`, `ESTIMATED LOW-PASS LIMIT`), per state when `nstates > 1`, and
   persists them as `RESOLUTION`, `RESOLUTION_FSC05`, `LP_MATCHING`,
   `LP_ESTIMATED` (plus `_STATEnn` variants) in the iteration stats. Both
-  backends write the same fields (2026-09-06)
+  backends write the same fields (2026-09-06). `res05` occupies fixed
+  particle-record slot 50 (`I_RES05`, the former spare `I_EMPTY10`): the
+  binary project stores particles as fixed 50-float records, so a key without
+  a slot never reaches disk
 
 Volume assembly does not refresh matcher PFTC references. It only produces
 Cartesian volumes and metadata for the next iteration.

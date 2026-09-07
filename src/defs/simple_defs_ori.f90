@@ -52,7 +52,7 @@ enum, bind(c)
     enumerator :: I_CLASS_MATCH = 47
     enumerator :: I_CONT_INPL_ATTEMPTED = 48
     enumerator :: I_CONT_INPL_IMPROVED  = 49
-    enumerator :: I_EMPTY10             = 50
+    enumerator :: I_RES05               = 50 ! resolution @ FSC=0.5 (formerly the spare slot I_EMPTY10)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
@@ -107,6 +107,8 @@ contains
                 get_oriparam_ind = I_SHINCARG
             case('res')
                 get_oriparam_ind = I_RES
+            case('res05')
+                get_oriparam_ind = I_RES05
             case('state')
                 get_oriparam_ind = I_STATE
             case('stkind')
@@ -262,6 +264,8 @@ contains
                 flag = 'cont_inpl_attempted'
             case(I_CONT_INPL_IMPROVED)
                 flag = 'cont_inpl_improved'
+            case(I_RES05)
+                flag = 'res05'
             case DEFAULT
                 flag = 'unknown'
         end select
@@ -321,8 +325,8 @@ contains
                 oriparam_isthere = abs(val) > TINY    
             case(I_RETIRED_W)
                 oriparam_isthere = .false.
-            case(I_EMPTY10)
-                oriparam_isthere = .false.
+            case(I_RES05)
+                oriparam_isthere = abs(val) > TINY
             case DEFAULT
                 ! default case is defined
                 oriparam_isthere = .true.
