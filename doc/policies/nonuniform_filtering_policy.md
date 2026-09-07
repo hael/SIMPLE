@@ -470,10 +470,10 @@ limit determines the single project-level matching bandwidth, matching the
 classical global-bandwidth policy.
 
 Staged `abinitio3D` additionally passes an `lpstop` ceiling: the per-stage
-`lpstages` value in the non-NU stages, and the ladder's final limit (`lpfinal`,
+`lpstages` value in the non-NU stages, and the ladder's hard fine bound (`LPSTOP_BOUNDS(1)`, 4.5 A; formerly `lpfinal`,
 4.5 A at the fine end) in the NU stages. Consequently, an NU-selected project
 limit may promote matching beyond the current stage plan but never beyond the
-ladder's final limit. This workflow constraint does not change the
+ladder's hard fine bound (4.5 A, 2026-09-07). This workflow constraint does not change the
 evidence-driven update policy used by `refine3D_auto`. When the user explicitly
 supplies a coarser `lpstop`, the staged workflow uses the coarser of that value
 and the ceiling.

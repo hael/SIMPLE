@@ -170,12 +170,29 @@ newly opened band. An explicit command-line `lp` (with `ml_reg=yes`) disables
 the promotion for that stage. Multi-state follows the standard single-band
 rule: the best resolved populated state sets the band for all states.
 (Streptavidin log set 2026-09-06: the plan sat at 8.6/7.6 A in stages 4/5
-while the half maps agreed to 4.3 A at FSC=0.5.) In the NU stages the ceiling is the ladder's final limit
-(`lpfinal`, bounded by `LPSTOP_BOUNDS`, 4.5 A at the fine end): the NU
-evidence handoff may promote matching beyond the per-stage plan, because the
-class-FRC ladder is not informative about the particle map once NU filtering
-is active, but `abinitio3D` runs without gold-standard halves, so the promotion
-is never left open. The bound applies throughout every iteration in the stage.
+while the half maps agreed to 4.3 A at FSC=0.5.)
+
+In the NU stages the ceiling is the ladder's HARD fine bound
+(`LPSTOP_BOUNDS(1)`, 4.5 A), not the class-FRC final limit `lpfinal` (the
+median resolution of the three best class averages clamped to
+`LPSTOP_BOUNDS`): the NU handoff may promote matching beyond the per-stage
+plan, because the class-FRC ladder is not informative about the particle map
+once NU filtering is active, but `abinitio3D` runs without gold-standard
+halves, so the promotion is never left open. The bound applies throughout
+every iteration in the stage. (Record 2026-09-07, PfCRT: `lpfinal` is 6.0 A
+because the 2D classes stop at 6 A while the 3D map reaches 4 A; capping at
+`lpfinal` pinned the NU stages at 5.97 A and every run plateaued at 6 A,
+whereas the July reference matched at 4.4/4.1/4.0 A.)
+
+NU stages run their full iteration budget: the stage command line carries
+`minits=maxits`, so the 0.9/0.95 orientation-overlap early stopping does not
+apply in stages 6-8. The likelihood sampler anneals its candidate set with the
+shrinking angular distance and reaches those overlaps within a few iterations
+of every NU stage regardless of map quality; the thresholds were tuned for the
+bounded sampler, under which successful runs never reached them. PfCRT record
+2026-09-07: the July successes ran 12/12/25 iterations in stages 6-8 (4.1 A);
+every early-stopped run, July or September, ended at 5-8.6 A with the FSC
+still improving when the stage stopped.
 An explicitly supplied, coarser command-line `lpstop` is folded into the
 ladder and is also retained as an independent ceiling when the staged child
 command is rebuilt; the effective ceiling is the coarser of the two limits.

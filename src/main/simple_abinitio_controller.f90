@@ -513,12 +513,18 @@ contains
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
-        ! Ladder cap: the ladder's FINAL limit (lpfinal, bounded
-        ! [LPSTOP_BOUNDS]). lpinfo normally incorporates an explicit lpstop
-        ! while constructing the ladder; retain the command-line value as an
-        ! independent guard so a coarser user ceiling cannot be lost when the
-        ! stage cline is rebuilt.
-        lp_cap = lpinfo(active_refine3D_nstages())%lp
+        ! Ladder cap: the ladder's HARD fine bound LPSTOP_BOUNDS(1) (4.5 A),
+        ! not the class-FRC final limit lpfinal. lpfinal is the median
+        ! resolution of the three best class averages clamped to
+        ! LPSTOP_BOUNDS, i.e. 6.0 A for a specimen whose 2D classes stop at
+        ! 6 A although its 3D map reaches 4 A (PfCRT: the July reference run
+        ! matched the NU stages at 4.4/4.1/4.0 A; capping at lpfinal pinned
+        ! every 2026-09-07 run at 5.97 A and the maps plateaued at 6 A, record
+        ! in pcg_priors.md). Retain a coarser command-line lpstop as an
+        ! independent guard so a user ceiling cannot be lost when the stage
+        ! cline is rebuilt. The class-average route keeps its own final limit.
+        lp_cap = LPSTOP_BOUNDS(1)
+        if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
         if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
         ! Stage-boundary FSC=0.5 promotion (2026-09-06). abinitio3D runs
         ! without gold-standard halves, so an FSC crossing is trustworthy only
@@ -538,11 +544,11 @@ contains
         ! promoted) stage limit, so the ceiling equals it. NU stages let the
         ! finest-label handoff promote matching beyond the per-stage plan (the
         ! class-FRC ladder is not informative about the particle map there),
-        ! capped at the ladder cap rather than left open. Log-set record
-        ! 2026-09-06 (pcg_priors.md dev item 2): capping at the per-stage value
-        ! stalled every NU stage on streptavidin and msp1; the uncapped
-        ! finest-label handoff of the healthy runs sat between the current
-        ! map's FSC=0.5 and FSC=0.143.
+        ! capped at the ladder's hard bound rather than left open. Log-set
+        ! record 2026-09-06 (pcg_priors.md dev item 2): capping at the
+        ! per-stage value stalled every NU stage on streptavidin and msp1; the
+        ! uncapped finest-label handoff of the healthy runs sat between the
+        ! current map's FSC=0.5 and FSC=0.143.
         if( cfg%filt_mode .ne. 'none' )then
             lpstop_eff = lp_cap
         else
@@ -619,6 +625,22 @@ contains
             call cline_refine3D%delete('nspace_sub')
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
+        ! NU stages run their full iteration budget (2026-09-07). The
+        ! likelihood sampler anneals its candidate set with the shrinking
+        ! angular distance, so the orientation overlap reaches the 0.9/0.95
+        ! early-stopping thresholds within a few iterations of every NU stage
+        ! regardless of map quality; the thresholds were tuned for the
+        ! bounded sampler, under which good runs never reached them and ran
+        ! to MAXITS. PfCRT record: the July successes ran 12/12/25 (or 16-25)
+        ! iterations in stages 6-8 and reached 4.1 A; every July early stop
+        ! (3-6 iterations in stage 8) and every 2026-09-07 run (3 iterations
+        ! in stage 8, 3-9 in stage 6) ended at 5-8.6 A with the FSC still
+        ! improving when the stage stopped.
+        if( cfg%filt_mode .ne. 'none' )then
+            call cline_refine3D%set('minits',             cfg%imaxits)
+        else
+            call cline_refine3D%delete('minits')
+        endif
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
         call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)

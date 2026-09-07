@@ -2623,6 +2623,34 @@ the acceptable-looking outputs do not validate the prior.
    compact evidence-state module remains for the envelope, postprocess_nu
    and the envmask test.
 
+   PfCRT REGRESSION 2026-09-07 (abinitio3D, 7/7 runs at 6.0-6.5 A vs the
+   July reference 8/10 at 4.1-4.3 A; both full sampling, identical commands
+   apart from rec_backend). Map-level audit: every stage snapshot of every
+   restart docked (both hands) against the July restart-1 snapshots and
+   scored by cross-FSC. Through stage 5 the September maps are as close to
+   the July reference as July's own restarts (median cross-FSC 20-10 A:
+   0.41 vs 0.41 at stage 5), so the global-search stages are NOT the
+   problem despite their low orientation overlap (0.12; the likelihood
+   sampler draws near-uniformly over the top-K, dist 13-22 deg on PfCRT vs
+   3-5 deg on msp1/streptavidin, but the maps are equivalent). The two sets
+   part in stage 6, the first NU stage (stage-6 cross-FSC 10-7 A: July
+   0.50, September 0.27) and never re-converge. Two causes, both in the NU
+   stages: (1) the matching cap implemented on 2026-09-06 was the ladder's
+   FINAL value lpfinal, 6.0 A for PfCRT (2D classes stop at 6 A), not the
+   4.5 A hard bound the user asked for; the raw NU handoffs of the
+   September runs (4.44/4.14/3.98 A) equal the bands the July run actually
+   matched at, and the cap pinned them at 5.97 A. (2) Early stopping: the
+   annealing sampler reaches overlap 0.9/0.95 within 3-9 iterations of every
+   NU stage; July successes ran 12/12/25 iterations, every early-stopped
+   run (July 4/5/3 iterations -> 5.9/4.9/8.0 A; September 3 iterations in
+   stage 8 everywhere) failed with the FSC still improving. Fixes: cap =
+   LPSTOP_BOUNDS(1) (coarser explicit lpstop retained); minits = maxits in
+   NU stages. Not implicated by the data: rec_backend (stage 2-5 maps match
+   July's), the 20 A stage-1 floor and ladder shift, the FSC=0.5 promotion,
+   inpl_cont, the sigma bootstrap. Remaining second-order candidate for
+   PfCRT-class specimens: the sampler temperature (audit
+   pfcrt_audit_a6ae317ae_vs_head.md item 1).
+
    The controller observations above stand as a record; the guard rails
    below were drafted and then WITHDRAWN (not applied), so the validated
    adaptive configuration (embb, exp_gate, PfCRT) is unchanged.
