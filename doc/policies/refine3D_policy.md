@@ -189,7 +189,26 @@ an empty directory, and every final reconstruction at a new sampling. Since
   sequence: seed, bootstrap map, residual pass, consolidation, final map;
   abinitio3D's `calc_final_rec` and refine3D_auto call it and carry no copy
   of the sequence. It runs standalone on any project with 3D orientations
-  and is the test entry point for the final-reconstruction stage.
+  and is the test entry point for the final-reconstruction stage. The
+  bootstrap map only serves as the residual reference, so it is always a
+  gridding assembly with ML regularization (one particle pass, no
+  postprocessing) that keeps the workflow's `filt_mode`, `nu_refine` and
+  `automsk`: the residual sigmas depend on the regularization of the
+  reference they are scored against, so that reference is regularized
+  exactly as the refinement's matching references were; the shipped map keeps the
+  caller's backend and, on PCG, starts from nothing at the native box and
+  therefore gets the cold-solve budget of at least `FINAL_PCG_MAXITS_FLOOR`
+  (5) iterations whoever the caller is (2026-09-07). The base plus ML solve
+  pair of that final PCG reconstruction is inherent to ML regularization:
+  the prior is built from the base pair's independent-half FSC, which is
+  also the reported FSC and the unfiltered pair postprocessing uses.
+- The registration-box rule is the same for both stores (2026-09-07): a
+  final reconstruction whose registration (crop) box differs from the native
+  box refreshes the sigmas at native sampling (image-power seed, bootstrap
+  map, residual pass) before the shipped map. Before this the canonical store
+  reused its committed state whenever it was structurally consumable, which
+  is always true at the native box, and so skipped the refresh legacy
+  performs; the two stores could not produce the same final map.
 
 ## 6. Reference Preparation
 

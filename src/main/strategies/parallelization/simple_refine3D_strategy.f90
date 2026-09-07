@@ -13,7 +13,8 @@ use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap, sigma2_star_from_iter
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
-    &sigma2_state_project_layout_digest, sigma2_state_range_path, sigma2_state_validate_identity
+    &sigma2_state_project_layout_digest, sigma2_state_range_path, sigma2_state_validate_identity, &
+    &sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master
@@ -1165,14 +1166,20 @@ contains
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(string) :: state_path, candidate_path, range_path
+        integer(int64) :: next_gen
         integer :: ipart, status
         logical :: found
         character(len=STDLEN) :: message
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        candidate_path = sigma2_state_candidate_path(state_path%to_char())
+        ! transaction-scoped names: candidate and ranges carry the generation
+        ! this update commits, so nothing left by another transaction can be
+        ! merged into it (2026-09-07)
+        call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
         do ipart = 1, params%nparts
-            range_path = sigma2_state_range_path(state_path%to_char(), ipart, params%numlen)
+            range_path = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
             call del_file(range_path)
         enddo
         call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)
@@ -1402,6 +1409,10 @@ contains
         select case(trim(params%refine))
             case('eval')
                 ! nothing
+            case('sigma')
+                ! no convergence report for a residual-only pass: it merges
+                ! no alignment documents, so the master's field would be
+                ! reported against itself (stale sampled flags, zero motion)
             case DEFAULT
                 if( trim(params%volrec).eq.'yes' ) call refresh_resolution_fields_from_fsc(params, build)
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)

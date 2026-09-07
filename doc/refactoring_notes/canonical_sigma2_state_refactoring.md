@@ -155,8 +155,10 @@ the complete generation.
 
 ## 5. Distributed Write and Recovery
 
-The committed `sigma2_state.bin` is immutable. Every update targets
-`sigma2_state.next`; only the master may create, size, validate, publish, or
+The committed `sigma2_state.bin` is immutable. Every update targets the
+generation-scoped candidate `sigma2_state.g<N>.next` (N = the generation the
+update commits; worker ranges are `sigma2_state.g<N>.part<NN>.range`, both
+since 2026-09-07); only the master may create, size, validate, publish, or
 discard it.
 
 Protocol:

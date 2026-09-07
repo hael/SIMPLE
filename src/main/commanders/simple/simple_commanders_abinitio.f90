@@ -642,6 +642,16 @@ contains
         call nice_comm%cycle()
         ! read project
         call spproj%read(params%projfile)
+        ! A fresh abinitio3D never continues another run's sigma2 estimate: a
+        ! canonical registration inherited with the project is dropped so the
+        ! first euclid stage seeds in this run's own directory (2026-09-07)
+        if( spproj%projinfo%get_noris() == 1 )then
+            if( spproj%projinfo%isthere(1, 'sigma2_state') )then
+                call spproj%projinfo%delete_entry('sigma2_state')
+                call spproj%write_segment_inside('projinfo', params%projfile)
+                write(logfhandle,'(A)') '>>> ABINITIO3D: dropped an inherited canonical sigma2 registration; sigmas are seeded here'
+            endif
+        endif
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.

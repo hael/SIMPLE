@@ -147,39 +147,82 @@ contains
         call self%projinfo%set(1, 'cwd', cwd%to_char())
     end subroutine update_projinfo_2
 
+    !> Register the canonical sigma2 state. A state in the project's own
+    !! directory is stored by name only and resolved against that directory
+    !! on lookup, so a project copied into another execution directory never
+    !! points back into the originating run (execution-local state,
+    !! 2026-09-07). A state elsewhere keeps its absolute path: an explicit
+    !! cross-directory registration (streaming pool, project merges).
     module subroutine set_sigma2_state_path( self, state_path )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: state_path
-        type(string) :: absolute_path, cwd
+        type(string) :: absolute_path, project_dir, state_dir, state_name
         character(len=:), allocatable :: raw_path
-        logical :: l_absolute
         if( self%projinfo%get_noris() /= 1 ) call self%projinfo%new(1, is_ptcl=.false.)
         raw_path = trim(state_path%to_char())
         if( len(raw_path) == 0 ) THROW_HARD('canonical sigma2 state path cannot be blank')
-        l_absolute = raw_path(1:1) == '/' .or. raw_path(1:1) == '\'
-        if( len(raw_path) >= 2 ) l_absolute = l_absolute .or. raw_path(2:2) == ':'
-        if( file_exists(state_path) )then
-            absolute_path = simple_abspath(state_path)
-        else if( l_absolute )then
-            absolute_path = raw_path
-        else
-            call simple_getcwd(cwd)
-            absolute_path = filepath(cwd, state_path)
+        if( scan(raw_path, '/\') == 0 )then
+            ! a bare name: the state lives next to the project file
+            call self%projinfo%set(1, 'sigma2_state', raw_path)
+            return
         endif
-        call self%projinfo%set(1, 'sigma2_state', absolute_path%to_char())
-        call cwd%kill
+        absolute_path = simple_abspath(state_path, check_exists=.false.)
+        project_dir   = sigma2_state_project_dir(self)
+        state_dir     = stemname(absolute_path)
+        if( trim(state_dir%to_char()) == trim(project_dir%to_char()) )then
+            state_name = basename(absolute_path)
+            call self%projinfo%set(1, 'sigma2_state', state_name%to_char())
+        else
+            call self%projinfo%set(1, 'sigma2_state', absolute_path%to_char())
+        endif
         call absolute_path%kill
+        call project_dir%kill
+        call state_dir%kill
+        call state_name%kill
     end subroutine set_sigma2_state_path
 
+    !> The registered canonical sigma2 state, resolved: a name resolves
+    !! against the project's own directory, an absolute registration is
+    !! returned as is
     module subroutine get_sigma2_state_path( self, state_path, found )
         class(sp_project), intent(in)    :: self
         type(string),      intent(inout) :: state_path
         logical,           intent(out)   :: found
+        type(string) :: registered, project_dir
+        character(len=:), allocatable :: raw_path
+        logical :: l_absolute
         call state_path%kill
         found = self%projinfo%get_noris() == 1
         if( found ) found = self%projinfo%isthere(1, 'sigma2_state')
-        if( found ) call self%projinfo%getter(1, 'sigma2_state', state_path)
+        if( .not. found ) return
+        call self%projinfo%getter(1, 'sigma2_state', registered)
+        raw_path   = trim(registered%to_char())
+        l_absolute = .false.
+        if( len(raw_path) >= 1 ) l_absolute = raw_path(1:1) == '/' .or. raw_path(1:1) == '\'
+        if( len(raw_path) >= 2 ) l_absolute = l_absolute .or. raw_path(2:2) == ':'
+        if( l_absolute )then
+            state_path = raw_path
+        else
+            project_dir = sigma2_state_project_dir(self)
+            state_path  = filepath(project_dir, registered)
+            call project_dir%kill
+        endif
+        call registered%kill
     end subroutine get_sigma2_state_path
+
+    !> The directory that owns the project's canonical sigma2 state: the
+    !! project file's directory recorded in projinfo, else the working directory
+    function sigma2_state_project_dir( self ) result( dir )
+        class(sp_project), intent(in) :: self
+        type(string) :: dir
+        if( self%projinfo%get_noris() == 1 )then
+            if( self%projinfo%isthere(1, 'cwd') )then
+                call self%projinfo%getter(1, 'cwd', dir)
+                if( dir%strlen_trim() > 0 ) return
+            endif
+        endif
+        call simple_getcwd(dir)
+    end function sigma2_state_project_dir
 
     module subroutine update_compenv( self, cline )
         class(sp_project), intent(inout) :: self

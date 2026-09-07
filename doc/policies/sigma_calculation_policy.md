@@ -148,16 +148,37 @@ normalization by `2*pftsz`.
 
 Each canonical iteration is transactional:
 
-1. the master creates `sigma2_state.next`, copying the committed generation
-   when unchanged rows must survive;
-2. each worker writes one exclusive temporary range for its assigned global
-   particle rows;
+1. the master creates the candidate `<state stem>.g<N>.next`, where N is the
+   generation this update commits (committed generation + 1), copying the
+   committed generation when unchanged rows must survive;
+2. each worker writes one exclusive range file
+   `<state stem>.g<N>.part<NN>.range` for its assigned global particle rows,
+   after checking that the candidate it found carries generation N;
 3. the master verifies generation/layout identity and exact non-overlapping
    scheduled coverage, merges the ranges, and reduces active records into the
    grouped model;
 4. commit-time scientific and integrity validation runs;
 5. the candidate is synced and atomically published over the committed file,
    followed by directory sync.
+
+Candidate and range names carry the generation they belong to (2026-09-07),
+so a file left by another transaction, a crashed run or a second run in the
+same directory, can never be merged into this one; the mismatch fails loudly.
+
+Execution-local state (2026-09-07): the project registers its state by name
+only when the state lives in the project file's own directory, and the name
+is resolved against that directory on lookup. A project copied into a new
+execution directory (`mkdir=yes`) therefore no longer points back into the
+originating run's `sigma2_state.bin`; the copy seeds its own state. An
+absolute registration is kept only for an explicit cross-directory state
+(the streaming pool, project merges). abinitio3D drops any registration
+inherited with its input project at start, so a fresh workflow always seeds.
+
+Invalid records (2026-09-07): an active particle record with a non-finite or
+non-positive shell is skipped by the reduction and by commit-time validation,
+with a warning giving the count, instead of aborting the run. The legacy
+store averages whatever its part files hold; the canonical store now degrades
+the same way rather than failing where legacy would not.
 
 A failed or incomplete candidate never replaces the previous committed state.
 The committed format is independent of partition count and number padding.

@@ -5,18 +5,19 @@ use simple_string,            only: string
 use simple_syslib,            only: del_file, file_exists
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, &
     &sigma2_state_create_candidate, sigma2_state_write_local_range, sigma2_state_read_header, &
-    &sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, SIGMA2_PROV_PSPEC, &
-    &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
+    &sigma2_state_read_groups, sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
+    &SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
 use simple_sigma2_state,      only: sigma2_state_layout_digest, sigma2_state_merge_local_ranges, &
     &sigma2_state_reduce_groups, sigma2_state_validate_identity, sigma2_state_validate_science, &
     &sigma2_state_candidate_path, sigma2_state_commit, sigma2_state_prepare_update, &
-    &sigma2_state_range_path
+    &sigma2_state_range_path, sigma2_state_next_generation
 implicit none
 
 call exercise_policy('global', SIGMA2_GROUP_GLOBAL, 1, 4)
 call exercise_policy('group',  SIGMA2_GROUP_STACK,  2, 8)
 call exercise_recovery_guards()
 call exercise_update_preparation()
+call exercise_invalid_record_skip()
 write(*,'(A)') 'SIMPLE_TEST_SIGMA2_STATE NORMAL STOP'
 
 contains
@@ -171,13 +172,15 @@ contains
         logical :: active(4)
         integer :: eo(4), groups(4), status
         integer(int64), parameter :: DIGEST = 991_int64
+        integer(int64) :: next_gen
         character(len=128) :: message
         character(len=*), parameter :: COMMITTED = 'sigma2_state.bin'
-        candidate_path = sigma2_state_candidate_path(COMMITTED)
-        range_path = sigma2_state_range_path(COMMITTED, 2, 3)
+        candidate_path = sigma2_state_candidate_path(COMMITTED, 1_int64)
+        range_path = sigma2_state_range_path(COMMITTED, 1_int64, 2, 3)
         call del_file(COMMITTED)
         call del_file(candidate_path)
         call del_file(range_path)
+        call del_file(sigma2_state_candidate_path(COMMITTED, 2_int64))
         spectra(:,1) = [1.0,2.0,3.0]
         spectra(:,2) = [2.0,3.0,4.0]
         spectra(:,3) = [3.0,4.0,5.0]
@@ -197,18 +200,79 @@ contains
         call require_ok(status, message)
         call sigma2_state_commit(candidate_path%to_char(), COMMITTED, active, eo, groups, status, message)
         call require_ok(status, message)
+        call require(index(candidate_path%to_char(), 'sigma2_state.g1.next') > 0, &
+            &'candidate path is scoped to the generation it commits')
+        call require(index(range_path%to_char(), 'sigma2_state.g1.part002.range') > 0, &
+            &'canonical range path is scoped to the generation and includes the padded partition')
+        ! the next transaction is named for the generation it will commit
+        call sigma2_state_next_generation(COMMITTED, next_gen, status, message)
+        call require_ok(status, message)
+        call require(next_gen == 2_int64, 'next generation follows the committed one')
+        candidate_path = sigma2_state_candidate_path(COMMITTED, next_gen)
+        call require(index(candidate_path%to_char(), 'sigma2_state.g2.next') > 0, &
+            &'next candidate path is scoped to the next generation')
         call sigma2_state_prepare_update(COMMITTED, candidate_path%to_char(), status, message)
         call require_ok(status, message)
         call sigma2_state_read_header(candidate_path%to_char(), header, status, message)
         call require_ok(status, message)
         call require(header%generation == 2_int64, 'prepared update advances the generation')
         call require(header%provenance == SIGMA2_PROV_RESIDUAL, 'prepared update records residual provenance')
-        call require(index(range_path%to_char(), 'sigma2_state_range_part002.bin') > 0, &
-            &'canonical range path includes the padded partition')
         call del_file(COMMITTED)
         call del_file(candidate_path)
         call del_file(range_path)
     end subroutine exercise_update_preparation
+
+    !> an active record with a non-positive shell is skipped by the
+    !! reduction (with a warning) instead of aborting; the grouped model
+    !! is the mean of the valid records and commit-time validation agrees
+    subroutine exercise_invalid_record_skip()
+        type(sigma2_state_header) :: header
+        type(string) :: candidate_path, range_path
+        real(real32), allocatable :: stored(:,:,:)
+        real(real32) :: spectra(3,4), expected_even(3), expected_odd(3)
+        logical :: active(4)
+        integer :: eo(4), groups(4), status
+        integer(int64), parameter :: DIGEST = 1231_int64
+        character(len=128) :: message
+        character(len=*), parameter :: COMMITTED = 'skip_sigma2_state.bin'
+        candidate_path = sigma2_state_candidate_path(COMMITTED, 1_int64)
+        range_path     = sigma2_state_range_path(COMMITTED, 1_int64, 1, 1)
+        call del_file(COMMITTED)
+        call del_file(candidate_path)
+        call del_file(range_path)
+        spectra(:,1) = [1.0,2.0,3.0]
+        spectra(:,2) = [2.0,3.0,4.0]
+        spectra(:,3) = [3.0,0.0,5.0] ! invalid: a non-positive shell
+        spectra(:,4) = [4.0,5.0,6.0]
+        active = .true.; eo = [0,1,0,1]; groups = 1
+        expected_even = spectra(:,1)
+        expected_odd  = 0.5*(spectra(:,2)+spectra(:,4))
+        call sigma2_state_init_header(header, 1, 3, 4, 8, 1.5, 1, SIGMA2_GROUP_GLOBAL, &
+            &1_int64, DIGEST, SIGMA2_PROV_PSPEC)
+        call sigma2_state_create_candidate(candidate_path%to_char(), header, status, message)
+        call require_ok(status, message)
+        call sigma2_state_write_local_range(range_path%to_char(), 1_int64, DIGEST, 1, spectra, &
+            &1, 3, status, message)
+        call require_ok(status, message)
+        call sigma2_state_merge_local_ranges(candidate_path%to_char(), [range_path], &
+            &[.true.,.true.,.true.,.true.], status, message)
+        call require_ok(status, message)
+        call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo, groups, status, message)
+        call require(status == 0, 'invalid record is skipped, not fatal')
+        call sigma2_state_read_groups(candidate_path%to_char(), stored, status, message)
+        call require_ok(status, message)
+        call require(all(abs(stored(:,1,1)-expected_even) <= 1.e-6*expected_even), &
+            &'even group mean excludes the invalid record')
+        call require(all(abs(stored(:,2,1)-expected_odd) <= 1.e-6*expected_odd), &
+            &'odd group mean is the mean of the valid records')
+        call sigma2_state_validate_science(candidate_path%to_char(), active, eo, groups, status, message)
+        call require(status == 0, 'commit-time validation applies the same skip rule')
+        call sigma2_state_commit(candidate_path%to_char(), COMMITTED, active, eo, groups, status, message)
+        call require_ok(status, message)
+        call del_file(COMMITTED)
+        call del_file(candidate_path)
+        call del_file(range_path)
+    end subroutine exercise_invalid_record_skip
 
     subroutine assert_committed_generation(path, expected)
         character(len=*), intent(in) :: path

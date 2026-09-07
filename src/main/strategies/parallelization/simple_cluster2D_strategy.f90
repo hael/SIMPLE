@@ -11,7 +11,7 @@ use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_group_iter
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
-    &sigma2_state_range_path
+    &sigma2_state_range_path, sigma2_state_next_generation
 implicit none
 
 public :: cluster2D_strategy, cluster2D_inmem_strategy, cluster2D_distr_strategy, create_cluster2D_strategy
@@ -386,17 +386,22 @@ contains
     ! private helpers
 
     subroutine prepare_canonical_sigma_update( params, build )
+        use, intrinsic :: iso_fortran_env, only: int64
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(string) :: state_path, candidate_path, range_path
+        integer(int64) :: next_gen
         integer :: ipart, status
         logical :: found
         character(len=STDLEN) :: message
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        candidate_path = sigma2_state_candidate_path(state_path%to_char())
+        ! transaction-scoped names (see the refine3D strategy), 2026-09-07
+        call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
         do ipart = 1, params%nparts
-            range_path = sigma2_state_range_path(state_path%to_char(), ipart, params%numlen)
+            range_path = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
             call del_file(range_path)
         enddo
         call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)

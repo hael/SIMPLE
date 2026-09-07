@@ -328,7 +328,7 @@ contains
             layout_digest = sigma2_state_project_layout_digest(merged_proj, merged_proj%os_ptcl2D)
             if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
             target_path = dir//'sigma2_state.bin'
-            candidate_path = sigma2_state_candidate_path(target_path%to_char())
+            candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
             call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
                 &nallptcls, int(target_header%box), real(target_header%smpd), ngroups, &
                 &target_header%grouping, generation, layout_digest, SIGMA2_PROV_RESIDUAL)
@@ -697,7 +697,7 @@ contains
                 if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
                 target_dir = get_fpath(projfile_out)
                 target_path = target_dir//'sigma2_state.bin'
-                candidate_path = sigma2_state_candidate_path(target_path%to_char())
+                candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
                 call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
                     &nrows, int(target_header%box), real(target_header%smpd), ngroups, &
                     &target_header%grouping, generation, layout_digest, SIGMA2_PROV_RESIDUAL)

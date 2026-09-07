@@ -29,7 +29,7 @@ contains
         type(sigma2_binfile)             :: binfile
         type(sigma2_state_header)        :: state_header, previous_header
         type(string)                     :: part_fname,starfile_fname,outbin_fname
-        type(string)                     :: state_path,candidate_path,cwd
+        type(string)                     :: state_path,candidate_path
         integer(int64)                   :: generation,layout_digest,prefix_digest
         integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nstks,nyq,pspec_l,pspec_u
         integer                          :: prefix_first,prefix_last
@@ -141,10 +141,11 @@ contains
                 &THROW_HARD('canonical sigma2 bootstrap requires a particle orientation field')
             call build%spproj%get_sigma2_state_path(state_path, state_path_found)
             if( .not. state_path_found )then
-                call simple_getcwd(cwd)
-                state_path = filepath(cwd, string(SIGMA2_STATE_FNAME))
+                ! execution-local state: registered by name, it lives next to
+                ! the project file that owns it (2026-09-07)
+                call build%spproj%set_sigma2_state_path(string(SIGMA2_STATE_FNAME))
+                call build%spproj%get_sigma2_state_path(state_path, state_path_found)
             endif
-            candidate_path = sigma2_state_candidate_path(state_path%to_char())
             generation = 1_int64
             preserve_prefix = .false.
             if( file_exists(state_path) )then
@@ -177,6 +178,7 @@ contains
                     &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_STACK, generation, &
                     &layout_digest, SIGMA2_PROV_PSPEC)
             endif
+            candidate_path = sigma2_state_candidate_path(state_path%to_char(), generation)
             call sigma2_state_create_candidate(candidate_path%to_char(), state_header, state_status, state_message)
             if( state_status /= 0 ) THROW_HARD(trim(state_message))
             allocate(active(nptcls), eo_ids(nptcls), group_ids(nptcls))
@@ -255,7 +257,6 @@ contains
         call binfile%kill
         call state_path%kill
         call candidate_path%kill
-        call cwd%kill
         call build%kill_general_tbox
         call simple_touch('CALC_PSPEC_FINISHED')
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)

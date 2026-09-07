@@ -2,24 +2,26 @@
 module simple_sigma2_state
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, int64, real32, real64
+use simple_defs,              only: logfhandle
 use simple_fileio,            only: get_fpath
 use simple_oris,              only: oris
 use simple_sp_project,        only: sp_project
 use simple_string,            only: string
-use simple_string_utils,      only: int2str_pad
+use simple_string_utils,      only: int2str, int2str_pad
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
     &sigma2_state_read_particles, sigma2_state_read_groups, sigma2_state_write_particles, &
     &sigma2_state_write_groups, sigma2_state_read_local_range, sigma2_state_refresh_integrity, &
     &sigma2_state_validate_file, sigma2_state_publish, sigma2_state_digest_begin, &
     &sigma2_state_digest_text, sigma2_state_digest_integer, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
-    &SIGMA2_STATE_NEXT_FNAME, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_CANDIDATE, &
+    &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_CANDIDATE, &
     &SIGMA2_STATE_COMMITTED, sigma2_state_create_candidate
 implicit none
 private
 
 public :: sigma2_state_layout_digest
 public :: sigma2_state_project_layout_digest
-public :: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_prepare_update
+public :: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
+public :: sigma2_state_prepare_update
 public :: sigma2_state_merge_local_ranges, sigma2_state_reduce_groups
 public :: sigma2_state_validate_identity, sigma2_state_validate_science, sigma2_state_commit
 
@@ -95,24 +97,68 @@ contains
         deallocate(stack_refs, stack_ids, stack_indices)
     end function sigma2_state_project_layout_digest
 
-    function sigma2_state_candidate_path(committed_path) result(candidate_path)
+    !> Transaction-scoped name of the candidate that will commit the given
+    !! generation: <committed stem>.g<generation>.next. Candidate and range
+    !! names carry the generation they belong to, so a file left by another
+    !! transaction (a crashed run, a second run in the same directory) can
+    !! never be mistaken for this one (2026-09-07).
+    function sigma2_state_candidate_path(committed_path, generation) result(candidate_path)
         character(len=*), intent(in) :: committed_path
+        integer(int64),   intent(in) :: generation
         type(string) :: candidate_path
-        type(string) :: parent
-        parent = get_fpath(string(committed_path))
-        candidate_path = parent//SIGMA2_STATE_NEXT_FNAME
-        call parent%kill
+        candidate_path = transaction_stem(committed_path)//'.g'//int2str(int(generation))//'.next'
     end function sigma2_state_candidate_path
 
-    function sigma2_state_range_path(committed_path, part, numlen) result(range_path)
+    !> Transaction-scoped name of one worker's range file for the update that
+    !! commits the given generation: <committed stem>.g<generation>.part<NN>.range
+    function sigma2_state_range_path(committed_path, generation, part, numlen) result(range_path)
         character(len=*), intent(in) :: committed_path
+        integer(int64),   intent(in) :: generation
         integer,          intent(in) :: part, numlen
         type(string) :: range_path
-        type(string) :: parent
-        parent = get_fpath(string(committed_path))
-        range_path = parent//SIGMA2_RANGE_FBODY//int2str_pad(part,max(1,numlen))//'.bin'
-        call parent%kill
+        range_path = transaction_stem(committed_path)//'.g'//int2str(int(generation))//'.part'//&
+            &int2str_pad(part,max(1,numlen))//'.range'
     end function sigma2_state_range_path
+
+    !> The generation the next update of the committed state will commit
+    subroutine sigma2_state_next_generation(committed_path, generation, status, message)
+        character(len=*), intent(in)  :: committed_path
+        integer(int64),   intent(out) :: generation
+        integer,          intent(out) :: status
+        character(len=*), intent(out) :: message
+        type(sigma2_state_header) :: header
+        generation = 0_int64
+        call sigma2_state_read_header(committed_path, header, status, message)
+        if( status /= 0 ) return
+        if( header%state /= SIGMA2_STATE_COMMITTED )then
+            status = 1; message = 'canonical sigma2 update source is not committed'; return
+        endif
+        generation = header%generation + 1_int64
+    end subroutine sigma2_state_next_generation
+
+    !> the committed path without its .bin extension
+    function transaction_stem(committed_path) result(stem)
+        character(len=*), intent(in) :: committed_path
+        type(string) :: stem
+        integer :: l
+        l = len_trim(committed_path)
+        if( l > 4 )then
+            if( committed_path(l-3:l) == '.bin' )then
+                stem = committed_path(1:l-4)
+                return
+            endif
+        endif
+        stem = committed_path(1:l)
+    end function transaction_stem
+
+    !> An active particle record enters the grouped model only when every
+    !! shell is finite and positive. Invalid records are skipped with a
+    !! warning instead of aborting the run (2026-09-07); the legacy store
+    !! averages whatever its part files hold.
+    pure logical function record_is_valid(spectrum)
+        real(real32), intent(in) :: spectrum(:)
+        record_is_valid = all(ieee_is_finite(spectrum)) .and. all(spectrum > 0.0_real32)
+    end function record_is_valid
 
     subroutine sigma2_state_prepare_update(committed_path, candidate_path, status, message)
         character(len=*), intent(in) :: committed_path, candidate_path
@@ -191,6 +237,7 @@ contains
         real(real32), allocatable :: spectra(:,:), groups(:,:,:)
         integer(int64), allocatable :: checksums(:), counts(:,:)
         real(real64), allocatable :: sums(:,:,:)
+        integer(int64) :: ninvalid
         integer :: first_row, last_row, i, row, half, group, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
@@ -201,6 +248,7 @@ contains
         nshell = int(header%kto-header%kfrom+1)
         allocate(sums(nshell,2,header%ngroups), source=0.0_real64)
         allocate(counts(2,header%ngroups), source=0_int64)
+        ninvalid = 0_int64
         do first_row = 1, int(header%nptcls), REDUCE_BLOCK_ROWS
             last_row = min(int(header%nptcls), first_row+REDUCE_BLOCK_ROWS-1)
             call sigma2_state_read_particles(path, first_row, last_row, spectra, status, message, checksums)
@@ -211,8 +259,9 @@ contains
                 if( checksums(i) == 0_int64 )then
                     status = 1; message = 'active particle has no canonical sigma2 record'; return
                 endif
-                if( any(.not. ieee_is_finite(spectra(:,i))) .or. any(spectra(:,i) <= 0.0_real32) )then
-                    status = 1; message = 'active particle has invalid canonical sigma2 values'; return
+                if( .not. record_is_valid(spectra(:,i)) )then
+                    ninvalid = ninvalid + 1_int64
+                    cycle
                 endif
                 if( eo(row) < 0 .or. eo(row) > 1 )then
                     status = 1; message = 'active particle has invalid even/odd assignment'; return
@@ -234,6 +283,9 @@ contains
             enddo
             deallocate(spectra, checksums)
         enddo
+        if( ninvalid > 0_int64 ) write(logfhandle,'(A,I0,A)') &
+            &'>>> WARNING: canonical sigma2 reduction skipped ', ninvalid, &
+            &' active particle record(s) with non-finite or non-positive values'
         if( any(counts == 0_int64) )then
             status = 1; message = 'canonical sigma2 group has an empty even/odd half'; return
         endif
@@ -317,10 +369,10 @@ contains
             do i = 1, size(spectra,2)
                 row = first_row+i-1
                 if( .not. active(row) ) cycle
-                if( checksums(i) == 0_int64 .or. any(.not. ieee_is_finite(spectra(:,i))) .or. &
-                    &any(spectra(:,i) <= 0.0_real32) )then
-                    status = 1; message = 'active particle has invalid canonical sigma2 state'; return
+                if( checksums(i) == 0_int64 )then
+                    status = 1; message = 'active particle has no canonical sigma2 record'; return
                 endif
+                if( .not. record_is_valid(spectra(:,i)) ) cycle ! the reduction's rule
                 if( eo(row) < 0 .or. eo(row) > 1 )then
                     status = 1; message = 'active particle has invalid even/odd assignment'; return
                 endif

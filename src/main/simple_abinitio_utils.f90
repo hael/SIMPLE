@@ -869,9 +869,13 @@ contains
             ! a valid committed state is reused directly; a missing, stale,
             ! wrong-grid, wrong-layout or wrong-grouping state is rebuilt from
             ! particle power and residual-upgraded exactly like a rebuilt
-            ! legacy STAR (bootstrap_rec3D seeds the canonical state itself)
+            ! legacy STAR (bootstrap_rec3D seeds the canonical state itself).
+            ! The registration-box rule is the legacy store's: sigmas
+            ! estimated at a cropped box are refreshed at native sampling
+            ! before the shipped map, whichever store holds them (2026-09-07)
             sigma_iter         = 0
             l_bootstrap_sigmas = canonical_final_rec_needs_bootstrap()
+            if( .not. l_bootstrap_sigmas ) l_bootstrap_sigmas = final_rec_box_changed()
             if( .not. l_bootstrap_sigmas ) write(logfhandle,'(A)') &
                 &'>>> FINAL RECONSTRUCTION: reusing committed canonical sigmas'
         else
@@ -967,7 +971,6 @@ contains
 
             logical function final_rec_needs_bootstrap_sigmas( sigma_iter ) result( l_bootstrap )
                 integer, intent(in) :: sigma_iter
-                integer :: reg_box
                 l_bootstrap = .false.
                 if( .not. final_stage_uses_ml_reg() ) return
                 if( sigma_iter <= 0 )then
@@ -975,15 +978,24 @@ contains
                     write(logfhandle,'(A)') '>>> FINAL RECONSTRUCTION: no compatible sigma file found; bootstrapping sigmas'
                     return
                 endif
-                reg_box  = params%box_crop
-                if( cline_refine3D%defined('box_crop')  ) reg_box  = cline_refine3D%get_iarg('box_crop')
+                l_bootstrap = final_rec_box_changed()
+            end function final_rec_needs_bootstrap_sigmas
+
+            !> the one registration-box rule of both sigma stores: sigmas
+            !! estimated at a cropped registration box are refreshed at the
+            !! final (native) box before the shipped map
+            logical function final_rec_box_changed() result( l_changed )
+                integer :: reg_box
+                l_changed = .false.
+                reg_box   = params%box_crop
+                if( cline_refine3D%defined('box_crop') ) reg_box = cline_refine3D%get_iarg('box_crop')
                 if( reg_box > 0 .and. reg_box /= ldim(1) )then
-                    l_bootstrap = .true.
+                    l_changed = .true.
                     write(logfhandle,'(A,I0,A,I0)') &
                         &'>>> FINAL RECONSTRUCTION: registration/final boxes differ; bootstrapping sigmas: ', &
                         &reg_box, ' -> ', ldim(1)
                 endif
-            end function final_rec_needs_bootstrap_sigmas
+            end function final_rec_box_changed
 
             logical function canonical_final_rec_needs_bootstrap() result( l_bootstrap )
                 use simple_sigma2_files, only: canonical_sigma2_consumable
@@ -1034,6 +1046,19 @@ contains
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
                 if( final_stage_uses_ml_reg() ) call child_cline%set('conical_fsc', params%conical_fsc)
+                if( prg.eq.'bootstrap_rec3D' )then
+                    ! the residual sigmas depend on the regularization of the
+                    ! reference they are scored against: the bootstrap map is
+                    ! regularized exactly as the last stage's matching
+                    ! references were; the shipped map is made classical by
+                    ! bootstrap_rec3D itself (2026-09-07)
+                    if( cline_refine3D%defined('filt_mode') ) &
+                        &call child_cline%set('filt_mode', cline_refine3D%get_carg('filt_mode'))
+                    if( cline_refine3D%defined('nu_refine') ) &
+                        &call child_cline%set('nu_refine', cline_refine3D%get_carg('nu_refine'))
+                    if( cline_refine3D%defined('automsk') ) &
+                        &call child_cline%set('automsk',   cline_refine3D%get_carg('automsk'))
+                endif
                 if( .not. l_postprocess )then
                     call child_cline%set('postprocess', 'no')
                 endif

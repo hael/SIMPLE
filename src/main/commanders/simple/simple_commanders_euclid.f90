@@ -5,7 +5,8 @@ use simple_commanders_api
 use simple_sigma2_binfile, only: sigma2_binfile
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
     &sigma2_state_merge_local_ranges, sigma2_state_project_layout_digest, &
-    &sigma2_state_range_path, sigma2_state_reduce_groups, sigma2_state_validate_identity
+    &sigma2_state_range_path, sigma2_state_reduce_groups, sigma2_state_validate_identity, &
+    &sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
     &sigma2_state_init_header, sigma2_state_read_groups, sigma2_state_read_header, &
     &sigma2_state_validate_file, sigma2_state_write_particles, SIGMA2_GROUP_GLOBAL, &
@@ -76,15 +77,20 @@ contains
             type(string), allocatable :: range_paths(:)
             logical, allocatable :: scheduled(:), active(:)
             integer, allocatable :: eo_ids(:), group_ids(:)
+            integer(int64) :: next_gen
             integer :: ipart, iptcl, status
             logical :: found
             character(len=STDLEN) :: message
             call build%spproj%get_sigma2_state_path(state_path, found)
             if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-            candidate_path = sigma2_state_candidate_path(state_path%to_char())
+            ! the transaction prepared before the workers ran: candidate and
+            ! ranges of the generation this consolidation commits (2026-09-07)
+            call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
             allocate(range_paths(params%nparts))
             do ipart = 1, params%nparts
-                range_paths(ipart) = sigma2_state_range_path(state_path%to_char(), ipart, params%numlen)
+                range_paths(ipart) = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
             enddo
             allocate(scheduled(params%nptcls), source=.true.)
             call sigma2_state_merge_local_ranges(candidate_path%to_char(), range_paths, scheduled, status, message)
@@ -349,7 +355,7 @@ contains
                 call sigma2_state_init_header(header, 1, fdim(box)-1, nptcls, box, smpd, ngroups, &
                     &grouping, 1_int64, layout_digest, SIGMA2_PROV_LEGACY_PARTS)
             endif
-            candidate_path = sigma2_state_candidate_path(state_path%to_char())
+            candidate_path = sigma2_state_candidate_path(state_path%to_char(), 1_int64)
             call sigma2_state_create_candidate(candidate_path%to_char(), header, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             call sigma2_state_write_particles(candidate_path%to_char(), 1, spectra, status, message)

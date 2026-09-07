@@ -299,12 +299,11 @@ contains
         else
             call cline_rec3D%set('which_iter', MAXITS_REFINE3D_AUTO_CAP + 2)
         endif
-        if( params%l_nonuniform )then
-            ! final-map postprocessing is classical on both backends
-            call cline_rec3D%set('filt_mode', 'none')
-            call cline_rec3D%set('automsk', 'no')
-        endif
-        call cline_rec3D%set('nu_refine', 'no')
+        ! the refinement's filt_mode/nu_refine/automsk ride along: the
+        ! residual sigmas depend on the regularization of the reference they
+        ! are scored against, so the bootstrap map is regularized exactly as
+        ! the matching references were; bootstrap_rec3D makes the shipped map
+        ! classical itself (2026-09-07)
         if( trim(params%rec_backend) == 'pcg' )then
             call configure_final_pcg_solve_budget(cline, cline_rec3D)
             write(logfhandle,'(A,I0)') '>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', &
@@ -2021,6 +2020,7 @@ contains
         use simple_commanders_rec,    only: commander_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline, consolidate_sigma2_groups
+        use simple_abinitio_utils,    only: configure_final_pcg_solve_budget, strip_pcg_backend_keys
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(commander_rec3D)      :: xrec3D
@@ -2069,10 +2069,16 @@ contains
         call xcalc_pspec%execute(cline_pspec)
         call cline_pspec%kill
         ! 2. Bootstrap map: a single euclid ML-regularized reconstruction on
-        ! the seed; it is the reference the residual pass scores against.
+        ! the seed. It only serves as the reference the residual pass scores
+        ! against, so it is always a gridding assembly (one particle pass,
+        ! the regularized map and the unfiltered pair for a few seconds of
+        ! assembly) whatever backend the shipped map uses. It keeps the
+        ! caller's filt_mode/nu_refine/automsk: the residual sigmas depend on
+        ! the regularization of the reference, so it must be regularized
+        ! exactly as the refinement's matching references were (2026-09-07).
         cline_rec = cline
-        call prepare_bootstrap_rec_cline(cline_rec, which_iter)
-        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION ON THE IMAGE-POWER SEED, SIGMA ITERATION ', &
+        call prepare_bootstrap_rec_cline(cline_rec, which_iter, l_final=.false.)
+        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: GRIDDING ML-REGULARIZED BOOTSTRAP MAP ON THE IMAGE-POWER SEED, SIGMA ITERATION ', &
             &which_iter
         call xrec3D%execute(cline_rec)
         call cline_rec%kill
@@ -2096,11 +2102,18 @@ contains
         ! commits its own groups and this is a no-op.
         call consolidate_sigma2_groups(cline, params%projfile, which_iter + 1, params%l_sigma_canonical)
         ! 5. The shipped map: euclid ML-regularized reconstruction on the
-        ! residual sigmas.
+        ! residual sigmas, on the caller's backend. A PCG solve at the native
+        ! box starts from nothing (no warm start exists at this sampling), so
+        ! it gets the cold-solve iteration budget (at least
+        ! FINAL_PCG_MAXITS_FLOOR) whoever the caller is (2026-09-07).
         cline_rec = cline
-        call prepare_bootstrap_rec_cline(cline_rec, which_iter + 1)
+        call prepare_bootstrap_rec_cline(cline_rec, which_iter + 1, l_final=.true.)
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION ', &
             &which_iter + 1
+        if( cline_rec%defined('rec_backend') )then
+            if( cline_rec%get_carg('rec_backend') == 'pcg' ) write(logfhandle,'(A,I0)') &
+                &'>>> BOOTSTRAP_REC3D: FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_rec%get_iarg('maxits_pcg')
+        endif
         call xrec3D%execute(cline_rec)
         call cline_rec%kill
         call register_bootstrap_rec_outputs()
@@ -2112,11 +2125,33 @@ contains
 
     contains
 
-        !> euclid ML-regularized reconstruct3D on the sigma2 estimate of iter
-        subroutine prepare_bootstrap_rec_cline( cline_rec, iter )
+        !> euclid ML-regularized reconstruct3D on the sigma2 estimate of iter:
+        !! the bootstrap map (l_final=.false.) is a gridding assembly without
+        !! postprocessing that keeps the caller's filt_mode/nu_refine/automsk,
+        !! because the residual sigmas depend on the regularization of the
+        !! reference they are scored against; the shipped map (l_final=.true.)
+        !! keeps the caller's backend and postprocessing, is classical
+        !! (no nonuniform filtering, no automask) and, on PCG, carries the
+        !! cold-solve iteration budget
+        subroutine prepare_bootstrap_rec_cline( cline_rec, iter, l_final )
             class(cmdline), intent(inout) :: cline_rec
             integer,        intent(in)    :: iter
+            logical,        intent(in)    :: l_final
             integer :: istate
+            if( l_final )then
+                call cline_rec%set('filt_mode', 'none')
+                call cline_rec%set('nu_refine',   'no')
+                call cline_rec%set('automsk',     'no')
+                if( cline_rec%defined('rec_backend') )then
+                    if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
+                        &call configure_final_pcg_solve_budget(cline, cline_rec)
+                endif
+            else
+                call strip_pcg_backend_keys(cline_rec)
+                call cline_rec%delete('pcg_mskfile')
+                call cline_rec%set('rec_backend', 'gridding')
+                call cline_rec%set('postprocess',       'no')
+            endif
             call cline_rec%set('prg',       'reconstruct3D')
             call cline_rec%set('mkdir',              'no')
             call cline_rec%set('oritype', params%oritype)

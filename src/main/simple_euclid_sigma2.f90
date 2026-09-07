@@ -1,11 +1,11 @@
 !@descr: the abstract data type for sigma2 used when objfun=euclid
 module simple_euclid_sigma2
-use, intrinsic :: iso_fortran_env, only: real32
+use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_core_module_api
 use simple_polarft_calc,   only: polarft_calc
 use simple_parameters,     only: parameters
 use simple_sigma2_binfile, only: sigma2_binfile
-use simple_sigma2_state,   only: sigma2_state_candidate_path, sigma2_state_range_path
+use simple_sigma2_state,   only: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
     &sigma2_state_read_groups, sigma2_state_read_particles, sigma2_state_write_local_range
 use simple_starfile_wrappers
@@ -361,13 +361,19 @@ contains
         type(sigma2_binfile) :: binfile
         type(sigma2_state_header) :: header
         type(string) :: candidate_path, range_path
+        integer(int64) :: next_gen
         integer :: status
         character(len=STDLEN) :: message
         if( self%p_ptr%l_sigma_canonical )then
-            candidate_path = sigma2_state_candidate_path(self%binfname%to_char())
-            range_path = sigma2_state_range_path(self%binfname%to_char(), self%p_ptr%part, self%p_ptr%numlen)
+            ! transaction-scoped names: the candidate and this range carry the
+            ! generation the master's update will commit (2026-09-07)
+            call sigma2_state_next_generation(self%binfname%to_char(), next_gen, status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            candidate_path = sigma2_state_candidate_path(self%binfname%to_char(), next_gen)
+            range_path = sigma2_state_range_path(self%binfname%to_char(), next_gen, self%p_ptr%part, self%p_ptr%numlen)
             call sigma2_state_read_header(candidate_path%to_char(), header, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
+            if( header%generation /= next_gen ) THROW_HARD('canonical sigma2 candidate belongs to another transaction')
             call sigma2_state_write_local_range(range_path%to_char(), header%generation, header%layout_digest, &
                 &self%fromp, real(self%sigma2_part,real32), self%kfromto(1), self%kfromto(2), status, message)
             if( status /= 0 ) THROW_HARD(trim(message))

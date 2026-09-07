@@ -197,10 +197,11 @@ subroutine new_automask( prgtab )
         &'bootstrap_rec3D',&                                             ! name
         &'bootstrap sigma2 and ML-regularized 3D reconstruction',&       ! summary
         &'complete final-reconstruction sequence for a project with 3D orientations: seeds the sigma2 estimate from particle&
-        & power spectra (calc_pspec) as the given iteration, reconstructs a Euclidean ML-regularized bootstrap map on it, runs one&
+        & power spectra (calc_pspec) as the given iteration, assembles a gridding ML-regularized bootstrap map on it (with the&
+        & given filt_mode/nu_refine/automsk, since the residual sigmas depend on the reference regularization), runs one&
         & residual sigma2 pass (refine=sigma, no search) against that map, consolidates the residual groups as the next&
-        & iteration and reconstructs the shipped ML-regularized map on them; standalone test entry point for the final&
-        & reconstruction stage of abinitio3D and refine3D_auto',&
+        & iteration and reconstructs the shipped ML-regularized map on them with the requested backend (PCG gets the cold-solve&
+        & iteration budget); standalone test entry point for the final reconstruction stage of abinitio3D and refine3D_auto',&
         &'simple_exec',&                                                 ! executable
         &.true.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

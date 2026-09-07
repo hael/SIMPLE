@@ -3473,6 +3473,32 @@ the acceptable-looking outputs do not validate the prior.
      nparts=... nthr=... rec_backend=pcg` (UI now exposes rec_backend,
      maxits_pcg, rtol).
 
+11. **Canonical sigma2 store review, streptavidin 2/10 failures (2026-09-07).**
+   - Proven non-equivalences with the legacy STAR store: (a) freshness,
+     canonical commits residuals(N) right after matcher pass N and its
+     stage-boundary and final reconstructions consume them, legacy's STAR N
+     holds residuals(N-1); (b) the final reconstruction: legacy refreshes
+     sigmas at native sampling whenever the registration box differs from
+     the native box, canonical reused any structurally consumable state and
+     skipped the refresh. Precision, averaging and grouping are the same.
+   - Failure surfaces only canonical had: hard abort on any active record
+     with a non-finite or non-positive shell; generation/digest/checksum/
+     coverage aborts on merge; silent re-seed from image power on any
+     validation failure. Design hazard: the state was registered as an
+     absolute path that survives every project copy, so a copied execution
+     project consumed and mutated the originating run's sigma2_state.bin;
+     candidate and range names carried no transaction identity.
+   - Fixes: registration by name resolved against the project file's
+     directory (absolute only for explicit cross-directory states);
+     abinitio3D drops an inherited registration at start; candidate and
+     range names carry the generation they commit
+     (`<stem>.g<N>.next`, `<stem>.g<N>.part<NN>.range`) and a worker checks
+     the candidate's generation; invalid records are skipped with a warning
+     in reduction and commit validation; the canonical final reconstruction
+     applies the legacy registration-box rule. Test
+     `simple_test_exec prg=sigma2_state` extended (invalid-record skip,
+     scoped names). Uncompiled.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

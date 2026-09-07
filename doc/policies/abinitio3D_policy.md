@@ -144,6 +144,18 @@ program takes any project with 3D orientations, it is also the standalone
 test for this stage (`simple_exec prg=bootstrap_rec3D projfile=... pgrp=...
 mskdiam=... nparts=... nthr=... rec_backend=...`), so failures in the final
 reconstruction can be reproduced in minutes rather than after a full run.
+Its bootstrap map is a gridding assembly that carries the last stage's
+`filt_mode`, `nu_refine` and `automsk` (the residual sigmas depend on the
+regularization of the reference they are scored against, so that reference is
+regularized like the last stage's matching references); the shipped map is
+classical and runs on the workflow's backend with the PCG cold-solve budget
+applied inside `bootstrap_rec3D` (2026-09-07).
+Whether the final reconstruction refreshes its sigmas at native sampling is
+decided by one rule for both sigma stores: a registration box different from
+the native box (2026-09-07; the canonical store used to reuse its committed
+state regardless). With `sigma_store=canonical`, abinitio3D drops any state
+registration inherited with its input project before the first stage, so
+every run seeds and owns its sigmas in its own directory.
 
 ## 4. Low-Pass and Cropping
 
