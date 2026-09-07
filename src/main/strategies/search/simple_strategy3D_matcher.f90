@@ -343,6 +343,7 @@ contains
         subroutine choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
             integer, intent(in) :: iptcl, iptcl_batch, ithr
             logical, intent(in) :: has_been_searched
+            type(ori) :: o_sigma ! procedure-local: thread-safe, unlike the host's orientation
             logical :: attempted, improved, no_improvement, invalid
             select case(ctrl%refine_mode)
                 case('shc')
@@ -382,8 +383,14 @@ contains
                 case('prob','prob_state','prob_neigh')
                     allocate(strategy3D_prob               :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('sigma')
-                    call b_ptr%spproj_field%get_ori(iptcl, orientation)
-                    call b_ptr%spproj_field%set(iptcl, 'proj', b_ptr%eulspace%find_closest_proj(orientation))
+                    ! residual-only pass: no search, the particle's projection
+                    ! direction is the closest one to its stored orientation.
+                    ! A contained procedure reaches the HOST's orientation, not
+                    ! the caller's OpenMP-private copy, so a procedure-local
+                    ! ori is mandatory here (shared-ori double free, 2026-09-07)
+                    call b_ptr%spproj_field%get_ori(iptcl, o_sigma)
+                    call b_ptr%spproj_field%set(iptcl, 'proj', b_ptr%eulspace%find_closest_proj(o_sigma))
+                    call o_sigma%kill
                 case default
                     THROW_HARD('refinement mode: '//trim(ctrl%refine_mode)//' unsupported')
             end select
