@@ -3499,6 +3499,26 @@ the acceptable-looking outputs do not validate the prior.
      `simple_test_exec prg=sigma2_state` extended (invalid-record skip,
      scoped names). Uncompiled.
 
+12. **Final-reconstruction sequence validated on msp1 (2026-09-07).** The
+   standalone `bootstrap_rec3D` (image-power seed, gridding ML bootstrap map
+   carrying the workflow's filt_mode/nu_refine/automsk, `refine=sigma`
+   residual pass against it, consolidation, PCG final map with the
+   cold-solve floor) produced the best msp1 map ever obtained (user report).
+   The earlier standalone run had a PCG bootstrap map and a 2-iteration cold
+   final solve (3.912 A on both maps, 812 s); the difference is the
+   regularization-consistent residual reference and the 5-iteration cold
+   solve. This is the reference configuration for final reconstructions.
+   Numbers of the validated run (commit 95d4adbf, 131223 particles,
+   nparts=10, nthr=8, rec_backend=pcg): NU matching band 3.863 A at the
+   residual pass; final base solves 5 its, residual 2.55e-2/2.58e-2 (was
+   3.7e-2 at 2 its); FSC=0.5 4.479 A, FSC=0.143 3.962 A, cFAR 0.4280,
+   B-factor -130.3; ML replays 5 its, residual 3.89e-2/3.87e-2 (was 6.2e-2);
+   586.5 s total (was 812.5 s: the gridding bootstrap pass costs ~115 s
+   against ~300 s for the PCG one, more than paying for the longer final
+   solves). The FSC crossing moved by one shell; the visible gain sits in
+   the far better converged solves and the consistent weighting, not in the
+   nominal resolution.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery
