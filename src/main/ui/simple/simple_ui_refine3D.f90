@@ -196,8 +196,8 @@ subroutine new_automask( prgtab )
         call bootstrap_rec3D%new(&
         &'bootstrap_rec3D',&                                             ! name
         &'bootstrap ML-regularized 3D reconstruction',&                  ! summary
-        &'generates an unregularized even/odd reconstruction, estimates weighted global sigma2 curves from the half-map difference,&
-        & and reruns reconstruct3D with Euclidean ML regularization',&
+        &'seeds the sigma2 estimate from particle power spectra (calc_pspec) for the given iteration and runs one Euclidean&
+        & ML-regularized reconstruct3D on it; workflows that ship a final map upgrade the seed with a residual sigma pass',&
         &'simple_exec',&                                                 ! executable
         &.true.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

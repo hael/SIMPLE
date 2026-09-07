@@ -293,7 +293,7 @@ contains
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(params, work_proj, work_projfile, xrec3D, l_postprocess=.false.)
+            call calc_final_rec(params, work_proj, work_projfile, xrec3D, xrefine3D, l_postprocess=.false.)
             ! final raw and low-pass diagnostic 3D reconstruction outputs
             call write_final_rec_outputs(params, work_proj, lpinfo(nstages_ini3D)%lp)
             ! add rec_final to os_out
@@ -973,7 +973,7 @@ contains
                     call ensure_multistate_particle_assignments
             end select
             ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(params, spproj, params%projfile, xrec3D, l_postprocess=.true.)
+            call calc_final_rec(params, spproj, params%projfile, xrec3D, xrefine3D, l_postprocess=.true.)
             ! for visualization
             call gen_ortho_reprojs4viz(params, spproj)
             ! final raw and low-pass diagnostic 3D reconstruction outputs

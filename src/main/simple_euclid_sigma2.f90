@@ -81,11 +81,21 @@ contains
     !! When this returns false because the grouped STAR exists, refine3D must
     !! consume that group file before consolidating partition-local files. The
     !! matcher will emit those files in the current partition layout.
+    !! A later start iteration normally continues from the previous iteration's
+    !! per-particle files; only when the directory holds neither a STAR for the
+    !! start iteration nor any per-particle file is there nothing to continue
+    !! from, and the same image-power bootstrap applies (2026-09-06). Sigma
+    !! files are never discovered in other directories.
     logical function sigma2_stage_needs_bootstrap( startit ) result( needs_bootstrap )
         integer, intent(in) :: startit
-        needs_bootstrap = startit <= 1
-        if( needs_bootstrap )then
-            if( file_exists(sigma2_star_from_iter(startit)) ) needs_bootstrap = .false.
+        type(string), allocatable :: list(:)
+        needs_bootstrap = .not. file_exists(sigma2_star_from_iter(startit))
+        if( .not. needs_bootstrap ) return
+        if( startit <= 1 ) return
+        call simple_list_files(SIGMA2_FBODY//'*', list)
+        if( allocated(list) )then
+            needs_bootstrap = size(list) < 1
+            deallocate(list)
         endif
     end function sigma2_stage_needs_bootstrap
 

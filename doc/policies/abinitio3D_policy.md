@@ -118,6 +118,27 @@ sampling setup is bypassed in favor of all-active sampling.
 The emitted child command line owns `startit` and `which_iter` for the current
 stage. `refine3D` then treats `maxits` as the run length for that stage.
 
+### Stage-start sigma bootstrap (ini3D routes)
+
+The `cavg_ini` and `cavg_ini_ext` routes enter the particle stages at a stage
+whose starting reconstruction is ML-regularized (`objfun=euclid`) before any
+refine3D iteration has estimated particle sigmas. Sigma files are never
+discovered in other directories (the sibling-directory carry-over was removed
+2026-09-06; it had seeded these starts with foreign iteration-numbered STARs).
+`calc_rec` applies the single sigma2 bootstrap rule (`simple_sigma2_bootstrap`,
+`doc/policies/refine3D_policy.md` section 5): for a euclid starting
+reconstruction it calls `ensure_sigma2_for_iteration`, which is a no-op when
+the directory holds a grouped STAR (legacy store) or a registered state
+(canonical store) and otherwise seeds the sigmas from the particle power
+spectra (`calc_pspec`) as the grouped STAR of the consuming stage's start
+iteration and sets `sigma_transition_ready=yes` on the stage command line. The
+starting reconstruction then runs as planned, and the stage's first euclid
+iteration initializes its workers from that STAR, emits per-particle sigma
+files in its own partition layout and replaces the seed with residual sigmas.
+The final reconstruction at original sampling seeds the same way through
+`bootstrap_rec3D`, then upgrades the seed with one residual sigma pass
+(`refine=sigma`) before the shipped euclid ML reconstruction.
+
 ## 4. Low-Pass and Cropping
 
 `lpinfo(istage)%lp` controls staged search/reference scheduling. Stage limits

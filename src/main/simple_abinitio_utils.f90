@@ -3,6 +3,8 @@ module simple_abinitio_utils
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
 use simple_commanders_rec,       only: commander_bootstrap_rec3D
+use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration, prepare_residual_sigma2_pass_cline, &
+    &consolidate_sigma2_groups
 use simple_commanders_volops,    only: commander_symmetrize_map
 use simple_cluster_seed,         only: gen_labelling
 use simple_class_frcs,           only: class_frcs
@@ -616,9 +618,10 @@ contains
         type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil
         type(string)      :: tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
-        integer           :: state
+        integer           :: state, sigma_iter
         real              :: lp_snapshot
         logical           :: have_even_stage, have_odd_stage, l_current_sample_only, l_seed_trail_chain, l_pcg_rec
+        logical           :: l_sigma_bootstrapped
         l_current_sample_only = .false.
         if( present(current_sample_only) ) l_current_sample_only = current_sample_only
         ! Seed the trailing accumulator chain only when the stage this boundary
@@ -661,6 +664,23 @@ contains
             if( l_seed_trail_chain ) call cline_rec%set('trail_seed', 'yes')
         endif
         call strip_refine3D_planning_keys(cline_rec)
+        if( stage_rec_is_euclid(cline_rec) )then
+            ! The ini3D routes (cavg_ini, cavg_ini_ext) enter at a stage whose
+            ! starting reconstruction is ML-regularized before any refine3D
+            ! iteration has estimated particle sigmas. One rule for every such
+            ! start (2026-09-06): seed from particle power spectra at the
+            ! consuming stage's start iteration and hand over through
+            ! sigma_transition_ready=yes; the stage's first euclid iteration
+            ! replaces the seed with residual sigmas. No-op when the directory
+            ! already holds an estimate (every later stage boundary).
+            sigma_iter = 1
+            if( cline_refine3D%defined('startit') ) sigma_iter = max(1, cline_refine3D%get_iarg('startit'))
+            call ensure_sigma2_for_iteration(cline_rec, projfile, sigma_iter, params%l_sigma_canonical, &
+                &params%box, params%smpd, params%l_sigma_glob, &
+                &'ABINITIO3D STAGE '//int2str(istage)//' STARTING RECONSTRUCTION', l_sigma_bootstrapped, &
+                &consumer_cline=cline_refine3D)
+            if( l_sigma_bootstrapped ) call cline_rec%set('which_iter', sigma_iter)
+        endif
         call xrec3D%execute(cline_rec)
         ! Rename volumes, update cline & project
         sstage  = int2str_pad(istage-1,2)
@@ -724,6 +744,16 @@ contains
         call vol_odd_unfil%kill
         call cline_rec%kill
     end subroutine calc_rec
+
+    !> Does a stage-start reconstruction command line run the euclid/ML estimator
+    logical function stage_rec_is_euclid( cline_rec ) result( l_euclid )
+        class(cmdline), intent(in) :: cline_rec
+        l_euclid = .false.
+        if( .not. cline_rec%defined('ml_reg') ) return
+        if( cline_rec%get_carg('ml_reg') .ne. 'yes' ) return
+        l_euclid = .true.
+        if( cline_rec%defined('objfun') ) l_euclid = cline_rec%get_carg('objfun') .eq. 'euclid'
+    end function stage_rec_is_euclid
 
     subroutine randomize_states( params, spproj, projfile, xrec3D, istage, clean_sampling, reconstruct_states )
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
@@ -816,17 +846,17 @@ contains
         call final_cline%set('maxits_pcg', maxits_final)
     end subroutine configure_final_pcg_solve_budget
 
-    subroutine calc_final_rec( params, spproj, projfile, xrec3D, l_postprocess )
-        use simple_commanders_euclid, only: commander_calc_pspec
+    subroutine calc_final_rec( params, spproj, projfile, xrec3D, xrefine3D, l_postprocess )
         class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
+        class(commander_base), intent(inout) :: xrefine3D
         logical,               intent(in)    :: l_postprocess
         type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star, vol_envmsk
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-        type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline) :: cline_calc_pspec
+        type(cmdline) :: cline_sigma_pass
+        type(string), allocatable :: seed_vols(:)
         integer      :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, sigma_iter, bootstrap_sigma_iter
         real         :: smpd
         logical      :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
@@ -841,20 +871,14 @@ contains
         write(logfhandle,'(A,I0,A,F8.4)') '>>> FINAL RECONSTRUCTION SAMPLING: box=', ldim(1), ' smpd=', smpd
         call prep_final_rec_cline(cline_reconstruct3D, 'reconstruct3D')
         if( params%l_sigma_canonical .and. final_stage_uses_ml_reg() )then
-            if( canonical_final_rec_needs_bootstrap() )then
-                cline_calc_pspec = cline_reconstruct3D
-                call cline_calc_pspec%set('prg', 'calc_pspec')
-                write(logfhandle,'(A)') &
-                    &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas at original sampling'
-                call xcalc_pspec%execute(cline_calc_pspec)
-                call spproj%read(projfile)
-                call cline_calc_pspec%kill
-            else
-                write(logfhandle,'(A)') &
-                    &'>>> FINAL RECONSTRUCTION: reusing committed canonical sigmas'
-            endif
-            sigma_iter        = 0
-            l_bootstrap_sigmas = .false.
+            ! a valid committed state is reused directly; a missing, stale,
+            ! wrong-grid, wrong-layout or wrong-grouping state is rebuilt from
+            ! particle power and residual-upgraded exactly like a rebuilt
+            ! legacy STAR (bootstrap_rec3D seeds the canonical state itself)
+            sigma_iter         = 0
+            l_bootstrap_sigmas = canonical_final_rec_needs_bootstrap()
+            if( .not. l_bootstrap_sigmas ) write(logfhandle,'(A)') &
+                &'>>> FINAL RECONSTRUCTION: reusing committed canonical sigmas'
         else
             sigma_iter = final_rec_sigma_iter()
             l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
@@ -871,6 +895,32 @@ contains
             if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
                 &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_reconstruct3D%get_iarg('maxits_pcg')
             call xbootstrap_rec3D%execute(cline_reconstruct3D)
+            ! No refinement iteration follows a final reconstruction, so the
+            ! image-power seed is upgraded here: one residual sigma2 pass at
+            ! the final sampling against the seeded map, consolidated as the
+            ! next iteration, then the final euclid ML reconstruction on the
+            ! residual sigmas (2026-09-06).
+            allocate(seed_vols(params%nstates))
+            do state = 1, params%nstates
+                seed_vols(state) = refine3D_state_vol_fname(state)
+            enddo
+            call prepare_residual_sigma2_pass_cline(cline_reconstruct3D, bootstrap_sigma_iter, params%nstates, &
+                &seed_vols, cline_sigma_pass)
+            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION: RESIDUAL SIGMA2 PASS AT ORIGINAL SAMPLING, ITERATION ', &
+                &bootstrap_sigma_iter
+            call xrefine3D%execute(cline_sigma_pass)
+            call consolidate_sigma2_groups(cline_reconstruct3D, projfile, bootstrap_sigma_iter + 1, &
+                &params%l_sigma_canonical)
+            call prep_final_rec_cline(cline_reconstruct3D, 'reconstruct3D')
+            call cline_reconstruct3D%set('which_iter', bootstrap_sigma_iter + 1)
+            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION: ', &
+                &bootstrap_sigma_iter + 1
+            call xrec3D%execute(cline_reconstruct3D)
+            do state = 1, params%nstates
+                call seed_vols(state)%kill
+            enddo
+            deallocate(seed_vols)
+            call cline_sigma_pass%kill
         else
             if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
                 &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_reconstruct3D%get_iarg('maxits_pcg')
@@ -960,46 +1010,14 @@ contains
             end function final_rec_needs_bootstrap_sigmas
 
             logical function canonical_final_rec_needs_bootstrap() result( l_bootstrap )
-                type(string) :: state_path
-                integer(int64) :: layout_digest
-                integer :: expected_grouping, expected_ngroups, iptcl, nprojptcls, status
-                logical :: found
+                use simple_sigma2_files, only: canonical_sigma2_consumable
                 character(len=STDLEN) :: message
-                l_bootstrap = .true.
-                call spproj%get_sigma2_state_path(state_path, found)
-                if( .not. found )then
-                    write(logfhandle,'(A)') &
-                        &'>>> FINAL RECONSTRUCTION: canonical sigma state is not registered'
-                    return
-                endif
-                call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
-                if( status /= 0 )then
-                    write(logfhandle,'(A)') &
-                        &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
-                    call state_path%kill
-                    return
-                endif
-                nprojptcls   = spproj%os_ptcl3D%get_noris()
-                layout_digest = sigma2_state_project_layout_digest(spproj, spproj%os_ptcl3D)
-                if( params%l_sigma_glob )then
-                    expected_grouping = SIGMA2_GROUP_GLOBAL
-                    expected_ngroups  = 1
-                else
-                    expected_grouping = SIGMA2_GROUP_STACK
-                    expected_ngroups  = 0
-                    do iptcl = 1, nprojptcls
-                        if( spproj%os_ptcl3D%get_state(iptcl) <= 0 ) cycle
-                        expected_ngroups = max(expected_ngroups, spproj%os_ptcl3D%get_int(iptcl, 'stkind'))
-                    enddo
-                endif
-                call sigma2_state_validate_identity(state_path%to_char(), ldim(1), smpd, 1, &
-                    &fdim(ldim(1))-1, nprojptcls, layout_digest, status, message, &
-                    &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=expected_grouping, &
-                    &expected_ngroups=expected_ngroups)
-                l_bootstrap = status /= 0
+                ! one validation boundary for every canonical consumer, at the
+                ! final (original) sampling
+                l_bootstrap = .not. canonical_sigma2_consumable(spproj, spproj%os_ptcl3D, ldim(1), smpd, &
+                    &params%l_sigma_glob, message)
                 if( l_bootstrap ) write(logfhandle,'(A)') &
                     &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
-                call state_path%kill
             end function canonical_final_rec_needs_bootstrap
 
             integer function final_rec_bootstrap_sigma_iter( sigma_iter ) result( iter )

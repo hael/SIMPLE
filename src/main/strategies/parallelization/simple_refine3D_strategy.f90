@@ -631,9 +631,12 @@ contains
                 ! emit particle sigma files in the current partition layout.
                 ! A pre-existing STAR for the start iteration is only a
                 ! legitimate handover at a genuine first iteration (startup
-                ! bootstrap, pose-initialization residual groups). At a later
-                ! stage start it can only be foreign (2026-09-06), so the
-                ! per-particle files are kept.
+                ! bootstrap). Wrapper-owned transitions at a later stage start
+                ! (external-reference pose initialization, the abinitio3D
+                ! ini3D-route sigma bootstrap) announce their STAR explicitly
+                ! through sigma_transition_ready=yes; any other STAR at a later
+                ! stage start is foreign (2026-09-06), so the per-particle
+                ! files are kept.
                 self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
                     &(startit <= 1 .and. file_exists(sigma2_star_from_iter(startit)))
                 if( self%l_sigma_transition_ready )then
@@ -718,7 +721,8 @@ contains
             ! Canonical grouped state is committed immediately after each matcher pass.
         else if( self%l_sigma .and. self%l_sigma_transition_ready )then
             if( trim(params%sigma_transition_ready) == 'yes' )then
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+                write(logfhandle,'(A)') &
+                    &'>>> SIGMA2 INIT: using wrapper-provided grouped sigmas (pose initialization or stage-start bootstrap)'
             else
                 write(logfhandle,'(A)') '>>> SIGMA2 INIT: using reusable grouped sigmas for current partition layout'
             endif
@@ -1145,46 +1149,16 @@ contains
     end subroutine distr_initialize
 
     logical function canonical_sigma2_needs_bootstrap(params, build) result(needs_bootstrap)
+        use simple_sigma2_files, only: canonical_sigma2_consumable
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        type(string) :: state_path
-        integer(int64) :: layout_digest
-        integer :: expected_ngroups, iptcl, status
-        logical :: found
         character(len=STDLEN) :: message
-        needs_bootstrap = .true.
         if( trim(params%oritype) /= 'ptcl3D' ) &
             &THROW_HARD('canonical sigma2 currently requires oritype=ptcl3D')
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( .not. found ) return
-        call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
-        if( status /= 0 )then
-            write(logfhandle,'(A)') '>>> SIGMA2 INIT: rebuilding canonical state: '//trim(message)
-            call state_path%kill
-            return
-        endif
-        layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
-        if( layout_digest == 0_int64 ) return
-        if( params%l_sigma_glob )then
-            expected_ngroups = 1
-            call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
-                &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
-                &expected_ngroups=expected_ngroups)
-        else
-            expected_ngroups = 0
-            do iptcl = 1, params%nptcls
-                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                expected_ngroups = max(expected_ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
-            enddo
-            call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
-                &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
-                &expected_ngroups=expected_ngroups)
-        endif
-        needs_bootstrap = status /= 0
+        ! one validation boundary for every canonical consumer (simple_sigma2_files)
+        needs_bootstrap = .not. canonical_sigma2_consumable(build%spproj, build%spproj_field, params%box, &
+            &params%smpd, params%l_sigma_glob, message)
         if( needs_bootstrap ) write(logfhandle,'(A)') '>>> SIGMA2 INIT: rebuilding canonical state: '//trim(message)
-        call state_path%kill
     end function canonical_sigma2_needs_bootstrap
 
     subroutine prepare_canonical_sigma_update(params, build)
@@ -1272,7 +1246,8 @@ contains
             ! Canonical grouped state is committed immediately after each matcher pass.
         else if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
             if( trim(params%sigma_transition_ready) == 'yes' )then
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+                write(logfhandle,'(A)') &
+                    &'>>> SIGMA2 INIT: using wrapper-provided grouped sigmas (pose initialization or stage-start bootstrap)'
             else
                 write(logfhandle,'(A)') '>>> SIGMA2 INIT: using reusable grouped sigmas for current partition layout'
             endif
@@ -1333,8 +1308,10 @@ contains
         endif
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
-        ! merge alignment docs
-        call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+        ! merge alignment docs (a residual-only sigma pass, refine=sigma,
+        ! searches nothing and writes none)
+        if( trim(params%refine) /= 'sigma' ) &
+            &call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
         if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)

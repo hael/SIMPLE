@@ -65,9 +65,8 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(commander_rec3D) :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline)         :: cline_unreg, cline_reg, cline_pspec
+        type(cmdline)         :: cline_reg, cline_pspec
         type(parameters)      :: params
-        type(string)          :: sigma_star
         integer               :: state, which_iter
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         call cline%set('oritype', 'ptcl3D')
@@ -84,36 +83,40 @@ contains
         which_iter = max(1, params%which_iter)
         call cline%set('which_iter', which_iter)
         call cline%set('mkdir', 'no') ! child reconstruct3D calls must not create nested run directories
-        cline_unreg = cline
-        call prepare_bootstrap_rec_cline(cline_unreg, l_regularized=.false.)
-        write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 1: UNREGULARIZED EVEN/ODD RECONSTRUCTION'
-        call xrec3D%execute(cline_unreg)
-        if( params%l_sigma_canonical )then
-            cline_pspec = cline
-            call cline_pspec%set('prg',       'calc_pspec')
-            call cline_pspec%set('mkdir',              'no')
-            call cline_pspec%set('objfun',       'euclid')
-            call cline_pspec%set('sigma_est',    'global')
-            call cline_pspec%delete('postprocess')
-            call cline_pspec%delete('combine_eo')
-            call cline_pspec%delete('rec_backend')
-            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D INITIALIZING CANONICAL SIGMA2 FROM PARTICLE POWER'
-            call xcalc_pspec%execute(cline_pspec)
-            call cline_pspec%kill
-        else
-            call write_bootstrap_sigma2_from_halfmaps(sigma_star)
-            write(logfhandle,'(A,1X,A)') '>>> BOOTSTRAP_REC3D WROTE SIGMA STAR:', sigma_star%to_char()
-        endif
+        ! One sigma2 basis for every bootstrap (2026-09-06): the particle
+        ! power spectra, exactly what a fresh refinement seeds from, written
+        ! as the grouped STAR of which_iter (legacy store) or the registered
+        ! canonical state. The former half-map power estimator sat on a
+        ! different basis than the residual sigmas a refinement then computes
+        ! and conditioned the euclid system markedly worse (bgal residual
+        ! 0.23 vs 0.08, refine3D_auto startup record). With the seed in hand
+        ! the reconstruction is a single euclid ML-regularized pass; callers
+        ! that ship a final map upgrade the seed with a residual pass
+        ! (simple_sigma2_bootstrap).
+        cline_pspec = cline
+        call cline_pspec%set('prg',       'calc_pspec')
+        call cline_pspec%set('mkdir',              'no')
+        call cline_pspec%set('objfun',       'euclid')
+        call cline_pspec%set('sigma_est',    'global')
+        call cline_pspec%set('which_iter',  which_iter)
+        call cline_pspec%delete('postprocess')
+        call cline_pspec%delete('combine_eo')
+        call cline_pspec%delete('rec_backend')
+        call cline_pspec%delete('maxits_pcg')
+        call cline_pspec%delete('rtol')
+        call cline_pspec%delete('trail_seed')
+        call cline_pspec%delete('outfile')
+        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
+        call xcalc_pspec%execute(cline_pspec)
+        call cline_pspec%kill
         cline_reg = cline
         call prepare_bootstrap_rec_cline(cline_reg, l_regularized=.true.)
-        write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: EUCLID ML-REGULARIZED RECONSTRUCTION'
+        write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION'
         call xrec3D%execute(cline_reg)
         call register_bootstrap_rec_outputs()
         do state = 1, params%nstates
             call cline%set('vol'//int2str(state), refine3D_state_vol_fname(state))
         enddo
-        call sigma_star%kill
-        call cline_unreg%kill
         call cline_reg%kill
         call simple_end('**** SIMPLE_BOOTSTRAP_REC3D NORMAL STOP ****', print_simple=.false.)
 
@@ -198,158 +201,6 @@ contains
             call spproj%kill
         end subroutine register_bootstrap_rec_outputs
 
-        subroutine write_bootstrap_sigma2_from_halfmaps( sigma_star )
-            type(string), intent(out) :: sigma_star
-            type(image) :: vol_even, vol_odd, vol_noise
-            type(string) :: fname_even, fname_odd
-            real, allocatable :: pspec(:), sigma2(:), group_pspecs(:,:,:), state_scales(:), state_counts(:)
-            real :: total_count
-            integer :: ldim(3), nptcls, state, nstates_used, last_shell, nspec, filtsz
-            filtsz = fdim(params%box) - 1
-            if( filtsz < 1 ) THROW_HARD('Invalid box for bootstrap_rec3D sigma estimation')
-            allocate(sigma2(filtsz), source=0.)
-            call calc_bootstrap_state_scales(state_scales, state_counts)
-            nstates_used = 0
-            last_shell   = 0
-            total_count  = 0.
-            do state = 1, params%nstates
-                fname_even = refine3D_state_halfvol_fname(state, 'even')
-                fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
-                if( (.not. file_exists(fname_even)) .or. (.not. file_exists(fname_odd)) )then
-                    call fname_even%kill
-                    call fname_odd%kill
-                    cycle
-                endif
-                call find_ldim_nptcls(fname_even, ldim, nptcls)
-                call vol_even%new(ldim, params%smpd_crop)
-                call vol_odd%new(ldim,  params%smpd_crop)
-                call vol_even%read(fname_even)
-                call vol_odd%read(fname_odd)
-                call vol_noise%copy(vol_even)
-                call vol_noise%subtr(vol_odd)
-                call vol_noise%spectrum('power', pspec, norm=.true.)
-                nspec = min(size(pspec), filtsz)
-                if( nspec > 0 )then
-                    ! state_counts=Ne+No and state_scales=Ne*No/(Ne+No),
-                    ! so the numerator is Ne*No*pspec_diff. The final divide
-                    ! by total_count keeps the state average population-aware.
-                    sigma2(1:nspec) = sigma2(1:nspec) + state_counts(state) * state_scales(state) * pspec(1:nspec)
-                    last_shell      = max(last_shell, nspec)
-                    nstates_used    = nstates_used + 1
-                    total_count     = total_count + state_counts(state)
-                endif
-                if( allocated(pspec) ) deallocate(pspec)
-                call vol_even%kill
-                call vol_odd%kill
-                call vol_noise%kill
-                call fname_even%kill
-                call fname_odd%kill
-            enddo
-            if( nstates_used == 0 ) THROW_HARD('No even/odd half maps found after bootstrap_rec3D unregularized reconstruction')
-            if( total_count > TINY )then
-                sigma2 = sigma2 / total_count
-            else
-                sigma2 = sigma2 / real(nstates_used)
-            endif
-            if( last_shell < filtsz .and. last_shell > 0 ) sigma2(last_shell+1:filtsz) = sigma2(last_shell)
-            call condition_bootstrap_sigma2(sigma2, last_shell)
-            allocate(group_pspecs(2,1,1:filtsz))
-            group_pspecs(1,1,:) = sigma2
-            group_pspecs(2,1,:) = sigma2
-            sigma_star = sigma2_star_from_iter(which_iter)
-            call write_groups_starfile(sigma_star, group_pspecs, 1)
-            deallocate(group_pspecs, sigma2, state_scales, state_counts)
-        end subroutine write_bootstrap_sigma2_from_halfmaps
-
-        subroutine calc_bootstrap_state_scales( state_scales, state_counts )
-            real, allocatable, intent(out) :: state_scales(:)
-            real, allocatable, intent(out) :: state_counts(:)
-            type(sp_project) :: spproj
-            real, allocatable :: eo_counts(:,:)
-            real :: denom
-            integer :: state
-            allocate(state_scales(params%nstates), state_counts(params%nstates), eo_counts(2,params%nstates), source=0.)
-            select case(trim(params%oritype))
-                case('ptcl3D')
-                    call spproj%read_segment('ptcl3D', params%projfile)
-                    call accumulate_bootstrap_eo_counts(spproj%os_ptcl3D, eo_counts)
-                case('cls3D')
-                    call spproj%read_segment('cls3D', params%projfile)
-                    call accumulate_bootstrap_eo_counts(spproj%os_cls3D, eo_counts)
-                case DEFAULT
-                    THROW_HARD('bootstrap_rec3D supports ptcl3D and cls3D orientations only')
-            end select
-            do state = 1, params%nstates
-                denom = eo_counts(1,state) + eo_counts(2,state)
-                if( eo_counts(1,state) > TINY .and. eo_counts(2,state) > TINY )then
-                    state_scales(state) = (eo_counts(1,state) * eo_counts(2,state)) / denom
-                    state_counts(state) = denom
-                else
-                    state_scales(state) = 0.5
-                    state_counts(state) = 1.
-                    write(logfhandle,'(A,I0,A)') '>>> WARNING: BOOTSTRAP_REC3D COULD NOT DETERMINE EVEN/ODD COUNTS FOR STATE ',&
-                        &state, '; USING UNSCALED HALF-MAP DIFFERENCE'
-                endif
-                write(logfhandle,'(A,I0,A,F12.3)') '>>> BOOTSTRAP_REC3D SIGMA SCALE STATE ', state, ':', state_scales(state)
-            enddo
-            call spproj%kill
-            deallocate(eo_counts)
-        end subroutine calc_bootstrap_state_scales
-
-        subroutine accumulate_bootstrap_eo_counts( os, eo_counts )
-            class(oris), intent(in)    :: os
-            real,        intent(inout) :: eo_counts(:,:)
-            integer :: eo, iptcl, state
-            do iptcl = 1, os%get_noris()
-                state = os%get_state(iptcl)
-                if( state < 1 .or. state > size(eo_counts,2) )cycle
-                eo = os%get_eo(iptcl) + 1
-                if( eo < 1 .or. eo > 2 )cycle
-                eo_counts(eo,state) = eo_counts(eo,state) + 1.
-            enddo
-        end subroutine accumulate_bootstrap_eo_counts
-
-        subroutine condition_bootstrap_sigma2( sigma2, last_shell )
-            real,    intent(inout) :: sigma2(:)
-            integer, intent(in)    :: last_shell
-            real, allocatable :: logsigma(:), smoothed(:)
-            real    :: floor_val, pos_min
-            integer :: i, pass, n, anchor
-            logical :: any_pos
-            n = size(sigma2)
-            if( n == 0 )return
-            pos_min = huge(pos_min)
-            any_pos = .false.
-            do i = 1, n
-                if( sigma2(i) > TINY )then
-                    pos_min = min(pos_min, sigma2(i))
-                    any_pos = .true.
-                endif
-            enddo
-            if( .not. any_pos ) THROW_HARD('Unable to estimate positive sigma2 values from even/odd half-map difference')
-            floor_val = max(pos_min * 1.e-3, TINY)
-            do i = 1, n
-                if( sigma2(i) <= floor_val ) sigma2(i) = floor_val
-            enddo
-            if( last_shell > 0 .and. last_shell < n ) sigma2(last_shell+1:n) = sigma2(last_shell)
-            anchor = min(n, 6)
-            if( anchor > 1 )then
-                do i = 1, anchor - 1
-                    if( sigma2(i) <= floor_val ) sigma2(i) = max(sigma2(i), sigma2(anchor))
-                enddo
-            endif
-            allocate(logsigma(n), smoothed(n))
-            logsigma = log(max(sigma2, floor_val))
-            do pass = 1, 2
-                smoothed = logsigma
-                do i = 2, n - 1
-                    smoothed(i) = 0.25 * logsigma(i-1) + 0.5 * logsigma(i) + 0.25 * logsigma(i+1)
-                enddo
-                logsigma = smoothed
-            enddo
-            sigma2 = exp(logsigma)
-            deallocate(logsigma, smoothed)
-        end subroutine condition_bootstrap_sigma2
 
         subroutine warn_for_forced_bootstrap_overrides( cline_in )
             class(cmdline), intent(inout) :: cline_in

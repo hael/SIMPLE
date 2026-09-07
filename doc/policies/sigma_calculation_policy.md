@@ -124,8 +124,15 @@ generation and rebuilds only when it is missing or stale.
 
 Direct `reconstruct3D`, `bootstrap_rec3D`, and Flex PCA initialize canonical
 state when they need Euclidean sigma and the associated particle project has no
-valid state. The legacy half-map-difference STAR bootstrap remains confined to
-legacy `bootstrap_rec3D`.
+valid state. `bootstrap_rec3D` is the particle-power seed (`calc_pspec`, both
+stores) followed by one Euclidean ML-regularized reconstruction; the former
+half-map-difference estimator was retired on 2026-09-06. Workflows that ship a
+final map upgrade the seed with one residual `refine=sigma` pass before the
+shipped reconstruction (`doc/policies/refine3D_policy.md` section 5.1). In the
+canonical store that pass commits its residual state itself; in the legacy
+store the caller consolidates the per-particle files it left into the next
+iteration's STAR. Validation of a canonical state for any consumer is one
+function, `canonical_sigma2_consumable` in `simple_sigma2_files`.
 
 ### Search update and commit
 

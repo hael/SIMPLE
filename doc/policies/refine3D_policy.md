@@ -153,6 +153,40 @@ Even/odd partitioning is required for consistent half-map reconstruction. If it
 is absent, initialization partitions the active orientation segment and writes
 that state back to the project.
 
+### 5.1 Sigma2 bootstrap contract
+
+Work that has alignments, or nothing at all, but no noise-power estimate is
+one problem: a fresh abinitio3D start, the ini3D routes, external starting
+volumes, the refine3D_auto startup, a refine3D started at a later iteration in
+an empty directory, and every final reconstruction at a new sampling. Since
+2026-09-06 all of them follow one rule, owned by `simple_sigma2_bootstrap`:
+
+- Seed from the particle image power spectra (`calc_pspec`) as the grouped
+  STAR of the consuming iteration (legacy store) or the canonical state, and
+  let the first euclid pass replace the seed with residual sigmas. Image
+  power needs neither alignment nor volume, and it is the basis every
+  refinement already starts from. Half-map power (the former
+  `bootstrap_rec3D` estimator) sat on a different basis than the residual
+  sigmas a refinement then computes and conditioned the euclid system
+  markedly worse; it is retired.
+- `ensure_sigma2_for_iteration` is a no-op when the directory already holds
+  an estimate, seeds otherwise, and hands over to a consuming refine3D
+  through `sigma_transition_ready=yes`: that stage's first iteration
+  initializes its workers from the STAR and emits per-particle files in its
+  own partition layout. The external-reference pose initialization uses the
+  same key after its CC residual pass.
+- `sigma2_stage_needs_bootstrap` makes refine3D itself self-healing: a start
+  iteration above 1 in a directory holding neither a STAR for that iteration
+  nor any per-particle file seeds the same way instead of failing in a
+  worker. Sigma files are never discovered in other directories.
+- Where no refinement iteration follows (final reconstructions at original
+  sampling in abinitio3D and refine3D_auto), the seed is upgraded by one
+  residual pass: `refine=sigma` against the seeded map at the final sampling
+  (no search, no volume assembly, no orientation output, alignment docs are
+  not merged), consolidated as the next iteration, then the shipped euclid
+  ML reconstruction runs on the residual sigmas. `bootstrap_rec3D` is now
+  the seed plus a single euclid ML pass.
+
 ## 6. Reference Preparation
 
 The strategy materializes the iteration reprojection model before

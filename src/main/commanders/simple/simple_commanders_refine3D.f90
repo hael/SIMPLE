@@ -65,6 +65,7 @@ contains
         use simple_commanders_rec,    only: commander_bootstrap_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_refine3D_strategy, only: strip_refine3D_search_only_args
+        use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline, consolidate_sigma2_groups
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D, cline_boot
@@ -82,6 +83,9 @@ contains
         integer, parameter :: MAXITS_REFINE3D_AUTO_CAP = 50
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
+        integer :: final_sigma_iter, state
+        type(cmdline) :: cline_sigma_pass
+        type(string), allocatable :: final_seed_vols(:)
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
         logical :: l_external_input, l_ref_pose_init_requested
         ! commanders
@@ -307,6 +311,31 @@ contains
                 &cline_rec3D%get_iarg('maxits_pcg')
         endif
         call xbootstrap_rec3D%execute(cline_rec3D)
+        ! upgrade the image-power seed with one residual sigma2 pass at the
+        ! final sampling against the seeded map, then ship the final map on
+        ! the residual sigmas (simple_sigma2_bootstrap, 2026-09-06)
+        final_sigma_iter = cline_rec3D%get_iarg('which_iter')
+        allocate(final_seed_vols(params%nstates))
+        do state = 1, params%nstates
+            final_seed_vols(state) = refine3D_state_vol_fname(state)
+        enddo
+        call prepare_residual_sigma2_pass_cline(cline_rec3D, final_sigma_iter, params%nstates, &
+            &final_seed_vols, cline_sigma_pass)
+        write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION: RESIDUAL SIGMA2 PASS AT ORIGINAL SAMPLING, ITERATION ', &
+            &final_sigma_iter
+        call xrefine3D%execute(cline_sigma_pass)
+        call consolidate_sigma2_groups(cline_rec3D, params%projfile, final_sigma_iter + 1, params%l_sigma_canonical)
+        call cline_rec3D%set('prg',        'reconstruct3D')
+        call cline_rec3D%set('objfun',     'euclid')
+        call cline_rec3D%set('ml_reg',     'yes')
+        call cline_rec3D%set('which_iter', final_sigma_iter + 1)
+        write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION: ', final_sigma_iter + 1
+        call xrec3D%execute(cline_rec3D)
+        do state = 1, params%nstates
+            call final_seed_vols(state)%kill
+        enddo
+        deallocate(final_seed_vols)
+        call cline_sigma_pass%kill
         call params_final_rec%new(cline_rec3D)
         params_final_rec%box  = params%box
         params_final_rec%smpd = params%smpd

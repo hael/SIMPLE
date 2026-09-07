@@ -164,7 +164,7 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
-    character(len=3)          :: sigma_transition_ready='no' !< internal: CC residual group sigma is ready(yes|no){no}
+    character(len=3)          :: sigma_transition_ready='no' !< internal: a wrapper-provided grouped sigma STAR for the start iteration is ready(yes|no){no}
     character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
