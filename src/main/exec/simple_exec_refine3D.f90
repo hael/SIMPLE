@@ -5,9 +5,9 @@ use simple_string,               only: string
 use simple_exec_helpers,         only: restarted_exec
 use simple_commanders_mask,      only: commander_automask
 use simple_commanders_volops,    only: commander_postprocess
-use simple_commanders_rec,       only: commander_bootstrap_rec3D, commander_rec3D
+use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto, commander_refine3D_states, &
-    &commander_classify3D_refs
+    &commander_classify3D_refs, commander_bootstrap_rec3D
 implicit none
 
 public :: exec_refine3D_commander

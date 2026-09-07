@@ -195,15 +195,23 @@ subroutine new_automask( prgtab )
         ! PROGRAM SPECIFICATION
         call bootstrap_rec3D%new(&
         &'bootstrap_rec3D',&                                             ! name
-        &'bootstrap ML-regularized 3D reconstruction',&                  ! summary
-        &'seeds the sigma2 estimate from particle power spectra (calc_pspec) for the given iteration and runs one Euclidean&
-        & ML-regularized reconstruct3D on it; workflows that ship a final map upgrade the seed with a residual sigma pass',&
+        &'bootstrap sigma2 and ML-regularized 3D reconstruction',&       ! summary
+        &'complete final-reconstruction sequence for a project with 3D orientations: seeds the sigma2 estimate from particle&
+        & power spectra (calc_pspec) as the given iteration, reconstructs a Euclidean ML-regularized bootstrap map on it, runs one&
+        & residual sigma2 pass (refine=sigma, no search) against that map, consolidates the residual groups as the next&
+        & iteration and reconstructs the shipped ML-regularized map on them; standalone test entry point for the final&
+        & reconstruction stage of abinitio3D and refine3D_auto',&
         &'simple_exec',&                                                 ! executable
         &.true.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
+        call bootstrap_rec3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend; PCG runs independent kernel solves for the two halfsets(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
+        &visibility=UI_VIS_STANDARD)
         call bootstrap_rec3D%add_input(UI_PARM, sigma_store, visibility=UI_VIS_ADVANCED)
         call bootstrap_rec3D%add_input(UI_PARM, 'which_iter', 'num', 'Sigma iteration index',&
         &'Iteration index used for the generated sigma2_groups file{1}', 'iteration{1}', .false., 1.0, &
@@ -226,6 +234,14 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         call bootstrap_rec3D%add_input(UI_FILT, combine_eo, &
         &visibility=UI_VIS_DEVELOPER)
+        call bootstrap_rec3D%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{2}', .false., 2., &
+        &visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call bootstrap_rec3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
+        &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
+        &.false., 0.0, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         ! mask controls
         call bootstrap_rec3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

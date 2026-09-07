@@ -3,7 +3,6 @@ module simple_commanders_rec
 use simple_commanders_api
 use simple_matcher_2Dprep
 use simple_matcher_3Drec, only: calc_3Drec, calc_projdir3Drec
-use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_state_halfvol_fname, refine3D_state_vol_fname
 use simple_sigma2_files, only: load_sigma2_groups
 implicit none
 #include "simple_local_flags.inc"
@@ -12,11 +11,6 @@ type, extends(commander_base) :: commander_rec3D
   contains
     procedure :: execute => exec_rec3D
 end type commander_rec3D
-
-type, extends(commander_base) :: commander_bootstrap_rec3D
-  contains
-    procedure :: execute => exec_bootstrap_rec3D
-end type commander_bootstrap_rec3D
 
 type, extends(commander_base) :: commander_rec3D_worker
   contains
@@ -58,164 +52,6 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_rec3D
-
-    subroutine exec_bootstrap_rec3D( self, cline )
-        use simple_commanders_euclid, only: commander_calc_pspec
-        class(commander_bootstrap_rec3D), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(commander_rec3D) :: xrec3D
-        type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline)         :: cline_reg, cline_pspec
-        type(parameters)      :: params
-        integer               :: state, which_iter
-        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
-        call cline%set('oritype', 'ptcl3D')
-        if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
-        call warn_for_forced_bootstrap_overrides(cline)
-        call cline%set('sigma_est', 'global')
-        if( .not. cline%defined('which_iter')  ) call cline%set('which_iter',       1)
-        if( .not. cline%defined('postprocess') ) call cline%set('postprocess',  'yes')
-        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no')
-        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',        'no')
-        call cline%delete('objfun')
-        call cline%delete('ml_reg')
-        call params%new(cline)
-        which_iter = max(1, params%which_iter)
-        call cline%set('which_iter', which_iter)
-        call cline%set('mkdir', 'no') ! child reconstruct3D calls must not create nested run directories
-        ! One sigma2 basis for every bootstrap (2026-09-06): the particle
-        ! power spectra, exactly what a fresh refinement seeds from, written
-        ! as the grouped STAR of which_iter (legacy store) or the registered
-        ! canonical state. The former half-map power estimator sat on a
-        ! different basis than the residual sigmas a refinement then computes
-        ! and conditioned the euclid system markedly worse (bgal residual
-        ! 0.23 vs 0.08, refine3D_auto startup record). With the seed in hand
-        ! the reconstruction is a single euclid ML-regularized pass; callers
-        ! that ship a final map upgrade the seed with a residual pass
-        ! (simple_sigma2_bootstrap).
-        cline_pspec = cline
-        call cline_pspec%set('prg',       'calc_pspec')
-        call cline_pspec%set('mkdir',              'no')
-        call cline_pspec%set('objfun',       'euclid')
-        call cline_pspec%set('sigma_est',    'global')
-        call cline_pspec%set('which_iter',  which_iter)
-        call cline_pspec%delete('postprocess')
-        call cline_pspec%delete('combine_eo')
-        call cline_pspec%delete('rec_backend')
-        call cline_pspec%delete('maxits_pcg')
-        call cline_pspec%delete('rtol')
-        call cline_pspec%delete('trail_seed')
-        call cline_pspec%delete('outfile')
-        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
-        call xcalc_pspec%execute(cline_pspec)
-        call cline_pspec%kill
-        cline_reg = cline
-        call prepare_bootstrap_rec_cline(cline_reg, l_regularized=.true.)
-        write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION'
-        call xrec3D%execute(cline_reg)
-        call register_bootstrap_rec_outputs()
-        do state = 1, params%nstates
-            call cline%set('vol'//int2str(state), refine3D_state_vol_fname(state))
-        enddo
-        call cline_reg%kill
-        call simple_end('**** SIMPLE_BOOTSTRAP_REC3D NORMAL STOP ****', print_simple=.false.)
-
-    contains
-
-        subroutine prepare_bootstrap_rec_cline( cline_rec, l_regularized )
-            class(cmdline), intent(inout) :: cline_rec
-            logical,        intent(in)    :: l_regularized
-            integer :: state
-            call cline_rec%set('prg',       'reconstruct3D')
-            call cline_rec%set('mkdir',              'no')
-            call cline_rec%set('oritype', params%oritype)
-            call cline_rec%set('nstates', params%nstates)
-            call cline_rec%set('sigma_est',     'global')
-            call cline_rec%set('which_iter', which_iter)
-            call cline_rec%set('trail_rec',        'no')
-            call cline_rec%set('combine_eo',       'no')
-            call cline_rec%delete('refine')
-            call cline_rec%delete('update_frac')
-            call cline_rec%delete('fillin')
-            call cline_rec%delete('objfun_den')
-            call cline_rec%delete('objfun_den_w')
-            call cline_rec%delete('ufrac_trec')
-            call cline_rec%delete('endit')
-            call cline_rec%delete('vol_even')
-            call cline_rec%delete('vol_odd')
-            call cline_rec%delete('refs')
-            call cline_rec%delete('refs_even')
-            call cline_rec%delete('refs_odd')
-            do state = 1, params%nstates
-                call cline_rec%delete('vol'//int2str(state))
-            enddo
-            if( l_regularized )then
-                call cline_rec%set('objfun', 'euclid')
-                call cline_rec%set('ml_reg',    'yes')
-            else
-                call cline_rec%set('objfun',       'cc')
-                call cline_rec%set('ml_reg',       'no')
-                call cline_rec%set('postprocess',  'no')
-                call cline_rec%set('filt_mode',    'none')
-                call cline_rec%set('automsk',      'no')
-            endif
-        end subroutine prepare_bootstrap_rec_cline
-
-
-        subroutine register_bootstrap_rec_outputs()
-            type(sp_project) :: spproj
-            type(string)     :: volname, fscname
-            integer          :: state, pop
-            character(len=16) :: imgkind
-            call spproj%read_segment('out', params%projfile)
-            call spproj%read_segment(params%oritype, params%projfile)
-            select case(trim(params%oritype))
-                case('cls3D')
-                    imgkind = 'vol_cavg'
-                case DEFAULT
-                    imgkind = 'vol'
-            end select
-            do state = 1, params%nstates
-                select case(trim(params%oritype))
-                    case('cls3D')
-                        pop = spproj%os_cls3D%get_pop(state, 'state')
-                    case DEFAULT
-                        pop = spproj%os_ptcl3D%get_pop(state, 'state')
-                end select
-                if( pop == 0 )cycle
-                volname = refine3D_state_vol_fname(state)
-                if( .not. file_exists(volname) )then
-                    call volname%kill
-                    cycle
-                endif
-                fscname = refine3D_fsc_fname(state)
-                ! params%box_crop/smpd_crop are the effective reconstruction
-                ! sampling resolved by params%new or explicitly pinned by
-                ! callers that must avoid staged downsampling leakage.
-                call spproj%add_vol2os_out(volname, params%smpd_crop, state, trim(imgkind), pop=pop)
-                if( file_exists(fscname) ) call spproj%add_fsc2os_out(fscname, state, params%box_crop)
-                call volname%kill
-                call fscname%kill
-            enddo
-            call spproj%write_segment_inside('out', params%projfile)
-            call spproj%kill
-        end subroutine register_bootstrap_rec_outputs
-
-
-        subroutine warn_for_forced_bootstrap_overrides( cline_in )
-            class(cmdline), intent(inout) :: cline_in
-            type(string) :: val
-            if( cline_in%defined('sigma_est') )then
-                val = cline_in%get_carg('sigma_est')
-                if( val%to_char().ne.'global' )then
-                    THROW_WARN('bootstrap_rec3D enforces sigma_est=global; ignoring input sigma_est='//val%to_char())
-                endif
-                call val%kill
-            endif
-            if( cline_in%defined('objfun') ) THROW_WARN('bootstrap_rec3D controls objfun internally; ignoring input objfun')
-            if( cline_in%defined('ml_reg') ) THROW_WARN('bootstrap_rec3D controls ml_reg internally; ignoring input ml_reg')
-        end subroutine warn_for_forced_bootstrap_overrides
-    end subroutine exec_bootstrap_rec3D
 
     subroutine exec_rec3D_distr_worker( self, cline )
         use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_worker

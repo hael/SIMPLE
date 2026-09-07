@@ -7,7 +7,7 @@ use simple_external_reference_pose_initialization, only: initialize_poses_agains
 use simple_procimgstk,              only: shift_imgfile
 use simple_commanders_project_core, only: commander_selection
 use simple_commanders_reproject,    only: commander_reproject
-use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D_states
+use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D_states, commander_bootstrap_rec3D
 use simple_commanders_rec,          only: commander_rec3D
 use simple_cluster_seed,            only: gen_labelling
 use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
@@ -40,6 +40,7 @@ contains
         ! shared-mem commanders
         type(commander_refine3D)  :: xrefine3D
         type(commander_rec3D)     :: xrec3D
+        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         type(commander_reproject) :: xreproject
         ! other
         type(string)              :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
@@ -293,7 +294,7 @@ contains
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(params, work_proj, work_projfile, xrec3D, xrefine3D, l_postprocess=.false.)
+            call calc_final_rec(params, work_proj, work_projfile, xrec3D, xbootstrap_rec3D, l_postprocess=.false.)
             ! final raw and low-pass diagnostic 3D reconstruction outputs
             call write_final_rec_outputs(params, work_proj, lpinfo(nstages_ini3D)%lp)
             ! add rec_final to os_out
@@ -506,6 +507,7 @@ contains
         type(commander_refine3D)        :: xrefine3D
         type(commander_refine3D_states) :: xrefine3D_states
         type(commander_rec3D)           :: xrec3D
+        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         ! other
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:), cls_states(:)
         type(class_sample), allocatable :: clssmp(:)
@@ -973,7 +975,7 @@ contains
                     call ensure_multistate_particle_assignments
             end select
             ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(params, spproj, params%projfile, xrec3D, xrefine3D, l_postprocess=.true.)
+            call calc_final_rec(params, spproj, params%projfile, xrec3D, xbootstrap_rec3D, l_postprocess=.true.)
             ! for visualization
             call gen_ortho_reprojs4viz(params, spproj)
             ! final raw and low-pass diagnostic 3D reconstruction outputs

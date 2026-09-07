@@ -135,9 +135,15 @@ iteration and sets `sigma_transition_ready=yes` on the stage command line. The
 starting reconstruction then runs as planned, and the stage's first euclid
 iteration initializes its workers from that STAR, emits per-particle sigma
 files in its own partition layout and replaces the seed with residual sigmas.
-The final reconstruction at original sampling seeds the same way through
-`bootstrap_rec3D`, then upgrades the seed with one residual sigma pass
-(`refine=sigma`) before the shipped euclid ML reconstruction.
+The final reconstruction at original sampling is one program call,
+`bootstrap_rec3D`, which owns the complete sequence: the same image-power
+seed, a euclid ML bootstrap map on it, one residual sigma pass
+(`refine=sigma`) against that map, consolidation of the residual groups as the
+next iteration and the shipped euclid ML reconstruction on them. Because the
+program takes any project with 3D orientations, it is also the standalone
+test for this stage (`simple_exec prg=bootstrap_rec3D projfile=... pgrp=...
+mskdiam=... nparts=... nthr=... rec_backend=...`), so failures in the final
+reconstruction can be reproduced in minutes rather than after a full run.
 
 ## 4. Low-Pass and Cropping
 

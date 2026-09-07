@@ -3444,6 +3444,35 @@ the acceptable-looking outputs do not validate the prior.
    - `bootstrap_rec3D` imports `NU_AUTOTARGET_MIN/MAX` instead of
      duplicating the bounds.
 
+10. **Final-reconstruction stage made standalone (2026-09-07).**
+   - msp1 residual-pass crash reported after the 09:25 fix carried exactly
+     the same code addresses as the 09:18 log (0x12ac0b2
+     choose_and_run_strategy, 0x12b2812 refine3d_exec._omp_fn.0, 0x166a8d3
+     alloc_hash): same binary, i.e. the pre-fix shared-orientation race, not
+     a second race. Rebuild `simple_private_exec` on that machine; addr2line
+     on 0x12ac0b2 must no longer name the old choose_and_run_strategy line.
+   - Export gate: one event, the master's own THROW at the cold base solve
+     of the final reconstruction on the residual sigmas (dot(p,Hp)=NaN at CG
+     iteration 1). Its backtrace appears before the "10 PART(S) COMPLETED"
+     line only because stderr is unbuffered; no worker died. D is validated
+     finite by update_lambda_from_density, so the NaN enters through the RHS
+     or the preconditioner floor. The bootstrap reconstruction on the
+     image-power STAR (iteration N) solved; the final one on the residual
+     STAR (N+1) did not, so the residual groups are the suspect (scale, tiny
+     shells). Diagnosis needs sigma2_it_N.star vs sigma2_it_N+1.star from
+     the run directory.
+   - `bootstrap_rec3D` moved to simple_commanders_refine3D and now owns the
+     complete sequence: image-power seed (N), euclid ML bootstrap map,
+     refine=sigma residual pass against it, consolidation (N+1), final euclid
+     ML map on the residual sigmas; it returns vol1..N and which_iter=N+1 on
+     the command line. abinitio3D's calc_final_rec (takes the commander as
+     class(commander_base) from the abinitio commander) and refine3D_auto
+     call it and carry no copy. Standalone reproduction of the failing stage
+     on any project with 3D orientations:
+     `simple_exec prg=bootstrap_rec3D projfile=... pgrp=... mskdiam=...
+     nparts=... nthr=... rec_backend=pcg` (UI now exposes rec_backend,
+     maxits_pcg, rtol).
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

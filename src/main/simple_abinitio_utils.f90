@@ -2,9 +2,7 @@
 module simple_abinitio_utils
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
-use simple_commanders_rec,       only: commander_bootstrap_rec3D
-use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration, prepare_residual_sigma2_pass_cline, &
-    &consolidate_sigma2_groups
+use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration
 use simple_commanders_volops,    only: commander_symmetrize_map
 use simple_cluster_seed,         only: gen_labelling
 use simple_class_frcs,           only: class_frcs
@@ -846,17 +844,14 @@ contains
         call final_cline%set('maxits_pcg', maxits_final)
     end subroutine configure_final_pcg_solve_budget
 
-    subroutine calc_final_rec( params, spproj, projfile, xrec3D, xrefine3D, l_postprocess )
+    subroutine calc_final_rec( params, spproj, projfile, xrec3D, xbootstrap_rec3D, l_postprocess )
         class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
-        class(commander_base), intent(inout) :: xrefine3D
+        class(commander_base), intent(inout) :: xbootstrap_rec3D
         logical,               intent(in)    :: l_postprocess
         type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star, vol_envmsk
-        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-        type(cmdline) :: cline_sigma_pass
-        type(string), allocatable :: seed_vols(:)
         integer      :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, sigma_iter, bootstrap_sigma_iter
         real         :: smpd
         logical      :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
@@ -894,33 +889,14 @@ contains
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION BOOTSTRAP SIGMA ITERATION: ', bootstrap_sigma_iter
             if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
                 &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_reconstruct3D%get_iarg('maxits_pcg')
+            ! bootstrap_rec3D owns the complete sequence: image-power seed,
+            ! euclid ML bootstrap map, one residual sigma2 pass (refine=sigma)
+            ! against it at the final sampling, group consolidation as the
+            ! next iteration and the shipped euclid ML reconstruction on the
+            ! residual sigmas. The same program is the standalone test entry
+            ! point for this stage on any project with 3D orientations
+            ! (simple_exec prg=bootstrap_rec3D), 2026-09-07.
             call xbootstrap_rec3D%execute(cline_reconstruct3D)
-            ! No refinement iteration follows a final reconstruction, so the
-            ! image-power seed is upgraded here: one residual sigma2 pass at
-            ! the final sampling against the seeded map, consolidated as the
-            ! next iteration, then the final euclid ML reconstruction on the
-            ! residual sigmas (2026-09-06).
-            allocate(seed_vols(params%nstates))
-            do state = 1, params%nstates
-                seed_vols(state) = refine3D_state_vol_fname(state)
-            enddo
-            call prepare_residual_sigma2_pass_cline(cline_reconstruct3D, bootstrap_sigma_iter, params%nstates, &
-                &seed_vols, cline_sigma_pass)
-            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION: RESIDUAL SIGMA2 PASS AT ORIGINAL SAMPLING, ITERATION ', &
-                &bootstrap_sigma_iter
-            call xrefine3D%execute(cline_sigma_pass)
-            call consolidate_sigma2_groups(cline_reconstruct3D, projfile, bootstrap_sigma_iter + 1, &
-                &params%l_sigma_canonical)
-            call prep_final_rec_cline(cline_reconstruct3D, 'reconstruct3D')
-            call cline_reconstruct3D%set('which_iter', bootstrap_sigma_iter + 1)
-            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION: ', &
-                &bootstrap_sigma_iter + 1
-            call xrec3D%execute(cline_reconstruct3D)
-            do state = 1, params%nstates
-                call seed_vols(state)%kill
-            enddo
-            deallocate(seed_vols)
-            call cline_sigma_pass%kill
         else
             if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
                 &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_reconstruct3D%get_iarg('maxits_pcg')

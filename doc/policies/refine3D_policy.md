@@ -184,8 +184,12 @@ an empty directory, and every final reconstruction at a new sampling. Since
   residual pass: `refine=sigma` against the seeded map at the final sampling
   (no search, no volume assembly, no orientation output, alignment docs are
   not merged), consolidated as the next iteration, then the shipped euclid
-  ML reconstruction runs on the residual sigmas. `bootstrap_rec3D` is now
-  the seed plus a single euclid ML pass.
+  ML reconstruction runs on the residual sigmas. Since 2026-09-07
+  `bootstrap_rec3D` (module `simple_commanders_refine3D`) owns this whole
+  sequence: seed, bootstrap map, residual pass, consolidation, final map;
+  abinitio3D's `calc_final_rec` and refine3D_auto call it and carry no copy
+  of the sequence. It runs standalone on any project with 3D orientations
+  and is the test entry point for the final-reconstruction stage.
 
 ## 6. Reference Preparation
 

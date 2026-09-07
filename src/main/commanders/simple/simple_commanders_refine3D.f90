@@ -38,6 +38,11 @@ type, extends(commander_base) :: commander_refine3D_distr_worker
     procedure :: execute      => exec_refine3D_distr_worker
 end type commander_refine3D_distr_worker
 
+type, extends(commander_base) :: commander_bootstrap_rec3D
+  contains
+    procedure :: execute      => exec_bootstrap_rec3D
+end type commander_bootstrap_rec3D
+
 contains
 
     subroutine exec_nspace(self,cline)
@@ -62,10 +67,8 @@ contains
             &write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,     only: lpstages_setlims
-        use simple_commanders_rec,    only: commander_bootstrap_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_refine3D_strategy, only: strip_refine3D_search_only_args
-        use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline, consolidate_sigma2_groups
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D, cline_boot
@@ -83,9 +86,6 @@ contains
         integer, parameter :: MAXITS_REFINE3D_AUTO_CAP = 50
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
-        integer :: final_sigma_iter, state
-        type(cmdline) :: cline_sigma_pass
-        type(string), allocatable :: final_seed_vols(:)
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
         logical :: l_external_input, l_ref_pose_init_requested
         ! commanders
@@ -284,9 +284,9 @@ contains
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images at original sampling: the
-        ! refinement sigmas are crop-box incompatible, so bootstrap_rec3D
-        ! derives compatible sigmas from an unregularized pass and ships a
-        ! euclid ML-regularized final map
+        ! refinement sigmas are crop-box incompatible, so bootstrap_rec3D seeds
+        ! compatible sigmas from particle power, upgrades them with one residual
+        ! pass against its bootstrap map and ships the euclid ML final map
         call cline_rec3D%set('prg', 'bootstrap_rec3D')
         call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
         call cline_rec3D%set('postprocess', 'yes')
@@ -310,32 +310,15 @@ contains
             write(logfhandle,'(A,I0)') '>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', &
                 &cline_rec3D%get_iarg('maxits_pcg')
         endif
+        ! bootstrap_rec3D owns the complete sequence: image-power seed, euclid
+        ! ML bootstrap map, one residual sigma2 pass (refine=sigma) against it,
+        ! group consolidation and the shipped euclid ML reconstruction on the
+        ! residual sigmas (which_iter+1 on return). It is also the standalone
+        ! test entry point for this stage (2026-09-07).
         call xbootstrap_rec3D%execute(cline_rec3D)
-        ! upgrade the image-power seed with one residual sigma2 pass at the
-        ! final sampling against the seeded map, then ship the final map on
-        ! the residual sigmas (simple_sigma2_bootstrap, 2026-09-06)
-        final_sigma_iter = cline_rec3D%get_iarg('which_iter')
-        allocate(final_seed_vols(params%nstates))
-        do state = 1, params%nstates
-            final_seed_vols(state) = refine3D_state_vol_fname(state)
-        enddo
-        call prepare_residual_sigma2_pass_cline(cline_rec3D, final_sigma_iter, params%nstates, &
-            &final_seed_vols, cline_sigma_pass)
-        write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION: RESIDUAL SIGMA2 PASS AT ORIGINAL SAMPLING, ITERATION ', &
-            &final_sigma_iter
-        call xrefine3D%execute(cline_sigma_pass)
-        call consolidate_sigma2_groups(cline_rec3D, params%projfile, final_sigma_iter + 1, params%l_sigma_canonical)
-        call cline_rec3D%set('prg',        'reconstruct3D')
-        call cline_rec3D%set('objfun',     'euclid')
-        call cline_rec3D%set('ml_reg',     'yes')
-        call cline_rec3D%set('which_iter', final_sigma_iter + 1)
-        write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION: ', final_sigma_iter + 1
-        call xrec3D%execute(cline_rec3D)
-        do state = 1, params%nstates
-            call final_seed_vols(state)%kill
-        enddo
-        deallocate(final_seed_vols)
-        call cline_sigma_pass%kill
+        call cline_rec3D%set('prg',    'reconstruct3D')
+        call cline_rec3D%set('objfun', 'euclid')
+        call cline_rec3D%set('ml_reg', 'yes')
         call params_final_rec%new(cline_rec3D)
         params_final_rec%box  = params%box
         params_final_rec%smpd = params%smpd
@@ -2020,5 +2003,200 @@ contains
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
     end subroutine exec_refine3D_distr_worker
+
+    !> Complete sigma2 bootstrap and reconstruction for a project with 3D
+    !! orientations but no consumable sigma2 estimate (final reconstructions
+    !! at a new sampling, standalone reconstructions): the particle power
+    !! spectra seed the grouped STAR of which_iter (legacy store) or the
+    !! canonical state, one euclid ML-regularized reconstruction on that seed
+    !! gives the bootstrap map, one residual sigma2 pass (refine=sigma, no
+    !! search) against that map re-estimates every particle's sigma2, the
+    !! groups are consolidated as which_iter+1 and the shipped euclid ML
+    !! reconstruction runs on the residual sigmas. On return the command line
+    !! carries vol1..N and which_iter+1. Standalone test entry point for the
+    !! final-reconstruction stage of abinitio3D and refine3D_auto, e.g.
+    !!   simple_exec prg=bootstrap_rec3D projfile=x.simple pgrp=c1 mskdiam=160
+    !!               nparts=10 nthr=8 rec_backend=pcg
+    subroutine exec_bootstrap_rec3D( self, cline )
+        use simple_commanders_rec,    only: commander_rec3D
+        use simple_commanders_euclid, only: commander_calc_pspec
+        use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline, consolidate_sigma2_groups
+        class(commander_bootstrap_rec3D), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(commander_rec3D)      :: xrec3D
+        type(commander_calc_pspec) :: xcalc_pspec
+        type(commander_refine3D)   :: xrefine3D
+        type(cmdline)              :: cline_rec, cline_pspec, cline_sigma
+        type(parameters)           :: params
+        type(string), allocatable  :: seed_vols(:)
+        integer                    :: state, which_iter
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
+        call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
+        call warn_for_forced_bootstrap_overrides(cline)
+        call cline%set('sigma_est', 'global')
+        if( .not. cline%defined('which_iter')  ) call cline%set('which_iter',       1)
+        if( .not. cline%defined('postprocess') ) call cline%set('postprocess',  'yes')
+        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no')
+        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',        'no')
+        call cline%delete('objfun')
+        call cline%delete('ml_reg')
+        call params%new(cline)
+        which_iter = max(1, params%which_iter)
+        call cline%set('which_iter', which_iter)
+        call cline%set('mkdir', 'no') ! child calls must not create nested run directories
+        ! 1. One sigma2 basis for every bootstrap (2026-09-06): the particle
+        ! power spectra, exactly what a fresh refinement seeds from, written
+        ! as the grouped STAR of which_iter (legacy store) or the registered
+        ! canonical state. The former half-map power estimator sat on a
+        ! different basis than the residual sigmas a refinement then computes
+        ! and conditioned the euclid system markedly worse (bgal residual
+        ! 0.23 vs 0.08, refine3D_auto startup record).
+        cline_pspec = cline
+        call cline_pspec%set('prg',       'calc_pspec')
+        call cline_pspec%set('mkdir',              'no')
+        call cline_pspec%set('objfun',       'euclid')
+        call cline_pspec%set('sigma_est',    'global')
+        call cline_pspec%set('which_iter',  which_iter)
+        call cline_pspec%delete('postprocess')
+        call cline_pspec%delete('combine_eo')
+        call cline_pspec%delete('rec_backend')
+        call cline_pspec%delete('maxits_pcg')
+        call cline_pspec%delete('rtol')
+        call cline_pspec%delete('trail_seed')
+        call cline_pspec%delete('outfile')
+        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
+        call xcalc_pspec%execute(cline_pspec)
+        call cline_pspec%kill
+        ! 2. Bootstrap map: a single euclid ML-regularized reconstruction on
+        ! the seed; it is the reference the residual pass scores against.
+        cline_rec = cline
+        call prepare_bootstrap_rec_cline(cline_rec, which_iter)
+        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION ON THE IMAGE-POWER SEED, SIGMA ITERATION ', &
+            &which_iter
+        call xrec3D%execute(cline_rec)
+        call cline_rec%kill
+        ! 3. No refinement iteration follows, so the image-power seed is
+        ! upgraded here: one residual sigma2 pass (refine=sigma: no search,
+        ! no volume assembly, no orientation output) against the bootstrap
+        ! map at this sampling (simple_sigma2_bootstrap, 2026-09-06).
+        allocate(seed_vols(params%nstates))
+        do state = 1, params%nstates
+            seed_vols(state) = refine3D_state_vol_fname(state)
+        enddo
+        call prepare_residual_sigma2_pass_cline(cline, which_iter, params%nstates, seed_vols, cline_sigma)
+        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: RESIDUAL SIGMA2 PASS AGAINST THE BOOTSTRAP MAP, ITERATION ', which_iter
+        call xrefine3D%execute(cline_sigma)
+        call cline_sigma%kill
+        do state = 1, params%nstates
+            call seed_vols(state)%kill
+        enddo
+        deallocate(seed_vols)
+        ! 4. Residual groups of which_iter+1 (legacy store); a canonical pass
+        ! commits its own groups and this is a no-op.
+        call consolidate_sigma2_groups(cline, params%projfile, which_iter + 1, params%l_sigma_canonical)
+        ! 5. The shipped map: euclid ML-regularized reconstruction on the
+        ! residual sigmas.
+        cline_rec = cline
+        call prepare_bootstrap_rec_cline(cline_rec, which_iter + 1)
+        write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION ', &
+            &which_iter + 1
+        call xrec3D%execute(cline_rec)
+        call cline_rec%kill
+        call register_bootstrap_rec_outputs()
+        do state = 1, params%nstates
+            call cline%set('vol'//int2str(state), refine3D_state_vol_fname(state))
+        enddo
+        call cline%set('which_iter', which_iter + 1)
+        call simple_end('**** SIMPLE_BOOTSTRAP_REC3D NORMAL STOP ****', print_simple=.false.)
+
+    contains
+
+        !> euclid ML-regularized reconstruct3D on the sigma2 estimate of iter
+        subroutine prepare_bootstrap_rec_cline( cline_rec, iter )
+            class(cmdline), intent(inout) :: cline_rec
+            integer,        intent(in)    :: iter
+            integer :: istate
+            call cline_rec%set('prg',       'reconstruct3D')
+            call cline_rec%set('mkdir',              'no')
+            call cline_rec%set('oritype', params%oritype)
+            call cline_rec%set('nstates', params%nstates)
+            call cline_rec%set('sigma_est',     'global')
+            call cline_rec%set('which_iter',       iter)
+            call cline_rec%set('trail_rec',        'no')
+            call cline_rec%set('combine_eo',       'no')
+            call cline_rec%set('objfun',       'euclid')
+            call cline_rec%set('ml_reg',          'yes')
+            call cline_rec%delete('refine')
+            call cline_rec%delete('update_frac')
+            call cline_rec%delete('fillin')
+            call cline_rec%delete('objfun_den')
+            call cline_rec%delete('objfun_den_w')
+            call cline_rec%delete('ufrac_trec')
+            call cline_rec%delete('endit')
+            call cline_rec%delete('vol_even')
+            call cline_rec%delete('vol_odd')
+            call cline_rec%delete('refs')
+            call cline_rec%delete('refs_even')
+            call cline_rec%delete('refs_odd')
+            do istate = 1, params%nstates
+                call cline_rec%delete('vol'//int2str(istate))
+            enddo
+        end subroutine prepare_bootstrap_rec_cline
+
+        subroutine register_bootstrap_rec_outputs()
+            type(sp_project) :: spproj
+            type(string)     :: volname, fscname
+            integer          :: istate, pop
+            character(len=16) :: imgkind
+            call spproj%read_segment('out', params%projfile)
+            call spproj%read_segment(params%oritype, params%projfile)
+            select case(trim(params%oritype))
+                case('cls3D')
+                    imgkind = 'vol_cavg'
+                case DEFAULT
+                    imgkind = 'vol'
+            end select
+            do istate = 1, params%nstates
+                select case(trim(params%oritype))
+                    case('cls3D')
+                        pop = spproj%os_cls3D%get_pop(istate, 'state')
+                    case DEFAULT
+                        pop = spproj%os_ptcl3D%get_pop(istate, 'state')
+                end select
+                if( pop == 0 )cycle
+                volname = refine3D_state_vol_fname(istate)
+                if( .not. file_exists(volname) )then
+                    call volname%kill
+                    cycle
+                endif
+                fscname = refine3D_fsc_fname(istate)
+                ! params%box_crop/smpd_crop are the effective reconstruction
+                ! sampling resolved by params%new or explicitly pinned by
+                ! callers that must avoid staged downsampling leakage.
+                call spproj%add_vol2os_out(volname, params%smpd_crop, istate, trim(imgkind), pop=pop)
+                if( file_exists(fscname) ) call spproj%add_fsc2os_out(fscname, istate, params%box_crop)
+                call volname%kill
+                call fscname%kill
+            enddo
+            call spproj%write_segment_inside('out', params%projfile)
+            call spproj%kill
+        end subroutine register_bootstrap_rec_outputs
+
+        subroutine warn_for_forced_bootstrap_overrides( cline_in )
+            class(cmdline), intent(inout) :: cline_in
+            type(string) :: val
+            if( cline_in%defined('sigma_est') )then
+                val = cline_in%get_carg('sigma_est')
+                if( val%to_char().ne.'global' )then
+                    THROW_WARN('bootstrap_rec3D enforces sigma_est=global; ignoring input sigma_est='//val%to_char())
+                endif
+                call val%kill
+            endif
+            if( cline_in%defined('objfun') ) THROW_WARN('bootstrap_rec3D controls objfun internally; ignoring input objfun')
+            if( cline_in%defined('ml_reg') ) THROW_WARN('bootstrap_rec3D controls ml_reg internally; ignoring input ml_reg')
+        end subroutine warn_for_forced_bootstrap_overrides
+
+    end subroutine exec_bootstrap_rec3D
 
 end module simple_commanders_refine3D
