@@ -694,7 +694,11 @@ contains
         l_promoted = .false.
         if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
         res05 = project_best_fsc05_resolution(params)
-        if( res05 < TINY ) return
+        if( res05 < TINY )then
+            write(logfhandle,'(A,I0,A)') '>>> ABINITIO3D STAGE ', istage, &
+                &' FSC=0.5 PROMOTION SKIPPED: no res05 field in project '//params%projfile%to_char()
+            return
+        endif
         lp_new = max(min(lp, res05), lp_cap)
         if( lp_new < lp - 1.e-3 )then
             write(logfhandle,'(A,I0,A,F6.1,A,F6.1,A,F6.1,A,F6.1,A)') &
@@ -702,6 +706,9 @@ contains
                 &lp, ' -> ', lp_new, ' A (FSC=0.5 resolution ', res05, ' A, ladder cap ', lp_cap, ' A)'
             lp         = lp_new
             l_promoted = .true.
+        else
+            write(logfhandle,'(A,I0,A,F6.1,A,F6.1,A)') '>>> ABINITIO3D STAGE ', istage, &
+                &' FSC=0.5 PROMOTION NOT NEEDED: plan ', lp, ' A already at or beyond FSC=0.5 resolution ', res05, ' A'
         endif
     end subroutine promote_stage_lp_from_fsc05
 
