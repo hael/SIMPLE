@@ -379,8 +379,15 @@ def view_stream_create_stream(request):
 
 @login_required(login_url="/login")
 @require_GET
-def view_stream_test_path(request, path):
-    """Check whether the given filesystem path exists and is a directory."""
+def view_stream_test_path(request):
+    """Check whether the given filesystem path exists and is a directory.
+
+    The path is read from the ``path`` GET query parameter rather than a URL
+    path segment - front-end proxies/servers commonly merge consecutive
+    slashes in the URL path, which would silently strip the leading slash off
+    an absolute filesystem path when it's concatenated onto a route.
+    """
+    path = request.GET.get("path", "")
     return_obj = {}
     return_obj["exists"] = bool(path) and directory_exists(path)
     if not return_obj["exists"]:

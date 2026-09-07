@@ -743,8 +743,11 @@
             if (inputEl.dataset.hasValue === "true") return;
             const path = inputEl.value.trim();
             if (!path) return;
-            const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-            const url = "{% url 'nice_lite:test_stream_path' path='PLACEHOLDER' %}".replace("PLACEHOLDER", encodedPath);
+            // Pass the path as a query parameter rather than a URL path
+            // segment - proxies/servers commonly merge consecutive slashes
+            // in the URL path, which would silently strip the leading slash
+            // off an absolute filesystem path.
+            const url = "{% url 'nice_lite:test_stream_path' %}?" + new URLSearchParams({ path: path }).toString();
             fetch(url)
                 .then((response) => response.json())
                 .then((data) => {

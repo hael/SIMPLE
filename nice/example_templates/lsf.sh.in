@@ -3,9 +3,9 @@
 #BSUB -R "rusage[mem=20000]"
 #BSUB -R "span[hosts=1]"
 
-export PATH=@SIMPLE_PATH@/bin:$PATH
+export PATH=XXXSIMPLEPATHXXX/bin:$PATH
 export SIMPLE_DEFAULT_PARTITION_TIME=true
-export SIMPLE_PATH=@SIMPLE_PATH@
+export SIMPLE_PATH=XXXSIMPLEPATHXXX
 export SIMPLE_EMAIL=''
 export SIMPLE_QSYS=lsf
 

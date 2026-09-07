@@ -89,7 +89,7 @@ urlpatterns = [
     path("killdeletestream",                   stream_views.view_stream_kill_delete_stream,        name="kill_delete_stream"),
     path("updatestreamdescription",            stream_views.view_stream_update_description,        name="update_stream_description"),
     path("updatestream",                       stream_views.view_stream_update_parameters,         name="update_stream_parameters"),
-    path("teststreampath/<path:path>",         stream_views.view_stream_test_path,                 name="test_stream_path"),
+    path("teststreampath",                     stream_views.view_stream_test_path,                 name="test_stream_path"),
 
     # Stream sub-process control (terminate / restart)
     path("termstreamprocess",                  stream_views.view_stream_terminate_stream_process,  name="term_stream_process"),
