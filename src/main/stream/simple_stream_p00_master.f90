@@ -521,9 +521,15 @@ contains
             ! exit if terminate received all processes stopped
             if( l_terminate_loop ) then
                 write(logfhandle, '(A)') "TERMINATE "
-                ! send sigterm to all running forked processes
+                ! terminate assign_optics first and wait (up to 1 minute) for it to
+                ! stop before signalling the remaining stages; guarded by status()
+                ! so this only runs once per shutdown
+                if( fork_assign_optics%status() == FORK_STATUS_RUNNING ) then
+                    call fork_assign_optics%terminate()
+                    call wait_for_fork_termination(fork_assign_optics, 60, 'ASSIGN OPTICS')
+                endif
+                ! send sigterm to remaining running forked processes
                 if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) call fork_preprocess%terminate()
-                if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) call fork_assign_optics%terminate()
                 if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call fork_initial_analysis%terminate()
                 if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call fork_reference_picking%terminate()
                 if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call fork_particle_sieving%terminate()
@@ -598,6 +604,24 @@ contains
             write(logfhandle, '(A)') 'SIGTERM RECEIVED (MASTER)'
             l_terminate_loop = .true.
         end subroutine sigterm_handler
+
+        ! Polls fork%status() until it leaves FORK_STATUS_RUNNING or timeout_secs
+        ! elapses, whichever comes first. Blocks the master loop for the duration
+        ! of the wait; used to let a fast, lightweight stage (e.g. assign_optics)
+        ! shut down before the remaining stages are signalled.
+        subroutine wait_for_fork_termination(fork, timeout_secs, label)
+            class(forked_process), intent(inout) :: fork
+            integer,                intent(in)    :: timeout_secs
+            character(len=*),       intent(in)    :: label
+            integer, parameter :: POLL_US = 200000 ! 200 ms
+            integer :: max_polls, ipoll, rc_wait
+            max_polls = (timeout_secs * 1000000) / POLL_US
+            do ipoll = 1, max_polls
+                if( fork%status() /= FORK_STATUS_RUNNING ) return
+                rc_wait = c_usleep(POLL_US)
+            end do
+            write(logfhandle, '(A)') trim(label)//' DID NOT TERMINATE WITHIN TIMEOUT'
+        end subroutine wait_for_fork_termination
 
         subroutine safe_destroy_json_ptr(ptr_json)
             type(json_value), pointer, intent(inout) :: ptr_json

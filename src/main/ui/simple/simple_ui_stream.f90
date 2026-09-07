@@ -171,7 +171,6 @@ subroutine new_abinitio2D_stream( prgtab )
         call master%add_input(UI_PARM, 'flipgain',       'multi',         'Gain processing', 'Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}', '', .false., 'none', &
         &choices=ui_choices([character(len=9) :: 'none', 'flip_auto', 'flip_x', 'flip_y', 'flip_xy', 'generate']), &
         &visibility=UI_VIS_STANDARD)
-        call master%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '', &
         &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '', &
@@ -198,6 +197,7 @@ subroutine new_abinitio2D_stream( prgtab )
         call master%add_input(UI_PARM, 'nicedispid',     'int',           'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'thres',          'float',         'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'nmics',          'int',           'Number of micrographs', 'Number of micrographs to collect before termination', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! search controls
         ! filter controls
