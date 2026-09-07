@@ -189,8 +189,8 @@ subroutine new_abinitio2D_stream( prgtab )
         call master%add_input(UI_PARM, dfmin, visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, dfmax, visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'smpd_downscale', 'float', 'Downscaled pixel size (A)', &
-        &'Downscaled pixel size (A)', '', .false., STREAM_DEFAULT_SMPD_DOWNSCALE, &
-        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        &'Downscaled pixel size (A)', '', .true., STREAM_DEFAULT_SMPD_DOWNSCALE, &
+        &visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call master%add_input(UI_PARM, 'total_dose',     'float',         'Total exposure dose (e/A2)', 'Total exposure dose (e/A2)', '', .true., '', visibility=UI_VIS_STANDARD)
         call master%add_input(UI_FILE, 'pickrefs',       'file',          '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)', '', .false., '', visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'box_extract',    'int',           'Force box size (px, optional)', 'force a box size (px) eg. to match an existing dataset"', '', .false., '', visibility=UI_VIS_STANDARD)

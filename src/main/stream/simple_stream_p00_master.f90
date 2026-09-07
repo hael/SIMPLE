@@ -192,7 +192,7 @@ contains
     subroutine exec_stream_p00_master( self, cline )
         class(stream_p00_master), intent(inout)    :: self
         class(cmdline),           intent(inout)    :: cline
-        integer, parameter                        :: N_STREAM_PIPES = 6
+        integer, parameter                         :: N_STREAM_PIPES = 6
         type(parameters)                           :: params
         type(cmdline)                              :: cline_preprocess, cline_assign_optics
         type(cmdline)                              :: cline_opening2D, cline_reference_picking
@@ -257,7 +257,8 @@ contains
             nmics_stop = cline%get_iarg('nmics')
             call cline%delete('nmics')
         end if
-        if( .not.cline%defined('memreport') ) call cline%set('memreport', 'yes')
+        if( .not.cline%defined('smpd_downscale') ) call cline%set('smpd_downscale',   1.3)
+        if( .not.cline%defined('memreport')      ) call cline%set('memreport',      'yes')
         ! init params
         call cline%printline()
         call params%new(cline)
