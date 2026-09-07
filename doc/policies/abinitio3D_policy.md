@@ -131,8 +131,25 @@ external-volume schedules use `lpstages_setlims` and are unchanged.
 
 The controller passes an `lpstop` ceiling to each staged `refine3D` child
 alongside the effective planned matching limit. In the non-NU stages the
-ceiling is the current `lpinfo(istage)%lp`, so matching never exceeds the
-printed stage limit. In the NU stages the ceiling is the ladder's final limit
+ceiling is the stage's matching limit, so matching never exceeds the
+printed stage limit.
+
+Stage-boundary FSC=0.5 promotion (2026-09-06, particle route only): past
+stage 2, the planned `lpinfo(istage)%lp` is replaced by the project's FSC=0.5
+resolution of the best resolved populated state (the per-particle `res05`
+field written by the reconstruction) when that is finer, bounded by the
+ladder cap (`lpfinal`, or the coarser explicit `lpstop`). The promoted value
+is the printed stage limit and, in non-NU stages, the `lpstop` ceiling. The
+decision is taken once per stage boundary and never per iteration:
+`abinitio3D` runs without gold-standard halves, so an FSC crossing is
+trustworthy only where it lies beyond the band that produced the alignments.
+The crossing at the end of the previous stage lies beyond that stage's band
+and is clean; a per-iteration rule would ratchet on noise fitted inside the
+newly opened band. An explicit command-line `lp` (with `ml_reg=yes`) disables
+the promotion for that stage. Multi-state follows the standard single-band
+rule: the best resolved populated state sets the band for all states.
+(Streptavidin log set 2026-09-06: the plan sat at 8.6/7.6 A in stages 4/5
+while the half maps agreed to 4.3 A at FSC=0.5.) In the NU stages the ceiling is the ladder's final limit
 (`lpfinal`, bounded by `LPSTOP_BOUNDS`, 4.5 A at the fine end): the NU
 evidence handoff may promote matching beyond the per-stage plan, because the
 class-FRC ladder is not informative about the particle map once NU filtering
@@ -386,9 +403,8 @@ The final reconstruction inherits only the scientific reconstruction policy it
 needs. It preserves the parent `envfsc` request so the original-sampling half
 maps use the same radial FSC/cFAR masking policy, but it does not inherit staged
 search, matching-reference automasking, or reference-filter controls such as
-`refine`, `lp`, `automsk`, or `gauref`. The PCG exception is the explicit
-`filt_mode=nonuniform` selection needed to activate the in-solve Q_NU replay;
-it does not run post-hoc NU filtering.
+`refine`, `lp`, `automsk`, or `gauref`. There is no backend exception: the
+final reconstruction runs with `filt_mode=none` on both backends.
 
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
 uses compatible grouped sigma estimates when they are local to the workflow.
@@ -396,14 +412,9 @@ If needed, it bootstraps sigmas locally before producing the regularized map.
 For the final ML-regularized stage, final reconstruction preserves the
 `conical_fsc` policy selected by the parent workflow.
 
-On the PCG backend, a final ML-regularized stage uses the in-solve Q_NU prior.
-When the sigma bootstrap crosses from a downscaled stage grid to the native
-grid and Q_NU strength is automatic, the bootstrap retains the learned
-suppression target but not the old-grid strength. Its first native-grid Q_NU
-solve is a calibration measurement with postprocessing disabled; the
-controller adapts from that response and a second regularized solve produces
-the final map. An explicit `pcg_nu_lambda_rel` remains pinned and skips this
-extra calibration solve.
+On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
+replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
+controllers were removed on 2026-09-06.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged

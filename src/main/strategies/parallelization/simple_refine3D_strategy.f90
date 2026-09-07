@@ -16,7 +16,7 @@ use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare
     &sigma2_state_project_layout_digest, sigma2_state_range_path, sigma2_state_validate_identity
 use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
-use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, get_pcg_nu_evidence_bench_seconds
+use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -198,23 +198,13 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         logical          :: l_trail_bootstrap(params%nstates)
-        real             :: nu_replay_lps(params%nstates)
-        call validate_refine3D_pcg_integration(params)
+        real             :: nu_align_lps(params%nstates)
+        ! the PCG master runs the same assembly-owned NU competition as the
+        ! gridding volassemble and hands off the matching low-pass
         call execute_rec3D_pcg_distributed_master(params, build, cline, &
-            &trail_bootstrap_states=l_trail_bootstrap, nu_replay_finest_lps=nu_replay_lps)
-        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_replay_lps)
+            &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
+        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_align_lps)
     end subroutine assemble_refine3D_pcg
-
-    subroutine validate_refine3D_pcg_integration( params )
-        type(parameters), intent(in) :: params
-        if( trim(params%rec_backend) /= 'pcg' ) return
-        ! nu_refine=yes on the pcg path means Q_NU evidence-bank shell
-        ! extension (Stage 6.6, the mirror of the gridding challenger) and
-        ! requires the Q_NU replay; there is no post-hoc PCG+NU path.
-        if( params%l_nonuniform .and. params%l_nu_refine .and. &
-            &.not. (params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0) ) &
-            &THROW_HARD('nu_refine=yes on the PCG backend requires the Q_NU replay (euclid ml_reg, pcg_nu_lambda_rel > 0)')
-    end subroutine validate_refine3D_pcg_integration
 
     subroutine remove_pcg_raw_files( params )
         type(parameters), intent(in) :: params
@@ -248,11 +238,12 @@ contains
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(string) :: fsc_file
-        real,    allocatable :: fsc(:), res(:), res0143s(:)
+        real,    allocatable :: fsc(:), res(:), res0143s(:), res05s(:)
         logical, allocatable :: has_fsc(:)
         real    :: fsc05, fsc0143
         integer :: state, iptcl, istate
         allocate(res0143s(params%nstates), source=0.)
+        allocate(res05s(params%nstates),   source=0.)
         allocate(has_fsc(params%nstates), source=.false.)
         res = get_resarr(params%box_crop, params%smpd_crop)
         do state = 1, params%nstates
@@ -261,17 +252,24 @@ contains
             fsc = file2rarr(fsc_file)
             call get_resolution(fsc, res, fsc05, fsc0143)
             res0143s(state) = fsc0143
+            res05s(state)   = fsc05
             has_fsc(state)  = .true.
             deallocate(fsc)
         end do
         if( any(has_fsc) )then
             if( params%nstates == 1 )then
-                if( has_fsc(1) ) call build%spproj_field%set_all2single('res', res0143s(1))
+                if( has_fsc(1) )then
+                    call build%spproj_field%set_all2single('res',   res0143s(1))
+                    call build%spproj_field%set_all2single('res05', res05s(1))
+                endif
             else
                 do iptcl = 1, build%spproj_field%get_noris()
                     istate = build%spproj_field%get_state(iptcl)
                     if( istate > 0 .and. istate <= params%nstates )then
-                        if( has_fsc(istate) ) call build%spproj_field%set(iptcl, 'res', res0143s(istate))
+                        if( has_fsc(istate) )then
+                            call build%spproj_field%set(iptcl, 'res',   res0143s(istate))
+                            call build%spproj_field%set(iptcl, 'res05', res05s(istate))
+                        endif
                     endif
                 end do
             endif
@@ -280,6 +278,7 @@ contains
         if( allocated(fsc)      ) deallocate(fsc)
         if( allocated(res)      ) deallocate(res)
         if( allocated(res0143s) ) deallocate(res0143s)
+        if( allocated(res05s)   ) deallocate(res05s)
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
 
@@ -550,9 +549,6 @@ contains
         write(fnr,'(a,1x,f0.2)') 'refine3D probabilistic pre-step     :', bench%rt_prob
         write(fnr,'(a,1x,f0.2)') 'refine3D matcher/scheduler          :', bench%rt_sched
         write(fnr,'(a,1x,f0.2)') 'refine3D assembly/postprocess       :', bench%rt_assemble
-        ! contained WITHIN assembly/postprocess (pcg backend only; 0.0 on
-        ! gridding) -- reported for attribution, never stacked on top of it
-        write(fnr,'(a,1x,f0.2)') 'refine3D pcg nu-evidence phase      :', get_pcg_nu_evidence_bench_seconds()
         write(fnr,'(a,1x,f0.2)') 'refine3D total time                 :', bench%rt_tot
         write(fnr,'(a,1x,f0.2)') 'refine3D % accounted for            :', rt_accounted
         call fclose(fnr)
@@ -575,7 +571,6 @@ contains
         logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
-        call validate_refine3D_pcg_integration(params)
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -634,8 +629,13 @@ contains
                 ! A grouped sigma file is partition-independent. Skip the
                 ! first consolidation so workers can initialize from it and
                 ! emit particle sigma files in the current partition layout.
+                ! A pre-existing STAR for the start iteration is only a
+                ! legitimate handover at a genuine first iteration (startup
+                ! bootstrap, pose-initialization residual groups). At a later
+                ! stage start it can only be foreign (2026-09-06), so the
+                ! per-particle files are kept.
                 self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
-                    &file_exists(sigma2_star_from_iter(startit))
+                    &(startit <= 1 .and. file_exists(sigma2_star_from_iter(startit)))
                 if( self%l_sigma_transition_ready )then
                     call clear_sigma2_partition_files
                     write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
@@ -907,7 +907,6 @@ contains
         self%l_multistates = cline%defined('nstates')
         ! init project
         call build%init_params_and_build_spproj(cline, params)
-        call validate_refine3D_pcg_integration(params)
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -1066,8 +1065,9 @@ contains
                     ! A grouped sigma file is partition-independent. Skip the
                     ! first consolidation so workers can initialize from it and
                     ! emit particle sigma files in the current partition layout.
+                    ! genuine first iteration only; see the shared-memory twin
                     self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
-                        &file_exists(sigma2_star_from_iter(params%startit))
+                        &(params%startit <= 1 .and. file_exists(sigma2_star_from_iter(params%startit)))
                     if( self%l_sigma_transition_ready )then
                         call clear_sigma2_partition_files
                         write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'

@@ -46,9 +46,7 @@ It also supplies overridable defaults when the user has not provided them:
 - `nsample=25000`
 - `autoscale=yes`
 - `filt_mode=nonuniform`
-- `nu_refine=yes` (gridding extends the filter bank; PCG extends the evidence
-  bank used to construct `Q_NU`; the PCG extension is FSC-frontier bounded and
-  spacing-aware)
+- `nu_refine=yes` (the NU shell walk extends the filter bank on both backends)
 - `automsk=yes`
 - `envfsc=yes`
 - `keepvol=no`
@@ -69,7 +67,7 @@ adaptive candidates are challenged, so accepted probes refine precision inside
 a causal boundary rather than redefining their own support. Background voxels take the
 coarsest bank candidate, so matching references carry the envelope-excluded
 density (detergent micelle, disordered belt) heavily low-pass filtered
-rather than removed, and the same field derives the Q_NU precisions.
+rather than removed.
 Matching references always take the spherical soft mask only -- they are
 never multiplied with an envelope before projection, because a reference
 must not hard-remove density that is present in the particle images. The
@@ -110,11 +108,9 @@ When the raw pair is compatible, `refine3D_auto` generates fresh same-stem
 `nu_refine=yes`, that bootstrap may run the sequential shell challenger from
 the finest populated base-bank label.
 
-Under `rec_backend=pcg`, no `_nu_filt` bootstrap reference is produced. The
-startup reconstruction supplies the first `Q_NU`-regularized primary pair;
-when an existing initializer is used, the first matching pass necessarily
-precedes PCG evidence construction and uses that initializer with only the
-spherical matcher support.
+Under `rec_backend=pcg` the startup reconstruction runs the same NU
+competition inside the PCG master and produces the same `_nu_filt` bootstrap
+references and matching-lp handoff as gridding (policy 2026-09-06).
 
 ## 4. Autoscaling and Sampling
 

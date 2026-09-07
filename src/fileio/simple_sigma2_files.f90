@@ -1,12 +1,19 @@
-!@descr: discovery, carry-over and group loading of sigma2 files.
+!@descr: discovery and group loading of sigma2 files.
 !
 !  Workflows that consume sigma2 spectra estimated by an UPSTREAM run (rather
-!  than estimating their own) all need the same three things: pull any sigma2
-!  files left by a previous refine/abinitio run into the current execution
-!  directory, pick the most recent group star file, and load per-particle
-!  spectra from it. That logic originated inside simple_flex_analysis_strategy
-!  and was subsequently duplicated into the experimental PCG reconstruction
-!  commander; this module is the single owner so it cannot drift again.
+!  than estimating their own) pick the group STAR for the requested iteration
+!  in the CURRENT execution directory and load per-particle spectra from it.
+!  This module is the single owner of that logic.
+!
+!  There is deliberately NO implicit carry-over from other directories
+!  (2026-09-06): the former sibling-directory discovery (glob over sibling
+!  directories of the current run for the same project file)
+!  copied every completed run of the same project into new runs and seeded
+!  their later stage starts with foreign iteration-numbered STARs. refine3D
+!  continue=yes copies its predecessor's partition files explicitly from the
+!  recorded previous refinement directory; bootstrap_rec3D estimates its own
+!  sigmas; a standalone euclid reconstruct3D must be run in, or pointed at,
+!  the directory that holds the sigma files, and fails loudly otherwise.
 !
 !  Deliberately does NOT depend on simple_builder: builder depends on
 !  simple_euclid_sigma2, so anything reachable from the sigma2 side must stay
@@ -23,86 +30,12 @@ use simple_sigma2_state,  only: sigma2_state_project_layout_digest, sigma2_state
 use simple_sigma2_state_file, only: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 implicit none
 
-public :: carry_over_prior_sigma_files, pick_sigma_group_file, load_sigma2_groups
+public :: pick_sigma_group_file, load_sigma2_groups
 private
 #include "simple_local_flags.inc"
 
 contains
 
-    !>  \brief  Copies sigma2 files left by prior runs into the current working
-    !!          directory, searching sibling run directories first (e.g.
-    !!          ../5_abinitio3D/<projfile>), then the project's recorded cwd,
-    !!          the project's own directory, and the parent. Never overwrites a
-    !!          file that is already local.
-    subroutine carry_over_prior_sigma_files( params )
-        class(parameters), intent(in) :: params
-        type(sp_project)          :: inproj
-        type(string), allocatable :: siblings(:)
-        type(string) :: proj_dir, parent_dir, proj_cwd, proj_base, sibling_dir
-        logical      :: have_proj_cwd
-        integer      :: i
-        proj_dir      = get_fpath(params%projfile)
-        parent_dir    = string(PATH_PARENT)
-        proj_base     = basename(params%projfile)
-        proj_cwd      = ''
-        have_proj_cwd = .false.
-        ! Prefer sibling-run discovery from ../, e.g. ../5_abinitio3D/<projfile>.
-        if( parent_dir /= '' .and. proj_base /= '' )then
-            call simple_list_files(parent_dir%to_char()//'*/'//proj_base%to_char(), siblings)
-            if( allocated(siblings) )then
-                do i = 1, size(siblings)
-                    sibling_dir = get_fpath(siblings(i))
-                    if( sibling_dir /= '' ) call copy_sigma_files_from_dir(sibling_dir)
-                    call sibling_dir%kill
-                end do
-                deallocate(siblings)
-            endif
-        endif
-        if( file_exists(params%projfile) )then
-            call inproj%read_non_data_segments(params%projfile)
-            if( inproj%projinfo%isthere('cwd') )then
-                call inproj%projinfo%getter(1,'cwd',proj_cwd)
-                have_proj_cwd = proj_cwd /= ''
-            endif
-            call inproj%kill
-        endif
-        if( have_proj_cwd    ) call copy_sigma_files_from_dir(proj_cwd)
-        if( proj_dir   /= '' ) call copy_sigma_files_from_dir(proj_dir)
-        if( parent_dir /= '' ) call copy_sigma_files_from_dir(parent_dir)
-        call proj_base%kill
-        call proj_cwd%kill
-        call proj_dir%kill
-        call parent_dir%kill
-    end subroutine carry_over_prior_sigma_files
-
-    subroutine copy_sigma_files_from_dir( src_dir )
-        type(string), intent(in) :: src_dir
-        type(string), allocatable     :: list(:)
-        type(string)                  :: target_name
-        character(len=:), allocatable :: src_prefix
-        integer :: i
-        src_prefix = trim(src_dir%to_char())
-        if( len_trim(src_prefix) < 1 ) return
-        if( src_prefix(len_trim(src_prefix):len_trim(src_prefix)) /= '/' ) src_prefix = src_prefix//'/'
-        call simple_list_files(src_prefix//SIGMA2_FBODY//'*', list)
-        if( allocated(list) )then
-            do i = 1, size(list)
-                target_name = string(PATH_HERE)//basename(list(i))
-                if( .not. file_exists(target_name) ) call simple_copy_file(list(i),target_name)
-                call target_name%kill
-            end do
-            deallocate(list)
-        endif
-        call simple_list_files(src_prefix//SIGMA2_GROUP_FBODY//'*'//STAR_EXT, list)
-        if( allocated(list) )then
-            do i = 1, size(list)
-                target_name = string(PATH_HERE)//basename(list(i))
-                if( .not. file_exists(target_name) ) call simple_copy_file(list(i),target_name)
-                call target_name%kill
-            end do
-            deallocate(list)
-        endif
-    end subroutine copy_sigma_files_from_dir
 
     !>  \brief  Prefers the group star file for the current iteration, else the
     !!          highest-numbered sigma2 group star file present locally.
@@ -158,9 +91,9 @@ contains
 
     !>  \brief  Loads grouped sigma2 into esig. Canonical mode resolves and
     !!          validates the project-registered committed state. Legacy mode
-    !!          carries over prior files and selects the group STAR. Returns
-    !!          whether usable spectra were obtained; a .false. result is a
-    !!          normal legacy outcome -- callers decide what that means.
+    !!          selects the group STAR in the current directory. Returns
+    !!          whether usable spectra were obtained; a .false. result means
+    !!          no STAR is present here -- callers decide what that means.
     !!
     !!          Only acts when objfun=euclid, mirroring the convention that
     !!          objfun=cc needs no sigmas.
@@ -179,7 +112,7 @@ contains
         class(oris),          intent(inout) :: os
         class(cmdline),       intent(inout) :: cline
         logical,              intent(out)   :: loaded
-        type(string)     :: sigma_part_fname, sigma_group_fname, state_path
+        type(string)     :: sigma_part_fname, sigma_group_fname, state_path, cwd
         integer(int64)   :: layout_digest
         integer          :: fromp_saved, top_saved, noris, expected_grouping, expected_ngroups
         integer          :: iptcl, status
@@ -216,9 +149,17 @@ contains
             call state_path%kill
             return
         endif
-        call carry_over_prior_sigma_files(params)
         call pick_sigma_group_file(params, sigma_group_fname, has_group)
-        if( .not. has_group ) return
+        if( .not. has_group )then
+            ! no implicit discovery elsewhere: the caller's directory must hold
+            ! the sigma files (callers hard-error on loaded=.false.)
+            call simple_getcwd(cwd)
+            write(logfhandle,'(A)') '>>> SIGMA2: no grouped sigma STAR ('//SIGMA2_GROUP_FBODY//&
+                &'<iter>'//STAR_EXT//') found in '//cwd%to_char()//&
+                &'; euclid reconstruction must run in the directory that holds the sigma2 files'
+            call cwd%kill
+            return
+        endif
         sigma_part_fname    = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
         fromp_saved         = params%fromp
         top_saved           = params%top

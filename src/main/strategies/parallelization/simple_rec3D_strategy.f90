@@ -320,7 +320,7 @@ contains
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in, raw_fname
         logical, allocatable        :: l_trail_bootstrap(:)
-        real,    allocatable        :: nu_replay_lps(:)
+        real,    allocatable        :: nu_align_lps(:)
         integer                     :: state, part, eo
         if( trim(params%rec_backend) == 'pcg' )then
             ! A stale final filename must never masquerade as a completed worker
@@ -340,15 +340,15 @@ contains
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         if( trim(params%rec_backend) == 'pcg' )then
             if( params%l_nonuniform )then
-                ! reconstruct3D must leave behind the same Q_NU-regularized
-                ! primary references and evidence-derived matching low-pass
-                ! handoff as a refinement iteration.
+                ! reconstruct3D must leave behind the same _nu_filt matching
+                ! references and matching low-pass handoff as a refinement
+                ! iteration.
                 allocate(l_trail_bootstrap(params%nstates), source=.false.)
-                allocate(nu_replay_lps(params%nstates),     source=0.0)
+                allocate(nu_align_lps(params%nstates),      source=0.0)
                 call execute_rec3D_pcg_distributed_master(params, build, cline, &
-                    &trail_bootstrap_states=l_trail_bootstrap, nu_replay_finest_lps=nu_replay_lps)
-                call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_replay_lps)
-                deallocate(l_trail_bootstrap, nu_replay_lps)
+                    &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
+                call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_align_lps)
+                deallocate(l_trail_bootstrap, nu_align_lps)
             else
                 call execute_rec3D_pcg_distributed_master(params, build, cline)
             endif

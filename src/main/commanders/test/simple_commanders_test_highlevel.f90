@@ -58,10 +58,6 @@ type, extends(commander_base) :: commander_test_pcg_frac_update
     procedure :: execute      => exec_test_pcg_frac_update
 end type commander_test_pcg_frac_update
 
-type, extends(commander_base) :: commander_test_pcg_priors
-  contains
-    procedure :: execute      => exec_test_pcg_priors
-end type commander_test_pcg_priors
 
 type, extends(commander_base) :: commander_test_rec3D_backends
   contains
@@ -2103,344 +2099,6 @@ subroutine exec_test_pcg_recon( self, cline )
 
 end subroutine exec_test_pcg_recon
 
-!  Unit gate for the PCG replay prior operator (pcg_priors.md S10 Stage 6.2,
-!  Gate A), in-memory and project-free like test=pcg_recon. Covers the direct
-!  NU-evidence precision Q_NU = C (sum_b B_b^T W_b B_b) C (S5.3):
-!
-!    1. adjoint identity             -- <x,Q y> = <Q x,y>
-!    2. positive semidefiniteness    -- <x,Q x> >= 0, > 0 for a random probe
-!    3. exact constant null mode     -- Q (c 1) = 0 (the centering C; padded-DC
-!                                       exclusion alone cannot provide this)
-!    4. zero action, full support    -- W_b = 0 everywhere => Q x = 0 exactly
-!    5. monotone under evidence withdrawal -- W2 >= W1 pointwise =>
-!                                       x^T Q2 x >= x^T Q1 x
-!    6. finite-difference gradient   -- grad of R(x) = (1/2) x^T Q x is Q x
-!    7. band-partition sensitivity   -- uniform weights, 4-band vs 2-band cut:
-!                                       the pad/crop frame is NOT tight, so the
-!                                       deviation is MEASURED and recorded, not
-!                                       asserted zero (bank-refinement lesson)
-!    8. composition                  -- P (H_data + lambda Q_NU + lambda_0) P
-!                                       stays symmetric positive-definite
-!    9. priored solve parity         -- monolithic streaming vs two-part raw
-!                                       reduction at a positive strength: the
-!                                       exact shared-vs-nparts execution seam
-!
-!  Mutation contract (R4, verified manually and recorded in pcg_priors.md S10):
-!  dropping the mean-centering C must fail stage 3; applying W_b once (L
-!  instead of L^T L, i.e. weighting only the analysis side) must fail stage 1;
-!  overlapping band masks change the stage-7 measurement. The P_tau/Q_NU and
-!  attachment-order mutual exclusions are THROW_HARD contracts exercised by
-!  deliberate-failure runs, not by this in-process suite.
-subroutine exec_test_pcg_priors( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL
-    class(commander_test_pcg_priors), intent(inout) :: self
-    class(cmdline),                   intent(inout) :: cline
-    integer, parameter :: BOX = 24, NPROJS = 12, NCTF = 3, NB = 4
-    real,    parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
-    real,    parameter :: MSKRAD = real(BOX)/3.0
-    real,    parameter :: BAND_LIMITS4(NB) = [20., 12., 8., 5.]
-    real,    parameter :: BAND_LIMITS2(2)  = [20., 8.]
-    real,    parameter :: ADJ_RELTOL  = 1.0e-4   ! band ops run through single-precision FFT round trips
-    real,    parameter :: NULL_RELTOL = 1.0e-5
-    real,    parameter :: ZERO_TOL    = 1.0e-12
-    real,    parameter :: FD_H        = 1.0e-2
-    real,    parameter :: FD_RELTOL   = 1.0e-3
-    real,    parameter :: OP_RELTOL   = 1.0e-4   ! matches pcg_recon's NORMAL_OP_RELTOL
-    real,    parameter :: KV = 300., CS = 2.7, FRACA = 0.1
-    real,    parameter :: DFX_VALS(NCTF) = [1.0, 1.8, 2.6]
-    real,    parameter :: PARITY_RELTOL = 5.0e-4  ! matches pcg_recon's STREAM_SOLVE_RELTOL
-    integer, parameter :: PARITY_ITS    = 20
-    type(reconstructor_pcg) :: pcgop, pcgop_zero, pcgop_hi, pcgop_p4, pcgop_p2, pcg_parts, pcg_reduce
-    type(oris)              :: projdirs
-    type(ori)               :: e
-    type(ctfparams)         :: ctfparms
-    type(string)            :: raw1, raw2
-    real,    allocatable    :: band_w(:,:,:,:), band_w0(:,:,:,:), band_w_hi(:,:,:,:), band_wu4(:,:,:,:)
-    real,    allocatable    :: band_wu2(:,:,:,:)
-    real,    allocatable    :: x(:,:,:), y(:,:,:), d(:,:,:), ones_vol(:,:,:)
-    real,    allocatable    :: qx(:,:,:), qy(:,:,:), qc(:,:,:), q4(:,:,:), q2(:,:,:)
-    real,    allocatable    :: hp(:,:,:), hq(:,:,:), sig2arr(:), sig2_2d(:,:)
-    real,    allocatable    :: xa(:,:,:), xb(:,:,:)
-    complex, allocatable    :: gx_plane(:,:), Ti(:,:), y_planes(:,:,:)
-    integer, allocatable    :: iseed(:)
-    real(dp) :: dp_x_qy, dp_qx_y, dp_x_qx, dp_hi, r_plus, r_minus, g_fd, g_an
-    real     :: ctr, rr, adj_err, null_err, fd_err, part_dev
-    real     :: parity_err, lam_a, lam_b
-    integer  :: i, j, k, g, b, iseed_n, R, lims2(2,2), nraw, niters
-    logical  :: all_ok
-    all_ok = .true.
-
-    call random_seed(size=iseed_n)
-    allocate(iseed(iseed_n), source=42)
-    call random_seed(put=iseed)
-
-    ! synthetic graded lack-of-evidence weights: a fully supported core
-    ! (w=0), a graded transition, and full lack of evidence outside (w=1),
-    ! monotone non-decreasing coarse-to-fine as the nested band-support
-    ! contract requires
-    allocate(band_w(BOX,BOX,BOX,NB), source=0.0)
-    ctr = real(BOX)/2.0 + 0.5
-    do k = 1,BOX
-        do j = 1,BOX
-            do i = 1,BOX
-                rr = sqrt((real(i)-ctr)**2 + (real(j)-ctr)**2 + (real(k)-ctr)**2)
-                do b = 1, NB
-                    ! coarser bands lose evidence at larger radii
-                    band_w(i,j,k,b) = min(1.0, max(0.0, (rr - (7.0 - real(b)))/3.0))
-                end do
-            end do
-        end do
-    end do
-
-    call pcgop%new(BOX, SMPD, LAMBDA)
-    call pcgop%set_mask(MSKRAD)
-    call pcgop%set_nu_prior(band_w, BAND_LIMITS4, 1.0)
-
-    ! ============ STAGE 1: adjoint identity ============
-    write(logfhandle,'(a)') '>>> TEST_PCG_PRIORS (Q_NU Gate A)'
-    write(logfhandle,'(a)') '>>> STAGE 1: adjoint identity <x,Qy> = <Qx,y>'
-    allocate(x(BOX,BOX,BOX), y(BOX,BOX,BOX))
-    call random_number(x); call random_number(y)
-    x = x - 0.5; y = y - 0.5
-    qx = pcgop%apply_nu_precision(x)
-    qy = pcgop%apply_nu_precision(y)
-    dp_x_qy = pcgop%dot_real_volume(x, qy)
-    dp_qx_y = pcgop%dot_real_volume(qx, y)
-    adj_err = real(abs(dp_x_qy-dp_qx_y) / max(1.0_dp, abs(dp_x_qy), abs(dp_qx_y)))
-    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <x,Qy>=', real(dp_x_qy), &
-        &' <Qx,y>=', real(dp_qx_y), ' rel_err=', adj_err
-    if( adj_err > ADJ_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: NU precision is not symmetric (one-sided weighting?)'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: NU precision is symmetric'
-    endif
-
-    ! ============ STAGE 2: positive semidefiniteness ============
-    write(logfhandle,'(a)') '>>> STAGE 2: positive semidefiniteness'
-    dp_x_qx = pcgop%dot_real_volume(x, qx)
-    write(logfhandle,'(a,es14.6)') '    <x,Qx>=', real(dp_x_qx)
-    if( dp_x_qx <= 0.0_dp )then
-        write(logfhandle,'(a)') '    FAIL: quadratic form not positive for a random probe'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: quadratic form positive for a random probe'
-    endif
-
-    ! ============ STAGE 3: exact constant null mode ============
-    write(logfhandle,'(a)') '>>> STAGE 3: constant maps are exact null modes (centering C)'
-    allocate(ones_vol(BOX,BOX,BOX), source=3.7)
-    qc = pcgop%apply_nu_precision(ones_vol)
-    null_err = maxval(abs(qc)) / 3.7
-    write(logfhandle,'(a,es14.6)') '    max|Q(c*1)| / c =', null_err
-    if( null_err > NULL_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: constant mode is penalized (centering dropped?)'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: constant mode is in the null space'
-    endif
-
-    ! ============ STAGE 4: zero action under full support ============
-    write(logfhandle,'(a)') '>>> STAGE 4: fully supported field (all W_b = 0) is untouched'
-    allocate(band_w0(BOX,BOX,BOX,NB), source=0.0)
-    call pcgop_zero%new(BOX, SMPD, LAMBDA)
-    call pcgop_zero%set_mask(MSKRAD)
-    call pcgop_zero%set_nu_prior(band_w0, BAND_LIMITS4, 1.0)
-    qc = pcgop_zero%apply_nu_precision(x)
-    write(logfhandle,'(a,es14.6)') '    max|Q_0 x| =', maxval(abs(qc))
-    if( maxval(abs(qc)) > ZERO_TOL )then
-        write(logfhandle,'(a)') '    FAIL: zero weights act on the iterate'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: zero action for a fully supported band bank'
-    endif
-    call pcgop_zero%kill
-
-    ! ============ STAGE 5: monotone under evidence withdrawal ============
-    write(logfhandle,'(a)') '>>> STAGE 5: withdrawing evidence never decreases the penalty'
-    allocate(band_w_hi(BOX,BOX,BOX,NB))
-    band_w_hi = min(1.0, band_w + 0.2)
-    call pcgop_hi%new(BOX, SMPD, LAMBDA)
-    call pcgop_hi%set_mask(MSKRAD)
-    call pcgop_hi%set_nu_prior(band_w_hi, BAND_LIMITS4, 1.0)
-    qc    = pcgop_hi%apply_nu_precision(x)
-    dp_hi = pcgop_hi%dot_real_volume(x, qc)
-    write(logfhandle,'(a,es14.6,a,es14.6)') '    <x,Q x>=', real(dp_x_qx), ' <x,Q_hi x>=', real(dp_hi)
-    if( dp_hi < dp_x_qx * (1.0_dp - 1.0e-6_dp) )then
-        write(logfhandle,'(a)') '    FAIL: penalty decreased when evidence was withdrawn'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: penalty is monotone in the lack-of-evidence weights'
-    endif
-    call pcgop_hi%kill
-
-    ! ============ STAGE 6: finite-difference gradient of R_NU ============
-    write(logfhandle,'(a)') '>>> STAGE 6: gradient of R(x) = (1/2) x^T Q x is Q x'
-    allocate(d(BOX,BOX,BOX))
-    call random_number(d)
-    d = d - 0.5
-    qy      = pcgop%apply_nu_precision(x + FD_H*d)
-    r_plus  = 0.5_dp * pcgop%dot_real_volume(x + FD_H*d, qy)
-    qy      = pcgop%apply_nu_precision(x - FD_H*d)
-    r_minus = 0.5_dp * pcgop%dot_real_volume(x - FD_H*d, qy)
-    g_fd    = (r_plus - r_minus) / real(2.0*FD_H,dp)
-    g_an    = pcgop%dot_real_volume(d, qx)
-    fd_err  = real(abs(g_fd-g_an) / max(1.0_dp, abs(g_fd), abs(g_an)))
-    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    fd=', real(g_fd), ' analytic=', real(g_an), &
-        &' rel_err=', fd_err
-    if( fd_err > FD_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: finite-difference gradient disagrees with Q x'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: finite-difference gradient matches'
-    endif
-
-    ! ============ STAGE 7: band-partition sensitivity (measured) ============
-    write(logfhandle,'(a)') '>>> STAGE 7: 4-band vs 2-band partition at uniform weights (measured, not asserted zero)'
-    allocate(band_wu4(BOX,BOX,BOX,NB), source=0.5)
-    allocate(band_wu2(BOX,BOX,BOX,2),  source=0.5)
-    call pcgop_p4%new(BOX, SMPD, LAMBDA)
-    call pcgop_p4%set_mask(MSKRAD)
-    call pcgop_p4%set_nu_prior(band_wu4, BAND_LIMITS4, 1.0)
-    call pcgop_p2%new(BOX, SMPD, LAMBDA)
-    call pcgop_p2%set_mask(MSKRAD)
-    call pcgop_p2%set_nu_prior(band_wu2, BAND_LIMITS2, 1.0)
-    q4 = pcgop_p4%apply_nu_precision(x)
-    q2 = pcgop_p2%apply_nu_precision(x)
-    part_dev = real(sqrt(sum(real(q4-q2,dp)**2) / max(1.0_dp, sum(real(q4,dp)**2))))
-    write(logfhandle,'(a,es14.6)') '    rel_dev(Q4 x, Q2 x) =', part_dev
-    if( .not. (part_dev >= 0.0) )then   ! NaN guard; the value itself is the record
-        write(logfhandle,'(a)') '    FAIL: partition-change measurement is not finite'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: bank-refinement sensitivity measured (record with the run)'
-    endif
-    call pcgop_p4%kill
-    call pcgop_p2%kill
-
-    ! ============ STAGE 8: composition with the masked normal operator ============
-    write(logfhandle,'(a)') '>>> STAGE 8: P (H_data + lambda Q_NU + lambda_0) P symmetry and positivity'
-    call pcgop%set_deapod(.false.)   ! inverse-crime domain, algebra gate only
-    call projdirs%new(NPROJS, .false.)
-    call projdirs%spiral
-    lims2 = pcgop%get_lims2()
-    R     = lims2(1,2)
-    allocate(sig2arr(0:R))
-    do i = 0, R
-        sig2arr(i) = 1.0 + 0.15*real(i)
-    end do
-    allocate(sig2_2d(0:R,NPROJS))
-    call e%new(.false.)
-    do i = 1, NPROJS
-        call projdirs%get_ori(i, e)
-        g = mod(i-1, NCTF) + 1
-        ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
-        ctfparms%dfx = DFX_VALS(g); ctfparms%dfy = DFX_VALS(g)+0.15
-        ctfparms%angast = 20.*real(g); ctfparms%phshift = 0.
-        call e%set_ctfvars(ctfparms)
-        call e%set_shift([1.1, -0.7])
-        call projdirs%set_ori(i, e)
-        sig2_2d(:,i) = sig2arr
-    end do
-    call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
-    hp = pcgop%apply_normal(x)
-    hq = pcgop%apply_normal(y)
-    dp_x_qy = pcgop%dot_real_volume(x, hq)
-    dp_qx_y = pcgop%dot_real_volume(hp, y)
-    dp_x_qx = pcgop%dot_real_volume(x, hp)
-    adj_err = real(abs(dp_x_qy-dp_qx_y) / max(1.0_dp, abs(dp_x_qy), abs(dp_qx_y)))
-    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,Hq)=', real(dp_x_qy), &
-        &' dot(Hp,q)=', real(dp_qx_y), ' rel_err=', adj_err
-    if( adj_err > OP_RELTOL .or. dp_x_qx <= 0.0_dp )then
-        write(logfhandle,'(a)') '    FAIL: NU term breaks the masked normal operator contract'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: priored masked operator remains symmetric positive-definite'
-    endif
-
-    ! ============ STAGE 9: priored solve parity, monolithic vs raw reduction ============
-    ! The exact seam that separates shared-memory from nparts=2 execution is
-    ! the raw (B,D) artifact reduction; everything downstream (finalization,
-    ! data scale, effective NU strength, kernel solve) is master-local.
-    ! Solve the same synthetic problem WITH the prior at a positive strength
-    ! through both routes and require the solutions to agree.
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 9: priored solve parity, monolithic vs two-part raw reduction'
-        allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-        allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
-        call pcgop%set_volume(band_w(:,:,:,1))   ! any in-support structure serves
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
-            y_planes(:,:,i) = Ti * gx_plane
-        end do
-        ! route A: monolithic streaming accumulation on the priored operator
-        call pcgop%begin_accum
-        call pcgop%accumulate_batch(y_planes, NPROJS, 1)
-        call pcgop%end_accum(.true.)
-        call pcgop%set_op_mode(PCG_OP_KERNEL)
-        lam_a = pcgop%get_effective_nu_lambda()
-        allocate(xa(BOX,BOX,BOX), source=0.0)
-        call pcgop%solve_accum(xa, maxits=PARITY_ITS, rtol=0.0, niters=niters)
-        ! route B: two raw artifacts, fixed-order reduction, same prior
-        raw1 = 'test_pcg_priors_raw1.dat'
-        raw2 = 'test_pcg_priors_raw2.dat'
-        call pcg_parts%new(BOX, SMPD, LAMBDA)
-        call pcg_parts%set_deapod(.false.)
-        call pcg_parts%set_mask(MSKRAD)
-        call pcg_parts%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
-        call pcg_parts%begin_accum
-        call pcg_parts%accumulate_batch(y_planes(:,:,1:NPROJS/2), NPROJS/2, 1)
-        call pcg_parts%write_raw_accum(raw1, 1, 0, 1, 2, NPROJS/2, 'pcg_priors_test_v1')
-        call pcg_parts%begin_accum
-        call pcg_parts%accumulate_batch(y_planes(:,:,NPROJS/2+1:NPROJS), NPROJS/2, NPROJS/2+1)
-        call pcg_parts%write_raw_accum(raw2, 1, 0, 2, 2, NPROJS/2, 'pcg_priors_test_v1')
-        call pcg_parts%end_accum(.false.)
-        call pcg_reduce%new(BOX, SMPD, LAMBDA)
-        call pcg_reduce%set_deapod(.false.)
-        call pcg_reduce%set_mask(MSKRAD)
-        call pcg_reduce%set_nu_prior(band_w, BAND_LIMITS4, 1.0)
-        call pcg_reduce%begin_reduction
-        call pcg_reduce%add_raw_accum(raw1, 1, 0, 1, 2, 'pcg_priors_test_v1', nraw)
-        call pcg_reduce%add_raw_accum(raw2, 1, 0, 2, 2, 'pcg_priors_test_v1', nraw)
-        call pcg_reduce%end_accum(.true.)
-        call pcg_reduce%set_op_mode(PCG_OP_KERNEL)
-        lam_b = pcg_reduce%get_effective_nu_lambda()
-        allocate(xb(BOX,BOX,BOX), source=0.0)
-        call pcg_reduce%solve_accum(xb, maxits=PARITY_ITS, rtol=0.0, niters=niters)
-        parity_err = sqrt(sum((xa-xb)**2)) / max(1.0, sqrt(sum(xa*xa)))
-        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    lambda_eff A=', lam_a, ' B=', lam_b, &
-            &' rel_err(x)=', parity_err
-        if( lam_a <= 0.0 .or. lam_b <= 0.0 .or. &
-            &abs(lam_a-lam_b) > 1.0e-6*max(lam_a,lam_b) .or. parity_err > PARITY_RELTOL )then
-            write(logfhandle,'(a)') '    FAIL: priored solve differs between monolithic and raw-reduction routes'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: priored solve is route-independent (shared vs nparts seam)'
-        endif
-        call pcg_parts%kill
-        call pcg_reduce%kill
-        call del_file(raw1)
-        call del_file(raw2)
-        call raw1%kill
-        call raw2%kill
-    else
-        write(logfhandle,'(a)') '>>> STAGE 9 SKIPPED: an earlier stage failed'
-    endif
-
-    call pcgop%kill
-    call projdirs%kill
-    call e%kill
-
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> TEST_PCG_PRIORS: ALL STAGES PASS'
-        call simple_end('**** SIMPLE_TEST_PCG_PRIORS NORMAL STOP ****')
-    else
-        THROW_HARD('TEST_PCG_PRIORS FAILED')
-    endif
-end subroutine exec_test_pcg_priors
 
 subroutine exec_test_pcg_frac_update( self, cline )
     use simple_builder,            only: builder
@@ -2484,7 +2142,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     class(commander_test_rec3D_backends), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
     type(backends_run_summary) :: summary
-    logical :: l_mlreg, l_nu_replay
+    logical :: l_mlreg
     ! prior-capable defaults: a bare invocation (projfile, pgrp, mskdiam,
     ! nthr) runs a single euclid+ml_reg comparison at the
     ! production-representative budget; every default is overridable
@@ -2493,15 +2151,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     if( .not. cline%defined('maxits_pcg') ) call cline%set('maxits_pcg',       5.)
     if( .not. cline%defined('rtol')       ) call cline%set('rtol',         1.e-3)
     l_mlreg = cline%get_carg('ml_reg') .eq. 'yes'
-    ! direct NU-evidence replay (pcg_priors.md S5): the pcg leg derives its
-    ! evidence in-run from its own base half pair; the run is a single
-    ! measurement against the unpriored gridding reference, so gates are
-    ! soft -- the prior legitimately moves the pcg leg away from gridding
-    l_nu_replay = .false.
-    if( cline%defined('pcg_nu_lambda_rel') ) l_nu_replay = cline%get_rarg('pcg_nu_lambda_rel') > 0.0
-    if( l_nu_replay .and. .not. l_mlreg ) &
-        &THROW_HARD('pcg_nu_lambda_rel requires ml_reg=yes: Q_NU replaces P_tau in the regularized replay')
-    call run_rec3D_backends_single(cline, summary, .not. l_nu_replay)
+    call run_rec3D_backends_single(cline, summary, .true.)
     call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
 end subroutine exec_test_rec3D_backends
 
@@ -2563,9 +2213,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         endif
         if( cline%defined('maxits_pcg') ) dirbody = dirbody//('_its'//int2str(cline%get_iarg('maxits_pcg')))
         if( cline%defined('rtol')       ) dirbody = dirbody//('_rtol'//real_tok(cline%get_rarg('rtol')))
-        if( cline%defined('pcg_nu_lambda_rel') )then
-            dirbody = dirbody//('_nu'//real_tok(cline%get_rarg('pcg_nu_lambda_rel')))
-        endif
         if( cline%defined('lp')         ) dirbody = dirbody//('_lp'//real_tok(cline%get_rarg('lp')))
         do i = 1, 9999
             exec_dir = string(int2str(i)//'_')//dirbody
@@ -2599,8 +2246,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call cline_rec%set('rec_backend', trim(BACKENDS(ib)))
         call cline_rec%delete('vol1')   ! ground-truth volume is for the comparison only
         call cline_rec%delete('lp')
-        ! the NU replay key is pcg-only and hard-errors on other backends
-        if( trim(BACKENDS(ib)) .ne. 'pcg' ) call cline_rec%delete('pcg_nu_lambda_rel')
         call cline_rec%delete('hp')
         write(logfhandle,'(A)') '>>> REC3D BACKENDS: RECONSTRUCTING WITH '//trim(BACKENDS(ib))
         call xrec3D%execute(cline_rec)

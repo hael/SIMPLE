@@ -239,10 +239,8 @@ contains
     end subroutine strip_refine3D_planning_keys
 
     ! Remove the PCG backend key together with every PCG-only control. Any
-    ! child command line that leaves the PCG backend must go through here:
-    ! the reconstruct3D commander hard-errors on a positive pcg_nu_lambda_rel
-    ! without rec_backend=pcg (explicit-activation contract, pcg_priors.md
-    ! S6.2). This list is the strip-side dual of the PCG subset copied by
+    ! child command line that leaves the PCG backend must go through here.
+    ! This list is the strip-side dual of the PCG subset copied by
     ! apply_refine3D_reconstruction_controls below -- extend both together.
     subroutine strip_pcg_backend_keys( child_cline )
         class(cmdline), intent(inout) :: child_cline
@@ -250,8 +248,6 @@ contains
         call child_cline%delete('pcgop')
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('rtol')
-        call child_cline%delete('pcg_nu_lambda_rel')
-        call child_cline%delete('pcg_nu_supp_target')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -267,12 +263,6 @@ contains
         endif
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
-        endif
-        if( cline_refine3D%defined('pcg_nu_lambda_rel') )then
-            call child_cline%set('pcg_nu_lambda_rel', cline_refine3D%get_rarg('pcg_nu_lambda_rel'))
-        endif
-        if( cline_refine3D%defined('pcg_nu_supp_target') )then
-            call child_cline%set('pcg_nu_supp_target', cline_refine3D%get_rarg('pcg_nu_supp_target'))
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))
@@ -1058,23 +1048,12 @@ contains
                     call child_cline%set('ml_reg', 'no')
                 endif
                 ! the final reconstruction runs on the refinement's backend;
-                ! with the euclid ML replay active the Q_NU prior regularizes
-                ! it in-solve. When bootstrap_rec3D changes the reconstruction
-                ! grid, it retains the learned suppression target but measures
-                ! and corrects the Q_NU strength on that grid before shipping
-                ! the final map. Explicit controls remain pinned.
+                ! final-map postprocessing is classical on both backends
                 if( trim(params%rec_backend) == 'pcg' )then
                     call child_cline%set('rec_backend', 'pcg')
                     call configure_final_pcg_solve_budget(cline_refine3D, child_cline)
                     if( cline_refine3D%defined('rtol') )&
                         &call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
-                    if( final_stage_uses_ml_reg() )then
-                        call child_cline%set('filt_mode', 'nonuniform')
-                        if( cline_refine3D%defined('pcg_nu_lambda_rel') )&
-                            &call child_cline%set('pcg_nu_lambda_rel', cline_refine3D%get_rarg('pcg_nu_lambda_rel'))
-                        if( cline_refine3D%defined('pcg_nu_supp_target') )&
-                            &call child_cline%set('pcg_nu_supp_target', cline_refine3D%get_rarg('pcg_nu_supp_target'))
-                    endif
                 endif
             end subroutine prep_final_rec_cline
 

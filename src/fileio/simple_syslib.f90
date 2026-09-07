@@ -9,7 +9,9 @@ use simple_string_utils
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 implicit none
-private :: c_sync_file_path, c_sync_directory_path, c_atomic_replace_path, syslib_c_path
+! the bind(c) interfaces stay default-public: gfortran warns when a symbol
+! carrying a binding label is marked PRIVATE
+private :: syslib_c_path
 ! local version of throw_hard to enable public feature
 #define THROW_ERROR(msg) call simple_exception(msg, __FILENAME__ , __LINE__)
 

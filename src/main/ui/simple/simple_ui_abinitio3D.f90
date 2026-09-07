@@ -44,21 +44,6 @@ contains
         &'Maximum kernel PCG iterations from stage 3 onward; the cold original-sampling final reconstruction uses at least 5', &
         &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call abinitio3D%add_input(UI_PARM, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
-        &'Direct NU-evidence replay precision strength relative to the PCG data scale, forwarded to the '//&
-        &'refine3D stages; when positive each regularized replay derives graded band-support evidence from '//&
-        &'its own base half pair and attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive, no '//&
-        &'envelope artifact); default 0.1 in the NU-filtered stages, explicit 0 restores the ordinary '//&
-        &'global-ML replay', 'strength{0.1 in NU mode}', &
-        &.false., 0.0, group="search", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call abinitio3D%add_input(UI_PARM, 'pcg_nu_supp_target', 'num', 'PCG NU prior suppression setpoint', &
-        &'Prior-energy suppression setpoint (%) tracked by the auto-lambda controller in the refine3D stages; '//&
-        &'when left unset the AIMD auto-target outer loop adapts the setpoint per dataset from the shipped-pair '//&
-        &'FSC=0.143 trajectory (cold start 15%), while an explicit value in [5,75] pins it; requires the '//&
-        &'auto-lambda controller (unset pcg_nu_lambda_rel)', 'percent{auto in NU mode}', &
-        &.false., 0.0, group="search", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
@@ -135,12 +120,6 @@ contains
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
-        call abinitio3D%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
-        &'Q_NU evidence-bank shell extension on the pcg backend: allow proven high-resolution expansion of the &
-        &nonuniform resolution bank beyond the stage ladder; requires rec_backend=pcg with the NU replay &
-        &active(yes|no){no}','', .false., 'no', group="filter", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, envmsklp, group="filter", &

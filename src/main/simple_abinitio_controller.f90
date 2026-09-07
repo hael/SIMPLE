@@ -43,6 +43,7 @@ character(len=*), parameter :: PROB_NEIGH_MODE_DOCKED  = 'geom'
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
+integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
 real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
@@ -396,14 +397,6 @@ contains
                 &(istage < GOLD_STD_STAGE .or. params%nstates > 1) ) cfg%filt_mode = 'nonuniform_lpset'
             if( cfg%filt_mode.eq.'nonuniform_lpset' .and. &
                 &params%nstates == 1 .and. istage >= GOLD_STD_STAGE ) cfg%filt_mode = 'nonuniform'
-            ! nu_refine is an explicit opt-in and pcg-only in abinitio3D: it
-            ! enables the Q_NU evidence-bank shell extension (Stage 6.6),
-            ! which rides the euclid ML replay (ml_reg=yes holds from
-            ! ML_REG_START_STAGE, so on every NU-filter stage). The
-            ! gridding-path challenger stays off; the commander rejects
-            ! nu_refine=yes without rec_backend=pcg.
-            if( trim(params%nu_refine).eq.'yes' .and. cfg%rec_backend.eq.'pcg' .and. &
-                &istage >= ML_REG_START_STAGE ) cfg%nu_refine = 'yes'
         endif
     end subroutine set_refine3D_filtering_policy
 
@@ -415,12 +408,7 @@ contains
         cfg%automsk = 'no'
         if( l_cavgs ) return
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
-        ! rec_backend=pcg no longer forces automasking (policy 2026-08-28):
-        ! the solvent prior that consumed the envelope is removed, and with
-        ! the default-on Q_NU replay the shipped maps are already locally
-        ! regularized, making them good matching references without envelope
-        ! masking. Automasking in the pcg path now follows the same explicit
-        ! user control as everywhere else.
+        ! automasking follows the same explicit user control on both backends
     end subroutine set_refine3D_automsk_policy
 
     subroutine set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
@@ -519,31 +507,49 @@ contains
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_sticky_class_sampling
         character(len=STDLEN) :: ptcl_src_eff
-        real :: lp_eff, lpstop_eff
-        logical :: l_full_update_stage
+        real :: lp_eff, lpstop_eff, lp_cap
+        logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
         l_full_update_stage = force_full_sampling_mode(params)
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
-        ! Matching-band ceiling. Non-NU stages match at the planned stage
-        ! limit, so the ceiling equals it. NU stages let the evidence handoff
-        ! promote matching beyond the per-stage plan (the class-FRC ladder is
-        ! not informative about the particle map there), but abinitio3D runs
-        ! without gold-standard halves, so the promotion is capped at the
-        ! ladder's FINAL limit (lpfinal, bounded [LPSTOP_BOUNDS]) rather than
-        ! left open. Log-set record 2026-09-06 (pcg_priors.md dev item 2):
-        ! capping at the per-stage value stalled every NU stage on
-        ! streptavidin and msp1; the uncapped finest-label handoff of the
-        ! healthy runs sat between the current map's FSC=0.5 and FSC=0.143.
+        l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
+        ! Ladder cap: the ladder's FINAL limit (lpfinal, bounded
+        ! [LPSTOP_BOUNDS]). lpinfo normally incorporates an explicit lpstop
+        ! while constructing the ladder; retain the command-line value as an
+        ! independent guard so a coarser user ceiling cannot be lost when the
+        ! stage cline is rebuilt.
+        lp_cap = lpinfo(active_refine3D_nstages())%lp
+        if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
+        ! Stage-boundary FSC=0.5 promotion (2026-09-06). abinitio3D runs
+        ! without gold-standard halves, so an FSC crossing is trustworthy only
+        ! where it lies beyond the band that produced the alignments; the
+        ! crossing measured at the end of the previous stage lies beyond that
+        ! stage's band and is therefore clean, whereas a per-iteration rule
+        ! would ratchet on noise fitted inside the newly opened band. Past
+        ! stage FSC05_PROMOTE_MIN_STAGE the planned stage limit is replaced
+        ! by the project's FSC=0.5 resolution of the best resolved populated
+        ! state when that is finer, never beyond the ladder cap. Streptavidin
+        ! log set: the plan sat at 8.6/7.6 A in stages 4/5 while the halves
+        ! agreed to 4.3 A at FSC=0.5.
+        l_fsc05_promoted = .false.
+        if( .not. l_cavgs .and. .not. l_explicit_lp ) &
+            &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
+        ! Matching-band ceiling. Non-NU stages match at the (possibly
+        ! promoted) stage limit, so the ceiling equals it. NU stages let the
+        ! finest-label handoff promote matching beyond the per-stage plan (the
+        ! class-FRC ladder is not informative about the particle map there),
+        ! capped at the ladder cap rather than left open. Log-set record
+        ! 2026-09-06 (pcg_priors.md dev item 2): capping at the per-stage value
+        ! stalled every NU stage on streptavidin and msp1; the uncapped
+        ! finest-label handoff of the healthy runs sat between the current
+        ! map's FSC=0.5 and FSC=0.143.
         if( cfg%filt_mode .ne. 'none' )then
-            lpstop_eff = lpinfo(active_refine3D_nstages())%lp
+            lpstop_eff = lp_cap
         else
             lpstop_eff = lpinfo(istage)%lp
+            if( l_fsc05_promoted ) lpstop_eff = lp_eff
+            if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = max(lpstop_eff, params%lpstop)
         endif
-        ! lpinfo normally incorporates an explicit lpstop while constructing
-        ! the ladder. Retain the command-line value as an independent guard so
-        ! a coarser user ceiling cannot be lost when the stage cline is rebuilt.
-        if( .not. l_cavgs .and. l_refine3D_lpstop_override ) &
-            &lpstop_eff = max(lpstop_eff, params%lpstop)
         call cline_refine3D%set('prg',    'refine3D')
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
@@ -674,6 +680,50 @@ contains
         lp = lpinfo(istage)%lp
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
+
+    !> Replace the planned stage matching limit by the project's FSC=0.5
+    !! resolution when that is finer, bounded by the ladder cap. Applies past
+    !! stage FSC05_PROMOTE_MIN_STAGE on the particle route only.
+    subroutine promote_stage_lp_from_fsc05( params, istage, lp_cap, lp, l_promoted )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: istage
+        real,              intent(in)    :: lp_cap
+        real,              intent(inout) :: lp
+        logical,           intent(out)   :: l_promoted
+        real :: res05, lp_new
+        l_promoted = .false.
+        if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
+        res05 = project_best_fsc05_resolution(params)
+        if( res05 < TINY ) return
+        lp_new = max(min(lp, res05), lp_cap)
+        if( lp_new < lp - 1.e-3 )then
+            write(logfhandle,'(A,I0,A,F6.1,A,F6.1,A,F6.1,A,F6.1,A)') &
+                &'>>> ABINITIO3D STAGE ', istage, ' FSC=0.5 PROMOTION OF MATCHING LP: ', &
+                &lp, ' -> ', lp_new, ' A (FSC=0.5 resolution ', res05, ' A, ladder cap ', lp_cap, ' A)'
+            lp         = lp_new
+            l_promoted = .true.
+        endif
+    end subroutine promote_stage_lp_from_fsc05
+
+    !> FSC=0.5 resolution of the best resolved populated state, read from the
+    !! per-particle res05 field the reconstruction writes; 0 when absent
+    real function project_best_fsc05_resolution( params ) result( res05 )
+        class(parameters), intent(in) :: params
+        type(sp_project)     :: spproj
+        real,    allocatable :: res05s(:), states(:)
+        logical, allocatable :: mask(:)
+        res05 = 0.
+        if( .not. file_exists(params%projfile) ) return
+        call spproj%read_segment('ptcl3D', params%projfile)
+        if( spproj%os_ptcl3D%get_noris() > 0 .and. spproj%os_ptcl3D%isthere('res05') )then
+            states = spproj%os_ptcl3D%get_all('state')
+            res05s = spproj%os_ptcl3D%get_all('res05')
+            allocate(mask(size(states)), source=states > 0.5 .and. res05s > TINY)
+            if( any(mask) ) res05 = minval(res05s, mask=mask)
+            deallocate(states, res05s, mask)
+        endif
+        call spproj%kill
+    end function project_best_fsc05_resolution
 
     character(len=STDLEN) function stage_ptcl_src( cfg, params ) result( ptcl_src )
         type(refine3D_stage_cfg), intent(in) :: cfg

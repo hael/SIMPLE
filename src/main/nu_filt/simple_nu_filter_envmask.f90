@@ -346,9 +346,9 @@ contains
             ! (no second compute). Voxels outside it take the coarsest bank
             ! candidate -- a heavy background low-pass (cisTEM-style) that
             ! down-weights the excluded density's contribution to alignment
-            ! without removing it from the reference. The same field feeds the
-            ! Q_NU precisions. The PCG SOLVE support stays on the conservative
-            ! density envelope, never on this evidence mask.
+            ! without removing it from the reference. The PCG SOLVE support
+            ! stays on the conservative density envelope (automsk=yes only),
+            ! never on this evidence mask.
             if( l_arm )then
                 call set_nu_solvent_envelope(envmask, source='nu_evidence_envelope')
                 if( present(l_armed) ) l_armed = .true.

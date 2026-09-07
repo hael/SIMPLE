@@ -1,10 +1,13 @@
 # `reconstruct3D` PCG backend policy
 
 Contract of the code that runs today: the opt-in CTF- and sigma-weighted
-preconditioned-conjugate-gradient (PCG) reconstruction path. Regularization
-research (the direct NU-evidence replay precision, Wilson priors) and the
-record of removed prior experiments -- including the retired binary-envelope
-solvent prior, removed 2026-08-27 -- live in
+preconditioned-conjugate-gradient (PCG) reconstruction path. The PCG backend
+carries no regularization of its own beyond the ordinary FSC/SSNR `P_tau`
+replay; nonuniform filtering is the same assembly-owned competition as on the
+gridding backend (`simple_nu_state_filter`, policy 2026-09-06). The record of
+the removed prior experiments -- the binary-envelope solvent prior (2026-08-27)
+and the direct NU-evidence replay precision `Q_NU` with its auto-lambda and
+auto-target controllers (2026-09-06) -- lives in
 `doc/implementation_notes/pcg_priors.md`.
 
 The production `reconstruct3D` command accepts the selector
@@ -127,10 +130,9 @@ the absolute coefficient `1e-3` (`PCG_LAMBDA`). The relative-lambda CLI
 (`pcg_lambda_rel`) was removed as unused; the internal `set_lambda_relative`
 mechanism and the deterministic linear fixed-band data scale `s_data(D)`
 remain for tests, diagnostics, and future prior anchoring
-(`pcg_priors.md`). A solve may receive a frozen real-space support and, for an
-NU replay, a frozen real-space `Q_NU` precision. Both are fixed before CG
-starts; no state changes or nonlinear clipping occur during an iteration, so
-the operator remains linear.
+(`pcg_priors.md`). A solve may receive a frozen real-space support. It is fixed
+before CG starts; no state changes or nonlinear clipping occur during an
+iteration, so the operator remains linear.
 
 **The normal operator carries only the real weight `|T_i|^2 = |C_i|^2/sigma2_i`.**
 The shift phase is unit-modulus and cancels between the forward and adjoint
@@ -170,9 +172,11 @@ sections; restart reporting and fatal handling occur afterward at the serial
 finalization boundary. Solver callers that do not request an outcome retain
 the historical immediate hard failure. The
 regularized replay deterministically replays kernel finalization from the
-persisted raw `(B,D)` and produces the standard maps. Ordinary mode installs
-the FSC/SSNR shell-diagonal `P_tau`; NU modes install the Potts-derived
-real-space `Q_NU` instead, never both. The replay warm-starts from the previous
+persisted raw `(B,D)` and produces the standard maps. It installs the FSC/SSNR
+shell-diagonal `P_tau` in every mode; with NU filtering active the base
+(`_unfil`) pair then seeds the NU candidate bank and the replayed pair joins the
+competition as the auxiliary member, exactly as on gridding. The replay
+warm-starts from the previous
 refinement iteration's ML half map when one exists on disk — strictly the same
 half (gold-standard independence), constant-FOV `read_and_crop` across crop
 changes, support re-masked after resampling, the first-iteration noise
@@ -181,10 +185,16 @@ precision nor lambda is ever accumulated into raw `B` or `D`.
 
 Every shipped state volume carries a solve-support provenance sidecar
 (`<vol>_pcg_support.txt`, `solve_support=density|sphere` and
-`solve_kind=base|regularized|mixed`). The trailing bootstrap reads the support
-field for the lag-one FSC/evidence pair so the envelope and phase-randomization
-FSC preprocessing is skipped exactly when that pair was density-constrained in
-the estimator; a pair without a sidecar is treated as unconstrained, and a
+`solve_kind=base|regularized|mixed`). The trailing bootstrap follows the same
+recipe as the gridding bootstrap, applied to the PCG solver's own maps: the
+FSC prior comes from the lag-one previous shipped pair, and the NU candidate
+bank is seeded from the CURRENT base pair, volume blended with the previous
+pair at the applied update weight together with the regularized pair (the
+gridding `trail_restored_halves_if_needed` blend). The lag-one pair is never
+an NU input (fix 2026-09-06). Same recipe and the same kinds of inputs on both
+backends; the maps differ because the estimators differ. The bootstrap reads the support field for the lag-one FSC pair so the envelope and
+phase-randomization FSC preprocessing is skipped exactly when that pair was
+density-constrained in the estimator; a pair without a sidecar is treated as unconstrained, and a
 bootstrap blend is constrained only if both contributions were. The base
 warm-start selector uses the kind field to prevent a regularized or mixed
 primary map from entering the base solve. The NU evidence built from a
@@ -484,8 +494,9 @@ Not implemented, and hard-errored or absent rather than silently approximated:
 - no orientation search or pose optimization inside reconstruction;
 - no online pose update inside reconstruction; distributed fractional/trailing
   reconstruction is supported through persisted raw accumulator chains;
-- no post-hoc NU filtering or post-hoc masking; PCG+NU uses only the frozen
-  `Q_NU` replay precision;
+- no post-hoc masking of PCG maps; NU filtering is the assembly-owned
+  competition shared with gridding and writes derived `_nu_filt` products
+  without touching the primary maps;
 - no projection-direction compression, conical-FSC regularization, or
   GPU/offload path;
 - no reuse of SPIDER BP-CG real-space code — the design is Fourier

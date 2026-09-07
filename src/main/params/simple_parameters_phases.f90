@@ -912,41 +912,6 @@ contains
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
         self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
-        ! Direct NU-evidence PCG replay default (pcg_priors.md, policy
-        ! 2026-08-28): when the PCG backend runs with the NU machinery and the
-        ! euclid ML replay active, Q_NU is the default regularized estimator
-        ! at the calibrated strength -- no command-line flag is required. An
-        ! explicit pcg_nu_lambda_rel=0 keeps the ordinary global-ML P_tau
-        ! replay (the R10 A/B control). When the replay itself is unavailable
-        ! (explicit ml_reg=no or objfun=cc), the prior cannot engage; warn so
-        ! the deviation from the pcg+NU => Q_NU policy is never silent.
-        if( .not. cline%defined('pcg_nu_lambda_rel') )then
-            if( trim(self%rec_backend) == 'pcg' .and. self%l_nonuniform )then
-                if( self%l_ml_reg )then
-                    self%pcg_nu_lambda_rel = 0.1
-                    ! strength left to the default -> the suppression-targeted
-                    ! auto-lambda controller owns it (pcg_priors.md); an
-                    ! explicit pcg_nu_lambda_rel pins the strength instead
-                    self%l_pcg_nu_autolambda = .true.
-                    ! the suppression setpoint the controller tracks: pinned
-                    ! by an explicit pcg_nu_supp_target, otherwise owned by
-                    ! the AIMD auto-target outer loop (pcg_priors.md dev item 2)
-                    if( cline%defined('pcg_nu_supp_target') )then
-                        if( self%pcg_nu_supp_target < 5.0 .or. self%pcg_nu_supp_target > 75.0 )&
-                            &THROW_HARD('pcg_nu_supp_target must be in [5,75] %')
-                    else
-                        self%pcg_nu_supp_target = 15.0
-                        self%l_pcg_nu_autotarget = .true.
-                    endif
-                else
-                    THROW_WARN('rec_backend=pcg with NU filtering but no euclid ML replay; Q_NU prior DISABLED')
-                endif
-            endif
-        endif
-        ! an explicit setpoint outside the auto-lambda activation branch is
-        ! validated at the PCG execution point (validate_nu_replay_request),
-        ! where the filtering policy is final -- the abinitio3D parent only
-        ! forwards the key to its refine3D stages
         if( cline%defined('pcg_mskfile') )then
             if( trim(self%rec_backend) /= 'pcg' ) &
                 &THROW_HARD('pcg_mskfile (PCG support constraint) requires rec_backend=pcg')

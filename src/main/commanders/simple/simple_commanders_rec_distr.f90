@@ -799,22 +799,15 @@ contains
 
     end subroutine restore_state_from_parts
 
-    !> PCG-backend NU matching contract: with Q_NU mandatory for every NU
-    !! filter mode on this backend (validated at every PCG entry), the shipped
-    !! maps are regularized in-solve and NO post-hoc NU filter runs here for
-    !! either mode (code review 2026-09-02 P1 -- a second bank filter made the
-    !! two NU topologies scientifically different for reasons unrelated to
-    !! their matching topology). The primary per-half Q_NU maps ARE the
-    !! matching references for plain nonuniform; the merged primary map serves
-    !! nonuniform_lpset. Only the evidence-derived scalar matching-lp handoff
-    !! survives, for both modes. With automsk enabled the NU evidence envelope
-    !! is regenerated at replay-evidence construction time inside the PCG
-    !! strategy (build_nu_replay_evidence), never here.
-    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, nu_replay_lps )
+    !> PCG-path project handoff of the NU matching low-pass, the dual of
+    !! update_project_nu_alignment_lowpass in the gridding volassemble: the
+    !! _nu_filt products themselves are written by nonuniform_filter_state
+    !! inside the PCG master (both backends run the same competition).
+    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, nu_align_lps )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         logical,          intent(in)    :: l_trail_bootstrap(:)
-        real, optional,   intent(in)    :: nu_replay_lps(:)
+        real, optional,   intent(in)    :: nu_align_lps(:)
         integer, allocatable :: state_pops(:)
         logical, allocatable :: l_included(:)
         integer :: state
@@ -822,60 +815,50 @@ contains
         if( .not. params%l_nonuniform ) return
         if( size(l_trail_bootstrap) /= params%nstates ) &
             &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
-        if( .not. present(nu_replay_lps) ) &
-            &THROW_HARD('NU on the PCG backend requires the evidence-derived LP handoff from the Q_NU replay')
-        if( size(nu_replay_lps) /= params%nstates ) &
-            &THROW_HARD('NU replay LP handoff has invalid size')
+        if( .not. present(nu_align_lps) ) &
+            &THROW_HARD('NU on the PCG backend requires the matching low-pass handoff from the NU filter')
+        if( size(nu_align_lps) /= params%nstates ) &
+            &THROW_HARD('NU matching low-pass handoff has invalid size')
         allocate(state_pops(params%nstates), l_included(params%nstates))
         do state = 1, params%nstates
             state_pops(state) = build%spproj_field%get_pop(state, 'state')
         enddo
-        l_included = (state_pops > 0) .and. (nu_replay_lps > TINY)
+        l_included = (state_pops > 0) .and. (nu_align_lps > TINY)
         if( any(l_included) )then
-            align_lp = minval(nu_replay_lps, mask=l_included)
-            write(logfhandle,'(A,F8.3,A)') &
-                &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); '//&
-                &'evidence-derived matching low-pass ', align_lp, ' A'
-            call build%spproj_field%set_all2single('lp', align_lp)
+            align_lp = minval(nu_align_lps, mask=l_included)
+            write(logfhandle,'(A,F8.3,A)') '>>> NU filter project matching low-pass limit: ', align_lp, ' A'
+            call build%spproj_field%set_all2single('lp',     align_lp)
+            call build%spproj_field%set_all2single('lp_est', align_lp)
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         else
-            write(logfhandle,'(A)') &
-                &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); no evidenced cutoff to hand off'
+            write(logfhandle,'(A)') '>>> WARNING: no populated state has a valid NU filter matching low-pass limit'
         endif
         deallocate(state_pops, l_included)
     end subroutine filter_pcg_nonuniform_maps
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor,    only: reconstructor
-        use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &set_nu_filter_report, NU_DEV_OUTPUT, &
-            &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
-            &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
-            &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, &
-            &write_nu_evidence_envmask
-        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess
+        use simple_nu_filter,        only: set_nu_filter_report, NU_DEV_OUTPUT
+        use simple_nu_state_filter,  only: nonuniform_filter_state, nu_state_filter_timings, &
+            &nu_static_aux_replacement
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters), target      :: params
         type(builder)                 :: build
         type(reconstructor)           :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
         type(image)                   :: vol_prev_even, vol_prev_odd, vol_merged
-        type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
-        type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
-        type(vol_pproc_plan)          :: pp_plan
+        type(nu_state_filter_timings) :: nu_timings
         logical                       :: l_nonuniform_mode
         integer, allocatable          :: state_pops(:)
         logical, allocatable          :: l_state_dropped(:)
-        real, allocatable             :: res0143s(:)
+        real, allocatable             :: res0143s(:), res05s(:)
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:), realized_update_fracs(:)
-        real                          :: res05
         integer                       :: state, numlen_part
-        integer(timer_int_kind)       :: t_nu_envmask, t_nonuniform_filter, t_tot
+        integer(timer_int_kind)       :: t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
         real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
@@ -942,8 +925,9 @@ contains
             call sum_rec%new_accumulator(params, build%spproj, expand=.false.)
             numlen_part       = max(1, params%numlen)
             l_nonuniform_mode = params%l_nonuniform
-            allocate(res0143s(params%nstates))
+            allocate(res0143s(params%nstates), res05s(params%nstates))
             res0143s = 0.
+            res05s   = 0.
             allocate(nu_align_lps(params%nstates))
             nu_align_lps = 0.
             allocate(update_frac_trail_recs(params%nstates))
@@ -1015,6 +999,7 @@ contains
             params%vols_even(state) = refine3D_state_halfvol_fname(state, 'even')
             params%vols_odd(state)  = refine3D_state_halfvol_fname(state, 'odd')
             res0143s(state)         = 0.
+            res05s(state)           = 0.
         end subroutine carry_forward_dropped_state
 
         !> The realized fractions f (what the current partials actually contain)
@@ -1046,7 +1031,7 @@ contains
                 &update_frac_trail_recs(state), realized_update_fracs(state), &
                 &vol_prev_even, vol_prev_odd, vol_merged, &
                 &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
-                &volname, eonames, res05, res0143s(state), restore_timings)
+                &volname, eonames, res05s(state), res0143s(state), restore_timings)
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
             params%vols_odd(state)  = eonames(2)
@@ -1055,244 +1040,26 @@ contains
         end subroutine assemble_state
 
         subroutine postprocess_state()
-            integer :: which_iter
-            which_iter = 1
-            if( cline%defined('which_iter') ) which_iter = params%which_iter
-            call plan_state_postprocess(params, state, which_iter, pp_plan)
-            if( pp_plan%l_nu_envmask_incompatible )then
-                write(logfhandle,'(A,1X,A)') &
-                    &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
-                    &pp_plan%nu_envmask_file%to_char()
-            endif
             if( l_nonuniform_mode ) call run_state_nonuniform_filter()
         end subroutine postprocess_state
 
         subroutine run_state_nonuniform_filter()
-            if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
-            call setup_nonuniform_filter()
-            call release_nonuniform_aux_inputs()
-            call optimize_nu_cutoff_finds()
-            call refine_nonuniform_filter_bank()
-            call release_nonuniform_base_inputs()
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            call log_nonuniform_filter_stats()
-            call write_nonuniform_outputs()
-            call record_nu_alignment_lowpass_limit()
-            call cleanup_nonuniform_state()
-            if( L_BENCH_GLOB ) rt_nonuniform_filter = rt_nonuniform_filter + toc(t_nonuniform_filter)
+            integer :: which_iter
+            which_iter = 1
+            if( cline%defined('which_iter') ) which_iter = params%which_iter
+            ! the shared assembly-owned NU competition (both backends)
+            call nonuniform_filter_state(params, state, which_iter, vol_nu_base_even, vol_nu_base_odd, &
+                &vol_nu_aux_even, vol_nu_aux_odd, use_static_nu_aux_replacement(), res0143s(state), &
+                &volname, eonames, nu_align_lps(state), nu_timings)
         end subroutine run_state_nonuniform_filter
 
-        subroutine setup_nonuniform_filter()
-            integer :: n_highres_steps
-            real    :: aux_resolution
-            n_highres_steps = nu_highres_steps_for_state()
-            call cleanup_nu_aux_images()
-            if( use_static_nu_aux_replacement() )then
-                allocate(nu_aux_even(1), nu_aux_odd(1))
-                call nu_aux_even(1)%copy(vol_nu_aux_even)
-                call nu_aux_odd(1)%copy(vol_nu_aux_odd)
-                aux_resolution = nu_aux_effective_resolution()
-                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, params%mskdiam, [aux_resolution], &
-                    &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps)
-            else
-                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, params%mskdiam, [real ::], &
-                    &n_highres_steps=n_highres_steps)
-            endif
-            if( trim(params%automsk).ne.'no' )then
-                ! automsk=yes: the filter-field background is the complement of
-                ! the NU evidence envelope, derived from the unaries of the
-                ! setup that just ran (same pass, no second compute). The
-                ! objective domain remains the spherical mskdiam support;
-                ! nu_refine independently controls high-resolution extension.
-                if( L_BENCH_GLOB ) t_nu_envmask = tic()
-                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, &
-                    &vol_nu_base_even%get_smpd(), state, pp_plan%nu_envmask_file, l_arm_background=.true.)
-                if( L_BENCH_GLOB ) rt_nu_envmask = rt_nu_envmask + toc(t_nu_envmask)
-            endif
-        end subroutine setup_nonuniform_filter
-
         logical function use_static_nu_aux_replacement() result(l_use_aux)
-            l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
+            l_use_aux = nu_static_aux_replacement(params)
         end function use_static_nu_aux_replacement
 
-        real function nu_aux_effective_resolution() result(aux_resolution)
-            aux_resolution = res0143s(state)
-            if( params%l_lpset .and. params%lp > TINY )then
-                if( NU_DEV_OUTPUT .and. params%part == 1 .and. aux_resolution > params%lp + TINY )then
-                    write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                        &'>>> NU auxiliary effective resolution clamped by matching low-pass: FSC ', &
-                        &aux_resolution, ' A; matching LP ', params%lp, ' A'
-                endif
-                aux_resolution = min(aux_resolution, params%lp)
-            endif
-        end function nu_aux_effective_resolution
-
-        subroutine refine_nonuniform_filter_bank()
-            type(nu_highres_extension_stats) :: ext_stats
-            integer :: n_highres_steps, n_accepted_this_iteration
-            if( .not. params%l_nu_refine ) return
-            n_highres_steps = nu_highres_steps_for_state()
-            n_accepted_this_iteration = 0
-            do
-                call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
-                if( .not. ext_stats%attempted )then
-                    if( NU_DEV_OUTPUT .and. params%part == 1 )then
-                        if( ext_stats%n_mask == 0 )then
-                            write(logfhandle,'(A)') &
-                                &'>>> NU high-resolution extension stopped: empty NU refinement mask'
-                        else if( ext_stats%n_tested == 0 )then
-                            write(logfhandle,'(A,F8.3,A,I0,A)') &
-                                &'>>> NU high-resolution extension stopped: no frontier voxels at current finest label ', &
-                                &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
-                        else
-                            write(logfhandle,'(A,F8.3,A,I0,A)') &
-                                &'>>> NU high-resolution extension stopped: no valid next shell after ', &
-                                &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
-                        endif
-                    endif
-                    exit
-                endif
-                if( .not. ext_stats%applied      ) exit
-                if( .not. ext_stats%promote_next ) exit
-                n_accepted_this_iteration = n_accepted_this_iteration + 1
-            end do
-            if( n_accepted_this_iteration > 0 )then
-                call refine_nu_extension_filtmap_ordered_labels
-                n_highres_steps = get_nu_filtmap_highres_shell_depth()
-                call write_nu_highres_steps_for_state(n_highres_steps)
-                if( NU_DEV_OUTPUT .and. params%part == 1 )then
-                    write(logfhandle,'(A,I0,A,I0)') &
-                        &'>>> NU high-resolution extension accepted shell steps this iteration: ', &
-                        &n_accepted_this_iteration, '; promoted depth for next iteration: ', n_highres_steps
-                endif
-            endif
-        end subroutine refine_nonuniform_filter_bank
-
-        integer function nu_highres_steps_for_state() result(nsteps)
-            type(string) :: fname
-            integer :: funit, io_stat
-            nsteps = 0
-            if( .not. params%l_nu_refine ) return
-            if( params%startit <= 1 .and. params%which_iter <= params%startit )then
-                call write_nu_highres_steps_for_state(0)
-                return
-            endif
-            fname = nu_highres_steps_fname()
-            if( .not.file_exists(fname) )then
-                call fname%kill
-                return
-            endif
-            call fopen(funit, status='OLD', action='READ', file=fname, iostat=io_stat)
-            if( io_stat == 0 )then
-                read(funit, *, iostat=io_stat) nsteps
-                call fclose(funit)
-            endif
-            if( io_stat /= 0 ) nsteps = 0
-            nsteps = max(0, nsteps)
-            call fname%kill
-        end function nu_highres_steps_for_state
-
-        subroutine write_nu_highres_steps_for_state(nsteps)
-            integer, intent(in) :: nsteps
-            type(string) :: fname
-            integer :: funit, io_stat
-            if( .not. params%l_nu_refine ) return
-            fname = nu_highres_steps_fname()
-            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
-            if( io_stat == 0 )then
-                write(funit,'(I0)') max(0, nsteps)
-                call fclose(funit)
-            else
-                write(logfhandle,'(A,1X,A)') '>>> WARNING: failed to write NU high-resolution depth file:', &
-                    &fname%to_char()
-            endif
-            call fname%kill
-        end subroutine write_nu_highres_steps_for_state
-
-        function nu_highres_steps_fname() result(fname)
-            type(string) :: fname
-            fname = 'nu_highres_depth_state'//int2str_pad(state,2)//'.txt'
-        end function nu_highres_steps_fname
-
-        subroutine log_nonuniform_filter_stats()
-            call print_nu_filtmap_lowpass_stats()
-            if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
-        end subroutine log_nonuniform_filter_stats
-
-        subroutine write_nonuniform_outputs()
-            type(string) :: eonames_nu(2), volname_nu, locres_name
-            eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
-            eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
-            volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
-            locres_name   = add2fbody(volname,    MRC_EXT, NULOCRES_SUFFIX)
-            call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
-            call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
-            call vol_even_nu%add(vol_odd_nu)
-            call vol_even_nu%mul(0.5)
-            call vol_even_nu%write(volname_nu, del_if_exists=.true.)
-            call write_nu_local_resolution_map(locres_name)
-            call wait_for_closure(volname_nu)
-            call wait_for_closure(locres_name)
-            call eonames_nu(1)%kill
-            call eonames_nu(2)%kill
-            call volname_nu%kill
-            call locres_name%kill
-        end subroutine write_nonuniform_outputs
-
-        subroutine record_nu_alignment_lowpass_limit()
-            real :: selected_lp
-            if( .not. params%l_nonuniform ) return
-            ! raw finest selected label (min_assigned_pct=0): the 5% support
-            ! gate introduced 2026-08-30 capped the PfCRT matching band at
-            ! 5-6 A against a 4.1 A map and refine3D_auto degraded from there
-            selected_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
-            if( selected_lp <= TINY ) return
-            nu_align_lps(state) = selected_lp
-            if( NU_DEV_OUTPUT .and. params%part == 1 )then
-                write(logfhandle,'(A,I0,A,F8.3,A)') &
-                    &'>>> NU filter state ', state, ' matching low-pass limit for next iteration: ', selected_lp, ' A'
-            endif
-        end subroutine record_nu_alignment_lowpass_limit
-
-        subroutine cleanup_nonuniform_state()
-            call vol_even_nu%kill
-            call vol_odd_nu%kill
-            call vol_nu_base_even%kill
-            call vol_nu_base_odd%kill
-            call vol_nu_aux_even%kill
-            call vol_nu_aux_odd%kill
-            call cleanup_nu_aux_images()
-            call cleanup_nu_filter()
-        end subroutine cleanup_nonuniform_state
-
-        subroutine release_nonuniform_aux_inputs()
-            call cleanup_nu_aux_images()
-            call vol_nu_aux_even%kill
-            call vol_nu_aux_odd%kill
-        end subroutine release_nonuniform_aux_inputs
-
-        subroutine release_nonuniform_base_inputs()
-            call vol_nu_base_even%kill
-            call vol_nu_base_odd%kill
-        end subroutine release_nonuniform_base_inputs
-
-        subroutine cleanup_nu_aux_images()
-            integer :: i
-            if( allocated(nu_aux_even) )then
-                do i = 1, size(nu_aux_even)
-                    call nu_aux_even(i)%kill
-                enddo
-                deallocate(nu_aux_even)
-            endif
-            if( allocated(nu_aux_odd) )then
-                do i = 1, size(nu_aux_odd)
-                    call nu_aux_odd(i)%kill
-                enddo
-                deallocate(nu_aux_odd)
-            endif
-        end subroutine cleanup_nu_aux_images
-
         subroutine collect_restore_timings()
+            rt_nu_envmask                = nu_timings%envmask
+            rt_nonuniform_filter         = nu_timings%filter
             rt_reduce_partials           = restore_timings%reduce_partials
             rt_sum_eos                   = restore_timings%sum_eos
             rt_restore_eos_and_write_fsc = restore_timings%restore_eos_and_write_fsc
@@ -1305,12 +1072,14 @@ contains
             integer :: iptcl, istate
             call refresh_state_populations()
             if( params%nstates == 1 )then
-                call build%spproj_field%set_all2single('res', res0143s(1))
+                call build%spproj_field%set_all2single('res',   res0143s(1))
+                call build%spproj_field%set_all2single('res05', res05s(1))
             else
                 do iptcl = 1, build%spproj_field%get_noris()
                     istate = build%spproj_field%get_state(iptcl)
                     if( istate > 0 .and. istate <= params%nstates )then
-                        call build%spproj_field%set(iptcl, 'res', res0143s(istate))
+                        call build%spproj_field%set(iptcl, 'res',   res0143s(istate))
+                        call build%spproj_field%set(iptcl, 'res05', res05s(istate))
                     endif
                 enddo
             endif
@@ -1344,7 +1113,10 @@ contains
                     exit
                 endif
             enddo
-            call build%spproj_field%set_all2single('lp', align_lp)
+            ! 'lp' is the raw handoff the matcher clips against lpstop;
+            ! 'lp_est' records the NU-estimated limit itself for reporting
+            call build%spproj_field%set_all2single('lp',     align_lp)
+            call build%spproj_field%set_all2single('lp_est', align_lp)
             if( NU_DEV_OUTPUT .and. params%part == 1 )then
                 write(logfhandle,'(A,I0,A,F8.3,A)') &
                     &'>>> NU filter project matching low-pass limit from state ', selected_state, ': ', align_lp, ' A'
@@ -1377,17 +1149,13 @@ contains
             call vol_nu_base_odd%kill
             call vol_nu_aux_even%kill
             call vol_nu_aux_odd%kill
-            call vol_even_nu%kill
-            call vol_odd_nu%kill
-            call cleanup_nu_aux_images()
             if( allocated(state_pops)             ) deallocate(state_pops)
             if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)
+            if( allocated(res05s)                 ) deallocate(res05s)
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             if( allocated(realized_update_fracs)  ) deallocate(realized_update_fracs)
-            call cleanup_nu_filter()
-            call pp_plan%nu_envmask_file%kill
             call volname%kill
             call eonames(1)%kill
             call eonames(2)%kill

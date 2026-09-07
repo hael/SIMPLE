@@ -12,7 +12,6 @@ type(ui_program), target :: subproject_distr
 type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
-type(ui_program), target :: pcg_priors
 type(ui_program), target :: rec3D_backends
 
 contains
@@ -27,7 +26,6 @@ contains
         call new_ptcls_ppca_subproject_distr(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
-        call new_pcg_priors(tsttab)
         call new_rec3D_backends(tsttab)
     end subroutine construct_test_highlevel_programs
 
@@ -42,7 +40,6 @@ contains
         write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
-        write(logfhandle,'(A)') pcg_priors%name%to_char()
         write(logfhandle,'(A)') rec3D_backends%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
@@ -219,21 +216,6 @@ contains
         call add_ui_program('pcg_frac_update', pcg_frac_update, tsttab, UI_CATEGORY)
     end subroutine new_pcg_frac_update
 
-    subroutine new_pcg_priors( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        call pcg_priors%new(&
-        &'pcg_priors',&
-        &'PCG prior-operator unit gate',&
-        &'In-memory, project-free unit gate for the PCG replay prior operator (pcg_priors.md Gate A). '//&
-        &'Validates the direct NU-evidence precision Q_NU: adjoint identity, positive '//&
-        &'semidefiniteness, the exact constant null mode (mean centering), zero action under full '//&
-        &'band support, monotonicity under evidence withdrawal, the finite-difference gradient of '//&
-        &'the penalty, the measured band-partition sensitivity, composition with the masked normal '//&
-        &'operator, and priored solve parity across the shared-vs-nparts reduction seam.',&
-        &'simple_test_exec',&
-        &.false.)
-        call add_ui_program('pcg_priors', pcg_priors, tsttab, UI_CATEGORY)
-    end subroutine new_pcg_priors
 
     subroutine new_rec3D_backends( tsttab )
         class(ui_hash), intent(inout) :: tsttab
@@ -241,8 +223,7 @@ contains
         &'rec3D_backends',&
         &'Same-inputs gridding vs PCG reconstruction comparison',&
         &'Minimal invocation is projfile+pgrp+mskdiam+nthr: defaults to objfun=euclid ml_reg=yes '//&
-        &'maxits_pcg=5 rtol=1e-3; pcg_nu_lambda_rel>0 measures the direct NU-evidence replay against '//&
-        &'the unpriored gridding reference (gates soft in that mode). '//&
+        &'maxits_pcg=5 rtol=1e-3. '//&
         &'Reconstructs one fixed set of particles/orientations/sigma2 with reconstruct3D using the gridding '//&
         &'and the PCG backend, in a numbered execution directory named after the run settings (run it inside '//&
         &'a refine3D run directory; the sigma2 group files are symlinked in; '//&
@@ -264,11 +245,6 @@ contains
         &'PCG iterations for the comparison', 'iterations{5}', .false., 5.)
         call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance for the comparison', 'tolerance{1e-3}', .false., 1.e-3)
-        call rec3D_backends%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
-        &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the pcg '//&
-        &'leg builds the compact NU evidence state from its own base half pair in-run and attaches Q_NU '//&
-        &'INSTEAD of the FSC/SSNR P_tau (needs no envelope artifact); '//&
-        &'0 keeps the ordinary global-ML replay', 'strength{0}', .false., 0.0)
         call rec3D_backends%add_input(UI_IMG, 'vol1', 'file', 'Ground-truth volume', &
         &'Known volume the particles were simulated from; enables the radial recon/truth table', &
         &'e.g. truth.mrc', .false., '')

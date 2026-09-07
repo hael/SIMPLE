@@ -12,8 +12,7 @@ The current architecture has two independent controls and artifacts:
 - `automsk` requests a NU-evidence-derived per-state envelope that defines
   the filter-field background: outside it the NU filter takes the coarsest
   bank candidate, so matching references carry the excluded density heavily
-  low-pass filtered (never removed), and the same field derives the Q_NU
-  precisions on the pcg backend
+  low-pass filtered (never removed), on both backends
 - `envfsc` requests an on-the-fly density-derived per-state envelope for
   phase-randomized FSC correction and cFAR. Non-PCG derived final maps may
   reuse it; PCG maps are never masked after the solve.
@@ -86,9 +85,9 @@ The NU envelope is generated before `nu_filter_vols` releases the mask-packed
 NU unary storage, and constrains the local filtering field in that same
 assembly pass.
 
-On the PCG backend, the reconstruction strategy builds the NU-evidence
-envelope while the replay unaries are live and installs it as a fixed
-coarsest-label boundary condition before constructing `Q_NU`. It independently
+On the PCG backend, the PCG master runs the same assembly-owned NU competition
+(`simple_nu_state_filter`), so the NU-evidence envelope is produced and
+consumed exactly as on gridding. It independently
 builds the conservative density mask used as solve support, but only under
 `automsk=yes`; with `automsk=no` no density mask is built and every PCG solve
 runs on the spherical support (policy 2026-09-06).
@@ -112,8 +111,8 @@ files are `fscu_stateNN.bin`, `fsct_stateNN.bin`, and `fscn_stateNN.bin`.
 Matcher reference preparation never reads or multiplies either envelope.
 References receive only the broad spherical soft mask. With `automsk=yes`, the
 NU-evidence envelope has already influenced the reference through the
-coarsest-bank background assignment: through synthesized NU-filtered maps on
-the gridding backend, or through the in-solve `Q_NU` precision on PCG.
+coarsest-bank background assignment in the synthesized NU-filtered maps, on
+both backends.
 
 ## State-specific artifacts
 
@@ -145,7 +144,7 @@ not interchangeable in the FSC or NU-objective paths.
 6. The NU filter optimizes the static field and accepts any supported
    `nu_refine` extensions inside that fixed background.
 7. The NU envelope affects matching references only through the local filter
-   field or `Q_NU`; it is never multiplied into a reference and never enters
+   field; it is never multiplied into a reference and never enters
    FSC correction or NU objective support.
 8. Non-PCG final postprocessing may reuse a compatible
    `automask3D_stateNN.mrc` when `envfsc=yes`; PCG postprocessing applies no

@@ -230,9 +230,9 @@ logical :: nu_l_solvent_clamp = .false.
 ! envelope (automsk=yes background policy, derived in the same evidence
 ! pass). Part of the frozen-evidence identity via the provenance string.
 character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
-! Setup retention across the two per-iteration NU consumers (pcg_priors.md
-! dev item 4 dedup): the Q_NU evidence phase and the matching-reference
-! generation run on the same base pair with the same optimized, extended,
+! Setup retention across two NU consumers of the same base pair (pcg_priors.md
+! dev item 4 dedup; historically the removed Q_NU evidence phase followed by
+! the matching-reference generation): both run on the same base pair with the same optimized, extended,
 ! solvent-clamped setup when nu_refine=yes -- the evidence phase may retain
 ! its setup for the matching pass instead of tearing it down, and the
 ! matching pass consumes it and cleans up. State-indexed because the module

@@ -3,8 +3,8 @@
 ! postprocess_nu is the commander for the NU-evidence local sharpening
 ! experiment (nu_evidence_local_sharpening.md): model-free LocScale-style
 ! local amplitude restoration in which both the confidence field and the
-! target spectrum derive from the frozen cross-half NU evidence state -- the
-! same state that parameterizes the Q_NU replay prior. It is deliberately
+! target spectrum derive from the frozen cross-half NU evidence state (the
+! compact state the NU competition also uses for its envelope). It is deliberately
 ! isolated from the standard postprocess commander (global B-factor + FSC
 ! filter), which remains untouched: a single isotropic B-factor does not
 ! serve most specimens, and this path is the recorded alternative.
@@ -46,8 +46,8 @@ contains
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
-        ! frozen evidence from the unregularized half pair, exactly the Q_NU
-        ! replay lifecycle: bank -> optional accepted shell walk -> compact
+        ! frozen evidence from the unregularized half pair, the standard
+        ! lifecycle: bank -> optional accepted shell walk -> compact
         ! immutable state (one evidence identity, no second NU analysis)
         call setup_nu_dmats(even, odd, params%mskdiam, [real ::], evidence_source=NU_EVIDENCE_SOURCE_BASE)
         call optimize_nu_cutoff_finds()

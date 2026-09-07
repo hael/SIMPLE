@@ -45,14 +45,6 @@ contains
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
         if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
         rec_backend = cline%get_carg('rec_backend')
-        ! the direct NU-evidence replay exists only on the PCG backend; a
-        ! positive strength anywhere else would be silently ignored, which the
-        ! explicit-activation contract forbids (pcg_priors.md S6.2)
-        if( cline%defined('pcg_nu_lambda_rel') .and. rec_backend .ne. 'pcg' )then
-            if( cline%get_rarg('pcg_nu_lambda_rel') /= 0.0 )then
-                THROW_HARD('pcg_nu_lambda_rel requires rec_backend=pcg')
-            endif
-        endif
         call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         ! Select and run strategy
@@ -68,18 +60,15 @@ contains
     end subroutine exec_rec3D
 
     subroutine exec_bootstrap_rec3D( self, cline )
-        use simple_rec3D_pcg_strategy, only: NU_AUTOTARGET_MIN, NU_AUTOTARGET_MAX
         use simple_commanders_euclid, only: commander_calc_pspec
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(commander_rec3D) :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline)         :: cline_unreg, cline_reg, cline_nu_calib, cline_pspec
+        type(cmdline)         :: cline_unreg, cline_reg, cline_pspec
         type(parameters)      :: params
         type(string)          :: sigma_star
-        real                  :: inherited_nu_supp_target
         integer               :: state, which_iter
-        logical               :: l_calibrate_pcg_nu, l_inherited_nu_supp_target
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
@@ -93,13 +82,6 @@ contains
         call cline%delete('ml_reg')
         call params%new(cline)
         which_iter = max(1, params%which_iter)
-        ! Q_NU gain changes with reconstruction sampling. When lambda is under
-        ! automatic control, the first regularized solve on this grid must be
-        ! treated as a calibration measurement rather than as the final map.
-        ! A user-pinned lambda remains an explicit opt-out.
-        l_calibrate_pcg_nu = trim(params%rec_backend).eq.'pcg' .and. params%l_nonuniform .and. &
-            &.not. cline%defined('pcg_nu_lambda_rel')
-        call read_inherited_nu_supp_target(inherited_nu_supp_target, l_inherited_nu_supp_target)
         call cline%set('which_iter', which_iter)
         call cline%set('mkdir', 'no') ! child reconstruct3D calls must not create nested run directories
         cline_unreg = cline
@@ -124,18 +106,7 @@ contains
         endif
         cline_reg = cline
         call prepare_bootstrap_rec_cline(cline_reg, l_regularized=.true.)
-        if( l_inherited_nu_supp_target .and. .not. cline_reg%defined('pcg_nu_supp_target') ) &
-            &call cline_reg%set('pcg_nu_supp_target', inherited_nu_supp_target)
-        if( l_calibrate_pcg_nu )then
-            cline_nu_calib = cline_reg
-            call cline_nu_calib%set('postprocess', 'no')
-            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: CURRENT-GRID Q_NU CALIBRATION'
-            call xrec3D%execute(cline_nu_calib)
-            call cline_nu_calib%kill
-            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 3: CALIBRATED EUCLID ML-REGULARIZED RECONSTRUCTION'
-        else
-            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: EUCLID ML-REGULARIZED RECONSTRUCTION'
-        endif
+        write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: EUCLID ML-REGULARIZED RECONSTRUCTION'
         call xrec3D%execute(cline_reg)
         call register_bootstrap_rec_outputs()
         do state = 1, params%nstates
@@ -176,9 +147,6 @@ contains
                 call cline_rec%delete('vol'//int2str(state))
             enddo
             if( l_regularized )then
-                ! the Q_NU keys (pcg_nu_lambda_rel/pcg_nu_supp_target) and
-                ! filt_mode flow through: on the pcg backend with NU filtering
-                ! the regularized pass runs the direct NU-evidence replay
                 call cline_rec%set('objfun', 'euclid')
                 call cline_rec%set('ml_reg',    'yes')
             else
@@ -187,34 +155,9 @@ contains
                 call cline_rec%set('postprocess',  'no')
                 call cline_rec%set('filt_mode',    'none')
                 call cline_rec%set('automsk',      'no')
-                ! no euclid ML replay in the unregularized pass, so the Q_NU
-                ! prior cannot engage; strip its keys or the PCG validator
-                ! hard-errors on the explicit-activation contract
-                call cline_rec%delete('pcg_nu_lambda_rel')
-                call cline_rec%delete('pcg_nu_supp_target')
             endif
         end subroutine prepare_bootstrap_rec_cline
 
-        subroutine read_inherited_nu_supp_target( supp_target, available )
-            real,    intent(out) :: supp_target
-            logical, intent(out) :: available
-            type(oris) :: os
-            supp_target = 0.0
-            available   = .false.
-            if( .not. l_calibrate_pcg_nu ) return
-            if( cline%defined('pcg_nu_supp_target') ) return
-            if( .not. file_exists(PCG_NU_STATS_FILE) ) return
-            call os%new(1, is_ptcl=.false.)
-            call os%read(string(PCG_NU_STATS_FILE))
-            if( os%isthere('PCG_NU_SUPP_TARGET') )then
-                supp_target = os%get(1, 'PCG_NU_SUPP_TARGET')
-                available   = supp_target >= NU_AUTOTARGET_MIN .and. supp_target <= NU_AUTOTARGET_MAX
-            endif
-            call os%kill
-            if( available ) write(logfhandle,'(A,F5.1,A)') &
-                &'>>> BOOTSTRAP_REC3D: RETAINING LEARNED Q_NU SUPPRESSION TARGET ', supp_target, &
-                &' % FOR CURRENT-GRID CALIBRATION'
-        end subroutine read_inherited_nu_supp_target
 
         subroutine register_bootstrap_rec_outputs()
             type(sp_project) :: spproj

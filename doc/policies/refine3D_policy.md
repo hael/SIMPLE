@@ -400,9 +400,18 @@ the strategy dispatches `volassemble`.
 - restores merged state volumes
 - derives the NU-evidence envelope from the completed accepted NU bank before
   unary storage is released
-- writes derived NU reference products on gridding; PCG instead constructs the
-  replay precision and writes only its primary maps
-- records resolution and NU matching metadata in the project
+- writes derived NU reference products (`_nu_filt`, `_nu_locres`) on both
+  backends through the shared `simple_nu_state_filter` competition
+- records resolution and NU matching metadata in the project: per-particle
+  `res` (state FSC=0.143 resolution) and `res05` (state FSC=0.5 resolution),
+  the raw NU matching handoff in `lp` (clipped against `lpstop` by the
+  matcher before use) and, when NU filtering is active, the same NU-estimated
+  limit in `lp_est`. The convergence readout reports all four
+  (`RESOLUTION @ FSC=0.143`, `RESOLUTION @ FSC=0.5`, `MATCHING LOW-PASS
+  LIMIT`, `ESTIMATED LOW-PASS LIMIT`), per state when `nstates > 1`, and
+  persists them as `RESOLUTION`, `RESOLUTION_FSC05`, `LP_MATCHING`,
+  `LP_ESTIMATED` (plus `_STATEnn` variants) in the iteration stats. Both
+  backends write the same fields (2026-09-06)
 
 Volume assembly does not refresh matcher PFTC references. It only produces
 Cartesian volumes and metadata for the next iteration.
@@ -433,10 +442,11 @@ records only the refine3D-side integration contract:
   to a backend-specific state restorer: gridding reduces `(cmat,rho)` and
   sampling-density-corrects; PCG reduces raw `(B,D)`, finalizes the kernel
   and solves. FSC/cFAR diagnostics, filenames, and project updates share
-  policy helpers, but NU regularization and masking remain backend-specific:
-  gridding synthesizes `_nu_filt` references, whereas PCG installs `Q_NU`
-  during the replay and performs no post-hoc filtering or masking. PCG maps
-  never receive gridding correction or a second sampling-density correction.
+  policy helpers, and both backends synthesize `_nu_filt` references through
+  the same assembly-owned NU competition (base pair = the unregularized
+  `_unfil` halves, auxiliary member = the `P_tau`-regularized halves). PCG
+  maps never receive gridding correction, a second sampling-density
+  correction, or a post-hoc mask.
 - **Raw statistics boundary.** Workers accumulate and atomically publish raw,
   unregularized `(B,D)` per `(state,half,part)`; only the master folds,
   finalizes, regularizes, and solves, reducing parts in ascending order.
@@ -449,9 +459,9 @@ records only the refine3D-side integration contract:
   normal operator and preconditioner only; it never weights `B`, and nothing
   prior-related is persisted in raw statistics.
 - **FSC ownership.** The FSC comes from the unregularized `_unfil` base pair
-  and remains the resolution authority. Ordinary PCG replays with the global
-  FSC/SSNR precision; PCG+NU instead freezes the Potts local-resolution field
-  from that pair and replays with `Q_NU`.
+  and remains the resolution authority. PCG always replays with the global
+  FSC/SSNR precision `P_tau`; NU filtering is applied afterwards by the shared
+  competition, never inside the solve (policy 2026-09-06).
 - **Solve support.** Only the conservative density envelope may constrain a
   PCG solve, and only under `automsk=yes` (policy 2026-09-06). With
   `automsk=no` base and replay run on the sphere. With `automsk=yes` and

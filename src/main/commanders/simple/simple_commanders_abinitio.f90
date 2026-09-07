@@ -534,22 +534,13 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        ! nu_refine stays off by default: the stage ladder owns frequency
-        ! marching in abinitio3D. An explicit nu_refine=yes is honored only on
-        ! the pcg backend, where it enables the Q_NU evidence-bank shell
-        ! extension (pcg_priors.md Stage 6.6); the gridding-path challenger
-        ! remains unsupported here, and an explicit pcg_nu_lambda_rel=0 would
-        ! disable the replay the extension rides on
+        ! nu_refine stays off: the stage ladder owns frequency marching in
+        ! abinitio3D on both backends; the NU shell walk is reserved for
+        ! refine3D_auto and explicit base refine3D use
         if( cline%defined('nu_refine') .and. cline%get_carg('nu_refine').eq.'yes' )then
-            if( .not. (cline%defined('rec_backend') .and. cline%get_carg('rec_backend').eq.'pcg') )&
-                &THROW_HARD('nu_refine=yes in abinitio3D requires rec_backend=pcg')
-            if( cline%defined('pcg_nu_lambda_rel') )then
-                if( .not. (cline%get_rarg('pcg_nu_lambda_rel') > 0.) )&
-                    &THROW_HARD('nu_refine=yes in abinitio3D requires the Q_NU replay; pcg_nu_lambda_rel=0 disables it')
-            endif
-        else
-            call cline%set('nu_refine', 'no')
+            THROW_HARD('nu_refine=yes is not supported in abinitio3D; the stage ladder owns frequency marching')
         endif
+        call cline%set('nu_refine', 'no')
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',                   0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',                10.)

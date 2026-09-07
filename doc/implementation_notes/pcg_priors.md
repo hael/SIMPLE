@@ -2574,6 +2574,55 @@ the acceptable-looking outputs do not validate the prior.
    evaluation itself (phase-randomized masked FSC) is unchanged and still
    envfsc-only.
 
+   msp1 STAGE-7 COLLAPSE ROOT CAUSE (2026-09-06, from the full log sets):
+   the external-init repeats (5_abinitio3D) ran next to the completed
+   healthy set (4_abinitio3D) of the same project. The legacy sigma
+   loader's sibling-directory carry-over (../*/<projfile>) copied every
+   sigma2_it_N.star of the healthy run into each repeat at its first ML
+   reconstruction. Stage starts at iterations 16/28/40/52 then found a
+   STAR for their first iteration (impossible from the run itself: the
+   consolidation writes star N at the top of iteration N), took the
+   group-only path ("reusing existing grouped sigmas"), deleted the
+   per-particle files and initialized every particle from the healthy
+   run's sigma at that iteration number, i.e. its stage-5 band at 8 A.
+   At stage 7 (nspace 5000, frac_best 0.85) the objective went flat
+   (SCORE spread 0.002) and the search randomized in 10/10 runs; the lp
+   cap fixed stage 6 in the latest run but stage 7 collapsed identically.
+   The cavg_ini healthy set and both streptavidin sets log "particle
+   sigma files" at every stage: no foreign STAR, no collapse. Fixes
+   (user decision 2026-09-06, option 2): the loader's implicit carry-over
+   is REMOVED entirely (no sibling, parent, project-dir or projinfo-cwd
+   seeding); continue=yes keeps its explicit copy from the recorded
+   previous refinement directory, bootstrap_rec3D estimates its own
+   sigmas, and a standalone euclid reconstruct3D must run in the directory
+   that holds the sigma files (the loader logs the directory it searched
+   and returns loaded=.false.; reconstruction callers hard-error, the flex
+   PCA caller keeps its unit-spectrum fallback). The stage-start
+   group-only handover is accepted only at startit<=1 (both refine3D
+   strategy paths). Confirmed on disk: a broken msp1 run that ended at
+   iteration 78 owned sigma2_it_95..97.star.
+
+   DECISION (2026-09-06, user): Q_NU REMOVED FROM THE PCG BACKEND IN ITS
+   ENTIRETY, together with the auto-lambda and auto-target controllers,
+   the stats file, the bootstrap calibration pass, the parameters
+   (pcg_nu_lambda_rel, pcg_nu_supp_target), the UI entries, the
+   convergence readout, the evidence replay in the strategy, the operator
+   (set_nu_prior/apply_nu_precision and workspaces) and the test=pcg_priors
+   gate. Rationale: an elegant estimator that ends in a parameter
+   optimization the competition never needed; the belt on PfCRT and the
+   msp1 trajectories are the record. The PCG path now follows the gridding
+   path exactly: the unregularized (_unfil) pair seeds the discrete filter
+   bank, the P_tau-regularized pair joins the competition through the
+   auxiliary route (ml_reg=yes, nu_refine=no), nu_refine=yes runs the same
+   shell walk (refine3D_auto), and the finest selected label is the matching
+   handoff. Implemented by extracting the gridding volassemble NU section
+   into simple_nu_state_filter (src/main/volume) and calling it from both
+   the gridding assembly and the PCG master (shared + distributed). What
+   stays from the PCG work: the projected solve support under automsk=yes,
+   trailing accumulator chains, warm starts and crop-change embedding. The
+   compact evidence-state module remains for the envelope, postprocess_nu
+   and the envmask test.
+
    The controller observations above stand as a record; the guard rails
    below were drafted and then WITHDRAWN (not applied), so the validated
    adaptive configuration (embb, exp_gate, PfCRT) is unchanged.

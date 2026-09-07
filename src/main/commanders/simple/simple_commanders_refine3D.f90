@@ -120,11 +120,9 @@ contains
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
-        ! nu_refine=yes means conservative resolution-bank expansion on BOTH
-        ! backends (Stage 6.6): the gridding filter challenger, or its mirror
-        ! on the pcg path -- Q_NU evidence-bank shell extension with the same
-        ! proven win-fraction acceptance. abinitio3D keeps the discrete
-        ! static ladder via its stage policy.
+        ! nu_refine=yes: conservative resolution-bank expansion (the NU
+        ! shell walk) on both backends; abinitio3D keeps the discrete static
+        ! ladder via its stage policy.
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         if( .not. cline%defined('automsk') )then
             call cline%set('automsk', 'yes') ! evidence-constrained background filtering
@@ -231,14 +229,6 @@ contains
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
         call cline_rec3D%set('postprocess', 'no')
         call cline_rec3D%set('nu_refine', 'no')
-        ! the initial bootstrap reconstruction runs objfun=cc, so the Q_NU
-        ! replay cannot engage there: strip the pinning keys or the PCG
-        ! validator hard-errors on the explicit-activation contract
-        ! (pcg_priors.md S6.2). The final reconstruction re-forwards them
-        ! explicitly below, where its regularized bootstrap pass can honor
-        ! them.
-        call cline_rec3D%delete('pcg_nu_lambda_rel')
-        call cline_rec3D%delete('pcg_nu_supp_target')
         ! STARTUP BOOTSTRAP: reconstruct -> build masks -> re-reconstruct with
         ! the masks and the NU prior, before any matching. Without it the
         ! first iteration matches raw, spherically masked references while
@@ -283,12 +273,6 @@ contains
         ! NU-filtered halves, masks and matching-lp handoff are on disk and in
         ! the project, so iteration 1 matches exactly what iteration N will
         call cline%set('vol1', refine3D_state_vol_fname(1))
-        ! the NU replay controllers compare consecutive REFINEMENT iterations.
-        ! The bootstrap is a reconstruction from the incoming orientations, so
-        ! leaving its readout behind makes the first auto-target comparison
-        ! bootstrap-vs-iteration-1, which is not like for like and produced a
-        ! spurious setpoint step. Start the controllers clean.
-        if( file_exists(PCG_NU_STATS_FILE) ) call del_file(PCG_NU_STATS_FILE)
         call cline_boot%kill
         call seed_refine3D_auto_nonuniform_lpset()
         ! 3D refinement iterations
@@ -298,8 +282,7 @@ contains
         ! re-reconstruct from all particle images at original sampling: the
         ! refinement sigmas are crop-box incompatible, so bootstrap_rec3D
         ! derives compatible sigmas from an unregularized pass and ships a
-        ! euclid ML-regularized final map -- with the Q_NU replay in-solve
-        ! on the pcg backend
+        ! euclid ML-regularized final map
         call cline_rec3D%set('prg', 'bootstrap_rec3D')
         call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
         call cline_rec3D%set('postprocess', 'yes')
@@ -313,18 +296,8 @@ contains
             call cline_rec3D%set('which_iter', MAXITS_REFINE3D_AUTO_CAP + 2)
         endif
         if( params%l_nonuniform )then
-            if( trim(params%rec_backend) == 'pcg' )then
-                ! keep the NU machinery: the Q_NU prior regularizes the final
-                ! map in-solve (auto-lambda resumes from the persisted stats
-                ! file; explicit keys pin)
-                call cline_rec3D%set('filt_mode', 'nonuniform')
-                if( cline%defined('pcg_nu_lambda_rel') )&
-                    &call cline_rec3D%set('pcg_nu_lambda_rel', cline%get_rarg('pcg_nu_lambda_rel'))
-                if( cline%defined('pcg_nu_supp_target') )&
-                    &call cline_rec3D%set('pcg_nu_supp_target', cline%get_rarg('pcg_nu_supp_target'))
-            else
-                call cline_rec3D%set('filt_mode', 'none')
-            endif
+            ! final-map postprocessing is classical on both backends
+            call cline_rec3D%set('filt_mode', 'none')
             call cline_rec3D%set('automsk', 'no')
         endif
         call cline_rec3D%set('nu_refine', 'no')

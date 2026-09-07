@@ -6,13 +6,13 @@ today.
 
 ## 1. Scope
 
-Nonuniform filtering is a volume-domain regularization feature. On the
-gridding backend it selects a local low-pass limit inside spherical `mskdiam`
-support and writes NU-filtered derived references. On the PCG backend the same
-Potts-regularized local-resolution field supplies the in-solve `Q_NU`
-precision and no derived NU-filtered volume is produced. Its candidate bank is
-not truncated by the FSC. The finest evidenced cutoff separately governs the
-matching bandwidth handed to later iterations.
+Nonuniform filtering is a volume-domain regularization feature. On both
+reconstruction backends it selects a local low-pass limit inside spherical
+`mskdiam` support and writes NU-filtered derived references
+(`simple_nu_state_filter`, shared by the gridding volassemble and the PCG
+master since 2026-09-06). Its candidate bank is not truncated by the FSC. The
+finest selected label separately governs the matching bandwidth handed to
+later iterations.
 
 It is not a separate final-map postprocessing workflow. `postprocess` and the
 automatic `reconstruct3D` postprocess step use the ordinary global
@@ -39,13 +39,12 @@ bandwidth while the matcher retains independent half-map topology.
 selected NU bandwidth into an LP-set matching run. LP-set matching uses merged
 registration-reference topology.
 
-On `rec_backend=pcg` (2026-09-02) both NU modes require the active `Q_NU`
-replay, which is the SOLE NU regularization mechanism on that backend: no
-post-hoc NU filter runs, no `_nu_filt`/`_nu_locres` products are written, and
-the matcher consumes the primary Q_NU-regularized maps directly (per-half for
-`nonuniform`, merged for `nonuniform_lpset`) with no additional filtering.
-Only the evidence-derived scalar matching-lp handoff survives, for both
-modes.
+On `rec_backend=pcg` (2026-09-06) both NU modes run the same post-hoc NU
+competition as gridding inside the PCG master: the unregularized `_unfil` pair
+seeds the candidate bank, the `P_tau`-regularized pair joins as the auxiliary
+member (`ml_reg=yes`, `nu_refine=no`), and the `_nu_filt`/`_nu_locres`
+products and the matching-lp handoff are written exactly as on gridding. The
+former in-solve `Q_NU` replay precision and its controllers were removed.
 
 `nu_refine=yes` enables iterative high-resolution NU shell extension. This is
 on by default in `refine3D_auto`, off by default elsewhere, and explicitly set
@@ -82,8 +81,8 @@ particle images. With `automsk=yes`, the filter-field background -- the
 complement of the NU evidence envelope, derived in the same evidence pass that
 builds the filter bank -- takes the coarsest bank candidate, so the
 envelope-excluded density (detergent micelle, disordered belt) enters the
-matching references heavily low-pass filtered rather than removed, and the
-same field derives the Q_NU precisions on the pcg backend. With `automsk=no`,
+matching references heavily low-pass filtered rather than removed, on both
+backends. With `automsk=no`,
 the entire spherical `mskdiam` support remains unconstrained. The conservative
 density envelope is not an NU filter-field input; it remains independently
 owned by FSC correction and PCG solve support. This masking policy is
@@ -308,26 +307,20 @@ with the same test as the whitening profile); every calibration statistic
 (null-bias center, spatial beta, temperature, null/uncertain/band-support
 fractions) is confined to it, unobserved voxels are frozen at the explicit
 null with zero band support, and the summary reports `observed_fraction`.
-The spherical NU support itself is unchanged. The PCG replay consumes the expanded weights as
-the `Q_NU` precision when `pcg_nu_lambda_rel > 0`
-(`doc/implementation_notes/pcg_priors.md` Stage 6). Since 2026-08-28 this is
-the DEFAULT whenever `rec_backend=pcg` runs with NU filtering and the euclid
-ML replay; in that mode the post-hoc NU filter and its
-`_nu_filt`/`_nu_locres` products are NOT generated -- the in-solve precision
-already performs the local regularization, and the LP-set matching handoff
-derives from the frozen replay evidence (finest evidenced local cutoff).
-With `automsk` enabled the NU-evidence envelope is still produced. It is
+The spherical NU support itself is unchanged. The compact evidence state is a
+diagnostic and envelope input only; the in-solve `Q_NU` consumer was removed
+on 2026-09-06 (`doc/implementation_notes/pcg_priors.md`).
+With `automsk` enabled the NU-evidence envelope is produced. It is
 regenerated from the static candidate bank while the raw per-voxel evidence
 margins are live, then fixed as a coarsest-bank boundary condition during
 ordered-label Potts regularization and adaptive shell challenges. Accepted
 adaptive candidates refine the precision inside that preliminary boundary;
 they do not redefine their own support in the same pass.
-That clamped field supplies `Q_NU`; the artifact is not a second filtering or
-reference-masking mechanism. `write_nu_evidence_envmask` remains the single
-producer shared by gridding volume assembly and PCG evidence construction.
-The full post-hoc NU filtering path described in this document is production
-behavior only for the gridding backend. PCG+NU rejects a disabled `Q_NU`
-rather than falling back to post-hoc filtering.
+The artifact is not a second filtering or reference-masking mechanism.
+`write_nu_evidence_envmask` remains the single producer, called from the
+shared `simple_nu_state_filter` on both backends. The full post-hoc NU
+filtering path described in this document is production behavior on both
+backends.
 
 Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
 the finest discrete label only when its effective resolution is finer than that
@@ -434,11 +427,6 @@ reference and prefers the merged `_nu_filt` product when it exists.
 State count alone must not force merged-reference matching. The selected NU LP
 does not choose reference topology; LP-set mode does.
 
-On the PCG backend, both NU modes use the primary `Q_NU`-regularized maps:
-independent halves for `nonuniform`, and the merged map for
-`nonuniform_lpset`. PCG never looks for `_nu_filt` products and applies no
-additional NU filtering.
-
 The ordinary low-pass filter is not applied on top of either NU reference
 path.
 Reference preparation treats NU filtering, like ML regularization, as filtering
@@ -446,8 +434,7 @@ already done during assembly.
 
 Reference preparation never multiplies either the NU-evidence or density
 envelope into a reference. The matcher applies only the ordinary spherical
-soft support before projection. Envelope information reaches a PCG matching
-reference solely through the Potts-regularized `Q_NU` solve.
+soft support before projection.
 
 ## 12. FSC Correction and Matching-Bandwidth Handoff
 
