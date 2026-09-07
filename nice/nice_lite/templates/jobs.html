@@ -49,15 +49,7 @@
             if (el.workspace && el.workspace[key] !== undefined) return el.workspace[key];
             return fallback;
           };
-
-          const enableStreamDescription = (button) => {
-            const input = button.parentElement.querySelector("input[name='new_stream_description']");
-            if (!input) return;
-            input.disabled = false;
-            input.focus();
-            lastinteraction = Date.now();
-          };
-
+§
           const deleteStream = (button) => {
             const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
             if (confirm("Please confirm that you wish to delete stream " + jobid)) {
@@ -105,6 +97,64 @@
             }
             lastinteraction = Date.now();
           };
+
+          // Drag source for the per-stream data-type icon row. No drop target is
+          // wired up yet — this just carries {jobId, dataType} for future use.
+          // Uses a scaled-up, detached clone of the icon's SVG as the drag image
+          // so the icon itself is clearly visible next to the cursor while dragging.
+          const dragArtifact = (event, jobId, dataType) => {
+            const payload = JSON.stringify({ jobId, dataType });
+            event.dataTransfer.setData("application/json", payload);
+            event.dataTransfer.setData("text/plain", payload);
+            event.dataTransfer.effectAllowed = "copy";
+
+            const svgSource = event.currentTarget.querySelector("svg");
+            if (svgSource) {
+              const ghost = svgSource.cloneNode(true);
+              ghost.removeAttribute("class");
+              ghost.style.width = "28px";
+              ghost.style.height = "28px";
+              ghost.style.color = getComputedStyle(event.currentTarget).color;
+              ghost.style.position = "fixed";
+              ghost.style.top = "-200px";
+              ghost.style.left = "-200px";
+              ghost.style.pointerEvents = "none";
+              document.body.appendChild(ghost);
+              event.dataTransfer.setDragImage(ghost, 14, 14);
+              setTimeout(() => ghost.remove(), 0);
+            }
+
+            lastinteraction = Date.now();
+          };
+
+          // The data-type icon overlay only makes sense while the job builder
+          // (a sibling iframe in the parent window) is open, since that's the
+          // only current drop target. Poll its visibility rather than reload,
+          // since job builder being open already suppresses the idle-reload below.
+          // Note: check the DOM directly rather than calling a function on
+          // window.parent — top-level const/let declarations in a <script>
+          // (like isJobBuilderVisible in workspace.html) are not attached to
+          // window, so they aren't reachable as window.parent.<name>.
+          const isJobBuilderActive = () => {
+            try {
+              const iframe = window.parent && window.parent.document && window.parent.document.getElementById("job_builder_iframe");
+              if (!iframe) return false;
+              if (iframe.classList.contains("hidden")) return false;
+              return window.parent.getComputedStyle(iframe).display !== "none";
+            } catch (e) {
+              return false;
+            }
+          };
+
+          const syncArtifactRows = () => {
+            const active = isJobBuilderActive();
+            document.querySelectorAll(".artifact-drag-row").forEach((el) => {
+              el.classList.toggle("hidden", !active);
+            });
+          };
+
+          syncArtifactRows();
+          setInterval(syncArtifactRows, 500);
 
           window.addEventListener("visibilitychange", () => {
             if (document.visibilityState !== "hidden") location.reload();

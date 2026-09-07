@@ -15,7 +15,7 @@
         <div class="flex flex-col h-full gap-2.5">
             <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
                 <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                    <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">micrographs</p>
+                    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">micrographs</p>
                 </div>
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
@@ -28,7 +28,7 @@
             </div>
             <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
                 <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                    <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">particles</p>
+                    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">particles</p>
                 </div>
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
@@ -49,7 +49,7 @@
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
         <div id="micrographs_panel" class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
             <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">latest micrographs</p>
+                <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">latest micrographs</p>
             </div>
             {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
                 <div class="flex flex-col flex-1 overflow-y-auto">

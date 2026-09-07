@@ -51,7 +51,7 @@
 @theme { --color-streamline    : #e5e7eb; } /* borders                  */
 @theme { --color-streamaccent  : #059669; } /* logo accent / primary    */
 @theme { --color-streamring    : #10b981; } /* focus ring               */
-@theme { --color-streamtext    : #262626; } /* primary text             */
+@theme { --color-streamtext    : #757575; } /* primary text             */
 @theme { --color-streamlabel   : #a3a3a3; } /* muted labels             */
 @theme { --color-streamsurface : #fafafa; } /* input / select bg        */
 @theme { --color-streaminput   : #404040; } /* input text               */

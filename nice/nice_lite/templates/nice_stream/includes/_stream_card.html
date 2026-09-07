@@ -13,7 +13,7 @@
     {% include 'nice_stream/includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id active_persistent_workers=job.master_stats.master.active_persistent_workers %}
 
     <!-- Body -->
-    <div class="px-3 py-2 flex-1 flex flex-col">
+    <div class="px-3 py-2 flex-1 flex flex-col relative">
 
         {% if job.status == "failed" or job.status == "stopped" %}
 
@@ -91,6 +91,63 @@
             {% endif %}
 
         {% endif %}
+
+        <!-- Data type row: movies · micrographs · particle coordinates · particles · 2D class averages · 3D volume
+             Hidden by default; only shown (as an overlay on top of the body content
+             above) while the job builder is open — see syncArtifactRows() in jobs.html. -->
+        <div class="artifact-drag-row hidden absolute inset-0 z-10 bg-streambar/90 backdrop-blur-sm flex items-center justify-around px-2 cursor-default" onclick="event.stopPropagation()">
+            <span title="movies" draggable="true" ondragstart="dragArtifact(event, '{{ job.id }}', 'movies')" class="text-streamicon p-1 cursor-grab active:cursor-grabbing">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1.5" y="3" width="13" height="10" rx="1"/>
+                    <line x1="1.5" y1="6" x2="14.5" y2="6"/>
+                    <line x1="1.5" y1="10" x2="14.5" y2="10"/>
+                    <line x1="4.5" y1="3" x2="4.5" y2="6"/>
+                    <line x1="11.5" y1="3" x2="11.5" y2="6"/>
+                    <line x1="4.5" y1="10" x2="4.5" y2="13"/>
+                    <line x1="11.5" y1="10" x2="11.5" y2="13"/>
+                </svg>
+            </span>
+            <span title="micrographs" draggable="true" ondragstart="dragArtifact(event, '{{ job.id }}', 'micrographs')" class="text-streamicon p-1 cursor-grab active:cursor-grabbing">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+                    <circle cx="5.5" cy="6.5" r="1.25"/>
+                    <path d="M1.5 11.5l3.5-3.5 2.5 2.5 3-3 4 4"/>
+                </svg>
+            </span>
+            <span title="particle coordinates" draggable="true" ondragstart="dragArtifact(event, '{{ job.id }}', 'particle_coordinates')" class="text-streamicon p-1 cursor-grab active:cursor-grabbing">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="8" r="6"/>
+                    <line x1="8" y1="1.5" x2="8" y2="4"/>
+                    <line x1="8" y1="12" x2="8" y2="14.5"/>
+                    <line x1="1.5" y1="8" x2="4" y2="8"/>
+                    <line x1="12" y1="8" x2="14.5" y2="8"/>
+                </svg>
+            </span>
+            <span title="particles" draggable="true" ondragstart="dragArtifact(event, '{{ job.id }}', 'particles')" class="text-streamicon p-1 cursor-grab active:cursor-grabbing">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor" stroke="none">
+                    <circle cx="4.5" cy="5" r="1.75"/>
+                    <circle cx="11.5" cy="4.5" r="1.25"/>
+                    <circle cx="8" cy="9" r="2"/>
+                    <circle cx="12.5" cy="11" r="1.5"/>
+                    <circle cx="4" cy="11.5" r="1.25"/>
+                </svg>
+            </span>
+            <span title="2D class averages" draggable="true" ondragstart="dragArtifact(event, '{{ job.id }}', 'cls2D')" class="text-streamicon p-1 cursor-grab active:cursor-grabbing">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="0.75"/>
+                    <rect x="9" y="1.5" width="5.5" height="5.5" rx="0.75"/>
+                    <rect x="1.5" y="9" width="5.5" height="5.5" rx="0.75"/>
+                    <rect x="9" y="9" width="5.5" height="5.5" rx="0.75"/>
+                </svg>
+            </span>
+            <span title="3D volume" draggable="true" ondragstart="dragArtifact(event, '{{ job.id }}', 'volume3D')" class="text-streamicon p-1 cursor-grab active:cursor-grabbing">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 1.5l6 3.25v6.5L8 14.5l-6-3.25v-6.5L8 1.5Z"/>
+                    <path d="M2 4.75 8 8l6-3.25"/>
+                    <line x1="8" y1="8" x2="8" y2="14.5"/>
+                </svg>
+            </span>
+        </div>
     </div>
 
     <!-- Footer: view · restart · clone · delete/terminate -->

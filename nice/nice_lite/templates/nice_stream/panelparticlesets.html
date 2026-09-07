@@ -23,18 +23,18 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
 </head>
 <body class="bg-streambar h-screen overflow-hidden font-sans rounded-xl border {% if status == 'running' %}border-streamaction/20 hover:border-streamaction{% elif status == 'failed' or status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} transition-colors cursor cursor-zoom-in"
-    onclick="this.querySelector('form.zoomform')?.submit();">
-    
+    onclick="this.querySelector('form.zoomform')?.submit();" onmouseleave="this.querySelector('.status-menu')?.classList.add('hidden')">
+
     <!-- Loading gauze -->
     {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
 
     <div class="flex flex-col h-full">
 
         <!-- Header -->
-        <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-            <span class="text-[10px] font-medium text-streamlabel uppercase tracking-widest flex-1">particle sets</span>
+        <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamdivider flex-shrink-0">
+            <span class="text-[10px] font-medium text-streamtext uppercase tracking-widest flex-1">particle sets</span>
             <!-- Zoom button -->
-            <form method="GET" action="{% url 'nice_lite:view_stream_particle_sets_zoom' %}" target="_parent" class="flex">
+            <form method="GET" action="{% url 'nice_lite:view_stream_particle_sets_zoom' %}" target="_parent" class="zoomform flex hidden">
                 {% csrf_token %}
                 <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                 <button type="submit" class="text-streamicon hover:text-streamsubtle transition-colors" title="view full screen">
