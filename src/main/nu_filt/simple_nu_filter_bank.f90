@@ -6,13 +6,14 @@ implicit none
 contains
 
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, evidence_source )
+            &n_highres_steps, evidence_source, fsc_res )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
         character(len=*), optional, intent(in) :: evidence_source
+        real,        optional, intent(in) :: fsc_res
         type(image) :: vol_even_filt, vol_odd_filt, vol_support
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
@@ -20,7 +21,12 @@ contains
         real :: noise_rmax, finest_lp
         integer :: i, n_candidates, aux_replacement_idx
         real    :: x
-        call init_nu_filter(vol_even, vol_odd, n_highres_steps)
+        call init_nu_filter(vol_even, vol_odd, n_highres_steps, fsc_res)
+        if( nu_l_report .and. nu_bank_cap_find > 0 )then
+            write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') '>>> NU BANK CAP: FSC=0.143 ', fsc_res, &
+                &' A; candidates finer than ', calc_lowpass_lim(nu_bank_cap_find, box, smpd), &
+                &' A dropped; ', size(cutoff_finds), ' candidates retained of ', size(lowpass_limits), ' static labels'
+        endif
         if( mskdiam <= TINY ) THROW_HARD('mskdiam must be positive in setup_nu_dmats')
         nu_support_mskdiam = mskdiam
         if( allocated(nu_lmask) ) deallocate(nu_lmask)

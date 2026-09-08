@@ -17,7 +17,7 @@ use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
-    &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
+    &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, get_nu_bank_cap_find, &
     &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, write_nu_evidence_envmask
 use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess
 implicit none
@@ -84,10 +84,10 @@ contains
             call nu_aux_odd(1)%copy(vol_aux_odd)
             aux_resolution = nu_aux_effective_resolution()
             call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
-                &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps)
+                &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps, fsc_res=res0143)
         else
             call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [real ::], &
-                &n_highres_steps=n_highres_steps)
+                &n_highres_steps=n_highres_steps, fsc_res=res0143)
         endif
         if( trim(params%automsk).ne.'no' )then
             ! automsk=yes: the filter-field background is the complement of
@@ -135,11 +135,18 @@ contains
 
         subroutine refine_nonuniform_filter_bank()
             type(nu_highres_extension_stats) :: ext_stats
-            integer :: nsteps, n_accepted_this_iteration
+            integer :: nsteps, n_accepted_this_iteration, cap_find
             if( .not. params%l_nu_refine ) return
             n_accepted_this_iteration = 0
+            ! the shell walk cannot pass the FSC-anchored candidate cap
+            cap_find = get_nu_bank_cap_find()
             do
-                call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats)
+                if( cap_find > 0 )then
+                    call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats, &
+                        &max_find=cap_find)
+                else
+                    call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats)
+                endif
                 if( .not. ext_stats%attempted )then
                     if( NU_DEV_OUTPUT .and. params%part == 1 )then
                         if( ext_stats%n_mask == 0 )then

@@ -3519,6 +3519,84 @@ the acceptable-looking outputs do not validate the prior.
    the far better converged solves and the consistent weighting, not in the
    nominal resolution.
 
+### Run record (2026-09-08b): PfCRT -- the NU competition on truncated-CG pairs; `nu_input=gridding`
+
+Superseded record 13 (reverted commit fef7bd9eb, the "gridding-equivalent"
+`M^-1 b` input: histograms even further from July's, stage 7 collapsed to
+random orientations, cFAR 0.80 -> 0.09; that input carried the 1% shell-mean
+density floor and a per-half least-squares scale fit, neither of which a
+gridding pair has).
+
+Facts established from the logs and the maps on disk (all runs 16.8k
+particles, mskdiam 160, NU stages 6-8):
+
+- Search side unchanged since the 2026-08-10 PfCRT-validated state
+  (33c9d3663): `simple_strategy3D_prob`, the eul_prob sampler, the euclid
+  objective in `simple_polarft_corr` and the matcher band code differ only by
+  PCG dispatch, diagnostics and cosmetics.
+- The NU competition code differs from July (a6ae317ae) only by the radial
+  whitening (53f173787). The even/odd noise profile measured on the final
+  native-box pairs is flat for PCG pairs (sigma(r) 4.2-4.5 across the sphere,
+  halved only in the soft-support edge shell) and 1.5e-2 -> 0.94e-2 for the
+  July gridding pair (the fixed under-deapodization fade); the whitening is
+  not the cause.
+- Label histograms at matched FSC. July gridding pair, stage 7, FSC 6.3 A:
+  84% of the sphere at >= 10.0 A, 4.7% at 5.97, 1.8% at 5.0, 0.6% at 4.14.
+  Sep 7 PCG base pair, stage 7, FSC 6.1-6.3 A: 43% at >= 10.0 A, 32-35% at
+  7.96, 15-18% at 5.97, 0.1% at 5.0, 2.6-3.6% at 4.14 (the 5.0 label skipped,
+  the finest label populated). Sep 8 `M^-1 b` input, FSC 6.5 A: 44% at 5.97.
+- Same binary (124b277f `nu_filt3D`, static bank, mskdiam 160) on the final
+  native-box `_unfil` pairs: July gridding pair (FSC0143 3.98 A) 25% of the
+  sphere at <= 5.97 A; current_code_fails PCG pair (FSC0143 5.18 A) 33%;
+  Sep 7 PCG pair (FSC0143 6.09 A) 20.5%. A 5.2 A PCG pair receives more fine
+  labels than a 4.0 A gridding pair.
+
+Mechanism: the cross-half unary penalizes a finer candidate by the noise it
+admits from the other half. A truncated-CG solution (two warm-started
+iterations, or the five-iteration cold final) is spectrally regularized: its
+poorly determined high-frequency modes stay damped in both halves, so the
+finer candidates are nearly free and the competition selects them wherever
+the halves share any content -- including the previous iteration's map
+carried by the warm start (the base FSC stayed at 6.3 A for four iterations
+of essentially random orientations in the Sep 8 run: memory, not data). On
+high-SNR specimens (streptavidin, msp1, embb) those labels are also
+supported by the data, hence no failure there; on PfCRT they are not, the
+NU references carry unsupported 5-8 A content, the search fits it and stalls
+(4.5 A cap) or collapses. The PCG maps themselves are not at fault; the
+competition was designed for a pair with the full-band independent noise of
+the data, which the gridding backend supplies and a regularized solve does
+not.
+
+Implemented (opt-in, default unchanged so the four working datasets are not
+touched): `nu_input=gridding` on `abinitio3D`, `refine3D`, `refine3D_auto`
+and `reconstruct3D`. `reconstructor_pcg%set_keep_gridding_half` makes
+`end_accum` keep `E T^-1 b` -- the exact sampling-density division of the
+folded RHS with the `sampl_dens_correct` rule (divide where rho > 1e-6, zero
+elsewhere), no shell floor, no prior, no support mask, the solver's own
+scale and convention -- and both PCG master paths seed the NU competition
+from that pair (bootstrap: blended with the previous pair like the base
+pair). The base pair remains the FSC oracle, the `_unfil` product, the ML
+warm start and the auxiliary resolution. Test matrix requested: PfCRT x
+{`rec_backend=pcg` default, `rec_backend=pcg nu_input=gridding`,
+`rec_backend=gridding`}, master logs (`ABINITIO3D_OUTPUT_RESTART*`) kept.
+
+Addendum (2026-09-08c, user-directed): FSC-anchored candidate cap, both
+backends, default on. A pre-processing low-pass of the input pair was
+considered and rejected: candidates beyond the cutoff would have identical
+raw unaries but are smoothed at candidate-specific radii, so the finer label
+wins by footprint in about half the voxels and Potts turns that into patches.
+Capping the bank instead: `init_nu_filter(fsc_res=)` keeps the static labels
+coarser than `fsc/NU_BANK_FSC_HEADROOM` (1.5, about two labels), never fewer
+than two, `nu_bank_cap_find` bounds the shell walk (`max_find`), the cap is
+logged once per state (`NU BANK CAP`). The ML pair as competition input was
+also considered and rejected: `P_tau` shrinks the other-half noise identically
+in both halves, so within the band the fine candidates get cheaper still.
+Measured on the final native-box pairs (E-O slice spectra, noise power
+relative to the 8 A shell): July gridding 1.11/1.28/1.35 at 6/5/4.4 A (rising
+toward Nyquist), PCG 1.01/0.96/0.90 (falling); the July real-space fade
+(sigma 1.5e-2 centre, 0.94e-2 edge) is not a band limit and the gridding
+insertion ran to the crop Nyquist in July as now.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

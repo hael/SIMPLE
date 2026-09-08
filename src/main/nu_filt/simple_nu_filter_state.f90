@@ -28,11 +28,12 @@ contains
             &allocated(aux_even_bank) .and. allocated(aux_odd_bank)
     end function nu_label_is_aux_replacement
 
-    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
+    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, fsc_res )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
+        real,    optional, intent(in) :: fsc_res
         integer, allocatable :: cutoff_finds_tmp(:)
-        integer :: i, n_extra, n_extra_requested, n_valid, max_extra, base_find
+        integer :: i, n_extra, n_extra_requested, n_valid, max_extra, base_find, n_static
         integer :: istep, n_extra_retained_requested, n_extra_skip, n_kept_seen
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
@@ -56,7 +57,20 @@ contains
         do i = 1, size(lowpass_limits)
             cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
-        n_valid = size(lowpass_limits)
+        ! FSC-anchored candidate cap: keep the static labels coarser than
+        ! fsc_res/NU_BANK_FSC_HEADROOM (at least two, the competition needs a
+        ! pair), and bound the shell walk below by the same shell
+        nu_bank_cap_find = 0
+        n_static = size(lowpass_limits)
+        if( present(fsc_res) )then
+            if( fsc_res > TINY )then
+                nu_bank_cap_find = min(box/2, max(1, &
+                    &calc_fourier_index(fsc_res / NU_BANK_FSC_HEADROOM, box, smpd)))
+                n_static = max(2, count(cutoff_finds_tmp(:size(lowpass_limits)) <= nu_bank_cap_find))
+                n_static = min(n_static, size(lowpass_limits))
+            endif
+        endif
+        n_valid = n_static
         if( NU_DEV_OUTPUT .and. nu_l_report .and. n_extra_retained_requested > n_extra )then
             write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                 &'>>> NU high-resolution depth ', n_extra_requested, &
@@ -76,6 +90,7 @@ contains
             if( .not.keep_nu_highres_extension_step(istep, n_extra_requested) ) cycle
             n_kept_seen = n_kept_seen + 1
             if( n_kept_seen <= n_extra_skip ) cycle
+            if( nu_bank_cap_find > 0 .and. base_find + istep > nu_bank_cap_find ) cycle
             if( .not.any(cutoff_finds_tmp(:n_valid) == base_find + istep) )then
                 n_valid = n_valid + 1
                 cutoff_finds_tmp(n_valid) = base_find + istep
@@ -90,6 +105,10 @@ contains
             call butterworth_filter(cutoff_finds(i), bwfilters(:,i))
         end do
     end subroutine init_nu_filter
+
+    module integer function get_nu_bank_cap_find()
+        get_nu_bank_cap_find = nu_bank_cap_find
+    end function get_nu_bank_cap_find
 
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report
@@ -208,6 +227,7 @@ contains
         nu_evidence_source_fingerprint = 0.d0
         call clear_nu_solvent_envelope
         nu_retained_setup_state = 0
+        nu_bank_cap_find = 0
     end subroutine cleanup_nu_filter
 
     !> Arm the solvent-constraint clamp from a soft [0,1] envelope mask on the

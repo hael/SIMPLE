@@ -788,6 +788,15 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
+        ! NU competition input on the PCG backend: the base solve pair or the
+        ! gridding half pair of the same accumulated data (a no-op on the
+        ! gridding backend, whose unfiltered pair already is that)
+        select case(trim(self%nu_input))
+            case('base','gridding')
+            case DEFAULT
+                THROW_HARD('nu_input must be base or gridding')
+        end select
+        self%l_nu_input_gridding = trim(self%nu_input) == 'gridding'
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')

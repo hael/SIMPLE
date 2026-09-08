@@ -50,6 +50,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
           refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
+          get_nu_bank_cap_find,&
           get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
@@ -65,6 +66,20 @@ private
 #include "simple_local_flags.inc"
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
+! FSC-anchored candidate cap (2026-09-08). The competition prices a finer
+! candidate by the noise it admits from the other half, which holds for a
+! gridding pair (white noise to Nyquist) but not for a spectrally regularized
+! pair (truncated CG, P_tau), whose damped high-frequency modes make every
+! finer candidate nearly free wherever the halves share content -- on PfCRT
+! the finest bank label was populated at a 6 A FSC and the matching band was
+! pinned there. Given the pair's FSC=0.143 resolution, the bank keeps only
+! candidates coarser than fsc/NU_BANK_FSC_HEADROOM (1.5x finer than the FSC,
+! about two ladder labels: the July gridding runs populated one to three
+! labels beyond the FSC, 4.7/1.8/0.6% of the sphere at 6.3 A) and the shell
+! walk is bounded by the same limit, so no candidate can exist beyond what the
+! data support, whatever the pair's noise looks like. Absent an FSC (the
+! standalone nu_filt3D program) the bank is uncapped.
+real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
 ! Minimum finest-frontier fraction of the NU mask required before testing a
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
@@ -238,6 +253,7 @@ character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
 ! matching pass consumes it and cleans up. State-indexed because the module
 ! holds one setup; cleanup_nu_filter always clears the retention.
 integer :: nu_retained_setup_state = 0 !< 0 = nothing retained
+integer :: nu_bank_cap_find = 0 !< FSC-anchored candidate cap in Fourier shells; 0 = uncapped
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
@@ -366,10 +382,14 @@ interface
         integer, intent(in) :: ilabel
     end function nu_label_is_aux_replacement
 
-    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
+    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, fsc_res )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
+        real,    optional, intent(in) :: fsc_res
     end subroutine init_nu_filter
+
+    module integer function get_nu_bank_cap_find()
+    end function get_nu_bank_cap_find
 
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report
@@ -484,13 +504,14 @@ interface
 
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, evidence_source )
+            &n_highres_steps, evidence_source, fsc_res )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
         character(len=*), optional, intent(in) :: evidence_source
+        real,        optional, intent(in) :: fsc_res !< pair FSC=0.143 resolution in A; caps the bank
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates )

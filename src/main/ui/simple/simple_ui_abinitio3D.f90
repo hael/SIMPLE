@@ -44,6 +44,12 @@ contains
         &'Maximum kernel PCG iterations from stage 3 onward; the cold original-sampling final reconstruction uses at least 5', &
         &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call abinitio3D%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
+        &'Half-map pair seeding the nonuniform-filter competition on the PCG backend: the base solve pair or the '//&
+        &'gridding reconstruction of the same accumulated data(base|gridding){base}', &
+        &'', .false., 'base', group="search", &
+        &choices=ui_choices([character(len=8) :: 'base', 'gridding']), visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)

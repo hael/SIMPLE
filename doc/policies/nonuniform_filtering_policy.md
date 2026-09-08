@@ -46,6 +46,19 @@ member (`ml_reg=yes`, `nu_refine=no`), and the `_nu_filt`/`_nu_locres`
 products and the matching-lp handoff are written exactly as on gridding. The
 former in-solve `Q_NU` replay precision and its controllers were removed.
 
+`nu_input` (2026-09-08, PCG backend only, default `base`) selects the pair that
+seeds the competition: `base`, the unregularized solve pair, or `gridding`, the
+gridding half pair of the same accumulated data (`E T^-1 b`: exact density
+division, no shell floor, no prior, no support mask). The competition's unary
+penalizes a finer candidate by the noise it admits from the other half; a
+truncated-CG pair is spectrally regularized, its poorly determined
+high-frequency modes stay damped in both halves, and the competition then
+selects fine labels wherever the halves share any content. On PfCRT that
+populated the finest labels at a 6 A FSC (record 2026-09-08b in
+`doc/implementation_notes/pcg_priors.md`); the gridding pair carries the
+full-band independent noise the competition was designed for. The base pair
+remains the FSC oracle, the `_unfil` product and the ML warm start.
+
 `nu_refine=yes` enables iterative high-resolution NU shell extension. This is
 on by default in `refine3D_auto`, off by default elsewhere, and explicitly set
 to `no` by staged `abinitio3D`. The static `nu_refine=no` PCG evidence and
@@ -164,6 +177,10 @@ effective resolution comes from the state FSC(0.143) resolution,
 When `nu_refine=yes`, the ML-regularized auxiliary replacement is not supplied;
 the high-resolution shell challenger owns the resolution-extension experiment.
 
+On `rec_backend=pcg` the base input is the unregularized solve pair, or with
+`nu_input=gridding` the gridding half pair of the same accumulated data (see
+section 2).
+
 ## 6. Spherical Support Contract
 
 All NU entry paths use a spherical support mask derived from `mskdiam`.
@@ -273,7 +290,19 @@ The current filter performs these steps:
 10. write the same-grid `_nu_locres` map
 
 The nominal static bank is `[20, 15, 12, 10, 8, 6, 5, 4]` Angstrom before any
-high-resolution extension. The FSC does not remove candidates from this bank.
+high-resolution extension. Since 2026-09-08 the bank is capped by the pair's
+FSC=0.143 resolution: only candidates coarser than `fsc/1.5` (about two
+ladder labels finer than the FSC) are retained, never fewer than two, and
+the `nu_refine=yes` shell walk is bounded by the same shell. The unary prices
+a finer candidate by the noise it admits from the other half, which holds
+for a gridding pair but not for a spectrally regularized one (truncated CG,
+`P_tau`): on PfCRT a PCG base pair populated the finest label at a 6 A FSC
+and pinned the matching band there. With the cap no candidate exists beyond
+what the data support, whatever the pair's noise looks like; the July
+gridding runs populated one to three labels beyond the FSC (4.7/1.8/0.6% of
+the sphere at 6.3 A), which the cap admits. The standalone `nu_filt3D`
+program has no FSC and runs uncapped. Record 2026-09-08b/c in
+`doc/implementation_notes/pcg_priors.md`.
 
 An opt-in replay-evidence API can compact this full unary bank before it is
 released. Callers must tag the setup source as `base_unfil`; the API fingerprints
