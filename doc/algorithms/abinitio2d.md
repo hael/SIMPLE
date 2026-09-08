@@ -4,10 +4,8 @@
 
 Construct stable 2D class averages and assignments from random
 initialization. The alternating estimator in
-[Cluster2D](cluster2d_class_averaging.md) converges to a local optimum, and
-from a random start the nearest local optimum is poor: a few classes capture
-most particles, high-frequency noise is fitted before low-frequency shape, and
-shifts absorb misassignment. Ab initio 2D is a continuation scheme that steers
+[Cluster2D](cluster2d_class_averaging.md) converges to a local optimum.
+Ab initio 2D is a continuation scheme that steers
 the alternation toward a good optimum by controlling three things over time:
 the admitted bandwidth, the amount of stochasticity in the search, and the
 number of particles updated per iteration.

@@ -35,10 +35,11 @@ contains
 
     !> The ML-regularized pair joins the competition as the auxiliary member
     !! only in static-bank mode; with nu_refine=yes the shell walk owns the
-    !! resolution-extension experiment.
+    !! resolution-extension experiment, and with nu_input=ml the ML pair IS
+    !! the competition input (no auxiliary member, user design 2026-09-08).
     pure logical function nu_static_aux_replacement( params ) result( l_use_aux )
         class(parameters), intent(in) :: params
-        l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
+        l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine .and. .not. params%l_nu_input_ml
     end function nu_static_aux_replacement
 
     !> Run the NU competition for one state and write its derived products.

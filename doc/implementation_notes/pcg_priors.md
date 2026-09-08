@@ -3597,6 +3597,86 @@ toward Nyquist), PCG 1.01/0.96/0.90 (falling); the July real-space fade
 (sigma 1.5e-2 centre, 0.94e-2 edge) is not a band limit and the gridding
 insertion ran to the crop Nyquist in July as now.
 
+Addendum (2026-09-08d): the tie mechanism and the like-for-like selection.
+Candidates are smoothed at radii of 1.5 x LP (capped at 30 A), so
+near-identical raw unaries are separated by the smoothing footprint: the
+smaller radius wins at local minima of the unary field, the larger at
+maxima, an intermediate radius almost never. The Sep 7 PCG base-pair
+histograms follow the radius table (radii for 5.97/5.0/finest): box 140,
+4/3/3 px: 2.8% / 7.2% / 0.08% (5.0 and 4.44 tie exactly, 5.0 wins); box 150,
+4/4/3 px: 15% / 0.1% / 3% (5.97 and 5.0 tie, 4.14 wins by footprint); box
+160, 5/4/3 px: 7.5% / 2.7% / 2.4% (all differ, both populated). Offline with
+the standalone competition (Mac binary e45b237a, mskdiam 160, final
+native-box pairs): the Sep 7 ML pair (FSC0143 5.86 A) put 18.3% of the
+sphere at 3.98 A against 2.3% for its base pair -- the ML pair as sole
+input needs the tie handling fixed first. A uniform 10% relative margin
+(finer label must beat the incumbent by 10%) was tried and rejected the
+same day: honest base pairs collapsed to 79-82% at 19.4 A (the natural
+differences between coarse labels are below 1%, at the fine end about 12%)
+and the ML skip pattern persisted (3.5/7.8/4.1% at 5.97/5.0/3.98). The
+implemented rule is scale-consistent instead: raw unaries are kept
+(`raw_dmats_mask`); the selection walks coarse to fine and at each level
+smooths the candidate and the incumbent at the candidate's radius, so
+identical unaries tie exactly and the coarser label keeps; the Potts sweeps
+never promote a voxel beyond its entry label. Cost: n(n+1)/2-1 smoothing
+passes instead of n. Offline check pending (rebuild, then
+scratchpad/run_nu_all.sh): pass = July base/ML pairs close to their
+uncapped-binary histograms (4/12/20/19/21/10/9/6% coarse to fine for the
+base pair), Sep 7 ML pair finest label from 18% to low single digits, skip
+pattern gone.
+
+Addendum (2026-09-08e): `nu_input=gridding` defect. The first runs with the
+gridding half produced a hollow sphere at stage 6. Cause: the RHS scatter
+carries one `padsc` (padf**3 = 8) and the calibrated operator `padsc**2`
+(`Khat = padsc**2 x folded density`), so the exact quotient `b_hat/rho`
+sits `padsc**2` = 64 above the solution's scale; CG absorbs that in the
+preconditioner, the reverted `M^-1 b` attempt hid it with its least-squares
+fit, and the NU references synthesized from a 64x reference destroyed the
+matching. `build_gridding_half` now divides by `padsc**2`, and
+`test=pcg_recon` gates the kept half against the converged streamed solve
+(LS scale within 25% of 1, correlation above 0.9). Offline check of the
+like-for-like selection (2026-09-08d) with the rebuilt Mac binary passed:
+Sep 7 ML pair finest label 18.3% -> 0.09%, skip pattern gone on all PCG
+pairs, July pairs' finest labels unchanged (5.3% at 3.98 A) with the mid
+band one label coarser (7.96 A: 20% -> 10%), 10.7 s at box 300.
+`test=pcg_recon` with the corrected gridding half: LS scale 1.248,
+correlation 0.945 against the converged streamed solve (5 iterations to
+rtol 1e-3); the residual 25% is the operator's CTF deconvolution beyond the
+plain density quotient, a constant of the kernel, not a layout error.
+
+Addendum (2026-09-08f): `nu_input=ml`, user design. The ML-regularized pair
+is the sole competition input, no auxiliary member, on both backends
+(`nu_static_aux_replacement` is false under it; the gridding assembly reads
+the regularized pair whenever it is needed; both PCG paths pass `ml_even/odd`
+as the base input and the base pair through the unused auxiliary slot). The
+base pair keeps every other role. Validation: `nu_input=ml` with NU active
+requires `ml_reg=yes` under euclid. The FSC cap still applies to all inputs
+as a bound on the finest-label handoff; it can be retired once the ML input
+is validated.
+
+Run record (2026-09-08g): PfCRT abinitio3D on e45b237a (FSC cap, old argmin,
+rec_backend=pcg defaults), one restart. Structure correct: docked against
+the July final, cross-FSC 0.143 at 4.09 A, band means 0.81 (20-10 A) and
+0.63 (10-7 A), the level of July's own restart-to-restart agreement
+(0.54-0.61); the stage 6/7/8 snapshots dock at 7.2/4.5/4.5 A. Resolution
+pinned: final FSC0143 4.50 A, FSC05 5.97 A, B -132; the handoff asked for
+4.14 A from stage 7 iteration 3 and 3.98 A from stage 8 iteration 1 and was
+clamped to the 4.5 A NU-stage ceiling every iteration; the FSC sat at
+exactly 4.500 A for 30 iterations (this dataset's FSC tracks the matching
+band; July matched at 4.14/3.98 A and reached 4.37/4.3 A). Stage 6 stalled
+at 7.2-7.4 A with orientation overlap 0.11-0.14 and 11-13 degree jumps
+(July: 0.6 and 3.5 degrees at the end of stage 6) with the band at 5.0 A;
+the old argmin still over-populated the retained bank (stage 7 iteration 3,
+FSC 5.75: 17.7% at 5.97 A, 1.0% at 5.0, 2.3% at 4.14 -- the radius-4/4/3
+skip pattern; stage 8: 30% at 7.96, 11% at 5.97, 10% at 5.0, 2-3% at 3.98
+for a 4.5 A map). The like-for-like selection on this run's final base pair
+gives 19/7.4/8.1/0.85% instead of 32/12/11/3.2%. The FSC-anchored bank cap
+behaved as designed (handoff never beyond FSC/1.5). Controller changes:
+NU-stage lpstop ceiling removed (explicit lpstop only), minits=maxits
+retired (stage 8 overlap 0.96-0.997 for its last ten iterations with the
+FSC flat; streptavidin 2000 s vs 1300 s). Next run: like-for-like +
+uncapped handoff + early stopping, default input and nu_input=ml arms.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

@@ -533,8 +533,13 @@ contains
         if( allocated(self%grid_half) ) deallocate(self%grid_half)
         self%grid_half = center_crop_real3d(self%wimg%get_rmat(), self%box)
         ! same convention as the solution: apply_precond multiplies the
-        ! density-corrected map by the envelope on the way out
+        ! density-corrected map by the envelope on the way out, and the
+        ! calibrated operator carries padsc**2 relative to this raw density
+        ! (Khat = padsc**2 x folded density, the RHS scatter one padsc), so the
+        ! exact quotient b_hat/rho sits padsc**2 above the solution; CG absorbs
+        ! that in the preconditioner, this product has to remove it
         if( self%l_deapod ) self%grid_half = self%grid_half * self%env
+        self%grid_half = self%grid_half / self%padsc**2
         self%l_grid = .true.
     end subroutine build_gridding_half
 

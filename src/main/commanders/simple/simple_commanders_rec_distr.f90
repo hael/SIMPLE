@@ -428,7 +428,9 @@ contains
             if( params%l_ml_reg )then
                 call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
                 call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
-                if( use_static_nu_aux_replacement() )then
+                ! the regularized pair: the auxiliary member (static bank), or
+                ! the competition input itself (nu_input=ml)
+                if( use_static_nu_aux_replacement() .or. params%l_nu_input_ml )then
                     call vol_nu_aux_even%new(ldim, params%smpd_crop)
                     call vol_nu_aux_odd%new( ldim, params%smpd_crop)
                     call vol_nu_aux_even%read(eonames(1))
@@ -1048,9 +1050,17 @@ contains
             which_iter = 1
             if( cline%defined('which_iter') ) which_iter = params%which_iter
             ! the shared assembly-owned NU competition (both backends)
-            call nonuniform_filter_state(params, state, which_iter, vol_nu_base_even, vol_nu_base_odd, &
-                &vol_nu_aux_even, vol_nu_aux_odd, use_static_nu_aux_replacement(), res0143s(state), &
-                &volname, eonames, nu_align_lps(state), nu_timings)
+            if( params%l_nu_input_ml .and. params%l_ml_reg )then
+                ! nu_input=ml: the ML-regularized pair is the competition input,
+                ! no auxiliary member; the base pair is consumed unused
+                call nonuniform_filter_state(params, state, which_iter, vol_nu_aux_even, vol_nu_aux_odd, &
+                    &vol_nu_base_even, vol_nu_base_odd, .false., res0143s(state), &
+                    &volname, eonames, nu_align_lps(state), nu_timings)
+            else
+                call nonuniform_filter_state(params, state, which_iter, vol_nu_base_even, vol_nu_base_odd, &
+                    &vol_nu_aux_even, vol_nu_aux_odd, use_static_nu_aux_replacement(), res0143s(state), &
+                    &volname, eonames, nu_align_lps(state), nu_timings)
+            endif
         end subroutine run_state_nonuniform_filter
 
         logical function use_static_nu_aux_replacement() result(l_use_aux)

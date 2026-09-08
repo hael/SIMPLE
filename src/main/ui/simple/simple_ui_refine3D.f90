@@ -138,10 +138,11 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
         call reconstruct3D%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
-        &'Half-map pair seeding the nonuniform-filter competition on the PCG backend: the base solve pair or the '//&
-        &'gridding reconstruction of the same accumulated data(base|gridding){base}', &
+        &'Half-map pair seeding the nonuniform-filter competition: the unregularized pair, the gridding '//&
+        &'reconstruction of the same accumulated data (PCG only), or the ML-regularized pair with no auxiliary '//&
+        &'member(base|gridding|ml){base}', &
         &'', .false., 'base', &
-        &choices=ui_choices([character(len=8) :: 'base', 'gridding']), visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=8) :: 'base', 'gridding', 'ml']), visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_PARM, sigma_store, visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
@@ -282,10 +283,11 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
-        &'Half-map pair seeding the nonuniform-filter competition on the PCG backend: the base solve pair or the '//&
-        &'gridding reconstruction of the same accumulated data(base|gridding){base}', &
+        &'Half-map pair seeding the nonuniform-filter competition: the unregularized pair, the gridding '//&
+        &'reconstruction of the same accumulated data (PCG only), or the ML-regularized pair with no auxiliary '//&
+        &'member(base|gridding|ml){base}', &
         &'', .false., 'base', group="search", &
-        &choices=ui_choices([character(len=8) :: 'base', 'gridding']), visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=8) :: 'base', 'gridding', 'ml']), visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
@@ -423,10 +425,11 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
-        &'Half-map pair seeding the nonuniform-filter competition on the PCG backend: the base solve pair or the '//&
-        &'gridding reconstruction of the same accumulated data(base|gridding){base}', &
+        &'Half-map pair seeding the nonuniform-filter competition: the unregularized pair, the gridding '//&
+        &'reconstruction of the same accumulated data (PCG only), or the ML-regularized pair with no auxiliary '//&
+        &'member(base|gridding|ml){base}', &
         &'', .false., 'base', group="search", &
-        &choices=ui_choices([character(len=8) :: 'base', 'gridding']), visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=8) :: 'base', 'gridding', 'ml']), visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D_auto%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         ! search controls

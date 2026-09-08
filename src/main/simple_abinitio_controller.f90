@@ -541,16 +541,19 @@ contains
         if( .not. l_cavgs .and. .not. l_explicit_lp ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
         ! Matching-band ceiling. Non-NU stages match at the (possibly
-        ! promoted) stage limit, so the ceiling equals it. NU stages let the
-        ! finest-label handoff promote matching beyond the per-stage plan (the
-        ! class-FRC ladder is not informative about the particle map there),
-        ! capped at the ladder's hard bound rather than left open. Log-set
-        ! record 2026-09-06 (pcg_priors.md dev item 2): capping at the
-        ! per-stage value stalled every NU stage on streptavidin and msp1; the
-        ! uncapped finest-label handoff of the healthy runs sat between the
-        ! current map's FSC=0.5 and FSC=0.143.
+        ! promoted) stage limit, so the ceiling equals it. NU stages match at
+        ! the finest-label handoff with NO ceiling (July 2026 policy restored
+        ! 2026-09-08): the handoff is bounded by the FSC-anchored candidate
+        ! bank (nonuniform_filtering_policy.md section 8), so a ceiling here
+        ! only pins the map. PfCRT record 2026-09-08: with the ladder's 4.5 A
+        ! bound the handoff asked for 4.14 A (stage 7) and 3.98 A (stage 8),
+        ! matching was clamped to 4.5 A and the FSC sat at exactly 4.50 A for
+        ! 30 iterations; the July runs matched at 4.14/3.98 A and reached
+        ! 4.1-4.3 A with side chains. A command-line lpstop remains an explicit
+        ! user ceiling.
         if( cfg%filt_mode .ne. 'none' )then
-            lpstop_eff = lp_cap
+            lpstop_eff = 0.
+            if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
         else
             lpstop_eff = lpinfo(istage)%lp
             if( l_fsc05_promoted ) lpstop_eff = lp_eff
@@ -605,9 +608,12 @@ contains
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         ! Non-NU stages: the printed stage limit is the highest resolution
-        ! permitted. NU stages: the evidence handoff may promote matching up
-        ! to the ladder's final limit, never beyond it.
-        call cline_refine3D%set('lpstop',                 lpstop_eff)
+        ! permitted. NU stages: no ceiling unless the user set lpstop.
+        if( lpstop_eff > TINY )then
+            call cline_refine3D%set('lpstop',             lpstop_eff)
+        else
+            call cline_refine3D%delete('lpstop')
+        endif
         call cline_refine3D%set('automsk',                cfg%automsk)
         call cline_refine3D%set('envfsc',                 cfg%envfsc)
         call cline_refine3D%set('envmsklp',               params%envmsklp)
@@ -625,22 +631,16 @@ contains
             call cline_refine3D%delete('nspace_sub')
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
-        ! NU stages run their full iteration budget (2026-09-07). The
-        ! likelihood sampler anneals its candidate set with the shrinking
-        ! angular distance, so the orientation overlap reaches the 0.9/0.95
-        ! early-stopping thresholds within a few iterations of every NU stage
-        ! regardless of map quality; the thresholds were tuned for the
-        ! bounded sampler, under which good runs never reached them and ran
-        ! to MAXITS. PfCRT record: the July successes ran 12/12/25 (or 16-25)
-        ! iterations in stages 6-8 and reached 4.1 A; every July early stop
-        ! (3-6 iterations in stage 8) and every 2026-09-07 run (3 iterations
-        ! in stage 8, 3-9 in stage 6) ended at 5-8.6 A with the FSC still
-        ! improving when the stage stopped.
-        if( cfg%filt_mode .ne. 'none' )then
-            call cline_refine3D%set('minits',             cfg%imaxits)
-        else
-            call cline_refine3D%delete('minits')
-        endif
+        ! Early stopping applies in every stage (minits=maxits for NU stages
+        ! retired 2026-09-08). The 2026-09-07 early stops that motivated it
+        ! happened under a matching-band ceiling: pinned at 5.97 A the sampler
+        ! converged on a coarse solution within a few iterations while the
+        ! FSC could still improve. Without the ceiling the overlap tracks the
+        ! map: PfCRT 2026-09-08 sat at 0.11-0.25 through stages 6-7 and only
+        ! passed 0.9 in stage 8 once the FSC had been flat at the band for
+        ! ten iterations, where the forced remainder of the budget changed
+        ! nothing; on streptavidin the forced budget cost 700 s of 2000 s.
+        call cline_refine3D%delete('minits')
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
         call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)

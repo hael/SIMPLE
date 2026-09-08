@@ -11,6 +11,7 @@ contains
         integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer :: nchanged, n_base
         real    :: beta, e, best_e, site_energy
+        integer(kind=NU_LABEL_KIND), allocatable :: cap(:,:,:)
         if( n_candidates < 2 ) return
         if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_ordered_labels')
         if( size(candidate_coords) /= n_candidates ) &
@@ -32,6 +33,12 @@ contains
                 &write(logfhandle,'(A)') '>>> NU ordered-label smoothing skipped: beta <= TINY'
             return
         endif
+        ! The unaries are smoothed at candidate-specific radii, so a comparison
+        ! between labels carries the footprint bias described in
+        ! optimize_nu_cutoff_finds. The smoothing therefore never promotes a
+        ! voxel beyond the label it entered with (the like-for-like winner, or
+        ! the shell walk's accepted label); it only removes fine-label speckle.
+        allocate(cap, source=candmap)
         if( NU_DEV_OUTPUT .and. nu_l_report )then
             site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
             write(logfhandle,'(A,F12.5)') '>>> NU ordered-label smoothing initial mean site energy: ', site_energy
@@ -54,6 +61,7 @@ contains
                         &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_full, nsz)
                     do icand = 1, n_candidates
                         if( icand == cur_icand ) cycle
+                        if( icand > int(cap(i,j,k)) ) cycle
                         e = dmats_mask(imask,icand) + beta * &
                             &nu_label_smooth_neighborhood_cost(icand, candmap, n_full, nsz)
                         if( nu_label_smooth_is_better(e, best_e) )then
@@ -75,6 +83,7 @@ contains
             endif
             if( nchanged == 0 ) exit
         end do
+        deallocate(cap)
     end subroutine refine_nu_candidate_map_ordered_labels
 
     module real function estimate_nu_label_smooth_beta( n_candidates )

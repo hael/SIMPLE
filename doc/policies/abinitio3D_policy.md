@@ -190,27 +190,27 @@ rule: the best resolved populated state sets the band for all states.
 (Streptavidin log set 2026-09-06: the plan sat at 8.6/7.6 A in stages 4/5
 while the half maps agreed to 4.3 A at FSC=0.5.)
 
-In the NU stages the ceiling is the ladder's HARD fine bound
-(`LPSTOP_BOUNDS(1)`, 4.5 A), not the class-FRC final limit `lpfinal` (the
-median resolution of the three best class averages clamped to
-`LPSTOP_BOUNDS`): the NU handoff may promote matching beyond the per-stage
-plan, because the class-FRC ladder is not informative about the particle map
-once NU filtering is active, but `abinitio3D` runs without gold-standard
-halves, so the promotion is never left open. The bound applies throughout
-every iteration in the stage. (Record 2026-09-07, PfCRT: `lpfinal` is 6.0 A
-because the 2D classes stop at 6 A while the 3D map reaches 4 A; capping at
-`lpfinal` pinned the NU stages at 5.97 A and every run plateaued at 6 A,
-whereas the July reference matched at 4.4/4.1/4.0 A.)
+In the NU stages there is no ceiling (July 2026 policy, restored
+2026-09-08): matching runs at the finest-label handoff, which is bounded by
+the FSC-anchored candidate bank (`doc/policies/nonuniform_filtering_policy.md`
+section 8), so a ceiling only pins the map. Two ceilings were tried and
+retired: the class-FRC final limit `lpfinal` (6.0 A on PfCRT, whose 2D
+classes stop at 6 A while the 3D map reaches 4 A) pinned the NU stages at
+5.97 A on 2026-09-07; the ladder's hard bound of 4.5 A pinned the 2026-09-08
+run at exactly 4.50 A for 30 iterations while the handoff asked for 4.14 A
+(stage 7) and 3.98 A (stage 8), the values the July runs matched at on their
+way to 4.1-4.3 A with side chains. Only an explicit command-line `lpstop`
+remains a ceiling in NU stages.
 
-NU stages run their full iteration budget: the stage command line carries
-`minits=maxits`, so the 0.9/0.95 orientation-overlap early stopping does not
-apply in stages 6-8. The likelihood sampler anneals its candidate set with the
-shrinking angular distance and reaches those overlaps within a few iterations
-of every NU stage regardless of map quality; the thresholds were tuned for the
-bounded sampler, under which successful runs never reached them. PfCRT record
-2026-09-07: the July successes ran 12/12/25 iterations in stages 6-8 (4.1 A);
-every early-stopped run, July or September, ended at 5-8.6 A with the FSC
-still improving when the stage stopped.
+Early stopping applies in every stage (the NU-stage `minits=maxits` of
+2026-09-07 was retired on 2026-09-08). The early stops that motivated it
+happened under a matching-band ceiling: pinned at 5.97 A the sampler
+converged on a coarse solution within a few iterations while the FSC could
+still improve. Without a ceiling the overlap tracks the map: the 2026-09-08
+PfCRT run sat at 0.11-0.25 through stages 6-7 and passed 0.9 in stage 8 only
+after the FSC had been flat at the band for ten iterations, where the forced
+remainder of the budget changed nothing; on streptavidin the forced budget
+cost 700 s of a 2000 s run.
 An explicitly supplied, coarser command-line `lpstop` is folded into the
 ladder and is also retained as an independent ceiling when the staged child
 command is rebuilt; the effective ceiling is the coarser of the two limits.

@@ -116,6 +116,8 @@ contains
         call setup_nu_candidate_coords(n_candidates)
         if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_objective_smoothing_bank()
         allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
+        if( allocated(raw_dmats_mask) ) deallocate(raw_dmats_mask)
+        allocate(raw_dmats_mask(n_nu_mask,n_candidates), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
         allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
         if( allocated(nu_ev_base) ) deallocate(nu_ev_base)
@@ -140,6 +142,7 @@ contains
             ! Snapshot the raw cost before candidate-scale smoothing; the envelope
             ! needs terms that were blurred identically, not per-candidate.
             call accumulate_nu_evidence_raw(dmat_cand, i)
+            call pack_nu_raw_candidate(dmat_cand, i)
             call smooth_nu_objective(dmat_cand, dmat_tmp, nu_label_lowpass_limit(i))
             call pack_nu_dmat_candidate(dmat_cand, i)
         end do
@@ -191,8 +194,10 @@ contains
     end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
-        integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask, n_clamped
-        real    :: best_dmat
+        integer :: nx, ny, nz, i, j, k, icand, n_base, n_candidates, imask, n_clamped, ilevel
+        integer, allocatable :: sel(:)
+        real,    allocatable :: lvl(:,:), full(:,:,:), tmp(:,:,:)
+        real    :: lp_level
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -203,25 +208,51 @@ contains
         ! dmats_mask has one column per retained label. If an auxiliary pair is
         ! eligible, it backs the finest label rather than appending a new one.
         n_candidates = size(dmats_mask, 2)
+        if( .not.allocated(raw_dmats_mask) ) THROW_HARD('raw_dmats_mask not allocated; run setup_nu_dmats before optimize_nu_cutoff_finds')
         if( allocated(filtmap) ) deallocate(filtmap)
         allocate(filtmap(nx,ny,nz), source=1_NU_LABEL_KIND)
-        !$omp parallel do schedule(static) default(shared) &
-        !$omp private(i,j,k,icand,best_icand,best_dmat,imask) proc_bind(close)
+        ! Coarse-to-fine selection with like-for-like smoothing (2026-09-08).
+        ! dmats_mask holds each candidate smoothed at its own radius (1.5 x LP),
+        ! so an argmin over it compares differently smoothed fields: two
+        ! candidates with near-identical raw unaries do not tie, the smaller
+        ! radius wins at local minima of the unary field, the larger at maxima,
+        ! an intermediate one almost never. An honest gridding pair never
+        ! exposes this (adjacent fine candidates differ by the admitted noise
+        ! band); a regularized pair does, and the populated fine label then
+        ! follows the radius table (PfCRT 2026-09-07: box 140, radii 4/3/3 px
+        ! for 5.97/5.0/4.44 A, 7.2% at 5.0 and 0.08% at 4.44; box 150, 4/4/3,
+        ! 0.1% at 5.0 and 3% at 4.14). Here each finer candidate replaces the
+        ! incumbent only if it wins at ITS scale with both smoothed alike, so
+        ! identical unaries tie exactly and the coarser label keeps (strict <).
+        ! The cost is the smoothing passes: n(n+1)/2 - 1 instead of n.
+        allocate(sel(n_nu_mask), source=1)
+        allocate(lvl(n_nu_mask,n_candidates), source=0.)
+        allocate(full(nx,ny,nz), source=0.)
+        allocate(tmp(nx,ny,nz),  source=0.)
+        do ilevel = 2, n_candidates
+            lp_level = nu_label_lowpass_limit(ilevel)
+            do icand = 1, ilevel
+                call unpack_nu_raw_candidate(icand, full)
+                call smooth_nu_objective(full, tmp, lp_level)
+                call pack_nu_full_to_mask(full, lvl(:,icand))
+            end do
+            !$omp parallel do schedule(static) default(shared) private(imask) proc_bind(close)
+            do imask = 1, n_nu_mask
+                if( lvl(imask,ilevel) < lvl(imask,sel(imask)) ) sel(imask) = ilevel
+            end do
+            !$omp end parallel do
+        end do
+        deallocate(lvl, full, tmp)
+        call release_nu_smooth_norm()
+        !$omp parallel do schedule(static) default(shared) private(i,j,k,imask) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            best_icand = 1
-            best_dmat = dmats_mask(imask,1)
-            do icand = 2, n_candidates
-                if( dmats_mask(imask,icand) < best_dmat ) then
-                    best_dmat = dmats_mask(imask,icand)
-                    best_icand = icand
-                end if
-            end do
-            filtmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
+            filtmap(i,j,k) = int(sel(imask), kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do
+        deallocate(sel)
         ! solvent-constraint clamp: outside the envelope the label is the
         ! coarsest candidate. Applied before Potts smoothing as the intended
         ! initialization AND re-applied after: the smoothing re-optimizes on

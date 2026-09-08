@@ -527,6 +527,8 @@ contains
         l_nu_grid = params%l_nonuniform .and. params%l_nu_input_gridding
         if( l_nu_grid ) write(logfhandle,'(A)') &
             &'>>> PCG SHARED: NU COMPETITION SEEDED FROM THE GRIDDING PAIR OF THE ACCUMULATED DATA (nu_input=gridding)'
+        if( params%l_nonuniform .and. params%l_nu_input_ml ) write(logfhandle,'(A)') &
+            &'>>> PCG SHARED: NU COMPETITION SEEDED FROM THE ML-REGULARIZED PAIR, NO AUXILIARY MEMBER (nu_input=ml)'
         nselected = 0
         call build%spproj_field%sample4rec([params%fromp,params%top], nselected, selected_pinds)
         if( nselected < 1 ) THROW_HARD('no active particles selected for PCG reconstruct3D')
@@ -645,7 +647,13 @@ contains
                 t_state_phase = tic()
                 eonames(1) = fname_even
                 eonames(2) = fname_odd
-                if( l_nu_grid )then
+                if( params%l_nu_input_ml .and. params%l_ml_reg )then
+                    ! nu_input=ml: the ML pair is the input, no auxiliary member;
+                    ! the base pair is consumed unused
+                    call nonuniform_filter_state(params, state, params%which_iter, ml_even, ml_odd, &
+                        &half_even, half_odd, .false., &
+                        &res0143s(state), fname_vol, eonames, nu_align_lps(state))
+                else if( l_nu_grid )then
                     call nonuniform_filter_state(params, state, params%which_iter, grid_even, grid_odd, &
                         &ml_even, ml_odd, params%l_ml_reg .and. nu_static_aux_replacement(params), &
                         &res0143s(state), fname_vol, eonames, nu_align_lps(state))
@@ -1712,6 +1720,8 @@ contains
         l_nu_grid = params%l_nonuniform .and. params%l_nu_input_gridding
         if( l_nu_grid ) write(logfhandle,'(A)') &
             &'>>> PCG DISTRIBUTED: NU COMPETITION SEEDED FROM THE GRIDDING PAIR OF THE ACCUMULATED DATA (nu_input=gridding)'
+        if( params%l_nonuniform .and. params%l_nu_input_ml ) write(logfhandle,'(A)') &
+            &'>>> PCG DISTRIBUTED: NU COMPETITION SEEDED FROM THE ML-REGULARIZED PAIR, NO AUXILIARY MEMBER (nu_input=ml)'
         ! the partition workers are idle during the master-side solve and NU
         ! filtering phases: on local execution use the full
         ! allocation, restored to nthr before returning to the matching
@@ -1949,7 +1959,13 @@ contains
                 t_state_phase = tic()
                 eonames(1) = fname_even
                 eonames(2) = fname_odd
-                if( l_nu_grid )then
+                if( params%l_nu_input_ml .and. params%l_ml_reg )then
+                    ! nu_input=ml: the ML pair is the input, no auxiliary member;
+                    ! the base pair is consumed unused
+                    call nonuniform_filter_state(params, state, params%which_iter, ml_even, ml_odd, &
+                        &half_even, half_odd, .false., &
+                        &res0143s(state), fname_vol, eonames, align_lps(state))
+                else if( l_nu_grid )then
                     call nonuniform_filter_state(params, state, params%which_iter, grid_even, grid_odd, &
                         &ml_even, ml_odd, params%l_ml_reg .and. nu_static_aux_replacement(params), &
                         &res0143s(state), fname_vol, eonames, align_lps(state))

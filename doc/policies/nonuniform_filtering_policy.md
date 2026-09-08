@@ -46,10 +46,15 @@ member (`ml_reg=yes`, `nu_refine=no`), and the `_nu_filt`/`_nu_locres`
 products and the matching-lp handoff are written exactly as on gridding. The
 former in-solve `Q_NU` replay precision and its controllers were removed.
 
-`nu_input` (2026-09-08, PCG backend only, default `base`) selects the pair that
-seeds the competition: `base`, the unregularized solve pair, or `gridding`, the
-gridding half pair of the same accumulated data (`E T^-1 b`: exact density
-division, no shell floor, no prior, no support mask). The competition's unary
+`nu_input` (2026-09-08, default `base`) selects the pair that seeds the
+competition: `base`, the unregularized pair; `gridding` (PCG backend only), the
+gridding half pair of the same accumulated data (`E T^-1 b / padsc^2`: exact
+density division, no shell floor, no prior, no support mask, at the solution's
+scale); or `ml`, the ML-regularized pair as the sole input with no auxiliary
+member (both backends; requires `ml_reg=yes`). With the like-for-like
+selection of section 9 the ML pair's candidates beyond the FSC tie exactly and
+resolve coarse, which is what makes `ml` viable; the base pair keeps the FSC,
+the `_unfil` product and the warm starts. The competition's unary
 penalizes a finer candidate by the noise it admits from the other half; a
 truncated-CG pair is spectrally regularized, its poorly determined
 high-frequency modes stay damped in both halves, and the competition then
@@ -283,8 +288,11 @@ The current filter performs these steps:
 3. cache low-pass-filtered bank volumes as local scratch files
 4. compute mask-packed unary objective costs for retained candidates
 5. smooth each candidate objective over a mask-normalized local support
-6. select the best candidate per in-mask voxel
-7. apply ordered-label Potts smoothing to the candidate map
+6. select the label per in-mask voxel coarse to fine: a finer candidate
+   replaces the incumbent only if it wins at its own smoothing scale with
+   both smoothed alike (2026-09-08; see section 9)
+7. apply ordered-label Potts smoothing to the candidate map, which never
+   promotes a voxel beyond the label it entered with
 8. synthesize filtered even/odd outputs from the selected labels
 9. write the merged `_nu_filt` output as the even/odd average
 10. write the same-grid `_nu_locres` map
@@ -358,6 +366,26 @@ label. It is not appended as an extra sidecar candidate.
 Persistent unary costs are mask-packed. Full-volume objective arrays are
 temporary work buffers; values outside the NU mask must not influence in-mask
 objective smoothing or label selection.
+
+Like-for-like selection (2026-09-08). Each candidate's smoothed unary uses
+its own radius (1.5 x LP, capped at 30 A), so an argmin over `dmats_mask`
+compares differently smoothed fields: two candidates with near-identical raw
+unaries do not tie, the smaller radius wins at local minima of the unary
+field, the larger at maxima, an intermediate one almost never. An honest
+gridding pair never exposes this (adjacent fine candidates differ by the
+admitted noise band); a regularized pair does, and the populated fine label
+then follows the radius table (PfCRT record 2026-09-08d in
+`doc/implementation_notes/pcg_priors.md`). The selection is therefore
+sequential, coarse to fine: at each level the incumbent and the candidate
+are both smoothed at the candidate's radius from the raw unaries kept in
+`raw_dmats_mask`, and the candidate wins only with a strictly lower cost.
+Identical unaries tie exactly and the coarser label keeps. `dmats_mask`
+(own-radius smoothing) remains the input of the Potts prior, the beta
+estimate, the shell walk and the evidence envelope, and the Potts sweeps
+may only move a voxel to a coarser label than the one it entered with. A
+uniform 10% tie margin was tried first and rejected: the natural cost
+differences are below 1% between the coarse labels and about 12% at the
+fine end, so it collapsed honest pairs to the coarsest label.
 
 ## 9. Objective and Label Smoothing
 

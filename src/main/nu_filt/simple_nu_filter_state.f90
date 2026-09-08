@@ -168,8 +168,61 @@ contains
         end if
     end subroutine delete_cached_filtered_vols
 
+    module subroutine pack_nu_raw_candidate( dmat_full, icand )
+        real,    intent(in) :: dmat_full(:,:,:)
+        integer, intent(in) :: icand
+        integer :: i, j, k, imask
+        if( .not.allocated(raw_dmats_mask) ) THROW_HARD('raw_dmats_mask not allocated; pack_nu_raw_candidate')
+        if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; pack_nu_raw_candidate')
+        if( icand < 1 .or. icand > size(raw_dmats_mask,2) ) THROW_HARD('candidate index out of range; pack_nu_raw_candidate')
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            raw_dmats_mask(imask,icand) = dmat_full(i,j,k)
+        end do
+        !$omp end parallel do
+    end subroutine pack_nu_raw_candidate
+
+    !> Raw unary of one candidate back on the full grid, zero outside the
+    !! support (the neutral fill smooth_nu_objective expects).
+    module subroutine unpack_nu_raw_candidate( icand, dmat_full )
+        integer, intent(in)    :: icand
+        real,    intent(inout) :: dmat_full(:,:,:)
+        integer :: i, j, k, imask
+        if( .not.allocated(raw_dmats_mask) ) THROW_HARD('raw_dmats_mask not allocated; unpack_nu_raw_candidate')
+        if( any(shape(dmat_full) /= ldim) ) THROW_HARD('dmat shape mismatch; unpack_nu_raw_candidate')
+        if( icand < 1 .or. icand > size(raw_dmats_mask,2) ) THROW_HARD('candidate index out of range; unpack_nu_raw_candidate')
+        dmat_full = 0.
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            dmat_full(i,j,k) = raw_dmats_mask(imask,icand)
+        end do
+        !$omp end parallel do
+    end subroutine unpack_nu_raw_candidate
+
+    module subroutine pack_nu_full_to_mask( dmat_full, packed )
+        real, intent(in)    :: dmat_full(:,:,:)
+        real, intent(inout) :: packed(:)
+        integer :: i, j, k, imask
+        if( size(packed) /= n_nu_mask ) THROW_HARD('packed size mismatch; pack_nu_full_to_mask')
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            packed(imask) = dmat_full(i,j,k)
+        end do
+        !$omp end parallel do
+    end subroutine pack_nu_full_to_mask
+
     module subroutine release_nu_filter_unary_storage
         if( allocated(dmats_mask)         ) deallocate(dmats_mask)
+        if( allocated(raw_dmats_mask)     ) deallocate(raw_dmats_mask)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         call release_nu_smooth_norm
     end subroutine release_nu_filter_unary_storage

@@ -324,7 +324,7 @@ type :: parameters
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcgop='kernel'       !< PCG operator; production reconstruct3D requires kernel
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
-    character(len=STDLEN)     :: nu_input='base'       !< half-map pair seeding the NU competition on the PCG backend(base|gridding){base}
+    character(len=STDLEN)     :: nu_input='base'       !< half-map pair seeding the NU competition(base|gridding|ml){base}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
@@ -692,6 +692,7 @@ type :: parameters
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nu_input_gridding = .false.
+    logical :: l_nu_input_ml       = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_nu_refine       = .false.
     logical :: l_objfun_den      = .false.

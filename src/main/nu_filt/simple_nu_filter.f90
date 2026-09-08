@@ -208,6 +208,12 @@ character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v1'
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
+! Raw (unsmoothed) mask-packed unaries of every candidate, kept for the
+! coarse-to-fine selection in optimize_nu_cutoff_finds (2026-09-08): a finer
+! candidate is compared with the incumbent at the finer candidate's own
+! smoothing scale, both smoothed alike, which the per-candidate radii of
+! dmats_mask cannot provide. Released with dmats_mask.
+real,             allocatable :: raw_dmats_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
@@ -482,6 +488,21 @@ interface
         real,    intent(in) :: dmat_full(:,:,:)
         integer, intent(in) :: icand
     end subroutine pack_nu_dmat_candidate
+
+    module subroutine pack_nu_raw_candidate( dmat_full, icand )
+        real,    intent(in) :: dmat_full(:,:,:)
+        integer, intent(in) :: icand
+    end subroutine pack_nu_raw_candidate
+
+    module subroutine unpack_nu_raw_candidate( icand, dmat_full )
+        integer, intent(in)    :: icand
+        real,    intent(inout) :: dmat_full(:,:,:)
+    end subroutine unpack_nu_raw_candidate
+
+    module subroutine pack_nu_full_to_mask( dmat_full, packed )
+        real, intent(in)    :: dmat_full(:,:,:)
+        real, intent(inout) :: packed(:)
+    end subroutine pack_nu_full_to_mask
 
     module subroutine unpack_nu_dmat_candidate( icand, dmat_full )
         integer, intent(in)  :: icand
