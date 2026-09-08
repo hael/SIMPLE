@@ -95,32 +95,35 @@
                         {% for input in stream_user_inputs %}
                             {% with keytype=input.keytype %}
 
-                            {# Visible label aligned with its control; developer-visibility fields keep their proper widget but stay hidden until Ctrl+Q. Non-developer fields other than dir_movies stay path-gated until testStreamPath confirms the movies directory exists, but still reveal on Ctrl+Q. Fields that already carry a value (e.g. cloning an existing job) are shown immediately instead of waiting on the path gate. #}
-                            <label class="text-xs font-medium text-streamtext whitespace-nowrap{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} hidden{% endif %}"
+                            {# Visible label aligned with its control; developer-visibility fields keep their proper widget but stay hidden until Ctrl+Q. Non-developer fields other than dir_movies stay visible but disabled (label dimmed too) until testStreamPath confirms the movies directory exists, and are also enabled on Ctrl+Q. Fields that already carry a value (e.g. cloning an existing job) are enabled immediately instead of waiting on the path gate. #}
+                            <label class="text-xs font-medium text-streamtext whitespace-nowrap{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} blur-sm cursor-not-allowed{% endif %}"
                                 {% if input.visibility == "developer" %}data-toggle-hidden-label="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-label="true"{% endif %}
                                 for="field_{{ input.key }}">{{ input.label }}</label>
 
-                            <div class="relative flex items-center{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} hidden{% endif %}"
+                            <div class="relative flex items-center{% if input.visibility == "developer" %} hidden{% endif %}"
                                 {% if input.visibility == "developer" %}data-toggle-hidden-container="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-container="true"{% endif %}>
  
                                     {% if keytype == "int" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="1"
                                             {% if input.required %}required{% endif %}
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_int }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_int }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
 
                                     {% elif keytype == "float" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="0.0001"
                                             {% if input.required %}required{% endif %}
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_float:4 }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_float:4 }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
  
                                     {% elif keytype == "multi" %}
                                         <select id="field_{{ input.key }}" name="{{ input.key }}"
                                                 {% if input.required %}required{% endif %}
-                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
+                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
                                             {% for option in input.options %}
                                                 <option value="{{ option }}"
                                                     {% if "value" in input and option == input.value %}selected
@@ -141,8 +144,9 @@
                                                        {% if "value" in input and input.value == "yes" %}checked
                                                        {% elif "has_default" in input and input.has_default and input.default == "yes" %}checked
                                                        {% endif %}
+                                                       {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                                        onchange="document.getElementById('field_{{ input.key }}').value = this.checked ? 'yes' : 'no'; this.nextElementSibling.nextElementSibling.textContent = this.checked ? 'yes' : 'no';">
-                                                <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                                                <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent peer-disabled:blur-sm peer-disabled:cursor-not-allowed after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
                                             </label>
                                         </div>
 
@@ -151,11 +155,13 @@
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
                                             {% if input.key == "dir_movies" %}onblur="testStreamPath(this);" oninput="this.setCustomValidity('');" data-has-value="{% if "value" in input %}true{% else %}false{% endif %}"{% endif %}
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
                                         <button type="button" title="browse for directory"
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             onclick="openWorkspaceBrowser('dir', 'field_{{ input.key }}')"
-                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors disabled:blur-sm disabled:cursor-not-allowed">
                                             <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
                                                 <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z"/>
                                             </svg>
@@ -165,11 +171,13 @@
                                         {# File picker: same pattern, file icon, file browser URL #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
                                         <button type="button" title="browse for file"
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             onclick="openWorkspaceBrowser('file', 'field_{{ input.key }}')"
-                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors disabled:blur-sm disabled:cursor-not-allowed">
                                             <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
                                             </svg>
@@ -179,8 +187,9 @@
                                         {# Plain text fallback for any unrecognised keytype #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
+                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
                                     {% endif %}
 
                             </div>
@@ -668,14 +677,21 @@
             iframe.classList.add("hidden");
         }
 
-        let pathGateVisible = false;
+        let pathGateEnabled = false;
 
         function updatePathGatedVisibility() {
-            const visible = hiddenInputsVisible || pathGateVisible;
+            const enabled = hiddenInputsVisible || pathGateEnabled;
             const labels = document.querySelectorAll("label[data-toggle-path-label='true']");
             const containers = document.querySelectorAll("[data-toggle-path-container='true']");
-            labels.forEach((label) => label.classList.toggle("hidden", !visible));
-            containers.forEach((container) => container.classList.toggle("hidden", !visible));
+            labels.forEach((label) => {
+                label.classList.toggle("blur-sm", !enabled);
+                label.classList.toggle("cursor-not-allowed", !enabled);
+            });
+            containers.forEach((container) => {
+                container.querySelectorAll("input, select, button").forEach((control) => {
+                    control.disabled = !enabled;
+                });
+            });
         }
 
         const TEST_PATH_RESPONSE_KEYS = [
@@ -751,10 +767,10 @@
             fetch(url)
                 .then((response) => response.json())
                 .then((data) => {
-                    pathGateVisible = Boolean(data.exists);
+                    pathGateEnabled = Boolean(data.exists);
                     updatePathGatedVisibility();
                     const lastUpdatedField = applyTestStreamPathValues(data);
-                    if (pathGateVisible) {
+                    if (pathGateEnabled) {
                         // Note: do not call reportValidity() here - it forces
                         // focus back onto the field, which would fight the
                         // user every time they blur away from it.

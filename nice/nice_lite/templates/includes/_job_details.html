@@ -1,0 +1,46 @@
+{% comment %}
+  _job_details.html — job details footer, included by streamview.html.
+  Expects: jobid, disp, created, folder, desc.
+  JobModel has no modified/user fields (unlike WorkspaceModel), so this footer
+  only shows name/created/location plus an editable description.
+{% endcomment %}
+<!-- Job details footer (natural flow — no fixed positioning) -->
+<div class="bg-streambar border-t border-streamline px-6 py-3 flex-shrink-0">
+    <div class="flex items-start justify-between gap-8">
+
+        <!-- Left: name, created, location -->
+        <div>
+            <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">Job details</p>
+            <div class="flex gap-10">
+                <div>
+                    <p class="text-[10px] text-streamlabel mb-0.5">name</p>
+                    <p class="text-xs text-streaminput font-medium">{{ disp }} · stream</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-streamlabel mb-0.5">created</p>
+                    <p class="text-xs text-streaminput">{{ created }}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-streamlabel mb-0.5">location</p>
+                    <p class="text-xs text-streamsubtle font-mono">{{ folder }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: description -->
+        <div>
+            <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">&nbsp;</p>
+            <div>
+                <p class="text-[10px] text-streamlabel mb-0.5">description</p>
+                <form method="POST" action="{% url 'nice_lite:update_stream_description' %}" class="flex items-center gap-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="selected_job_id" value="{{ jobid }}">
+                    <input name="new_stream_description" value="{{ desc }}"
+                           onblur="this.form.submit()"
+                           class="text-xs text-streamsubtle italic bg-transparent border-none outline-none">
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>

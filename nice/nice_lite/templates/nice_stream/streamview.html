@@ -10,10 +10,12 @@
       attributes on the iframes, so they adapt when the iframe is resized.
 
   Context variables:
-    disp  — human-readable stream number / display name
-    jobid — primary key of the job, appended as ?selected_job_id= on all iframes
-    desc  — optional user-supplied job description; shown alongside disp when non-empty
-    args  — dict of stream launch parameters (smpd, cs, kv, fraca, etc.)
+    disp    — human-readable stream number / display name
+    jobid   — primary key of the job, appended as ?selected_job_id= on all iframes
+    desc    — optional user-supplied job description; shown alongside disp when non-empty
+    args    — dict of stream launch parameters (smpd, cs, kv, fraca, etc.)
+    created — job creation timestamp, shown in the job-details footer
+    folder  — absolute path to the job directory, shown in the job-details footer
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -69,6 +71,8 @@
 
         </div>
     </div>
+
+    {% include 'includes/_job_details.html' %}
 
     {% include 'messages.html' %}
 </body>

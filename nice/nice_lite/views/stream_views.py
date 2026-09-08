@@ -577,7 +577,7 @@ def view_stream_kill_delete_stream(request):
 def view_stream(request, jobid):
     """Returns stream view."""
     template = "nice_stream/streamview.html"
-    _streamjob, jobmodel = _get_accessible_streamjob(request, jobid=jobid, log_context="view_stream")
+    streamjob, jobmodel = _get_accessible_streamjob(request, jobid=jobid, log_context="view_stream")
     if jobmodel is None:
         print_error(f"view_stream: invalid or missing stream job {jobid}")
         return redirect("nice_lite:workspace")
@@ -589,6 +589,8 @@ def view_stream(request, jobid):
         "proj": jobmodel.dset.proj.name,
         "dset": jobmodel.dset.name,
         "args": jobmodel.args,
+        "created": jobmodel.cdat,
+        "folder": streamjob.get_absdir(),
     }
     response = render(request, template, context)
     # Reset panel checksums when entering a stream shell so each iframe refreshes once.
