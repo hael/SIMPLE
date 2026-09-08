@@ -85,6 +85,7 @@ contains
     procedure, private :: refine
     procedure          :: fit_patches
     procedure, private :: norm_pspec
+    procedure, private :: dampen_pspec4srch
     procedure, private :: gen_roavspec1d
     procedure, private :: subtr_backgr
     ! scoring, display & output
@@ -95,7 +96,6 @@ contains
     procedure, private :: calc_icefrac
     procedure          :: write_diagnostic
     procedure, private :: ctf2pspecimg
-    procedure, private :: calc_tilt
     ! polynomial fitting
     procedure, private :: fit_polynomial
     procedure, private :: pix2poly
@@ -343,31 +343,23 @@ contains
     ! DOERS
 
     !>  Performs initial grid search & 2D refinement, calculate stats
-    subroutine fit( self, parms, ctfresthreshold,spec, nano)
+    subroutine fit( self, parms, ctfresthreshold, nano)
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctfparams),         intent(inout) :: parms
         real,                    intent(in)    :: ctfresthreshold
-        class(image),  optional, intent(inout) :: spec
         logical,       optional, intent(in)    :: nano
         integer :: freslims1d(2)
         logical :: l_nano
         if( BENCH ) self%t_tot = tic()
         l_nano = .false.
         if( present(nano) ) l_nano = nano
-        if( present(spec) )then
-            ! use provided spectrum
-            if( .not. (self%pspec.eqdims.spec) )then
-                THROW_HARD('Spectrums have incompatible dimensions! fit')
-            endif
-            call self%pspec%copy(spec)
-        else
-            ! generate spectrum from tiles
-            if( BENCH ) self%t = tic()
-            call self%mic2spec(self%pspec)
-            if( BENCH ) self%rt_mic2spec = toc(self%t)
-        endif
+        ! generate spectrum from tiles
+        if( BENCH ) self%t = tic()
+        call self%mic2spec(self%pspec)
+        if( BENCH ) self%rt_mic2spec = toc(self%t)
         self%pspec4ctfres = self%pspec
         if( BENCH ) self%t = tic()
+        if( self%parms%l_fit_phshift ) call self%dampen_pspec4srch(self%pspec)
         ! generate & normalize 1D spectrum
         call self%gen_roavspec1d
         if( BENCH ) self%t = tic()
@@ -485,6 +477,30 @@ contains
         call self%subtr_backgr(spec)
     end subroutine mic2spec
 
+    subroutine dampen_pspec4srch( self, pspec )
+        class(ctf_estimate_fit), intent(inout) :: self
+        class(image),            intent(inout) :: pspec
+        real    :: A, gsq, g, hsq, x
+        integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
+        A    = real(self%flims1d(2)**2)
+        lims = pspec%loop_lims(3)
+        mh   = abs(lims(1,1))
+        mk   = abs(lims(2,1))
+        do h = lims(1,1),lims(1,2)
+            i   = min(max(1,h+mh+1), self%box)
+            hsq = real(h**2)
+            do k = lims(2,1),lims(2,2)
+                j   = min(max(1,k+mk+1), self%box)
+                gsq = (hsq + real(k**2)) / A
+                if( gsq < 0.25 )then
+                    g = sqrt(max(0., gsq))
+                    x = min(1.0, max(0.0, sin(g*PI)))
+                    call pspec%mul_rmat_at( i,j,1, x)
+                endif
+            end do
+        end do
+    end subroutine dampen_pspec4srch
+
     !>  \brief  Normalize to zero mean and unit variance the reference power spectrum
     !>  within the relevent resolution range
     subroutine norm_pspec( self, img )
@@ -505,9 +521,9 @@ contains
     subroutine gen_roavspec1d( self, center )
         class(ctf_estimate_fit), intent(inout) :: self
         logical,       optional, intent(in)    :: center
-        real          :: cnt(self%flims1d(1):self%flims1d(2)),avg,sdev
-        integer       :: i,j,h,k, mh,mk, sh, shlim, n
-        logical       :: center_here
+        real    :: cnt(self%flims1d(1):self%flims1d(2)),avg,sdev
+        integer :: i,j,h,k, mh,mk, sh, shlim, n
+        logical :: center_here
         center_here = .true.
         if( present(center) ) center_here = center
         ! spectrum 1D
@@ -596,73 +612,6 @@ contains
         ! cleanup
         call imgmsk%kill
     end subroutine gen_resmsk
-
-    ! calculate micrograph tilt
-    subroutine calc_tilt( self, tilt )
-        class(ctf_estimate_fit), intent(inout) :: self
-        real,                    intent(inout) :: tilt
-        real     :: normal(3), cross(3), ref(3)
-        real(dp) :: x,y,z, sum_xx,sum_xy,sum_yy,sum_xz,sum_yz,sum_zz,detx,dety,detz,center(3)
-        integer :: pi,pj
-        tilt = 0.
-        if( self%ntotpatch == 0 )return
-        ref    = [0.,0.,1.]
-        center = 0.d0
-        do pi = 1,self%npatches(1)
-            do pj = 2,self%npatches(2)
-                center(3) = center(3) + real((self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.,dp)
-            enddo
-        enddo
-        center(3) = center(3) / real(self%ntotpatch,dp)
-        sum_xx = 0.d0
-        sum_xy = 0.d0
-        sum_yy = 0.d0
-        sum_xz = 0.d0
-        sum_yz = 0.d0
-        do pi = 1,self%npatches(1)
-            do pj = 2,self%npatches(2)
-                call self%pix2poly(real(self%centers(pi,pj,1),dp),real(self%centers(pi,pj,2),dp), x,y)
-                z = real((self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.,dp)
-                x = x - center(1)
-                y = y - center(2)
-                z = z - center(3)
-                sum_xx = sum_xx + x*x
-                sum_xy = sum_xy + x*y
-                sum_yy = sum_yy + y*y
-                sum_xz = sum_xz + x*z
-                sum_yz = sum_yz + y*z
-                sum_zz = sum_zz + z*z
-            enddo
-        enddo
-        detx = sum_yy*sum_zz - sum_yz*sum_yz
-        dety = sum_xx*sum_zz - sum_xz*sum_xz
-        detz = sum_xx*sum_yy - sum_xy*sum_xy
-        if( maxval([detx,dety,detz]) < 1.d-6 )then
-            THROW_WARN('No plane detected')
-            tilt = 0.
-            return
-        endif
-        select case( maxloc([detx,dety,detz],dim=1) )
-            case(1)
-                normal(1) = real(detx)
-                normal(2) = real(sum_xz*sum_yz - sum_xy*sum_zz)
-                normal(3) = real(sum_xy*sum_yz - sum_xz*sum_yy)
-            case(2)
-                normal(1) = real(sum_xz*sum_yz - sum_xy*sum_zz)
-                normal(2) = real(dety)
-                normal(3) = real(sum_xy*sum_xz - sum_yz*sum_xx)
-            case(3)
-                normal(1) = real(sum_xy*sum_yz - sum_xz*sum_yy)
-                normal(2) = real(sum_xy*sum_xz - sum_yz*sum_xx)
-                normal(3) = real(detz)
-        end select
-        normal   = normal / sqrt(sum(normal**2.))
-        cross(1) = ref(2)*normal(3) - ref(3)*normal(2)
-        cross(2) = ref(3)*normal(1) - ref(1)*normal(3)
-        cross(3) = ref(1)*normal(2) - ref(2)*normal(1)
-        tilt     = atan2(sqrt(sum(cross**2.)), dot_product(ref,normal))
-        tilt     = rad2deg(tilt)
-    end subroutine calc_tilt
 
     ! make & write half-n-half diagnostic
     subroutine write_diagnostic( self, diagfname, nano )
@@ -1507,12 +1456,12 @@ contains
         call os%set(1,'angast',  self%parms%angast)
         call os%set(1,'phshift', self%parms%phshift)
         call os%set(1,'forctf',  moviename)
-        call os%set(1,'xdim',    real(self%ldim_mic(1)))
-        call os%set(1,'ydim',    real(self%ldim_mic(2)))
+        call os%set(1,'xdim',    self%ldim_mic(1))
+        call os%set(1,'ydim',    self%ldim_mic(2))
         call os%set(1,'ctfres',  self%ctfres)
         call os%set(1,'icefrac', self%icefrac)
         call os%set(1,'ctfcc',   self%cc_fit)
-        call os%set(1,'npatch',  real(self%ntotpatch))
+        call os%set(1,'npatch',  self%ntotpatch)
         if( self%ntotpatch == 0 )then
             self%polyx = 0.
             self%polyy = 0.

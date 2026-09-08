@@ -209,6 +209,14 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
+                call build%spproj_field%minmax('phshift', mind, maxd)
+                if( (mind > 0.001) .and. (maxd > 0.001) ) then
+                    call build%spproj_field%stats('phshift', avgd, sdevd, vard, err )
+                    write(logfhandle,'(a,1x,f8.2)') 'AVERAGE PHASE SHIFT                  :', rad2deg(avgd)
+                    write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF PHASE SHIFT    :', rad2deg(sdevd)
+                    write(logfhandle,'(a,1x,f8.2)') 'MINIMUM PHASE SHIFT                  :', rad2deg(mind)
+                    write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM PHASE SHIFT                  :', rad2deg(maxd)
+                endif
                 if( trim(params%oritype) .eq. 'ptcl2D' )then
                     states = build%spproj_field%get_all_asint('state')
                     cls    = build%spproj_field%get_all_asint('class')
