@@ -264,120 +264,7 @@
 
     <main class="flex-1 min-h-0 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
-            <section data-collapsible-panel data-collapse-key="overview" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
-                <h2>
-                    <button type="button" data-collapse-toggle aria-expanded="true" aria-controls="batch_overview_panel"
-                            class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
-                        <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
-                            <polyline points="4,2 8,6 4,10"/>
-                        </svg>
-                        <span>job overview</span>
-                    </button>
-                </h2>
-                <div id="batch_overview_panel" data-collapse-body class="mt-3">
-                    <dl class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
-                        <dt class="text-streamlabel">program</dt>
-                        <dd class="min-w-0 break-words text-streamtext font-mono">{{ program }}</dd>
-                        <dt class="text-streamlabel">created</dt>
-                        <dd class="min-w-0 break-words text-streamtext">{{ created }}</dd>
-                        <dt class="text-streamlabel">project</dt>
-                        <dd class="min-w-0 break-words text-streamtext">{{ project }}</dd>
-                        <dt class="text-streamlabel">workspace</dt>
-                        <dd class="min-w-0 break-words text-streamtext">{{ workspace }}</dd>
-                        <dt class="text-streamlabel">input project</dt>
-                        <dd class="min-w-0 break-words text-streamtext">{{ source_label }}</dd>
-                        <dt class="text-streamlabel">job directory</dt>
-                        <dd class="min-w-0 text-streamsubtle font-mono" style="overflow-wrap:anywhere">{{ job_dir }}</dd>
-                    </dl>
-                </div>
-            </section>
-
-            <section data-collapsible-panel data-collapse-key="arguments" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <h2 class="min-w-0 flex-1">
-                        <button type="button" data-collapse-toggle data-collapse-companion-id="argument_view_controls"
-                                aria-expanded="true" aria-controls="batch_arguments_panel"
-                                class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
-                            <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
-                                <polyline points="4,2 8,6 4,10"/>
-                            </svg>
-                            <span id="argument_view_heading">submitted arguments</span>
-                        </button>
-                    </h2>
-                    {% if arguments %}
-                        <label id="argument_view_controls" for="argument_view_toggle"
-                               title="toggle between submitted and all arguments"
-                               class="min-h-9 flex-shrink-0 inline-flex cursor-pointer select-none items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px]">
-                            <span data-argument-view-label="all" class="text-streamlabel">all</span>
-                            <input id="argument_view_toggle" type="checkbox" role="switch"
-                                   aria-label="show all arguments" aria-controls="argument_list"
-                                   class="peer sr-only">
-                            <span aria-hidden="true"
-                                  class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
-                        </label>
-                    {% endif %}
-                </div>
-                <div id="batch_arguments_panel" data-collapse-body class="mt-3">
-                    {% if arguments %}
-                        <dl id="argument_list" class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
-                            {% for arg in arguments %}
-                                <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
-                                    class="min-w-0 break-words text-streamlabel{% if not arg.submitted %} hidden{% endif %}">{{ arg.label }}</dt>
-                                <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
-                                    class="min-w-0 text-streamtext font-mono{% if not arg.submitted %} hidden{% endif %}"
-                                    style="overflow-wrap:anywhere">
-                                    {% if arg.origin == "unset" %}
-                                        <span class="text-streamlabel">—</span>
-                                    {% elif arg.value == "" %}
-                                        <span class="text-streamlabel">empty</span>
-                                    {% else %}
-                                        <span>{{ arg.value }}</span>
-                                    {% endif %}
-                                    <span data-argument-origin class="hidden ml-1 sm:ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
-                                        {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
-                                    </span>
-                                </dd>
-                            {% endfor %}
-                        </dl>
-                    {% endif %}
-                    <p id="no_submitted_arguments" class="text-[11px] text-streamsubtle{% if submitted_argument_count %} hidden{% endif %}">no user arguments were submitted</p>
-                </div>
-            </section>
-
-            <section data-collapsible-panel data-collapse-key="result" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
-                <h2>
-                    <button type="button" data-collapse-toggle aria-expanded="true" aria-controls="batch_result_panel"
-                            class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
-                        <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
-                            <polyline points="4,2 8,6 4,10"/>
-                        </svg>
-                        <span>project results</span>
-                    </button>
-                </h2>
-                <div id="batch_result_panel" data-collapse-body class="mt-3">
-                    {% if result_project %}
-                        <p class="text-[10px] text-streamsubtle font-mono mb-3" style="overflow-wrap:anywhere">{{ result_project }}</p>
-                        {% if status == "finished" and project_sections %}
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {% for section in project_sections %}
-                                    <div class="rounded-lg border border-streamdivider bg-streambg px-3 py-2" title="{{ section.info }}">
-                                        <p class="text-[18px] font-medium text-streamtext">{{ section.count }}</p>
-                                        <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ section.label }}</p>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        {% elif status == "finished" and not project_summary_available %}
-                            <p class="text-[11px] text-streamsubtle">project summary is empty or currently unavailable</p>
-                        {% else %}
-                            <p class="text-[11px] text-streamsubtle">project data is summarized after the job finishes</p>
-                        {% endif %}
-                    {% else %}
-                        <p class="text-[11px] text-streamsubtle">no unambiguous result project was found in the job directory</p>
-                    {% endif %}
-                </div>
-            </section>
-
-            <section data-collapsible-panel data-collapse-key="artifacts" class="lg:col-span-full min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+            <section data-collapsible-panel data-collapse-key="artifacts" class="col-span-full min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
                 <div class="flex flex-wrap items-center gap-3">
                     <h2 class="min-w-0 flex-1">
                         <button type="button" data-collapse-toggle data-collapse-companion-id="batch_output_controls"
@@ -735,7 +622,120 @@
                 </div>
             </section>
 
-            <section data-collapsible-panel data-collapse-key="logs" class="col-span-full min-w-0 bg-streambar rounded-xl border {% if status == 'failed' or status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} p-3 sm:p-4">
+            <section data-collapsible-panel data-collapse-key="overview" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <h2>
+                    <button type="button" data-collapse-toggle aria-expanded="true" aria-controls="batch_overview_panel"
+                            class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                        <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                            <polyline points="4,2 8,6 4,10"/>
+                        </svg>
+                        <span>job overview</span>
+                    </button>
+                </h2>
+                <div id="batch_overview_panel" data-collapse-body class="mt-3">
+                    <dl class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
+                        <dt class="text-streamlabel">program</dt>
+                        <dd class="min-w-0 break-words text-streamtext font-mono">{{ program }}</dd>
+                        <dt class="text-streamlabel">created</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ created }}</dd>
+                        <dt class="text-streamlabel">project</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ project }}</dd>
+                        <dt class="text-streamlabel">workspace</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ workspace }}</dd>
+                        <dt class="text-streamlabel">input project</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ source_label }}</dd>
+                        <dt class="text-streamlabel">job directory</dt>
+                        <dd class="min-w-0 text-streamsubtle font-mono" style="overflow-wrap:anywhere">{{ job_dir }}</dd>
+                    </dl>
+                </div>
+            </section>
+
+            <section data-collapsible-panel data-collapse-key="arguments" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="min-w-0 flex-1">
+                        <button type="button" data-collapse-toggle data-collapse-companion-id="argument_view_controls"
+                                aria-expanded="true" aria-controls="batch_arguments_panel"
+                                class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                            <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                                <polyline points="4,2 8,6 4,10"/>
+                            </svg>
+                            <span id="argument_view_heading">submitted arguments</span>
+                        </button>
+                    </h2>
+                    {% if arguments %}
+                        <label id="argument_view_controls" for="argument_view_toggle"
+                               title="toggle between submitted and all arguments"
+                               class="min-h-9 flex-shrink-0 inline-flex cursor-pointer select-none items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px]">
+                            <span data-argument-view-label="all" class="text-streamlabel">all</span>
+                            <input id="argument_view_toggle" type="checkbox" role="switch"
+                                   aria-label="show all arguments" aria-controls="argument_list"
+                                   class="peer sr-only">
+                            <span aria-hidden="true"
+                                  class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                        </label>
+                    {% endif %}
+                </div>
+                <div id="batch_arguments_panel" data-collapse-body class="mt-3">
+                    {% if arguments %}
+                        <dl id="argument_list" class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
+                            {% for arg in arguments %}
+                                <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
+                                    class="min-w-0 break-words text-streamlabel{% if not arg.submitted %} hidden{% endif %}">{{ arg.label }}</dt>
+                                <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
+                                    class="min-w-0 text-streamtext font-mono{% if not arg.submitted %} hidden{% endif %}"
+                                    style="overflow-wrap:anywhere">
+                                    {% if arg.origin == "unset" %}
+                                        <span class="text-streamlabel">—</span>
+                                    {% elif arg.value == "" %}
+                                        <span class="text-streamlabel">empty</span>
+                                    {% else %}
+                                        <span>{{ arg.value }}</span>
+                                    {% endif %}
+                                    <span data-argument-origin class="hidden ml-1 sm:ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
+                                        {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
+                                    </span>
+                                </dd>
+                            {% endfor %}
+                        </dl>
+                    {% endif %}
+                    <p id="no_submitted_arguments" class="text-[11px] text-streamsubtle{% if submitted_argument_count %} hidden{% endif %}">no user arguments were submitted</p>
+                </div>
+            </section>
+
+            <section data-collapsible-panel data-collapse-key="result" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <h2>
+                    <button type="button" data-collapse-toggle aria-expanded="true" aria-controls="batch_result_panel"
+                            class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                        <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                            <polyline points="4,2 8,6 4,10"/>
+                        </svg>
+                        <span>project results</span>
+                    </button>
+                </h2>
+                <div id="batch_result_panel" data-collapse-body class="mt-3">
+                    {% if result_project %}
+                        <p class="text-[10px] text-streamsubtle font-mono mb-3" style="overflow-wrap:anywhere">{{ result_project }}</p>
+                        {% if status == "finished" and project_sections %}
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {% for section in project_sections %}
+                                    <div class="rounded-lg border border-streamdivider bg-streambg px-3 py-2" title="{{ section.info }}">
+                                        <p class="text-[18px] font-medium text-streamtext">{{ section.count }}</p>
+                                        <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ section.label }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% elif status == "finished" and not project_summary_available %}
+                            <p class="text-[11px] text-streamsubtle">project summary is empty or currently unavailable</p>
+                        {% else %}
+                            <p class="text-[11px] text-streamsubtle">project data is summarized after the job finishes</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-[11px] text-streamsubtle">no unambiguous result project was found in the job directory</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section data-collapsible-panel data-collapse-key="logs" class="lg:col-span-full min-w-0 bg-streambar rounded-xl border {% if status == 'failed' or status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} p-3 sm:p-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <h2 class="min-w-0 flex-1">
                         <button type="button" data-collapse-toggle data-collapse-companion-id="batch_log_layout_toggle"

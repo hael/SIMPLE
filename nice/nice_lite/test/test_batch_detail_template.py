@@ -53,7 +53,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('aria-label="delete batch job"', batch_view)
         self.assertIn("size-11", batch_view)
         self.assertIn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3", batch_view)
-        self.assertIn('data-collapse-key="artifacts" class="lg:col-span-full', batch_view)
+        self.assertIn('data-collapse-key="artifacts" class="col-span-full', batch_view)
+        self.assertIn('data-collapse-key="logs" class="lg:col-span-full', batch_view)
         self.assertIn("flex overflow-x-auto rounded-t-lg", batch_view)
         self.assertIn("grid grid-cols-2 sm:grid-cols-3 gap-2", batch_view)
         self.assertIn('id="batch_artifact_images" data-output-grid', batch_view)
@@ -844,16 +845,17 @@ class BatchDetailTemplateTests(SimpleTestCase):
         )
         self.assertNotIn('id="batch_output_dimensions_toggle"', rendered_without_dimensions)
 
-    def test_batch_detail_panels_collapse_and_logs_are_last(self):
+    def test_batch_detail_panels_collapse_output_first_and_logs_are_last(self):
         batch_view = self._read_template("nice_classic/batchview.html")
 
         for panel_key in ("overview", "arguments", "result", "artifacts", "logs"):
             self.assertIn(f'data-collapse-key="{panel_key}"', batch_view)
         self.assertNotIn('data-collapse-key="log-{{ forloop.counter }}"', batch_view)
-        self.assertGreater(
-            batch_view.index('data-collapse-key="logs"'),
-            batch_view.index('data-collapse-key="artifacts"'),
-        )
+        panel_positions = [
+            batch_view.index(f'data-collapse-key="{panel_key}"')
+            for panel_key in ("artifacts", "overview", "arguments", "result", "logs")
+        ]
+        self.assertEqual(panel_positions, sorted(panel_positions))
         self.assertEqual(batch_view.count('type="button" data-collapse-toggle'), 5)
         self.assertIn("data-collapse-icon", batch_view)
         self.assertIn("rotate-90 transition-transform", batch_view)
