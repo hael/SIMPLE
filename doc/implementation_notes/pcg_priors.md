@@ -3519,6 +3519,40 @@ the acceptable-looking outputs do not validate the prior.
    the far better converged solves and the consistent weighting, not in the
    nominal resolution.
 
+13. **PfCRT still failing with the 4.5 A cap and the full NU budget: the NU
+    competition on the PCG base pair (2026-09-08).** Six new runs
+    (`current_code_fails`, 16879 particles, no fractional update) reached
+    4.5-5.2 A against July's 4.1-4.3 A. Reconstructed from the bench and
+    RESOLUTION files (no master logs): every run matches at the ladder plan
+    for one iteration of each NU stage and then at exactly the 4.5 A cap
+    (shell 69) from the second iteration on, while July's band walked
+    5.97, 5.01, 4.44 A (stage 6), 4.14 (7), 3.98 (8) with the map. Stage 6
+    stalls near 7 A after three or four iterations (July: monotonic 10 to
+    5.5 A) and stage 8 degrades after the boundary (run 7: 4.57 to 5.35 A,
+    never recovered). Docking cross-FSC versus July restart 1 (medians,
+    band 10-7 A): July 0.54/0.60/0.61 in stages 6/7/8, new runs
+    0.26/0.30/0.33 (Sep 7: 0.27/0.41/0.39).
+    Cause, from the Sep 7 logs (same PCG NU path, uncapped handoff): the
+    label histogram of the first stage-6 iteration on the PCG base pair gave
+    5.0 A to 7 percent of the voxels and the bank's finest member (4.44 A) to
+    164 voxels with the map at 8.6 A; the raw finest-label handoff therefore
+    sat at the bank's finest member from iteration 1 in every NU stage
+    (4.436/4.140/3.981). July's gridding halves at the same map quality gave
+    those labels 14 and 0 voxels. The competition measures E/O agreement
+    beyond the halves' noise; a two-iteration warm-started base solve
+    under-represents the high-frequency band (and holds none of it right
+    after a box change), so its halves agree there for lack of content.
+    Fix: the NU bank on PCG is seeded from the gridding-equivalent pair,
+    `M^-1 b` scale-fitted to the base solution
+    (`reconstructor_pcg%get_gridding_equivalent`), in both master paths and
+    the trailing-bootstrap blend; base pair unchanged for FSC, warm starts
+    and the auxiliary effective resolution. Uncompiled. Secondary difference
+    kept as is: July's NU stages started from the boundary reconstruction's
+    handoff (band 5.97 A at the first stage-6 iteration), the current
+    controller sets the ladder lp for that first iteration (GOLD_STD_STAGE is
+    turned off, so the lp deletion never fires) and the boundary
+    reconstruction runs without NU.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

@@ -173,9 +173,12 @@ finalization boundary. Solver callers that do not request an outcome retain
 the historical immediate hard failure. The
 regularized replay deterministically replays kernel finalization from the
 persisted raw `(B,D)` and produces the standard maps. It installs the FSC/SSNR
-shell-diagonal `P_tau` in every mode; with NU filtering active the base
-(`_unfil`) pair then seeds the NU candidate bank and the replayed pair joins the
-competition as the auxiliary member, exactly as on gridding. The replay
+shell-diagonal `P_tau` in every mode; with NU filtering active the
+gridding-equivalent pair of the base solve's data (`M^-1 b`, the preconditioned
+right-hand side scale-fitted to the base solution) seeds the NU candidate bank
+and the replayed pair joins the competition as the auxiliary member, exactly
+as on gridding (the base solve pair itself is unsuitable as an NU input, see
+`doc/policies/nonuniform_filtering_policy.md` section 5, 2026-09-08). The replay
 warm-starts from the previous
 refinement iteration's ML half map when one exists on disk — strictly the same
 half (gold-standard independence), constant-FOV `read_and_crop` across crop
@@ -188,8 +191,9 @@ Every shipped state volume carries a solve-support provenance sidecar
 `solve_kind=base|regularized|mixed`). The trailing bootstrap follows the same
 recipe as the gridding bootstrap, applied to the PCG solver's own maps: the
 FSC prior comes from the lag-one previous shipped pair, and the NU candidate
-bank is seeded from the CURRENT base pair, volume blended with the previous
-pair at the applied update weight together with the regularized pair (the
+bank is seeded from the CURRENT gridding-equivalent pair, volume blended with
+the previous pair at the applied update weight together with the base and
+regularized pairs (the
 gridding `trail_restored_halves_if_needed` blend). The lag-one pair is never
 an NU input (fix 2026-09-06). Same recipe and the same kinds of inputs on both
 backends; the maps differ because the estimators differ. The bootstrap reads the support field for the lag-one FSC pair so the envelope and

@@ -164,6 +164,26 @@ effective resolution comes from the state FSC(0.143) resolution,
 When `nu_refine=yes`, the ML-regularized auxiliary replacement is not supplied;
 the high-resolution shell challenger owns the resolution-extension experiment.
 
+On the PCG backend the base NU input is NOT the base solve pair but the
+gridding-equivalent pair of the same data: the sampling-density-corrected
+backprojection `M^-1 b` (the preconditioned right-hand side, the first CG
+search direction from zero), scale-fitted to the base solution by one
+least-squares scalar (`reconstructor_pcg%get_gridding_equivalent`,
+2026-09-08). The competition measures where the two halves agree beyond their
+noise, and that needs halves carrying the full-band independent noise of the
+data. A two-iteration warm-started base solve under-represents the
+high-frequency band and holds none of it right after a box change, so its
+halves agree there for lack of content and the competition hands the finest
+label to voxels the data do not support. PfCRT record: on the base solve pair
+the first stage-6 iteration assigned 5.0 A to 7 percent of the voxels and the
+bank's finest member to 164 voxels while the map's FSC was at 8.6 A, so the
+raw finest-label handoff jumped to the bank's finest member at once; on the
+gridding halves of the July reference run the same two labels held 14 and 0
+voxels and the handoff walked 5.97, 5.01, 4.44 A with the map. The base solve
+pair remains the FSC pair, the `_unfil` warm-start pair and the auxiliary
+member's effective-resolution source; the ML replay pair remains the shipped
+map and the auxiliary member.
+
 ## 6. Spherical Support Contract
 
 All NU entry paths use a spherical support mask derived from `mskdiam`.
