@@ -504,7 +504,7 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        type(image) :: half_even, half_odd, ml_even, ml_odd, merged, grid_even, grid_odd
+        type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt
         type(halfmap_diagnostics_result) :: hm_diag
@@ -555,18 +555,10 @@ contains
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
             l_base_support_constrained = l_state_support .and. params%l_envfsc
             call collect_state_half(state, 0, n_even, half_pinds)
-            if( params%l_nonuniform )then
-                call solve_state_half(state, 0, 'even', half_pinds, half_even, grid_volume=grid_even)
-            else
-                call solve_state_half(state, 0, 'even', half_pinds, half_even)
-            endif
+            call solve_state_half(state, 0, 'even', half_pinds, half_even)
             deallocate(half_pinds)
             call collect_state_half(state, 1, n_odd, half_pinds)
-            if( params%l_nonuniform )then
-                call solve_state_half(state, 1, 'odd', half_pinds, half_odd, grid_volume=grid_odd)
-            else
-                call solve_state_half(state, 1, 'odd', half_pinds, half_odd)
-            endif
+            call solve_state_half(state, 1, 'odd', half_pinds, half_odd)
             deallocate(half_pinds)
 
             fname_even = refine3D_state_halfvol_fname(state, 'even')
@@ -629,17 +621,12 @@ contains
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             if( params%l_nonuniform )then
                 ! NU competition, mirroring the gridding volassemble: the
-                ! candidate bank from the GRIDDING-EQUIVALENT pair (the
-                ! sampling-density-corrected backprojection of this solve's
-                ! data, full-band independent noise), never the base solve
-                ! pair, which under-represents the high-frequency band and
-                ! makes the competition hand the finest label to voxels the
-                ! data do not support (PfCRT 2026-09-08); the ML pair as the
-                ! auxiliary member; consumes both pairs
+                ! candidate bank from the base (unfil) pair, the ML pair as
+                ! the auxiliary member; consumes both pairs
                 t_state_phase = tic()
                 eonames(1) = fname_even
                 eonames(2) = fname_odd
-                call nonuniform_filter_state(params, state, params%which_iter, grid_even, grid_odd, &
+                call nonuniform_filter_state(params, state, params%which_iter, half_even, half_odd, &
                     &ml_even, ml_odd, params%l_ml_reg .and. nu_static_aux_replacement(params), &
                     &res0143s(state), fname_vol, eonames, nu_align_lps(state))
                 time_nu_filter = real(toc(t_state_phase),dp)
@@ -771,13 +758,12 @@ contains
             if( cnt /= n ) THROW_HARD('inconsistent PCG state-half particle count')
         end subroutine collect_state_half
 
-        subroutine solve_state_half( state_here, eo_here, half, pinds, volume, outcome, grid_volume )
+        subroutine solve_state_half( state_here, eo_here, half, pinds, volume, outcome )
             integer,          intent(in)    :: state_here, eo_here
             character(len=*), intent(in)    :: half
             integer,          intent(in)    :: pinds(:)
             type(image),      intent(inout) :: volume
-            type(pcg_solver_outcome), optional, intent(out)   :: outcome
-            type(image),              optional, intent(inout) :: grid_volume
+            type(pcg_solver_outcome), optional, intent(out) :: outcome
             type(reconstructor_pcg) :: pcgop
             type(pcg_solver_outcome) :: result
             type(oris)      :: selection
@@ -785,7 +771,7 @@ contains
             type(ctfparams) :: ctfparms
             type(string)    :: raw_fname_here
             complex, allocatable :: y_batch(:,:,:)
-            real,    allocatable :: sig2(:,:), x(:,:,:), rel_res_hist(:), z(:,:,:)
+            real,    allocatable :: sig2(:,:), x(:,:,:), rel_res_hist(:)
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
             integer :: i, ii, iptcl, ibatch, niters
             real    :: shift(2), crop_factor, sdev_noise, edge_mean
@@ -886,13 +872,6 @@ contains
             call validate_solved_map(x, 'shared', state_here, half, 'base')
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            if( present(grid_volume) )then
-                ! the gridding-equivalent half for the NU competition
-                call pcgop%get_gridding_equivalent(x, z)
-                call grid_volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                call grid_volume%set_rmat(z, .false.)
-                deallocate(z)
-            endif
             call report_beyond_band_excess(volume, params, state_here, half, 'base')
             time_total = real(toc(t_half),dp)
             call write_half_diagnostics(state_here, half, 'base', size(pinds), result, rel_res_hist, &
@@ -1670,7 +1649,6 @@ contains
         logical, optional, intent(out)  :: trail_bootstrap_states(:)
         real,    optional, intent(out)  :: nu_align_lps(:)
         type(image), target  :: half_even, half_odd, ml_even, ml_odd, merged
-        type(image)          :: grid_even, grid_odd
         type(image), target  :: previous_even, previous_odd, previous_merged
         type(image), pointer :: fsc_pair_even, fsc_pair_odd, fsc_pair_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
@@ -1769,12 +1747,7 @@ contains
             ! replay uses density. automsk=no: sphere throughout.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
             l_base_support_constrained = l_state_support .and. params%l_envfsc
-            if( params%l_nonuniform )then
-                call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base', &
-                    &grid_even=grid_even, grid_odd=grid_odd)
-            else
-                call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base')
-            endif
+            call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base')
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
@@ -1879,10 +1852,6 @@ contains
                     call blend_bootstrap_half(ml_even, previous_even, update_weights(state))
                     call blend_bootstrap_half(ml_odd,  previous_odd,  update_weights(state))
                 endif
-                if( params%l_nonuniform )then
-                    call blend_bootstrap_half(grid_even, previous_even, update_weights(state))
-                    call blend_bootstrap_half(grid_odd,  previous_odd,  update_weights(state))
-                endif
                 if( params%l_lpset )then
                     call merged%kill
                     if( params%l_ml_reg )then
@@ -1919,17 +1888,13 @@ contains
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             if( params%l_nonuniform )then
                 ! NU competition, mirroring the gridding volassemble: the
-                ! candidate bank from the GRIDDING-EQUIVALENT pair of this
-                ! solve's data (bootstrap: blended with the previous pair
-                ! above, never the lag-one FSC pair), never the base solve
-                ! pair, whose under-represented high-frequency band makes the
-                ! competition hand the finest label to voxels the data do not
-                ! support (PfCRT 2026-09-08); the shipped ML pair as the
-                ! auxiliary member; consumes both
+                ! candidate bank from the current base pair (bootstrap: blended
+                ! with the previous pair above, never the lag-one FSC pair),
+                ! the shipped ML pair as the auxiliary member; consumes both
                 t_state_phase = tic()
                 eonames(1) = fname_even
                 eonames(2) = fname_odd
-                call nonuniform_filter_state(params, state, params%which_iter, grid_even, grid_odd, &
+                call nonuniform_filter_state(params, state, params%which_iter, half_even, half_odd, &
                     &ml_even, ml_odd, params%l_ml_reg .and. nu_static_aux_replacement(params), &
                     &res0143s(state), fname_vol, eonames, align_lps(state))
                 time_nu_filter = real(toc(t_state_phase),dp)
@@ -2097,14 +2062,13 @@ contains
         end function count_full_state_half
 
         subroutine reduce_solve_state_pair( state_here, even, odd, n_even_here, n_odd_here, solve_kind, &
-                &fsc_prior, warm_even, warm_odd, grid_even, grid_odd )
+                &fsc_prior, warm_even, warm_odd )
             integer,          intent(in)    :: state_here
             character(len=*), intent(in)    :: solve_kind
             type(image),      intent(inout) :: even, odd
             integer,          intent(out)   :: n_even_here, n_odd_here
             real, optional,   intent(in)    :: fsc_prior(:)
-            type(image), optional, intent(in)    :: warm_even, warm_odd
-            type(image), optional, intent(inout) :: grid_even, grid_odd
+            type(image), optional, intent(in) :: warm_even, warm_odd
 
             if( present(fsc_prior) )then
                 if( .not. present(warm_even) .or. .not. present(warm_odd) ) &
@@ -2125,14 +2089,8 @@ contains
             call solve_distributed_half_pair(even_job, odd_job)
 
             if( present(fsc_prior) )then
-                if( present(grid_even) .or. present(grid_odd) ) &
-                    &THROW_HARD('the gridding-equivalent pair belongs to the base solve, not the replay')
                 call finish_distributed_half_job(even_job, even, warm_even)
                 call finish_distributed_half_job(odd_job, odd, warm_odd)
-            else if( present(grid_even) )then
-                if( .not. present(grid_odd) ) THROW_HARD('gridding-equivalent odd half missing')
-                call finish_distributed_half_job(even_job, even, grid_volume=grid_even)
-                call finish_distributed_half_job(odd_job, odd, grid_volume=grid_odd)
             else
                 call finish_distributed_half_job(even_job, even)
                 call finish_distributed_half_job(odd_job, odd)
@@ -2307,25 +2265,15 @@ contains
 
         ! Finalization is serial for deterministic logging, diagnostics and
         ! image/FFTW lifecycle management.
-        subroutine finish_distributed_half_job( job, volume, warm_start, grid_volume )
+        subroutine finish_distributed_half_job( job, volume, warm_start )
             type(distributed_half_job), intent(inout) :: job
             type(image), intent(inout) :: volume
-            type(image), optional, intent(in)    :: warm_start
-            type(image), optional, intent(inout) :: grid_volume
-            real, allocatable :: z(:,:,:)
+            type(image), optional, intent(in) :: warm_start
             if( .not. job%ready ) return
             call handle_cold_restart_outcome(job%result, 'distributed', job%half, job%solve_kind)
             call validate_solved_map(job%x, 'distributed', job%state, job%half, job%solve_kind)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(job%x, .false.)
-            if( present(grid_volume) )then
-                ! the gridding-equivalent half for the NU competition, taken
-                ! while this half's operator is still alive
-                call job%pcgop%get_gridding_equivalent(job%x, z)
-                call grid_volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                call grid_volume%set_rmat(z, .false.)
-                deallocate(z)
-            endif
             call report_beyond_band_excess(volume, params, job%state, job%half, job%solve_kind)
             if( job%l_ml_solve )then
                 call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%l_concurrent, &

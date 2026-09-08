@@ -215,7 +215,6 @@ type :: reconstructor_pcg
     procedure :: get_env
     procedure :: get_invenv
     procedure :: get_rhs
-    procedure :: get_gridding_equivalent
     procedure :: get_raw_accum
     procedure :: get_ml_prior
     procedure :: get_ml_prior_stats
@@ -467,31 +466,6 @@ contains
         if( .not. self%l_rhs ) THROW_HARD('no right-hand side has been built; get_rhs')
         allocate(b(self%box,self%box,self%box), source=self%b_rhs)
     end subroutine get_rhs
-
-    !>  \brief  The gridding-equivalent half-map of the accumulated data: the
-    !!          sampling-density-corrected backprojection M^-1 b (the first CG
-    !!          search direction from x=0), i.e. what the gridding backend's
-    !!          unfiltered half is, carrying the full-band, independent noise
-    !!          of the data. Scale-fitted to the solved map x_ref by one
-    !!          least-squares scalar so it sits on the solution's scale.
-    !!          The nonuniform-filter competition needs exactly this pair: a
-    !!          two-iteration warm-started base solve under-represents the
-    !!          high-frequency band (and holds none of it right after a box
-    !!          change), so its halves agree there for lack of content and the
-    !!          competition hands the finest label to voxels the data do not
-    !!          support (PfCRT record 2026-09-08, pcg_priors.md).
-    subroutine get_gridding_equivalent( self, x_ref, z )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                      intent(in)    :: x_ref(self%box,self%box,self%box)
-        real, allocatable,         intent(out)   :: z(:,:,:)
-        real(dp) :: zz, xz
-        if( .not. self%l_rhs     ) THROW_HARD('no right-hand side has been built; get_gridding_equivalent')
-        if( .not. self%l_precond ) THROW_HARD('no preconditioner has been built; get_gridding_equivalent')
-        z  = self%apply_precond(self%b_rhs)
-        zz = self%dot_real_volume(z, z)
-        xz = self%dot_real_volume(x_ref, z)
-        if( zz > 0.0_dp .and. xz > 0.0_dp ) z = real(xz / zz) * z
-    end subroutine get_gridding_equivalent
 
     !> Copy the open, unfinalized accumulator-domain statistics. This is a
     !! test/diagnostic boundary only: production distribution persists the
