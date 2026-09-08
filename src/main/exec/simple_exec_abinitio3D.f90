@@ -3,7 +3,8 @@ module simple_exec_abinitio3D
 use simple_cmdline,             only: cmdline
 use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec, exec_screen
-use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D
+use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D,&
+                                    & commander_abinitio3D_cavgs_conditional_restarts
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
@@ -11,10 +12,11 @@ implicit none
 public :: exec_abinitio3D_commander
 private
 
-type(commander_abinitio3D)        :: xabinitio3D
-type(commander_abinitio3D_cavgs)  :: xabinitio3D_cavgs
-type(commander_estimate_lpstages) :: xestimate_lpstages
-type(commander_noisevol)          :: xnoisevol
+type(commander_abinitio3D)                            :: xabinitio3D
+type(commander_abinitio3D_cavgs)                      :: xabinitio3D_cavgs
+type(commander_abinitio3D_cavgs_conditional_restarts) :: xabinitio3D_cavgs_conditional_restarts
+type(commander_estimate_lpstages)                     :: xestimate_lpstages
+type(commander_noisevol)                              :: xnoisevol
 
 contains
 
@@ -36,7 +38,9 @@ contains
                     call xabinitio3D%execute(cline)
                 endif
             case( 'abinitio3D_cavgs' )
-                if( cline%defined('nrestarts') )then
+                if( cline%defined('nrestarts_collapse') )then
+                    call xabinitio3D_cavgs_conditional_restarts%execute(cline)
+                else if( cline%defined('nrestarts') )then
                     call restarted_exec(cline, string('abinitio3D_cavgs'), string('simple_exec'))
                 else
                     call xabinitio3D_cavgs%execute(cline)

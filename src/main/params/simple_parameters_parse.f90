@@ -422,6 +422,7 @@ contains
         call reg%add_int('nran', self%nran)
         call reg%add_int('nrefs', self%nrefs)
         call reg%add_int('nrestarts', self%nrestarts)
+        call reg%add_int('nrestarts_collapse', self%nrestarts_collapse)
         call reg%add_int('nsample', self%nsample)
         call reg%add_int('nsample_max', self%nsample_max)
         call reg%add_int('nsample_start', self%nsample_start)

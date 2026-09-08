@@ -469,7 +469,8 @@ type :: parameters
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
-    integer :: nrestarts=1
+    integer :: nrestarts=1         !< # of restarts for eligible applications
+    integer :: nrestarts_collapse=1   !< # of restarts for abinitio3D_cavgs when states collapse
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=0           !< # particles to sample in refinement with fractional update
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update

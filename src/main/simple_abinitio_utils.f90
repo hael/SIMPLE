@@ -426,7 +426,7 @@ contains
             endif
             if( allocated(lpinfo) ) deallocate(lpinfo)
             allocate(lpinfo(nstages))
-            call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+            call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, force_lpstart=.true.)
             return
         endif
         ! retrieve FRC info

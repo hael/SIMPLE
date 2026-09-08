@@ -14,7 +14,8 @@ use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_star
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
 implicit none
 
-public :: commander_abinitio3D_cavgs, commander_abinitio3D
+public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_conditional_restarts
+public :: commander_abinitio3D
 private
 #include "simple_local_flags.inc"
 
@@ -24,6 +25,11 @@ type, extends(commander_base) :: commander_abinitio3D_cavgs
     contains
     procedure :: execute => exec_abinitio3D_cavgs
 end type commander_abinitio3D_cavgs
+
+type, extends(commander_base) :: commander_abinitio3D_cavgs_conditional_restarts
+    contains
+    procedure :: execute => exec_abinitio3D_cavgs_conditional_restarts
+end type commander_abinitio3D_cavgs_conditional_restarts
 
 type, extends(commander_base) :: commander_abinitio3D
     contains
@@ -44,7 +50,7 @@ contains
         type(commander_reproject) :: xreproject
         ! other
         type(string)              :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
-        integer, allocatable      :: states(:)
+        integer, allocatable      :: states(:), final_states(:)
         type(ori)                 :: o, o_even, o_odd
         type(parameters)          :: params
         type(ctfparams)           :: ctfvars
@@ -53,8 +59,8 @@ contains
         type(stack_io)            :: stkio_r, stkio_r2, stkio_w
         type(string)              :: final_vol, work_projfile
         integer                   :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
-        integer                   :: nstates_on_cline, nstates_target, split_stage
-        integer                   :: cavg_ldim(3), cavg_nimgs
+        integer                   :: nstates_on_cline, nstates_target, split_stage, pop
+        integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates
         real                      :: cavg_smpd
         if( cline%defined('part') )then
             THROW_HARD('abinitio3D_cavgs distributed execution is master-only; remove part from command line')
@@ -66,8 +72,8 @@ contains
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         call cline%set('nu_refine',     'no') ! no nonuniform refinement for cavgs route
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                      'yes')
         call cline%set('objfun', 'euclid') ! noise normalized Euclidean distances from the start
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                      'yes')
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',                     0.95)
         if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                  90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',   abinitio_cenlp_default())
@@ -348,6 +354,18 @@ contains
         if( nstages_ini3D == abinitio_nstages_ini3D_max() )then
             if( trim(params%rank_cavgs).eq.'yes' ) call rank_cavgs
         endif
+        ! Message for conditional restarts
+        final_nstates = 1
+        if( nstates_target > 1 )then
+            states = nint(spproj%os_cls3D%get_all('state'))
+            final_nstates = 0
+            do s = 1, nstates_target
+                pop = count(states == s)
+                if( pop > 0 ) final_nstates = final_nstates + 1
+                write(logfhandle, '(A,I0,A,I0)') '>>> FINAL POPULATION STATE ', s, ': ', pop
+            enddo
+        endif
+        call cline%set('final_nstates', final_nstates)
         ! remove postprocessed (pproc) volumes; with bfac=0 they add nothing in cavgs mode
         call del_pproc_vols
         ! end gracefully
@@ -498,6 +516,63 @@ contains
             end subroutine strip_distributed_child
 
     end subroutine exec_abinitio3D_cavgs
+
+    subroutine exec_abinitio3D_cavgs_conditional_restarts( self, cline )
+        class(commander_abinitio3D_cavgs_conditional_restarts), intent(inout) :: self
+        class(cmdline),                                         intent(inout) :: cline
+        type(commander_abinitio3D_cavgs) :: xcommander_abinitio3D_cavgs
+        type(cmdline) :: cline_backup
+        integer       :: nrestarts, irestart, final_nstates, input_nstates, nstates_collapse
+        logical       :: state_collapse, l_mkdir
+        if( .not. cline%defined('nrestarts_collapse') )then
+            THROW_HARD('nrestarts_collapse needs to be on the command line for abinitio3D_cavgs state collapse conditional restarts')
+        endif
+        if( cline%defined('nrestarts') )then
+            THROW_HARD('nrestarts is not compatible with abinitio3D_cavgs state collapse conditional restarts')
+        endif
+        if( .not. cline%defined('nstates') )then
+            THROW_HARD('nstates needs to be defined on command line for abinitio3D_cavgs state collapse conditional restarts')
+        endif
+        input_nstates  = cline%get_iarg('nstates')
+        if( input_nstates == 1 )then
+            THROW_HARD('nstates needs to be greater than 1 for abinitio3D_cavgs state collapse conditional restarts')
+        endif
+        if( .not.cline%defined('projfile') )then
+            THROW_HARD('projfile needs to be defined on command line for abinitio3D_cavgs state collapse conditional restarts')
+        endif
+        if( cline%defined('mkdir') )then
+            l_mkdir = cline%get_carg('mkdir')=='yes'
+        else
+            call cline%set('mkdir', 'yes')
+            l_mkdir = .true.
+        endif
+        if( .not.l_mkdir ) THROW_HARD('MKDIR must be YES for abinitio3D_cavgs state collapse conditional restarts')
+        cline_backup     = cline
+        nrestarts        = cline%get_iarg('nrestarts_collapse')
+        nstates_collapse = 0
+        write(logfhandle,'(A,I0,A,I0)') '>>> INITIAL RUN WITH NSTATES=', input_nstates
+        write(logfhandle,'(A)') '>>>'
+        do irestart = 1, nrestarts
+            cline = cline_backup
+            call cline%delete('nrestarts_collapse')
+            call xcommander_abinitio3D_cavgs%execute(cline)
+            if( l_mkdir ) call chdir('..')
+            final_nstates = cline%get_iarg('final_nstates')
+            call cline%delete('final_nstates')
+            state_collapse = (final_nstates == 1)
+            if( state_collapse )then
+                nstates_collapse = nstates_collapse + 1
+                write(logfhandle,'(A,I0)') '>>>'
+                write(logfhandle,'(A,I0,A,I0)') '>>> STATE COLLAPSE DURING RUN ', irestart,&
+                    &' - FINAL NSTATES=', final_nstates
+                write(logfhandle,'(A)')    '>>>'
+            else
+                exit
+            endif
+        end do
+        ! cleanup
+        call cline_backup%kill
+    end subroutine exec_abinitio3D_cavgs_conditional_restarts
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio3D( self, cline )
