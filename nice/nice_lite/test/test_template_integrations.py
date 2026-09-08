@@ -54,6 +54,70 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
         self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
 
+    def test_jobbuilder_converts_dropped_file_uris_to_paths(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        context = {
+            "stream_user_inputs": [
+                {"key": "movies", "keytype": "dir", "label": "movies"},
+                {"key": "gain", "keytype": "file", "label": "gain"},
+                {"key": "threads", "keytype": "int", "label": "threads"},
+            ],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{
+                "prg": "demo",
+                "disp": "Demo",
+                "sections": [{
+                    "name": "inputs",
+                    "inputs": [
+                        {"key": "directory", "keytype": "dir", "label": "directory"},
+                        {"key": "document", "keytype": "file", "label": "document"},
+                        {"key": "count", "keytype": "int", "label": "count"},
+                    ],
+                }],
+            }],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{
+                "prg": "demo",
+                "disp": "Demo",
+                "sections": [{
+                    "name": "inputs",
+                    "inputs": [
+                        {"key": "directory", "keytype": "dir", "label": "directory"},
+                        {"key": "document", "keytype": "file", "label": "document"},
+                        {"key": "count", "keytype": "int", "label": "count"},
+                    ],
+                }],
+            }],
+            "default_batch_project_file": "/workspace/workspace.simple",
+        }
+        rendered = render_to_string("jobbuilder.html", context)
+
+        self.assertEqual(jobbuilder.count(" data-path-input"), 8)
+        for input_id in (
+            "field_movies",
+            "field_gain",
+            "simple_batch_project_file",
+            "batch_demo_directory",
+            "batch_demo_document",
+            "single_batch_project_file",
+            "single_demo_directory",
+            "single_demo_document",
+        ):
+            self.assertRegex(rendered, rf'<input id="{input_id}"[^>]*data-path-input')
+        for input_id in ("field_threads", "batch_demo_count", "single_demo_count"):
+            self.assertNotRegex(rendered, rf'<input id="{input_id}"[^>]*data-path-input')
+        self.assertIn('dataTransfer.getData("text/uri-list")', jobbuilder)
+        self.assertIn('dataTransfer.getData("text/plain")', jobbuilder)
+        self.assertIn('dataTransfer.getData("text/x-moz-url-data")', jobbuilder)
+        self.assertIn('decodeURIComponent(fileUrl.pathname)', jobbuilder)
+        self.assertIn('document.addEventListener("drop"', jobbuilder)
+        self.assertIn('input.matches("[data-path-input]")', jobbuilder)
+        self.assertIn('function applyDroppedFilePath(input, path)', jobbuilder)
+        self.assertIn('window.setTimeout(function()', jobbuilder)
+        self.assertIn('const insertedPath = fileUriToPath(input.value);', jobbuilder)
+        self.assertIn('input.dispatchEvent(new Event("input", {bubbles: true}));', jobbuilder)
+
     def test_new_project_back_button_closes_form_in_parent_shell(self):
         newproject = self._read_template("newproject.html")
 

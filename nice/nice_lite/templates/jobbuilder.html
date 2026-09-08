@@ -152,7 +152,7 @@
 
                                     {% elif keytype == "dir" %}
                                         {# Directory picker: text input + folder icon + full-screen iframe browser #}
-                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}" data-path-input
                                             {% if input.required %}required{% endif %}
                                             {% if input.key == "dir_movies" %}onblur="testStreamPath(this);" oninput="this.setCustomValidity('');" data-has-value="{% if "value" in input %}true{% else %}false{% endif %}"{% endif %}
                                             {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
@@ -169,7 +169,7 @@
 
                                     {% elif keytype == "file" %}
                                         {# File picker: same pattern, file icon, file browser URL #}
-                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}" data-path-input
                                             {% if input.required %}required{% endif %}
                                             {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
@@ -280,7 +280,7 @@
                         <label class="text-xs font-bold text-streamtext whitespace-nowrap"
                                for="simple_batch_project_file">input project</label>
                         <div class="relative flex items-center">
-                            <input id="simple_batch_project_file" type="text"
+                            <input id="simple_batch_project_file" type="text" data-path-input
                                    value="{{ default_batch_project_file }}"
                                    data-required-extension=".simple"
                                    title="select a .simple project file"
@@ -381,7 +381,7 @@
                                                             </label>
                                                         </div>
                                                     {% elif input.keytype == "dir" %}
-                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" data-path-input
                                                                {% if input.required %}required{% endif %}
                                                                {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -393,7 +393,7 @@
                                                             </svg>
                                                         </button>
                                                     {% elif input.keytype == "file" %}
-                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" data-path-input
                                                                {% if input.required %}required{% endif %}
                                                                {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -501,7 +501,7 @@
                         <label class="text-xs font-bold text-streamtext whitespace-nowrap"
                                for="single_batch_project_file">input project</label>
                         <div class="relative flex items-center">
-                            <input id="single_batch_project_file" type="text"
+                            <input id="single_batch_project_file" type="text" data-path-input
                                    value="{{ default_batch_project_file }}"
                                    data-required-extension=".simple"
                                    title="select a .simple project file"
@@ -602,7 +602,7 @@
                                                             </label>
                                                         </div>
                                                     {% elif input.keytype == "dir" %}
-                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" data-path-input
                                                                {% if input.required %}required{% endif %}
                                                                {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -614,7 +614,7 @@
                                                             </svg>
                                                         </button>
                                                     {% elif input.keytype == "file" %}
-                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" data-path-input
                                                                {% if input.required %}required{% endif %}
                                                                {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -676,6 +676,67 @@
             iframe.setAttribute("hidden", "hidden");
             iframe.classList.add("hidden");
         }
+
+        function fileUriToPath(value) {
+            const candidate = String(value || "").trim();
+            if (!/^file:\/\//i.test(candidate)) return null;
+
+            try {
+                const fileUrl = new URL(candidate);
+                if (fileUrl.protocol !== "file:") return null;
+                const hostname = fileUrl.hostname && fileUrl.hostname !== "localhost"
+                    ? "//" + fileUrl.hostname
+                    : "";
+                return hostname + decodeURIComponent(fileUrl.pathname);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function getDroppedFilePath(dataTransfer) {
+            if (!dataTransfer) return null;
+            const droppedValues = [
+                dataTransfer.getData("text/uri-list"),
+                dataTransfer.getData("text/plain"),
+                dataTransfer.getData("text/x-moz-url-data"),
+                dataTransfer.getData("text/x-moz-url"),
+            ];
+
+            for (const droppedValue of droppedValues) {
+                const candidates = droppedValue.split(/\r?\n/);
+                for (const candidate of candidates) {
+                    if (!candidate.trim() || candidate.trim().startsWith("#")) continue;
+                    const path = fileUriToPath(candidate);
+                    if (path !== null) return path;
+                }
+            }
+            return null;
+        }
+
+        function applyDroppedFilePath(input, path) {
+            input.value = path;
+            input.dispatchEvent(new Event("input", {bubbles: true}));
+            input.dispatchEvent(new Event("change", {bubbles: true}));
+        }
+
+        document.addEventListener("drop", function(event) {
+            const input = event.target;
+            if (!(input instanceof HTMLInputElement) || !input.matches("[data-path-input]")) return;
+            const path = getDroppedFilePath(event.dataTransfer);
+            if (path === null) {
+                // Some browsers expose only an opaque Files payload during
+                // drop, then insert the file URI as their default action.
+                // Normalize that inserted value on the next event-loop turn.
+                window.setTimeout(function() {
+                    const insertedPath = fileUriToPath(input.value);
+                    if (insertedPath !== null) applyDroppedFilePath(input, insertedPath);
+                }, 0);
+                return;
+            }
+
+            event.preventDefault();
+            applyDroppedFilePath(input, path);
+        });
 
         let pathGateEnabled = false;
 
