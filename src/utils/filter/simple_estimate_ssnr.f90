@@ -413,17 +413,21 @@ contains
 
     end subroutine lpstages
 
-    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo )
+    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
+        logical, optional, intent(in)  :: force_lpstart
         real,    parameter :: LP2SMPD_TARGET   = 0.4
         real,    parameter :: SMPD_TARGET_MIN  = 2.5
         integer :: i
         real    :: lpstart_eff
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_fast')
         lpstart_eff = max(lpstart, LPSTAGES_STAGE1_LP_FLOOR)
+        if( present(force_lpstart) )then
+            if( force_lpstart ) lpstart_eff = lpstart
+        endif
         lpinfo(:)%l_lpset = .true.
         do i = 1,nstages
             if( nstages == 1 )then

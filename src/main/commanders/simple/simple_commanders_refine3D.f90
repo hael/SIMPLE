@@ -107,12 +107,10 @@ contains
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
-        if( .not. cline%defined('envfsc') )then
-            ! Density-envelope/phase-randomization-corrected FSC steers the
-            ! matching LP, NU gating, and convergence.
-            call cline%set('envfsc', 'yes')
-        endif
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',            'yes')
+        ! Density-envelope/phase-randomization-corrected FSC steers the
+        ! matching LP, NU gating, and convergence.
+        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc', 'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
         if( cline%defined('ref_pose_init') .and. cline%get_carg('ref_pose_init').eq.'cc' )then
             call cline%set('sigma_est', 'global')
@@ -128,9 +126,7 @@ contains
         ! shell walk) on both backends; abinitio3D keeps the discrete static
         ! ladder via its stage policy.
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
-        if( .not. cline%defined('automsk') )then
-            call cline%set('automsk', 'yes') ! evidence-constrained background filtering
-        endif
+        if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! evidence-constrained background filtering
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
             maxits_user = cline%get_iarg('maxits')
@@ -1502,19 +1498,19 @@ contains
         call cline%set('nu_refine',       'no')
         call cline%set('combine_eo',      'no')
         call cline%set('multivol_mode',   'independent')
+        call cline%set('sigma_est',       'global')
+        ! staged frequency marching always uses planner-driven downscaling
+        if( cline%defined('autoscale') ) write(logfhandle,'(A)') &
+            &'>>> '//WORKFLOW_LABEL//' IGNORES autoscale: frequency marching owns downscaling'
+        call cline%set('autoscale', 'yes')
         ! overridable defaults
         if( .not. cline%defined('filt_mode')       ) call cline%set('filt_mode',       'nonuniform_lpset')
         if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',          'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',          'no')
-        call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_inpl')       ) call cline%set('prob_inpl',       'yes')
         if( .not. cline%defined('refine')          ) call cline%set('refine',          'prob_neigh')
         if( .not. cline%defined('prob_neigh_mode') ) call cline%set('prob_neigh_mode', 'state')
-        ! staged frequency marching always uses planner-driven downscaling
-        if( cline%defined('autoscale') ) write(logfhandle,'(A)') &
-            &'>>> '//WORKFLOW_LABEL//' IGNORES autoscale: frequency marching owns downscaling'
-        call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',          'yes')
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart', LPSTART_CLASSIFY3D_REFS)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',  LPSTOP_CLASSIFY3D_REFS)
