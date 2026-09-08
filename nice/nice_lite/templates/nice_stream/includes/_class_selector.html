@@ -27,6 +27,9 @@
             <div class="flex flex-wrap gap-4 text-[10px] text-streamlabel">
                 <span>selected classes <strong data-selected-class-count class="ml-1 font-mono text-streamtext">0 / 0</strong></span>
                 <span>selected particles <strong data-selected-particle-count class="ml-1 font-mono text-streamtext">0 / 0</strong></span>
+                {% if batch_class_selector.sampling_distance %}
+                    <span>pixel size <strong class="ml-1 font-mono text-streamtext">{{ batch_class_selector.sampling_distance|floatformat:3 }} Å/px</strong></span>
+                {% endif %}
                 <span data-class-selector-save-status class="text-streamaccent" role="status" aria-live="polite">loaded</span>
             </div>
             <p class="text-[9px] text-streamsubtle">click to toggle · Shift-click a visual range · Ctrl/Cmd-wheel over the grid to resize</p>
@@ -34,7 +37,8 @@
 
         <div id="batch_class_selector_grid" data-class-selector-grid data-output-grid
              data-output-grid-size-property="--class-tile-size" data-output-grid-tile-dimension="width"
-             data-pick-overlay-mode="circle" data-pick-overlay-size="0"
+             data-pick-overlay-mode="circle" data-pick-overlay-size="{{ batch_class_selector.overlay_size|default:0 }}"
+             data-pick-overlay-sampling-distance="{{ batch_class_selector.sampling_distance|default:0 }}"
              data-pick-overlay-color="#ff3b30"
              class="flex flex-wrap content-start items-start gap-2 overflow-y-auto rounded-lg border border-streamdivider bg-streamsurface p-2"
              style="max-height:70vh" aria-label="2D class averages">

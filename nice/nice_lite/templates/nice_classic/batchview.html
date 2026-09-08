@@ -206,7 +206,7 @@
     </style>
     <script type="module" src="{% static 'nice_lite/output_grid.js' %}?v=2"></script>
     {% if pick_micrographs or batch_class_selector %}
-        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=14"></script>
+        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=17"></script>
     {% endif %}
     {% if batch_class_selector %}
         <script type="module" src="{% static 'nice_lite/class_selector.js' %}?v=4"></script>
@@ -279,25 +279,37 @@
                     <div id="batch_output_controls" class="flex flex-wrap items-center justify-end gap-2">
                         {% if pick_box_overlay_available or batch_class_selector %}
                             <div data-pick-overlay-size-control
-                                 title="set circle diameter or box size in source-image pixels"
+                                 title="set circle diameter or box size{% if batch_class_selector.sampling_distance %} in angstroms or source-image pixels{% else %} in source-image pixels{% endif %}"
                                  class="{% if not batch_class_selector %}hidden {% endif %}min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
                                 <label for="batch_pick_overlay_size">size</label>
                                 <input id="batch_pick_overlay_size" type="range"
-                                       min="1" max="1000" step="1" value="100"{% if not batch_class_selector %} disabled{% endif %}
-                                       aria-label="overlay size in pixels"
-                                       aria-valuetext="100 pixels"
+                                       min="1" max="1000" step="1" value="{{ batch_class_selector.overlay_display_size|default:100 }}"{% if not batch_class_selector %} disabled{% endif %}
+                                       aria-label="overlay size in {% if batch_class_selector.overlay_unit == 'angstroms' %}angstroms{% else %}pixels{% endif %}"
+                                       aria-valuetext="{{ batch_class_selector.overlay_display_size|default:100 }} {% if batch_class_selector.overlay_unit == 'angstroms' %}angstroms{% else %}pixels{% endif %}"
                                        aria-controls="{% if batch_class_selector %}batch_class_selector_grid{% else %}batch_artifact_images{% endif %}"
                                        style="width:6rem;accent-color:var(--color-streamaccent)">
                                 <input id="batch_pick_overlay_size_value" type="number"
-                                       min="1" max="1000" step="1" value="100"{% if not batch_class_selector %} disabled{% endif %}
+                                       min="1" max="1000" step="1" value="{{ batch_class_selector.overlay_display_size|default:100 }}"{% if not batch_class_selector %} disabled{% endif %}
                                        data-pick-overlay-size-number
-                                       inputmode="numeric"
-                                       aria-label="enter overlay size in pixels"
-                                       aria-valuetext="100 pixels"
+                                       inputmode="decimal"
+                                       aria-label="enter overlay size in {% if batch_class_selector.overlay_unit == 'angstroms' %}angstroms{% else %}pixels{% endif %}"
+                                       aria-valuetext="{{ batch_class_selector.overlay_display_size|default:100 }} {% if batch_class_selector.overlay_unit == 'angstroms' %}angstroms{% else %}pixels{% endif %}"
                                        aria-controls="{% if batch_class_selector %}batch_class_selector_grid{% else %}batch_artifact_images{% endif %}"
                                        class="rounded-md border border-streamline bg-streambar px-2 py-1 font-mono text-streamtext"
                                        style="width:5rem">
-                                <span aria-hidden="true" class="text-streamsubtle">px</span>
+                                {% if batch_class_selector.sampling_distance %}
+                                    <button id="batch_pick_overlay_size_unit" type="button"
+                                            data-pick-overlay-size-unit
+                                            value="{{ batch_class_selector.overlay_unit }}"
+                                            aria-label="overlay size unit {% if batch_class_selector.overlay_unit == 'angstroms' %}angstroms; switch to pixels{% else %}pixels; switch to angstroms{% endif %}"
+                                            title="switch to {% if batch_class_selector.overlay_unit == 'angstroms' %}pixels{% else %}angstroms{% endif %}"
+                                            class="rounded-md border border-streamline bg-streambar px-1 text-streamtext hover:bg-streamsurface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                            style="min-height:1.75rem;min-width:2rem">
+                                        <span data-pick-overlay-size-unit-label>{% if batch_class_selector.overlay_unit == 'angstroms' %}Å{% else %}px{% endif %}</span>
+                                    </button>
+                                {% else %}
+                                    <span aria-hidden="true" class="text-streamsubtle">px</span>
+                                {% endif %}
                             </div>
                             <button id="batch_pick_overlay_toggle" type="button" data-pick-overlay-toggle
                                     data-pick-overlay-mode="{% if batch_class_selector %}circle{% else %}points{% endif %}"
@@ -436,6 +448,11 @@
                     </div>
                 </div>
                 <div id="batch_artifacts_panel" data-collapse-body class="mt-3">
+                    {% if project_sampling_distance and not batch_class_selector %}
+                        <div class="mb-3 flex flex-wrap gap-4 text-[10px] text-streamlabel">
+                            <span>pixel size <strong class="ml-1 font-mono text-streamtext">{{ project_sampling_distance|floatformat:3 }} Å/px</strong></span>
+                        </div>
+                    {% endif %}
                     {% if batch_class_selector %}
                         {% include 'nice_stream/includes/_class_selector.html' %}
                     {% elif class_selector_requested and class_selector_error %}

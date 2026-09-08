@@ -103,6 +103,11 @@ class BatchViewTests(SimpleTestCase):
 
         with (
             patch.object(batch_views, "_get_accessible_batch_job", return_value=(batch_job, jobmodel)),
+            patch.object(
+                batch_views,
+                "_project_sampling_distance",
+                return_value=0.885,
+            ),
             patch.object(batch_views, "SIMPLEBatch", return_value=launcher),
             patch.object(batch_views, "SIMPLEProjFile") as projfile,
             patch.object(batch_views, "render", return_value=rendered_response) as render,
@@ -140,6 +145,7 @@ class BatchViewTests(SimpleTestCase):
             },
         ])
         self.assertEqual(context["submitted_argument_count"], 1)
+        self.assertEqual(context["project_sampling_distance"], 0.885)
         self.assertEqual(response.cookies["selected_project_id"].value, "3")
         self.assertEqual(response.cookies["selected_workspace_id"].value, "4")
         self.assertEqual(response.cookies["workspace_checksum"]["max-age"], 0)
@@ -163,6 +169,96 @@ class BatchViewTests(SimpleTestCase):
             "submitted": True,
         }])
 
+    def test_submitted_mask_diameter_accepts_only_positive_finite_numbers(self):
+        for value, expected in (
+            ("190", 190),
+            (120.6, 120.6),
+            (0.4, 0.4),
+            (0, None),
+            (-10, None),
+            (True, None),
+            ("nan", None),
+            ("invalid", None),
+            (None, None),
+        ):
+            with self.subTest(value=value):
+                jobmodel = SimpleNamespace(args={"mskdiam": value})
+                self.assertEqual(
+                    batch_views._submitted_mask_diameter(jobmodel),
+                    expected,
+                )
+
+    def test_project_sampling_distance_prefers_output_then_stack_and_micrograph(self):
+        reader = Mock()
+        reader.read_records.side_effect = lambda oritype: {
+            "out": [{"imgkind": "cavg", "smpd": "1.5"}],
+            "stk": [{"smpd": 1.3}],
+            "mic": [{"smpd": 0.885}],
+        }[oritype]
+
+        with patch.object(
+            batch_views,
+            "SIMPLEProjectFileReader",
+            return_value=reader,
+        ):
+            sampling_distance = batch_views._project_sampling_distance(
+                "/project/workspace.simple"
+            )
+
+        self.assertEqual(sampling_distance, 1.5)
+        reader.read_records.assert_called_once_with("out")
+
+    def test_project_sampling_distance_falls_back_to_stack_records(self):
+        reader = Mock()
+        reader.read_records.side_effect = lambda oritype: {
+            "out": [{"imgkind": "frc2D"}],
+            "stk": [{"smpd": 1.3}],
+            "mic": [{"smpd": 0.885}],
+        }[oritype]
+
+        with patch.object(
+            batch_views,
+            "SIMPLEProjectFileReader",
+            return_value=reader,
+        ):
+            sampling_distance = batch_views._project_sampling_distance(
+                "/project/workspace.simple"
+            )
+
+        self.assertEqual(sampling_distance, 1.3)
+        self.assertEqual(
+            [call.args[0] for call in reader.read_records.call_args_list],
+            ["out", "stk"],
+        )
+
+    def test_class_overlay_uses_pixels_until_mask_and_sampling_are_available(self):
+        jobmodel = SimpleNamespace(args={"mskdiam": "190"})
+        no_sampling = batch_views._class_overlay_settings(
+            jobmodel,
+            SimpleNamespace(sampling_distance=None),
+        )
+        no_mask = batch_views._class_overlay_settings(
+            SimpleNamespace(args={}),
+            SimpleNamespace(sampling_distance=1.3),
+        )
+        project_sampling = batch_views._class_overlay_settings(
+            jobmodel,
+            SimpleNamespace(sampling_distance=None),
+            project_sampling_distance=1.3,
+        )
+
+        self.assertEqual(no_sampling["overlay_unit"], "pixels")
+        self.assertIsNone(no_sampling["overlay_size"])
+        self.assertEqual(no_mask["overlay_unit"], "pixels")
+        self.assertIsNone(no_mask["overlay_size"])
+        self.assertEqual(no_mask["sampling_distance"], 1.3)
+        self.assertEqual(project_sampling["overlay_unit"], "angstroms")
+        self.assertAlmostEqual(
+            project_sampling["overlay_size"],
+            190 / 1.3,
+            places=5,
+        )
+
     def test_batch_class_selector_is_loaded_only_by_explicit_query_key(self):
         project = SimpleNamespace(name="project", dirc="/project")
         workspace = SimpleNamespace(name="workspace", proj=project)
@@ -173,7 +269,7 @@ class BatchViewTests(SimpleTestCase):
             desc="",
             status="finished",
             cdat="created",
-            args={},
+            args={"mskdiam": "190"},
             master_stats={"package": "simple", "program": "abinitio2D"},
             dset=workspace,
         )
@@ -187,6 +283,7 @@ class BatchViewTests(SimpleTestCase):
             stack_name="classes.mrcs",
             width=128,
             height=128,
+            sampling_distance=1.3,
             initial_selected_class_ids=(1,),
             browser_data=lambda: {
                 "classes": [{"class_id": 1, "stack_index": 1}],
@@ -226,6 +323,24 @@ class BatchViewTests(SimpleTestCase):
         self.assertEqual(open_context["batch_class_selector"]["class_count"], 1)
         self.assertEqual(open_context["batch_class_selector"]["width"], 128)
         self.assertEqual(open_context["batch_class_selector"]["height"], 128)
+        self.assertAlmostEqual(
+            open_context["batch_class_selector"]["sampling_distance"],
+            1.3,
+            places=6,
+        )
+        self.assertAlmostEqual(
+            open_context["batch_class_selector"]["overlay_size"],
+            190 / 1.3,
+            places=5,
+        )
+        self.assertEqual(
+            open_context["batch_class_selector"]["overlay_display_size"],
+            190,
+        )
+        self.assertEqual(
+            open_context["batch_class_selector"]["overlay_unit"],
+            "angstroms",
+        )
         self.assertTrue(
             open_context["class_selector_replaces_artifact_previews"]
         )

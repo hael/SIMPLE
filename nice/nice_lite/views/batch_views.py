@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 import struct
 
@@ -18,6 +19,7 @@ from django.views.decorators.http import require_GET, require_POST
 from ..data_structures.batchjob import BatchJob
 from ..data_structures.class_selection import (
     ClassSelectionError,
+    SIMPLEProjectFileReader,
     batch_class_selection_available,
     deselected_class_ids,
     load_batch_class_selection,
@@ -47,6 +49,38 @@ _BATCH_PICK_COORDINATE_LIMIT = 1500
 _BATCH_PARTICLE_PAGE_SIZE = 40
 _BATCH_MOVIE_PAGE_SIZE = 40
 _BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
+
+
+def _positive_finite_number(value):
+    """Return a normalized positive finite numeric value, otherwise None."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number <= 0:
+        return None
+    rounded = round(number, 6)
+    return int(rounded) if rounded.is_integer() else rounded
+
+
+def _project_sampling_distance(project_path):
+    """Read the output sampling distance directly from a SIMPLE project."""
+    if not isinstance(project_path, (str, os.PathLike)):
+        return None
+    try:
+        reader = SIMPLEProjectFileReader(project_path)
+        for oritype in ("out", "stk", "mic"):
+            for record in reader.read_records(oritype):
+                sampling_distance = _positive_finite_number(
+                    record.get("smpd") if isinstance(record, dict) else None
+                )
+                if sampling_distance is not None:
+                    return sampling_distance
+    except (ClassSelectionError, OSError, OverflowError, struct.error):
+        return None
+    return None
 
 
 def _get_accessible_batch_job(request, log_context, job_id=None):
@@ -282,6 +316,46 @@ def _argument_rows(jobmodel, metadata):
     return arguments
 
 
+def _submitted_mask_diameter(jobmodel):
+    """Return a positive finite submitted mask diameter in angstroms."""
+    raw_args = jobmodel.args if isinstance(jobmodel.args, dict) else {}
+    return _positive_finite_number(raw_args.get("mskdiam"))
+
+
+def _class_overlay_settings(
+    jobmodel,
+    selection,
+    project_sampling_distance=None,
+):
+    """Return class-overlay sizes derived from SIMPLE project sampling."""
+    sampling_distance = getattr(selection, "sampling_distance", None)
+    if (
+        isinstance(sampling_distance, bool)
+        or not isinstance(sampling_distance, (int, float))
+        or not math.isfinite(sampling_distance)
+        or sampling_distance <= 0
+    ):
+        sampling_distance = _positive_finite_number(project_sampling_distance)
+
+    mask_diameter_angstroms = _submitted_mask_diameter(jobmodel)
+    settings = {
+        "sampling_distance": sampling_distance,
+        "overlay_size": None,
+        "overlay_display_size": None,
+        "overlay_unit": "pixels",
+    }
+    if sampling_distance is None or mask_diameter_angstroms is None:
+        return settings
+
+    overlay_size = round(mask_diameter_angstroms / sampling_distance, 6)
+    settings.update({
+        "overlay_size": overlay_size,
+        "overlay_display_size": mask_diameter_angstroms,
+        "overlay_unit": "angstroms",
+    })
+    return settings
+
+
 def _empty_movie_page():
     """Return the stable empty shape used by the import movie gallery."""
     return {
@@ -391,6 +465,7 @@ def _batch_detail_context(
     """Assemble validated batch metadata, logs, artifacts, and project summary."""
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     result_project = batch_job.get_result_project_path()
+    project_sampling_distance = _project_sampling_distance(result_project)
     project_stats = {}
     project_reader = None
     pick_micrographs = []
@@ -430,6 +505,11 @@ def _batch_detail_context(
                 "stack_name": selection.stack_name,
                 "width": selection.width,
                 "height": selection.height,
+                **_class_overlay_settings(
+                    jobmodel,
+                    selection,
+                    project_sampling_distance=project_sampling_distance,
+                ),
                 "initial_selected_class_ids": selection.initial_selected_class_ids,
                 "browser_data": selection.browser_data(),
             }
@@ -514,6 +594,7 @@ def _batch_detail_context(
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
         "result_project": result_project,
+        "project_sampling_distance": project_sampling_distance,
         "project_sections": _project_sections(project_stats),
         "project_summary_available": bool(project_stats),
         "class_selector_available": class_selector_available,

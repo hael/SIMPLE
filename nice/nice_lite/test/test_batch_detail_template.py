@@ -88,6 +88,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 "jobid": 7,
                 "status": "finished",
                 "result_project": "/project/workspace.simple",
+                "project_sampling_distance": 1.4,
                 "project_summary_available": False,
                 "class_selector_available": True,
                 "class_selector_requested": True,
@@ -102,6 +103,10 @@ class BatchDetailTemplateTests(SimpleTestCase):
                     "stack_name": "classes.mrcs",
                     "width": 128,
                     "height": 128,
+                    "sampling_distance": 1.5,
+                    "overlay_size": 80,
+                    "overlay_display_size": 120,
+                    "overlay_unit": "angstroms",
                     "initial_selected_class_ids": (1,),
                     "browser_data": {
                         "classes": [{"class_id": 1, "stack_index": 1}],
@@ -194,12 +199,34 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('data-pick-display-image-selector="[data-class-selector-tile] img"', rendered)
         self.assertIn('id="batch_pick_overlay_toggle"', rendered)
         self.assertIn('data-pick-overlay-mode="circle"', rendered)
+        self.assertIn('data-pick-overlay-size="80"', rendered)
+        self.assertIn('data-pick-overlay-sampling-distance="1.5"', rendered)
         self.assertIn('data-pick-overlay-modes="circle,boxes"', rendered)
         self.assertIn('data-pick-overlay-name="class-average"', rendered)
         self.assertIn('aria-controls="batch_class_selector_grid"', rendered)
         self.assertIn('aria-label="circle overlay; show box"', rendered)
         self.assertIn('data-pick-overlay-toggle-label>circle', rendered)
         self.assertIn('id="batch_pick_overlay_size" type="range"', rendered)
+        self.assertIn('min="1" max="1000" step="1" value="120"', rendered)
+        self.assertIn('aria-label="overlay size in angstroms"', rendered)
+        self.assertIn('aria-valuetext="120 angstroms"', rendered)
+        self.assertIn('inputmode="decimal"', rendered)
+        self.assertIn(
+            '<button id="batch_pick_overlay_size_unit" type="button"',
+            rendered,
+        )
+        self.assertNotIn('<select id="batch_pick_overlay_size_unit"', rendered)
+        self.assertIn('value="angstroms"', rendered)
+        self.assertIn('aria-label="overlay size unit angstroms; switch to pixels"', rendered)
+        self.assertIn('data-pick-overlay-size-unit-label>Å</span>', rendered)
+        self.assertIn(
+            'pixel size <strong class="ml-1 font-mono text-streamtext">1.500 Å/px',
+            rendered,
+        )
+        self.assertNotIn(
+            'pixel size <strong class="ml-1 font-mono text-streamtext">1.400 Å/px',
+            rendered,
+        )
         self.assertLess(
             rendered.index('id="batch_pick_overlay_size"'),
             rendered.index('id="batch_pick_overlay_toggle"'),
@@ -314,7 +341,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("{ passive: false }", output_grid_script)
         self.assertIn('target.querySelectorAll("[data-output-grid]")', output_grid_script)
         self.assertIn("output_grid.js?v=2", rendered)
-        self.assertIn("pick_micrograph_slider.js?v=14", rendered)
+        self.assertIn("pick_micrograph_slider.js?v=17", rendered)
         self.assertIn("class_selector.js?v=4", rendered)
 
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):
@@ -349,6 +376,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 ],
             }],
             "ctf_artifact_micrograph_toggle_available": True,
+            "project_sampling_distance": 1.3,
             "arguments": [],
             "logs": [],
             "auto_refresh": False,
@@ -372,6 +400,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertEqual(rendered.count("data-artifact-dimensions"), 2)
         self.assertIn("800 × 600 px", rendered)
         self.assertIn("4096 × 3072 px", rendered)
+        self.assertIn("pixel size", rendered)
+        self.assertIn("1.300 Å/px", rendered)
         self.assertGreater(rendered.index("movie_thumb.jpg"), rendered.index("movie_ctf_estimate_diag.jpg"))
         self.assertIn("setBatchCtfMicrographsVisible(false)", batch_view)
         self.assertIn('visible ? "hide micrographs" : "show micrographs"', batch_view)
@@ -409,6 +439,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 ],
             }],
             "motion_artifact_toggle_available": True,
+            "project_sampling_distance": 1.3,
             "arguments": [],
             "logs": [],
             "auto_refresh": False,
@@ -426,6 +457,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('data-motion-artifact-preview="micrograph"', rendered)
         self.assertEqual(rendered.count("data-artifact-dimensions"), 2)
         self.assertIn("4096 × 3072 px", rendered)
+        self.assertIn("pixel size", rendered)
+        self.assertIn("1.300 Å/px", rendered)
         self.assertIn('class="hidden relative', rendered)
         self.assertIn('setBatchMotionArtifactView("power_spectrum")', batch_view)
         self.assertIn('const showSideBySide = view === "side_by_side"', batch_view)
@@ -452,7 +485,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn(shared_slide, slider)
         self.assertIn(shared_slide, batch_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", batch_view)
-        self.assertIn("pick_micrograph_slider.js' %}?v=14", batch_view)
+        self.assertIn("pick_micrograph_slider.js' %}?v=17", batch_view)
         self.assertIn("nice_lite/pick_micrograph_slider.js", initial_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", reference_pick)
         self.assertIn("nice_stream/includes/_scroll_btn.html", slider)
@@ -481,6 +514,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 "ydim": 3072,
                 "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
             }],
+            "project_sampling_distance": 1.3,
             "pick_box_overlay_available": True,
             "arguments": [],
             "logs": [],
@@ -554,9 +588,17 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('sizeInput.addEventListener("input"', slider_script)
         self.assertIn('sizeNumber.addEventListener("input"', slider_script)
         self.assertIn('sizeNumber.addEventListener("change"', slider_script)
-        self.assertIn("sizeNumber.value = String(pixels)", slider_script)
+        self.assertIn("const samplingDistance = Number(", slider_script)
+        self.assertIn('sizeUnit?.value === "angstroms"', slider_script)
+        self.assertIn("const renderSizeUnitControl = () =>", slider_script)
+        self.assertIn('label.textContent = unit === "angstroms" ? "Å" : "px"', slider_script)
+        self.assertIn("pixels * samplingDistance", slider_script)
+        self.assertIn("value / samplingDistance", slider_script)
+        self.assertIn("sizeNumber.value = formattedValue", slider_script)
         self.assertIn("sizeNumber.max = sizeInput.max", slider_script)
-        self.assertIn("setSize(nativeSize || sizeInput.value)", slider_script)
+        self.assertIn("const requestedInitialSize = Number(", slider_script)
+        self.assertIn("setPixelSize(initialSize || sizeInput.value)", slider_script)
+        self.assertIn('sizeUnit?.addEventListener("click"', slider_script)
         self.assertIn('sizeControl.classList.toggle("hidden", !adjustableSize)', slider_script)
         self.assertIn("if (sizeInput) sizeInput.disabled = !adjustableSize", slider_script)
         self.assertIn("if (sizeNumber) sizeNumber.disabled = !adjustableSize", slider_script)
@@ -586,7 +628,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("overlayContainer?.dataset.pickOverlayColor", slider_script)
         self.assertNotIn("colorInput", slider_script)
         self.assertNotIn('overlayMode === "points"', slider_script)
-        self.assertIn("pick_micrograph_slider.js?v=14", rendered)
+        self.assertIn("pick_micrograph_slider.js?v=17", rendered)
         self.assertIn('data-pick-display-target-id="batch_artifact_images"', rendered)
         self.assertIn('id="batch_pick_display_min" type="range"', rendered)
         self.assertIn('min="0" max="254" step="1" value="0"', rendered)
@@ -622,6 +664,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('data-ydim="3072"', rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("4096 × 3072 px", rendered)
+        self.assertIn("pixel size", rendered)
+        self.assertIn("1.300 Å/px", rendered)
         self.assertIn("movie_thumb.jpg", rendered)
         self.assertIn("picked micrograph 9", rendered)
 
@@ -652,6 +696,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 "first_particle": 41,
                 "last_particle": 80,
             },
+            "project_sampling_distance": 1.3,
             "arguments": [],
             "logs": [],
             "artifact_counts": [{"extension": "MRCS", "count": 1}],
@@ -673,6 +718,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("data-output-grid-tile", rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("128 × 128 px", rendered)
+        self.assertIn("pixel size", rendered)
+        self.assertIn("1.300 Å/px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
         self.assertIn("hover:opacity-90 transition-opacity", rendered)
         self.assertNotIn("<figcaption", rendered)
@@ -713,6 +760,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 "first_movie": 41,
                 "last_movie": 80,
             },
+            "project_sampling_distance": 0.885,
             "arguments": [],
             "logs": [],
             "artifact_counts": [],
@@ -734,6 +782,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("data-output-grid-tile", rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("4096 × 4096 px", rendered)
+        self.assertIn("pixel size", rendered)
+        self.assertIn("0.885 Å/px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
         self.assertNotIn("<figcaption", rendered)
         self.assertIn('aria-label="imported movie pages"', rendered)

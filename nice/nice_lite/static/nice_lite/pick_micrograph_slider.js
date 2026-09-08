@@ -302,6 +302,12 @@
         );
         const sizeControl = sizeInput?.closest("[data-pick-overlay-size-control]");
         const sizeNumber = sizeControl?.querySelector("[data-pick-overlay-size-number]");
+        const sizeUnit = sizeControl?.querySelector("[data-pick-overlay-size-unit]");
+        const samplingDistance = Number(
+            container.dataset.pickOverlaySamplingDistance || 0,
+        );
+        const hasSamplingDistance = Number.isFinite(samplingDistance)
+            && samplingDistance > 0;
         const colorControl = document.getElementById(
             button.dataset.pickOverlayColorControlId || "",
         );
@@ -331,26 +337,97 @@
         );
         let renderedDiscBrightness = null;
         let colorDiscDragging = false;
+        let maximumOverlayPixels = 1000;
 
-        const setSize = (rawPixels) => {
+        const activeSizeUnit = () => (
+            sizeUnit?.value === "angstroms" && hasSamplingDistance
+                ? "angstroms"
+                : "pixels"
+        );
+
+        const renderSizeUnitControl = () => {
+            if (!sizeUnit) return;
+            const unit = activeSizeUnit();
+            const nextUnit = unit === "angstroms" ? "pixels" : "angstroms";
+            const label = sizeUnit.querySelector("[data-pick-overlay-size-unit-label]");
+            if (label) label.textContent = unit === "angstroms" ? "Å" : "px";
+            sizeUnit.setAttribute(
+                "aria-label",
+                `overlay size unit ${unit}; switch to ${nextUnit}`,
+            );
+            sizeUnit.title = `switch to ${nextUnit}`;
+        };
+
+        const formatSize = (value, unit) => {
+            const precision = unit === "angstroms" ? 10 : 1;
+            return String(Math.round(value * precision) / precision);
+        };
+
+        const configureSizeInputs = () => {
+            if (!sizeInput) return;
+            const unit = activeSizeUnit();
+            renderSizeUnitControl();
+            const minimum = unit === "angstroms" ? samplingDistance : 1;
+            const maximum = unit === "angstroms"
+                ? maximumOverlayPixels * samplingDistance
+                : maximumOverlayPixels;
+            const step = unit === "angstroms" ? 0.1 : 1;
+            sizeInput.min = formatSize(minimum, unit);
+            sizeInput.max = formatSize(maximum, unit);
+            sizeInput.step = String(step);
+            if (sizeNumber) {
+                sizeNumber.min = sizeInput.min;
+                sizeNumber.max = sizeInput.max;
+                sizeNumber.step = sizeInput.step;
+            }
+        };
+
+        const renderSizeControls = (pixels) => {
+            if (!sizeInput) return;
+            const unit = activeSizeUnit();
+            const value = unit === "angstroms"
+                ? pixels * samplingDistance
+                : pixels;
+            const formattedValue = formatSize(value, unit);
+            const unitLabel = unit === "angstroms" ? "angstroms" : "pixels";
+            sizeInput.value = formattedValue;
+            sizeInput.setAttribute("aria-label", `overlay size in ${unitLabel}`);
+            sizeInput.setAttribute("aria-valuetext", `${formattedValue} ${unitLabel}`);
+            if (sizeNumber) {
+                sizeNumber.value = formattedValue;
+                sizeNumber.setAttribute(
+                    "aria-label",
+                    `enter overlay size in ${unitLabel}`,
+                );
+                sizeNumber.setAttribute(
+                    "aria-valuetext",
+                    `${formattedValue} ${unitLabel}`,
+                );
+            }
+        };
+
+        const setPixelSize = (rawPixels) => {
+            const requestedPixels = Number(rawPixels);
+            const pixels = Number.isFinite(requestedPixels)
+                ? Math.min(maximumOverlayPixels, Math.max(1, requestedPixels))
+                : 100;
+            container.dataset.pickOverlaySize = String(pixels);
+            renderSizeControls(pixels);
+            redrawOverlays(container);
+        };
+
+        const setSize = (rawValue) => {
             if (!sizeInput) return;
             const minimum = Number(sizeInput.min) || 1;
             const maximum = Number(sizeInput.max) || 1000;
-            const requestedPixels = Number(rawPixels);
-            const pixels = Number.isFinite(requestedPixels)
-                ? Math.round(Math.min(maximum, Math.max(minimum, requestedPixels)))
-                : 100;
-            sizeInput.value = String(pixels);
-            sizeInput.setAttribute(
-                "aria-valuetext",
-                `${pixels} pixels`,
-            );
-            if (sizeNumber) {
-                sizeNumber.value = String(pixels);
-                sizeNumber.setAttribute("aria-valuetext", `${pixels} pixels`);
-            }
-            container.dataset.pickOverlaySize = String(pixels);
-            redrawOverlays(container);
+            const requestedValue = Number(rawValue);
+            const value = Number.isFinite(requestedValue)
+                ? Math.min(maximum, Math.max(minimum, requestedValue))
+                : minimum;
+            const pixels = activeSizeUnit() === "angstroms"
+                ? value / samplingDistance
+                : Math.round(value);
+            setPixelSize(pixels);
         };
 
         const drawColorDisc = () => {
@@ -517,6 +594,7 @@
             if (sizeControl) sizeControl.classList.toggle("hidden", !adjustableSize);
             if (sizeInput) sizeInput.disabled = !adjustableSize;
             if (sizeNumber) sizeNumber.disabled = !adjustableSize;
+            if (sizeUnit) sizeUnit.disabled = !adjustableSize;
             redrawOverlays(container);
         };
 
@@ -530,15 +608,18 @@
         if (sizeInput) {
             sizeInput.addEventListener("input", () => setSize(sizeInput.value));
             const nativeSize = findNativeOverlaySize(container);
-            if (nativeSize) {
-                sizeInput.max = String(Math.max(
-                    Number(sizeInput.max) || 1000,
-                    nativeSize * 3,
-                ));
-            }
+            const requestedInitialSize = Number(container.dataset.pickOverlaySize || 0);
+            const initialSize = Number.isFinite(requestedInitialSize)
+                && requestedInitialSize > 0
+                ? requestedInitialSize
+                : nativeSize;
+            maximumOverlayPixels = Math.max(
+                1000,
+                (nativeSize || 0) * 3,
+                initialSize || 0,
+            );
+            configureSizeInputs();
             if (sizeNumber) {
-                sizeNumber.min = sizeInput.min;
-                sizeNumber.max = sizeInput.max;
                 sizeNumber.addEventListener("input", () => {
                     if (sizeNumber.value !== "") setSize(sizeNumber.value);
                 });
@@ -546,7 +627,14 @@
                     setSize(sizeNumber.value || sizeInput.value);
                 });
             }
-            setSize(nativeSize || sizeInput.value);
+            sizeUnit?.addEventListener("click", () => {
+                sizeUnit.value = activeSizeUnit() === "angstroms"
+                    ? "pixels"
+                    : "angstroms";
+                configureSizeInputs();
+                setPixelSize(container.dataset.pickOverlaySize || initialSize || 100);
+            });
+            setPixelSize(initialSize || sizeInput.value);
         }
         if (colorControl) {
             colorToggle?.addEventListener("click", () => {

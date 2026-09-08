@@ -176,6 +176,7 @@ class BatchClassSelection:
     stack_mtime_ns: int
     width: int
     height: int
+    sampling_distance: float | None
 
     def browser_data(self):
         return {
@@ -246,7 +247,7 @@ def _safe_regular_file(path, project_root):
     return resolved_path
 
 
-def _class_average_stack(project_path, project_root, out_records):
+def _class_average_output(project_path, project_root, out_records):
     candidates = [
         record
         for record in out_records
@@ -258,6 +259,9 @@ def _class_average_stack(project_path, project_root, out_records):
         )
 
     record = candidates[0]
+    sampling_distance = _numeric_record_value(record, "smpd")
+    if sampling_distance is not None and sampling_distance <= 0:
+        sampling_distance = None
     raw_stack = _record_value(record, "stk")
     if not isinstance(raw_stack, str) or not raw_stack.strip():
         raise ClassSelectionError(
@@ -284,7 +288,7 @@ def _class_average_stack(project_path, project_root, out_records):
     for path in paths:
         safe_path = _safe_regular_file(path, project_root)
         if safe_path is not None and safe_path.suffix.lower() in (".mrc", ".mrcs"):
-            return safe_path
+            return safe_path, sampling_distance
     raise ClassSelectionError(
         "The class-average MRC stack is missing or outside the selected project."
     )
@@ -308,7 +312,7 @@ def _load_batch_class_selection(
     class_records = reader.read_records("cls2D")
     if not class_records:
         raise ClassSelectionError("The result project has no 2D class metadata.")
-    stack_path = _class_average_stack(
+    stack_path, sampling_distance = _class_average_output(
         safe_project,
         project_root,
         reader.read_records("out"),
@@ -364,6 +368,7 @@ def _load_batch_class_selection(
         stack_mtime_ns=stack_stat.st_mtime_ns,
         width=stack_info.width,
         height=stack_info.height,
+        sampling_distance=sampling_distance,
     )
 
 

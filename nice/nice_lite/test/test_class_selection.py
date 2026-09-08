@@ -67,7 +67,9 @@ class BatchClassSelectionTests(SimpleTestCase):
                 "class=2 pop=20 res=7.0 state=0",
                 "class=3 pop=30 res=5.5 state=1",
             ],
-            out_records=[f"imgkind=cavg stk={stack_path or self.stack_path}"],
+            out_records=[
+                f"imgkind=cavg stk={stack_path or self.stack_path} smpd=1.3"
+            ],
         )
 
     def test_loads_all_classes_and_initializes_selection_from_project_state(self):
@@ -87,6 +89,7 @@ class BatchClassSelectionTests(SimpleTestCase):
         )
         self.assertEqual(selection.classes[1]["population"], 20)
         self.assertEqual((selection.width, selection.height), (2, 2))
+        self.assertAlmostEqual(selection.sampling_distance, 1.3, places=6)
         self.assertIn("nice.batch-class-selection.v1.7", selection.storage_key)
 
     def test_rejects_class_stack_outside_selected_project(self):
