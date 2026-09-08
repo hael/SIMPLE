@@ -540,6 +540,9 @@ contains
                         enddo
                     enddo
                 case('rocksalt')
+                    ! Rocksalt structure (cubic, space group Fm-3m, #225):
+                    ! element 1 occupies the FCC sites and element 2 occupies
+                    ! the octahedral sites displaced by a/2 along a cube axis.
                     ! count
                     do i = 1, ncubes
                         x  = real(i - 1) * a(1); x1 = x + ha

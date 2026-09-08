@@ -256,6 +256,9 @@ contains
                 a = 3.155;                                   crystal_system = 'bcc       '
             case('PBSE ')
                 a = 6.12;                                    crystal_system = 'rocksalt  '
+            case('CDSER')
+                ! Mariano, A. N. & Warekois, E. P. 1963, Science 142; 672-673
+                a = 5.49;                                    crystal_system = 'rocksalt  '
             case('CDSEW')
                 ! Xu, Y.-N. 1993, Phys. Rev. 48; 4335-4351
                 a(1) = 4.2985; a(2) = 4.2985; a(3) = 7.0152; crystal_system = 'wurtzite  '

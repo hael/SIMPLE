@@ -322,9 +322,9 @@ subroutine set_ui_params
                                    'Number of raw EER frames in a movie fraction', &
                                    '# EER frames{20}', .false., 20.)
 
-    call element%set_param(        'element',         'str',    'Atom element name: Au, Pt etc.', &
-                                   'Atom element name: Au, Pt etc.', &
-                                   'atom composition e.g. Pt', .true., '  ')
+    call element%set_param(        'element',         'str',    'Atom element or crystal selector', &
+                                   'Atom element or compound crystal selector', &
+                                   'e.g. Pt, CdSeW (wurtzite), CdSeZ (zincblende), CdSeR (rocksalt)', .true., '  ')
 
     call envfsc%set_param(         'envfsc',          'binary', 'Envelope solvent correction for FSC', &
                                    'yes activates on-the-fly density-mask generation smoothed at envmsklp; '//&

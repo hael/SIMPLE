@@ -99,7 +99,9 @@ subroutine new_atoms_stats( tsttab )
         ! search controls
         !call simulate_nanoparticle%add_input(UI_SRCH, )
         ! filter controls
-        call simulate_nanoparticle%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call simulate_nanoparticle%add_input(UI_FILT, 'element', 'str', 'Atom element or crystal selector', &
+            &'Atom element or compound crystal selector', &
+            &'e.g. Pt, CdSeW (wurtzite), CdSeZ (zincblende), CdSeR (rocksalt)', .true., '')
         !call simulate_nanoparticle%add_input(UI_FILT, )
         ! mask controls
         !call simulate_nanoparticle%add_input(UI_MASK, )
