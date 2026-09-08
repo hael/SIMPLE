@@ -196,9 +196,9 @@ def _find_gainref_file(gain_dir):
 
 
 def _find_foilhole_xml(meta_dir):
-    """Return path to first FoilHole*Data*.xml file within meta_dir, or None."""
+    """Return path to first FoilHole*Data*.xml file within meta_dir or its subdirectories, or None."""
     try:
-        matches = sorted(glob.glob(os.path.join(meta_dir, "FoilHole*Data*.xml")))
+        matches = sorted(glob.glob(os.path.join(meta_dir, "**", "FoilHole*Data*.xml"), recursive=True))
     except OSError:
         return None
     return matches[0] if matches else None
@@ -412,14 +412,16 @@ def view_stream_test_path(request):
         else:
             return_obj["dir_movies"] = normalized_path
             stem_dir = normalized_path
-
+    
     if directory_exists(os.path.join(stem_dir, "metadata")):
         return_obj["dir_meta"] = os.path.join(stem_dir, "metadata")
-    elif _find_images_disc_dir(normalized_path) is not None:
-        return_obj["dir_meta"] = _find_images_disc_dir(normalized_path)
+    elif _find_images_disc_dir(stem_dir) is not None:
+        return_obj["dir_meta"] = _find_images_disc_dir(stem_dir)
 
     if "dir_meta" in return_obj:
         meta_xml = _find_foilhole_xml(return_obj["dir_meta"])
+        print("dir_meta:", return_obj.get("dir_meta"))
+        print("meta_xml:", meta_xml)
         if meta_xml is not None:
             return_obj["cs"] = 2.7 # spherical aberration in mm
             kv = _get_xml_acceleration_voltage_kv(meta_xml)
