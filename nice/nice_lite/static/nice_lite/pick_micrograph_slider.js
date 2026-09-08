@@ -358,10 +358,7 @@
             sizeUnit.title = `switch to ${nextUnit}`;
         };
 
-        const formatSize = (value, unit) => {
-            const precision = unit === "angstroms" ? 10 : 1;
-            return String(Math.round(value * precision) / precision);
-        };
+        const formatSize = (value) => String(Math.round(value));
 
         const configureSizeInputs = () => {
             if (!sizeInput) return;
@@ -371,9 +368,9 @@
             const maximum = unit === "angstroms"
                 ? maximumOverlayPixels * samplingDistance
                 : maximumOverlayPixels;
-            const step = unit === "angstroms" ? 0.1 : 1;
-            sizeInput.min = formatSize(minimum, unit);
-            sizeInput.max = formatSize(maximum, unit);
+            const step = 1;
+            sizeInput.min = formatSize(minimum);
+            sizeInput.max = formatSize(maximum);
             sizeInput.step = String(step);
             if (sizeNumber) {
                 sizeNumber.min = sizeInput.min;
@@ -388,7 +385,7 @@
             const value = unit === "angstroms"
                 ? pixels * samplingDistance
                 : pixels;
-            const formattedValue = formatSize(value, unit);
+            const formattedValue = formatSize(value);
             const unitLabel = unit === "angstroms" ? "angstroms" : "pixels";
             sizeInput.value = formattedValue;
             sizeInput.setAttribute("aria-label", `overlay size in ${unitLabel}`);

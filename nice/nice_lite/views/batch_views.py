@@ -83,6 +83,33 @@ def _project_sampling_distance(project_path):
     return None
 
 
+def _project_picked_particle_count(project_path):
+    """Sum per-micrograph picked-particle counts from a SIMPLE project."""
+    if not isinstance(project_path, (str, os.PathLike)):
+        return None
+    try:
+        records = SIMPLEProjectFileReader(project_path).read_records("mic")
+    except (ClassSelectionError, OSError, OverflowError, struct.error):
+        return None
+    if not records:
+        return None
+
+    total = 0
+    for record in records:
+        value = record.get("nptcls") if isinstance(record, dict) else None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        if isinstance(value, int):
+            if value < 0:
+                return None
+            total += value
+            continue
+        if not math.isfinite(value) or value < 0 or not value.is_integer():
+            return None
+        total += int(value)
+    return total
+
+
 def _get_accessible_batch_job(request, log_context, job_id=None):
     """Return an owned batch job and model selected by the request."""
     resolved_job_id = job_id if job_id is not None else get_job_id(request)
@@ -469,6 +496,7 @@ def _batch_detail_context(
     project_stats = {}
     project_reader = None
     pick_micrographs = []
+    pick_particle_count = None
     if jobmodel.status == "finished" and result_project is not None:
         project_reader = SIMPLEProjFile(result_project)
         project_stats = project_reader.getGlobalStats()
@@ -521,6 +549,7 @@ def _batch_detail_context(
             )
             class_selector_error = str(error)
     if jobmodel.status == "finished" and metadata.get("program") == "pick":
+        pick_particle_count = _project_picked_particle_count(result_project)
         pick_micrographs = batch_job.get_pick_micrograph_previews(
             max_previews=_BATCH_PICK_PREVIEW_LIMIT,
             max_coordinates=_BATCH_PICK_COORDINATE_LIMIT,
@@ -605,6 +634,7 @@ def _batch_detail_context(
             class_selector_replaces_artifact_previews
         ),
         "pick_micrographs": pick_micrographs,
+        "pick_particle_count": pick_particle_count,
         "pick_box_overlay_available": any(
             isinstance(box.get("width"), (int, float))
             and not isinstance(box.get("width"), bool)

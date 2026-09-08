@@ -231,6 +231,44 @@ class BatchViewTests(SimpleTestCase):
             ["out", "stk"],
         )
 
+    def test_project_picked_particle_count_sums_micrograph_records(self):
+        reader = Mock()
+        reader.read_records.return_value = [
+            {"nptcls": 229.0},
+            {"nptcls": 0.0},
+            {"nptcls": 241},
+        ]
+
+        with patch.object(
+            batch_views,
+            "SIMPLEProjectFileReader",
+            return_value=reader,
+        ):
+            particle_count = batch_views._project_picked_particle_count(
+                "/project/workspace.simple"
+            )
+
+        self.assertEqual(particle_count, 470)
+        reader.read_records.assert_called_once_with("mic")
+
+    def test_project_picked_particle_count_rejects_incomplete_counts(self):
+        reader = Mock()
+        reader.read_records.return_value = [
+            {"nptcls": 229.0},
+            {},
+        ]
+
+        with patch.object(
+            batch_views,
+            "SIMPLEProjectFileReader",
+            return_value=reader,
+        ):
+            particle_count = batch_views._project_picked_particle_count(
+                "/project/workspace.simple"
+            )
+
+        self.assertIsNone(particle_count)
+
     def test_class_overlay_uses_pixels_until_mask_and_sampling_are_available(self):
         jobmodel = SimpleNamespace(args={"mskdiam": "190"})
         no_sampling = batch_views._class_overlay_settings(
@@ -635,7 +673,14 @@ class BatchViewTests(SimpleTestCase):
             "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
         }]
 
-        with patch.object(batch_views, "SIMPLEProjFile") as projfile:
+        with (
+            patch.object(batch_views, "SIMPLEProjFile") as projfile,
+            patch.object(
+                batch_views,
+                "_project_picked_particle_count",
+                return_value=5708,
+            ) as picked_particle_count,
+        ):
             project_reader = projfile.return_value
             project_reader.getGlobalStats.return_value = {"mic": {"n": 30}}
 
@@ -645,6 +690,9 @@ class BatchViewTests(SimpleTestCase):
             max_previews=20,
             max_coordinates=1500,
         )
+        picked_particle_count.assert_called_once_with(
+            "/workspace/3_pick/workspace.simple"
+        )
         project_reader.getFieldStats.assert_not_called()
         self.assertEqual(context["pick_micrographs"], [{
             "path": "/workspace/1_motion/movie_thumb.jpg",
@@ -653,6 +701,7 @@ class BatchViewTests(SimpleTestCase):
             "ydim": 3072,
             "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
         }])
+        self.assertEqual(context["pick_particle_count"], 5708)
         self.assertTrue(context["pick_box_overlay_available"])
         self.assertTrue(context["output_dimensions_available"])
 

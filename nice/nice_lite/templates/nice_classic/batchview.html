@@ -206,7 +206,7 @@
     </style>
     <script type="module" src="{% static 'nice_lite/output_grid.js' %}?v=2"></script>
     {% if pick_micrographs or batch_class_selector %}
-        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=17"></script>
+        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=18"></script>
     {% endif %}
     {% if batch_class_selector %}
         <script type="module" src="{% static 'nice_lite/class_selector.js' %}?v=4"></script>
@@ -448,10 +448,23 @@
                     </div>
                 </div>
                 <div id="batch_artifacts_panel" data-collapse-body class="mt-3">
-                    {% if project_sampling_distance and not batch_class_selector %}
-                        <div class="mb-3 flex flex-wrap gap-4 text-[10px] text-streamlabel">
-                            <span>pixel size <strong class="ml-1 font-mono text-streamtext">{{ project_sampling_distance|floatformat:3 }} Å/px</strong></span>
-                        </div>
+                    {% if not batch_class_selector %}
+                        {% if project_sampling_distance or import_movie_page.movies or particle_stack_page.particles or pick_particle_count is not None %}
+                            <div id="batch_output_summary" class="mb-3 flex flex-wrap gap-4 text-[10px] text-streamlabel">
+                                {% if project_sampling_distance %}
+                                    <span>pixel size <strong class="ml-1 font-mono text-streamtext">{{ project_sampling_distance|floatformat:3 }} Å/px</strong></span>
+                                {% endif %}
+                                {% if import_movie_page.movies %}
+                                    <span>imported movies <strong class="ml-1 font-mono text-streamtext">{{ import_movie_page.first_movie }}–{{ import_movie_page.last_movie }} of {{ import_movie_page.total }}</strong></span>
+                                {% endif %}
+                                {% if pick_particle_count is not None %}
+                                    <span>picked particles <strong class="ml-1 font-mono text-streamtext">{{ pick_particle_count }}</strong></span>
+                                {% endif %}
+                                {% if particle_stack_page.particles %}
+                                    <span>extracted particles <strong class="ml-1 font-mono text-streamtext">{{ particle_stack_page.first_particle }}–{{ particle_stack_page.last_particle }} of {{ particle_stack_page.total }} from {{ particle_stack_page.stacks|length }} stack{{ particle_stack_page.stacks|length|pluralize }}</strong></span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                     {% endif %}
                     {% if batch_class_selector %}
                         {% include 'nice_stream/includes/_class_selector.html' %}
@@ -478,15 +491,7 @@
 
                     {% if import_movie_page.movies %}
                         <div id="batch_movie_gallery" class="mb-4">
-                            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                <span>
-                                    <span class="block text-[10px] text-streamlabel">imported movies</span>
-                                    <span class="block text-[9px] text-streamsubtle">
-                                        {{ import_movie_page.first_movie }}–{{ import_movie_page.last_movie }} of {{ import_movie_page.total }}
-                                    </span>
-                                </span>
-                                <span class="text-[9px] text-streamsubtle">thumbnails are cached as WebP on demand</span>
-                            </div>
+                            <p class="mb-2 text-right text-[9px] text-streamsubtle">thumbnails are cached as WebP on demand</p>
                             <div id="batch_movie_thumbnails" data-output-grid
                                  data-output-grid-size-property="--artifact-tile-height" data-output-grid-tile-dimension="height"
                                  class="flex flex-wrap items-start gap-2"
@@ -554,16 +559,7 @@
 
                     {% if particle_stack_page.particles %}
                         <div id="batch_particle_gallery" class="mb-4">
-                            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                <span>
-                                    <span class="block text-[10px] text-streamlabel">extracted particles</span>
-                                    <span class="block text-[9px] text-streamsubtle">
-                                        {{ particle_stack_page.first_particle }}–{{ particle_stack_page.last_particle }} of {{ particle_stack_page.total }}
-                                        from {{ particle_stack_page.stacks|length }} stack{{ particle_stack_page.stacks|length|pluralize }}
-                                    </span>
-                                </span>
-                                <span class="text-[9px] text-streamsubtle">thumbnails are generated on demand</span>
-                            </div>
+                            <p class="mb-2 text-right text-[9px] text-streamsubtle">thumbnails are generated on demand</p>
                             <div id="batch_particle_thumbnails" data-output-grid
                                  data-output-grid-size-property="--artifact-tile-height" data-output-grid-tile-dimension="height"
                                  class="flex flex-wrap items-start gap-2"

@@ -341,7 +341,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("{ passive: false }", output_grid_script)
         self.assertIn('target.querySelectorAll("[data-output-grid]")', output_grid_script)
         self.assertIn("output_grid.js?v=2", rendered)
-        self.assertIn("pick_micrograph_slider.js?v=17", rendered)
+        self.assertIn("pick_micrograph_slider.js?v=18", rendered)
         self.assertIn("class_selector.js?v=4", rendered)
 
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):
@@ -485,7 +485,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn(shared_slide, slider)
         self.assertIn(shared_slide, batch_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", batch_view)
-        self.assertIn("pick_micrograph_slider.js' %}?v=17", batch_view)
+        self.assertIn("pick_micrograph_slider.js' %}?v=18", batch_view)
         self.assertIn("nice_lite/pick_micrograph_slider.js", initial_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", reference_pick)
         self.assertIn("nice_stream/includes/_scroll_btn.html", slider)
@@ -515,6 +515,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
             }],
             "project_sampling_distance": 1.3,
+            "pick_particle_count": 5708,
             "pick_box_overlay_available": True,
             "arguments": [],
             "logs": [],
@@ -524,6 +525,12 @@ class BatchDetailTemplateTests(SimpleTestCase):
         })
 
         self.assertNotIn("pick locations", rendered)
+        output_summary = rendered.split('id="batch_output_summary"', 1)[1].split(
+            "</div>", 1,
+        )[0]
+        self.assertIn("pixel size", output_summary)
+        self.assertIn("picked particles", output_summary)
+        self.assertIn("5708", output_summary)
         self.assertIn('id="batch_artifact_images" data-output-grid', rendered)
         self.assertIn('id="batch_output_tile_size" type="range"', rendered)
         self.assertIn('data-output-grid-target-id="batch_artifacts_panel"', rendered)
@@ -592,6 +599,9 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('sizeUnit?.value === "angstroms"', slider_script)
         self.assertIn("const renderSizeUnitControl = () =>", slider_script)
         self.assertIn('label.textContent = unit === "angstroms" ? "Å" : "px"', slider_script)
+        self.assertIn("const formatSize = (value) => String(Math.round(value))", slider_script)
+        self.assertIn("const step = 1", slider_script)
+        self.assertNotIn("const step = unit === \"angstroms\" ? 0.1 : 1", slider_script)
         self.assertIn("pixels * samplingDistance", slider_script)
         self.assertIn("value / samplingDistance", slider_script)
         self.assertIn("sizeNumber.value = formattedValue", slider_script)
@@ -628,7 +638,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("overlayContainer?.dataset.pickOverlayColor", slider_script)
         self.assertNotIn("colorInput", slider_script)
         self.assertNotIn('overlayMode === "points"', slider_script)
-        self.assertIn("pick_micrograph_slider.js?v=17", rendered)
+        self.assertIn("pick_micrograph_slider.js?v=18", rendered)
         self.assertIn('data-pick-display-target-id="batch_artifact_images"', rendered)
         self.assertIn('id="batch_pick_display_min" type="range"', rendered)
         self.assertIn('min="0" max="254" step="1" value="0"', rendered)
@@ -706,8 +716,16 @@ class BatchDetailTemplateTests(SimpleTestCase):
 
         rendered = render_to_string("nice_classic/batchview.html", context)
 
-        self.assertIn("extracted particles", rendered)
-        self.assertIn("41–80 of 481", rendered)
+        output_summary = rendered.split('id="batch_output_summary"', 1)[1].split(
+            "</div>", 1,
+        )[0]
+        self.assertIn("pixel size", output_summary)
+        self.assertIn("extracted particles", output_summary)
+        self.assertIn("41–80 of 481 from 1 stack", output_summary)
+        self.assertLess(
+            rendered.index('id="batch_output_summary"'),
+            rendered.index('id="batch_particle_gallery"'),
+        )
         self.assertIn("thumbnails are generated on demand", rendered)
         self.assertIn("/batchparticle/7/particles.mrcs/42", rendered)
         self.assertIn('loading="lazy" decoding="async"', rendered)
@@ -718,7 +736,6 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("data-output-grid-tile", rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("128 × 128 px", rendered)
-        self.assertIn("pixel size", rendered)
         self.assertIn("1.300 Å/px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
         self.assertIn("hover:opacity-90 transition-opacity", rendered)
@@ -770,8 +787,20 @@ class BatchDetailTemplateTests(SimpleTestCase):
 
         rendered = render_to_string("nice_classic/batchview.html", context)
 
-        self.assertIn("imported movies", rendered)
-        self.assertIn("41–80 of 481", rendered)
+        output_summary = rendered.split('id="batch_output_summary"', 1)[1].split(
+            "</div>", 1,
+        )[0]
+        self.assertIn("pixel size", output_summary)
+        self.assertIn("imported movies", output_summary)
+        self.assertIn("41–80 of 481", output_summary)
+        self.assertLess(
+            output_summary.index("pixel size"),
+            output_summary.index("imported movies"),
+        )
+        self.assertLess(
+            rendered.index('id="batch_output_summary"'),
+            rendered.index('id="batch_movie_gallery"'),
+        )
         self.assertIn("thumbnails are cached as WebP on demand", rendered)
         self.assertIn("/batchmovie/7/signed-token", rendered)
         self.assertIn('loading="lazy" decoding="async"', rendered)
@@ -782,7 +811,6 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("data-output-grid-tile", rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("4096 × 4096 px", rendered)
-        self.assertIn("pixel size", rendered)
         self.assertIn("0.885 Å/px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
         self.assertNotIn("<figcaption", rendered)
