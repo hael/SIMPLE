@@ -328,7 +328,7 @@ class TemplateIntegrationTests(SimpleTestCase):
 
     def test_batch_cards_reuse_stream_stop_and_delete_controls(self):
         batch_card = self._read_template("nice_classic/_batch_card.html")
-        jobs = self._read_template("jobs.html")
+        jobs = self._read_template("jobs_cards.html")
 
         self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_card)
         self.assertIn('onclick="stopBatchJob(this)"', batch_card)

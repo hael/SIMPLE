@@ -2,7 +2,7 @@
 
 This module serves two coupled HTML payloads:
 - ``workspace.html``: parent shell containing metadata, controls, and the jobs iframe.
-- ``jobs.html``: iframe payload containing stream cards.
+- ``jobs_cards.html``: iframe payload containing stream cards.
 
 It also exposes write endpoints for workspace delete/rename/description updates.
 The refresh endpoint reconciles externally removed job directories, cards, and
@@ -205,21 +205,24 @@ def view_workspace_jobs(request):
     project_id    = get_project_id(request)
     workspace_obj = Workspace(workspace_id)
     response      = HttpResponseNoContent()
+    view_mode     = request.GET.get("view")
+    template      = {"list": "jobs_table.html", "flow": "jobs_flow.html"}.get(view_mode, "jobs_cards.html")
 
     if not _is_workspace_accessible(workspace_obj, project_id, request.user.username):
-        return render(request, "jobs.html", {"jobs": []})
+        return render(request, template, {"jobs": []})
 
     jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
     if _reconcile_local_batch_completions(jobs):
         jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
-    checksum_payload = {"jobs": list(jobs.values())}
+    # Include the template name so switching view modes always forces a redraw.
+    checksum_payload = {"jobs": list(jobs.values()), "template": template}
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
     if old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
-        response = render(request, "jobs.html", {"jobs": jobs})
+        response = render(request, template, {"jobs": jobs})
         response.set_cookie(key="workspace_jobs_checksum", value=checksum)
 
     return response

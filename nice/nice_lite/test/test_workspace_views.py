@@ -52,7 +52,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
             response = workspace_views.view_workspace_jobs(request)
 
         self.assertEqual(response.status_code, 200)
-        mock_render.assert_called_once_with(request, "jobs.html", {"jobs": []})
+        mock_render.assert_called_once_with(request, "jobs_cards.html", {"jobs": []})
 
     def test_workspace_jobs_renders_and_sets_checksum_cookie_on_first_load(self):
         request = self.factory.get("/workspacejobs")

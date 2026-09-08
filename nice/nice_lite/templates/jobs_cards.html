@@ -1,20 +1,9 @@
 {% comment %}
-  workspace.html — stream grid and workspace details footer, loaded inside the
-  workspace iframe by stream.html.
-
-  Structure:
-    - Sub-bar : new-stream button and live stream count.
-    - Grid    : responsive column grid of stream cards (see _stream_card.html).
-    - Footer  : editable workspace metadata and delete-workspace button.
+  jobs_cards.html — stream/batch card grid, loaded inside the jobs_iframe by
+  workspace.html.
 
   Context variables:
-    current_workspace_id   — 0 when no workspace is selected
-    current_workspace_name — display name of the selected workspace
-    jobs                 — queryset of StreamJob view-objects for this workspace
-    created, modified    — formatted date strings
-    user                 — username of workspace creator
-    folder               — absolute path to the workspace directory
-    description          — workspace description string
+    jobs — queryset of StreamJob/BatchJob view-objects for the current workspace
 {% endcomment %}
 {% load static %}
 {% load humanize %}
@@ -26,7 +15,7 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans">
-  <div class="flex flex-wrap gap-3 content-start flex-1 overflow-y-auto px-5 py-4 ">
+  <div class="flex flex-wrap gap-3 content-start flex-1 overflow-y-auto scrollbar-hidden px-5 py-4 ">
       {% for job in jobs %}
           {% if job.master_stats.job_type == "batch" %}
               {% include 'nice_classic/_batch_card.html' %}

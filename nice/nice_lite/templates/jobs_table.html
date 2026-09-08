@@ -1,0 +1,245 @@
+{% comment %}
+  jobs_table.html — stream/batch job table, loaded inside the jobs_iframe by
+  workspace.html. Table variant of jobs_cards.html: same job data, no images.
+
+  Context variables:
+    jobs — queryset of StreamJob/BatchJob view-objects for the current workspace
+{% endcomment %}
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="bg-streambg h-screen flex flex-col font-sans">
+  <div class="flex-1 overflow-y-auto scrollbar-hidden px-5 py-4">
+    <table class="w-full text-xs text-left border-collapse">
+        <thead>
+            <tr class="text-[10px] uppercase tracking-wide text-streamlabel border-b border-streamline">
+                <th class="py-2 pr-3 font-medium">status</th>
+                <th class="py-2 pr-3 font-medium">name</th>
+                <th class="py-2 pr-3 font-medium">progress</th>
+                <th class="py-2 pr-3 font-medium">description</th>
+                <th class="py-2 pr-3 font-medium text-right">actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+                {% if job.master_stats.job_type == "batch" %}
+                    <tr class="border-b border-streamdivider hover:bg-streambar/60">
+                        <td class="py-2 pr-3">
+                            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full {% if job.status == 'running' %}bg-streamaction/10 text-streamaction{% elif job.status == 'finished' %}bg-streamring/10 text-streamaccent{% elif job.status == 'failed' or job.status == 'stopped' %}bg-streamerrorsurface text-streamerror{% elif job.status == 'queued' %}bg-streamline/40 text-streamlabel{% else %}bg-streamrejected/10 text-streamrejected{% endif %}">
+                                {{ job.status }}
+                            </span>
+                        </td>
+                        <td class="py-2 pr-3 text-streamtext font-medium">
+                            <a href="{% url 'nice_lite:view_batch' job.id %}{% if job.status == 'finished' and job.master_stats.program == 'abinitio2D' %}?class_selector=1{% endif %}" target="_parent" class="hover:text-streamring transition-colors">
+                                {{ job.disp }} {{ job.name }}
+                            </a>
+                        </td>
+                        <td class="py-2 pr-3 text-streamsubtle">{{ job.master_stats.package }} batch</td>
+                        <td class="py-2 pr-3 text-streamsubtle truncate max-w-[240px]" title="{{ job.dirc }}">{{ job.dirc }}</td>
+                        <td class="py-2 pr-3">
+                            <div class="flex items-center justify-end gap-1">
+                                {% if job.status == "running" %}
+                                    <form method="POST" action="{% url 'nice_lite:stop_batch' %}" target="_parent">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                        <button type="button" data-job-id="{{ job.id }}" onclick="stopBatchJob(this)"
+                                                title="stop batch job"
+                                                class="text-streamicon hover:text-streamerror transition-colors p-1">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                {% elif job.status == "queued" or job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                                    <form method="POST" action="{% url 'nice_lite:delete_batch' %}" target="_parent">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                        <button type="button" data-job-id="{{ job.id }}" onclick="deleteBatchJob(this)"
+                                                title="delete batch job"
+                                                class="text-streamicon hover:text-streamerror transition-colors p-1">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                                <polyline points="2,4 14,4"/>
+                                                <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
+                    <tr class="border-b border-streamdivider hover:bg-streambar/60 cursor-pointer" onclick="this.querySelector('form.viewform').submit();">
+                        <td class="py-2 pr-3">
+                            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}bg-streamaction/10 text-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}bg-streamerrorsurface text-streamerror{% elif job.status == 'finished' %}bg-streamring/10 text-streamaccent{% else %}bg-streamrejected/10 text-streamrejected{% endif %}">
+                                {{ job.status }}
+                            </span>
+                        </td>
+                        <td class="py-2 pr-3 text-streamtext font-medium">{{ job.disp }} · stream</td>
+                        <td class="py-2 pr-3 text-streamsubtle">
+                            {% if ms.movies_imported > 0 %}{{ ms.movies_processed }}/{{ ms.movies_imported }} movies{% endif %}
+                            {% if cs.particles_imported > 0 %}{% if ms.movies_imported > 0 %} · {% endif %}{{ cs.particles_accepted }}/{{ cs.particles_imported }} particles{% endif %}
+                        </td>
+                        <td class="py-2 pr-3 text-streamsubtle italic truncate max-w-[240px]">{{ job.desc }}</td>
+                        <td class="py-2 pr-3">
+                            <div class="flex items-center justify-end gap-1" onclick="event.stopPropagation()">
+                                <form method="GET" action="{% url 'nice_lite:view_stream' job.id %}" target="_parent" class="viewform hidden">
+                                    {% csrf_token %}
+                                </form>
+                                {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                                    <form method="POST" action="{% url 'nice_lite:restart_stream' %}" target="_parent">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                        <button type="button" data-job-id="{{ job.id }}" onclick="restartStream(this)"
+                                                title="restart"
+                                                class="text-streamicon hover:text-streamsubtle transition-colors p-1 cursor-pointer">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
+                                                <polyline points="14,2 14,6 10,6"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                                <form method="POST" action="{% url 'nice_lite:new_stream' %}" target="job_builder_iframe">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                    <button type="submit" title="clone"
+                                            class="text-streamicon hover:text-streamsubtle transition-colors p-1 cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="6" y="6" width="8" height="8" rx="1"/>
+                                            <path d="M4 10H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                                {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                                    <form method="POST" action="{% url 'nice_lite:delete_stream' %}" target="_parent">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                        <button type="button" data-job-id="{{ job.id }}" onclick="deleteStream(this)"
+                                                title="delete"
+                                                class="text-streamicon hover:text-streamerror transition-colors p-1 cursor-pointer">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                                <polyline points="2,4 14,4"/>
+                                                <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                {% elif job.status == "queued" %}
+                                    <form method="POST" action="{% url 'nice_lite:kill_delete_stream' %}" target="_parent">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                        <button type="button" data-job-id="{{ job.id }}" onclick="killDeleteStream(this)"
+                                                title="kill/delete"
+                                                class="text-streamicon hover:text-streamerror transition-colors p-1 cursor-pointer">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                                <polyline points="3,3 13,13"/>
+                                                <polyline points="13,3 3,13"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                {% elif job.status == "running" or job.status == "alarm" or job.status == "error" %}
+                                    <form method="POST" action="{% url 'nice_lite:terminate_stream' %}" target="_parent">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                        <button type="button" data-job-id="{{ job.id }}" onclick="terminateStream(this)"
+                                                title="terminate"
+                                                class="text-streamicon hover:text-streamerror transition-colors p-1 cursor-pointer">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                {% endif %}
+            {% empty %}
+                <tr>
+                    <td colspan="5" class="py-24 text-center text-streamlabel text-sm">no streams yet — click new stream to create one</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+  </div>
+
+        <script>
+          let lastinteraction = Date.now();
+
+          const getValue = (el, key, fallback = "") => {
+            if (!el) return fallback;
+            if (el.dataset && el.dataset[key] !== undefined) return el.dataset[key];
+            if (el.workspace && el.workspace[key] !== undefined) return el.workspace[key];
+            return fallback;
+          };
+
+          const deleteStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to delete stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const terminateStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to terminate all processes in stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const restartStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to restart stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const killDeleteStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to kill and delete stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const stopBatchJob = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to stop batch job " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const deleteBatchJob = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to permanently delete batch job " + jobid + ". This cannot be undone.")) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") location.reload();
+          });
+
+          setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+              lastinteraction = Date.now();
+              location.reload();
+            }
+          }, 1000);
+        </script>
+</body>
+</html>
