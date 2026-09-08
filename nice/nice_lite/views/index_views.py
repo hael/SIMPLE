@@ -116,14 +116,14 @@ def view_index(request):
             if new_workspace.new(project, username):
                 workspaceid = new_workspace.get_id()
                 workspaces = WorkspaceModel.objects.filter(proj=projectid, user=username)
-                iframeurl = reverse("nice_lite:workspace", query={"selected_workspace_id": workspaceid})
+                iframeurl = reverse("nice_lite:workspace", query={"selected_project_id": projectid, "selected_workspace_id": workspaceid})
                 messages.add_message(request, messages.INFO, "created new workspace")
             else:
                 workspaceid = None
                 workspaces = WorkspaceModel.objects.filter(proj=projectid, user=username)
                 messages.add_message(request, messages.ERROR, "failed to create new workspace")
     elif workspaceid is not None and workspaceid > 0:
-        iframeurl = reverse("nice_lite:workspace", query={"selected_workspace_id": workspaceid})
+        iframeurl = reverse("nice_lite:workspace", query={"selected_project_id": projectid, "selected_workspace_id": workspaceid})
 
     context = {
         "current_project_id": projectid,

@@ -16,6 +16,11 @@
 
   Selecting a project or workspace submits a GET form, reloading the page with
   the new selection reflected in the URL query string.
+
+  Per-tab persistence: the resolved selection is cached in this tab's
+  sessionStorage. On a bare load (no selected_*_id in the URL) any id missing
+  from sessionStorage falls back to the selected_*_id cookie set server-side,
+  but a value present in sessionStorage always wins over that cookie.
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -27,7 +32,9 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <title>SIMPLE Stream</title>
 </head>
-<body class="bg-streambg h-screen flex flex-col font-sans">
+<body class="bg-streambg h-screen flex flex-col font-sans"
+      data-current-project-id="{% if current_project_id and current_project_id > 0 %}{{ current_project_id }}{% endif %}"
+      data-current-workspace-id="{% if current_workspace_id and current_workspace_id > 0 %}{{ current_workspace_id }}{% endif %}">
 
     <!-- Header -->
     <header class="bg-streambar border-b border-streamline h-13 flex items-center px-5 gap-5 flex-shrink-0">
@@ -95,5 +102,38 @@
     </div>
 
     {% include 'messages.html' %}
+
+    <script>
+        (() => {
+            const PROJECT_KEY = "selected_project_id";
+            const WORKSPACE_KEY = "selected_workspace_id";
+            const params = new URLSearchParams(window.location.search);
+            const storedProjectId = sessionStorage.getItem(PROJECT_KEY);
+            const storedWorkspaceId = sessionStorage.getItem(WORKSPACE_KEY);
+
+            // Fill in whichever id the URL is missing from this tab's sessionStorage,
+            // so a per-tab selection always wins over the shared selection cookie.
+            const wantsProjectId = !params.has(PROJECT_KEY) && storedProjectId !== null;
+            const wantsWorkspaceId = !params.has(WORKSPACE_KEY) && storedWorkspaceId !== null;
+            if (wantsProjectId || wantsWorkspaceId) {
+                if (wantsProjectId) params.set(PROJECT_KEY, storedProjectId);
+                if (wantsWorkspaceId) params.set(WORKSPACE_KEY, storedWorkspaceId);
+                window.location.replace(`${window.location.pathname}?${params.toString()}`);
+                return;
+            }
+
+            // Otherwise remember whatever this load ended up resolving (from the URL,
+            // or the cookie-backed server default) as this tab's own selection.
+            const body = document.body;
+            if (body.dataset.currentProjectId) {
+                sessionStorage.setItem(PROJECT_KEY, body.dataset.currentProjectId);
+            }
+            if (body.dataset.currentWorkspaceId) {
+                sessionStorage.setItem(WORKSPACE_KEY, body.dataset.currentWorkspaceId);
+            } else {
+                sessionStorage.removeItem(WORKSPACE_KEY);
+            }
+        })();
+    </script>
 </body>
 </html>
