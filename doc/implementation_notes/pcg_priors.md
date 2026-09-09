@@ -3702,6 +3702,39 @@ options, the kept gridding half (set_keep_gridding_half/get_gridding_half),
 the auxiliary-slot bypass and the pcg_recon gate were removed the same day;
 the base pair is the competition input, as in July.
 
+### Record (2026-09-09b): one support, applied once -- gridding aligned to the deapodized, support-masked PCG products
+
+User request: align the gridding FSC to the deapodized halves, mask the
+gridding products so they are equivalent to the PCG reconstructions, and
+stop applying the mask twice anywhere on the PCG path. Audit of every
+`mask3D_soft` consumer of a reconstruction product:
+
+| site | before | after |
+|---|---|---|
+| gridding `restore_gridding_pair` | FSC on undeapodized `base` halves (legacy parity); deapodized, unmasked halves written; merged map fills the box | halves and `_unfil` halves deapodized then `mask3D_soft(msk_crop, backgr=0.)` (the PCG `set_mask` profile: 12 px cosine band centred on `msk_crop`); FSC on the masked finals; merged map masked in `restore_merged_volume`; sidecar `solve_kind=gridding` written |
+| `evaluate_halfmap_pair` | `mask3D_soft(msk_crop)` on copies of both backends' halves (second application on PCG halves) | no mask; `spherical_mask_radius` argument removed |
+| PCG warm starts (`override_*_warm_start_from_previous`) | `mask3D_soft` on the previous half (already `P u`) | none |
+| solver entry (`solve`, `solve_accum`) | `mask_mul(x)`: `u0 = P x_prev = P^2 u_prev`, exit `x = P u` -> `P^3` per warm-started iteration in the band, compounding over a stage (with the strategy re-mask; `P^2` without) | `mask_div(x)`: `u0 = x/P` where `P >= PCG_SUPPORT_DIV_MIN = 0.1`, zero below; exact for support-masked input, amplification capped at 10x on the outermost ~2.5 px for content not proportional to `P` (resampling ringing, foreign maps), which is regenerated from the data each iteration instead of compounding |
+| `postprocess_volume_from_files` | no mask for `rec_backend=pcg` (by name), spherical/envelope mask for gridding (now a second application) | no post-hoc mask for any volume with the support-provenance sidecar, or `rec_backend=pcg`; classical mask otherwise (imported maps) |
+| matcher `mask_matching_reference` | `mask3D_soft` after Fourier filtering | unchanged: reference preparation (compact support after ringing, user start volumes); `P^2` in the band, deliberate |
+
+Why the solver entry matters with two CG iterations: in the band the
+constrained system `P H P u = P b` has the unconstrained solution `x = H^-1 b`
+wherever `P > 0`, but the Krylov directions `z = P M^-1 r` vanish like `P`
+there, so two iterations barely move the band and the output inherits the
+start. With a shrinking start (`P^2`-`P^3` per iteration) the cosine edge
+hardened toward its inner end over a 20-30 iteration stage; with the exact
+conversion the band keeps the accumulated corrections of all previous
+iterations, which is what a warm start is for.
+
+Consequences to expect in the backend comparison: the gridding FSC loses the
+apodization taper's rim down-weighting (it was slightly optimistic at high
+resolution), the gridding `_unfil` NU inputs now match the PCG support, the
+gridding Guinier B-factor is estimated on masked `_unfil` halves like PCG,
+and gridding `_pproc` maps are no longer masked a second time. The sidecar
+moved to `simple_halfmap_diagnostics` (`write/read_support_provenance`,
+file name unchanged). Uncompiled; user compiles and runs the comparison.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

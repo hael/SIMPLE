@@ -242,7 +242,7 @@ and legacy runtime implementation are removed. The converter remains.
    updates, refine3D variants, external-reference emission, and gridding/PCG
    reconstruction.
 4. **2D/restoration migration — complete for canonical opt-in:** cluster2D,
-   abinitio2D, SGD/checkpoint paths, probabilistic assignment, and class-average
+   abinitio2D checkpoint paths, probabilistic assignment, and class-average
    restoration.
 5. **Streaming/secondary migration — complete for canonical opt-in:** isolated
    chunk/pool lineages, safe dynamic-pool rebuild, project concatenation, Flex,
@@ -265,8 +265,8 @@ The canonical opt-in now provides:
 - shared-memory and distributed transactions for 2D and 3D matchers, including
   fractional updates, `update_missing`, probabilistic modes, and the optional
   CC residual-emission path;
-- power-spectrum initialization and committed-state recovery for abinitio2D,
-  abinitio2D SGD/checkpoint continuation, particle abinitio3D,
+- power-spectrum initialization and committed-state recovery for abinitio2D
+  checkpoint continuation, particle abinitio3D,
   abinitio3D_cavgs, refine3D variants, direct reconstruct3D,
   bootstrap_rec3D, and Flex PCA;
 - canonical loading for class-average restoration plus gridding and PCG
@@ -371,8 +371,8 @@ look excellent, providing the scientific gate for the distributed slice.
 The distributed `cluster2D` path now uses the same canonical transaction as the
 shared-memory path: master candidate preparation before worker dispatch,
 partition-local range production, and exact-coverage master consolidation and
-commit. At that intermediate stage checkpoint resume and streaming-SGD were
-still explicitly gated. This
+commit. At that intermediate stage checkpoint resume was still explicitly
+gated. This
 distributed slice passed focused `git diff --check`, Fortran source-index
 generation with an acyclic module graph, and the UI audit with only its three
 pre-existing unrelated mismatches. The maintainer subsequently reported that
@@ -426,7 +426,7 @@ distributed docked runtime tests remain outstanding.
 
 The integration pass then removed the remaining artificial workflow gates and
 completed the canonical opt-in across the current runtime surface. This added
-abinitio2D checkpoint recovery and SGD, refine3D sparse/update-missing and CC
+abinitio2D checkpoint recovery, refine3D sparse/update-missing and CC
 emission transactions, direct reconstruct3D and bootstrap initialization,
 stream chunk/pool ownership, prefix-preserving append, exact canonical state
 concatenation in both chunk aggregation and `merge_projects`, the explicit
@@ -451,7 +451,7 @@ matrix in Section 10.
 1. Build the changed executables and run `simple_test_sigma2_state` plus the
    normal unit suite.
 2. Run canonical abinitio2D shared and distributed, then resume a checkpoint at
-   a later stage; run the developer SGD variant once.
+   a later stage.
 3. Run canonical particle abinitio3D and the already established
    abinitio3D_cavgs cases, including docked multi-state if available. For the
    Streptavidin regression, verify the final symmetry-stage commit is deferred,

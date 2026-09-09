@@ -90,8 +90,7 @@ seeding all use the discrete route. Two consequences are deliberate:
   is used only by reconstruction and persisted for the next iteration's seed.
 
 The polish is available for the raw Euclidean and correlation objectives. It
-is not applied in the SGD streaming variant or in time-series shift-only
-search.
+is not applied in time-series shift-only search.
 
 ## Rationale
 

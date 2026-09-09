@@ -275,22 +275,7 @@ contains
         integer,              intent(inout) :: nptcls
         integer, allocatable, intent(inout) :: pinds(:)
         logical :: l_has_been_sampled
-        integer :: nactive, iptcl
-        real    :: sgd_frac
         l_has_been_sampled = build%spproj_field%has_been_sampled()
-        if( params%l_sgd_streaming_active )then
-            ! SGD owns a fresh random mini-batch on every active iteration.
-            ! Its fraction is independent of SIMPLE's legacy update_frac, while
-            ! the maximum sample count remains the existing abinitio2D cap.
-            nactive = 0
-            do iptcl = pfromto(1), pfromto(2)
-                if( build%spproj_field%get_state(iptcl) > 0 ) nactive = nactive + 1
-            enddo
-            if( nactive < 1 ) THROW_HARD('no active particles to sample for SGD')
-            sgd_frac = min(params%sgd_update_frac, real(NSAMPLE_DEFAULT_2D) / real(nactive))
-            call build%spproj_field%sample4update_rnd(pfromto, sgd_frac, nptcls, pinds, .true.)
-            return
-        endif
         if( l_updatefrac )then
             ! abinitio2D controller policy:
             ! startit==1  -> sticky sampled subset stage

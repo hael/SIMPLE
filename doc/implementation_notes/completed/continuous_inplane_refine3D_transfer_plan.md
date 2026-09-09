@@ -118,7 +118,7 @@ The scope is deliberately limited to:
 simple_exec -> prg=refine3D
 ```
 
-This phase does not modify `abinitio3D`, `abinitio3D_cavgs`, SGD, or the CC
+This phase does not modify `abinitio3D`, `abinitio3D_cavgs`, or the CC
 objective. The default behavior must remain unchanged.
 
 ## Final completion audit
@@ -518,7 +518,7 @@ Acceptance conditions:
 - omitted `inpl_cont` behaves exactly like `inpl_cont=no`;
 - explicit `inpl_cont=no` behaves exactly like the omitted option;
 - unsupported objective combinations fail clearly;
-- no `inpl_cont` value changes 2D or SGD behavior.
+- no `inpl_cont` value changes 2D behavior.
 
 ## Phase 3D-2: extend the 3D search state
 
@@ -974,7 +974,7 @@ Run the existing biological `refine3D` workflow without `inpl_cont`. Confirm:
 - normal completion;
 - unchanged metadata contract;
 - no continuous angle values are written;
-- no CC or SGD path is entered.
+- no CC path is entered.
 
 ### Gate D: real-data opt-in regression
 

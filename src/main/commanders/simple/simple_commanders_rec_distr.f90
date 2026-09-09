@@ -37,7 +37,7 @@ contains
         &volname, eonames, res05, res0143, timings )
         use simple_reconstructor, only: reconstructor, gridding_half_restore
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
-            &write_halfmap_diagnostics
+            &write_halfmap_diagnostics, write_support_provenance
         type(parameters),       intent(in)    :: params
         type(builder),          intent(inout) :: build
         class(cmdline),         intent(in)    :: cline
@@ -82,6 +82,12 @@ contains
         call build%vol%read(eonames(1))
         call build%vol2%read(eonames(2))
         call trail_restored_halves_if_needed()
+        ! The shipped halves and merged volume carry the soft spherical support
+        ! at msk_crop (restore_gridding_pair, restore_merged_volume; the legacy
+        ! trailing blend mixes two such volumes). Record it beside the volume
+        ! so postprocess does not mask again; the PCG base warm-start selector
+        ! ignores the gridding kind.
+        call write_support_provenance(volname, .false., 'gridding')
         call cleanup_restore_state()
 
     contains
@@ -447,6 +453,8 @@ contains
                 write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             endif
             call sum_rec%restore_final(build%vol)
+            ! the same soft spherical support as the halves and the PCG solve
+            call build%vol%mask3D_soft(params%msk_crop, backgr=0.)
             call build%vol%fft
             call build%vol%ifft
             call build%vol%write(volname, del_if_exists=.true.)
@@ -686,21 +694,26 @@ contains
             endif
             call even_restore%new(even_rec)
             call odd_restore%new(odd_rec)
-            ! ML-regularization
+            ! Every gridding product is deapodized and then given the soft
+            ! spherical support the PCG solve installs (mask3D_soft at
+            ! msk_crop), so the two backends' halves are equivalent and the FSC
+            ! is computed on the halves as shipped, with no mask of its own
+            ! (2026-09-09). The inverse envelope's rim gain, which the legacy
+            ! undeapodized FSC avoided, is zeroed by the support.
             if( params%l_ml_reg )then
-                ! preprocessing for FSC calculation
-                ! even
                 call even_rec%restore_base(even_restore%base, preserve_numerator=.true.)
-                ! write a deapodized copy; the in-memory half stays undeapodized so the
-                ! FSC below matches the legacy estimate (the inverse envelope's edge
-                ! gain up-weights rim noise and shifts the FSC crossing)
                 call even_restore%finalize_from_base(even_rec)
+                call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
-                call even_restore%final%kill
-                ! odd
                 call odd_rec%restore_base(odd_restore%base, preserve_numerator=.true.)
                 call odd_restore%finalize_from_base(odd_rec)
+                call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( .not. l_have_fsc )then
+                    call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
+                        &state, diagnostics, cones=cones_fsc)
+                endif
+                call even_restore%final%kill
                 call odd_restore%final%kill
                 ! Regularization
                 if( l_have_fsc )then
@@ -712,9 +725,6 @@ contains
                         call odd_rec%add_invtausq2rho(diagnostics%fsc)
                     endif
                 else
-                    call calc_gridding_pair_diagnostics(params, even_restore%base, odd_restore%base, &
-                        &state, diagnostics, cones=cones_fsc)
-                    ! Regularization
                     if( params%conical_fsc == 'yes' )then
                         call even_rec%add_conical_invtausq2rho(cones_fsc)
                         call odd_rec%add_conical_invtausq2rho(cones_fsc)
@@ -723,34 +733,34 @@ contains
                         call odd_rec%add_invtausq2rho(diagnostics%fsc)
                     endif
                 endif
-                ! Even: uneven sampling density correction, clip, & write
+                ! regularized halves: density correction, deapodization, support, write
                 call even_restore%base%kill
                 call even_restore%prepare_final(even_rec)
                 call even_rec%restore_final(even_restore%final, preserve_numerator=.true.)
+                call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(fname_even, del_if_exists=.true.)
                 call even_restore%final%kill
-                ! Odd: uneven sampling density correction, clip, & write
                 call odd_restore%base%kill
                 call odd_restore%prepare_final(odd_rec)
                 call odd_rec%restore_final(odd_restore%final, preserve_numerator=.true.)
+                call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
                 call odd_restore%final%kill
             else
-                ! correct for the uneven sampling density
                 call even_rec%restore_base(even_restore%base)
                 call odd_rec%restore_base(odd_restore%base)
-                ! write un-normalised unmasked DEAPODIZED even/odd volumes; the in-memory
-                ! halves stay undeapodized so the FSC below matches the legacy estimate
                 call even_restore%finalize_from_base(even_rec)
+                call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(fname_even, del_if_exists=.true.)
-                call even_restore%final%kill
                 call odd_restore%finalize_from_base(odd_rec)
+                call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
-                call odd_restore%final%kill
                 if( .not. l_have_fsc )then
-                    call calc_gridding_pair_diagnostics(params, even_restore%base, odd_restore%base, &
+                    call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
                         &state, diagnostics, cones=cones_fsc)
                 endif
+                call even_restore%final%kill
+                call odd_restore%final%kill
             endif
             ! save, get & print resolution
             call arr2file(diagnostics%fsc, refine3D_fsc_fname(state))
@@ -764,14 +774,12 @@ contains
         end subroutine restore_gridding_pair
 
         !> Gridding adapter for the backend-neutral half-map evaluator: builds
-        !! the merged average, selects the spherical FSC mask radius, and
-        !! writes the automask artifact on the envfsc path. The mask radius is
-        !! the user mask (msk_crop), unified with the PCG backend (2026-08-28;
-        !! previously the broad rim radius box_crop/2 - COSMSKHALFWIDTH - 1).
-        !! The ordinary restoration path passes the real-space undeapodized
-        !! base pair from restore_base (the legacy gridding FSC
-        !! representation); the trailing bootstrap passes the previous final
-        !! half maps, which already satisfy the real-space contract.
+        !! the merged average and writes the automask artifact on the envfsc
+        !! path. The evaluator applies no mask (2026-09-09): the ordinary
+        !! restoration path passes the deapodized halves that already carry
+        !! the soft spherical support at msk_crop (identical to the PCG solve
+        !! support), and the trailing bootstrap passes the previous final half
+        !! maps, which were shipped under the same contract.
         subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics, cones )
             use simple_fsc, only: fsc_area_score_result
             class(parameters),                      intent(in)    :: params
@@ -780,19 +788,16 @@ contains
             type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
             class(fsc_area_score_result), optional, intent(inout) :: cones
             type(image) :: average, envmask
-            real        :: msk
-            msk = params%msk_crop
             call average%copy(even)
             call average%add(odd)
             call average%mul(0.5)
             if( params%l_envfsc )then
-                call evaluate_halfmap_pair(params, state, even, odd, average, msk, diagnostics, &
+                call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, &
                     &envmask=envmask, cones=cones)
                 call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
                 call envmask%kill
             else
-                call evaluate_halfmap_pair(params, state, even, odd, average, msk, diagnostics, &
-                    &cones=cones)
+                call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, cones=cones)
             endif
             call average%kill
         end subroutine calc_gridding_pair_diagnostics

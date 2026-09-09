@@ -17,7 +17,7 @@ use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare
     &sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
-use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master
+use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -675,6 +675,7 @@ contains
         type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_build
+        integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
         logical                           :: l_prob_state_mode, l_prob_neigh_mode
         logical                           :: l_write_partial_recs
@@ -790,12 +791,15 @@ contains
             call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
         enddo
         if( l_write_partial_recs )then
+            t_recphase = tic()
             if( trim(params%rec_backend) == 'pcg' )then
                 call assemble_refine3D_pcg(cline, params, build)
             else
                 call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
                 call xvolassemble%execute(cline_volassemble)
             endif
+            write(logfhandle,'(A,A,A,F9.1,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
+                &trim(params%rec_backend), '): ', real(toc(t_recphase)), ' s'
             if( trim(params%volrec) .eq. 'yes' )then
                 do state = 1, params%nstates
                     volname = refine3D_state_vol_fname(state)
@@ -1224,6 +1228,7 @@ contains
         type(commander_volassemble) :: xvolassemble
         type(cmdline) :: cline_prob_align, cline_volassemble
         type(string)  :: str
+        integer(timer_int_kind) :: t_recphase
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
         type(string)  :: fname_vol, volpproc, vollp
         real, allocatable :: res(:), fsc(:)
@@ -1334,12 +1339,20 @@ contains
                 case('eval')
                     ! nothing
                 case DEFAULT
+                    ! one wall-clock line per iteration for the whole master-side
+                    ! reconstruction phase, the same for both backends and with
+                    ! the same thread budget (rec3D_master_nthr), so their costs
+                    ! can be compared from the log (2026-09-09)
+                    t_recphase = tic()
                     if( trim(params%rec_backend) == 'pcg' )then
                         call assemble_refine3D_pcg(cline, params, build)
                     else
-                        call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
+                        call prepare_assembly_cline(cline, params, rec3D_master_nthr(params, self%nthr_master), &
+                            &cline_volassemble)
                         call xvolassemble%execute(cline_volassemble)
                     endif
+                    write(logfhandle,'(A,A,A,F9.1,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
+                        &trim(params%rec_backend), '): ', real(toc(t_recphase)), ' s'
                     if( trim(params%volrec).eq.'yes' )then
                         ! rename & add volumes to project & update job_descr
                         call build%spproj_field%get_pops(state_pops, 'state')

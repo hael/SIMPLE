@@ -57,22 +57,12 @@
       - `simple_pose_cont_refinement_shift_polish_test.f90`
       - `simple_pose_cont_refinement_shift_test.f90`
       - `simple_pose_cont_refinement_test_helpers.f90`
-      - `simple_sgd_base_suite_baseline_test.f90`
-      - `simple_sgd_base_suite_direct_test.f90`
-      - `simple_sgd_base_suite_helpers.f90`
-      - `simple_sgd_base_suite_sampling_restore_test.f90`
-      - `simple_sgd_base_suite_v2_test.f90`
-      - `simple_sgd_base_suite_v3_test.f90`
-      - `simple_sgd_base_suite_v4_test.f90`
-      - `simple_test_abinitio2d_sgd_dispatch.f90` — focused dispatch and command-line contract test for the development abinitio2D_sgd commander
+      - `simple_test_1jyx_abinitio.f90`
       - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
       - `simple_test_binoris.f90`
       - `simple_test_binoris_io.f90`
-      - `simple_test_block_tree.f90` — test for block-tree search space decomposition and mapping
-      - `simple_test_block_tree2D.f90`
-      - `simple_test_block_tree_io.f90`
       - `simple_test_bounds_from_mask3D.f90`
       - `simple_test_cartesian_fourier.f90`
       - `simple_test_cavg_quality_relations.f90`
@@ -158,7 +148,7 @@
       - `simple_test_rotate_ref.f90`
       - `simple_test_search_gain_flips.f90`
       - `simple_test_serialize.f90`
-      - `simple_test_sgd_base_suite.f90`
+      - `simple_test_sigma2_state.f90` — validates canonical sigma2 transactions, grouping and recovery guards
       - `simple_test_simd.f90`
       - `simple_test_socket_client.f90`
       - `simple_test_socket_io.f90`
@@ -176,8 +166,10 @@
       - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
       - **pose_cont_capture/**
+      - **pose_cont_validation/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
+    - **ui/**
   - **src/** — main source code folder
     - **defs/** — home of singleton modules with parameter and type definitions
       - `simple_ansi_ctrls.f90` — ANSI C control parameters for text formatting
@@ -196,7 +188,6 @@
     - **fileio/** — home of modules for i/o related to project files, mrc files, eer movies, star files etc.
       - `simple_binoris.f90` — for managing orientation data using binary files
       - `simple_binoris_io.f90` — high-level binoris i/o routines
-      - `simple_block_tree_io.f90` — for storing block tree information on disk
       - `simple_class_sample_io.f90` — for storing class sampling information on disk
       - `simple_discrete_stack_io.f90` — for cached non-contiguous reading of image stacks
       - `simple_eer_factory.f90` — for eer movie format i/o
@@ -208,7 +199,8 @@
       - `simple_nrtxtfile.f90` — deals with text files of numbers
       - `simple_projfile_utils.f90` — project file utilities
       - `simple_sigma2_binfile.f90` — sigma2 file i/o class
-      - `simple_sigma2_files.f90` — discovery, carry-over and group loading of sigma2 files.
+      - `simple_sigma2_files.f90` — discovery and group loading of sigma2 files.
+      - `simple_sigma2_state_file.f90` — versioned binary persistence and transaction primitives for canonical sigma2 state
       - `simple_srchspace_map2D_io.f90` — for storing search-space maps on disk
       - `simple_stack_io.f90` — This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes
       - `simple_syslib.f90` — System utilities & POSIX/OS wrappers
@@ -235,6 +227,8 @@
       - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb for power spectrum and thumbnails generation
       - `simple_pspecs.f90` — abstract data type for power spectra
       - `simple_refine3D_stage_plan.f90` — workflow-neutral frequency-stage planning for refine3D wrappers
+      - `simple_sigma2_bootstrap.f90` — single owner of the sigma2 bootstrap for work that has alignments (or
+      - `simple_sigma2_state.f90` — canonical per-particle sigma2 state validation, reduction and transactional consolidation
       - `simple_simulator.f90` — simulation of single-particle images
       - `simple_sym.f90` — defines protein point-group symmetries
       - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
@@ -271,7 +265,6 @@
           - `simple_commander_base.f90` — abstract base commander
           - `simple_commanders_abinitio.f90` — abinitio 3D reconstruction in single- and multi-particle mode
           - `simple_commanders_abinitio2D.f90` — ab initio 2D analysis
-          - `simple_commanders_abinitio2d_sgd.f90` — developer wrapper for table-free streaming-SGD ab initio 2D classification
           - `simple_commanders_atoms.f90` — operations on atoms, mostly used in SINGLE
           - `simple_commanders_cavgs.f90` — analysis of class averages
           - `simple_commanders_checks.f90` — checking info about images, project, or checking update calculations
@@ -420,7 +413,6 @@
         - `simple_image_seg.f90` — image segmentation related stuff to support masking
         - `simple_image_vis.f90` — for supporting visualization of images in various ways
         - `simple_projector.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
-        - `simple_projector_pft.f90` — projector-to-polarft adapters kept outside simple_projector to avoid module cycles
         - `simple_projector_pft_batch.f90` — fused projection helpers that operate on projector data without polarft class dependencies
       - **interp/** — home of the window functions for Fourier gridding interpolation
         - `simple_cartesian_fourier.f90` — neutral Cartesian Fourier lattice embedding, extraction, and packed KB gathers
@@ -439,7 +431,6 @@
         - `simple_motion_gain_helpers.f90`
         - `simple_motion_gain_tester.f90` — unit tests for motion gain helper and analyzer
         - `simple_motion_patched.f90` — patched-based anisotropic motion correction
-        - `simple_opt_image_weights.f90` — numerically find optimal weights for frames
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
@@ -460,17 +451,12 @@
         - `simple_nu_filter_state.f90` — simple nu filter state implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_stats.f90` — simple nu filter stats implementation for volume-domain nonuniform filtering
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
-        - `simple_opt_bfgs.f90` — function minimization by L-BFGS (Limited memory Broyden-Fletcher-Goldfarb-Shannon optimization)
         - `simple_opt_bfgs2.f90` — function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
         - `simple_opt_bforce.f90` — brute force function minimisation
         - `simple_opt_de.f90` — continuous function optimisation by differential evolution
         - `simple_opt_factory.f90` — factory pattern class for the SIMPLE optimisers
-        - `simple_opt_fr_cg.f90` — function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4
         - `simple_opt_helpers.f90` — helper routines and definitions for certain optimizer routines (those taken from the gsl library)
         - `simple_opt_lbfgsb.f90` — memory limited bound-constained BFGS optimiser
-        - `simple_opt_particle_swarm.f90` — continuous particle swarm optimisation
-        - `simple_opt_powell.f90` — continuous function optimisation by Powell's method of conjugate search directions
-        - `simple_opt_pr_cg.f90` — function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
         - `simple_opt_simplex.f90` — The Nelder-Mead simplex method for continuous function minimisation
         - `simple_opt_spec.f90` — optimiser specification
         - `simple_opt_stde.f90` — function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
@@ -500,7 +486,6 @@
         - `simple_parameters_phases.f90` — constructor and semantic execution, source, derivation, and validation phases for SIMPLE parameters
         - `simple_parameters_registry.f90` — typed registry used to bind command-line arguments onto the flat SIMPLE parameters object
       - **pca/** — home of modules implementing principal component analysis: SVD, probabilistic, and nonlinear kernel variants
-        - `simple_complex_ppca.f90` — complex/Hermitian probabilistic PCA for Fourier-domain vectors
         - `simple_diff_map_denoise.f90` — CSR graph coefficient-projection denoising helpers
         - `simple_diff_map_graphs.f90` — CSR graph construction helpers for diffusion-map class splitting
         - `simple_diffusion_maps.f90` — sparse diffusion-map embeddings for class-split graphs
@@ -577,7 +562,6 @@
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
-          - `simple_strategy2D_eval.f90` — 2D strategy for objective function evaluation
           - `simple_strategy2D_greedy.f90` — 2D strategy for exhaustive projection matching with greedy in-plane search
           - `simple_strategy2D_greedy_smpl.f90` — 2D strategy for exhaustive projection matching with probabilistic in-plane search
           - `simple_strategy2D_inpl.f90` — 2D strategy for in-plane refinement
@@ -684,9 +668,10 @@
         - `simple_cartesian_pose_refiner.f90` — Fixed-volume Cartesian Fourier particle-pose refinement numerics
         - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
         - `simple_halfmap_diagnostics.f90` — backend-neutral half-map FSC, cFAR, and resolution diagnostics shared by the gridding and PCG reconstruction paths
+        - `simple_nu_state_filter.f90` — assembly-owned nonuniform (NU) filtering of one state's half-map pair
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
-        - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and
+        - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and preconditioned
         - `simple_vol_pproc_policy.f90` — per-state automask policy decisions consumed by volume assembly
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
         - `simple_volcluster.f90` — clustering of pre-docked volumes from Fourier-shell correlations
@@ -694,14 +679,11 @@
         - `simple_volpft_corrcalc.f90` — fast cross-correlation calculation between Fourier volumes using defined sampling space geometries
         - `simple_volpft_symsrch.f90` — symmetry search using polar volume representation
     - **utils/** — utilities source code directory
-      - `simple_block_tree.f90`
-      - `simple_block_tree_corr.f90`
       - `simple_corrmat.f90` — for calculation of correlation matrices
       - `simple_eulspace_neigh_map.f90`
       - `simple_exec_helpers.f90` — helpers for restarted execution, asynchronous execution, script-based execution etc.
       - `simple_forked_process.f90` — POSIX fork-based child-process manager with timestamps, auto-restart, and status polling
       - `simple_forked_process_tester.f90` — unit tests for simple_forked_process (lifecycle, signals, restart, timestamps, I/O)
-      - `simple_gauss2Dfit.f90` — Module for fitting the intensity distributions of 2D particle image arrays with 2D multivariate Gaussians
       - `simple_gpu_utils.f90` — contains utilities for gpu offloading with OpenMP and
       - `simple_imgarr_utils.f90` — utilities for image arrays
       - `simple_imgproc.f90` — various image processing routines
@@ -724,7 +706,7 @@
       - `simple_string.f90` — the string class that replaces intrinsic allocatable strings in SIMPLE
       - `simple_string_tester.f90` — unit test subroutines for the string class
       - `simple_string_utils.f90` — contains various string manipulation subroutines and functions
-      - `simple_test_utils.f90` — utilities for unit testing, assertions etc.
+      - `simple_test_utils.f90` — reusable assertion, suite tracking, and reporting utilities for tests
       - `simple_timer.f90` — Simple timer module: High resolution (nanoseconds) timer in Fortran
       - `simple_timer_omp.f90` — very precise timer for use in OpenMP sections
       - **clustering/** — algorithms for clustering a distance matrix
@@ -785,7 +767,6 @@
         - `simple_math_ft.f90` — Fourier transform-related math routines
         - `simple_neighs.f90` — pixel neighborhood definitions and generation
         - `simple_online_var.f90` — online moments estimation
-        - `simple_r8lib.f90` — cholesky decompositions and solvers
         - `simple_ran_tabu.f90` — routines for generation of directed random numbers
         - `simple_rnd.f90` — random number generation module
         - `simple_srch_sort_loc.f90` — searching ordered tables, sorting, locate etc.
@@ -816,8 +797,6 @@
         - `simple_qsys_sge.f90` — batch-processing manager - SunGrid Engine
         - `simple_qsys_slurm.f90` — batch-processing manager - SLURM
       - **structs/** — implementation of various standard and non-standard data structures
-        - `simple_binary_tree.f90` — simple binary tree structure for hierarchical clustering results
-        - `simple_binary_tree_tester.f90` — unit test routines for refactored simple_binary_tree class (no subsets; node-only getters)
         - `simple_chash.f90` — Character hash
         - `simple_chash_tester.f90` — unit test routines for chash class
         - `simple_hash.f90` — real hash data structure
@@ -825,8 +804,6 @@
         - `simple_kd_tree.f90` — deterministic flat-array k-d tree and exact Euclidean k-nearest-neighbor queries
         - `simple_linked_list.f90` — polymorphic linked list class
         - `simple_linked_list_tester.f90` — unit test routines for linked list class
-        - `simple_multi_dendro.f90` — simple multi-dendrogram structure to hold multiple hierarchical clusterings
-        - `simple_multi_dendro_tester.f90` — unit test routines for simple_multi_dendro class (matches current minimal API)
         - `simple_rec_list.f90` — polymorphic linked list implementation for derived types (specified in the class header)
         - `simple_rec_list_tester.f90` — unit test routines for class rec_list
         - `simple_vrefhash.f90` — string-key, polymorphic *reference* hash (stores pointers; updates are visible)

@@ -157,10 +157,7 @@ contains
         call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
-        call apply_stream_iteration_policy(params)
-        call cline%set('sgd', merge('yes','no ',params%l_sgd_streaming_active))
-        call cline%set('sgd_path', 'stream')
-        if( params%l_prob_align_mode .and. .not. params%l_sgd_streaming_active )then
+        if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
@@ -274,19 +271,14 @@ contains
         call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
-        call apply_stream_iteration_policy(params)
-        call cline%set('sgd', merge('yes','no ',params%l_sgd_streaming_active))
-        call cline%set('sgd_path', 'stream')
         call self%job_descr%set('refs',       params%refs)
         call self%job_descr%set('nparts',     int2str(params%nparts))
         call self%job_descr%set('startit',    int2str(params%startit))
         call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
-        call self%job_descr%set('sgd', merge('yes','no ',params%l_sgd_streaming_active))
-        call self%job_descr%set('sgd_path', 'stream')
         call self%job_descr%set('frcs',       FRCS_FILE)
         call cleanup_distributed_iteration_artifacts(params)
-        if( params%l_prob_align_mode .and. .not. params%l_sgd_streaming_active )then
+        if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
@@ -582,42 +574,6 @@ contains
             call xmake_cavgs%execute(cline_make_cavgs)
         endif
     end subroutine execute_make_cavgs
-
-    subroutine apply_stream_iteration_policy( params )
-        type(parameters), intent(inout) :: params
-        logical :: requested
-        ! The public mode controls activation. sgd/sgd_path are only
-        ! internal compatibility fields on the child command line.
-        requested = trim(params%sgd_stage4_mode) /= 'off'
-        select case(trim(params%sgd_stage4_mode))
-            case('alternate')
-                ! Boundary-warmup schedule: retain SIMPLE's established
-                ! probabilistic matcher for the first iteration of stages 3--5
-                ! (global iterations 11, 16, and 21), then use streaming SGD.
-                ! Stage 6 is passed as mode=on by the controller and therefore
-                ! remains fully streamed.  Comparing with startit keeps the
-                ! schedule restart-stable without hard-coding global numbers.
-                params%l_sgd_streaming_active = requested
-            case('on')
-                params%l_sgd_streaming_active = requested
-            case DEFAULT
-                params%l_sgd_streaming_active = .false.
-        end select
-        ! Warm up stages 3--5 with SIMPLE's established probabilistic
-        ! assignment once before switching to the streaming optimizer.  The
-        ! controller enters these stages at global iterations 11, 16, and 21;
-        ! comparing which_iter with startit keeps the policy restart-stable.
-        if( params%l_sgd_streaming_active .and. params%startit > 10 .and. &
-            params%which_iter == params%startit )then
-            params%l_sgd_streaming_active = .false.
-        endif
-        if( params%sgd_diagnostic )then
-            write(logfhandle,'(A,1X,A,I0,1X,A,1X,A,1X,A,L1,1X,A,L1)') &
-                '>>> SEARCH DIAG: SGD iteration policy:', 'iteration=', params%which_iter, &
-                'stage4_mode=', trim(params%sgd_stage4_mode), 'requested=', requested, &
-                'active=', params%l_sgd_streaming_active
-        endif
-    end subroutine apply_stream_iteration_policy
 
     subroutine gen_jpeg( which_iter ) 
         integer, intent(in) :: which_iter

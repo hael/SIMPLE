@@ -76,7 +76,7 @@ subroutine exec_test_eval_polarftcc( self, cline )
     use simple_matcher_smpl_and_lplims, only: set_bp_range3D
     use simple_builder,             only: builder
     use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
-    use simple_projector_pft,       only: fproject_polar
+    use simple_polarft_calc,        only: vol_pad2ref_pfts
     class(commander_test_eval_polarftcc), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
     type(parameters)         :: p
@@ -115,7 +115,8 @@ subroutine exec_test_eval_polarftcc( self, cline )
     call b%vol%mask3D_soft(p%msk)
     call b%vol%fft()
     call b%vol%expand_cmat()
-    call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
+    call b%eulspace%set_ori(1, o)
+    call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
     call b%pftc%cp_even_ref2ptcl(1,1)
     call b%pftc%set_eo(1, .true. )
     if( o%e3get() < 0.)then
@@ -123,7 +124,8 @@ subroutine exec_test_eval_polarftcc( self, cline )
     else
         call o%e3set(o%e3get() + 29.5)
     endif
-    call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
+    call b%eulspace%set_ori(1, o)
+    call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
     shvec(1) = -2.
     shvec(2) =  2.
     print *,'Ref orientation:'

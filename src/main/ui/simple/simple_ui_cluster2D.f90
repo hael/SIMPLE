@@ -7,7 +7,6 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('clust
 type(ui_program), target :: abinitio2D
 type(ui_program), target :: cluster2D
 type(ui_program), target :: abinitio2D_chunks
-type(ui_program), target :: abinitio2d_sgd
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: bootstrap_cavgs
 type(ui_program), target :: unbootstrap_cavgs
@@ -21,7 +20,6 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
         call new_abinitio2D_chunks(prgtab)
-        call new_abinitio2d_sgd(prgtab)
         call new_make_cavgs(prgtab)
         call new_bootstrap_cavgs(prgtab)
         call new_unbootstrap_cavgs(prgtab)
@@ -39,18 +37,6 @@ contains
         call abinitio2D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call add_ui_program('abinitio2D', abinitio2D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D
-
-    subroutine new_abinitio2d_sgd( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! abinitio2D_sgd rejects inpl_cont=yes, so it keeps the legacy default
-        call new_abinitio2D_descriptor(abinitio2d_sgd, 'abinitio2D_sgd', &
-            &'Run experimental streaming-SGD 2D classification from particle images', &
-            &'runs the development table-free SGD variant of staged 2D classification', &
-            &UI_VIS_DEVELOPER, 'Development 2D SGD', 'no')
-        call abinitio2d_sgd%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
-        call add_abinitio2d_sgd_inputs(abinitio2d_sgd)
-        call add_ui_program('abinitio2D_sgd', abinitio2d_sgd, prgtab, UI_CATEGORY)
-    end subroutine new_abinitio2d_sgd
 
     subroutine new_abinitio2D_descriptor( program, name, summary, help, visibility, display_name, &
         &inpl_cont_default )
@@ -145,28 +131,6 @@ contains
         call program%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call program%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
     end subroutine new_abinitio2D_descriptor
-
-    subroutine add_abinitio2d_sgd_inputs( program )
-        type(ui_program), intent(inout) :: program
-        ! This developer-only append point is intentionally separate from the
-        ! conventional descriptor, so standard abinitio2D cannot inherit an
-        ! experimental control through a future shared-descriptor branch.
-        call program%add_input(UI_SRCH, 'sgd_stage4_mode', 'multi', 'SGD stage policy', &
-            &'Stream policy(on|alternate){on}', '', .false., 'on', group="search", &
-            &visibility=UI_VIS_DEVELOPER, choices=ui_choices([character(len=9) :: 'on', 'alternate']))
-        call program%add_input(UI_SRCH, 'sgd_diagnostic', 'binary', 'SGD diagnostics', &
-            &'Emit SGD diagnostic and safety logs(yes|no){no}', '', .false., 'no', group="search", &
-            &visibility=UI_VIS_DEVELOPER, choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call program%add_input(UI_SRCH, 'sgd_eta_shift', 'num', 'SGD shift learning rate', &
-            &'Learning rate for bounded analytical shift updates{0.25}', 'learning rate{0.25}', .false., 0.25, &
-            &group="search", visibility=UI_VIS_DEVELOPER)
-        call program%add_input(UI_SRCH, 'sgd_update_frac', 'num', 'SGD mini-batch fraction', &
-            &'Fraction of active particles sampled afresh on each SGD iteration{0.6}', 'fraction{0.6}', .false., 0.6, &
-            &group="search", visibility=UI_VIS_DEVELOPER)
-        call program%add_input(UI_SRCH, 'sgd_shift_its', 'num', 'SGD shift steps', &
-            &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
-            &group="search", visibility=UI_VIS_DEVELOPER)
-    end subroutine add_abinitio2d_sgd_inputs
 
     subroutine new_abinitio2D_chunks( prgtab )
         class(ui_hash), intent(inout) :: prgtab

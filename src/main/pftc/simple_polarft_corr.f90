@@ -354,9 +354,9 @@ contains
         !
         !   L_r = 1 + crvec1_r / (wsqsums_ptcl * 2*nrots).
         !
-        ! Do not exponentiate here: SGD selects the minimum raw loss, while
-        ! gen_euclids applies the legacy monotone score transform in its
-        ! wrapper above.
+        ! Do not exponentiate here: continuous optimization consumes the raw
+        ! loss, while gen_euclids applies the legacy monotone score transform
+        ! in its wrapper above.
         ! For each discrete rotation r, expose the finite Gaussian loss
         !
         !   L_r = sum_k w_k |X_k - CTF_k R_r S_s A_k|^2 / wsqsum(X).
@@ -1453,7 +1453,7 @@ contains
         grad  = -f * 2.d0 * grad / denom
     end subroutine gen_euclid_grad_for_rot_8
 
-    ! Candidate API for SGD: return the finite Gaussian loss L and grad(L).
+    ! Continuous-optimization API: return the finite Gaussian loss L and grad(L).
     ! The legacy score is exp(-L), which is monotonic but can underflow.
     module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self

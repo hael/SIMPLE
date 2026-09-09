@@ -8,23 +8,6 @@ implicit none
 
 contains
 
-    module pure function cavger_zero_support_recovery( pop, have_previous ) result(l_restore)
-        integer, intent(in) :: pop
-        logical, intent(in) :: have_previous
-        logical :: l_restore
-        l_restore = pop == 0 .and. have_previous
-    end function cavger_zero_support_recovery
-
-    subroutine backup_previous_cavgs()
-        integer :: icls
-        if( .not. associated(p_ptr) .or. .not. p_ptr%l_sgd_streaming_active ) return
-        if( .not. associated(cavgs_prev%merged%cmat) ) call cavgs_prev%new_set(ldim_crop(1:2), ncls)
-        do icls = 1, ncls
-            call cavgs_prev%copy_fast(cavgs, icls, .true.)
-        enddo
-        have_prev_cavgs = .true.
-    end subroutine backup_previous_cavgs
-
     !>  \brief  Constructor
     module subroutine cavger_new( params, build )
         class(parameters), target, intent(inout) :: params
@@ -175,9 +158,6 @@ contains
         ! the caller rather than inferred, so the offline assembly path is unaffected.
         l_cropped_ptcls = .false.
         if( present(cropped_ptcls) ) l_cropped_ptcls = cropped_ptcls
-        ! Preserve the last restored model before clearing the accumulators.
-        ! This lets a zero-support class retain its own previous average.
-        call backup_previous_cavgs()
         ! Zero sums or set to previous with weight
         call cavgs%zero_set(.true.)
         if( do_frac_update )then
@@ -459,16 +439,9 @@ contains
             eo_pop = eo_pops(:,icls)
             pop    = sum(eo_pop)
             if(pop == 0)then
-                ! Preserve an empty class's previous model. It remains
-                ! unsupported for this update, but is not destroyed by zeroing.
-                if( associated(p_ptr) .and. p_ptr%l_sgd_streaming_active .and. &
-                    cavger_zero_support_recovery(pop, have_prev_cavgs) )then
-                    call cavgs%copy_fast(cavgs_prev, icls, .true.)
-                else
-                    call cavgs%even%zero_slice(icls, .false.)
-                    call cavgs%odd%zero_slice(icls, .false.)
-                    call cavgs%merged%zero_slice(icls, .false.)
-                endif
+                call cavgs%even%zero_slice(icls, .false.)
+                call cavgs%odd%zero_slice(icls, .false.)
+                call cavgs%merged%zero_slice(icls, .false.)
             else
                 ! even + odd
                 cavgs%merged%slices(icls)%ft = .true.
@@ -720,7 +693,6 @@ contains
         enddo
         !$omp end parallel do
         ! Assemble class contributions
-        call backup_previous_cavgs()
         call cavgs%zero_set(.true.)
         call cavgs4reade%new_stack(ldim_crop(1:2), ncls)
         call cavgs4reado%new_stack(ldim_crop(1:2), ncls)
@@ -801,8 +773,6 @@ contains
         call dealloc_imgarr(cavgs_odd)
         call dealloc_imgarr(cavgs_merged)
         call cavgs%kill_set
-        call cavgs_prev%kill_set
-        have_prev_cavgs = .false.
         ncls    = 0
         ldim    = 0; ldim_crop   = 0
         ldim_pd = 0; ldim_croppd = 0

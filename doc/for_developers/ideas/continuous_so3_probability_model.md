@@ -37,8 +37,8 @@ The relevant existing implementation is concentrated in:
   - exact PFTC objective evaluation once a reference PFT exists
 - `src/main/image/simple_projector_pft_batch.f90`
   - batched extraction of discrete reference polar sections
-- `src/main/image/simple_projector_pft.f90`
-  - single-orientation polar section extraction adapters
+- `src/main/pftc/simple_polarft_core.f90`
+  - production `vol_pad2ref_pfts` ownership of reference-section extraction
 - `src/main/strategies/search/simple_strategy3D_prob.f90`
   - consumption of probability-table assignments during search/update
 - `src/main/strategies/search/simple_strategy3D_matcher.f90`

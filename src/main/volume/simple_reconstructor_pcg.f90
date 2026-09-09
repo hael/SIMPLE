@@ -1,13 +1,9 @@
-!@descr: CTF/sigma-weighted Fourier-projection operator and
-!  preconditioned-conjugate-gradient volume solver used by the reconstruct3D
-!  PCG backend. See doc/policies/reconstruct3D_pcg_policy.md.
-!
-!  Per-particle data is cached once by prep_particles (not re-derived every CG
-!  iteration), the particle loop is OpenMP-parallel throughout, and the solve
-!  is preconditioned with the sampling-density diagonal. An optional kernelized
-!  (Toeplitz/Gram) normal operator (pcgop=kernel) makes per-iteration cost
-!  independent of particle count; the matrix-free operator remains the exact
-!  reference.
+!@descr: CTF/sigma-weighted Fourier-projection operator and preconditioned
+!  conjugate-gradient volume solver of the reconstruct3D PCG backend, see
+!  doc/policies/reconstruct3D_pcg_policy.md. Per-particle data is cached once
+!  (prep_particles), the particle loops are OpenMP-parallel, and the optional
+!  kernelized (Toeplitz) normal operator makes the per-iteration cost independent
+!  of the particle count; the matrix-free operator is the exact reference.
 module simple_reconstructor_pcg
 use, intrinsic :: iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -30,24 +26,22 @@ integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~
 integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
 integer, parameter :: PCG_RAW_ACCUM_VERSION = 1
 integer, parameter :: PCG_RAW_PROV_LEN = 256
+real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< support floor of the x/P warm-start conversion, see mask_div
 character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
 
-!> stop_reason value when CG met a non-positive or non-finite curvature
-!! dot(p,Hp): the iterate is returned as it stood BEFORE that step (the
-!! step is not applied), converged=.false., and the caller decides whether to
-!! restart (a warm start can steer the Krylov space into the operator-error
-!! modes of the approximate kernel) or to fail.
+!> stop_reason when dot(p,Hp) is non-positive or non-finite: the iterate is
+!! returned as it stood before that step and the caller decides (restart or fail)
 character(len=*), parameter, public :: PCG_STOP_INDEFINITE = 'indefinite'
 
 type :: pcg_solver_outcome
-    character(len=24) :: stop_reason         = 'not_started'
-    integer           :: iteration_count     = 0
-    integer           :: requested_maxits    = 0
+    character(len=24) :: stop_reason          = 'not_started'
+    integer           :: iteration_count      = 0
+    integer           :: requested_maxits     = 0
     real              :: initial_rel_residual = 0.0
     real              :: final_rel_residual   = 0.0
     real              :: final_rel_update     = 0.0
-    real(dp)          :: failure_curvature    = 0.0_dp !< curvature of this attempt's indefinite stop
-    integer           :: failure_iteration    = 0      !< iteration of this attempt's indefinite stop
+    real(dp)          :: failure_curvature    = 0.0_dp      !< curvature of this attempt's indefinite stop
+    integer           :: failure_iteration    = 0           !< iteration of this attempt's indefinite stop
     real(dp)          :: restart_trigger_curvature = 0.0_dp !< warm-attempt curvature that caused a cold restart
     integer           :: restart_trigger_iteration = 0      !< warm-attempt iteration that caused a cold restart
     logical           :: cold_restart_used    = .false.     !< outcome is from the one permitted cold retry
@@ -91,9 +85,7 @@ type :: reconstructor_pcg
     real,            allocatable  :: sig2(:,:)       !< (0:R,nptcls) per-particle noise power
     ! ---- lookup tables / work buffers ----
     integer, allocatable :: wrap(:)                  !< precomputed cyci_1d over the whole reachable range
-    ! (h,k)-only quantities absT2_plane and build_transfer would otherwise
-    ! recompute per particle; built once over the fixed lims2 disk, shared by
-    ! all particles. ~258 kB each at box 256. See build_hk_luts.
+    ! (h,k)-only lookup tables over the fixed lims2 disk, see build_hk_luts
     real,    allocatable :: spafreqsq_lut(:,:)       !< spatial frequency squared
     real,    allocatable :: ang_lut(:,:)             !< atan2(k,h) astigmatism angle
     integer, allocatable :: shell_lut(:,:)           !< resolution shell index, capped at Rnat
@@ -106,10 +98,7 @@ type :: reconstructor_pcg
     logical              :: wimg_exists = .false.
     integer              :: fft_nthreads = 1         !< threads owned by each persistent FFTW plan
     ! ---- streaming accumulation over particle batches ----
-    ! These two Fourier accumulators are the ONLY particle-dependent state the
-    ! solve needs; precond, Khat and the RHS are all derived from them. Keeping
-    ! them here rather than handing them to callers is what lets a commander
-    ! stream batches without ever seeing the padded lattice.
+    ! the only particle-dependent state the solve needs; precond, Khat and the RHS derive from them
     real,    allocatable :: acc_work(:,:,:)          !< sum_i G_i^dagger |T_i|^2, full-range
     complex, allocatable :: b_work(:,:,:)            !< RHS accumulator, full-range
     real,    allocatable :: b_rhs(:,:,:)             !< folded/deapodized/masked RHS, box^3
@@ -127,20 +116,14 @@ type :: reconstructor_pcg
     real,    allocatable :: Khat(:,:,:)              !< Gram kernel on wimg's cmat layout, real
     logical              :: l_kernel = .false.
     ! ---- optional FSC/SSNR quadratic prior ----
-    ! Requested before raw D is finalized; its absolute scale is then derived
-    ! from D, keeping the prior in the same calibrated operator convention.
+    ! requested before D is finalized; the absolute scale is derived from D
     real, allocatable :: ml_fsc(:)                    !< independent-half FSC, shells 1:R
     real, allocatable :: ml_prior(:,:,:)              !< calibrated padded Fourier diagonal
     real              :: ml_tau = 1.0                 !< established ML regularization fudge factor
     real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
     logical           :: l_ml_prior_requested = .false.
     logical           :: l_ml_prior = .false.
-    ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
-    !      question before any further optimization: of the seconds an iteration
-    !      costs, how many are the particle loop (which the kernelized operator
-    !      removes) and how many are FFT + bulk cmat traffic on the padf-times
-    !      padded lattice (which it does NOT)? Guessing that split wrong means
-    !      optimizing the wrong half. ----
+    ! ---- per-phase profiling over a solve: particle loop vs FFT + lattice traffic ----
     logical  :: l_profile = .false.
     real(dp) :: t_setvol  = 0.0_dp  !< pad + forward FFT of the iterate
     real(dp) :: t_cmatcp  = 0.0_dp  !< get_cmat/set_cmat bulk copies
@@ -153,7 +136,7 @@ type :: reconstructor_pcg
     real(dp) :: t_fin_fold = 0.0_dp !< fused reciprocal and packed-Khat pass
     real(dp) :: t_fin_dep = 0.0_dp  !< deposition-envelope construction
     real(dp) :: t_fin_kernel = 0.0_dp !< kernel correction, FFT and calibration
-    logical              :: exists = .false.
+    logical  :: exists = .false.
   contains
     ! CONSTRUCTOR / DESTRUCTOR
     procedure :: new
@@ -164,7 +147,7 @@ type :: reconstructor_pcg
     procedure :: build_precond
     procedure :: build_kernel
     procedure :: build_operators
-    ! STREAMING SETUP (batch-at-a-time; see begin_accum)
+    ! STREAMING SETUP (batch at a time, see begin_accum)
     procedure :: begin_accum
     procedure :: begin_reduction
     procedure :: accumulate_batch
@@ -176,9 +159,6 @@ type :: reconstructor_pcg
     procedure :: compare_raw_accum
     procedure, private :: accumulate_rhs_density
     procedure, private :: accumulate_absT2
-    procedure, private :: accumulate_rhs
-    procedure, private :: precond_from_accum
-    procedure, private :: fold_accum_to_khat
     procedure, private :: finalize_density_accum
     procedure, private :: finalize_khat
     procedure :: set_deapod
@@ -190,11 +170,11 @@ type :: reconstructor_pcg
     procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
     procedure, private :: mask_mul
+    procedure, private :: mask_div
     procedure, private :: calibrate_kernel
     procedure :: measure_kernel_scale
     procedure :: set_op_mode
-    ! LOW-LEVEL OPERATOR (public: the test commanders drive these directly to
-    ! verify the adjoint identity before any solve() result may be trusted)
+    ! LOW-LEVEL OPERATOR (public: the test commanders verify the adjoint identity)
     procedure :: set_volume
     procedure :: forward_plane
     procedure :: fourier_dot
@@ -243,9 +223,7 @@ end type reconstructor_pcg
 
 contains
 
-    !> PCG-local wall-clock helpers. Unlike the legacy shared timer, these keep
-    !! no module-global last timestamp and are therefore safe when independent
-    !! even/odd operators execute concurrently.
+    !> wall-clock helpers without module-global state, safe for concurrent even/odd solves
     integer(timer_int_kind) function pcg_tic() result(tstart)
         call system_clock(count=tstart)
     end function pcg_tic
@@ -257,16 +235,14 @@ contains
         seconds = real(tend-tstart,dp) / real(rate,dp)
     end function pcg_toc
 
-    !>  \brief  Applies a right tangent-space increment R <- R exp([omega]x).
-
     ! CONSTRUCTOR
 
     subroutine new( self, box, smpd, lambda, fft_nthreads )
-        class(reconstructor_pcg), intent(inout) :: self
-        integer,                   intent(in)    :: box
-        real,                      intent(in)    :: smpd
-        real, optional,            intent(in)    :: lambda
-        integer, optional,         intent(in)    :: fft_nthreads
+        class(reconstructor_pcg),           intent(inout) :: self
+        integer,                            intent(in)    :: box
+        real,                               intent(in)    :: smpd
+        real,                     optional, intent(in)    :: lambda
+        integer,                  optional, intent(in)    :: fft_nthreads
         type(image) :: tmp
         integer     :: R, lo, hi, i
         real        :: rlim
@@ -279,63 +255,36 @@ contains
         if( present(fft_nthreads) ) self%fft_nthreads = max(1, fft_nthreads)
         self%kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         self%iwinsz = ceiling(self%kbwin%get_winsz() - 0.5)
-        ! Deliberately computed as 2*iwinsz+1 (odd, symmetric around nint(loc)),
-        ! not kbwin%get_wdim() directly -- for KBWINSZ=1.5 these agree (both 3),
-        ! but spelling it out documents the invariant this operator depends on:
-        ! an even-width window would not be centred on nint(loc), so negating
-        ! loc would not negate the window as a set, breaking the mirror
-        ! consistency fold_and_ifft's h>=0-only fold requires.
+        ! odd width centred on nint(loc): negating loc negates the window as a set,
+        ! which the h>=0 fold in fold_and_ifft relies on
         self%wdim   = 2*self%iwinsz + 1
-        ! After rotation, source h-lines separated by only wdim can still update
-        ! the same 3-D interpolation cell. sqrt(3)*wdim guarantees separation by
-        ! a full window width along at least one target axis, because in 3-D the
-        ! max-norm is at least the Euclidean norm over sqrt(3). Same scheme as
-        ! reconstructor%insert_plane_oversamp.
+        ! same-colour h-lines stay a full window apart along one axis after rotation
+        ! (max-norm >= Euclidean norm / sqrt(3)), as in reconstructor%insert_plane_oversamp
         self%stride = ceiling(sqrt(3.0) * real(self%wdim))
-        ! OVERSAMPLING. The unknown stays on the native box, but every Fourier
-        ! operation runs on a padf-times padded lattice: the volume is centre-
-        ! padded going in and centre-cropped coming out. This is the same trick
-        ! Fourier gridding uses (projector%interp_fcomp_oversamp works at
-        ! loc*PAD_FAC and rescales by PAD_FAC**3). Without it, KB interpolation
-        ! on the native lattice is only percent-accurate, the roll-off envelope
-        ! swings ~30x across the box, and the Gram kernel cannot match the
-        ! operator -- three symptoms of one cause.
+        ! oversampling: the unknown lives on the native box, every Fourier operation
+        ! on the padf-times padded lattice (centre-pad in, centre-crop out), as in
+        ! Fourier gridding; native-lattice KB interpolation is only percent-accurate
         self%padf    = OSMPL_PAD_FAC
         self%boxpd   = self%padf * box
         self%pad_off = (self%boxpd - box) / 2
         self%Rnat    = box / 2
-        ! fwd_ft divides by product(ldim), so the padded spectrum is 1/padf**3
-        ! of the native one at coincident frequencies; this restores the scale.
+        ! fwd_ft divides by product(ldim): restores the native scale at coincident frequencies
         self%padsc   = real(self%padf)**3
         call tmp%new([self%boxpd,self%boxpd,self%boxpd], smpd, &
             &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads)
         call tmp%fft()
         self%lims3 = tmp%loop_lims(3)
-        ! wlims is the TRUE period-box canonical wrap range (period = box).
-        ! lims3(1,:) is NOT usable for this on axis 1: it spans the redundant
-        ! [-box/2, box/2] (both Friedel-mate Nyquist bins), one longer than the
-        ! true period, which would give cyci_1d an off-by-one wrap. Axes 2/3
-        ! never get that extension, so lims3(2,:) is the correct range; the box
-        ! is cubic so it applies to all three axes.
+        ! true period-box wrap range: lims3(1,:) spans both Friedel Nyquist mates
+        ! (one longer than the period), axes 2/3 do not
         self%wlims = self%lims3(2,:)
-        ! lims2 is a FULL symmetric (both-sign h) disk, not the packed half.
-        ! This makes forward_plane/adjoint_plane_add an exact adjoint pair for
-        ! ANY orientation, at the cost of 2x the plane work -- which no longer
-        ! matters per iteration once the kernelized operator is in use.
-        ! lims2 stays NATIVE: the plane is sampled at native Fourier indices,
-        ! which map onto the padded lattice as padf*loc.
+        ! full symmetric (both-sign h) NATIVE disk: forward_plane/adjoint_plane_add
+        ! are then an exact adjoint pair for any orientation; padded loc = padf*loc
         R = self%Rnat
         self%lims2(1,:) = [-R, R]
         self%lims2(2,:) = [-R, R]
         self%sqlp       = R*R
-        ! Squared plane radius below which a KB window provably CANNOT reach the
-        ! periodic wrap boundary, so the serial rim pass can reject it without
-        ! computing anything. The window spans nint(loc) +/- iwinsz and wraps
-        ! only if some component leaves [wlims(1), wlims(2)]; since
-        ! |nint(loc_j)| <= |loc| + 0.5 and |loc| = padf*sqrt(h^2+k^2) is
-        ! rotation-INDEPENDENT, the test collapses to one on (h,k) alone.
-        ! Conservative by construction, with an extra -1 of margin: it only ever
-        ! rejects points that cannot wrap, never ones that can.
+        ! squared plane radius below which a KB window cannot reach the wrap boundary;
+        ! |loc| = padf*sqrt(h^2+k^2) is rotation-independent, so (h,k) decides (conservative)
         rlim = real(min(self%wlims(2) - self%iwinsz, -self%wlims(1) - self%iwinsz)) - 0.5
         self%sq_rim = max(0, int((rlim / real(self%padf))**2) - 1)
         call tmp%kill
@@ -348,8 +297,7 @@ contains
         end do
         call self%build_hk_luts
         call self%build_env
-        ! Default point group is c1: a single identity operator. set_sym
-        ! replaces this when the caller requests replication.
+        ! c1 default: a single identity operator, replaced by set_sym
         self%nsym = 1
         if( allocated(self%symmats) ) deallocate(self%symmats)
         allocate(self%symmats(3,3,1), source=0.0)
@@ -357,17 +305,8 @@ contains
         self%exists = .true.
     end subroutine new
 
-    !>  \brief  precomputes the (h,k)-only quantities absT2_plane and
-    !!          build_transfer would otherwise recompute per particle: spatial
-    !!          frequency squared, the astigmatism angle (atan2) and the
-    !!          resolution shell (sqrt). The lims2 disk is fixed for the life of
-    !!          the object, so these are particle-independent. These three
-    !!          expressions are bit-identical to the inlined ones they replace.
-    !!          The CTF form that consumes them is NOT: absT2_plane and
-    !!          build_transfer factor half_wl2_cs = 0.5*wl*wl*Cs out of the
-    !!          per-pixel product, which reassociates. So the residual trace is
-    !!          NOT a valid regression signal across that change -- the operator
-    !!          stages of test=pcg_recon are (see note 5.4).
+    !> (h,k)-only quantities of the fixed lims2 disk (spatial frequency squared,
+    !! astigmatism angle, resolution shell), built once instead of per particle
     subroutine build_hk_luts( self )
         class(reconstructor_pcg), intent(inout) :: self
         integer :: h, k, R
@@ -384,29 +323,11 @@ contains
         end do
     end subroutine build_hk_luts
 
-    !>  \brief  Separable real-space Kaiser-Bessel instrument envelope.
-    !!
-    !!          KB interpolation is not a free lunch: gathering
-    !!          sum_k w(k-loc) xhat(k) equals the Fourier transform of
-    !!          (w_hat . x) sampled at loc, i.e. it silently multiplies the
-    !!          volume by the KB instrument function in real space. That is
-    !!          exactly why production divides it out after gridding, see
-    !!          prep3D_inv_instrfun4mul in simple_gridding.f90.
-    !!
-    !!          The matrix-free operator applies it TWICE (once gathering,
-    !!          once scattering), so H = E T E with E = diag(w_hat) and T the
-    !!          bare shift-invariant part. apply_normal_kernel must therefore
-    !!          bracket its convolution with the same envelope, or it models a
-    !!          different operator entirely -- the envelope falls from 1 at the
-    !!          box centre to roughly 0.19 at the edge per axis, so squared it
-    !!          varies by a factor of ~30 across the volume.
-    !!
-    !!          The envelope is the exact discrete transform of the normalized
-    !!          three-tap weights returned by apod_mat_3d_fast at the origin.
-    !!          It is not kbinterpol%instr, which is the continuous transform and
-    !!          differs materially at the box edge. Separability makes the 3-D
-    !!          impulse IFFT exactly the outer product of one 1-D cosine sum, so
-    !!          no padded 3-D accumulator or FFT is needed.
+    !> Separable real-space KB instrument envelope: the gather multiplies the volume
+    !! by the window's transform (why gridding deapodizes). The matrix-free operator
+    !! applies it twice, H = E T E, so the kernel must bracket its convolution with
+    !! the same envelope (~0.19 per axis at the box edge). Exact discrete transform
+    !! of the normalized origin stencil (not kbinterpol%instr), separable by construction.
     subroutine build_env( self )
         class(reconstructor_pcg), intent(inout) :: self
         real, parameter :: EPS_DIV = 1.0e-8
@@ -455,25 +376,19 @@ contains
         env = self%env
     end function get_env
 
-    !>  \brief  Copy of the right-hand side currently held, whether it was built
-    !!          by solve() from whole planes or by end_accum from batches.
-    !!          Exists so a test can localize a disagreement between the two
-    !!          accumulation paths to the RHS or to the operator, rather than
-    !!          only observing that the solutions differ.
+    !> copy of the RHS currently held (solve or end_accum), lets a test localize a disagreement
     subroutine get_rhs( self, b )
         class(reconstructor_pcg), intent(in)  :: self
-        real, allocatable,         intent(out) :: b(:,:,:)
+        real, allocatable,        intent(out) :: b(:,:,:)
         if( .not. self%l_rhs ) THROW_HARD('no right-hand side has been built; get_rhs')
         allocate(b(self%box,self%box,self%box), source=self%b_rhs)
     end subroutine get_rhs
 
-    !> Copy the open, unfinalized accumulator-domain statistics. This is a
-    !! test/diagnostic boundary only: production distribution persists the
-    !! same arrays through write_raw_accum and never exposes them to policy.
+    !> copy of the open raw accumulators; test/diagnostic boundary only
     subroutine get_raw_accum( self, b, d )
-        class(reconstructor_pcg), intent(in) :: self
-        complex, allocatable, intent(out) :: b(:,:,:)
-        real,    allocatable, intent(out) :: d(:,:,:)
+        class(reconstructor_pcg), intent(in)  :: self
+        complex, allocatable,     intent(out) :: b(:,:,:)
+        real, allocatable,        intent(out) :: d(:,:,:)
         if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open')
         allocate(b(self%lims3(1,1):self%lims3(1,2), &
                    &self%lims3(2,1):self%lims3(2,2), &
@@ -484,22 +399,19 @@ contains
     end subroutine get_raw_accum
 
     subroutine get_ml_prior( self, prior )
-        class(reconstructor_pcg), intent(in) :: self
-        real, allocatable, intent(out) :: prior(:,:,:)
+        class(reconstructor_pcg), intent(in)  :: self
+        real, allocatable,        intent(out) :: prior(:,:,:)
         if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built')
         allocate(prior, source=self%ml_prior)
     end subroutine get_ml_prior
 
-    !> Summarize the calibrated FSC/SSNR prior without copying its padded
-    !! lattice. Ratios compare P_tau with the calibrated data-only Khat over
-    !! exactly the bins where the prior is positive. Absolute Khat is used in
-    !! the L1 denominator because the finite-support Toeplitz approximation can
-    !! contain small negative bins even though the underlying operator is PSD.
+    !> P_tau summary over its positive bins relative to the calibrated data-only Khat
+    !! (|Khat| in the L1 denominator: the finite-support Toeplitz can hold small negative bins)
     subroutine get_ml_prior_stats( self, npositive, positive_min, positive_max, &
             &prior_to_khat_l1, prior_to_khat_rms )
-        class(reconstructor_pcg), intent(in) :: self
-        integer, intent(out) :: npositive
-        real,    intent(out) :: positive_min, positive_max, prior_to_khat_l1, prior_to_khat_rms
+        class(reconstructor_pcg), intent(in)  :: self
+        integer,                  intent(out) :: npositive
+        real,                     intent(out) :: positive_min, positive_max, prior_to_khat_l1, prior_to_khat_rms
         real(dp) :: prior_l1, khat_l1, prior_sq, khat_sq
         real     :: pval, kval
         integer  :: i, j, k
@@ -528,9 +440,9 @@ contains
                     khat_l1  = khat_l1  + abs(real(kval,dp))
                     prior_sq = prior_sq + real(pval,dp)**2
                     khat_sq  = khat_sq  + real(kval,dp)**2
-                enddo
-            enddo
-        enddo
+                end do
+            end do
+        end do
         !$omp end parallel do
         if( npositive < 1 ) THROW_HARD('PCG ML prior statistics found no positive bins')
         prior_to_khat_l1  = real(prior_l1 / max(khat_l1, DTINY))
@@ -548,17 +460,15 @@ contains
 
     subroutine set_deapod( self, l_deapod )
         class(reconstructor_pcg), intent(inout) :: self
-        logical,                    intent(in)    :: l_deapod
+        logical,                  intent(in)    :: l_deapod
         self%l_deapod = l_deapod
     end subroutine set_deapod
 
-    !> Interpret lambda as a dimensionless coefficient relative to the weighted
-    !! data normal operator. The effective absolute coefficient is derived only
-    !! after raw D has been reduced or trailing-blended; workers therefore keep
-    !! publishing raw (B,D), with no regularization embedded in the artifact.
+    !> lambda as a dimensionless coefficient of the weighted data operator; the absolute
+    !! value is derived once raw D is reduced, so workers publish unregularized (B,D)
     subroutine set_lambda_relative( self, lambda_rel )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: lambda_rel
+        real,                     intent(in)    :: lambda_rel
         if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 )then
             THROW_HARD('relative PCG lambda must be finite and non-negative')
         endif
@@ -568,12 +478,11 @@ contains
         self%l_lambda_relative = .true.
     end subroutine set_lambda_relative
 
-    !> Request the established isotropic FSC/SSNR prior. The FSC determines
-    !! only the shell-wise relative strength here; its absolute scale is built
-    !! later from the finalized raw data density D on the master.
+    !> request the isotropic FSC/SSNR prior: the FSC sets the shell-wise relative
+    !! strength, the absolute scale comes from the finalized D on the master
     subroutine set_ml_prior( self, fsc, tau, hp )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: fsc(:), tau, hp
+        real,                     intent(in)    :: fsc(:), tau, hp
         if( size(fsc) < 1 ) THROW_HARD('PCG ML prior requires a non-empty FSC')
         if( .not. ieee_is_finite(tau) .or. tau <= 0.0 ) THROW_HARD('PCG ML tau must be finite and positive')
         if( .not. ieee_is_finite(hp) .or. hp <= 0.0 ) THROW_HARD('PCG ML high-pass limit must be finite and positive')
@@ -586,75 +495,27 @@ contains
         self%l_ml_prior = .false.
     end subroutine set_ml_prior
 
-
-
-
-
-
-
-
-
-
-    !>  \brief  Multiplies a real volume by E^-1, the inverse KB instrument
-    !!          envelope -- the deapodization / roll-off correction.
-    !!
-    !!          WHY THIS MATTERS FOR REAL DATA. The gather makes the operator
-    !!          A~ = A.E rather than the true A = D.S (see build_env). For
-    !!          SYNTHETIC tests that is invisible, because the observations are
-    !!          generated with the same operator, so the envelope cancels -- an
-    !!          inverse crime. Real particle images carry no such envelope, so
-    !!          fitting them with A~ returns E^-1 x_true instead of x_true, i.e.
-    !!          a reconstruction inflated toward the box edges.
-    !!
-    !!          Applying E^-1 on both sides of the normal operator (and once to
-    !!          the right-hand side) turns A~ back into A, so the solve targets
-    !!          x_true directly and the prior applies to x_true rather than to a
-    !!          rescaled surrogate -- which a post-hoc output correction could
-    !!          not achieve.
-    !!
-    !!          CAVEAT, stated plainly: this correction is large here (~5x per
-    !!          axis at the box edge, so ~140x at a corner) ONLY because this
-    !!          operator interpolates on the native grid with no oversampling.
-    !!          Production grids into a 2x padded box and therefore evaluates
-    !!          the envelope over half the range, where the correction is mild
-    !!          (~1.5x per axis). Adding oversampling is the proper fix and
-    !!          would make this step benign.
+    !> multiplies by E^-1, the inverse KB envelope (deapodization). Real images carry
+    !! no envelope, so fitting them with A E returns E^-1 x; applying E^-1 on both
+    !! sides of the normal operator and once to the RHS makes the solve target x
+    !! itself, so the prior acts on x rather than on a rescaled surrogate
     pure subroutine deapod_mul( self, v )
         class(reconstructor_pcg), intent(in)    :: self
-        real,                       intent(inout) :: v(self%box,self%box,self%box)
+        real,                     intent(inout) :: v(self%box,self%box,self%box)
         if( .not. self%l_deapod ) return
         v = v * self%invenv
     end subroutine deapod_mul
 
-    !>  \brief  Constrains the solution to a soft spherical support.
-    !!
-    !!          This is a CONSTRAINT ON THE SOLVE, not a cosmetic post-hoc mask.
-    !!          Writing x = P u and minimizing ||A P u - y||^2 gives the normal
-    !!          equations (P H P) u = P b, so P is applied on BOTH sides of the
-    !!          operator and once to the right-hand side; apply_normal and solve
-    !!          do exactly that. P H P is still symmetric positive semi-definite,
-    !!          and its null space -- everything outside the support -- is simply
-    !!          never entered when starting from x = 0, the same argument that
-    !!          makes the singular preconditioner safe (see build_precond).
-    !!
-    !!          Two things are gained. The obvious one: solvent outside the
-    !!          particle is where E^-1 deapodization amplifies hardest (~3.4x at
-    !!          a box corner), which is what puts artefacts at the box sides when
-    !!          the display threshold is raised. The less obvious and more
-    !!          valuable one: at mskdiam 180 in a 256 box the sphere is only ~18%
-    !!          of the volume, so five sixths of the unknowns being solved for
-    !!          were solvent the data says almost nothing about. Removing them
-    !!          shrinks the problem and improves conditioning.
-    !!
-    !!          The edge profile is production's own cosedge_r2_3d, obtained by
-    !!          running a unit volume through image%mask3D_soft, so the roll-off
-    !!          matches what the rest of SIMPLE uses. backgr=0. is passed to stop
-    !!          it subtracting a background from what is meant to be a pure
-    !!          window function.
+    !> soft spherical support as a CONSTRAINT ON THE SOLVE: with x = P u the normal
+    !! equations are (P H P) u = P b (apply_normal, solve). Removes the solvent,
+    !! where deapodization amplifies hardest, and shrinks the problem (~18% of the
+    !! box at mskdiam 180 in a 256 box). Profile = image%mask3D_soft on a unit
+    !! volume (backgr=0.), the same mask the gridding restoration applies, so no
+    !! consumer masks twice; warm starts are converted back to u by mask_div
     subroutine set_mask( self, mskrad )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: mskrad
-        type(image)       :: mimg
+        real,                     intent(in)    :: mskrad
+        type(image) :: mimg
         real, allocatable :: ones(:,:,:)
         if( allocated(self%mask) ) deallocate(self%mask)
         self%l_mask = .false.
@@ -669,17 +530,16 @@ contains
         self%l_mask = .true.
     end subroutine set_mask
 
-    !>  \brief  Arbitrary-envelope variant of set_mask: install a caller-supplied
-    !!          real-space [0,1] volume as the support constraint P. Same solve
-    !!          contract as the spherical case ((P H P) u = P b, see set_mask
-    !!          docs); the mask is clipped into [0,1]. Experimental focused /
-    !!          support mode (pcg_priors.md dev item 5).
+    !> caller-supplied real-space [0,1] volume as the support P (clipped); same
+    !! contract as set_mask. Experimental focused support (pcg_priors.md dev item 5)
     subroutine set_mask_volume( self, mskvol )
         class(reconstructor_pcg), intent(inout) :: self
         class(image),             intent(in)    :: mskvol
         integer :: mdim(3)
         mdim = mskvol%get_ldim()
-        if( any(mdim /= self%box) ) THROW_HARD('support mask volume dimensions differ from the solve box; set_mask_volume')
+        if( any(mdim /= self%box) )then
+            THROW_HARD('support mask volume dimensions differ from the solve box; set_mask_volume')
+        endif
         if( mskvol%is_ft() ) THROW_HARD('support mask volume must be in real space; set_mask_volume')
         if( allocated(self%mask) ) deallocate(self%mask)
         self%mask = mskvol%get_rmat()
@@ -694,6 +554,22 @@ contains
         if( .not. self%l_mask ) return
         v = v * self%mask
     end subroutine mask_mul
+
+    !> output-space initial guess (x = P u, every shipped half map) -> CG variable
+    !! u = x/P where P >= PCG_SUPPORT_DIV_MIN, zero elsewhere. Projecting with P
+    !! instead squared the soft edge on every warm-started iteration and compounded
+    !! over a stage. Exact for support-masked input; the floor caps the amplification
+    !! (1/floor) of content not proportional to P (resampling ringing, foreign maps)
+    pure subroutine mask_div( self, v )
+        class(reconstructor_pcg), intent(in)    :: self
+        real,                     intent(inout) :: v(self%box,self%box,self%box)
+        if( .not. self%l_mask ) return
+        where( self%mask >= PCG_SUPPORT_DIV_MIN )
+            v = v / self%mask
+        elsewhere
+            v = 0.0
+        end where
+    end subroutine mask_div
 
     subroutine ensure_wimg( self )
         class(reconstructor_pcg), intent(inout) :: self
@@ -757,19 +633,14 @@ contains
 
     ! SETUP
 
-    !>  \brief  caches everything per-particle that does NOT depend on the CG
-    !!          iterate: rotation matrices, CTF parameters, shifts and noise
-    !!          spectra. Caching avoids re-deriving them inside every
-    !!          apply_normal call -- an ori deep copy, string-keyed hash lookups
-    !!          and two euler2m evaluations per particle per iteration. All of
-    !!          it is small (order 100 kB for 5000 particles) and constant for
-    !!          the whole solve. Caching it is also what lets the particle loop
-    !!          be shared cleanly across OpenMP threads.
+    !> caches the per-particle quantities that do not depend on the iterate
+    !! (rotation matrices, CTF parameters, shifts, noise spectra); small, constant
+    !! over the solve, and what lets the particle loop be shared across threads
     subroutine prep_particles( self, orientations, use_ctf, sig2 )
-        class(reconstructor_pcg), intent(inout) :: self
-        class(oris),                intent(inout) :: orientations
-        logical,          optional, intent(in)    :: use_ctf
-        real,             optional, intent(in)    :: sig2(0:,:)
+        class(reconstructor_pcg),           intent(inout) :: self
+        class(oris),                        intent(inout) :: orientations
+        logical,                  optional, intent(in)    :: use_ctf
+        real,                     optional, intent(in)    :: sig2(0:,:)
         type(ori) :: e
         integer   :: i, R
         R = self%lims2(1,2)
@@ -801,14 +672,9 @@ contains
         call self%ensure_wimg
     end subroutine prep_particles
 
-    !>  \brief  caches the point-group operators for coordinate replication.
-    !!
-    !!          Symmetry is applied at scatter time by replicating each plane
-    !!          pixel at all M orientations R_i . S_g (2.3 in the pcg note):
-    !!          absT2_plane is still evaluated once per particle, only the KB
-    !!          weight and the 27-tap scatter are replicated. symmats(:,:,1) is
-    !!          the identity, so g=1 reproduces the c1 pass exactly. Call after
-    !!          new (which installs the c1 default) and before begin_accum.
+    !> point-group operators for coordinate replication: each plane pixel is
+    !! scattered at all R_i.S_g; symmats(:,:,1) = I reproduces c1. Call after new
+    !! and before begin_accum
     subroutine set_sym( self, pgrpsyms )
         class(reconstructor_pcg), intent(inout) :: self
         class(sym),               intent(in)    :: pgrpsyms
@@ -823,7 +689,7 @@ contains
 
     subroutine set_op_mode( self, op_mode )
         class(reconstructor_pcg), intent(inout) :: self
-        integer,                    intent(in)    :: op_mode
+        integer,                  intent(in)    :: op_mode
         if( op_mode == PCG_OP_KERNEL .and. .not. self%l_kernel )then
             THROW_HARD('kernelized operator requested but build_kernel has not been called; set_op_mode')
         endif
@@ -832,35 +698,24 @@ contains
 
     ! LOW-LEVEL OPERATOR
 
-    !>  \brief  G_i F: gathers a full (unpacked) Fourier plane from an already-
-    !!          FFT'd volume at orientation e, via periodic-wrap KB
-    !!          interpolation. Retained with the ori-based signature because the
-    !!          test commanders drive it directly for the adjoint dot-product
-    !!          gate; the solver path uses the cached rotation matrices instead.
-    !>  \brief  Loads a native box^3 volume into the operator, centre-padded
-    !!          and transformed onto the oversampled lattice. Callers hand over
-    !!          a plain real volume and never see the padding -- which is the
-    !!          point: the padded lattice is an implementation detail, and
-    !!          letting it leak into callers is exactly how convention bugs get
-    !!          in.
+    !> loads a native box^3 volume, centre-padded and transformed onto the
+    !! oversampled lattice; the padding never leaks to callers
     subroutine set_volume( self, v )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: v(self%box,self%box,self%box)
+        real,                     intent(in)    :: v(self%box,self%box,self%box)
         call self%ensure_wimg
         call self%wimg%set_rmat(center_embed_real3d(v,self%boxpd), .false.)
         call self%wimg%fft()
     end subroutine set_volume
 
-    !>  \brief  G_i F: gathers a full (unpacked) Fourier plane at orientation e
-    !!          from the volume most recently passed to set_volume. Plane
-    !!          coordinates are NATIVE (h,k); they map onto the oversampled
-    !!          lattice as padf*loc, and padsc undoes fwd_ft's 1/product(ldim)
-    !!          so the result carries native scale.
+    !> G_i F: gathers a full (unpacked) Fourier plane at orientation e from the
+    !! volume held by set_volume; native (h,k) -> padded padf*loc, padsc restores
+    !! the native scale. Ori-based signature kept for the adjoint test
     subroutine forward_plane( self, e, plane )
         class(reconstructor_pcg), intent(inout) :: self
-        class(ori),                 intent(in)    :: e
-        complex,                    intent(out)   :: plane(self%lims2(1,1):self%lims2(1,2),&
-                                                            &self%lims2(2,1):self%lims2(2,2))
+        class(ori),               intent(in)    :: e
+        complex,                  intent(out)   :: plane(self%lims2(1,1):self%lims2(1,2),&
+                                                        &self%lims2(2,1):self%lims2(2,2))
         complex, allocatable :: cmat(:,:,:)
         real    :: e_rotmat(3,3), loc(3), w(self%wdim,self%wdim,self%wdim)
         integer :: h, k, i0(3)
@@ -882,15 +737,13 @@ contains
         !$omp end parallel do
     end subroutine forward_plane
 
-    !>  \brief  <x_hat, accum> over the oversampled Fourier lattice, for the
-    !!          volume currently held by set_volume. Exists so the adjoint
-    !!          dot-product test can form <x, G^dagger q> without needing to
-    !!          know the lattice or the Friedel packing at all.
+    !> <x_hat, accum> over the oversampled lattice for the volume held by
+    !! set_volume; lets the adjoint test form <x, G^dagger q> without lattice knowledge
     function fourier_dot( self, accum ) result( d )
         class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: accum(self%lims3(1,1):self%lims3(1,2),&
-                                                            &self%lims3(2,1):self%lims3(2,2),&
-                                                            &self%lims3(3,1):self%lims3(3,2))
+        complex,                  intent(in)    :: accum(self%lims3(1,1):self%lims3(1,2),&
+                                                        &self%lims3(2,1):self%lims3(2,2),&
+                                                        &self%lims3(3,1):self%lims3(3,2))
         complex, allocatable :: cmat(:,:,:)
         real(dp) :: d
         complex  :: xv
@@ -920,53 +773,42 @@ contains
         end do
     end function fourier_dot
 
-    !>  \brief  F^dagger G_i^dagger, accumulate form: the literal transpose of
-    !!          forward_plane's gather. Each plane entry is scattered once, at
-    !!          its own location, with its own KB window -- verified against
-    !!          forward_plane by the adjoint dot-product test for arbitrary
-    !!          orientations. Written fresh, not derived from
-    !!          reconstructor%insert_plane_oversamp or compress_exp.
+    !> F^dagger G_i^dagger, accumulate form: the literal transpose of the gather,
+    !! verified against forward_plane by the adjoint dot-product test
     subroutine adjoint_plane_add( self, plane, e, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
-        complex,                    intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
-                                                            &self%lims2(2,1):self%lims2(2,2))
-        class(ori),                 intent(in)    :: e
-        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
-        real    :: e_rotmat(3,3)
+        complex,                  intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
+                                                        &self%lims2(2,1):self%lims2(2,2))
+        class(ori),               intent(in)    :: e
+        complex,                  intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
+        real :: e_rotmat(3,3)
         e_rotmat = e%get_mat()
         call scatter_plane(self, plane, e_rotmat, vol_accum)
     end subroutine adjoint_plane_add
 
-    !>  \brief  T_i(h,k) = C_i(h,k) * S_i(h,k) / sqrt(sigma2_i(shell)), the full
-    !!          complex per-particle transfer. Needed only
-    !!          for the right-hand side: see absT2_plane for why apply_normal
-    !!          does not use this.
+    !> T_i(h,k) = C_i(h,k) S_i(h,k) / sqrt(sigma2_i(shell)), the full complex
+    !! transfer; needed for the RHS only (absT2_plane serves the normal operator)
     function build_transfer( self, ctfparms, shift, sig2arr ) result( T )
-        class(reconstructor_pcg), intent(in) :: self
-        type(ctfparams),           intent(in) :: ctfparms
-        real,                      intent(in) :: shift(2)
-        real,            optional, intent(in) :: sig2arr(0:)
-        complex   :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        class(reconstructor_pcg),           intent(in) :: self
+        type(ctfparams),                    intent(in) :: ctfparms
+        real,                               intent(in) :: shift(2)
+        real,                     optional, intent(in) :: sig2arr(0:)
+        complex       :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
-        real      :: cval, args, sw, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
-        integer   :: h, k, shell
-        logical   :: l_ctf, l_flip
-        ! ctfflag, exactly as image%gen_fplane4rec reads it: CTFFLAG_NO means the
-        ! images carry no CTF to model, and CTFFLAG_FLIP means they are ALREADY
-        ! phase-flipped, so the signed CTF would reintroduce the very phase the
-        ! flip removed. Ignoring the flag is invisible on
-        ! synthetic fixtures, which are always generated with a signed CTF, and
-        ! destroys a real reconstruction on any phase-flipped project.
+        real          :: cval, args, sw, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
+        integer       :: h, k, shell
+        logical       :: l_ctf, l_flip
+        ! ctfflag as image%gen_fplane4rec reads it: NO = no CTF to model, FLIP =
+        ! already phase-flipped (a signed CTF would reintroduce the removed phase)
         l_ctf  = ctfparms%ctfflag /= CTFFLAG_NO
         l_flip = ctfparms%ctfflag == CTFFLAG_FLIP
         if( l_ctf )then
             tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
             call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
-            ! see absT2_plane: flat, call-free CTF form of ft_map_ctf_kernel,
-            ! inlined to run over the both-sign-h disk via the LUTs.
+            ! flat, call-free CTF form of ft_map_ctf_kernel over the both-sign-h disk
             ctfvals     = tfun%get_ctfvars(ctfparms%phshift)
             wl          = ctfvals%wl
             half_wl2_cs = 0.5 * wl * wl * ctfvals%cs
@@ -991,13 +833,8 @@ contains
                     cval  = sin( phsh + phc + accc )
                     if( l_flip ) cval = abs(cval)
                 endif
-                ! SIGN. apply_adjoint_all forms conjg(T)*y, and production applies
-                ! exp(i*(-shift)*shconst*(h,k)) to y (gen_fplane4rec: pshift =
-                ! -shift*shconst). So T must carry the POSITIVE phase for its
-                ! conjugate to reproduce production's correction. A negated phase
-                ! here would shift every particle by twice its own displacement in
-                ! the wrong direction -- invisible on synthetic
-                ! data, where the same build_transfer generates the observations.
+                ! POSITIVE shift phase: apply_adjoint_all applies conjg(T), which
+                ! reproduces production's exp(-i shift) correction (gen_fplane4rec)
                 args       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
                 sw        = 1.0
                 if( present(sig2arr) )then
@@ -1010,16 +847,15 @@ contains
         !$omp end parallel do
     end function build_transfer
 
-    !>  \brief  Applies the production PCG inverse-noise amplitude to one raw
-    !!          Fourier observation: y_w = y / sqrt(sigma2(shell)).
+    !> y_w = y / sqrt(sigma2(shell)), the production inverse-noise amplitude
     function whiten_observation( self, plane, sig2arr ) result( whitened )
         class(reconstructor_pcg), intent(in) :: self
-        complex, intent(in) :: plane(self%lims2(1,1):self%lims2(1,2), &
-                                      &self%lims2(2,1):self%lims2(2,2))
-        real, intent(in) :: sig2arr(0:)
+        complex,                  intent(in) :: plane(self%lims2(1,1):self%lims2(1,2), &
+                                                     &self%lims2(2,1):self%lims2(2,2))
+        real,                     intent(in) :: sig2arr(0:)
         complex :: whitened(self%lims2(1,1):self%lims2(1,2), &
-                             &self%lims2(2,1):self%lims2(2,2))
-        real :: sigma2
+                           &self%lims2(2,1):self%lims2(2,2))
+        real    :: sigma2
         integer :: h, k, shell
         whitened = cmplx(0.,0.)
         do k = self%lims2(2,1), self%lims2(2,2)
@@ -1031,42 +867,35 @@ contains
                     error stop 'whiten_observation requires finite positive sigma2'
                 endif
                 whitened(h,k) = plane(h,k) / sqrt(sigma2)
-            enddo
-        enddo
+            end do
+        end do
     end function whiten_observation
 
-    !>  \brief  2D, non-interpolated analog of the gather: reads a real
-    !!          particle image's own Fourier plane directly into the lims2 disk
-    !!          (the image's own box IS the native grid -- no KB window, no
-    !!          wrap). img2d must already be FFT'd. This is how y_planes is
-    !!          built for REAL particles; forward_plane only builds SYNTHETIC
-    !!          ones by projecting a known volume.
+    !> reads an FFT'd particle image's own Fourier plane into the lims2 disk (no
+    !! KB window, no wrap); how y_planes is built for real particles
     function extract_native_plane( self, img2d ) result( plane )
         class(reconstructor_pcg), intent(in) :: self
-        class(image),               intent(in) :: img2d
+        class(image),             intent(in) :: img2d
         complex :: plane(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
         plane = extract_native_fourier_plane(img2d,self%lims2,self%sqlp)
     end function extract_native_plane
 
-    !>  \brief  deterministic double-precision real-volume dot product.
+    !> deterministic double-precision dot product
     pure function dot_real_volume( self, a, b ) result( d )
         class(reconstructor_pcg), intent(in) :: self
-        real,                      intent(in) :: a(self%box,self%box,self%box)
-        real,                      intent(in) :: b(self%box,self%box,self%box)
+        real,                     intent(in) :: a(self%box,self%box,self%box)
+        real,                     intent(in) :: b(self%box,self%box,self%box)
         real(dp) :: d
         d = sum(real(a,dp) * real(b,dp))
     end function dot_real_volume
 
     ! HIGH-LEVEL OPERATOR
 
-    !>  \brief  The operator the SOLVER sees: P H P when a support constraint is
-    !!          set (see set_mask), plain H otherwise. The two concrete operators
-    !!          below are deliberately left unmasked -- the test commanders drive
-    !!          them directly and compare them against one another, and a mask
-    !!          would silently hide any disagreement outside its support.
+    !> the operator the solver sees: P H P with a support (set_mask), H otherwise.
+    !! The two concrete operators stay unmasked so the tests compare them fully
     function apply_normal( self, p ) result( hp )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: p(self%box,self%box,self%box)
+        real,                     intent(in)    :: p(self%box,self%box,self%box)
         real, allocatable :: hp(:,:,:), pm(:,:,:)
         if( self%l_mask )then
             allocate(pm(self%box,self%box,self%box), source=p)
@@ -1089,44 +918,29 @@ contains
         call self%mask_mul(hp)
     end function apply_normal
 
-    !>  \brief  H p = sum_i G_i^dagger |T_i|^2 G_i p + lambda*p -- the exact
-    !!          reference operator.
-    !!
-    !!          Gather, weight and scatter are FUSED into one pass over the
-    !!          plane so the rotated coordinate, the wrapped window indices and
-    !!          the KB weights are computed once and used for both directions,
-    !!          rather than twice.
-    !!
-    !!          OpenMP: the particle loop is walked in lockstep by all threads,
-    !!          with the plane's h loop worksharing inside it. The scatter uses
-    !!          the h-strided colouring scheme (see `stride` in new) so threads
-    !!          write disjoint 27-voxel footprints into the single shared
-    !!          accumulator -- chosen over per-thread accumulators because at
-    !!          box 256 those cost ~135 MB per thread.
+    !> H p = sum_i G_i^dagger |T_i|^2 G_i p + lambda p, the exact reference operator.
+    !! Gather, weight and scatter are fused per plane point. All threads walk the
+    !! particle loop in lockstep with the h loop workshared; the h-strided colouring
+    !! (stride, see new) keeps the scatter footprints disjoint in one shared accumulator
     function apply_normal_matrixfree( self, p ) result( hp )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: p(self%box,self%box,self%box)
+        real,                     intent(in)    :: p(self%box,self%box,self%box)
         real,    allocatable :: hp(:,:,:), pd(:,:,:)
         complex, allocatable :: vol_accum(:,:,:), cmat(:,:,:)
         real,    allocatable :: absT2(:,:)
-        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
-        complex :: comp
-        integer :: i, g, h, k, l, i0(3)
+        real                    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
+        complex                 :: comp
+        integer                 :: i, g, h, k, l, i0(3)
         integer(timer_int_kind) :: tp
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; apply_normal_matrixfree')
         call self%ensure_wimg
-        ! A = A~ . E^-1 : deapodize going in, and again coming out of the
-        ! adjoint, so the operator is the true D.S rather than D.S.E
+        ! A = A~ E^-1: deapodize in and out of the adjoint, so the operator is D.S not D.S.E
         allocate(pd(self%box,self%box,self%box), source=p)
         call self%deapod_mul(pd)
         if( self%l_profile ) tp = pcg_tic()
         call self%set_volume(pd)
         if( self%l_profile ) self%t_setvol = self%t_setvol + pcg_toc(tp)
-        ! NOTE: get_cmat returns a COPY. On the padded lattice that is
-        ! (boxpd/2+1)*boxpd^2 complex -- 539 MB at box 256 -- allocated and
-        ! streamed on every call. t_cmatcp is what separates that traffic from
-        ! the transforms themselves; image offers get_rmat_ptr but no cmat
-        ! equivalent, so removing it would mean adding one.
+        ! get_cmat returns a COPY (539 MB at box 256); t_cmatcp isolates that traffic
         if( self%l_profile ) tp = pcg_tic()
         cmat = self%wimg%get_cmat()
         if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + pcg_toc(tp)
@@ -1137,14 +951,10 @@ contains
         if( self%l_profile ) tp = pcg_tic()
         !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,comp,rot) proc_bind(close)
         do i = 1, self%nptcls
-            ! per-particle real weight |T_i|^2, shared across threads. The
-            ! worksharing inside absT2_plane is orphaned and binds to THIS
-            ! region, so the CTF evaluation is spread across the team; its
-            ! trailing barrier is what makes absT2 safe to read below.
+            ! orphaned worksharing inside absT2_plane binds to this region; its
+            ! trailing barrier makes absT2 safe to read below
             call self%absT2_plane(i, absT2)
-            ! coordinate replication: gather and scatter at every R_i.S_g, with g
-            ! outside the h-strided colour sweep so the reference matches the
-            ! kernel built by accumulate_absT2. symmats(:,:,1)=I gives the c1 op.
+            ! replication at every R_i.S_g, g outside the colour sweep (matches accumulate_absT2)
             do g = 1, self%nsym
                 rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
                 ! fused gather -> weight -> scatter, h-strided for scatter safety
@@ -1164,8 +974,7 @@ contains
                     end do
                     !$omp end do
                 end do
-                ! wrapping rim, serialized: the colouring's separation guarantee does
-                ! not survive folding, see win_wraps
+                ! wrapping rim, serialized: the colouring does not survive folding (win_wraps)
                 !$omp single
                 do h = self%lims2(1,1), self%lims2(1,2)
                     do k = self%lims2(2,1), self%lims2(2,2)
@@ -1191,26 +1000,21 @@ contains
         hp = hp + self%lambda * p
     end function apply_normal_matrixfree
 
-    !>  \brief  kernelized (Toeplitz/Gram) normal operator:
-    !!          H_data p = crop(IFFT(Khat * FFT(pad(p)))), cost O(box^3 log box)
-    !!          and INDEPENDENT of particle count. See build_kernel for how Khat
-    !!          is constructed and why it is not a literal impulse
-    !!          response.
+    !> kernelized (Toeplitz/Gram) operator H_data p = crop(IFFT(Khat FFT(pad p))),
+    !! O(box^3 log box) and independent of the particle count; see build_kernel
     function apply_normal_kernel( self, p ) result( hp )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: p(self%box,self%box,self%box)
+        real,                     intent(in)    :: p(self%box,self%box,self%box)
         real,    allocatable :: hp(:,:,:), work(:,:,:)
         complex, allocatable :: cmat(:,:,:)
-        real    :: kv
-        integer :: cdim(3), i, j, k
+        real                    :: kv
+        integer                 :: cdim(3), i, j, k
         integer(timer_int_kind) :: tp
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; apply_normal_kernel')
         call self%ensure_wimg
         allocate(work(self%box,self%box,self%box), source=p)
-        ! Khat represents the bare Toeplitz operator T. With deapodization ON
-        ! the matrix-free operator is E^-1(E T E)E^-1 = T as well, so nothing
-        ! more is needed. With it OFF the matrix-free operator is E T E, so the
-        ! envelope has to be reinstated on both sides for the two to agree.
+        ! Khat is the bare Toeplitz T; with deapodization off the matrix-free
+        ! operator is E T E, so the envelope is reinstated on both sides
         if( .not. self%l_deapod ) work = work * self%env
         if( self%l_profile ) tp = pcg_tic()
         call self%wimg%set_rmat(center_embed_real3d(work,self%boxpd), .false.)
@@ -1243,19 +1047,17 @@ contains
         if( self%l_ml_prior .and. .not. self%l_deapod )then
             hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
         endif
-        ! band precision on the same (deapodized) domain as the iterate;
-        ! attachment mode is enforced upstream, see assert_prior_attachment_mode
+        ! band precision on the deapodized domain; attachment mode enforced upstream
         hp = hp + self%lambda * p
     end function apply_normal_kernel
 
-    !> Apply C^T F^-1 diag(d) F C on the same padded lattice as Khat. This is
-    !! used directly by the matrix-free oracle and by the deapodization-off
-    !! diagnostic path; production kernel solves fuse d with Khat above.
+    !> C^T F^-1 diag(d) F C on the Khat lattice; the matrix-free oracle and the
+    !! deapodization-off path use it, kernel solves fuse d with Khat
     function apply_fourier_diagonal( self, p, diag ) result( q )
         class(reconstructor_pcg), intent(inout) :: self
-        real, intent(in) :: p(self%box,self%box,self%box)
-        real, intent(in) :: diag(:,:,:)
-        real, allocatable :: q(:,:,:)
+        real,                     intent(in)    :: p(self%box,self%box,self%box)
+        real,                     intent(in)    :: diag(:,:,:)
+        real,    allocatable :: q(:,:,:)
         complex, allocatable :: cmat(:,:,:)
         integer :: cdim(3), i, j, k
         call self%ensure_wimg
@@ -1269,22 +1071,21 @@ contains
             do j = 1, cdim(2)
                 do i = 1, cdim(1)
                     cmat(i,j,k) = cmat(i,j,k) * diag(i,j,k)
-                enddo
-            enddo
-        enddo
+                end do
+            end do
+        end do
         !$omp end parallel do
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
         q = center_crop_real3d(self%wimg%get_rmat(),self%box)
     end function apply_fourier_diagonal
 
-    !>  \brief  b = sum_i G_i^dagger(conjg(T_i) * y_i / sqrt(sigma2_i)), the
-    !!          data right-hand side (no prior term). Unlike H, the RHS DOES
-    !!          need the full complex T_i including the shift phase.
+    !> b = sum_i G_i^dagger(conjg(T_i) y_i / sqrt(sigma2_i)), the data RHS; unlike
+    !! H it needs the full complex T_i including the shift phase
     function apply_adjoint_all( self, y_planes ) result( b )
         class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
-                                                               &self%lims2(2,1):self%lims2(2,2), *)
+        complex,                  intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
+                                                           &self%lims2(2,1):self%lims2(2,2), *)
         real,    allocatable :: b(:,:,:)
         complex, allocatable :: vol_accum(:,:,:), weighted(:,:), T(:,:)
         integer :: i, h, k, shell, R
@@ -1317,67 +1118,14 @@ contains
             call scatter_plane(self, weighted, self%rotmats(:,:,i), vol_accum)
         end do
         b = self%fold_and_ifft(vol_accum)
-        ! A^dagger = E^-1 A~^dagger : the RHS gets the correction once, the
-        ! normal operator twice (once per application of the gather/scatter)
+        ! A^dagger = E^-1 A~^dagger: the RHS gets the correction once, H twice
         call self%deapod_mul(b)
     end function apply_adjoint_all
 
-    !>  \brief  Batch form of apply_adjoint_all's loop body: scatters one batch
-    !!          of observed planes into a Fourier accumulator WITHOUT folding.
-    !!
-    !!          Folding is deliberately not done here. fold_and_ifft is an
-    !!          inverse FFT followed by a centre-crop, and neither commutes with
-    !!          summation over batches once the deapodization is applied -- so
-    !!          the fold happens exactly once, in end_accum, over the completed
-    !!          accumulator.
-    subroutine accumulate_rhs( self, y_batch, nb, ifrom, acc )
-        class(reconstructor_pcg), intent(inout) :: self
-        integer,                    intent(in)    :: nb, ifrom
-        complex,                    intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
-                                                              &self%lims2(2,1):self%lims2(2,2), nb)
-        complex,                    intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
-                                                          &self%lims3(2,1):self%lims3(2,2),&
-                                                          &self%lims3(3,1):self%lims3(3,2))
-        complex, allocatable :: weighted(:,:), T(:,:)
-        integer :: ib, i, h, k, shell, R
-        if( nb < 1 ) return
-        R = self%lims2(1,2)
-        allocate(weighted(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        allocate(T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        do ib = 1, nb
-            i = ifrom + ib - 1
-            if( self%l_use_ctf )then
-                call self%transfer_plane_cmplx(i, T)
-                !$omp parallel do collapse(2) default(shared) private(h,k,shell) &
-                !$omp schedule(static) proc_bind(close)
-                do k = self%lims2(2,1), self%lims2(2,2)
-                    do h = self%lims2(1,1), self%lims2(1,2)
-                        if( h*h + k*k > self%sqlp )then
-                            weighted(h,k) = cmplx(0.,0.)
-                        else
-                            shell = min(nint(sqrt(real(h*h+k*k))), R)
-                            weighted(h,k) = conjg(T(h,k)) * y_batch(h,k,ib) / sqrt(self%sig2(shell,i))
-                        endif
-                    end do
-                end do
-                !$omp end parallel do
-            else
-                weighted = y_batch(:,:,ib)
-            endif
-            call scatter_plane(self, weighted, self%rotmats(:,:,i), acc)
-        end do
-    end subroutine accumulate_rhs
 
-    ! STREAMING SETUP
-    !
-    ! begin_accum / accumulate_batch / end_accum replace the pattern of holding
-    ! every particle's Fourier plane resident for the whole run. The images are
-    ! needed for one thing only -- forming the RHS -- and for one pass only, so
-    ! a caller reads a batch, hands it over, and discards it.
-    !
-    ! Peak memory during accumulation is one complex RHS and one real density
-    ! accumulator plus the work image; that floor is constant in nptcls. See
-    ! doc/policies/reconstruct3D_pcg_policy.md.
+    ! STREAMING SETUP: begin_accum / accumulate_batch / end_accum form the RHS and
+    ! the density in one pass over particle batches, so no plane stays resident;
+    ! peak memory is one complex and one real full-range accumulator plus the work image
 
     subroutine begin_accum( self )
         class(reconstructor_pcg), intent(inout) :: self
@@ -1385,9 +1133,8 @@ contains
         call self%begin_reduction
     end subroutine begin_accum
 
-    !> Allocate zero raw accumulators without particle metadata. Distributed
-    !! masters use this entry point before adding worker artifacts; workers use
-    !! begin_accum after prep_particles as before.
+    !> zero raw accumulators without particle metadata: masters call this before
+    !! adding worker artifacts, workers use begin_accum after prep_particles
     subroutine begin_reduction( self )
         class(reconstructor_pcg), intent(inout) :: self
         call self%ensure_wimg
@@ -1408,14 +1155,12 @@ contains
         self%reduction_eo        = -1
     end subroutine begin_reduction
 
-    !>  \brief  Accumulates one batch into BOTH accumulators. y_batch holds the
-    !!          observed planes for particles ifrom .. ifrom+nb-1 of the
-    !!          selection passed to prep_particles.
+    !> accumulates one batch (particles ifrom .. ifrom+nb-1 of the selection) into both accumulators
     subroutine accumulate_batch( self, y_batch, nb, ifrom )
         class(reconstructor_pcg), intent(inout) :: self
-        integer,                    intent(in)    :: nb, ifrom
-        complex,                    intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
-                                                              &self%lims2(2,1):self%lims2(2,2), nb)
+        integer,                  intent(in)    :: nb, ifrom
+        complex,                  intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
+                                                          &self%lims2(2,1):self%lims2(2,2), nb)
         complex, allocatable :: bacc(:,:,:)
         real,    allocatable :: dacc(:,:,:)
         if( .not. self%l_accum ) THROW_HARD('begin_accum has not been called; accumulate_batch')
@@ -1423,12 +1168,8 @@ contains
         if( ifrom < 1 .or. ifrom + nb - 1 > self%nptcls )then
             THROW_HARD('batch range outside the particle selection; accumulate_batch')
         endif
-        ! move_alloc detaches the accumulator from `self` before it is passed as
-        ! a dummy. Handing self%b_work straight to a procedure that also takes
-        ! `self` as intent(inout) makes the two aliases of each other, which the
-        ! standard permits a compiler to assume cannot happen -- it may then
-        ! cache or reorder the writes. move_alloc is an O(1) descriptor swap, so
-        ! removing the hazard costs nothing and beats betting on the optimizer.
+        ! move_alloc detaches the accumulators from self before they are passed
+        ! next to intent(inout) self (an aliasing the standard lets compilers exploit)
         call move_alloc(self%b_work, bacc)
         call move_alloc(self%acc_work, dacc)
         call self%accumulate_rhs_density(y_batch, nb, ifrom, bacc, dacc)
@@ -1436,19 +1177,17 @@ contains
         call move_alloc(dacc, self%acc_work)
     end subroutine accumulate_batch
 
-    !> Atomically publish one worker's raw full-range B and D accumulators.
-    !! No folding, deapodization, shell flooring, kernel finalization or solve
-    !! is permitted before this write. The embedded header is the manifest for
-    !! this single-file artifact; promotion from .tmp happens only after close.
+    !> atomically publishes one worker's raw full-range B and D (no folding,
+    !! deapodization, flooring or solve before this); header = manifest, .tmp promoted after close
     subroutine write_raw_accum( self, fname, state, eo, part, nparts, nptcls, provenance )
         class(reconstructor_pcg), intent(in) :: self
-        class(string),             intent(in) :: fname
-        integer,                   intent(in) :: state, eo, part, nparts, nptcls
-        character(len=*),          intent(in) :: provenance
-        type(string) :: tmpfname
+        class(string),            intent(in) :: fname
+        integer,                  intent(in) :: state, eo, part, nparts, nptcls
+        character(len=*),         intent(in) :: provenance
+        type(string)                    :: tmpfname
         character(len=PCG_RAW_PROV_LEN) :: prov_fixed
-        integer :: funit, ierr, m
-        integer(int64) :: file_size
+        integer                         :: funit, ierr, m
+        integer(int64)                  :: file_size
         if( state < 1 .or. eo < 0 .or. eo > 1 ) THROW_HARD('invalid raw PCG state or half')
         if( part < 1 .or. nparts < part ) THROW_HARD('invalid raw PCG part index')
         if( nptcls < 0 ) THROW_HARD('invalid raw PCG particle count')
@@ -1475,12 +1214,12 @@ contains
             do m = self%lims3(3,1), self%lims3(3,2)
                 write(funit, iostat=ierr) self%b_work(:,:,m)
                 if( ierr /= 0 ) exit
-            enddo
+            end do
             call fileiochk('write_raw_accum writing B', ierr)
             do m = self%lims3(3,1), self%lims3(3,2)
                 write(funit, iostat=ierr) self%acc_work(:,:,m)
                 if( ierr /= 0 ) exit
-            enddo
+            end do
             call fileiochk('write_raw_accum writing D', ierr)
         endif
         call fclose(funit)
@@ -1491,23 +1230,21 @@ contains
         call tmpfname%kill
     end subroutine write_raw_accum
 
-    !> Add one raw worker artifact to the master's open reduction. Calls must
-    !! arrive in ascending part order; this makes the floating-point association
-    !! order explicit and reproducible. Slices are streamed to keep temporary
-    !! memory negligible relative to the full-range master accumulators.
+    !> adds one raw worker artifact to the open reduction; parts arrive in ascending
+    !! order (reproducible association), slices are streamed
     subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls )
         class(reconstructor_pcg), intent(inout) :: self
-        class(string),             intent(in)    :: fname
-        integer,                   intent(in)    :: state, eo, part, nparts
-        character(len=*),          intent(in)    :: provenance
-        integer,                   intent(out)   :: nptcls
-        character(len=16) :: magic
+        class(string),            intent(in)    :: fname
+        integer,                  intent(in)    :: state, eo, part, nparts
+        character(len=*),         intent(in)    :: provenance
+        integer,                  intent(out)   :: nptcls
+        character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
         complex, allocatable :: bslice(:,:)
         real,    allocatable :: dslice(:,:)
-        integer :: funit, ierr, m, version, state_file, eo_file, part_file
-        integer :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
-        real    :: smpd_file
+        integer        :: funit, ierr, m, version, state_file, eo_file, part_file
+        integer        :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
+        real           :: smpd_file
         integer(int64) :: file_size, stream_pos
         if( .not. self%l_accum ) THROW_HARD('master PCG reduction is not open')
         if( part /= self%reduction_next_part ) THROW_HARD('raw PCG parts must be reduced in ascending order')
@@ -1553,13 +1290,13 @@ contains
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
                 self%b_work(:,:,m) = self%b_work(:,:,m) + bslice
-            enddo
+            end do
             call fileiochk('add_raw_accum reading B', ierr)
             do m = self%lims3(3,1), self%lims3(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
                 self%acc_work(:,:,m) = self%acc_work(:,:,m) + dslice
-            enddo
+            end do
             call fileiochk('add_raw_accum reading D', ierr)
             deallocate(bslice, dslice)
         endif
@@ -1574,9 +1311,8 @@ contains
         self%reduction_next_part = part + 1
     end subroutine add_raw_accum
 
-    !> Scale an open raw accumulator in the sufficient-statistics domain.
-    !! This is the only valid place to apply the u/f and (1-u) continuation
-    !! weights: neither finalized kernels nor reconstructed maps are additive.
+    !> scales an open raw accumulator: the only valid place for the u/f and (1-u)
+    !! continuation weights (finalized kernels and maps are not additive)
     subroutine scale_raw_accum( self, weight )
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: weight
@@ -1586,10 +1322,9 @@ contains
         self%acc_work = weight * self%acc_work
     end subroutine scale_raw_accum
 
-    !> Relative L2 differences between two open raw accumulator chains. This
-    !! avoids materializing diagnostic copies of the padded B and D lattices.
+    !> relative L2 differences between two open raw accumulators, without copies
     subroutine compare_raw_accum( self, other, b_relerr, d_relerr )
-        class(reconstructor_pcg), intent(in) :: self, other
+        class(reconstructor_pcg), intent(in)  :: self, other
         real,                     intent(out) :: b_relerr, d_relerr
         real(dp) :: bnum, bden, dnum, dden
         integer  :: h, k, m
@@ -1608,32 +1343,28 @@ contains
                     bden = bden + real(abs(other%b_work(h,k,m))**2,dp)
                     dnum = dnum + real((self%acc_work(h,k,m)-other%acc_work(h,k,m))**2,dp)
                     dden = dden + real(other%acc_work(h,k,m)**2,dp)
-                enddo
-            enddo
-        enddo
+                end do
+            end do
+        end do
         b_relerr = real(sqrt(bnum / max(1.0_dp,bden)))
         d_relerr = real(sqrt(dnum / max(1.0_dp,dden)))
     end subroutine compare_raw_accum
 
-    !> Non-destructive header compatibility check for a persisted raw
-    !! accumulator artifact against the current reconstruction geometry and
-    !! continuation identity. Constant-FOV crop continuity applies: a chain
-    !! persisted at a SMALLER crop with the same physical field of view is
-    !! compatible (add_raw_accum_weighted embeds it by index-aligned
-    !! zero-extension). A larger-crop chain, a field-of-view change, an
-    !! identity/provenance change, or any read failure counts as incompatible:
-    !! callers must discard such a chain and re-seed (bootstrap) instead of
-    !! reducing it.
+    !> header compatibility of a persisted raw artifact with the current geometry and
+    !! identity. Constant-FOV crop continuity: a SMALLER crop with the same field of
+    !! view is compatible (zero-extended by add_raw_accum_weighted); a larger crop, a
+    !! FOV change, an identity change or a read failure is not (discard and re-seed)
     logical function pcg_raw_accum_compatible( fname, box, smpd, provenance ) result( l_compatible )
         class(string),    intent(in) :: fname
         integer,          intent(in) :: box
         real,             intent(in) :: smpd
         character(len=*), intent(in) :: provenance
-        character(len=16) :: magic
+        character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
-        integer :: funit, ierr, version, state_file, eo_file, part_file, nparts_file, nptcls_file
-        integer :: box_file, boxpd_file, padf_file, lims_file(3,2)
-        real    :: smpd_file, fov_file, fov_cur
+        integer                         :: funit, ierr, version, state_file, eo_file, part_file
+        integer                         :: nparts_file, nptcls_file
+        integer                         :: box_file, boxpd_file, padf_file, lims_file(3,2)
+        real                            :: smpd_file, fov_file, fov_cur
         l_compatible = .false.
         if( .not. file_exists(fname) ) return
         call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=ierr)
@@ -1658,20 +1389,11 @@ contains
         l_compatible = .true.
     end function pcg_raw_accum_compatible
 
-    !> Add one complete raw artifact with an explicit continuation weight.
-    !! Unlike add_raw_accum this routine does not participate in worker-part
-    !! ordering. It is for deterministic algebra on already reduced current
-    !! and previous chains after the worker reduction has completed.
-    !!
-    !! Constant-FOV crop continuity: under box*smpd == box_crop*smpd_crop the
-    !! padded lattices of consecutive crops share their frequency step, so a
-    !! SMALLER previous grid is an index-aligned central subset of the current
-    !! one and its (B,D) statistics embed exactly by zero-extension -- the same
-    !! autoscale ramp the gridding trailing chain performs. The one
-    !! approximation is the old lattice's wrap rim: KB windows that wrapped
-    !! around the old period carry aliased mass in the outermost old shells,
-    !! at/beyond the producing stage's matching band and decaying as (1-u)^k.
-    !! Larger-than-current grids cannot be restricted and are rejected.
+    !> adds one complete raw artifact with an explicit weight; deterministic algebra
+    !! on reduced chains, outside the worker-part ordering. Under constant FOV the
+    !! padded lattices of consecutive crops share their frequency step, so a smaller
+    !! previous grid embeds exactly by index-aligned zero-extension (the old wrap rim
+    !! carries aliased mass at/beyond the producing band, decaying as (1-u)^k)
     subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls )
         class(reconstructor_pcg), intent(inout) :: self
         class(string),            intent(in)    :: fname
@@ -1679,13 +1401,13 @@ contains
         character(len=*),         intent(in)    :: provenance
         real,                     intent(in)    :: weight
         integer,                  intent(out)   :: nptcls
-        character(len=16) :: magic
+        character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
         complex, allocatable :: bslice(:,:)
         real,    allocatable :: dslice(:,:)
-        integer :: funit, ierr, m, version, state_file, eo_file, part_file
-        integer :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
-        real    :: smpd_file, fov_file, fov_self
+        integer        :: funit, ierr, m, version, state_file, eo_file, part_file
+        integer        :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
+        real           :: smpd_file, fov_file, fov_self
         integer(int64) :: file_size, stream_pos
         if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open; add_raw_accum_weighted')
         if( .not. ieee_is_finite(weight) .or. weight < 0.0 ) THROW_HARD('invalid weighted raw PCG contribution')
@@ -1705,8 +1427,12 @@ contains
         call fileiochk('add_raw_accum_weighted reading geometry', ierr)
         read(funit, iostat=ierr) prov_file
         call fileiochk('add_raw_accum_weighted reading provenance', ierr)
-        if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION ) THROW_HARD('weighted raw PCG format mismatch')
-        if( state_file /= state .or. eo_file /= eo .or. part_file /= part ) THROW_HARD('weighted raw PCG identity mismatch')
+        if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION )then
+            THROW_HARD('weighted raw PCG format mismatch')
+        endif
+        if( state_file /= state .or. eo_file /= eo .or. part_file /= part )then
+            THROW_HARD('weighted raw PCG identity mismatch')
+        endif
         if( nparts_file /= nparts .or. nptcls < 0 ) THROW_HARD('weighted raw PCG accumulator partition mismatch')
         if( box_file > self%box .or. padf_file /= self%padf .or. boxpd_file /= padf_file*box_file )then
             THROW_HARD('weighted raw box mismatch')
@@ -1730,14 +1456,14 @@ contains
                 if( ierr /= 0 ) exit
                 self%b_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) = &
                     &self%b_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) + weight * bslice
-            enddo
+            end do
             call fileiochk('add_raw_accum_weighted reading B', ierr)
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
                 self%acc_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) = &
                     &self%acc_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) + weight * dslice
-            enddo
+            end do
             call fileiochk('add_raw_accum_weighted reading D', ierr)
             deallocate(bslice, dslice)
         else if( nptcls > 0 )then
@@ -1746,12 +1472,12 @@ contains
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
-            enddo
+            end do
             call fileiochk('add_raw_accum_weighted skipping B', ierr)
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
-            enddo
+            end do
             call fileiochk('add_raw_accum_weighted skipping D', ierr)
             deallocate(bslice, dslice)
         endif
@@ -1762,24 +1488,19 @@ contains
         if( stream_pos-1_int64 /= file_size ) THROW_HARD('weighted raw PCG accumulator has trailing or missing bytes')
     end subroutine add_raw_accum_weighted
 
-    !> Accumulate the weighted RHS B and Gram/sampling-density precursor D in
-    !! one particle traversal. Both scatters use the same orientation, rotated
-    !! coordinate and KB window, so evaluating that geometry twice is pure
-    !! overhead. Keeping both updates in the same coloured OpenMP region also
-    !! removes the per-particle parallel-region startup from accumulate_rhs.
-    !! The update order within each accumulator is unchanged from the two
-    !! standalone routines, which remain available to the low-level tests.
+    !> accumulates the weighted RHS B and the density D in one traversal: same
+    !! orientation, coordinate and KB window for both scatters
     subroutine accumulate_rhs_density( self, y_batch, nb, ifrom, bacc, dacc )
         class(reconstructor_pcg), intent(inout) :: self
-        integer,                    intent(in)    :: nb, ifrom
-        complex,                    intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
-                                                              &self%lims2(2,1):self%lims2(2,2), nb)
-        complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
-        real,                       intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
-                                                        &self%lims3(2,1):self%lims3(2,2),&
-                                                        &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: nb, ifrom
+        complex,                  intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
+                                                          &self%lims2(2,1):self%lims2(2,2), nb)
+        complex,                  intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
+                                                       &self%lims3(2,1):self%lims3(2,2),&
+                                                       &self%lims3(3,1):self%lims3(3,2))
+        real,                     intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                       &self%lims3(2,1):self%lims3(2,2),&
+                                                       &self%lims3(3,1):self%lims3(3,2))
         complex, allocatable :: weighted(:,:)
         real,    allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
@@ -1830,11 +1551,10 @@ contains
         deallocate(weighted, absT2)
     end subroutine accumulate_rhs_density
 
-    !>  \brief  Closes accumulation: folds the RHS once, derives preconditioner
-    !!          and (optionally) the Gram kernel, and releases the accumulators.
+    !> closes accumulation: folds the RHS once, derives preconditioner and optionally Khat
     subroutine end_accum( self, l_kernel )
         class(reconstructor_pcg), intent(inout) :: self
-        logical,                    intent(in)    :: l_kernel
+        logical,                  intent(in)    :: l_kernel
         complex, allocatable :: bwork(:,:,:)
         real,    allocatable :: dwork(:,:,:)
         integer(timer_int_kind) :: tp
@@ -1845,9 +1565,7 @@ contains
             endif
         endif
         call self%reset_finalize_profile
-        ! RHS first, and free its accumulator before the kernel work starts:
-        ! finalize_khat is the allocation-heavy half and should not overlap it.
-        ! move_alloc for the same aliasing reason as accumulate_batch.
+        ! RHS first and freed before the allocation-heavy kernel work; move_alloc as in accumulate_batch
         tp = pcg_tic()
         call move_alloc(self%b_work, bwork)
         self%b_rhs = self%fold_and_ifft(bwork)
@@ -1865,34 +1583,13 @@ contains
 
     ! SETUP: PRECONDITIONER AND KERNEL
 
-    !>  \brief  sampling-density preconditioner M(k) = rho(k) + floor(sh), where
-    !!          rho = sum_i G_i^dagger |T_i|^2 is exactly the gridding sampling
-    !!          density -- the scatter without the gather. Without it the solver
-    !!          would run with M = I, i.e. plain CG despite the name. With
-    !!          heterogeneous CTFs H is severely ill-conditioned at CTF zeros,
-    !!          so this is the other half of the performance problem: it cuts
-    !!          iteration count, independently of per-iteration cost.
-    !!
-    !!          THE FLOOR MUST BE RELATIVE TO rho, NOT AN ABSOLUTE CONSTANT.
-    !!          Using 1/(rho + lambda) with the solver's own lambda looks
-    !!          harmless and is not: rho spans many orders of magnitude across
-    !!          the oversampled lattice (it falls off as 1/sh^2 and is genuinely
-    !!          zero in the gaps between rotated planes), so wherever rho ~ 0 the
-    !!          preconditioner returns 1/lambda while well-sampled voxels get
-    !!          1/rho -- a relative amplification of the least-constrained modes
-    !!          by six to nine orders of magnitude. PCG then spends every
-    !!          iteration chasing directions the data barely determines: the
-    !!          residual falls for a few iterations, turns around, and the map
-    !!          fills with noise. Production never hits this because
-    !!          reconstructor%sampl_dens_correct leaves a voxel UNCHANGED when
-    !!          rho is below 1e-6 (image%div_cmat_at_1) instead of dividing, and
-    !!          because gridding is a single pass with no feedback.
-    !!
-    !!          Flooring at a fixed fraction of the shell-mean rho caps the
-    !!          within-shell dynamic range at 1/RHO_FLOOR_FRAC while staying
-    !!          symmetric positive definite, and is invariant to the operator's
-    !!          overall scale -- which matters because rho here is accumulated
-    !!          without the padsc factors that apply_normal carries.
+    !> sampling-density preconditioner M(k) = rho(k) + floor(shell), rho =
+    !! sum_i G_i^dagger |T_i|^2 (the gridding density); cuts the iteration count that
+    !! heterogeneous CTFs would otherwise inflate. The floor is a fraction of the
+    !! shell-mean rho (RHO_FLOOR_FRAC), never an absolute constant: rho spans many
+    !! orders of magnitude and is zero between rotated planes, so 1/(rho+lambda)
+    !! would amplify the least-constrained modes by orders of magnitude and fill the
+    !! map with noise. Scale-invariant (rho lacks the padsc factors of apply_normal)
     subroutine build_precond( self )
         class(reconstructor_pcg), intent(inout) :: self
         real, allocatable :: acc(:,:,:)
@@ -1902,39 +1599,21 @@ contains
                     &self%lims3(2,1):self%lims3(2,2),&
                     &self%lims3(3,1):self%lims3(3,2)), source=0.0)
         call self%accumulate_absT2(acc)
-        call self%precond_from_accum(acc)
+        call self%finalize_density_accum(acc, .true., .false.)
     end subroutine build_precond
 
-    !>  \brief  The ONE pass over the particles that both the preconditioner and
-    !!          the Gram kernel are derived from.
-    !!
-    !!          These were two separate passes until it became apparent they are
-    !!          the identical computation: build_precond went through
-    !!          scatter_plane and build_kernel had its own inlined copy, but both
-    !!          evaluate the same |T_i|^2, at the same rotated coordinate
-    !!          padf*R_i*[h,k,0], through the same KB stencil. The accumulators
-    !!          differed only by the constant padsc that scatter_plane applies --
-    !!          and BOTH consumers are invariant to overall scale: the
-    !!          preconditioner's floor is a fraction of the shell mean (see
-    !!          precond_from_accum) and the kernel is least-squares rescaled by
-    !!          calibrate_kernel. So the fusion is exact, not an approximation.
-    !!
-    !!          The particle loop is inside a single parallel region rather than
-    !!          calling scatter_plane per particle, which opened and closed one
-    !!          region per particle -- 5000 of them on a typical run.
-    !!
-    !!          ifrom/ito restrict the pass to a particle range, which is what
-    !!          lets the caller stream batches instead of holding every plane
-    !!          resident. Note this routine needs NO image data -- only the
-    !!          scalars prep_particles cached -- so the range exists purely to
-    !!          keep it in step with the RHS accumulation, which does.
+    !> the one particle pass both the preconditioner and the Gram kernel derive
+    !! from: |T_i|^2 scattered at padf*R_i*[h,k,0] through the KB stencil. Both
+    !! consumers are scale-invariant (shell-relative floor, analytic calibration),
+    !! so sharing the accumulator is exact. One parallel region for all particles;
+    !! ifrom/ito keep a batch caller in step with the RHS (no image data needed)
     subroutine accumulate_absT2( self, acc, ifrom, ito )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
-                                                        &self%lims3(2,1):self%lims3(2,2),&
-                                                        &self%lims3(3,1):self%lims3(3,2))
-        integer,          optional, intent(in)    :: ifrom, ito
-        real,    allocatable :: absT2(:,:)
+        class(reconstructor_pcg),           intent(inout) :: self
+        real,                               intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
+                                                                &self%lims3(2,1):self%lims3(2,2),&
+                                                                &self%lims3(3,1):self%lims3(3,2))
+        integer,                  optional, intent(in)    :: ifrom, ito
+        real, allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
         integer :: i, g, h, k, l, i0(3), ii_from, ii_to
         ii_from = 1
@@ -1946,10 +1625,7 @@ contains
         !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,rot) proc_bind(close)
         do i = ii_from, ii_to
             call self%absT2_plane(i, absT2)
-            ! coordinate replication: scatter |T_i|^2 at every symmetry-related
-            ! orientation R_i.S_g. g is OUTSIDE the h-strided colour sweep so the
-            ! scatter's separation guarantee still holds per orientation (2.7).
-            ! symmats(:,:,1)=I, so nsym=1 reproduces the c1 pass bit-for-bit.
+            ! replication at every R_i.S_g, g outside the colour sweep; symmats(:,:,1)=I gives c1
             do g = 1, self%nsym
                 rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
                 do l = 0, self%stride-1
@@ -1987,32 +1663,16 @@ contains
         !$omp end parallel
     end subroutine accumulate_absT2
 
-    subroutine precond_from_accum( self, rho_accum )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
-        call self%finalize_density_accum(rho_accum, .true., .false.)
-    end subroutine precond_from_accum
-
-    !> Set the absolute Tikhonov coefficient from a homogeneous scale of the
-    !! raw data-only density. The first six native Fourier shells are common to
-    !! full and cropped representations of the same physical box, and avoid
-    !! making lambda depend on whether higher-resolution shells are present.
-    !! Some Euclidean/simulated-data weights deliberately suppress that entire
-    !! low-frequency band. In that case extend the same origin-centred support
-    !! one native shell at a time until it contains data; do not confuse an
-    !! intentionally empty low-frequency band with an empty accumulator.
-    !!
-    !! Zero bins remain in the selected support average: excluding them would
-    !! make the scale nonlinear when fractional updates cover different voxels.
-    !! Raw D is converted to the calibrated normal-operator convention by the
-    !! same padsc**2 factor as Khat.
+    !> absolute Tikhonov coefficient from a homogeneous scale of the raw density:
+    !! the mean over the first six native shells (common to full and cropped
+    !! representations), extended one shell at a time when that band is empty
+    !! (some Euclidean/simulated weights suppress it). Zero bins stay in the average
+    !! so fractional updates remain linear; padsc**2 converts to the Khat convention
     subroutine update_lambda_from_density( self, rho_accum )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
+        real,                     intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         integer, parameter :: DATA_SCALE_NATIVE_SHELLS = 6
         real(dp), allocatable :: shell_sum(:)
         integer,  allocatable :: shell_count(:)
@@ -2046,7 +1706,7 @@ contains
             scale_shell = scale_shell + 1
             dsum   = dsum   + shell_sum(scale_shell)
             nscale = nscale + shell_count(scale_shell)
-        enddo
+        end do
         deallocate(shell_sum, shell_count)
         if( nscale < 1 .or. dsum <= 0.0_dp ) THROW_HARD('cannot derive PCG data scale from empty D')
         if( scale_shell > base_shell )then
@@ -2060,16 +1720,14 @@ contains
         if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
     end subroutine update_lambda_from_density
 
-    !> Build P_tau from the independent-half FSC and raw data-only D.
-    !! The padded Toeplitz lattice samples Fourier space padf times more finely
-    !! than the native FSC, so each padded radius is assigned to its nearest
-    !! native shell. The shell-mean D supplies 1/sigma2; multiplying the final
-    !! diagonal by padsc**2 puts it in the calibrated Khat convention.
+    !> P_tau from the independent-half FSC and the raw density: each padded radius
+    !! maps to its nearest native shell, the shell-mean D supplies 1/sigma2, and
+    !! padsc**2 puts the diagonal in the calibrated Khat convention
     subroutine build_ml_prior_from_density( self, rho_accum )
         class(reconstructor_pcg), intent(inout) :: self
-        real, intent(in) :: rho_accum(self%lims3(1,1):self%lims3(1,2), &
-                                      &self%lims3(2,1):self%lims3(2,2), &
-                                      &self%lims3(3,1):self%lims3(3,2))
+        real,                     intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2), &
+                                                            &self%lims3(2,1):self%lims3(2,2), &
+                                                            &self%lims3(3,1):self%lims3(3,2))
         real(dp), allocatable :: shsum(:), shsum_thr(:,:)
         integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
         integer :: cdim(3), h, k, m, hh, phys(3), shpd, sh, sz
@@ -2100,17 +1758,17 @@ contains
                     if( rval <= 0.0 ) cycle
                     shsum_thr(sh,ithr) = shsum_thr(sh,ithr) + real(rval,dp)
                     shcnt_thr(sh,ithr) = shcnt_thr(sh,ithr) + 1
-                enddo
-            enddo
-        enddo
+                end do
+            end do
+        end do
         !$omp end do
         !$omp end parallel
         do ithr = 1, nthr
             do sh = 0, sz
                 shsum(sh) = shsum(sh) + shsum_thr(sh,ithr)
                 shcnt(sh) = shcnt(sh) + shcnt_thr(sh,ithr)
-            enddo
-        enddo
+            end do
+        end do
         deallocate(shsum_thr, shcnt_thr)
         cdim = self%wimg%get_array_shape()
         if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
@@ -2130,48 +1788,40 @@ contains
                     prior_raw = real(shsum(sh) / real(shcnt(sh),dp)) / (self%ml_tau * ssnr)
                     phys = self%wimg%comp_addr_phys(h,k,m)
                     self%ml_prior(phys(1),phys(2),phys(3)) = prior_raw * self%padsc**2
-                enddo
-            enddo
-        enddo
+                end do
+            end do
+        end do
         !$omp end parallel do
         deallocate(shsum, shcnt)
         self%l_ml_prior = maxval(self%ml_prior) > 0.0
         if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior contains no positive bins')
     end subroutine build_ml_prior_from_density
 
-    !> Fold the real density accumulator once into the packed Fourier layout.
-    !! The preconditioner and Khat are two views of the same D accumulator, so
-    !! producing them in one sphere-limited parallel pass avoids a second full
-    !! padded-lattice traversal. Shell sums use one private column per OpenMP
-    !! thread and are merged in thread-number order to keep the result stable.
+    !> folds the real density accumulator once into the packed layout: preconditioner
+    !! and Khat are two views of D, produced in one sphere-limited pass; per-thread
+    !! shell sums merged in thread order for a stable result
     subroutine finalize_density_accum( self, rho_accum, l_precond, l_kernel )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
-        logical,                    intent(in)    :: l_precond, l_kernel
+        real,                     intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
+        logical,                  intent(in)    :: l_precond, l_kernel
         real, parameter :: RHO_FLOOR_FRAC = 1.0e-2
         real(dp), allocatable :: shsum(:), shsum_thr(:,:)
         integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
         real,     allocatable :: shfloor(:)
-        integer :: h, k, cdim(3), m, hh, phys(3), sh, rho_lim
-        integer :: khat_lim, work_lim, nthr, ithr
-        real    :: denom, rval
+        integer                 :: h, k, cdim(3), m, hh, phys(3), sh, rho_lim
+        integer                 :: khat_lim, work_lim, nthr, ithr
+        real                    :: denom, rval
         integer(timer_int_kind) :: tp
         if( .not. l_precond .and. .not. l_kernel ) return
         call self%update_lambda_from_density(rho_accum)
         cdim = self%wimg%get_array_shape()
         call self%build_ml_prior_from_density(rho_accum)
-        ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
-        ! identically zero: those modes are completely unconstrained. Zero them,
-        ! exactly as reconstructor%sampl_dens_correct does for sh > sh_lim. A
-        ! singular (PSD) preconditioner is the right tool here -- it keeps the
-        ! Krylov space out of the null space entirely, so starting from x = 0
-        ! those modes are never excited at all.
+        ! data reaches |loc| <= padf*Rnat only; beyond it rho is zero and the modes
+        ! unconstrained. A singular (PSD) preconditioner keeps the Krylov space out of them
         rho_lim = self%padf * self%Rnat
-        ! D can extend beyond the source sphere only by nearest-grid rounding
-        ! and the finite KB stencil. This conservative bound is exact: points
-        ! outside it cannot have received an accumulation update.
+        ! D extends past the source sphere only by rounding and the finite stencil (exact bound)
         khat_lim = rho_lim + ceiling(sqrt(3.0) * (real(self%iwinsz) + 0.5))
         work_lim = rho_lim
         if( l_kernel ) work_lim = max(work_lim, khat_lim)
@@ -2183,9 +1833,7 @@ contains
             if( allocated(self%Khat) ) deallocate(self%Khat)
             allocate(self%Khat(cdim(1),cdim(2),cdim(3)), source=0.0)
         endif
-        ! PASS 1: mean rho per shell, over the sampled voxels only. Averaging in
-        ! the zeros would drag the floor down exactly where sampling is sparse,
-        ! which is the regime the floor exists to protect.
+        ! PASS 1: shell-mean rho over the sampled voxels only (zeros would drag the floor down)
         if( l_precond )then
             tp = pcg_tic()
             nthr = 1
@@ -2229,8 +1877,7 @@ contains
             deallocate(shsum, shcnt)
             self%t_fin_rho = pcg_toc(tp)
         endif
-        ! PASS 2: guarded reciprocal and packed Khat. An empty shell leaves the
-        ! reciprocal at zero, i.e. treats those modes as unconstrained.
+        ! PASS 2: guarded reciprocal and packed Khat; an empty shell stays unconstrained
         tp = pcg_tic()
         !$omp parallel do collapse(2) default(shared) private(h,k,m,hh,phys,sh,denom) schedule(static)
         do m = self%lims3(3,1), self%lims3(3,2)
@@ -2265,61 +1912,34 @@ contains
         endif
     end subroutine finalize_density_accum
 
-    !>  \brief  Builds the Gram kernel.
-    !!
-    !!          The kernel is NOT the impulse response of the
-    !!          matrix-free operator, h = H_data(delta_at_origin). That does not
-    !!          work: the KB weights are normalized to sum 1 (see
-    !!          kbinterpol%apod_mat_3d), so G applied to a constant Fourier
-    !!          volume returns that constant, which makes the row sums of
-    !!          M = sum_i G_i^dagger|T_i|^2 G_i exactly rho -- the gridding
-    !!          density. A same-size kernel built that way reproduces gridding
-    !!          exactly and PCG would converge in one step to the gridding
-    !!          answer, gaining nothing.
-    !!
-    !!          The correct construction is the standard NUFFT Gram kernel:
-    !!          scatter the weights |T_i(p)|^2 onto a 2x OVERSAMPLED Fourier
-    !!          grid at DOUBLED coordinates. The extra resolution is precisely
-    !!          what resolves sub-pixel frequency offsets, so the resulting
-    !!          operator differs from gridding -- the oversampling is the point,
-    !!          not an optional safety margin. Since
-    !!              t = IFFT_2N(Khat)  and  H p = crop(IFFT_2N(FFT_2N(pad p) * Khat)),
-    !!          the real-space kernel t is never needed explicitly: the
-    !!          scattered array IS the multiplier.
-    !!
-    !!          Khat is real (real weights scattered with real KB weights) and
-    !!          symmetric (lims2 is a full symmetric disk, so every plane point
-    !!          appears with its negation), which is what makes the packed
-    !!          half-grid representation exact.
-    !!
-    !!          Memory: the padded work image is (2*box)^3, about 1.1 GB at
-    !!          box 256. That is the price of the kernelized operator.
+    !> Gram kernel. Not the impulse response of the matrix-free operator: the KB
+    !! weights sum to 1, so that reproduces the gridding density and PCG would
+    !! converge to gridding in one step. Standard NUFFT construction instead:
+    !! |T_i|^2 scattered onto the 2x oversampled grid at doubled coordinates, the
+    !! scattered array itself being the multiplier (H p = crop(IFFT(Khat FFT(pad p)))).
+    !! Khat is real and symmetric (full symmetric lims2 disk), so the packed
+    !! half-grid is exact. Memory: (2 box)^3, ~1.1 GB at box 256
     subroutine build_kernel( self )
         class(reconstructor_pcg), intent(inout) :: self
         real, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_kernel')
         call self%ensure_wimg
-        ! With oversampling in place the operator ALREADY works on a padf*box
-        ! lattice, which is exactly the 2x grid the Gram kernel needs for a
-        ! linear (non-wrapping) convolution of a box-supported volume. The two
-        ! lattices coincide, so no separate padded image is required.
+        ! the padf*box lattice of the operator is the 2x grid the linear convolution needs
         allocate(acc(self%lims3(1,1):self%lims3(1,2),&
                     &self%lims3(2,1):self%lims3(2,2),&
                     &self%lims3(3,1):self%lims3(3,2)), source=0.0)
         call self%accumulate_absT2(acc)
-        call self%fold_accum_to_khat(acc)
-        ! freed BEFORE finalize_khat, which is the memory-heavy half
+        call self%finalize_density_accum(acc, .false., .true.)
+        ! freed before finalize_khat, the memory-heavy half
         deallocate(acc)
         call self%finalize_khat
     end subroutine build_kernel
 
-    !>  \brief  Builds preconditioner and kernel from a SINGLE particle pass.
-    !!          This is what the solver path uses; build_precond and build_kernel
-    !!          remain separately callable for the test commanders, which drive
-    !!          one without the other.
+    !> preconditioner and kernel from a single particle pass (the solver path);
+    !! build_precond and build_kernel stay separately callable for the tests
     subroutine build_operators( self, l_kernel )
         class(reconstructor_pcg), intent(inout) :: self
-        logical,                    intent(in)    :: l_kernel
+        logical,                  intent(in)    :: l_kernel
         real, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_operators')
         call self%ensure_wimg
@@ -2332,31 +1952,18 @@ contains
         if( l_kernel ) call self%finalize_khat
     end subroutine build_operators
 
-    subroutine fold_accum_to_khat( self, kacc )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: kacc(self%lims3(1,1):self%lims3(1,2),&
-                                                          &self%lims3(2,1):self%lims3(2,2),&
-                                                          &self%lims3(3,1):self%lims3(3,2))
-        call self%finalize_density_accum(kacc, .false., .true.)
-    end subroutine fold_accum_to_khat
-
     subroutine finalize_khat( self )
         class(reconstructor_pcg), intent(inout) :: self
-        real,    parameter   :: EPS_D = 1.0e-8
+        real, parameter :: EPS_D = 1.0e-8
         complex, allocatable :: ctmp(:,:,:)
         real,    allocatable :: tker(:,:,:), dep1d(:)
-        real :: depval
-        integer :: i, j, k, cdim(3)
+        real                    :: depval
+        integer                 :: i, j, k, cdim(3)
         integer(timer_int_kind) :: tp
         cdim = self%wimg%get_array_shape()
-        ! ---- divide out the DEPOSITION envelope ----
-        ! Laying |T|^2 down through the KB window convolves the kernel spectrum
-        ! with that window, which multiplies the real-space kernel by the
-        ! window's transform. That is a SECOND envelope, distinct from the
-        ! gather's, and left in it shows up as a spurious spatial taper. It is
-        ! obtained from the exact discrete transform of the same normalized
-        ! origin stencil used for deposition. Its separability eliminates a
-        ! full complex accumulator and padded inverse FFT.
+        ! divide out the DEPOSITION envelope: scattering |T|^2 through the KB window
+        ! multiplies the real-space kernel by the window's transform, a second
+        ! envelope distinct from the gather's; separable exact stencil transform
         tp = pcg_tic()
         call kb_stencil_envelope_1d(self%kbwin,self%boxpd,dep1d)
         self%t_fin_dep = pcg_toc(tp)
@@ -2389,53 +1996,21 @@ contains
         self%t_fin_kernel = pcg_toc(tp)
     end subroutine finalize_khat
 
-    !>  \brief  One-off least-squares calibration of the kernel's overall scale
-    !!          against the matrix-free reference.
-    !!
-    !!          The scale depends on the DFT normalization convention and on the
-    !!          KB deposition used to build Khat. Rather than hard-code a
-    !!          convention-dependent constant that would silently rot if the
-    !!          image class changed its FFT scaling, it is measured once on a
-    !!          deterministic probe.
-    !!
-    !!          This does NOT paper over a wrong operator: fitting a single
-    !!          scalar removes only the scale degree of freedom, so whatever
-    !!          error the equivalence test reports afterwards is pure SHAPE
-    !!          mismatch -- which is exactly the quantity of interest. The
-    !!          fitted factor is reported precisely so a value far from unity
-    !!          shows up as the convention problem it would be.
-    !>  \brief  Scales Khat to the matrix-free operator. The factor is
-    !!          ANALYTIC, not fitted.
-    !!
-    !!          It used to be obtained by least squares against
-    !!          apply_normal_matrixfree on a probe volume -- a full particle
-    !!          pass, about 10 s of a 27 s setup, to determine one scalar. The
-    !!          fitted value was 6.43e1 on the synthetic fixture and 6.398380e1
-    !!          on a 5000-particle real data set: two independent data sets
-    !!          within 0.5% of padsc**2 = (padf**3)**2 = 64. The fit was
-    !!          measuring a constant.
-    !!
-    !!          Removing it is not merely an optimization. The trailing/
-    !!          fractional-update scheme derives Khat from a stored accumulator
-    !!          with no particles resident, so it CANNOT fit anything; an
-    !!          analytic factor is the only form that survives that path. See
-    !!          doc/policies/reconstruct3D_pcg_policy.md section 5.
-    !!
-    !!          measure_kernel_scale below still performs the fit, so the test
-    !!          suite can assert the constant has not drifted.
+    !> analytic scale of Khat relative to the matrix-free operator: padsc**2. A
+    !! least-squares fit measured 64.3 (synthetic) and 63.98 (real data), i.e. this
+    !! constant; the trailing path derives Khat from a stored accumulator with no
+    !! particles resident, so only an analytic factor survives (policy section 5).
+    !! measure_kernel_scale still fits it for the tests
     subroutine calibrate_kernel( self )
         class(reconstructor_pcg), intent(inout) :: self
         self%Khat = self%Khat * self%padsc**2
     end subroutine calibrate_kernel
 
-    !>  \brief  Least-squares scale of the kernelized operator against the
-    !!          matrix-free reference, on a deterministic probe. Returns 1.0 when
-    !!          the analytic factor in calibrate_kernel is correct, so a test can
-    !!          assert on the deviation directly. Costs one matrix-free particle
-    !!          pass, which is why it is NOT on the setup path.
+    !> least-squares scale of the kernel against the matrix-free reference on a
+    !! Gaussian probe; 1.0 when calibrate_kernel is right. One particle pass, tests only
     function measure_kernel_scale( self ) result( scale )
         class(reconstructor_pcg), intent(inout) :: self
-        real,    allocatable :: probe(:,:,:), hm(:,:,:), hk(:,:,:)
+        real, allocatable :: probe(:,:,:), hm(:,:,:), hk(:,:,:)
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
         integer  :: i, j, k
@@ -2468,34 +2043,22 @@ contains
 
     ! PRIVATE HELPERS
 
-    !>  \brief  |T_i|^2 = |C_i|^2 / sigma2_i over the lims2 disk.
-    !!
-    !!          apply_normal computes conjg(T)*(T*plane) = |T|^2 * plane, and
-    !!          the shift factor exp(-i*2*pi*f.t) has unit modulus, so the SHIFT
-    !!          CANCELS EXACTLY in the normal operator. H therefore depends only on this real, iteration-
-    !!          invariant quantity: no shift phase, no complex multiply, and
-    !!          half the transcendentals of a full complex path. The full
-    !!          complex transfer is still needed for the RHS -- see
-    !!          transfer_plane_cmplx.
-    !!          The worksharing loops here are ORPHANED: when called from inside
-    !!          apply_normal_matrixfree's or build_kernel's parallel region they
-    !!          bind to it and the CTF evaluation is spread across the team;
-    !!          when called from build_precond outside any parallel region they
-    !!          simply run serially. Both are correct. Wrapping this in
-    !!          !$omp single instead would serialize the CTF work and cap the
-    !!          achievable speedup by Amdahl's law. Every element is written
-    !!          inside a worksharing loop, so there is no benign-looking
-    !!          all-threads-write race on the shared buffer.
+    !> |T_i|^2 = |C_i|^2 / sigma2_i over the lims2 disk. The unit-modulus shift
+    !! phase cancels in conjg(T) T, so the normal operator needs only this real,
+    !! iteration-invariant weight (the RHS needs the complex T, transfer_plane_cmplx).
+    !! The worksharing loops are ORPHANED: inside a parallel region the CTF work is
+    !! spread across the team, outside one it runs serially; every element is
+    !! written inside a workshared loop
     subroutine absT2_plane( self, iptcl, absT2 )
         class(reconstructor_pcg), intent(in)  :: self
-        integer,                    intent(in)  :: iptcl
-        real,                       intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
-                                                          &self%lims2(2,1):self%lims2(2,2))
+        integer,                  intent(in)  :: iptcl
+        real,                     intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
+                                                      &self%lims2(2,1):self%lims2(2,2))
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
-        real      :: cval, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
-        integer   :: h, k, shell
-        logical   :: l_ctf, l_flip
+        real          :: cval, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
+        integer       :: h, k, shell
+        logical       :: l_ctf, l_flip
         if( .not. self%l_use_ctf )then
             !$omp do collapse(2) schedule(static)
             do k = self%lims2(2,1), self%lims2(2,2)
@@ -2506,19 +2069,14 @@ contains
             !$omp end do
             return
         endif
-        ! same ctfflag semantics as build_transfer; note |CTF|^2 == CTF^2, so the
-        ! FLIP case only matters for the complex T, not here -- but the NO case
-        ! does, and applying a CTF the images never saw would be wrong.
+        ! same ctfflag semantics as build_transfer; |CTF|^2 = CTF^2, so only NO matters here
         l_ctf  = self%ctfparms(iptcl)%ctfflag /= CTFFLAG_NO
         l_flip = self%ctfparms(iptcl)%ctfflag == CTFFLAG_FLIP
         if( l_ctf )then
             tfun = ctf(self%ctfparms(iptcl)%smpd, self%ctfparms(iptcl)%kv, &
                 &self%ctfparms(iptcl)%cs, self%ctfparms(iptcl)%fraca)
             call tfun%init(self%ctfparms(iptcl)%dfx, self%ctfparms(iptcl)%dfy, self%ctfparms(iptcl)%angast)
-            ! hoist the per-particle CTF constants and evaluate with the flat,
-            ! call-free transcendental form of simple_math_ctf::ft_map_ctf_kernel.
-            ! Its memoized (h,k) maps cover only the h>=0 half, so the kernel is
-            ! inlined here to run over this full both-sign-h disk via the LUTs.
+            ! flat, call-free form of ft_map_ctf_kernel over the both-sign-h disk (LUTs)
             ctfvals     = tfun%get_ctfvars(self%ctfparms(iptcl)%phshift)
             wl          = ctfvals%wl
             half_wl2_cs = 0.5 * wl * wl * ctfvals%cs
@@ -2551,35 +2109,33 @@ contains
         !$omp end do
     end subroutine absT2_plane
 
-    !>  \brief  full complex T_i for the cached particle iptcl (RHS only).
+    !> full complex T_i of cached particle iptcl (RHS only)
     subroutine transfer_plane_cmplx( self, iptcl, T )
         class(reconstructor_pcg), intent(in)  :: self
-        integer,                    intent(in)  :: iptcl
-        complex,                    intent(out) :: T(self%lims2(1,1):self%lims2(1,2),&
-                                                      &self%lims2(2,1):self%lims2(2,2))
+        integer,                  intent(in)  :: iptcl
+        complex,                  intent(out) :: T(self%lims2(1,1):self%lims2(1,2),&
+                                                  &self%lims2(2,1):self%lims2(2,2))
         T = self%build_transfer(self%ctfparms(iptcl), self%shifts(:,iptcl), self%sig2(:,iptcl))
     end subroutine transfer_plane_cmplx
 
-    !> Build the two plane values consumed by fused streaming accumulation.
-    !! Every thread in the persistent region calls this routine; the orphaned
-    !! omp-do partitions the plane between them. The expressions match
-    !! build_transfer and absT2_plane, but the CTF is evaluated only once.
+    !> the two plane values of the fused accumulation, CTF evaluated once; every
+    !! thread of the persistent region calls this and the orphaned omp-do partitions the plane
     subroutine prepare_fused_planes( self, iptcl, y_plane, weighted, absT2 )
         class(reconstructor_pcg), intent(in)  :: self
-        integer,                    intent(in)  :: iptcl
-        complex,                    intent(in)  :: y_plane(self%lims2(1,1):self%lims2(1,2),&
-                                                            &self%lims2(2,1):self%lims2(2,2))
-        complex,                    intent(out) :: weighted(self%lims2(1,1):self%lims2(1,2),&
-                                                             &self%lims2(2,1):self%lims2(2,2))
-        real,                       intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
+        integer,                  intent(in)  :: iptcl
+        complex,                  intent(in)  :: y_plane(self%lims2(1,1):self%lims2(1,2),&
+                                                        &self%lims2(2,1):self%lims2(2,2))
+        complex,                  intent(out) :: weighted(self%lims2(1,1):self%lims2(1,2),&
                                                          &self%lims2(2,1):self%lims2(2,2))
+        real,                     intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
+                                                      &self%lims2(2,1):self%lims2(2,2))
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
-        complex :: tval
-        real    :: cval, arg, sw, sum_df, diff_df, angast, wl, half_wl2_cs
-        real    :: accc, phc, cterm, df, phsh, s2
-        integer :: h, k, shell
-        logical :: l_ctf, l_flip
+        complex       :: tval
+        real          :: cval, arg, sw, sum_df, diff_df, angast, wl, half_wl2_cs
+        real          :: accc, phc, cterm, df, phsh, s2
+        integer       :: h, k, shell
+        logical       :: l_ctf, l_flip
         l_ctf  = self%ctfparms(iptcl)%ctfflag /= CTFFLAG_NO
         l_flip = self%ctfparms(iptcl)%ctfflag == CTFFLAG_FLIP
         if( l_ctf )then
@@ -2631,22 +2187,16 @@ contains
         !$omp end do
     end subroutine prepare_fused_planes
 
-    !>  \brief  folds a full-range (both-sign h) complex volume accumulator into
-    !!          the image's packed storage (h>=0 half) and inverse-FFTs it.
-    !!
-    !!          h = lims3(1,2) (the redundant Nyquist mate, present only because
-    !!          lims3 spans the "including redundant Friedel mates" range) is
-    !!          special: the scatter wraps via wlims and so never produces
-    !!          +lims3(1,2), only its canonical negative representative. The
-    !!          Nyquist bin's accumulated value lives at h = -lims3(1,2); the
-    !!          wrap table sends it there.
+    !> folds a full-range (both-sign h) accumulator into the packed h>=0 storage and
+    !! inverse-FFTs it. The redundant Nyquist mate h = lims3(1,2) is never produced by
+    !! the wrapping scatter; its value lives at -lims3(1,2), where the wrap table sends it
     function fold_and_ifft( self, vol_accum ) result( z )
         class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
+        complex,                  intent(in)    :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         real, allocatable :: z(:,:,:)
-        integer :: h, hh, k, m, phys(3)
+        integer                 :: h, hh, k, m, phys(3)
         integer(timer_int_kind) :: tp
         call self%ensure_wimg
         if( self%l_profile ) tp = pcg_tic()
@@ -2669,26 +2219,16 @@ contains
         if( self%l_profile ) self%t_fold = self%t_fold + pcg_toc(tp)
     end function fold_and_ifft
 
-    !>  \brief  z = M^-1 r via FFT, guarded elementwise divide, inverse FFT.
-    !!
-    !!          THE ENVELOPE BELONGS IN THE PRECONDITIONER TOO. rho is the
-    !!          Fourier diagonal of the BARE operator T = A~^dagger W A~, but the
-    !!          operator actually being solved is H = E^-1 T E^-1 (deapodization
-    !!          on both sides, see deapod_mul). Inverting that gives
-    !!          H^-1 = E T^-1 E, so the same real-space envelope has to bracket
-    !!          the Fourier-domain divide -- multiplying by env, not invenv,
-    !!          because this is the INVERSE of the deapodization sandwich.
-    !!          Leaving it out means preconditioning with something that differs
-    !!          from the true diagonal by a factor of E^2, which varies smoothly
-    !!          but substantially across the box; that mismatch is the most
-    !!          likely source of the non-monotone bump seen at iteration 2 with
-    !!          both operators.
+    !> z = M^-1 r via FFT, diagonal multiply, inverse FFT. rho is the diagonal of
+    !! the bare operator T while the solve targets H = E^-1 T E^-1, so H^-1 =
+    !! E T^-1 E: the real-space envelope brackets the Fourier divide (env, not
+    !! invenv); omitting it mis-preconditions by E^2
     function apply_precond( self, r ) result( z )
         class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: r(self%box,self%box,self%box)
+        real,                     intent(in)    :: r(self%box,self%box,self%box)
         real,    allocatable :: z(:,:,:), rw(:,:,:)
         complex, allocatable :: cmat(:,:,:)
-        integer :: cdim(3), i, j, k
+        integer                 :: cdim(3), i, j, k
         integer(timer_int_kind) :: tp
         if( .not. self%l_precond )then
             allocate(z(self%box,self%box,self%box), source=r)
@@ -2717,55 +2257,32 @@ contains
         call self%wimg%ifft()
         z = center_crop_real3d(self%wimg%get_rmat(),self%box)
         if( self%l_deapod ) z = z * self%env
-        ! keeping z inside the support keeps the whole Krylov space there; M^-1
-        ! is a Fourier diagonal and would otherwise leak the search directions
-        ! back out into the solvent that P H P has just been set up to ignore
+        ! z inside the support keeps the whole Krylov space there (M^-1 is a Fourier diagonal)
         call self%mask_mul(z)
         if( self%l_profile ) self%t_prec = self%t_prec + pcg_toc(tp)
     end function apply_precond
 
-    !>  \brief  Does this window straddle the periodic wrap boundary?
-    !!
-    !!          THE COLOURING SCHEME IS ONLY VALID FOR WINDOWS THAT DO NOT WRAP.
-    !!          The h-strided colouring guarantees that two h-lines of the same
-    !!          colour map at least padf*stride apart, which exceeds the window
-    !!          width -- but that separation is computed on UNWRAPPED
-    !!          coordinates. The accumulator is periodic, so a coordinate just
-    !!          past wlims(2) folds back to wlims(1), and two points that were
-    !!          most of a period apart can land within a voxel of each other.
-    !!          Two threads in the same colour sweep then write the same voxel.
-    !!
-    !!          Concretely at box 24: |loc| <= padf*R = 24 while
-    !!          wlims = [-24,23], and h = -12 and h = +12 differ by 24 = 4*stride
-    !!          so they share a colour. Their windows can overlap after folding.
-    !!          The same holds at every box size -- it is confined to the Nyquist
-    !!          rim, but it makes the result depend on thread scheduling, which
-    !!          is how it was found (a batched and a monolithic accumulation of
-    !!          identical data disagreed under threads and agreed on one).
-    !!
-    !!          Callers therefore split the plane: the interior scatters in the
-    !!          parallel coloured pass, the wrapping rim in a serial pass.
-    !!          Module-level and NOT type-bound, for the reason stated at the
-    !!          head of this section: it is evaluated once per plane point per
-    !!          particle -- of order 1e8 times per accumulation -- and a
-    !!          type-bound call on a class(...) object goes through a dispatch
-    !!          the compiler will not inline, which is exactly why
-    !!          gather_window and scatter_window live here too.
+    !> does the window straddle the periodic wrap boundary? The h-strided colouring
+    !! separates same-colour h-lines by more than a window only in unwrapped
+    !! coordinates; after folding two such windows can overlap at the Nyquist rim
+    !! and the sum becomes thread-order dependent. Callers scatter the interior in
+    !! the coloured parallel pass and the wrapping rim serially. Module-level, not
+    !! type-bound, so it inlines (~1e8 calls per accumulation), like the scatters
     pure logical function win_wraps( self, i0 )
         class(reconstructor_pcg), intent(in) :: self
-        integer,                   intent(in) :: i0(3)
+        integer,                  intent(in) :: i0(3)
         win_wraps = any(i0 < self%wlims(1)) .or. any(i0 + self%wdim - 1 > self%wlims(2))
     end function win_wraps
 
-    !>  \brief  KB-weighted scatter of one value into the full-range accumulator.
+    !> KB-weighted scatter of one complex value into the full-range accumulator
     pure subroutine scatter_window( self, i0, w, val, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
-        complex,                    intent(in)    :: val
-        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: i0(3)
+        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim)
+        complex,                  intent(in)    :: val
+        complex,                  intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, hh, kk, mm
         do dk = 1, self%wdim
             mm = self%wrap(i0(3)+dk-1)
@@ -2779,14 +2296,14 @@ contains
         end do
     end subroutine scatter_window
 
-    !> Real-valued counterpart used by the sampling-density accumulator.
+    !> real-valued counterpart for the density accumulator
     pure subroutine scatter_window_real( self, i0, w, val, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim), val
-        real,                       intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: i0(3)
+        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim), val
+        real,                     intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, hh, kk, mm
         do dk = 1, self%wdim
             mm = self%wrap(i0(3)+dk-1)
@@ -2800,18 +2317,18 @@ contains
         end do
     end subroutine scatter_window_real
 
-    !> Update B and D through one wrapped KB-window traversal.
+    !> B and D through one wrapped KB-window traversal
     pure subroutine scatter_window_pair( self, i0, w, bval, dval, bacc, dacc )
         class(reconstructor_pcg), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim), dval
-        complex,                    intent(in)    :: bval
-        complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
-        real,                       intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
-                                                          &self%lims3(2,1):self%lims3(2,2),&
-                                                          &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: i0(3)
+        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim), dval
+        complex,                  intent(in)    :: bval
+        complex,                  intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
+                                                       &self%lims3(2,1):self%lims3(2,2),&
+                                                       &self%lims3(3,1):self%lims3(3,2))
+        real,                     intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                       &self%lims3(2,1):self%lims3(2,2),&
+                                                       &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, hh, kk, mm
         do dk = 1, self%wdim
             mm = self%wrap(i0(3)+dk-1)
@@ -2826,20 +2343,16 @@ contains
         end do
     end subroutine scatter_window_pair
 
-    !>  \brief  Interior-only scatter for windows the caller has already proven
-    !!          cannot wrap (win_wraps == .false.). There the period-box lookup
-    !!          self%wrap is the identity over the whole window span, so indexing
-    !!          vol_accum directly is bit-identical -- and it makes the inner run
-    !!          contiguous (stride-1) and vectorizable, unlike the gathered
-    !!          self%wrap form.
+    !> interior-only scatter for windows proven not to wrap: self%wrap is the
+    !! identity there, so direct indexing is bit-identical and the inner run contiguous
     pure subroutine scatter_window_nowrap( self, i0, w, val, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
-        real,                       intent(in)    :: val
-        real,                       intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: i0(3)
+        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim)
+        real,                     intent(in)    :: val
+        real,                     intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, h0, kk, mm
         h0 = i0(1)
         do dk = 1, self%wdim
@@ -2853,18 +2366,18 @@ contains
         end do
     end subroutine scatter_window_nowrap
 
-    !> Update B and D through one non-wrapping, contiguous KB-window traversal.
+    !> B and D through one non-wrapping, contiguous KB-window traversal
     pure subroutine scatter_window_pair_nowrap( self, i0, w, bval, dval, bacc, dacc )
         class(reconstructor_pcg), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim), dval
-        complex,                    intent(in)    :: bval
-        complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
-        real,                       intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
-                                                          &self%lims3(2,1):self%lims3(2,2),&
-                                                          &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: i0(3)
+        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim), dval
+        complex,                  intent(in)    :: bval
+        complex,                  intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
+                                                       &self%lims3(2,1):self%lims3(2,2),&
+                                                       &self%lims3(3,1):self%lims3(3,2))
+        real,                     intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                       &self%lims3(2,1):self%lims3(2,2),&
+                                                       &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, h0, kk, mm
         h0 = i0(1)
         do dk = 1, self%wdim
@@ -2879,19 +2392,15 @@ contains
         end do
     end subroutine scatter_window_pair_nowrap
 
-    !>  \brief  Complex-valued counterpart of scatter_window_nowrap, for the RHS
-    !!          scatter where the transfer sample is complex. Same interior-only
-    !!          contract: the caller has ruled out wrapping, so direct indexing
-    !!          is bit-identical to the self%wrap form and the inner run is
-    !!          contiguous.
+    !> complex counterpart of scatter_window_nowrap, for the RHS scatter
     pure subroutine scatter_window_cmplx_nowrap( self, i0, w, val, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
-        complex,                    intent(in)    :: val
-        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
+        integer,                  intent(in)    :: i0(3)
+        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim)
+        complex,                  intent(in)    :: val
+        complex,                  intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, h0, kk, mm
         h0 = i0(1)
         do dk = 1, self%wdim
@@ -2905,22 +2414,19 @@ contains
         end do
     end subroutine scatter_window_cmplx_nowrap
 
-    !>  \brief  scatter a whole plane, h-strided so it is safe to call from
-    !!          inside an OpenMP parallel region (used by the non-fused paths:
-    !!          adjoint_plane_add, apply_adjoint_all, build_precond).
+    !> scatters a whole plane, h-strided so it is safe inside a parallel region
+    !! (non-fused paths: adjoint_plane_add, apply_adjoint_all)
     subroutine scatter_plane( self, plane, rot, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
-        complex,                    intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
-                                                            &self%lims2(2,1):self%lims2(2,2))
-        real,                       intent(in)    :: rot(3,3)
-        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
+        complex,                  intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
+                                                        &self%lims2(2,1):self%lims2(2,2))
+        real,                     intent(in)    :: rot(3,3)
+        complex,                  intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                            &self%lims3(2,1):self%lims3(2,2),&
+                                                            &self%lims3(3,1):self%lims3(3,2))
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot_g(3,3)
         integer :: h, k, l, g, i0(3)
-        ! coordinate replication over the point group: scatter the plane at every
-        ! R_i.S_g. g is outside the h-strided colour sweep so the scatter stays
-        ! race-free per orientation (2.7); symmats(:,:,1)=I gives the c1 pass.
+        ! replication at every R_i.S_g, g outside the colour sweep; symmats(:,:,1)=I gives c1
         !$omp parallel default(shared) private(h,k,l,g,loc,i0,w,rot_g) proc_bind(close)
         do g = 1, self%nsym
             rot_g = matmul(rot, self%symmats(:,:,g))
@@ -2941,11 +2447,8 @@ contains
             end do
         end do
         !$omp end parallel
-        ! Serial pass over the wrapping rim, where the colouring's separation
-        ! guarantee does not survive folding (see win_wraps). Confined to the
-        ! outermost shell, so the cost is negligible, and being serial it is also
-        ! reproducible -- which an atomic would not be, since the summation order
-        ! would still vary.
+        ! serial pass over the wrapping rim (see win_wraps): confined to the outermost
+        ! shell, so cheap, and reproducible unlike an atomic
         do g = 1, self%nsym
             rot_g = matmul(rot, self%symmats(:,:,g))
             do h = self%lims2(1,1), self%lims2(1,2)
@@ -2994,104 +2497,73 @@ contains
 
     ! SOLVER
 
-    !>  \brief  preconditioned CG solve of H x = b. With
-    !!          build_precond called this is genuinely preconditioned; without
-    !!          it, M = I and this degenerates to plain CG.
-    !!
-    !!          This form takes every observed plane at once and is retained for
-    !!          the test commanders, whose fixtures are small. Production-sized
-    !!          callers stream batches through begin_accum/accumulate_batch/
-    !!          end_accum and then call solve_accum, which never materializes
-    !!          y_planes at all.
+    !> preconditioned CG solve of H x = b from every observed plane at once; kept
+    !! for the test commanders. Production streams batches through begin_accum /
+    !! accumulate_batch / end_accum and calls solve_accum
     subroutine solve( self, y_planes, x, maxits, rtol, rel_res_hist, niters, outcome )
-        class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
-                                                               &self%lims2(2,1):self%lims2(2,2), *)
-        real,                        intent(inout) :: x(self%box,self%box,self%box)
-        integer,          optional,  intent(in)    :: maxits
-        real,             optional,  intent(in)    :: rtol
-        real, allocatable, optional, intent(out)   :: rel_res_hist(:)
-        integer,          optional,  intent(out)   :: niters
-        type(pcg_solver_outcome), optional, intent(out) :: outcome
+        class(reconstructor_pcg),           intent(inout) :: self
+        complex,                            intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
+                                                                     &self%lims2(2,1):self%lims2(2,2), *)
+        real,                               intent(inout) :: x(self%box,self%box,self%box)
+        integer,                  optional, intent(in)    :: maxits
+        real,                     optional, intent(in)    :: rtol
+        real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
+        integer,                  optional, intent(out)   :: niters
+        type(pcg_solver_outcome), optional, intent(out)   :: outcome
         if( allocated(self%b_rhs) ) deallocate(self%b_rhs)
         self%b_rhs = self%apply_adjoint_all(y_planes)
         ! b' = P b, completing the (P H P) u = P b normal equations
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
-        ! project the initial guess onto the support (see solve_accum)
-        call self%mask_mul(x)
+        ! output-space initial guess -> CG variable (see mask_div)
+        call self%mask_div(x)
         call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve
 
-    !>  \brief  Solve against the RHS built by end_accum. Same solver, no
-    !!          observed planes resident.
+    !> solves against the RHS built by end_accum, no observed planes resident
     subroutine solve_accum( self, x, maxits, rtol, rel_res_hist, niters, outcome )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                        intent(inout) :: x(self%box,self%box,self%box)
-        integer,          optional,  intent(in)    :: maxits
-        real,             optional,  intent(in)    :: rtol
-        real, allocatable, optional, intent(out)   :: rel_res_hist(:)
-        integer,          optional,  intent(out)   :: niters
-        type(pcg_solver_outcome), optional, intent(out) :: outcome
+        class(reconstructor_pcg),           intent(inout) :: self
+        real,                               intent(inout) :: x(self%box,self%box,self%box)
+        integer,                  optional, intent(in)    :: maxits
+        real,                     optional, intent(in)    :: rtol
+        real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
+        integer,                  optional, intent(out)   :: niters
+        type(pcg_solver_outcome), optional, intent(out)   :: outcome
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; solve_accum')
-        ! project the initial guess onto the support: the constrained system
-        ! never touches content outside P, so an unprojected warm start would
-        ! carry it into the output unchanged
-        call self%mask_mul(x)
+        ! the initial guess arrives in the output space (a shipped half map is x = P u):
+        ! convert it to u rather than projecting again, the exit projection defines the output
+        call self%mask_div(x)
         call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve_accum
 
-    !>  \brief  The solver proper. Reads the RHS from self%b_rhs rather than
-    !!          taking it as an argument: passing a component of `self` as a
-    !!          separate dummy while `self` is intent(inout) is an aliasing
-    !!          hazard the standard lets a compiler exploit, and the alternative
-    !!          (copying it) would cost 67 MB per solve at box 256 for nothing.
+    !> the solver proper. Reads the RHS from self%b_rhs: passing a component of
+    !! intent(inout) self as a separate dummy is an aliasing hazard, copying it costs 67 MB at box 256
     subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters, outcome )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                        intent(inout) :: x(self%box,self%box,self%box)
-        integer,          optional,  intent(in)    :: maxits
-        real,             optional,  intent(in)    :: rtol
-        real, allocatable, optional, intent(out)   :: rel_res_hist(:)
-        integer,          optional,  intent(out)   :: niters
-        type(pcg_solver_outcome), optional, intent(out) :: outcome
-        ! WHICH RESIDUAL IS REPORTED MATTERS. This used to report
-        ! ||r||_Minv / ||r0||_Minv, the PRECONDITIONED norm, which in PCG is not
-        ! monotone -- only ||e||_H is -- and with a singular preconditioner it
-        ! wanders freely. It duly oscillated, which reads exactly like a solver
-        ! that has lost conjugacy while the solve was in fact converging
-        ! perfectly well. The headline number and the stopping test are now the
-        ! true relative residual ||r||_2 / ||b||_2, which is what a reader
-        ! actually wants and costs two dot products against 1.5 s of FFTs. The
-        ! M-norm is retained in the solver outcome for the diagnostic file,
-        ! because a large gap between it and the true residual says M is a poor
-        ! model of H.
-        !
-        ! RESIDUAL REPLACEMENT. CG propagates the residual by the recurrence
-        ! r <- r - alpha*Hp rather than recomputing b - Hx, which is what makes
-        ! an iteration cost one operator application instead of two; the two can
-        ! drift apart in finite precision. Measured here, they agree to six
-        ! significant figures at box 256, so this is kept only as a periodic
-        ! audit at a long interval rather than a correction -- reporting ||r||_2
-        ! from the recurrence is only legitimate because this check backs it up.
+        class(reconstructor_pcg),           intent(inout) :: self
+        real,                               intent(inout) :: x(self%box,self%box,self%box)
+        integer,                  optional, intent(in)    :: maxits
+        real,                     optional, intent(in)    :: rtol
+        real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
+        integer,                  optional, intent(out)   :: niters
+        type(pcg_solver_outcome), optional, intent(out)   :: outcome
+        ! the reported and tested residual is the true ||r||_2/||b||_2 (the
+        ! preconditioned M-norm is not monotone in PCG and wanders with a singular M;
+        ! kept in the outcome as a diagnostic of how well M models H). The recurrence
+        ! residual is audited against b - Hx every RESID_REPLACE iterations
         integer, parameter :: RESID_REPLACE = 25
-        ! diminishing-returns stop: relative model-update tolerance dx/x. On
-        ! noisy real data |r|/|b| plateaus above rtol while dx/x keeps falling,
-        ! so this is what actually terminates a real solve. Internal default;
-        ! raise to stop sooner, lower to iterate longer. Suppressed by rtol <= 0,
-        ! which is the caller's way of saying "run exactly maxits iterations, no
-        ! early exits" -- test=pcg_recon stage 7 depends on that, since comparing
-        ! two solves stopped by a data-dependent criterion tests nothing.
+        ! diminishing-returns stop on the relative update dx/x, which is what ends a
+        ! real solve (|r|/|b| plateaus above rtol on noisy data); rtol <= 0 disables
+        ! both early exits (exactly maxits iterations, needed for solver comparisons)
         real, parameter :: PCG_XTOL = 1.5e-2
         real, allocatable :: r(:,:,:), p(:,:,:), hp(:,:,:), z(:,:,:), hist(:)
         real, allocatable :: update_hist(:), mnorm_hist(:), iteration_times(:)
-        real, allocatable :: rtr(:,:,:)
-        real(dp) :: rho, rho_new, rho0, alpha, beta, pHp
-        real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
-        integer  :: mmaxits, iter, n_done
-        real     :: rrtol
-        logical  :: stop_rtol, stop_xtol
+        real(dp)                 :: rho, rho_new, rho0, alpha, beta, pHp
+        real(dp)                 :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
+        integer                  :: mmaxits, iter, n_done
+        real                     :: rrtol
+        logical                  :: stop_rtol, stop_xtol
         type(pcg_solver_outcome) :: result
-        integer(timer_int_kind) :: t_it
+        integer(timer_int_kind)  :: t_it
         mmaxits = 50
         if( present(maxits) ) mmaxits = maxits
         if( mmaxits < 1 ) THROW_HARD('maxits must be at least 1; solve')
@@ -3103,12 +2575,10 @@ contains
         if( rrtol > 0.0 )  result%stop_reason = 'maxits'
         allocate(hist(mmaxits), update_hist(mmaxits), iteration_times(mmaxits))
         allocate(mnorm_hist(mmaxits), source=-1.0)
-        ! profile the ITERATIONS only: forming the RHS is a one-off setup cost
-        ! and folding it in would flatter whichever phase it happens to share.
+        ! profile the iterations only; forming the RHS is a one-off setup cost
         call self%reset_profile
         if( all(x == 0.0) )then
-            ! zero initialization is the documented baseline;
-            ! skip a full operator application that is known to return zero
+            ! zero initialization: skip the operator application known to return zero
             allocate(hp(self%box,self%box,self%box), source=0.0)
         else
             hp = self%apply_normal(x)
@@ -3130,8 +2600,7 @@ contains
             hp  = self%apply_normal(p)
             pHp = self%dot_real_volume(p,hp)
             if( .not. ieee_is_finite(pHp) .or. pHp <= 0.0_dp )then
-                ! lost positive-definiteness: hand the decision to the caller
-                ! with the iterate as it stood before this step
+                ! lost positive-definiteness: hand the decision to the caller with the previous iterate
                 if( .not. present(outcome) )then
                     THROW_HARD('non-positive/non-finite dot(p,Hp); PCG lost positive-definiteness; solve')
                 endif
@@ -3144,14 +2613,9 @@ contains
             alpha = rho / pHp
             x  = x + real(alpha) * p
             r  = r - real(alpha) * hp
-            if( mod(iter, RESID_REPLACE) == 0 )then
-                rtr  = self%b_rhs - self%apply_normal(x)
-                r = rtr
-            endif
+            if( mod(iter, RESID_REPLACE) == 0 ) r = self%b_rhs - self%apply_normal(x)
             n_done  = iter
-            ! headline: true relative residual. dx/x says how much the map is
-            ! still moving, which for a reconstruction is often the more
-            ! practical stopping signal than any residual level.
+            ! headline: true relative residual; dx/x says how much the map still moves
             rnorm      = sqrt(self%dot_real_volume(r,r))
             xnorm      = sqrt(self%dot_real_volume(x,x))
             dxnorm     = abs(alpha) * sqrt(self%dot_real_volume(p,p))
@@ -3165,12 +2629,9 @@ contains
                 if( stop_rtol )then
                     result%stop_reason = 'rtol'
                     result%converged   = .true.
-                    exit
-                endif
-                if( stop_xtol )then
+                else if( stop_xtol )then
                     result%stop_reason = 'xtol'
                     result%converged   = .true.
-                    exit
                 endif
                 exit
             endif
@@ -3183,10 +2644,8 @@ contains
             p    = z + real(beta) * p
             rho  = rho_new
         end do
-        ! x = P u: the CG variable u is unconstrained outside the support (P H P
-        ! annihilates it there, so it never influenced the residual), but it does
-        ! accumulate arbitrary values via the preconditioner. This is the step
-        ! that makes the returned volume the constrained solution.
+        ! x = P u: u is unconstrained outside the support (P H P annihilates it there)
+        ! but accumulates values through the preconditioner; this makes the output the constrained solution
         call self%mask_mul(x)
         result%iteration_count  = n_done
         result%final_rel_update = real(dxx)
@@ -3215,8 +2674,8 @@ contains
     end subroutine reset_finalize_profile
 
     subroutine report_finalize_profile( self, funit )
-        class(reconstructor_pcg), intent(in) :: self
-        integer, optional,          intent(in) :: funit
+        class(reconstructor_pcg),           intent(in) :: self
+        integer,                  optional, intent(in) :: funit
         real(dp) :: total
         integer  :: out_unit
         out_unit = logfhandle
@@ -3233,8 +2692,8 @@ contains
     end subroutine report_finalize_profile
 
     subroutine reset_profile( self, l_on )
-        class(reconstructor_pcg), intent(inout) :: self
-        logical, optional,          intent(in)    :: l_on
+        class(reconstructor_pcg),           intent(inout) :: self
+        logical,                  optional, intent(in)    :: l_on
         self%t_setvol = 0.0_dp
         self%t_cmatcp = 0.0_dp
         self%t_ploop  = 0.0_dp
@@ -3245,18 +2704,12 @@ contains
         if( present(l_on) ) self%l_profile = l_on
     end subroutine reset_profile
 
-    !>  \brief  Per-iteration breakdown of where the solve's time actually goes.
-    !!
-    !!          Read it as one question: how much of an iteration is the PARTICLE
-    !!          LOOP (t_ploop -- the only part the kernelized operator removes)
-    !!          and how much is FFT plus bulk traffic on the padded lattice
-    !!          (t_setvol + t_cmatcp + t_fold + t_prec -- which switching
-    !!          operator does NOT remove, and which only a Fourier-domain
-    !!          formulation of the solve eliminates)?
+    !> per-iteration time split: particle loop (what the kernelized operator removes)
+    !! vs FFT and lattice traffic (what only a Fourier-domain solve would remove)
     subroutine report_profile( self, niters, funit )
-        class(reconstructor_pcg), intent(in) :: self
-        integer,                    intent(in) :: niters
-        integer, optional,          intent(in) :: funit
+        class(reconstructor_pcg),           intent(in) :: self
+        integer,                            intent(in) :: niters
+        integer,                  optional, intent(in) :: funit
         real(dp) :: rn, tot, ffts
         integer  :: out_unit
         if( niters < 1 ) return

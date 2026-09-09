@@ -379,7 +379,7 @@ Point-group symmetry is applied by **coordinate replication** inside the
 operator: each plane pixel is gathered and scattered at all `M` orientations
 `R_i . S_g`. Replication is applied to `H` (`accumulate_absT2`,
 `apply_normal_matrixfree`) and to `b` (`scatter_plane`, reached from
-`apply_adjoint_all` and `accumulate_rhs`), so the system solved is consistently
+`apply_adjoint_all` and `accumulate_rhs_density`), so the system solved is consistently
 symmetrized.
 
 **Composition order is production's.** `matmul(R_i, S_g)` in the row-vector
@@ -529,6 +529,73 @@ implemented and tested here rather than repurposed from production gridding.
   gridding/storage conversions, not established linear adjoints.
 
 ## 12. Execution-path identity and performance rules
+
+### Backend comparison protocol (review 2026-09-09)
+
+A `rec_backend=gridding` versus `rec_backend=pcg` comparison in abinitio3D
+is meaningful because the two paths share everything but the estimator:
+
+- stages 1-2 are gridding on both (`PCG_REC_START_STAGE=3`); the stage
+  ladder, the FSC=0.5 promotion, the uncapped NU-stage handoff, early
+  stopping, the sigma2 handling, the matching references and the final
+  bootstrap_rec3D sequence (gridding bootstrap map, residual sigma pass)
+  are backend-agnostic; only the final map's solver differs;
+- the worker-side particle preparation is the same (noise normalization
+  against the same mask, edge taper, FFT), the same sigma2 weights and CTF
+  parameters enter both accumulations, and the KB stencil and its
+  deapodization envelope are shared (`kb_stencil_centered_crop_inv_envelope_1d`);
+- the ML regularizer is the same formula on both backends:
+  `1/tau2 = <rho>_shell / (tau * fsc/(1-fsc))`, FSC clamped to [0.001,
+  0.999], no prior below `hp`, driven by the current iteration's unfiltered
+  pair (`add_invtausq2rho` and `build_ml_prior_from_density`);
+- the NU competition, its bank cap and the handoff run on the unfiltered
+  pair with the regularized pair as auxiliary member through the one
+  `nonuniform_filter_state` on both backends; both ship deapodized halves
+  and merged maps carrying the same soft spherical support at `msk_crop`
+  (the PCG solve support; the gridding restoration applies the identical
+  `mask3D_soft` after deapodization, 2026-09-09) and compute the FSC on
+  those halves through `evaluate_halfmap_pair`, which applies no mask of
+  its own;
+- the master phase gets the same thread budget on local execution
+  (`rec3D_master_nthr`: nparts x nthr capped at 32, the PCG rule, now also
+  applied to the gridding volassemble instead of `NTHR_SHMEM_MAX`), and
+  both log one `RECONSTRUCTION MASTER PHASE (<backend>): <s>` line per
+  iteration; the worker side is in the bench files (`partial
+  reconstruction`), memory in the peak-RSS fields.
+
+Differences that are the estimator itself and belong in the comparison:
+PCG solves `(H + lambda) x = b` with two warm-started CG iterations per
+half and per kind (base and ML), so its maps carry the previous iteration's
+map; gridding is a fresh density quotient every iteration.
+
+The former measurement asymmetry (gridding FSC on the apodized halves for
+legacy parity, PCG on the solved halves) was removed on 2026-09-09: the
+gridding path now computes its FSC on the deapodized, support-masked halves
+it ships. The one-mask contract that came with it:
+
+- every reconstruction product (halves, `_unfil` halves, merged map) carries
+  the soft spherical support at `msk_crop` exactly once, installed by the
+  estimator (PCG) or by the restoration after deapodization (gridding), and
+  recorded in the support-provenance sidecar `<vol>_pcg_support.txt`
+  (`solve_kind=gridding` for gridding products; the PCG base warm-start
+  selector ignores that kind, so the stage-2/3 handoff stays cold);
+- `evaluate_halfmap_pair` masks nothing (the envfsc envelope +
+  phase-randomization correction is a different, opt-in estimator);
+- `postprocess` applies no post-hoc mask to a volume carrying the sidecar
+  (previously PCG-only by backend name; an imported map without the
+  sidecar still gets the classical spherical/envelope mask);
+- PCG warm starts are no longer re-masked in the strategy, and the solver
+  entry converts an output-space start `x = P u` back to the CG variable
+  (`mask_div`: `u = x/P` where `P >= PCG_SUPPORT_DIV_MIN`, zero below)
+  instead of projecting it again. The former entry projection plus the
+  exit projection squared the soft edge on every warm-started iteration
+  and compounded over a stage (P^2 per iteration);
+- the matcher still applies `mask3D_soft(msk_crop)` to its reprojection
+  reference after Fourier filtering (both backends, `mask_matching_reference`).
+  That is reference preparation, not an estimate: it restores compact
+  support after the filter's ringing and covers user-supplied start volumes.
+  In the 12 px cosine band the reference therefore carries P^2; it is the
+  one remaining second application and is deliberate.
 
 **Shared-memory and distributed execution are two parallelizations of one
 algorithm.** Output conventions, warm starts, and diagnostics are implemented

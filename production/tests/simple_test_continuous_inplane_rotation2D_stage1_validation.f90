@@ -3,8 +3,7 @@ use simple_pftc_srch_api
 use simple_string, only: string
 use simple_builder, only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_projector_pft, only: fproject_polar
-use simple_polarft_calc, only: polarft_calc
+use simple_polarft_calc, only: polarft_calc, vol_pad2ref_pfts
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
@@ -189,21 +188,21 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     type(cmdline) :: cline
     type(builder) :: b
     type(ori) :: o_ref, o_particle
-    type(pftc_shsrch_grad) :: direct_search
+    type(pftc_shsrch_grad) :: fixed_search
     type(pftc_shsrch_grad) :: joint_search
     real(sp), allocatable, target :: sigma2_noise(:,:)
     real(sp), allocatable :: raw_losses(:), scores(:)
     real :: limits(2,2), joint_limits(3,2), cxy(3), joint_cxy(3)
     real(dp) :: rotind_grid, rotind_parab
     real(dp) :: shift_grid(2), shift_parabola(2), shift_joint(2)
-    real(dp) :: expected_shift(2), objective_final
+    real(dp) :: expected_shift(2), objective_final, raw_grad(2)
     real(dp) :: objective_final_grid, objective_final_parabola
     real(dp) :: theta_rad
     real(dp) :: rotind_joint, joint_loss
     real(dp) :: joint_grad(3)
     real(dp) :: fd_error, fd_scale, grad_scale, parity_scale
     real(dp) :: stale_parity, fresh_min
-    integer :: nrots, igrid, irot_direct, irot_joint, k
+    integer :: nrots, igrid, irot_fixed, irot_joint, k
     logical :: fd_ok, parity_finite
     logical :: shift_grid_accepted, shift_parabola_accepted, joint_accepted
 
@@ -231,9 +230,11 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     call o_ref%e3set(0.0)
     o_particle = o_ref
     call o_particle%e3set(truth_angle)
-    call fproject_polar(b%vol, 1, o_particle, b%pftc, iseven=.true.)
+    call b%eulspace%set_ori(1, o_particle)
+    call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
     call b%pftc%cp_even_ref2ptcl(1, 1)
-    call fproject_polar(b%vol, 1, o_ref, b%pftc, iseven=.true.)
+    call b%eulspace%set_ori(1, o_ref)
+    call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
     call b%pftc%set_eo(1, .true.)
     ! The particle is first rotated by truth_angle, then its polar Fourier
     ! coefficients are multiplied by the production shift phase.  Consequently
@@ -253,22 +254,23 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     rotind_grid = real(igrid,dp)
     rotind_parab = rotind_grid + real(parabolic_peak_offset(-raw_losses, igrid),dp)
     limits(:,1) = -5.; limits(:,2) = 5.
-    call direct_search%new_direct(b, limits)
-    call direct_search%set_indices(1,1)
+    call fixed_search%new_fixed(b, limits, maxits=16)
+    call fixed_search%set_indices(1,1)
     shift_grid = 0.; shift_parabola = 0.
-    irot_direct = igrid
-    cxy = direct_search%minimize_direct(irot_direct, [0.,0.], .5, 16, sh_rot=.false., &
-        &objective_final=objective_final, raw_euclid=.true.)
-    shift_grid_accepted = irot_direct > 0
+    irot_fixed = igrid
+    cxy = fixed_search%minimize(irot_fixed, sh_rot=.false., xy_in=[0.,0.])
+    shift_grid_accepted = irot_fixed > 0
     if( shift_grid_accepted ) shift_grid = real(cxy(2:),dp)
+    call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, shift_grid, igrid, objective_final, raw_grad)
     objective_final_grid = objective_final
-    irot_direct = modulo(nint(rotind_parab)-1,nrots)+1
-    cxy = direct_search%minimize_direct(irot_direct, [0.,0.], .5, 16, sh_rot=.false., &
-        &objective_final=objective_final, raw_euclid=.true.)
-    shift_parabola_accepted = irot_direct > 0
+    irot_fixed = modulo(nint(rotind_parab)-1,nrots)+1
+    cxy = fixed_search%minimize(irot_fixed, sh_rot=.false., xy_in=[0.,0.])
+    shift_parabola_accepted = irot_fixed > 0
     if( shift_parabola_accepted ) shift_parabola = real(cxy(2:),dp)
+    call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, shift_parabola, &
+        &modulo(nint(rotind_parab)-1,nrots)+1, objective_final, raw_grad)
     objective_final_parabola = objective_final
-    call direct_search%kill
+    call fixed_search%kill
 
     ! The inpl_cont=yes route optimizes (sx,sy,rotind_frac) directly from
     ! the same selected discrete candidate and zero native shift.

@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_ft_expanded,          only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,       only: motion_patched
 use simple_motion_align_hybrid,  only: motion_align_hybrid
-use simple_opt_image_weights,    only: opt_image_weights
 use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_parameters,           only: parameters
@@ -19,7 +18,7 @@ public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_corre
 public :: motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname, motion_correct_write_poly
-public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_bid
+public :: motion_correct_write2star, motion_correct_calc_bid
 ! Utils
 public :: motion_correct_get_ref_frame
 private
@@ -64,7 +63,6 @@ logical :: motion_correct_with_patched = .false.          !< run patch-based ani
 ! module global constants
 real,    parameter :: NSIGMAS          = 6.       !< Number of standard deviations for outliers detection
 logical, parameter :: FITSHIFTS        = .true.
-logical, parameter :: DO_OPT_WEIGHTS   = .false.  !< continuously optimize weights after alignment
 
 ! paramaters instance pointer
 class(parameters), pointer :: p_ptr => null()
@@ -336,19 +334,6 @@ contains
         !$omp end parallel do
         if( L_BENCH ) print *,'t_shift:      ', toc(t_)
     end subroutine motion_correct_iso_shift_frames
-
-    ! Optimal weights, frames assumed in Fourier space
-    subroutine motion_correct_calc_opt_weights()
-        type(opt_image_weights)    :: opt_weights
-        if (DO_OPT_WEIGHTS) then
-            if( l_BENCH ) t_ = tic()
-            call opt_weights%new(movie_frames_scaled, hp, p_ptr%lpstop)
-            call opt_weights%calc_opt_weights
-            frameweights = opt_weights%get_weights()
-            call opt_weights%kill
-            if( L_BENCH ) print *,'t_opt_weights:',toc(t_)
-        end if
-    end subroutine motion_correct_calc_opt_weights
 
     !>  Generates sums, movie_frames_scaled are assumed shifted
     subroutine motion_correct_iso_calc_sums( movie_sum_corrected, movie_sum_ctf )

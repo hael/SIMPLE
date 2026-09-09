@@ -185,9 +185,9 @@ The active joint route is supported by non-streaming, non-time-series search
 under the raw Euclidean and cc objectives (the cc route minimizes `-cc` with
 a quotient-rule angular derivative and reports the clamped correlation as its
 score). The hybrid/denoised blend is not a continuous-angle capability and
-fails rather than silently selecting the legacy callback; `abinitio2D_sgd`
-also rejects `inpl_cont=yes`. Time-series shift-only search uses its
-fixed-angle optimizer and invokes neither angle route.
+fails rather than silently selecting the legacy callback. Time-series
+shift-only search uses its fixed-angle optimizer and invokes neither angle
+route.
 
 Probabilistic particle and class/reference sampling remain discrete. During
 candidate profiling, the joint optimizer may evaluate a fractional angle, but

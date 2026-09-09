@@ -14,7 +14,7 @@ use simple_pftc_srch_api
 use simple_string,  only: string
 use simple_builder, only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_projector_pft, only: fproject_polar
+use simple_polarft_calc, only: vol_pad2ref_pfts
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 #include "simple_local_flags.inc"
@@ -69,9 +69,11 @@ call b%eulspace%get_ori(1, o_ref)
 call o_ref%e3set(0.0)
 o_particle = o_ref
 call o_particle%e3set(truth_angle)
-call fproject_polar(b%vol, 1, o_particle, b%pftc, iseven=.true.)
+call b%eulspace%set_ori(1, o_particle)
+call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
 call b%pftc%cp_even_ref2ptcl(1, 1)
-call fproject_polar(b%vol, 1, o_ref, b%pftc, iseven=.true.)
+call b%eulspace%set_ori(1, o_ref)
+call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
 call b%pftc%set_eo(1, .true.)
 if( sum(abs(shift_truth)) > 0. ) call b%pftc%shift_ptcl(1, shift_truth)
 call b%pftc%memoize_refs

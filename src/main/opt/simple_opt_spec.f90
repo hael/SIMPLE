@@ -182,10 +182,6 @@ contains
         select case(str_opt)
             case('bfgs')
                 ! do nothing
-            case('fr_cg')
-                ! do nothing
-            case('pr_cg')
-                ! do nothing
             case('bfgs2')
                 ! do nothing
             case('lfbgsb')
@@ -194,14 +190,9 @@ contains
                 ! do nothing
             case('lbfgsb')
                 ! do nothing
-            case('powell')
-                self%maxits   = ndim*1000
             case('simplex')
                 if( .not. present(limits) ) THROW_HARD('need limits (variable bounds) for simplex opt; specify')
                 self%maxits   = ndim*1000
-            case('pso')
-                self%npop     = 150
-                self%maxits   = ndim*10000
             case('de')
                 self%str_mode = 'multimodal'
                 self%maxits   = ndim*1000

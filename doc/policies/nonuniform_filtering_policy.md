@@ -179,6 +179,12 @@ the high-resolution shell challenger owns the resolution-extension experiment.
 
 On `rec_backend=pcg` the base input is the unregularized solve pair.
 
+On both backends the input halves are deapodized and carry the soft spherical
+support at `msk_crop` exactly once (2026-09-09): the PCG solve support, and on
+gridding the identical `mask3D_soft` applied after deapodization in
+`restore_gridding_pair`. The NU machinery builds its own logical sphere from
+`mskdiam` and does not mask the inputs again.
+
 ## 6. Spherical Support Contract
 
 All NU entry paths use a spherical support mask derived from `mskdiam`.

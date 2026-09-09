@@ -8,13 +8,12 @@ use simple_optimizer, only: optimizer
 use simple_builder,   only: builder
 implicit none
 
-public :: pftc_shsrch_grad, bounded_shift_trial
+public :: pftc_shsrch_grad
 private
 #include "simple_local_flags.inc"
 
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
-integer,  parameter :: direct_max_backtracks = 8
-integer,  parameter :: SHSRCH_LEGACY = 1, SHSRCH_DIRECT = 2, SHSRCH_JOINT = 3
+integer,  parameter :: SHSRCH_LEGACY = 1, SHSRCH_JOINT = 2
 
 type :: pftc_shsrch_grad
     private
@@ -35,20 +34,14 @@ type :: pftc_shsrch_grad
     logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
     logical                   :: joint_hybrid = .false.  !< joint objective is negative hybrid score
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
-    logical                   :: raw_roundtrip_check = .false. !< validate vector/scalar raw loss when diagnostics are enabled
-    logical                   :: raw_roundtrip_failed = .false. !< diagnostic mismatch observed during this search
-    logical                   :: raw_roundtrip_offset_set = .false. !< first vector-scalar offset calibrated
-    real(dp)                  :: raw_roundtrip_offset = 0.d0 !< diagnostic-only legacy score baseline offset
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
 contains
     procedure          :: new_legacy      => grad_shsrch_new_legacy
     procedure          :: new_fixed       => grad_shsrch_new_fixed
-    procedure          :: new_direct      => grad_shsrch_new_direct
     procedure          :: new_joint       => grad_shsrch_new_joint
     procedure          :: set_indices     => grad_shsrch_set_indices
     procedure          :: minimize        => grad_shsrch_minimize
-    procedure          :: minimize_direct => grad_shsrch_minimize_direct
     procedure          :: minimize_joint  => grad_shsrch_minimize_joint
     procedure          :: select_best_discrete_angle
     procedure          :: kill            => grad_shsrch_kill
@@ -57,28 +50,11 @@ contains
     procedure          :: set_limits
     procedure          :: coarse_search
     procedure          :: coarse_search_opt_angle
-    procedure          :: is_direct_shift_only
-    procedure          :: set_diagnostic_mode
-    procedure          :: diagnostic_failed => grad_shsrch_diagnostic_failed
     procedure          :: reset_profile     => grad_shsrch_reset_profile
     procedure          :: get_profile       => grad_shsrch_get_profile
 end type pftc_shsrch_grad
 
 contains
-
-    subroutine set_diagnostic_mode( self, enabled )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        logical,                 intent(in)    :: enabled
-        self%raw_roundtrip_check = enabled
-        self%raw_roundtrip_failed = .false.
-        self%raw_roundtrip_offset_set = .false.
-        self%raw_roundtrip_offset = 0.d0
-    end subroutine set_diagnostic_mode
-
-    logical function grad_shsrch_diagnostic_failed( self )
-        class(pftc_shsrch_grad), intent(in) :: self
-        grad_shsrch_diagnostic_failed = self%raw_roundtrip_failed
-    end function grad_shsrch_diagnostic_failed
 
     subroutine grad_shsrch_new_legacy( self, build, lims, lims_init, maxits, coarse_init )
         class(pftc_shsrch_grad),     intent(inout) :: self
@@ -134,19 +110,6 @@ contains
         if( self%opt_angle ) self%ospec%opt_callback => grad_shsrch_update_discrete_angle_wrapper
     end subroutine grad_shsrch_new_mode
 
-    subroutine grad_shsrch_new_direct( self, build, lims )
-        class(pftc_shsrch_grad),     intent(inout) :: self
-        class(builder),      target, intent(in)    :: build
-        real,                        intent(in)    :: lims(2,2)
-        call self%kill
-        self%b_ptr         => build
-        self%nrots          = self%b_ptr%pftc%get_nrots()
-        self%opt_angle      = .false.
-        self%search_mode     = SHSRCH_DIRECT
-        call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
-            &max_step=0.01, maxits=1)
-    end subroutine grad_shsrch_new_direct
-
     subroutine grad_shsrch_new_joint( self, build, lims, maxits )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self
@@ -183,14 +146,6 @@ contains
         class(pftc_shsrch_grad), intent(in) :: self
         uses_joint_inplane = self%search_mode == SHSRCH_JOINT
     end function uses_joint_inplane
-
-    pure logical function is_direct_shift_only( self )
-        class(pftc_shsrch_grad), intent(in) :: self
-        ! The streaming optimizer operates on a fixed discrete rotation and
-        ! updates only s=(sx,sy); it must not allocate or fall through to the
-        ! legacy L-BFGS-B implementation.
-        is_direct_shift_only = self%search_mode == SHSRCH_DIRECT
-    end function is_direct_shift_only
 
     subroutine set_limits( self, lims )
         class(pftc_shsrch_grad), intent(inout) :: self              !< instance
@@ -635,195 +590,6 @@ contains
             cxy(2:) = matmul(cxy(2:), rotmat)
         endif
     end function grad_shsrch_minimize_joint
-
-    !> Bounded direct-gradient minimization for the streaming SGD path.
-    !! The PFTC routine supplies grad(C) for the correlation objective.  We
-    !! minimize the equivalent loss L=-C, hence grad(L)=-grad(C), and update
-    !! s_{t+1}=Pi_bounds[s_t-eta_s grad(L)].  A trial is committed only when
-    !! its evaluated loss is strictly lower; otherwise the original state is
-    !! retained.  This is the continuous shift part of Design A; class and
-    !! angle remain a discrete argmax in the surrounding search strategy.
-    !! The current candidate shift is the initial state.  Each normalized step
-    !! is projected into the legal shift box and accepted only when it lowers
-    !! the objective; otherwise a short backtracking line search is used.
-    function grad_shsrch_minimize_direct( self, irot, xy_in, step_size, max_steps,&
-            &sh_rot, accepted_steps, objective_initial, objective_final, raw_euclid ) result( cxy )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                 intent(inout) :: irot
-        real,                    intent(in)    :: xy_in(2), step_size
-        integer,                 intent(in)    :: max_steps
-        logical,                 intent(in)    :: sh_rot
-        integer,       optional, intent(out)   :: accepted_steps
-        ! Optional diagnostics expose the minimized cost C=-score without
-        ! changing the default update path: accepted steps require
-        ! C_{t+1}<C_t, while the original state is retained on rejection.
-        real(dp),      optional, intent(out)   :: objective_initial, objective_final
-        logical,                 intent(in)    :: raw_euclid
-        real :: cxy(3), rotmat(2,2)
-        real(dp) :: current_xy(2), trial_xy(2), grad(2), corr_grad(2)
-        real(dp) :: current_corr, current_cost, initial_cost, trial_corr, trial_cost
-        real(dp) :: alpha, improve_tol
-        real(sp), allocatable :: vector_losses(:)
-        real(dp) :: vector_loss, roundtrip_tol
-        integer :: istep, iback, naccepted
-        logical :: accepted
-
-        if( self%search_mode /= SHSRCH_DIRECT )then
-            THROW_HARD('direct minimization requested from a non-direct search object')
-        endif
-        if( irot < 1 .or. irot > self%nrots )then
-            THROW_HARD('direct shift minimizer received invalid rotation')
-        endif
-        if( step_size <= 0. )then
-            THROW_HARD('direct shift minimizer step_size must be > 0')
-        endif
-        if( max_steps < 1 )then
-            THROW_HARD('direct shift minimizer max_steps must be >= 1')
-        endif
-        naccepted = 0
-        if( present(accepted_steps) ) accepted_steps = 0
-        if( present(objective_initial) ) objective_initial = 0.d0
-        if( present(objective_final) ) objective_final = 0.d0
-        cxy = 0.
-        self%cur_inpl_idx = irot
-        current_xy = real(xy_in,dp)
-        self%profile_objective_evals = self%profile_objective_evals + 1_int64
-        if( raw_euclid )then
-            call self%b_ptr%pftc%gen_raw_euclid_grad_for_rot_8(&
-                &self%reference, self%particle, current_xy, self%cur_inpl_idx, current_corr, grad)
-            if( self%raw_roundtrip_check )then
-                ! Diagnostic-only invariant: the vector candidate loss and the
-                ! scalar gradient loss must agree at the identical state.
-                allocate(vector_losses(self%nrots))
-                call self%b_ptr%pftc%gen_raw_euclid_vals(self%reference, self%particle, &
-                    &real(current_xy,sp), vector_losses)
-                vector_loss = real(vector_losses(self%cur_inpl_idx),dp)
-                roundtrip_tol = 1.d-5 * (1.d0 + abs(current_corr))
-                if( ieee_is_finite(vector_loss) )then
-                    ! The legacy FFT score and the direct analytical loss have
-                    ! the same shift-dependent landscape but differ by a
-                    ! constant baseline in this SIMPLE representation.  The
-                    ! diagnostic therefore calibrates that baseline once and
-                    ! checks that it remains constant, rather than requiring
-                    ! two independently normalized implementations to match
-                    ! in absolute value.
-                    if( .not. self%raw_roundtrip_offset_set )then
-                        self%raw_roundtrip_offset = vector_loss - current_corr
-                        self%raw_roundtrip_offset_set = .true.
-                    endif
-                    if( abs((vector_loss-current_corr)-self%raw_roundtrip_offset) > roundtrip_tol )then
-                        write(*,'(A,2I8,5ES20.10)') &
-                            'RAW ROUNDTRIP offset mismatch (ref,rot,xy0,xy1,delta,expected): ', &
-                            self%reference, self%cur_inpl_idx, current_xy(1), current_xy(2), &
-                            vector_loss-current_corr, self%raw_roundtrip_offset
-                        self%raw_roundtrip_failed = .true.
-                    endif
-                else
-                    self%raw_roundtrip_failed = .true.
-                endif
-                deallocate(vector_losses)
-            endif
-        else
-            current_corr = self%b_ptr%pftc%gen_corr_for_rot_8(&
-                &self%reference, self%particle, current_xy, self%cur_inpl_idx)
-        endif
-        if( .not. ieee_is_finite(current_corr) )then
-            irot = 0
-            return
-        endif
-        if( raw_euclid )then
-            current_cost = current_corr
-        else
-            current_cost = -current_corr
-        endif
-        initial_cost = current_cost
-        if( present(objective_initial) ) objective_initial = initial_cost
-
-        do istep = 1, max_steps
-            self%profile_objective_evals = self%profile_objective_evals + 1_int64
-            self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
-            if( raw_euclid )then
-                call self%b_ptr%pftc%gen_raw_euclid_grad_for_rot_8(&
-                    &self%reference, self%particle, current_xy, self%cur_inpl_idx, current_corr, grad)
-            else
-                call self%b_ptr%pftc%gen_corr_grad_for_rot_8(self%reference, self%particle,&
-                    &current_xy, self%cur_inpl_idx, current_corr, corr_grad)
-                grad = -corr_grad
-            endif
-            if( .not. ieee_is_finite(current_corr) .or. any(.not. ieee_is_finite(grad)) )then
-                exit
-            endif
-            if( sqrt(sum(grad * grad)) <= real(DTINY,dp) )then
-                exit
-            endif
-            if( raw_euclid )then
-                current_cost = current_corr
-            else
-                current_cost = -current_corr
-            endif
-            alpha = real(step_size,dp)
-            accepted = .false.
-            do iback = 0, direct_max_backtracks - 1
-                trial_xy = bounded_shift_trial(current_xy, grad, alpha, real(self%ospec%limits,dp))
-                if( maxval(abs(trial_xy - current_xy)) <= real(DTINY,dp) )then
-                    alpha = 0.5_dp * alpha
-                    cycle
-                endif
-                self%profile_objective_evals = self%profile_objective_evals + 1_int64
-                if( raw_euclid )then
-                    call self%b_ptr%pftc%gen_raw_euclid_grad_for_rot_8(&
-                        &self%reference, self%particle, trial_xy, self%cur_inpl_idx, trial_corr, corr_grad)
-                else
-                    trial_corr = self%b_ptr%pftc%gen_corr_for_rot_8(&
-                        &self%reference, self%particle, trial_xy, self%cur_inpl_idx)
-                endif
-                if( ieee_is_finite(trial_corr) )then
-                    if( raw_euclid )then
-                        trial_cost = trial_corr
-                    else
-                        trial_cost = -trial_corr
-                    endif
-                    improve_tol = 64.0_dp * epsilon(1.0_dp) *&
-                        &max(1.0_dp, abs(current_cost), abs(trial_cost))
-                    if( trial_cost < current_cost - improve_tol )then
-                        current_xy   = trial_xy
-                        current_cost = trial_cost
-                        naccepted    = naccepted + 1
-                        accepted     = .true.
-                        exit
-                    endif
-                endif
-                alpha = 0.5_dp * alpha
-            end do
-            if( .not. accepted )then
-                exit
-            endif
-        end do
-
-        if( present(accepted_steps) ) accepted_steps = naccepted
-        if( present(objective_final) ) objective_final = current_cost
-        improve_tol = 64.0_dp * epsilon(1.0_dp) * max(1.0_dp, abs(initial_cost), abs(current_cost))
-        if( naccepted < 1 .or. current_cost >= initial_cost - improve_tol )then
-            irot = 0
-            return
-        endif
-        cxy(1)  = -real(current_cost)
-        cxy(2:) = real(current_xy)
-        if( sh_rot )then
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
-            cxy(2:) = matmul(cxy(2:), rotmat)
-        endif
-    end function grad_shsrch_minimize_direct
-
-    pure function bounded_shift_trial( xy, gradient, step_size, limits ) result( trial )
-        real(dp), intent(in) :: xy(2), gradient(2), step_size, limits(2,2)
-        real(dp) :: trial(2), grad_norm
-        grad_norm = sqrt(sum(gradient * gradient))
-        trial = xy
-        if( step_size <= 0.0_dp .or. grad_norm <= real(DTINY,dp) ) return
-        trial = xy - step_size * gradient / grad_norm
-        trial = max(limits(:,1), min(limits(:,2), trial))
-    end function bounded_shift_trial
 
     subroutine coarse_search(self, lowest_cost, init_xy)
         class(pftc_shsrch_grad), intent(inout) :: self

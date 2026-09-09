@@ -24,9 +24,9 @@ The core projection-to-PFT extraction path is:
 - `src/main/image/simple_projector_pft_batch.f90`
   - `fproject_polar_batch`
   - `fproject_polar_batch_mirr`
-- `src/main/image/simple_projector_pft.f90`
-  - `fproject_polar`
-  - `fproject_polar_oversamp`
+- `src/main/pftc/simple_polarft_core.f90`
+  - `vol_pad2ref_pfts`
+  - `vol_pad2ref_pfts_opt`
 - `src/main/image/simple_projector.f90`
   - `interp_fcomp`
   - `interp_fcomp_oversamp`

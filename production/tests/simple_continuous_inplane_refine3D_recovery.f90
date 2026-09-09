@@ -10,7 +10,7 @@ subroutine run_synthetic_recovery_contract()
 use simple_pftc_srch_api
 use simple_builder, only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_projector_pft, only: fproject_polar
+use simple_polarft_calc, only: vol_pad2ref_pfts
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
 
@@ -60,9 +60,11 @@ call build%eulspace%get_ori(projection_index, reference_ori)
 call reference_ori%e3set(0.)
 particle_ori = reference_ori
 call particle_ori%e3set(truth_angle)
-call fproject_polar(build%vol, 1, particle_ori, build%pftc, iseven=.true.)
+call build%eulspace%set_ori(1, particle_ori)
+call vol_pad2ref_pfts(build%pftc, build%vol, build%eulspace, 1, iseven=.true.)
 call build%pftc%cp_even_ref2ptcl(1, 1)
-call fproject_polar(build%vol, 1, reference_ori, build%pftc, iseven=.true.)
+call build%eulspace%set_ori(1, reference_ori)
+call vol_pad2ref_pfts(build%pftc, build%vol, build%eulspace, 1, iseven=.true.)
 call build%pftc%set_eo(1, .true.)
 call build%pftc%shift_ptcl(1, truth_shift)
 call build%pftc%memoize_refs

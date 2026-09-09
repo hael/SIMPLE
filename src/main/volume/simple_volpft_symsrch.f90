@@ -20,7 +20,7 @@ end type opt4openMP
 
 type(opt4openMP), allocatable :: opt_symaxes(:)     !< parallel optimisation, symmetry axes
 real,             allocatable :: sym_rmats(:,:,:)   !< symmetry operations rotation matrices
-type(volpft_corrcalc)         :: vpftc             !< corr calculator
+type(volpft_corrcalc)         :: vpftc              !< corr calculator
 type(ori)                     :: saxis_glob         !< best symaxis solution found so far
 integer                       :: nrestarts     = 3  !< simplex restarts (randomized bounds)
 integer                       :: nsym          = 0  !< # symmetry ops

@@ -96,7 +96,8 @@ runs on the spherical support (policy 2026-09-06).
 
 The NU-evidence envelope is never used for FSC correction because it is selected
 from cross-half agreement. With `envfsc=no`, the reported radial FSC and cFAR
-use the broad spherical FSC mask. With `envfsc=yes`, the density envelope is
+are computed on the shipped half-maps, which carry the soft spherical support
+at `msk_crop` from the reconstruction itself (no second mask, 2026-09-09). With `envfsc=yes`, the density envelope is
 passed to phase-randomized FSC correction and the same envelope is applied to
 the cFAR copies.
 
@@ -133,7 +134,8 @@ not interchangeable in the FSC or NU-objective paths.
 1. `refine3D` or staged `abinitio3D` produces partial reconstructions.
 2. `volassemble` restores even and odd state volumes and calculates radial FSC
    and cFAR. `envfsc=yes` generates the density envelope during this step;
-   `envfsc=no` uses the broad spherical FSC mask.
+   `envfsc=no` evaluates the shipped, support-masked halves without a second
+   mask.
 3. `volassemble` restores the merged state volume.
 4. The NU filter constructs spherical support from `mskdiam` and evaluates the
    static candidate-bank unaries.

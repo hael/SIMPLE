@@ -142,7 +142,6 @@ set(SIMPLE_INTENTIONAL_HELPER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/flex/simple_flex_projected_latent_model.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/image/simple_image.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_motion_align_hybrid.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_opt_image_weights.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori_utils.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_cluster2D_utils.f90"

@@ -22,39 +22,35 @@ program simple_test_continuous_inplane_rotation2D
     call make_directory(logdir)
 
     if( len_trim(vol1) == 0 )then
-        call find_newest_file(build_dir, '1JYX_v4.mrc', logdir, 'input_vol1.txt', vol1)
-        if( len_trim(vol1) == 0 )then
-            call find_newest_file(build_dir, '1JYX_v3.mrc', logdir, 'input_vol1.txt', vol1)
-        endif
+        call find_newest_file(build_dir, '1JYX.mrc', logdir, 'input_vol1.txt', vol1)
     endif
     if( len_trim(src_proj) == 0 )then
-        call find_newest_file(build_dir, 'onejyx_abinitio_v3.simple', logdir, 'input_proj.txt', src_proj)
+        call find_newest_file(build_dir, 'onejyx_abinitio.simple', logdir, 'input_proj.txt', src_proj)
     endif
 
     if( len_trim(vol1) == 0 )then
         write(*,'(a)') 'NOTICE: no 1JYX volume was found under '//trim(build_dir)//'.'
-        write(*,'(a)') 'NOTICE: run simple_test_sgd_base_suite first; its V3/V4 fixture tests create the volume.'
+        write(*,'(a)') 'NOTICE: run simple_test_1jyx_abinitio first; it creates the volume.'
         error stop 1
     else
         write(*,'(a)') 'USING VOLUME: '//trim(vol1)
         inquire(file=trim(vol1), exist=volume_exists)
         if( .not. volume_exists )then
             write(*,'(a)') 'NOTICE: volume was not found: '//trim(vol1)
-            write(*,'(a)') 'NOTICE: run simple_test_sgd_base_suite first, or run the shorter V3/V4 fixture test.'
+            write(*,'(a)') 'NOTICE: run simple_test_1jyx_abinitio first.'
             error stop 1
         endif
     endif
     if( len_trim(src_proj) == 0 )then
-        write(*,'(a)') 'NOTICE: no 1JYX V3 project was found under '//trim(build_dir)//'.'
-        write(*,'(a)') 'NOTICE: run simple_test_sgd_base_suite first to create the 1JYX V3 project.'
+        write(*,'(a)') 'NOTICE: no 1JYX project was found under '//trim(build_dir)//'.'
+        write(*,'(a)') 'NOTICE: run simple_test_1jyx_abinitio first to create the project.'
         error stop 1
     else
         write(*,'(a)') 'USING SOURCE PROJECT: '//trim(src_proj)
         inquire(file=trim(src_proj), exist=project_exists)
         if( .not. project_exists )then
             write(*,'(a)') 'NOTICE: source project was not found: '//trim(src_proj)
-            write(*,'(a)') 'NOTICE: run simple_test_sgd_base_suite first to create the '// &
-                &'1JYX V3 project.'
+            write(*,'(a)') 'NOTICE: run simple_test_1jyx_abinitio first.'
             error stop 1
         endif
     endif
@@ -178,7 +174,7 @@ contains
         integer :: unit, ios, status, cmdstat
         project = ''
         scratch = trim(logdir)//'/'//trim(scratch_name)
-        command = 'find '//trim(quote(build_dir))//' -type f -name onejyx_abinitio_v3.simple '// &
+        command = 'find '//trim(quote(build_dir))//' -type f -name onejyx_abinitio.simple '// &
             '-printf ''%T@ %p\n'' | sort -nr | head -n 1 | cut -d'' '' -f2- > '//trim(quote(scratch))
         call execute_command_line(command, wait=.true., exitstat=status, cmdstat=cmdstat)
         if( cmdstat /= 0 .or. status /= 0 )then

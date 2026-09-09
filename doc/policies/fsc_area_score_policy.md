@@ -53,7 +53,10 @@ active radial FSC policy rather than the standalone `automsk` switch:
 
 - `envfsc=yes`: the on-the-fly density envelope generated from the merged
   half-map is applied to both half-maps before conical FSC and cFAR calculation
-- `envfsc=no`: both half-maps receive the ordinary broad spherical FSC mask
+- `envfsc=no`: both half-maps are evaluated as shipped; they already carry the
+  soft spherical support at `msk_crop` from the reconstruction (PCG solve
+  support, or the gridding restoration since 2026-09-09), and no second mask
+  is applied
 
 The density envelope used for cFAR is the same mask used by the masked and
 randomized-masked radial FSC calculations. The raw radial FSC that determines

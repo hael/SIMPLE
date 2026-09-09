@@ -199,13 +199,13 @@ The route is resolved before the numerical objects are constructed.
 
 The active route additionally requires the raw Euclidean capability.
 Ineligible user requests fail explicitly rather than resolving to effective
-mode `no`. Streaming SGD and time-series fixed-angle paths do not use the
-callback and retain their separately documented restrictions.
+mode `no`. Time-series fixed-angle paths do not use the callback and retain
+their separately documented restrictions.
 
 The low-level API has no ambiguous general constructor. `new_legacy`,
-`new_fixed`, `new_direct`, and `new_joint` name their numerical contracts, and
-only `new_legacy` attaches the callback. Continuous behavior therefore cannot
-be inferred from objective type alone.
+`new_fixed`, and `new_joint` name their numerical contracts, and only
+`new_legacy` attaches the callback. Continuous behavior therefore cannot be
+inferred from objective type alone.
 
 ## Required regression tests
 

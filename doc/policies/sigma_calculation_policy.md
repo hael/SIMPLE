@@ -219,7 +219,7 @@ future optimization that requires filesystem-specific concurrency validation.
 
 ### 2D
 
-`abinitio2D` and its SGD/checkpoint variants bootstrap at the first stage,
+`abinitio2D` and its checkpoint continuations bootstrap at the first stage,
 commit matcher residuals each iteration, and use the same canonical state for
 ML class-average restoration. Shared-memory and distributed paths implement the
 same candidate transaction. Canonical final output does not register or create

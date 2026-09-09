@@ -357,8 +357,7 @@ the same policy wherever they commit a pose. A mode with no pose search,
 such as sigma-only setup, naturally invokes neither optimizer. Unsupported
 capability combinations fail validation rather than silently reverting to the
 callback. The joint cc route is validated on nanoparticle data as well, so
-the nano 2D/3D workflows follow the `inpl_cont=yes` default; only
-`abinitio2D_sgd` rejects the option, by design.
+the nano 2D/3D workflows follow the `inpl_cont=yes` default.
 
 `simple_test_continuous_inplane_hybrid_grad` guards the hybrid route with an
 integer-grid score identity, finite-difference checks of all three derivative
@@ -441,15 +440,19 @@ the strategy dispatches `volassemble`.
 `volassemble`:
 
 - reduces partition-local partial reconstructions
-- restores dense even/odd half-volumes
-- calculates FSC curves and state resolutions
+- restores dense even/odd half-volumes, deapodizes them and applies the soft
+  spherical support at `msk_crop` (identical to the PCG solve support) before
+  writing; the merged volume gets the same support; the support is recorded
+  in the `<vol>_pcg_support.txt` sidecar so downstream consumers never mask
+  again (2026-09-09)
+- calculates FSC curves and state resolutions on the halves as shipped
 - applies conical FSC curves for directional ML regularization when
   `ml_reg=yes` and `conical_fsc=yes`; this is opt-in
-- calculates conical FSC and cFAR from copies using the active FSC mask: the
-  on-the-fly density envelope low-pass filtered at `envmsklp` when
-  `envfsc=yes`, otherwise the broad spherical mask; phase-randomized radial FSC
-  retains the original unmasked half-volumes to determine its 0.8 randomization
-  onset. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and is separate from
+- calculates conical FSC and cFAR from copies of the shipped halves; with
+  `envfsc=yes` the copies are additionally masked by the on-the-fly density
+  envelope low-pass filtered at `envmsklp`, and the phase-randomized radial FSC
+  uses the shipped half-volumes to determine its 0.8 randomization onset. No
+  second spherical mask is applied anywhere in the FSC evaluation. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and is separate from
   the `amsklp` NU-evidence smoothing scale
 - writes `automask3D_stateNN.mrc` when `envfsc=yes`; the same density envelope
   is available to compatible non-PCG final postprocessing, but is never

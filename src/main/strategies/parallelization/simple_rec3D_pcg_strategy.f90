@@ -14,7 +14,8 @@ use simple_math_ft,           only: resample_sigma2
 use simple_estimate_ssnr,     only: fsc2shrink_filter
 use simple_image,             only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
-    &write_halfmap_diagnostics
+    &write_halfmap_diagnostics, &
+    &write_support_provenance, read_support_provenance
 use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: NU_DEV_OUTPUT
 use simple_nu_state_filter,   only: nonuniform_filter_state, nu_static_aux_replacement
@@ -26,7 +27,7 @@ use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state
 implicit none
 
 public :: execute_rec3D_pcg_shared, execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
-public :: validate_rec3D_pcg_fractional_updates
+public :: validate_rec3D_pcg_fractional_updates, rec3D_master_nthr
 private
 #include "simple_local_flags.inc"
 
@@ -61,8 +62,11 @@ contains
     !! convention a constant-FOV box change is a factor-free Fourier pad/clip,
     !! so read_and_crop makes the warm start valid across crop changes. Rules:
     !! each half warm-starts strictly from its own previous half (gold-standard
-    !! FSC independence), the soft support mask is re-applied after resampling
-    !! (Fourier padding rings slightly outside it), and the noise starting
+    !! FSC independence), no mask is applied here (the previous half already
+    !! carries the solve support; the solver converts the x-space start into
+    !! its CG variable under the exact current support, which also discards
+    !! resampling ringing outside it, and a second mask3D_soft would square the
+    !! soft edge and compound across iterations, 2026-09-09), and the noise starting
     !! volume of the first iteration is excluded by its workflow-contract name
     !! (warm-starting the ML system from noise is worse than the base
     !! solution). When no usable previous half exists, x keeps the base
@@ -88,7 +92,6 @@ contains
             return
         endif
         call prev%read_and_crop(prev_fname, params%smpd, params%box_crop, params%smpd_crop)
-        call prev%mask3D_soft(params%msk_crop, backgr=0.)
         x = prev%get_rmat()
         call prev%kill
         l_found = .true.
@@ -106,9 +109,11 @@ contains
     !! selecting a stale `_unfil` artifact after a base-only iteration. A
     !! volume without solve-kind provenance never seeds the base solve (no
     !! legacy fallback: a stale `_unfil` next to an imported map would survive
-    !! two CG steps); the caller's zero initialization is retained. solve_accum
-    !! applies the exact current solve support to this initial guess before
-    !! entering CG.
+    !! two CG steps); the caller's zero initialization is retained. Gridding
+    !! products carry solve_kind=gridding in their sidecar and are never
+    !! selected, so the gridding-to-PCG stage handoff stays a cold base solve.
+    !! solve_accum converts the x-space start into its CG variable under the
+    !! exact current solve support; no mask is applied here.
     subroutine override_base_warm_start_from_previous( params, state_here, half, x, context, l_found )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
@@ -128,7 +133,7 @@ contains
             return
         endif
         unfil_fname = add2fbody(prev_fname, MRC_EXT, '_unfil')
-        call read_pcg_support_provenance(params%vols(state_here), l_support_constrained, &
+        call read_support_provenance(params%vols(state_here), l_support_constrained, &
             &l_support_found, solve_kind, l_kind_found)
         if( .not. l_support_found ) l_kind_found = .false.
         if( l_kind_found .and. trim(solve_kind) == 'base' )then
@@ -143,7 +148,6 @@ contains
             return
         endif
         call prev%read_and_crop(seed_fname, params%smpd, params%box_crop, params%smpd_crop)
-        call prev%mask3D_soft(params%msk_crop, backgr=0.)
         x = prev%get_rmat()
         call prev%kill
         l_found = .true.
@@ -275,12 +279,12 @@ contains
         logical,                          intent(in)  :: l_pair_support_constrained
         type(image) :: envmask
         if( params%l_envfsc )then
-            call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, &
-                &diagnostics, envmask=envmask, l_pair_support_constrained=l_pair_support_constrained)
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, envmask=envmask, &
+                &l_pair_support_constrained=l_pair_support_constrained)
             call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state_here,2)//MRC_EXT))
             call envmask%kill
         else
-            call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, diagnostics, &
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, &
                 &l_pair_support_constrained=l_pair_support_constrained)
         endif
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
@@ -292,69 +296,8 @@ contains
 
 
 
-    !> Solve provenance sidecar of a shipped state volume: records whether
-    !! the shipped half pair was estimated inside the conservative density
-    !! envelope (P H P with the density support) or on the sphere, and whether
-    !! the primary pair is base, regularized, or a bootstrap mixture. The
-    !! trailing bootstrap reads the support field for its lag-one FSC pair;
-    !! the base warm-start selector reads the solve-kind field.
-    function pcg_support_provenance_fname( volname ) result( fname )
-        type(string), intent(in) :: volname
-        type(string) :: fname
-        fname = swap_suffix(add2fbody(volname, MRC_EXT, '_pcg_support'), TXT_EXT, MRC_EXT)
-    end function pcg_support_provenance_fname
-
-    subroutine write_pcg_support_provenance( volname, l_constrained, solve_kind )
-        type(string), intent(in) :: volname
-        logical,      intent(in) :: l_constrained
-        character(len=*), intent(in) :: solve_kind
-        type(string) :: fname
-        integer :: funit
-        select case( trim(solve_kind) )
-            case( 'base', 'regularized', 'mixed' )
-            case default
-                THROW_HARD('invalid PCG solve kind for provenance sidecar')
-        end select
-        fname = pcg_support_provenance_fname(volname)
-        call fopen(funit, file=fname, status='replace', action='write')
-        write(funit,'(A)') 'solve_support='//merge('density', 'sphere ', l_constrained)
-        write(funit,'(A)') 'solve_kind='//trim(solve_kind)
-        call fclose(funit)
-        call fname%kill
-    end subroutine write_pcg_support_provenance
-
-    subroutine read_pcg_support_provenance( volname, l_constrained, l_found, solve_kind, l_kind_found )
-        type(string), intent(in)  :: volname
-        logical,      intent(out) :: l_constrained, l_found
-        character(len=*), optional, intent(out) :: solve_kind
-        logical, optional,          intent(out) :: l_kind_found
-        type(string) :: fname
-        character(len=64) :: line
-        integer :: funit, io_stat
-        l_constrained = .false.
-        l_found       = .false.
-        if( present(solve_kind) )   solve_kind   = ''
-        if( present(l_kind_found) ) l_kind_found = .false.
-        fname = pcg_support_provenance_fname(volname)
-        if( .not. file_exists(fname) )then
-            call fname%kill
-            return
-        endif
-        call fopen(funit, file=fname, status='old', action='read')
-        do
-            read(funit,'(A)',iostat=io_stat) line
-            if( io_stat /= 0 ) exit
-            if( index(line, 'solve_support=') == 1 )then
-                l_found       = .true.
-                l_constrained = index(line, 'density') > 0
-            else if( index(line, 'solve_kind=') == 1 )then
-                if( present(solve_kind) ) solve_kind = adjustl(line(len('solve_kind=')+1:))
-                if( present(l_kind_found) ) l_kind_found = .true.
-            endif
-        enddo
-        call fclose(funit)
-        call fname%kill
-    end subroutine read_pcg_support_provenance
+    ! The support-provenance sidecar (write/read_support_provenance) lives in
+    ! simple_halfmap_diagnostics since both backends write it (2026-09-09).
 
     !> Resolution-text naming, mirroring the gridding volassemble contract
     !! (resolve_fsc_txt_fname in simple_commanders_rec_distr): an explicit
@@ -500,6 +443,23 @@ contains
 
 
 
+    !> Master-phase thread budget shared by both reconstruction backends
+    !! (2026-09-09): on local execution the partition workers are idle while
+    !! the master assembles (PCG solves, or the gridding restoration and the
+    !! NU competition), so the full allocation is used, capped where OpenMP
+    !! scaling saturates at these box sizes; on a cluster the master's slot is
+    !! fixed at nthr_master. One rule for both backends keeps their
+    !! master-phase timings comparable.
+    integer function rec3D_master_nthr( params, nthr_master ) result( nthr )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: nthr_master
+        nthr = nthr_master
+        if( trim(params%qsys_name) == 'local' )then
+            nthr = max(params%nthr, min(PCG_MASTER_NTHR_CAP, max(1, params%nparts) * params%nthr))
+            !$ nthr = min(omp_get_num_procs(), nthr)
+        endif
+    end function rec3D_master_nthr
+
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -611,11 +571,11 @@ contains
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
-                call write_pcg_support_provenance(fname_vol, l_state_support, 'regularized')
+                call write_support_provenance(fname_vol, l_state_support, 'regularized')
             else
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
-                call write_pcg_support_provenance(fname_vol, l_base_support_constrained, 'base')
+                call write_support_provenance(fname_vol, l_base_support_constrained, 'base')
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
@@ -1678,8 +1638,7 @@ contains
         ! Capped: OpenMP scaling saturates well before large core counts
         ! at these box sizes
         !$ if( trim(params%qsys_name) == 'local' ) &
-        !$ &call omp_set_num_threads(min(omp_get_num_procs(), &
-        !$ &max(params%nthr, min(PCG_MASTER_NTHR_CAP, max(1, params%nparts) * params%nthr))))
+        !$ &call omp_set_num_threads(rec3D_master_nthr(params, params%nthr))
         pcg_master_nthreads = 1
         !$ pcg_master_nthreads = omp_get_max_threads()
         pcg_half_nthreads = max(1, pcg_master_nthreads / 2)
@@ -1803,7 +1762,7 @@ contains
                 ! provenance persisted beside it. An imported pair without a
                 ! sidecar is treated as unconstrained so an envfsc request
                 ! receives the phase-randomized correction.
-                call read_pcg_support_provenance(params%vols(state), l_prev_support_constrained, &
+                call read_support_provenance(params%vols(state), l_prev_support_constrained, &
                     &l_prev_provenance_found)
                 l_fsc_pair_support_constrained = l_prev_provenance_found .and. l_prev_support_constrained
                 if( .not. l_prev_provenance_found ) write(logfhandle,'(A,I0,A)') &
@@ -1878,11 +1837,11 @@ contains
                 call half_odd%write(fname_odd, del_if_exists=.true.)
             endif
             if( params%l_ml_reg )then
-                call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized')
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized')
             else if( l_bootstrap .and. update_weights(state) < 0.99 )then
-                call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed')
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed')
             else
-                call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained, 'base')
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base')
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)

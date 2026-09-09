@@ -53,7 +53,6 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Revalidated the updated `HEAD` on Oracle Linux 8.10 with two independent runs: legacy-score errors `2.87e-08` and `2.91e-08`, scalar-gradient errors `2.70e-07` and `3.70e-07`; both completed with `NORMAL STOP`.
 - [x] Phase 2 implementation: continuous angular refinement (classical Euclidean likelihood path only).
   - The current implementation changes only the classical polar Euclidean refinement path and its focused route-identity test.
-  - No streaming-SGD implementation or test path is being extended; treat SGD as out of scope for this effort.
   - Windows MSYS2 UCRT64 compile/link verification completed before the build was stopped.
 - [x] Phase 2 focused validation: coefficient route identity and angular derivatives.
   - Oracle Linux 8.10 runtime passed with 288 rotations and `NORMAL STOP`.
@@ -63,8 +62,8 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Added the continuous in-plane Stage 1 validation test, an Oracle-runnable production test for the two-band aliasing comparison and deterministic synthetic recovery report.
   - The report includes grid-only, parabolic, and continuous rows; the Phase 3 joint row is explicitly reported as `NOT_IMPLEMENTED` until Phase 3 exists.
   - The harness now evaluates zero-shift, nonzero-shift, and near-periodic-boundary truths, and repeats the low-pass/full-band comparison with a hard-edged near-Nyquist fixture.
-  - All three recovery rows use the same fixed-angle classical Euclidean direct-shift minimizer. The harness reports expected and recovered shift vectors plus acceptance flags.
-  - For the polar `shift_ptcl` fixture, the expected candidate is `R(truth_angle) * applied_shift`; this is distinct from the `-R(angle) * applied_shift` corrective convention used by the image-space `rtsq` fixture in `simple_test_sgd_base_suite`.
+  - All three recovery rows use the same fixed-angle classical Euclidean L-BFGS-B shift minimizer. The harness reports expected and recovered shift vectors plus acceptance flags.
+  - For the polar `shift_ptcl` fixture, the expected candidate is `R(truth_angle) * applied_shift`.
   - Oracle Linux 8.10 validation passed with `NORMAL STOP`.
   - Three truths were covered: zero shift/zero angle, nonzero shift at `37°`, and nonzero shift near the periodic boundary at `359.375°`.
   - All three stages accepted the common fixed-angle shift refinement. Shift RMS over cases was `0.00704` pixels; the worst individual case was `0.01039` pixels.
@@ -80,10 +79,10 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - The joint angle RMS was `0.2756°`, improving over continuous-angle RMS `0.3041°`; Windows recompilation was intentionally not repeated on the laptop.
 - [x] Phase 4A: classical Euclidean 2D metadata and workflow wiring.
   - Added a gated production gateway in the classical Euclidean 2D search strategy: the selected discrete candidate is passed to exactly one continuous implementation.
-  - The public `inpl_cont` key defaults to `no`; `callback` and `joint` are disabled for streaming SGD, time-series shift-only search, hybrid/denoised objectives, and non-Euclidean objectives.
+  - The public `inpl_cont` key defaults to `no`; `callback` and `joint` are disabled for time-series shift-only search, hybrid/denoised objectives, and non-Euclidean objectives.
   - Selected orientations receive the continuous `e3` value while legacy integer `inpl` indices remain populated for search tables and compatibility.
-  - A real Oracle Linux classical Euclidean `abinitio2D` workflow completed five iterations with `objfun=euclid` and `sgd=no`, including repeated `SIMPLE_CLUSTER2D NORMAL STOP` and final `SIMPLE_ABINITIO2D NORMAL STOP` markers.
-  - Focused route-identity, Stage 1, and SGD regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
+  - A real Oracle Linux classical Euclidean `abinitio2D` workflow completed five iterations with `objfun=euclid`, including repeated `SIMPLE_CLUSTER2D NORMAL STOP` and final `SIMPLE_ABINITIO2D NORMAL STOP` markers.
+  - Focused route-identity and Stage 1 regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
   - Full six-stage, 30-iteration default-off Euclidean `abinitio2D` completed normally; corrected final metadata validation passed with 200 active particles, zero off-grid/invalid/non-finite values, 176 rotations, and 3 class-average records using `box_crop=88`.
   - The opt-in Euclidean workflow and final metadata validation also completed normally with valid 176-grid metadata. Real-data opt-in validation records off-grid count but does not require an off-grid winner; synthetic Stage 1/Phase 3 validation proves continuous-angle movement.
 - [x] Phase 4B: classical Euclidean 3D metadata and workflow wiring.
@@ -120,7 +119,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
 
 ### 1. Baseline and numerical contract
 
-- Preserve all current unrelated worktree changes in `simple_pftc_shsrch_grad.f90`, `simple_polarft_corr.f90`, and the current strategy and SGD test files.
+- Preserve all current unrelated worktree changes in `simple_pftc_shsrch_grad.f90`, `simple_polarft_corr.f90`, and the current strategy and test files.
 - Add Stage 0 parabolic interpolation around the discrete Euclidean residual minimum.
 - Use grid-index units internally:
   - integer `j` maps to `angtab(j)`;
@@ -151,7 +150,7 @@ Extend `simple_polarft_calc.f90` and `simple_polarft_corr.f90` with Euclidean-on
 
 Update `simple_pftc_shsrch_grad.f90`:
 
-- Scope this refinement to the classical SIMPLE Euclidean likelihood path. Do not add new SGD integration while that path is being reconsidered.
+- Scope this refinement to the classical SIMPLE Euclidean likelihood path.
 
 - Add `cur_inpl_ang` alongside `cur_inpl_idx`.
 - Replace the discrete angle callback’s final `maxloc` selection with:
@@ -254,7 +253,7 @@ Add focused tests under the existing production test framework, preferably along
 - The full staged roadmap is desired, with Stage 0–1 as the gated first deliverable.
 - Continuous refinement is enabled only for the raw Euclidean, non-streaming, non-time-series path.
 - Continuous refinement is opt-in through `inpl_cont=yes`; the default is `inpl_cont=no`.
-- The runtime gateway requires raw Euclidean (`objfun=euclid` and `.not. l_objfun_den`), non-SGD, non-time-series search; the same raw-objective requirement is rechecked by the Stage-1 callback and joint-gradient gateways. Probabilistic selection is followed by a gated polish of its selected candidate.
+- The runtime gateway requires raw Euclidean (`objfun=euclid` and `.not. l_objfun_den`) and non-time-series search; the same raw-objective requirement is rechecked by the Stage-1 callback and joint-gradient gateways. Probabilistic selection is followed by a gated polish of its selected candidate.
 - The current dirty worktree changes belong to the user and must not be overwritten.
 - Integer `irot` remains the compatibility index; continuous angle is an additive output and metadata enhancement.
 - The original plan’s sign convention and local ±2-grid-step Stage 2 window are authoritative.

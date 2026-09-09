@@ -293,7 +293,8 @@ contains
 
     subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state, &
             &density_window_bfac )
-        use simple_vol_pproc_policy, only: state_mask_is_compatible
+        use simple_vol_pproc_policy,    only: state_mask_is_compatible
+        use simple_halfmap_diagnostics, only: read_support_provenance
         class(string),   intent(in)    :: fname_vol, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
@@ -309,6 +310,7 @@ contains
         real    :: fsc0143, fsc05, lplim
         integer :: ldim(3)
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_density_window_bfac
+        logical :: l_support_at_source, l_prov_constrained, l_prov_found
         l_density_window_bfac = .false.
         if( present(density_window_bfac) ) l_density_window_bfac = density_window_bfac
         if( .not.file_exists(fname_vol) )then
@@ -406,13 +408,20 @@ contains
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)
-        ! Masking is a post-hoc operation and is therefore disabled entirely
-        ! for PCG: its support belongs inside the projected solve. This also
-        ! keeps derived _pproc/_mirr maps from silently changing the PCG
+        ! Masking is a post-hoc operation and is disabled for every volume
+        ! that already carries its support from the reconstruction: the PCG
+        ! solve support, and since 2026-09-09 the gridding restoration, which
+        ! applies the same soft spherical support after deapodization and
+        ! records it in the support-provenance sidecar beside the volume. A
+        ! volume without that record (an imported map, a standalone
+        ! postprocess of foreign halves) gets the classical mask below. This
+        ! also keeps derived _pproc/_mirr maps from silently changing the
         ! estimator after reconstruction.
+        call read_support_provenance(fname_vol, l_prov_constrained, l_prov_found)
+        l_support_at_source = trim(params%rec_backend) == 'pcg' .or. l_prov_found
         call vol_bfac%ifft()
-        if( trim(params%rec_backend) == 'pcg' )then
-            ! no post-hoc mask
+        if( l_support_at_source )then
+            ! no post-hoc mask: the support is already in the map
         else if( do_envfsc )then
             ! enveloppe mask from FSC
             fname_envmsk = AUTOMASK_FBODY//trim(adjustl(int2str_pad(state,2)))//MRC_EXT

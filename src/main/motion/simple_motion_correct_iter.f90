@@ -104,8 +104,6 @@ contains
         call self%moviesum%kill
         ! shifts frames accordingly
         call motion_correct_iso_shift_frames
-        ! optionally calculate optimal weights
-        call motion_correct_calc_opt_weights
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
         ! Patch based approach

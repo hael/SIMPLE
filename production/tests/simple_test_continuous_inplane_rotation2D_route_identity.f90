@@ -2,7 +2,7 @@ program simple_test_continuous_inplane_rotation2D_route_identity
 use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_projector_pft,   only: fproject_polar
+use simple_polarft_calc, only: vol_pad2ref_pfts
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_strategy2D_srch, only: strategy2D_srch, strategy2D_spec
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -56,7 +56,8 @@ call b%vol%mask3D_soft(p%msk)
 call b%vol%fft()
 call b%vol%expand_cmat()
 call b%eulspace%get_ori(irnd_uni(p%nspace), o)
-call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
+call b%eulspace%set_ori(1, o)
+call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
 call b%pftc%cp_even_ref2ptcl(1, 1)
 call b%pftc%set_eo(1, .true.)
 call b%pftc%memoize_refs
