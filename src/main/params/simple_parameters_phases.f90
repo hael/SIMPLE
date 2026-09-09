@@ -704,6 +704,11 @@ contains
             case DEFAULT
                 THROW_HARD('internal cc_emit_sigma must be yes or no')
         end select
+        select case(trim(self%sigma_commit_deferred))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('internal sigma_commit_deferred must be yes or no')
+        end select
         select case(trim(self%sigma_transition_ready))
             case('yes','no')
             case DEFAULT

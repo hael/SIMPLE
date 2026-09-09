@@ -217,6 +217,7 @@ contains
         call require_ok(status, message)
         call require(header%generation == 2_int64, 'prepared update advances the generation')
         call require(header%provenance == SIGMA2_PROV_RESIDUAL, 'prepared update records residual provenance')
+        call assert_committed_generation(COMMITTED, 1_int64)
         call del_file(COMMITTED)
         call del_file(candidate_path)
         call del_file(range_path)
@@ -282,7 +283,7 @@ contains
         integer :: status
         call sigma2_state_read_header(path, header, status, message)
         call require_ok(status, message)
-        call require(header%generation == expected, 'failed candidate preserves committed generation')
+        call require(header%generation == expected, 'candidate transaction preserves committed generation until publication')
     end subroutine assert_committed_generation
 
     subroutine assert_file_unchanged(path, expected)

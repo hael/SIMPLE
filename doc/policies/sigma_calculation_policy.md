@@ -154,12 +154,20 @@ Each canonical iteration is transactional:
 2. each worker writes one exclusive range file
    `<state stem>.g<N>.part<NN>.range` for its assigned global particle rows,
    after checking that the candidate it found carries generation N;
-3. the master verifies generation/layout identity and exact non-overlapping
-   scheduled coverage, merges the ranges, and reduces active records into the
-   grouped model;
-4. commit-time scientific and integrity validation runs;
-5. the candidate is synced and atomically published over the committed file,
+3. reconstruction and assembly owned by the current iteration continue to
+   consume the previously committed generation;
+4. after those consumers finish, the master verifies generation/layout
+   identity and exact non-overlapping scheduled coverage, merges the ranges,
+   and reduces active records into the grouped model;
+5. commit-time scientific and integrity validation runs;
+6. the candidate is synced and atomically published over the committed file,
    followed by directory sync.
+
+This is a lag-one visibility contract: residuals measured by iteration N first
+become visible to iteration N+1. At an abinitio3D symmetry boundary, the final
+candidate remains pending through the stage-owned symmetric reconstruction and
+is published immediately afterward. This reproduces the legacy scientific
+ordering without retaining iteration history in the canonical store.
 
 Candidate and range names carry the generation they belong to (2026-09-07),
 so a file left by another transaction, a crashed run or a second run in the
@@ -241,7 +249,9 @@ the committed generation before the following matcher opens the next candidate.
 
 Gridding and PCG reconstruction resolve the registered state through
 `load_sigma2_groups`, validate native grid/layout/grouping, and load the grouped
-model through the same boundary.
+model through the same boundary. Shared-memory and distributed assembly both
+consume the generation that scored the current iteration; neither may observe
+that iteration's newly measured residuals.
 
 ### Secondary consumers
 

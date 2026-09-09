@@ -229,6 +229,7 @@ contains
         call reg%add_char('states', self%states)
         call reg%add_char('sticky_class_sampling', self%sticky_class_sampling)
         call reg%add_char('cc_emit_sigma', self%cc_emit_sigma)
+        call reg%add_char('sigma_commit_deferred', self%sigma_commit_deferred)
         call reg%add_char('sigma_transition_ready', self%sigma_transition_ready)
         call reg%add_char('ref_pose_init', self%ref_pose_init)
         call reg%add_char('stream', self%stream)

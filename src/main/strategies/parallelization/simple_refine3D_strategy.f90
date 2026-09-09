@@ -719,7 +719,7 @@ contains
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! Per-iteration sigma update (euclid)
         if( self%l_sigma .and. params%l_sigma_canonical )then
-            ! Canonical grouped state is committed immediately after each matcher pass.
+            ! Canonical residuals are prepared below and committed only after assembly.
         else if( self%l_sigma .and. self%l_sigma_transition_ready )then
             if( trim(params%sigma_transition_ready) == 'yes' )then
                 write(logfhandle,'(A)') &
@@ -782,12 +782,6 @@ contains
         endif
         if( self%l_sigma .and. params%l_sigma_canonical ) call prepare_canonical_sigma_update(params, build)
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
-        if( self%l_sigma .and. params%l_sigma_canonical )then
-            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
-            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
-        endif
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
@@ -820,10 +814,18 @@ contains
             case default
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         end select
-        if( L_BENCH_GLOB )then
-            self%bench%rt_assemble = toc(self%bench%t_assemble)
-            self%bench%rt_tot      = toc(self%bench%t_tot)
+        if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
+        if( self%l_sigma .and. params%l_sigma_canonical )then
+            if( canonical_sigma_commit_deferred(params, converged) )then
+                write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
+            else
+                call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+                if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
+                call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+                if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
+            endif
         endif
+        if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration(self, params, build)
@@ -1250,7 +1252,7 @@ contains
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! per-iteration group sigmas (euclid)
         if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
-            ! Canonical grouped state is committed immediately after each matcher pass.
+            ! Canonical residuals are prepared below and committed only after assembly.
         else if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
             if( trim(params%sigma_transition_ready) == 'yes' )then
                 write(logfhandle,'(A)') &
@@ -1319,10 +1321,6 @@ contains
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) &
             &call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
-        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
-            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
-            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-        endif
         do state = 1, params%nstates
             call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
         enddo
@@ -1441,6 +1439,14 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES'
         endif
+        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+            if( canonical_sigma_commit_deferred(params, converged) )then
+                write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
+            else
+                call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+                call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+            endif
+        endif
         ! iteration-dependent updates
         if( params%l_doshift .and. .not.self%job_descr%isthere('trs') )then
             str = real2str(params%trs)
@@ -1465,6 +1471,14 @@ contains
         type(parameters), intent(in) :: params
         enabled = params%cc_objfun == OBJFUN_EUCLID .or. trim(params%cc_emit_sigma) == 'yes'
     end function sigma_update_enabled
+
+    pure logical function canonical_sigma_commit_deferred(params, converged) result(deferred)
+        type(parameters), intent(in) :: params
+        logical,          intent(in) :: converged
+        logical :: final_iteration
+        final_iteration = converged .or. (params%which_iter - params%startit + 1 >= params%maxits)
+        deferred = trim(params%sigma_commit_deferred) == 'yes' .and. final_iteration
+    end function canonical_sigma_commit_deferred
 
     subroutine distr_finalize_iteration(self, params, build)
         class(refine3D_distr_strategy), intent(inout) :: self

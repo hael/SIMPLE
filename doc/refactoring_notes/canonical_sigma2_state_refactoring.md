@@ -138,9 +138,11 @@ and cannot create the required per-particle state. Therefore:
 
 Workers read and write global particle ranges. A full update replaces every
 active record; a fractional update replaces only selected records and copies
-all others unchanged into the candidate. After the barrier, the master
-reduces active particle records into `global` or `group` curves and commits
-the complete generation.
+all others unchanged into the candidate. The previously committed generation
+remains visible through current-iteration assembly. After those consumers, the
+master reduces active particle records into `global` or `group` curves and
+commits the complete generation for the next iteration. At the abinitio3D
+symmetry boundary the final commit is deferred through symmetric reconstruction.
 
 ### Particle-set changes
 
@@ -168,12 +170,15 @@ Protocol:
    the scheduled global ranges, flushes, closes, and launches workers.
 2. Each worker writes exactly its assigned records, flushes and syncs its
    output, closes it, and only then emits the normal completion sentinel.
-3. After the distributed barrier, the master opens fresh handles, verifies
-   exact non-overlapping range coverage and checksums, derives the grouped
-   section, and validates the complete candidate.
-4. The master flushes and syncs the candidate, atomically renames it over the
+3. After the distributed barrier, assembly and any other reconstruction owned
+   by the current iteration consume the previous committed generation.
+4. The master then opens fresh handles, verifies exact non-overlapping range
+   coverage and checksums, derives the grouped section, and validates the
+   complete candidate.
+5. The master flushes and syncs the candidate, atomically renames it over the
    committed file, and syncs the containing directory. A failed validation
-   leaves the previous committed file untouched.
+   leaves the previous committed file untouched. The symmetry-search stage
+   delays steps 4-5 until its symmetric reconstruction has completed.
 
 The implemented range-I/O mechanism is:
 
@@ -448,7 +453,10 @@ matrix in Section 10.
 2. Run canonical abinitio2D shared and distributed, then resume a checkpoint at
    a later stage; run the developer SGD variant once.
 3. Run canonical particle abinitio3D and the already established
-   abinitio3D_cavgs cases, including docked multi-state if available.
+   abinitio3D_cavgs cases, including docked multi-state if available. For the
+   Streptavidin regression, verify the final symmetry-stage commit is deferred,
+   the symmetric reconstruction completes, and the commit follows immediately;
+   repeat the canonical arm at least ten times against the legacy control.
 4. Run canonical refine3D shared and distributed with a fractional update and
    `update_missing=yes`; cover an external-reference CC initialization path.
 5. Run direct canonical reconstruct3D and bootstrap_rec3D from a project with no

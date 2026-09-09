@@ -510,10 +510,12 @@ records only the refine3D-side integration contract:
 - **Raw statistics boundary.** Workers accumulate and atomically publish raw,
   unregularized `(B,D)` per `(state,half,part)`; only the master folds,
   finalizes, regularizes, and solves, reducing parts in ascending order.
-- **Sigma ordering.** For `objfun=euclid`, iteration `n` commits poses, then
-  updates and persists iteration-`n` sigma estimates, then accumulates
-  `(B,D)` with those estimates, then reduces and solves. The matcher path
-  must not reload a previous sigma generation; `objfun=cc` is unweighted.
+- **Sigma ordering.** For `objfun=euclid`, iteration `n` scores and reconstructs
+  with the sigma model committed before the iteration began. It writes new
+  residual estimates into a pending transaction, completes assembly, and only
+  then publishes them for iteration `n+1`. A stage-owned reconstruction such
+  as abinitio3D symmetry consumes the same lagged model before the final
+  transaction is published. `objfun=cc` is unweighted.
 - **Weights versus priors.** Particle/data weights (including `1/sigma2`)
   multiply both `B` and `D`. The zero-mean ML prior adds precision to the
   normal operator and preconditioner only; it never weights `B`, and nothing

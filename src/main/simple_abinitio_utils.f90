@@ -594,6 +594,7 @@ contains
                 enddo
                 call cline_symrec%kill
             endif
+            call commit_deferred_sigma_update(params)
             stage        = '_stage'//int2str_pad(istage,2)
             do state = 1,params%nstates
                 vol_sym      = refine3D_state_vol_fname(state)
@@ -609,6 +610,27 @@ contains
             enddo
         endif
     end subroutine symmetrize
+
+    subroutine commit_deferred_sigma_update( params )
+        use simple_commanders_euclid, only: commander_calc_group_sigmas
+        class(parameters), intent(in) :: params
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(cmdline) :: cline_calc_group_sigmas
+        if( .not. params%l_sigma_canonical ) return
+        if( params%cc_objfun /= OBJFUN_EUCLID .and. trim(params%cc_emit_sigma) /= 'yes' ) return
+        if( .not. cline_refine3D%defined('sigma_commit_deferred') ) return
+        if( cline_refine3D%get_carg('sigma_commit_deferred') /= 'yes' ) return
+        if( .not. cline_refine3D%defined('endit') ) THROW_HARD('deferred canonical sigma2 update has no final iteration')
+        cline_calc_group_sigmas = cline_refine3D
+        call cline_calc_group_sigmas%set('prg',                   'calc_group_sigmas')
+        call cline_calc_group_sigmas%set('mkdir',                 'no')
+        call cline_calc_group_sigmas%set('which_iter',            cline_refine3D%get_iarg('endit'))
+        call cline_calc_group_sigmas%set('sigma_commit_deferred', 'no')
+        call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
+        call cline_calc_group_sigmas%kill
+        call cline_refine3D%set('sigma_commit_deferred', 'no')
+        write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: committed canonical state after stage reconstruction'
+    end subroutine commit_deferred_sigma_update
 
     ! Performs reconstruction at selected stage boundaries.
     subroutine calc_rec( params, projfile, xrec3D, istage, current_sample_only )

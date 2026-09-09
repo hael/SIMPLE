@@ -3474,8 +3474,8 @@ the acceptable-looking outputs do not validate the prior.
      maxits_pcg, rtol).
 
 11. **Canonical sigma2 store review, streptavidin 2/10 failures (2026-09-07).**
-   - Proven non-equivalences with the legacy STAR store: (a) freshness,
-     canonical commits residuals(N) right after matcher pass N and its
+   - Proven non-equivalences with the legacy STAR store at review time: (a)
+     freshness, canonical committed residuals(N) right after matcher pass N and its
      stage-boundary and final reconstructions consume them, legacy's STAR N
      holds residuals(N-1); (b) the final reconstruction: legacy refreshes
      sigmas at native sampling whenever the registration box differs from
@@ -3498,6 +3498,13 @@ the acceptable-looking outputs do not validate the prior.
      applies the legacy registration-box rule. Test
      `simple_test_exec prg=sigma2_state` extended (invalid-record skip,
      scoped names). Uncompiled.
+   - Follow-up ordering correction (2026-09-08): canonical consolidation now
+     occurs after shared/distributed assembly, so every reconstruction owned by
+     iteration N consumes the sigma model that scored iteration N. The final
+     symmetry-search candidate remains pending through symmetric reconstruction
+     and is committed by the abinitio3D stage immediately afterward. This
+     restores the legacy lag-one visibility boundary without persistent
+     iteration history.
 
 12. **Final-reconstruction sequence validated on msp1 (2026-09-07).** The
    standalone `bootstrap_rec3D` (image-power seed, gridding ML bootstrap map
