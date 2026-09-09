@@ -643,8 +643,15 @@ contains
                 self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
                     &(startit <= 1 .and. file_exists(sigma2_star_from_iter(startit)))
                 if( self%l_sigma_transition_ready )then
-                    call clear_sigma2_partition_files
-                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
+                    ! CC residual updates preserve the image-power seed outside
+                    ! updated shells, so their partition files remain authoritative.
+                    if( trim(params%cc_emit_sigma) == 'yes' )then
+                        write(logfhandle,'(A)') &
+                            &'>>> SIGMA2 INIT: retaining image-bootstrap particle sigmas for CC residual update'
+                    else
+                        call clear_sigma2_partition_files
+                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
+                    endif
                 else
                     write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
                 endif
@@ -724,7 +731,9 @@ contains
         if( self%l_sigma .and. params%l_sigma_canonical )then
             ! Canonical residuals are prepared below and committed only after assembly.
         else if( self%l_sigma .and. self%l_sigma_transition_ready )then
-            if( trim(params%sigma_transition_ready) == 'yes' )then
+            if( trim(params%cc_emit_sigma) == 'yes' )then
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using image-bootstrap particle sigmas for CC residual update'
+            else if( trim(params%sigma_transition_ready) == 'yes' )then
                 write(logfhandle,'(A)') &
                     &'>>> SIGMA2 INIT: using wrapper-provided grouped sigmas (pose initialization or stage-start bootstrap)'
             else
@@ -1081,8 +1090,15 @@ contains
                     self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
                         &(params%startit <= 1 .and. file_exists(sigma2_star_from_iter(params%startit)))
                     if( self%l_sigma_transition_ready )then
-                        call clear_sigma2_partition_files
-                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
+                        ! CC residual updates preserve the image-power seed outside
+                        ! updated shells, so their partition files remain authoritative.
+                        if( trim(params%cc_emit_sigma) == 'yes' )then
+                            write(logfhandle,'(A)') &
+                                &'>>> SIGMA2 INIT: retaining image-bootstrap particle sigmas for CC residual update'
+                        else
+                            call clear_sigma2_partition_files
+                            write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
+                        endif
                     else
                         write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
                     endif
