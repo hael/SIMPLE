@@ -69,6 +69,74 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(loaded_job.prog, "pick")
         self.assertEqual(loaded_job.name, "Pick Particles")
 
+    def test_new_creates_fresh_job_with_rerun_lineage_and_preserved_metadata(self):
+        original_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(original_dir)
+        sentinel_path = os.path.join(original_dir, "original-result.txt")
+        with open(sentinel_path, "w", encoding="utf-8") as sentinel:
+            sentinel.write("keep")
+        self.workspace_model.jcnt = 1
+        self.workspace_model.save(update_fields=("jcnt",))
+        original = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            name="Import Movie Data",
+            desc="  original description  ",
+            dirc="1_import_movies",
+            args={"dir_movies": "/data/movies", "nthr": 8},
+            status="finished",
+            master_status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "import_movies",
+            },
+        )
+        source = {"type": "project_file", "filename": "workspace.simple"}
+        parent_proj = os.path.join(self.workspace_dir, "workspace.simple")
+
+        launcher = batchjob_module.SIMPLEBatch
+        with (
+            patch.object(launcher, "loadUIJSON", return_value=True),
+            patch.object(launcher, "start", return_value=True) as start,
+        ):
+            rerun_job = BatchJob()
+            created = rerun_job.new(
+                self.workspace,
+                "simple",
+                "import_movies",
+                original.args,
+                parent_proj=parent_proj,
+                source=source,
+                display_name=original.name,
+                description=original.desc,
+                rerun_of=original.id,
+            )
+
+        self.assertTrue(created)
+        self.assertTrue(os.path.isfile(sentinel_path))
+        original.refresh_from_db()
+        self.assertEqual(original.status, "finished")
+
+        rerun_model = JobModel.objects.get(id=rerun_job.id)
+        self.assertNotEqual(rerun_model.id, original.id)
+        self.assertEqual(rerun_model.disp, 2)
+        self.assertEqual(rerun_model.dirc, "2_import_movies")
+        self.assertEqual(rerun_model.args, original.args)
+        self.assertEqual(rerun_model.name, original.name)
+        self.assertEqual(rerun_model.desc, original.desc)
+        self.assertEqual(rerun_model.master_stats["source"], source)
+        self.assertEqual(rerun_model.master_stats["rerun_of"], original.id)
+        start.assert_called_once_with(
+            original.args,
+            os.path.join(self.workspace_dir, "2_import_movies"),
+            self.workspace_dir,
+            "import_movies",
+            rerun_job.id,
+            parent_proj=parent_proj,
+        )
+
     def test_batch_detail_resolves_named_new_project_in_job_directory(self):
         job_dir = os.path.join(self.workspace_dir, "1_new_project")
         os.mkdir(job_dir)
@@ -1054,6 +1122,60 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(
             job_builder_views._resolve_batch_project_file(self.workspace, outside_path),
             (None, None, "batch project file is outside the selected workspace"),
+        )
+
+    def test_recorded_batch_project_revalidates_project_file_source(self):
+        project_path = os.path.join(self.workspace_dir, "selected.simple")
+        with open(project_path, "w", encoding="utf-8"):
+            pass
+        metadata = {
+            "job_type": "batch",
+            "package": "simple",
+            "program": "cluster2D",
+            "source": {
+                "type": "project_file",
+                "filename": "selected.simple",
+            },
+        }
+
+        resolved_path, source, error = (
+            job_builder_views.resolve_recorded_batch_project(
+                self.workspace,
+                metadata,
+            )
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(resolved_path, project_path)
+        self.assertEqual(source, metadata["source"])
+        self.assertEqual(
+            job_builder_views.resolve_recorded_batch_project(
+                self.workspace,
+                {**metadata, "source": {"type": "unknown"}},
+            ),
+            (None, None, "batch project source is invalid"),
+        )
+
+        os.unlink(project_path)
+        self.assertEqual(
+            job_builder_views.resolve_recorded_batch_project(
+                self.workspace,
+                metadata,
+            ),
+            (None, None, "batch project file is unavailable"),
+        )
+
+    def test_recorded_new_project_rerun_does_not_require_input_project(self):
+        self.assertEqual(
+            job_builder_views.resolve_recorded_batch_project(
+                self.workspace,
+                {
+                    "job_type": "batch",
+                    "package": "simple",
+                    "program": "new_project",
+                },
+            ),
+            (None, None, None),
         )
 
     def test_new_rejects_explicit_project_outside_workspace(self):

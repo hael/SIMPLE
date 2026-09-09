@@ -217,7 +217,10 @@ def view_workspace_jobs(request):
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
     # Include the template name so switching view modes always forces a redraw.
-    checksum_payload = {"jobs": list(jobs.values()), "template": template}
+    checksum_payload = {
+        "jobs": list(jobs.values()),
+        "template": template,
+    }
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
     if old_checksum == "none" or old_checksum != checksum:

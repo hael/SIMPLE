@@ -393,6 +393,7 @@ class TemplateIntegrationTests(SimpleTestCase):
     def test_batch_cards_reuse_stream_stop_and_delete_controls(self):
         batch_card = self._read_template("nice_classic/_batch_card.html")
         jobs = self._read_template("jobs_cards.html")
+        jobs_table = self._read_template("jobs_table.html")
 
         self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_card)
         self.assertIn('onclick="stopBatchJob(this)"', batch_card)
@@ -403,9 +404,60 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('<polyline points="2,4 14,4"/>', batch_card)
         self.assertIn('<path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>', batch_card)
         self.assertIn("const stopBatchJob = (button) => {", jobs)
+        self.assertIn("{% url 'nice_lite:rerun_batch' %}", batch_card)
+        self.assertIn('target="job_builder_iframe"', batch_card)
+        self.assertIn('<button type="submit"', batch_card)
+        self.assertNotIn("const rerunBatchJob = (button) => {", jobs)
+        self.assertIn("{% url 'nice_lite:rerun_batch' %}", jobs_table)
+        self.assertIn('target="job_builder_iframe"', jobs_table)
+        self.assertNotIn("const rerunBatchJob = (button) => {", jobs_table)
         self.assertIn("const deleteBatchJob = (button) => {", jobs)
         self.assertIn("permanently delete batch job", jobs)
         self.assertIn("This cannot be undone.", jobs)
+
+    def test_batch_rerun_form_opens_selected_program_with_saved_values(self):
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [],
+            "simple_programs": [{
+                "prg": "cluster2D",
+                "disp": "Create 2D Classes",
+                "desc": "",
+            }],
+            "simple_program_inputs": [{
+                "prg": "cluster2D",
+                "disp": "Create 2D Classes",
+                "requirements": [],
+                "rerun_of": 17,
+                "sections": [{
+                    "name": "compute",
+                    "inputs": [{
+                        "key": "nthr",
+                        "keytype": "int",
+                        "label": "Threads",
+                        "value": "8",
+                    }],
+                }],
+            }],
+            "single_programs": [],
+            "single_program_inputs": [],
+            "default_batch_project_file": "/workspace/input.simple",
+            "batch_prefill": {
+                "job_id": 17,
+                "package": "simple",
+                "program": "cluster2D",
+            },
+        })
+
+        self.assertIn('name="rerun_of" value="17"', rendered)
+        self.assertIn(
+            'id="batch_cluster2D_nthr" name="nthr" type="number" min="0" step="1"',
+            rendered,
+        )
+        self.assertIn('value="8"', rendered)
+        self.assertIn('value="/workspace/input.simple"', rendered)
+        self.assertIn('const batchPrefillPackage = "simple";', rendered)
+        self.assertIn('const batchPrefillProgram = "cluster2D";', rendered)
+        self.assertIn('selectBuilderTab("simple_batch");', rendered)
 
     def test_batch_card_controls_follow_job_status(self):
         job = {
@@ -418,12 +470,12 @@ class TemplateIntegrationTests(SimpleTestCase):
             "status": "running",
         }
 
-        running = render_to_string("nice_classic/_batch_card.html", {"job": job})
+        context = {"job": job}
+        running = render_to_string("nice_classic/_batch_card.html", context)
         job["status"] = "queued"
-        queued = render_to_string("nice_classic/_batch_card.html", {"job": job})
+        queued = render_to_string("nice_classic/_batch_card.html", context)
         job["status"] = "finished"
-        finished = render_to_string("nice_classic/_batch_card.html", {"job": job})
-
+        finished = render_to_string("nice_classic/_batch_card.html", context)
         self.assertIn('title="stop batch job"', running)
         self.assertNotIn('title="delete batch job"', running)
         self.assertIn("rounded-full bg-streamaction/10 text-streamaction", running)
@@ -433,9 +485,11 @@ class TemplateIntegrationTests(SimpleTestCase):
             running.index('job directory'),
         )
         self.assertNotIn('title="stop batch job"', queued)
+        self.assertNotIn('title="rerun batch job"', queued)
         self.assertIn('title="delete batch job"', queued)
         self.assertIn("rounded-full bg-streamline/40 text-streamlabel", queued)
         self.assertNotIn('title="stop batch job"', finished)
+        self.assertIn('title="rerun batch job"', finished)
         self.assertIn('title="delete batch job"', finished)
         self.assertIn("rounded-full bg-streamring/10 text-streamaccent", finished)
         self.assertLess(

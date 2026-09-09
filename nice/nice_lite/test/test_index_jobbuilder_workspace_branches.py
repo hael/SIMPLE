@@ -122,6 +122,30 @@ class JobBuilderBranchTests(SimpleTestCase):
 
         self.assertEqual(program_inputs[0]["requirements"], requirements)
 
+    def test_collect_programs_prefills_saved_values_and_rerun_lineage(self):
+        batchui = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [
+                    {"key": "nthr", "keytype": "int"},
+                    {"key": "mode", "keytype": "multi", "options": [1, 2]},
+                ],
+            },
+        }
+
+        _, program_inputs = job_builder_views._collect_programs(
+            batchui,
+            "simple_exec",
+            prefill_program="cluster2D",
+            prefill_args={"nthr": "8", "mode": "2"},
+            rerun_of=17,
+        )
+
+        self.assertEqual(program_inputs[0]["rerun_of"], 17)
+        inputs = program_inputs[0]["sections"][0]["inputs"]
+        self.assertEqual(inputs[0]["value"], "8")
+        self.assertEqual(inputs[1]["value"], 2)
+
     def test_inaccessible_selected_job_clears_cookie(self):
         request = self.factory.get("/jobbuilder")
         request.user = _AuthUser()
@@ -164,6 +188,80 @@ class JobBuilderBranchTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         stream_inputs = response._ctx["stream_user_inputs"]
         self.assertEqual(stream_inputs[0]["value"], "2.5")
+
+    def test_accessible_batch_job_prefills_its_program_args_and_project(self):
+        request = self.factory.post("/rerunbatch", {"selected_job_id": "88"})
+        request.user = _AuthUser()
+        jobmodel = SimpleNamespace(
+            id=88,
+            dset_id=4,
+            dset=SimpleNamespace(user="tester"),
+            status="finished",
+            args={"nthr": "8", "mode": "fast"},
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "cluster2D",
+                "source": {"type": "project_file", "filename": "input.simple"},
+            },
+        )
+        selected_job = Mock()
+        selected_job.get_jobmodel.return_value = jobmodel
+        simple_stream = Mock()
+        simple_stream.loadUIJSON.return_value = True
+        simple_stream.get_ui.return_value = {"user_inputs": []}
+        simple_batch = Mock()
+        simple_batch.loadUIJSON.return_value = True
+        simple_batch.get_ui.return_value = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [
+                    {"key": "nthr", "keytype": "int"},
+                    {"key": "mode", "options": ["fast", "slow"]},
+                ],
+            },
+        }
+        workspace = Mock()
+
+        with (
+            patch.object(job_builder_views, "get_job_id", return_value=88),
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "StreamJob", return_value=selected_job),
+            patch.object(job_builder_views, "SIMPLEStream", return_value=simple_stream),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=simple_batch),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(
+                job_builder_views,
+                "_default_batch_project_file",
+                return_value="/workspace/latest.simple",
+            ),
+            patch.object(
+                job_builder_views,
+                "resolve_recorded_batch_project",
+                return_value=("/workspace/input.simple", jobmodel.master_stats["source"], None),
+            ) as resolve_project,
+            patch.object(job_builder_views, "render", side_effect=_render_with_context),
+            patch.object(job_builder_views, "clear_checksum_cookies"),
+        ):
+            response = job_builder_views.view_job_builder(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response._ctx["default_batch_project_file"], "/workspace/input.simple")
+        self.assertEqual(response._ctx["batch_prefill"], {
+            "job_id": 88,
+            "package": "simple",
+            "program": "cluster2D",
+            "args": jobmodel.args,
+        })
+        program = response._ctx["simple_program_inputs"][0]
+        self.assertEqual(program["rerun_of"], 88)
+        self.assertEqual(
+            [entry["value"] for entry in program["sections"][0]["inputs"]],
+            ["8", "fast"],
+        )
+        resolve_project.assert_called_once_with(workspace, jobmodel.master_stats)
 
     def test_job_builder_defaults_file_selector_to_latest_completed_batch_project(self):
         request = self.factory.get("/jobbuilder")
@@ -240,6 +338,107 @@ class JobBuilderBranchTests(SimpleTestCase):
             {"mode": "fast"},
             display_name="Pick Particles",
         )
+
+    def test_create_batch_preserves_rerun_lineage_name_and_description(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "cluster2D",
+            "batch_project_file": "/workspace/input.simple",
+            "rerun_of": "12",
+            "nthr": "16",
+        })
+        request.user = _AuthUser()
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [{"key": "nthr", "keytype": "int"}],
+            },
+        }
+        source_job = SimpleNamespace(
+            id=12,
+            dset=SimpleNamespace(user="tester"),
+            status="finished",
+            name="Create 2D Classes",
+            desc="saved description",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "cluster2D",
+            },
+        )
+        queryset = Mock()
+        queryset.first.return_value = source_job
+        batchjob = Mock()
+        batchjob.new.return_value = True
+        batchjob_class = Mock(return_value=batchjob)
+        batchjob_class.RERUNNABLE_STATUSES = frozenset(("finished", "failed", "stopped"))
+        source = {"type": "project_file", "filename": "input.simple"}
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(job_builder_views.JobModel.objects, "filter", return_value=queryset),
+            patch.object(
+                job_builder_views,
+                "_resolve_batch_project_file",
+                return_value=("/workspace/input.simple", source, None),
+            ),
+            patch.object(job_builder_views, "BatchJob", batchjob_class),
+            patch.object(job_builder_views.messages, "add_message"),
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "simple",
+            "cluster2D",
+            {"nthr": "16"},
+            display_name="Create 2D Classes",
+            description="saved description",
+            rerun_of=12,
+            parent_proj="/workspace/input.simple",
+            source=source,
+        )
+
+    def test_create_batch_rejects_tampered_rerun_lineage(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "cluster2D",
+            "rerun_of": "999",
+        })
+        request.user = _AuthUser()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [],
+            },
+        }
+        missing_job = Mock()
+        missing_job.first.return_value = None
+        batchjob_class = Mock()
+        batchjob_class.RERUNNABLE_STATUSES = frozenset(("finished", "failed", "stopped"))
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace"),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(job_builder_views.JobModel.objects, "filter", return_value=missing_job),
+            patch.object(job_builder_views, "BatchJob", batchjob_class),
+            patch.object(job_builder_views.messages, "add_message"),
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob_class.assert_not_called()
 
     def test_collect_batch_args_accepts_free_form_directory_with_empty_options(self):
         program_cfg = {

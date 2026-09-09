@@ -1,8 +1,8 @@
-"""Job-builder view for stream mode.
+"""Job-builder view for Stream and batch modes.
 
 This module renders ``jobbuilder.html`` and prepares:
 - stream-specific user inputs (optionally prefilled from a selected stream job)
-- SIMPLE and SINGLE program catalogs derived from batch UI JSON metadata
+- SIMPLE and SINGLE program catalogs, optionally prefilled from a batch job
 - completed batch projects and stream snapshots that can seed a batch job
 """
 
@@ -26,6 +26,7 @@ from ..data_structures.workspace import Workspace
 from ..models import JobModel
 from ..helpers import (
     clear_checksum_cookies,
+    get_integer,
     get_job_id,
     get_project_id,
     get_workspace_id,
@@ -119,10 +120,17 @@ def _is_job_accessible(jobmodel, username=None):
     return owner == username
 
 
-def _collect_programs(batchui, executable_name):
-    """Collect program metadata and section inputs for a target executable."""
+def _collect_programs(
+    batchui,
+    executable_name,
+    prefill_program=None,
+    prefill_args=None,
+    rerun_of=None,
+):
+    """Collect program metadata and optionally prefill one saved command."""
     programs = []
     program_inputs = []
+    prefill_args = prefill_args if isinstance(prefill_args, dict) else {}
 
     if not isinstance(batchui, dict):
         return programs, program_inputs
@@ -143,10 +151,29 @@ def _collect_programs(batchui, executable_name):
         for section_name, section_inputs in prg_cfg.items():
             if section_name == "program":
                 continue
-            visible_inputs = [
-                entry for entry in section_inputs
-                if isinstance(entry, dict) and entry.get("key") not in _BATCH_LAUNCHER_KEYS
-            ] if isinstance(section_inputs, list) else []
+            visible_inputs = []
+            if isinstance(section_inputs, list):
+                for entry in section_inputs:
+                    if (
+                        not isinstance(entry, dict)
+                        or entry.get("key") in _BATCH_LAUNCHER_KEYS
+                    ):
+                        continue
+                    user_input = copy.deepcopy(entry)
+                    key = user_input.get("key")
+                    if prg == prefill_program and key in prefill_args:
+                        value = prefill_args[key]
+                        options = user_input.get("options")
+                        if isinstance(options, list):
+                            value = next(
+                                (
+                                    option for option in options
+                                    if str(option) == str(value)
+                                ),
+                                value,
+                            )
+                        user_input["value"] = value
+                    visible_inputs.append(user_input)
             if visible_inputs:
                 sections.append({
                     "name": section_name,
@@ -159,12 +186,20 @@ def _collect_programs(batchui, executable_name):
             "disp": display_name,
             "desc": program_meta.get("summary", ""),
         })
-        program_inputs.append({
+        program_input = {
             "prg": prg,
             "disp": display_name,
             "requirements": program_meta.get("requirements", []),
             "sections": sections,
-        })
+        }
+        if (
+            prg == prefill_program
+            and isinstance(rerun_of, int)
+            and not isinstance(rerun_of, bool)
+            and rerun_of > 0
+        ):
+            program_input["rerun_of"] = rerun_of
+        program_inputs.append(program_input)
 
     return programs, program_inputs
 
@@ -535,6 +570,74 @@ def _resolve_batch_project_file(workspace_obj, project_file):
     )
 
 
+def resolve_recorded_batch_project(workspace_obj, metadata):
+    """Resolve persisted batch input provenance for a safe rerun form."""
+    if not isinstance(metadata, dict):
+        return None, None, "batch job metadata is unavailable"
+    if metadata.get("program") == "new_project":
+        return None, None, None
+
+    source = metadata.get("source")
+    if source is None:
+        parent_id = metadata.get("parent")
+        if (
+            isinstance(parent_id, int)
+            and not isinstance(parent_id, bool)
+            and parent_id > 0
+        ):
+            return _resolve_batch_project_source(
+                workspace_obj,
+                f"{_BATCH_JOB_SOURCE_PREFIX}:{parent_id}",
+            )
+        workspace_dir = workspace_obj.get_absdir()
+        if not isinstance(workspace_dir, str):
+            return None, None, "batch project file is unavailable"
+        project_path = os.path.join(workspace_dir, "workspace.simple")
+        resolved_path, _resolved_source, error = _resolve_batch_project_file(
+            workspace_obj,
+            project_path,
+        )
+        return resolved_path, None, error
+    if not isinstance(source, dict):
+        return None, None, "batch project source is invalid"
+
+    source_type = source.get("type")
+    if source_type == "batch_job":
+        source_id = source.get("batch_job_id")
+        if not isinstance(source_id, int) or isinstance(source_id, bool) or source_id <= 0:
+            return None, None, "batch project source is invalid"
+        return _resolve_batch_project_source(
+            workspace_obj,
+            f"{_BATCH_JOB_SOURCE_PREFIX}:{source_id}",
+        )
+    if source_type == "stream_snapshot":
+        stream_id = source.get("stream_job_id")
+        set_id = source.get("particle_set_id")
+        if any(
+            not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for value in (stream_id, set_id)
+        ):
+            return None, None, "batch project source is invalid"
+        return _resolve_batch_project_source(
+            workspace_obj,
+            f"{_BATCH_SNAPSHOT_SOURCE_PREFIX}:{stream_id}:{set_id}",
+        )
+    if source_type == "project_file":
+        filename = source.get("filename")
+        if not isinstance(filename, str) or not filename.strip():
+            return None, None, "batch project source is invalid"
+        return _resolve_batch_project_file(workspace_obj, filename)
+    if source_type == "workspace":
+        workspace_dir = workspace_obj.get_absdir()
+        if not isinstance(workspace_dir, str):
+            return None, None, "batch project file is unavailable"
+        return _resolve_batch_project_file(
+            workspace_obj,
+            os.path.join(workspace_dir, "workspace.simple"),
+        )
+    return None, None, "batch project source is invalid"
+
+
 def _is_workspace_accessible(workspace_obj, project_id, username):
     """Return True when the selected workspace belongs to project and user."""
     if workspace_obj is None or not project_id:
@@ -551,12 +654,13 @@ def _is_workspace_accessible(workspace_obj, project_id, username):
 
 @login_required(login_url="/login")
 def view_job_builder(request):
-    """Render stream job-builder page for a new job or from an existing stream job."""
+    """Render the job builder, optionally prefilled from an existing job."""
     template = "jobbuilder.html"
     jobid = get_job_id(request)
     streamui = None
     batchui = None
-    args = None
+    stream_args = None
+    selected_batch_jobmodel = None
     clear_selected_job_cookie = False
 
     if jobid is not None:
@@ -566,8 +670,25 @@ def view_job_builder(request):
             messages.add_message(request, messages.ERROR, "selected job is not accessible")
             # Drop stale invalid selection state to avoid repeated access errors.
             clear_selected_job_cookie = True
+        elif _is_batch_job(streamjobmodel):
+            metadata = streamjobmodel.master_stats
+            if (
+                streamjobmodel.status not in BatchJob.RERUNNABLE_STATUSES
+                or metadata.get("package") not in ("simple", "single")
+                or not isinstance(metadata.get("program"), str)
+                or not metadata["program"]
+                or not isinstance(streamjobmodel.args, dict)
+            ):
+                messages.add_message(
+                    request,
+                    messages.ERROR,
+                    "selected batch job cannot be rerun",
+                )
+                clear_selected_job_cookie = True
+            else:
+                selected_batch_jobmodel = streamjobmodel
         elif isinstance(streamjobmodel.args, dict):
-            args = streamjobmodel.args
+            stream_args = streamjobmodel.args
 
     simplestream = SIMPLEStream()
     if simplestream.loadUIJSON():
@@ -587,28 +708,88 @@ def view_job_builder(request):
     if isinstance(streamui, dict):
         user_inputs = streamui.get("user_inputs")
         if isinstance(user_inputs, list):
-            if isinstance(args, dict):
+            if isinstance(stream_args, dict):
                 for user_input in user_inputs:
                     if not isinstance(user_input, dict):
                         continue
                     key = user_input.get("key")
-                    if key in args:
-                        user_input["value"] = args[key]
+                    if key in stream_args:
+                        user_input["value"] = stream_args[key]
             context["stream_user_inputs"] = user_inputs
+
+    workspace_id = get_workspace_id(request)
+    project_id = get_project_id(request)
+    workspace_obj = None
+    if workspace_id is not None and project_id is not None:
+        selected_workspace = Workspace(workspace_id)
+        if _is_workspace_accessible(
+            selected_workspace,
+            project_id,
+            request.user.username,
+        ):
+            workspace_obj = selected_workspace
+            context["default_batch_project_file"] = _default_batch_project_file(workspace_obj)
+
+    batch_prefill = None
+    if selected_batch_jobmodel is not None:
+        metadata = selected_batch_jobmodel.master_stats
+        package = metadata["package"]
+        program = metadata["program"]
+        if workspace_obj is None or selected_batch_jobmodel.dset_id != workspace_id:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "selected batch job is outside the current workspace",
+            )
+            clear_selected_job_cookie = True
+        elif _get_batch_program(batchui, package, program) is None:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "selected batch program is no longer available",
+            )
+            clear_selected_job_cookie = True
+        else:
+            parent_proj, _source, error = resolve_recorded_batch_project(
+                workspace_obj,
+                metadata,
+            )
+            if error is not None:
+                logger.error("job_builder_rerun: %s", error)
+                messages.add_message(request, messages.ERROR, error)
+                parent_proj = ""
+            context["default_batch_project_file"] = parent_proj or ""
+            batch_prefill = {
+                "job_id": selected_batch_jobmodel.id,
+                "package": package,
+                "program": program,
+                "args": selected_batch_jobmodel.args,
+            }
+            context["batch_prefill"] = batch_prefill
+
     if isinstance(batchui, dict):
-        simple_programs, simple_program_inputs = _collect_programs(batchui, "simple_exec")
-        single_programs, single_program_inputs = _collect_programs(batchui, "single_exec")
+        prefill_package = batch_prefill.get("package") if batch_prefill else None
+        prefill_program = batch_prefill.get("program") if batch_prefill else None
+        prefill_args = batch_prefill.get("args") if batch_prefill else None
+        rerun_of = batch_prefill.get("job_id") if batch_prefill else None
+        simple_programs, simple_program_inputs = _collect_programs(
+            batchui,
+            "simple_exec",
+            prefill_program=prefill_program if prefill_package == "simple" else None,
+            prefill_args=prefill_args,
+            rerun_of=rerun_of,
+        )
+        single_programs, single_program_inputs = _collect_programs(
+            batchui,
+            "single_exec",
+            prefill_program=prefill_program if prefill_package == "single" else None,
+            prefill_args=prefill_args,
+            rerun_of=rerun_of,
+        )
         context["simple_programs"] = simple_programs
         context["simple_program_inputs"] = simple_program_inputs
         context["single_programs"] = single_programs
         context["single_program_inputs"] = single_program_inputs
-
-    workspace_id = get_workspace_id(request)
-    project_id = get_project_id(request)
-    if workspace_id is not None and project_id is not None:
-        workspace_obj = Workspace(workspace_id)
-        if _is_workspace_accessible(workspace_obj, project_id, request.user.username):
-            context["default_batch_project_file"] = _default_batch_project_file(workspace_obj)
 
     response = render(request, template, context)
     if clear_selected_job_cookie:
@@ -639,6 +820,32 @@ def view_create_batch(request):
         logger.error("create_batch: unknown %s program %s", package, program)
         messages.add_message(request, messages.ERROR, "invalid batch program selection")
         return redirect("nice_lite:workspace")
+
+    rerun_jobmodel = None
+    if "rerun_of" in request.POST:
+        rerun_of = get_integer(request.POST, "rerun_of", silent=True)
+        if rerun_of is not None:
+            rerun_jobmodel = JobModel.objects.filter(
+                id=rerun_of,
+                dset_id=workspace_id,
+            ).first()
+        rerun_metadata = (
+            rerun_jobmodel.master_stats
+            if rerun_jobmodel is not None
+            and isinstance(rerun_jobmodel.master_stats, dict)
+            else {}
+        )
+        if (
+            rerun_jobmodel is None
+            or not _is_job_accessible(rerun_jobmodel, request.user.username)
+            or not _is_batch_job(rerun_jobmodel)
+            or rerun_jobmodel.status not in BatchJob.RERUNNABLE_STATUSES
+            or rerun_metadata.get("package") != package
+            or rerun_metadata.get("program") != program
+        ):
+            logger.error("create_batch: invalid rerun source %s", rerun_of)
+            messages.add_message(request, messages.ERROR, "invalid batch rerun selection")
+            return redirect("nice_lite:workspace")
 
     args, error = _collect_batch_args(request.POST, program_cfg)
     if error is not None:
@@ -673,9 +880,15 @@ def view_create_batch(request):
     batchjob = BatchJob()
     launch_options = {}
     program_meta = program_cfg.get("program", {})
-    display_name = program_meta.get("display_name")
-    if isinstance(display_name, str) and display_name.strip():
-        launch_options["display_name"] = display_name.strip()
+    if rerun_jobmodel is not None:
+        if isinstance(rerun_jobmodel.name, str) and rerun_jobmodel.name.strip():
+            launch_options["display_name"] = rerun_jobmodel.name.strip()
+        launch_options["description"] = rerun_jobmodel.desc
+        launch_options["rerun_of"] = rerun_jobmodel.id
+    else:
+        display_name = program_meta.get("display_name")
+        if isinstance(display_name, str) and display_name.strip():
+            launch_options["display_name"] = display_name.strip()
     if parent_proj is not None:
         launch_options.update({"parent_proj": parent_proj, "source": source_metadata})
     if not batchjob.new(workspace_obj, package, program, args, **launch_options):

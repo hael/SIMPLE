@@ -14,6 +14,7 @@ from .index_views        import view_user_logout
 from .job_builder_views  import view_job_builder
 from .job_builder_views  import view_create_batch
 from .batch_views        import view_batch_delete
+from .batch_views        import view_batch_rerun
 from .batch_views        import view_batch_stop
 from .stream_views       import view_stream_create_stream
 from .stream_views       import view_stream_terminate_stream
@@ -44,6 +45,7 @@ __all__ = [
     "view_job_builder",
     "view_create_batch",
     "view_batch_delete",
+    "view_batch_rerun",
     "view_batch_stop",
     "view_stream_create_stream",
     "view_stream_terminate_stream",

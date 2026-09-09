@@ -81,6 +81,7 @@ urlpatterns = [
         name="batch_movie_thumbnail",
     ),
     path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
+    path("rerunbatch",                         batch_views.view_batch_rerun,                       name="rerun_batch"),
     path("deletebatch",                        batch_views.view_batch_delete,                      name="delete_batch"),
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
     path("restartstream",                      stream_views.view_stream_restart_stream,            name="restart_stream"),

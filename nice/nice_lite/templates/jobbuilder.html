@@ -23,6 +23,7 @@
   Context variables:
     user_inputs — list of input descriptor dicts (key, keytype, label,
                   required, value?, placeholder?, options?)
+    batch_prefill — selected batch package, program, arguments, and source job
 {% endcomment %}
 {% load static %}
 {% load ui_fields %}
@@ -307,6 +308,7 @@
                             <input type="hidden" name="package" value="simple">
                             <input type="hidden" name="program" value="{{ program.prg }}">
                             <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
+                            {% if program.rerun_of %}<input type="hidden" name="rerun_of" value="{{ program.rerun_of }}">{% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}
@@ -528,6 +530,7 @@
                             <input type="hidden" name="package" value="single">
                             <input type="hidden" name="program" value="{{ program.prg }}">
                             <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
+                            {% if program.rerun_of %}<input type="hidden" name="rerun_of" value="{{ program.rerun_of }}">{% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}
@@ -901,8 +904,10 @@
 
         const ACTIVE_TAB_CLASS = "text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamaccent text-white";
         const INACTIVE_TAB_CLASS = "text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamsurface text-streaminput";
-        let selectedSimpleProgramKey = null;
-        let selectedSingleProgramKey = null;
+        const batchPrefillPackage = "{{ batch_prefill.package|default:''|escapejs }}";
+        const batchPrefillProgram = "{{ batch_prefill.program|default:''|escapejs }}";
+        let selectedSimpleProgramKey = batchPrefillPackage === "simple" ? batchPrefillProgram : null;
+        let selectedSingleProgramKey = batchPrefillPackage === "single" ? batchPrefillProgram : null;
 
         function setBuilderTabStyles(activeTabName) {
             const streamTab = document.getElementById("tab_stream");
@@ -1051,6 +1056,12 @@
             configs.forEach((el) => el.classList.add("hidden"));
             const active = document.getElementById("batch_form_single_" + programKey);
             if (active) active.classList.remove("hidden");
+        }
+
+        if (batchPrefillPackage === "simple" && batchPrefillProgram) {
+            selectBuilderTab("simple_batch");
+        } else if (batchPrefillPackage === "single" && batchPrefillProgram) {
+            selectBuilderTab("single_batch");
         }
 
         const batchSubmissionPending = {simple: false, single: false};

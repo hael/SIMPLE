@@ -34,6 +34,7 @@ class BatchJob(Job):
     """Classic (non-stream) SIMPLE job attached to a workspace."""
 
     TERMINAL_STATUSES = frozenset(("finished", "failed", "stopped"))
+    RERUNNABLE_STATUSES = TERMINAL_STATUSES
     DELETABLE_STATUSES = TERMINAL_STATUSES | frozenset(("queued",))
     LOG_FILES = (
         ("stdout.log", "standard output"),
@@ -893,7 +894,7 @@ class BatchJob(Job):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _metadata(pckg, prog, parent=0, source=None):
+    def _metadata(pckg, prog, parent=0, source=None, rerun_of=None):
         metadata = {
             "job_type": "batch",
             "package": pckg,
@@ -902,9 +903,22 @@ class BatchJob(Job):
         }
         if isinstance(source, dict):
             metadata["source"] = dict(source)
+        if isinstance(rerun_of, int) and not isinstance(rerun_of, bool) and rerun_of > 0:
+            metadata["rerun_of"] = rerun_of
         return metadata
 
-    def new(self, workspace, pckg, prog, args, parent_proj=None, source=None, display_name=None):
+    def new(
+        self,
+        workspace,
+        pckg,
+        prog,
+        args,
+        parent_proj=None,
+        source=None,
+        display_name=None,
+        description=None,
+        rerun_of=None,
+    ):
         """Create and launch a SIMPLE or SINGLE batch job."""
         if workspace is None or pckg not in ("simple", "single") or not prog:
             logger.error("new: invalid batch job configuration")
@@ -943,6 +957,7 @@ class BatchJob(Job):
             self.name = display_name.strip()
         else:
             self.name = prog.replace("_", " ")
+        self.desc = description if isinstance(description, str) else ""
         self.args = dict(args)
 
         # Reserve the display counter under a row lock so two near-simultaneous
@@ -957,10 +972,16 @@ class BatchJob(Job):
                 disp=self.disp,
                 args=self.args,
                 name=self.name,
+                desc=self.desc,
                 dirc=self.dirc,
                 status="queued",
                 master_status="queued",
-                master_stats=self._metadata(pckg, prog, source=source),
+                master_stats=self._metadata(
+                    pckg,
+                    prog,
+                    source=source,
+                    rerun_of=rerun_of,
+                ),
                 master_heartbeat=0,
             )
             jobmodel.save()

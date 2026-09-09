@@ -885,6 +885,29 @@ def view_batch_stop(request):
 
 @login_required(login_url="/login")
 @require_POST
+def view_batch_rerun(request):
+    """Open the job builder with an owned terminal batch job selected."""
+    batch_job, jobmodel = _get_accessible_batch_job(request, "rerun_batch")
+    if batch_job is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+    if jobmodel.status not in BatchJob.RERUNNABLE_STATUSES:
+        messages.add_message(request, messages.ERROR, "batch job is not complete")
+        return redirect("nice_lite:workspace")
+
+    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    if metadata.get("package") not in ("simple", "single"):
+        messages.add_message(request, messages.ERROR, "batch job cannot be rerun")
+        return redirect("nice_lite:workspace")
+
+    return redirect(reverse(
+        "nice_lite:new_stream",
+        query={"selected_job_id": jobmodel.id},
+    ))
+
+
+@login_required(login_url="/login")
+@require_POST
 def view_batch_delete(request):
     """Permanently delete an owned deletable batch job and return to its workspace."""
     batch_job, jobmodel = _get_accessible_batch_job(request, "delete_batch")

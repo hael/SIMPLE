@@ -66,12 +66,19 @@ class WorkspaceJobsViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("workspace_jobs_checksum", response.cookies)
-        mock_render.assert_called_once()
+        mock_render.assert_called_once_with(
+            request,
+            "jobs_cards.html",
+            {"jobs": fake_queryset},
+        )
         mock_normalize.assert_called_once_with(fake_queryset)
 
     def test_workspace_jobs_returns_204_when_checksum_matches(self):
         payload = [{"id": 1, "status": "running"}]
-        checksum_payload = {"jobs": payload}
+        checksum_payload = {
+            "jobs": payload,
+            "template": "jobs_cards.html",
+        }
         checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
 
         request = self.factory.get("/workspacejobs")

@@ -58,6 +58,22 @@
                                         </button>
                                     </form>
                                 {% elif job.status == "queued" or job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                                    {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                                        {% if job.master_stats.package == "simple" or job.master_stats.package == "single" %}
+                                            <form method="POST" action="{% url 'nice_lite:rerun_batch' %}" target="job_builder_iframe">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                                                <button type="submit"
+                                                        title="rerun batch job" aria-label="rerun batch job"
+                                                        class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+                                                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
+                                                        <polyline points="14,2 14,6 10,6"/>
+                                                    </svg>
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                    {% endif %}
                                     <form method="POST" action="{% url 'nice_lite:delete_batch' %}" target="_parent">
                                         {% csrf_token %}
                                         <input type="hidden" name="selected_job_id" value="{{ job.id }}">

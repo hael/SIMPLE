@@ -726,6 +726,76 @@ class BatchViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         job.stop.assert_called_once_with()
 
+    def test_rerun_requires_post(self):
+        response = batch_views.view_batch_rerun(
+            self._get_request("/rerunbatch")
+        )
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_rerun_opens_job_builder_for_owned_terminal_batch_job(self):
+        job = Mock()
+        metadata = {
+            "job_type": "batch",
+            "package": "simple",
+            "program": "cluster2D",
+            "source": {"type": "project_file", "filename": "input.simple"},
+        }
+        jobmodel = SimpleNamespace(
+            id=7,
+            status="finished",
+            master_stats=metadata,
+            dset_id=3,
+        )
+
+        with patch.object(
+            batch_views,
+            "_get_accessible_batch_job",
+            return_value=(job, jobmodel),
+        ):
+            response = batch_views.view_batch_rerun(
+                self._request("/rerunbatch")
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/newstream?selected_job_id=7")
+        job.rerun.assert_not_called()
+
+    def test_rerun_rejects_active_or_unsupported_batch_jobs(self):
+        for status, package in (
+            ("running", "simple"),
+            ("finished", "simple_stream"),
+        ):
+            with self.subTest(status=status, package=package):
+                job = Mock()
+                jobmodel = SimpleNamespace(
+                    status=status,
+                    master_stats={
+                        "job_type": "batch",
+                        "package": package,
+                        "program": "demo",
+                    },
+                )
+                with (
+                    patch.object(
+                        batch_views,
+                        "_get_accessible_batch_job",
+                        return_value=(job, jobmodel),
+                    ),
+                    patch.object(batch_views.messages, "add_message"),
+                    patch.object(
+                        batch_views,
+                        "redirect",
+                        return_value=HttpResponseRedirect("/workspace"),
+                    ),
+                ):
+                    response = batch_views.view_batch_rerun(
+                        self._request("/rerunbatch")
+                    )
+
+                self.assertEqual(response.status_code, 302)
+                job.rerun.assert_not_called()
+
     def test_delete_calls_permanent_delete_for_owned_finished_job(self):
         job = Mock()
         job.delete.return_value = True
