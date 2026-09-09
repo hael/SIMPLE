@@ -58,15 +58,15 @@ def _classic_status_callback_wrapper(jobid, endpoint):
     the same header accepted by the NICE API.
     """
     running_payload = json.dumps(
-        {"jobid": jobid, "job_heartbeat": {}},
+        {"version": 1, "jobid": jobid, "batch_heartbeat": {}},
         separators=(",", ":"),
     )
     finished_payload = json.dumps(
-        {"jobid": jobid, "job": {"status": "finished", "terminate": True}},
+        {"version": 1, "jobid": jobid, "batch_heartbeat": {"status": "finished", "terminate": True}},
         separators=(",", ":"),
     )
     failed_payload = json.dumps(
-        {"jobid": jobid, "job": {"status": "failed", "terminate": True}},
+        {"version": 1, "jobid": jobid, "batch_heartbeat": {"status": "failed", "terminate": True}},
         separators=(",", ":"),
     )
     quoted_endpoint = shlex.quote(endpoint)
@@ -135,10 +135,10 @@ class SIMPLEStream:
     # class-level constants — shared across all instances
     ui_cmd                 = ["simple_private_exec", "prg=print_ui_json"]
     executable             = "simple_stream prg=master"
-    tplt_simple_motif      = "XXXSIMPLEXXX"   # placeholder in dispatch template for the command
+    tplt_simple_motif      = "XXXSIMPLEXXX"       # placeholder in dispatch template for the command
     tplt_simple_path_motif = "XXXSIMPLEPATHXXX"   # placeholder in dispatch template for the simple_path
-    tplt_nthr_motif        = "XXXNCPUXXX"     # placeholder in dispatch template for thread count
-    nthr_master            = 4                # number of threads for the master process
+    tplt_nthr_motif        = "XXXNCPUXXX"         # placeholder in dispatch template for thread count
+    nthr_master            = 4                    # number of threads for the master process
 
     def __init__(self, args=None):
         self.ui          = None    # parsed UI definition dict, populated by loadUIJSON()
@@ -405,9 +405,10 @@ class SIMPLEBatch:
     """
 
     # class-level constants
-    ui_cmd            = ["simple_private_exec", "prg=print_ui_json"]
-    tplt_simple_motif = "XXXSIMPLEXXX"
-    tplt_nthr_motif   = "XXXNCPUXXX"
+    ui_cmd                 = ["simple_private_exec", "prg=print_ui_json"]
+    tplt_simple_motif      = "XXXSIMPLEXXX"
+    tplt_simple_path_motif = "XXXSIMPLEPATHXXX"  
+    tplt_nthr_motif        = "XXXNCPUXXX"
 
     def __init__(self, pckg=None):
         self.ui          = {}   # parsed UI definition dict
@@ -502,9 +503,12 @@ class SIMPLEBatch:
             return False
         if self.tplt_simple_motif not in dispatchmodel.tplt:
             return False
+        if self.tplt_simple_path_motif not in dispatchmodel.tplt:
+            print_error("simple path missing from dispatch template")
+            return False
 
         creates_project = self.executable == "simple_exec" and self.jobtype == "new_project"
-        status_endpoint = dispatchmodel.url + "/api_classic"
+        status_endpoint = dispatchmodel.url + "/api"
         status_prefix, status_suffix = _classic_status_callback_wrapper(
             self.jobid,
             status_endpoint,
@@ -542,6 +546,7 @@ class SIMPLEBatch:
         dispatch_script = dispatchmodel.tplt
         dispatch_script = dispatch_script.replace(self.tplt_nthr_motif,   str(scheduler_nthr))
         dispatch_script = dispatch_script.replace(self.tplt_simple_motif, command_string)
+        dispatch_script = dispatch_script.replace(self.tplt_simple_path_motif, dispatchmodel.simple_path)
         dispatch_script = dispatch_script.replace("\r\n", "\n")
 
         dispatch_script_path = os.path.join(self.base_dir, "job.script")

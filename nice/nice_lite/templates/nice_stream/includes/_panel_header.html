@@ -59,7 +59,7 @@
                     <button type="button" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('hidden')"
                             class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction cursor-pointer hover:bg-streamaction/20 transition-colors"
                             title="status: running&#013;stage: {{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}">
-                        <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction animate-pulse flex-shrink-0" title="{% if n_workers == 0 %}dormant{% else %}{{ status }}{% endif %}"></span>
+                        <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction animate-pulse flex-shrink-0" title="{% if n_workers == 0 %}dormant{% else %}{{ status }}{% endif %}"></span> -->
                         {% if n_workers == 0 %}dormant{% else %}{{ status }}{% endif %}
                     </button>
                     <div class="status-menu hidden absolute right-0 top-full mt-1 z-30 min-w-[110px] bg-streambar border border-streamline rounded-lg shadow-lg py-1">
@@ -79,7 +79,7 @@
                 {% else %}
                     <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction"
                         title="status: running&#013;stage: {{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}">
-                        <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction animate-pulse flex-shrink-0" title="{% if n_workers == 0 %}dormant{% else %}{{ status }}{% endif %}"></span>
+                        <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction animate-pulse flex-shrink-0" title="{% if n_workers == 0 %}dormant{% else %}{{ status }}{% endif %}"></span> -->
                         {% if n_workers == 0 %}dormant{% else %}{{ status }}{% endif %}
                     </span>
                 {% endif %}
@@ -88,7 +88,7 @@
             {% if not hide_actions and status == "finished" %}
                 <button type="button" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('hidden')"
                         class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring cursor-pointer hover:bg-streamring/20 transition-colors">
-                    <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+                    <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span> -->
                     {{ status }}
                 </button>
                 <div class="status-menu hidden absolute right-0 top-full mt-1 z-30 min-w-[110px] bg-streambar border border-streamline rounded-lg shadow-lg py-1">
@@ -107,7 +107,7 @@
                 </div>
             {% else %}
                 <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
-                    <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+                    <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span> -->
                     {{ status }}
                 </span>
             {% endif %}
@@ -115,7 +115,7 @@
             {% if not hide_actions %}
                 <button type="button" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('hidden')"
                         class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamerror/10 text-streamerror cursor-pointer hover:bg-streamerror/20 transition-colors">
-                    <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamerror flex-shrink-0" title="{{ status }}"></span>
+                    <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamerror flex-shrink-0" title="{{ status }}"></span> -->
                     {{ status }}
                 </button>
                 <div class="status-menu hidden absolute right-0 top-full mt-1 z-30 min-w-[110px] bg-streambar border border-streamline rounded-lg shadow-lg py-1">
@@ -134,23 +134,23 @@
                 </div>
             {% else %}
                 <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamerror/10 text-streamerror">
-                    <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamerror flex-shrink-0" title="{{ status }}"></span>
+                    <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamerror flex-shrink-0" title="{{ status }}"></span> -->
                     {{ status }}
                 </span>
             {% endif %}
         {% elif status == "queued" or status == "terminating" %}
             <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction">
-                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction flex-shrink-0" title="{{ status }}"></span>
+                <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction flex-shrink-0" title="{{ status }}"></span> -->
                 {{ status }}
             </span>
         {% elif status == "error" %}
             <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamrejected/10 text-streamrejected">
-                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamrejected flex-shrink-0" title="{{ status }}"></span>
+                <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamrejected flex-shrink-0" title="{{ status }}"></span> -->
                 running - {{ status }}
             </span>
         {% else %}
             <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
-                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+                <!-- <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span> -->
                 {{ status }}
             </span>
         {% endif %}

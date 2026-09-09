@@ -5,9 +5,9 @@
 ! PURPOSE:
 !   Exercises gui_assembler through a set of unit tests covering object
 !   lifecycle (new/kill/reuse/set_stoptime), hash-based change suppression
-!   (clear_hashes), and JSON assembly for the stream-preprocess,
+!   (clear_hashes), and JSON assembly for the batch-heartbeat, stream-preprocess,
 !   optics-assignment, initial-picking, reference-picking, opening-2D,
-!   particle-sieving, and pool-2D stages.
+!   particle-sieving, pool-2D, and project stages.
 !   Where the assembled JSON is fully deterministic (no live timestamps) the
 !   test verifies an FNV-1a hash of the serialised output; otherwise it checks
 !   only that the output is non-empty.
@@ -19,7 +19,7 @@
 !
 ! DEPENDENCIES:
 !   simple_gui_metadata_api, simple_gui_assembler, simple_test_utils,
-!   simple_string
+!   simple_string, simple_sp_project, simple_syslib
 !==============================================================================
 module simple_gui_assembler_tester
   use simple_gui_metadata_api, only: gui_metadata_stream_preprocess,                      &
@@ -51,8 +51,11 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,            &
                                      gui_metadata_cavg2D,                                 &
                                      sprite_sheet_pos
+  use simple_gui_metadata_api, only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
   use simple_gui_assembler,    only: gui_assembler
-  use simple_test_utils,       only: assert_true, assert_char
+  use simple_sp_project,       only: sp_project
+  use simple_syslib,           only: del_file
+  use simple_test_utils,       only: assert_true, assert_char, assert_int
   use simple_string,           only: string
   implicit none
 
@@ -69,6 +72,7 @@ contains
     call test_new_kill_reuse()
     call test_set_stoptime()
     call test_clear_hashes()
+    call test_batch_heartbeat()
     call test_preprocess()
     call test_optics_assignment()
     call test_initial_picking()
@@ -76,6 +80,7 @@ contains
     call test_opening2D()
     call test_particle_sieving()
     call test_pool2D()
+    call test_project()
   end subroutine run_all_gui_assembler_tests
 
   !---------------- lifecycle ----------------
@@ -149,6 +154,30 @@ contains
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
   end subroutine test_clear_hashes
+
+  !---------------- batch heartbeat assembly ----------------
+
+  ! Assemble a batch_heartbeat JSON payload and verify the section is non-empty
+  ! and changes once set_stoptime has been called (status running -> finished).
+  ! An exact hash comparison is not possible because the section embeds a live
+  ! Unix timestamp and pid.
+  subroutine test_batch_heartbeat()
+    type(gui_assembler) :: assembler
+    type(string)        :: json_str1, json_str2
+    write(*,'(A)') 'test_batch_heartbeat'
+    call assembler%new(0)
+    call assert_true(assembler%is_associated(), 'assembler json associated')
+    call assembler%assemble_batch_heartbeat()
+    json_str1 = assembler%to_string()
+    call assert_true(json_str1%strlen() > 0, 'json length greater than 0')
+    call assembler%set_stoptime()
+    call assembler%assemble_batch_heartbeat()
+    json_str2 = assembler%to_string()
+    call assert_true(json_str2%strlen() > 0, 'json length greater than 0')
+    call assert_true(json_str1%to_char() /= json_str2%to_char(), 'batch heartbeat differs before/after set_stoptime')
+    call assembler%kill()
+    call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+  end subroutine test_batch_heartbeat
 
   !---------------- preprocess assembly ----------------
 
@@ -436,5 +465,46 @@ contains
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_latest_cavgs2D)
   end subroutine test_pool2D
+
+  !---------------- project assembly ----------------
+
+  ! Build a minimal project, populate gui_metadata_project via both the
+  ! in-memory set(spproj) and on-disk set(projfile) overloads, and verify the
+  ! assembled project section is non-empty.  An exact hash comparison is not
+  ! possible because the section embeds a live Unix timestamp (created).
+  subroutine test_project()
+    type(gui_assembler)        :: assembler
+    type(gui_metadata_project) :: meta_project_inmem, meta_project_disk
+    type(sp_project)           :: proj
+    type(string)                :: projfile, projname, json_str
+    integer                     :: nmics, nstks, nptcls, created
+    write(*,'(A)') 'test_project'
+    projfile = 'gui_assembler_tester_project.simple'
+    call proj%os_mic%new(2, is_ptcl=.false.)
+    call proj%os_ptcl2D%new(10, is_ptcl=.true.)
+    call proj%update_projinfo(projfile)
+    call meta_project_inmem%new(GUI_METADATA_PROJECT_TYPE)
+    call meta_project_inmem%set(proj)
+    call assert_true(meta_project_inmem%get(projname, projfile, nmics, nstks, nptcls, created), &
+        &'meta_project_inmem assigned')
+    call assert_int(2,  nmics,  'meta_project_inmem nmics from in-memory project')
+    call assert_int(10, nptcls, 'meta_project_inmem nptcls from in-memory project')
+    call proj%write(projfile)
+    call proj%kill
+    call meta_project_disk%new(GUI_METADATA_PROJECT_TYPE)
+    call meta_project_disk%set(projfile)
+    call assert_true(meta_project_disk%get(projname, projfile, nmics, nstks, nptcls, created), &
+        &'meta_project_disk assigned')
+    call assert_int(2,  nmics,  'meta_project_disk nmics from project file')
+    call assert_int(10, nptcls, 'meta_project_disk nptcls from project file')
+    call assembler%new(0)
+    call assert_true(assembler%is_associated(), 'assembler json associated')
+    call assembler%assemble_batch_metadata(meta_project_disk)
+    json_str = assembler%to_string()
+    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assembler%kill()
+    call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    call del_file(projfile)
+  end subroutine test_project
 
 end module simple_gui_assembler_tester

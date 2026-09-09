@@ -29,7 +29,6 @@ from .helpers                       import print_error
 from .data_structures.batchjob      import BatchJob
 from .data_structures.project       import Project
 from .data_structures.streamjob     import StreamJob
-from .data_structures.workspace     import Workspace
 from .models                        import ProjectModel
 
 
@@ -165,6 +164,7 @@ def index(request):
     - ``version`` (number)
     - ``jobid`` (positive integer)
     - ``stream_heartbeat`` (dict)
+    - ``batch_heartbeat`` (dict)
     """
     response = {}
     if not _is_worker_authorized(request):
@@ -175,6 +175,7 @@ def index(request):
     if request_json is None:
         print_error("failed to load json from request")
         return JsonResponse(response, status=400)
+
     if not isinstance(request_json, dict):
         print_error("request payload is not a JSON object")
         return JsonResponse(response, status=400)
@@ -182,67 +183,41 @@ def index(request):
     if not _has_numeric_version(request_json):
         print_error("version missing from request")
         return JsonResponse(response, status=400)
+    
     jobid = _get_valid_job_id(request_json)
     if jobid is None:
         print_error("jobid missing from request")
         return JsonResponse(response, status=400)
 
-    streamjob = StreamJob(id=jobid)
-    jobmodel = streamjob.get_jobmodel()
-    if not _is_known_job(jobmodel):
-        print_error(f"unknown stream job {jobid}")
-        return JsonResponse(response, status=404)
+    if dict_present(request_json, "stream_heartbeat", silent=True):
+        streamjob = StreamJob(id=jobid)
+        jobmodel = streamjob.get_jobmodel()
+        if not _is_known_job(jobmodel):
+            print_error(f"unknown stream job {jobid}")
+            return JsonResponse(response, status=404)
 
-    if dict_present(request_json, "stream_heartbeat"):
         if streamjob.update_stats(request_json):
             response = streamjob.get_master_update()
             return JsonResponse(response)
+        
+        return JsonResponse(response, status=400)
+    
+    elif dict_present(request_json, "batch_heartbeat", silent=True):
+        batchjob = BatchJob(id=jobid)
+        jobmodel = batchjob.get_jobmodel()
+        if not _is_known_job(jobmodel):
+            print_error(f"unknown batch job {jobid}")
+            return JsonResponse(response, status=404)
+
+        if batchjob.update_stats(request_json):
+            response = batchjob.get_master_update()
+            return JsonResponse(response)
+        
         return JsonResponse(response, status=400)
 
-    if dict_present(request_json, "heartbeat"):
-        print_error("classic heartbeat is not supported on this endpoint")
+    else:
+        print_error("unknown job heartbeat type")
         return JsonResponse(response, status=400)
-
-    print_error("unknown job heartbeat type")
-    return JsonResponse(response, status=400)
-
-
-@csrf_exempt
-@require_POST
-def index_classic(request):
-    """Handle classic heartbeat updates from worker clients.
-
-    Expected payload keys include:
-    - ``jobid`` (positive integer)
-    - classic stats/update fields consumed by ``BatchJob.updateStats``
-    """
-    response = {}
-    if not _is_worker_authorized(request):
-        print_error("unauthorized worker request")
-        return JsonResponse(response, status=403)
-
-    request_json = _parse_request_json(request)
-    if request_json is None:
-        print_error("failed to load json from classic request")
-        return JsonResponse(response, status=400)
-    if not isinstance(request_json, dict):
-        print_error("classic payload is not a JSON object")
-        return JsonResponse(response, status=400)
-
-    jobid = _get_valid_job_id(request_json)
-    if jobid is None:
-        print_error("jobid missing from classic request")
-        return JsonResponse(response, status=400)
-
-    job = BatchJob(id=jobid)
-    if not _is_known_job(job.jobmodel):
-        print_error(f"unknown classic job {jobid}")
-        return JsonResponse(response, status=404)
-
-    workspace = Workspace(job.jobmodel.dset_id)
-    project = Project(job.jobmodel.dset.proj_id)
-    response = job.updateStats(request_json, project, workspace)
-    return JsonResponse(response)
 
 
 @login_required(login_url="/login")

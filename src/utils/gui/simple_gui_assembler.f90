@@ -18,6 +18,8 @@
 !     clear_hashes()                 — reset change-detection hashes
 !     is_associated()                — .true. if the JSON root is initialised
 !     assemble_stream_heartbeat()    — write process-status section
+!     assemble_batch_heartbeat()     — write single-job status section for batch (non-streaming) jobs
+!     assemble_batch_metadata()      — write project section for batch (non-streaming) jobs
 !     assemble_stream_preprocess()   — write preprocessing section
 !     assemble_stream_optics_assignment() — write optics-assignment section
 !     assemble_stream_initial_picking()    — write initial-picking section
@@ -52,7 +54,8 @@ module simple_gui_assembler
                                      gui_metadata_stream_opening2D,          &
                                      gui_metadata_stream_particle_sieving,   &
                                      gui_metadata_stream_pool2D,             &
-                                     gui_metadata_stream_pool2D_snapshot
+                                     gui_metadata_stream_pool2D_snapshot,    &
+                                     gui_metadata_project
   implicit none
 
 public :: gui_assembler
@@ -70,6 +73,7 @@ type :: gui_assembler
   type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
   type(string)              :: particle_sieving_hash
   type(string)              :: pool2D_hash             ! FNV-1a hash of last sent pool-2D section
+  type(string)              :: project_hash            ! FNV-1a hash of last sent project section
   integer                   :: job_id    = 0           ! pipeline job identifier
   integer                   :: starttime = 0           ! Unix timestamp of job start
   integer                   :: stoptime  = 0           ! Unix timestamp of job stop (0 while running)
@@ -83,6 +87,8 @@ contains
   procedure :: clear_hashes
   procedure :: is_associated
   procedure :: assemble_stream_heartbeat
+  procedure :: assemble_batch_heartbeat
+  procedure :: assemble_batch_metadata
   procedure :: assemble_stream_preprocess
   procedure :: assemble_stream_optics_assignment
   procedure :: assemble_stream_initial_picking
@@ -131,6 +137,7 @@ contains
     call self%opening2D_hash%kill()
     call self%particle_sieving_hash%kill()
     call self%pool2D_hash%kill()
+    call self%project_hash%kill()
   end subroutine clear_hashes
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
@@ -218,6 +225,51 @@ contains
     end subroutine forked_process_status
 
   end subroutine assemble_stream_heartbeat
+
+  ! Write the batch_heartbeat section: single top-level status for batch (non-streaming) jobs.
+  subroutine assemble_batch_heartbeat( self )
+    class(gui_assembler), intent(inout) :: self
+    type(json_value),     pointer       :: json_ptr
+    call self%json%remove_if_present(self%json_root, 'batch_heartbeat')
+    call self%json%create_object(json_ptr, 'batch_heartbeat')
+    call self%json%add(json_ptr, 'timestamp', int(c_time(0_c_long)))
+    call self%json%add(json_ptr, 'starttime', self%starttime)
+    call self%json%add(json_ptr, 'stoptime',  self%stoptime)
+    call self%json%add(json_ptr, 'pid',       getpid())
+    if( self%stoptime > 0 ) then
+      call self%json%add(json_ptr, 'status', 'finished')
+    else
+      call self%json%add(json_ptr, 'status', 'running')
+    endif
+    call self%json%add(self%json_root, json_ptr)
+    nullify(json_ptr)
+  end subroutine assemble_batch_heartbeat
+
+  ! Write the project section from batch (non-streaming) project metadata.
+  ! The whole section is suppressed when its hash matches the previously sent hash.
+  subroutine assemble_batch_metadata( self, meta_project )
+    class(gui_assembler),      intent(inout) :: self
+    type(gui_metadata_project), intent(inout) :: meta_project
+    character(kind=CK,len=:),   allocatable   :: buffer
+    type(json_value),           pointer       :: json_ptr
+    type(string)                              :: str, hash
+    call self%json%remove_if_present(self%json_root, 'project_metadata')
+    json_ptr => meta_project%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'project_metadata')
+    call self%json%print_to_string_fast(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%project_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      call self%project_hash%kill()
+      self%project_hash = hash
+    else
+      call self%json%destroy(json_ptr)
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr)
+  end subroutine assemble_batch_metadata
 
   ! Write the preprocessing section, including micrographs, histograms, and
   ! timeplots. The whole section is suppressed when its hash matches the

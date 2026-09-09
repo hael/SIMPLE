@@ -1374,9 +1374,9 @@ class SimpleBatchDispatchTests(TestCase):
                     with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
                         content = script.read()
 
-                    running = '{"jobid":9,"job_heartbeat":{}}'
-                    finished = '{"jobid":9,"job":{"status":"finished","terminate":true}}'
-                    failed = '{"jobid":9,"job":{"status":"failed","terminate":true}}'
+                    running = '{"version":1,"jobid":9,"batch_heartbeat":{}}'
+                    finished = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"finished","terminate":true}}'
+                    failed = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"failed","terminate":true}}'
                     command = f"{executable} prg=demo_commander"
 
                     self.assertIn("nice_status_callback()", content)

@@ -31,7 +31,6 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path("image <path:src>",                   api.image,                                         name="image"),
     path("api",                                api.index,                                         name="api"),
-    path("api_classic",                        api.index_classic,                                 name="api_classic"),
 
     # ------------------------------------------------------------------
     # File browser
@@ -83,6 +82,7 @@ urlpatterns = [
     path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
     path("rerunbatch",                         batch_views.view_batch_rerun,                       name="rerun_batch"),
     path("deletebatch",                        batch_views.view_batch_delete,                      name="delete_batch"),
+    path("terminatebatch",                     batch_views.view_batch_terminate,                   name="terminate_batch"),
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
     path("restartstream",                      stream_views.view_stream_restart_stream,            name="restart_stream"),
     path("termstream",                         stream_views.view_stream_terminate_stream,          name="terminate_stream"),

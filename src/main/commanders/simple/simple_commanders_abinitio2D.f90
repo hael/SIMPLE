@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_commanders_cavgs
 use simple_commanders_cluster2D
 use simple_abinitio2D_controller 
+use simple_gui_communicator,       only: gui_communicator
 implicit none
 
 public :: commander_abinitio2D, execute_abinitio2D_staged
@@ -59,6 +60,7 @@ contains
         ! other
         type(parameters)           :: params
         type(sp_project)           :: spproj
+        type(gui_communicator)     :: gui_comm
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
         integer :: start_stage, stop_stage
@@ -93,6 +95,7 @@ contains
         l_shmem = set_shmem_flag(cline)
         ! master parameters
         call params%new(cline)
+        call gui_comm%new(params)
         if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_abinitio2D')
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
@@ -144,6 +147,12 @@ contains
         else
             call ensure_resume_sigma_state
         endif
+
+        ! TEST EXIT
+        ! call sleep(10)
+        ! call gui_comm%kill()
+        ! call simple_end('**** TEST EXIT AFTER GUI COMMUNICATOR KILL ****')
+        ! call exit(0)
         ! Frequency marching
         do istage = start_stage,stop_stage
             write(logfhandle,'(A)')'>>>'
@@ -156,6 +165,10 @@ contains
             call set_cline_cluster2D_stage(cline_cluster2D, cline, params, stage_parms, maxits, istage)
             ! classify
             call execute_cluster2D
+            ! update GUI
+            call spproj%read_segment('cls2D', params%projfile)
+            call spproj%read_segment('out',   params%projfile)
+            call gui_comm%add_metadata(spproj, stage2D=istage)
         enddo
         if( l_checkpoint .and. stop_stage < nstages )then
             last_iter = cline_cluster2D%get_iarg('endit')
@@ -191,6 +204,10 @@ contains
             rt_final_cavgs = toc(t_phase)
             call write_abinitio_benchmark(last_iter + 1, 'final_cavgs', nstages)
         endif
+        ! final update GUI
+        call spproj%read_segment('cls2D', params%projfile)
+        call spproj%read_segment('out',   params%projfile)
+        call gui_comm%add_metadata(spproj, stage2D=0) ! stage2D=0 signifies final
         ! cleanup
         call del_file('start2Drefs'//params%ext%to_char())
         call del_file('start2Drefs_even'//params%ext%to_char())
@@ -206,6 +223,7 @@ contains
         nullify(spproj_field)
         call qsys_cleanup(params)
         call simple_touch(ABINITIO2D_FINISHED)
+        call gui_comm%kill()
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
         
       contains

@@ -1,5 +1,6 @@
 # global imports
 import hashlib
+import json
 import logging
 import math
 import os
@@ -18,7 +19,7 @@ from django.db import transaction
 from django.utils import timezone
 
 # local imports
-from ..helpers import directory_exists, ensure_directory
+from ..helpers import directory_exists, ensure_directory, analyse_heartbeat, print_error
 from ..models import JobModel, WorkspaceModel
 from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
@@ -108,6 +109,26 @@ class BatchJob(Job):
         self.source = metadata.get("source")
         self.absdir = self.get_absdir()
 
+
+    # ------------------------------------------------------------------
+    # Process control
+    # ------------------------------------------------------------------
+
+    def terminate(self):
+        """Signal the process to terminate cleanly."""
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        if self.jobmodel.master_status != "running" and self.jobmodel.master_status != "error":
+            print_error("master is not running")
+            return False
+        self.jobmodel.master_status = "terminating"
+        master_update = self.jobmodel.master_update
+        master_update["terminate"] = True
+        self.jobmodel.master_update = master_update
+        self.jobmodel.save()
+        return True
+    
     # ------------------------------------------------------------------
     # Accessors
     # ------------------------------------------------------------------
@@ -1305,6 +1326,54 @@ class BatchJob(Job):
 
             jobmodel.save()
             return response
+
+    # ------------------------------------------------------------------
+    # Stage heartbeat / stats ingestion (called by the running job via API)
+    # ------------------------------------------------------------------
+
+    def update_stats(self, stats_json):
+        """
+        Ingest a stats payload from the running SIMPLEStream process.
+
+        The payload may contain any combination of:
+          - "stream_heartbeat" : dict of per-stage heartbeat entries
+          - "preprocessing"    : preprocessing stats dict
+          - "optics_assignment": optics assignment stats dict
+          - "initial_picking"  : initial picking stats dict
+          - "opening2D"        : pickrefs generation stats dict
+          - "reference_picking": reference picking stats dict
+
+        When a stage transitions to "running", any pending restart command for
+        that stage is cleared from master_update. When opening2D is not running,
+        any pending nmics/pickref-selection commands are also cleared.
+
+        Returns True on success, False if the job is not loaded.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+
+        updated = False
+
+        if "batch_heartbeat" in stats_json:
+            updated       = True
+            heartbeat     = stats_json["batch_heartbeat"]
+            master_update = self.jobmodel.master_update
+            self.jobmodel.master_heartbeat = int(time.time())
+            status, _ = analyse_heartbeat(heartbeat)
+            self.jobmodel.status        = status
+            self.jobmodel.master_status = status
+            self.jobmodel.master_update = master_update
+
+        if "project_metadata" in stats_json:
+            updated = True
+            master_stats = self.jobmodel.master_stats 
+            master_stats["project_metadata"] = stats_json["project_metadata"]
+            self.jobmodel.master_stats = master_stats
+        
+        if updated:
+            self.jobmodel.save()
+        return True
 
     # ------------------------------------------------------------------
     # Projfile helpers

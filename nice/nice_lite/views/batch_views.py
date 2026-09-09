@@ -866,6 +866,15 @@ def view_batch_movie_thumbnail(request, jobid, token):
         return HttpResponse(status=404)
     return HttpResponse(thumbnail, content_type="image/webp")
 
+@login_required(login_url="/login")
+@require_POST
+def view_batch_terminate(request):
+    """Terminates batch job and refreshes page by redirecting to workspace view."""
+    batch_job, _jobmodel = _get_accessible_batch_job(request, log_context="terminate_batch")
+    if batch_job is None:
+        return redirect("nice_lite:workspace")
+    batch_job.terminate()
+    return redirect("nice_lite:workspace")
 
 @login_required(login_url="/login")
 @require_POST
