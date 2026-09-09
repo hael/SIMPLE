@@ -1088,6 +1088,8 @@ subroutine exec_test_pcg_recon( self, cline )
     use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, &
         &PCG_OP_MATRIXFREE, PCG_OP_KERNEL
     use simple_sym,               only: sym
+    use simple_image,             only: image
+    use simple_matcher_ptcl_io,   only: prep_rec_observation
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
     integer,          parameter :: BOX = 24, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
@@ -1120,6 +1122,16 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: CROP_RAW_RELTOL = 2.0e-5
     integer,          parameter :: STREAM_ITS    = 20
     integer,          parameter :: KERNEL_COMPARE_ITS = 8
+    ! stage 13: the two backends' cropped observations differ only by the
+    ! single-precision FFT round trips of the fused gridding route
+    real,             parameter :: OBS_PARITY_RELTOL = 1.0e-5
+    ! stage 14: window band 8..12 px on the 24 box (mask3D_soft clips the ramp
+    ! at the box edge); the constrained result is compared with the windowed
+    ! unconstrained solution over the shells where the window is in [0.15,0.85]
+    real,             parameter :: SUPPORT_MSKRAD = real(BOX)/2.0 - 2.0
+    integer,          parameter :: SUPPORT_ITS = 40, SUPPORT_NREP = 6
+    real,             parameter :: SUPPORT_BAND_LO = 0.15, SUPPORT_BAND_HI = 0.85
+    real,             parameter :: SUPPORT_BAND_TOL = 0.15, SUPPORT_STABILITY_FRAC = 0.9
     real,             parameter :: CTRS(3,NBLOBS) = reshape([&
         &-5.0,-3.0, 2.0,&
         &4.0, 5.0,-3.0,&
@@ -1131,7 +1143,14 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
     real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
     real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
-    type(reconstructor_pcg) :: pcgop, pcg_reduce, pcg_crop, pcg_ml
+    type(reconstructor_pcg) :: pcgop, pcg_reduce, pcg_crop, pcg_ml, pcg_u, pcg_c
+    type(image)             :: ptcl_native, ptcl_work, obs_g, obs_p, pad_g, mskimg, wimg
+    logical, allocatable    :: lmsk_native(:,:,:), lmsk_crop(:,:,:)
+    real,    allocatable    :: rm_pad(:,:,:), obsg(:,:), obsp(:,:), proj2d(:,:,:), window(:,:,:)
+    real,    allocatable    :: x_u(:,:,:), x_c(:,:,:), x_w(:,:,:)
+    real    :: obs_scale, obs_err, ratio, wmean, rms_c, rms_w, rms_first, rms_last
+    integer :: npad, starts, x0, y0, xo, yo, ish, irep
+    logical :: ratio_ok
     type(oris)              :: projdirs, projdirs_exp, projdirs_crop
     type(ori)               :: e, e_exp
     type(ctfparams)         :: ctfparms
@@ -2067,6 +2086,149 @@ subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 12 SKIPPED: an earlier stage failed'
     endif
 
+    ! ============ STAGE 13: prepared-observation parity (gridding vs PCG) ============
+    ! Cropping and edge tapering do not commute, so both backends prepare a
+    ! cropped particle through prep_rec_observation. The gridding route is the
+    ! fused crop/taper/pad/FFT chain of prep_imgs4rec, un-padded here; the PCG
+    ! route is prep_rec_observation with the taper. Compared in real space,
+    ! before any backend-specific transform, weighting or accumulation.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 13: prepared-observation parity for box_crop < box'
+        call ptcl_native%new([BOX,BOX,1], SMPD)
+        call ptcl_work%new([BOX,BOX,1], SMPD)
+        call obs_g%new([CROP_BOX,CROP_BOX,1], CROP_SMPD)
+        call obs_p%new([CROP_BOX,CROP_BOX,1], CROP_SMPD)
+        npad = OSMPL_PAD_FAC * CROP_BOX
+        call pad_g%new([npad,npad,1], CROP_SMPD)
+        call mskimg%disc([BOX,BOX,1], SMPD, real(BOX)/3.0, lmsk_native)
+        call mskimg%disc([CROP_BOX,CROP_BOX,1], CROP_SMPD, real(CROP_BOX)/3.0, lmsk_crop)
+        call mskimg%kill
+        ! deterministic particle: the phantom projected along z on a background ramp plus noise
+        call ptcl_native%gauran(0., 0.3)
+        proj2d = ptcl_native%get_rmat()
+        do j = 1, BOX
+            do i = 1, BOX
+                proj2d(i,j,1) = proj2d(i,j,1) + sum(phantom(i,j,:)) + 0.2*real(i)/real(BOX) - 0.1*real(j)/real(BOX)
+            end do
+        end do
+        call ptcl_native%set_rmat(proj2d, .false.)
+        ! gridding route (prep_imgs4rec), un-padded and un-shifted for the comparison
+        call ptcl_work%copy(ptcl_native)
+        call ptcl_work%norm_noise_fft_clip_shift(lmsk_native, obs_g, [0.,0.])
+        call obs_g%ifft
+        call obs_g%norm_noise_taper_edge_pad_fft(lmsk_crop, pad_g, renorm=.false.)
+        call pad_g%ifft
+        rm_pad = pad_g%get_rmat()
+        allocate(obsg(CROP_BOX,CROP_BOX), obsp(CROP_BOX,CROP_BOX))
+        starts = (npad - CROP_BOX)/2 + 1
+        do j = 1, CROP_BOX
+            y0 = starts + j - 1
+            yo = modulo((y0 - 1) + npad/2, npad) + 1
+            do i = 1, CROP_BOX
+                x0 = starts + i - 1
+                xo = modulo((x0 - 1) + npad/2, npad) + 1
+                obsg(i,j) = rm_pad(xo,yo,1)
+            end do
+        end do
+        ! PCG route
+        call ptcl_work%copy(ptcl_native)
+        call prep_rec_observation(ptcl_work, lmsk_native, obs_p, .true.)
+        rm_pad = obs_p%get_rmat()
+        obsp   = rm_pad(:,:,1)
+        obs_scale = sum(obsg*obsp) / max(sum(obsp*obsp), TINY)
+        obs_err   = sqrt(sum((obsg - obs_scale*obsp)**2) / max(sum(obsg**2), TINY))
+        write(logfhandle,'(a,f10.6,a,es12.4)') '    gridding/PCG observation scale = ', obs_scale, &
+            &'  scaled relative error = ', obs_err
+        if( obs_err > OBS_PARITY_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: gridding and PCG prepare different cropped observations'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: gridding and PCG prepare the same cropped observation'
+        endif
+        call ptcl_native%kill
+        call ptcl_work%kill
+        call obs_g%kill
+        call obs_p%kill
+        call pad_g%kill
+        deallocate(proj2d, rm_pad, obsg, obsp, lmsk_native, lmsk_crop)
+    else
+        write(logfhandle,'(a)') '>>> STAGE 13 SKIPPED: an earlier stage failed'
+    endif
+
+    ! ============ STAGE 14: support semantics and warm-start band stability ============
+    ! The shipped PCG map is window*u with u solved on the hard domain window > 0:
+    ! one estimate times one soft window, like the gridding restoration. (a) through
+    ! the window band the constrained result equals the windowed unconstrained
+    ! solution; (b) repeated output-space warm starts (two CG iterations each, as
+    ! in production) do not shrink the band, which the former entry projection did.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 14: support semantics and warm-start band stability'
+        call pcg_u%new(BOX, SMPD, LAMBDA)
+        call pcg_u%set_deapod(.false.)
+        call pcg_c%new(BOX, SMPD, LAMBDA)
+        call pcg_c%set_deapod(.false.)
+        call pcg_c%set_mask(SUPPORT_MSKRAD)
+        call pcg_u%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcg_c%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcg_u%begin_accum
+        call pcg_c%begin_accum
+        call pcg_u%accumulate_batch(y_planes, NPROJS, 1)
+        call pcg_c%accumulate_batch(y_planes, NPROJS, 1)
+        call pcg_u%end_accum(.true.)
+        call pcg_c%end_accum(.true.)
+        call pcg_u%set_op_mode(PCG_OP_KERNEL)
+        call pcg_c%set_op_mode(PCG_OP_KERNEL)
+        allocate(x_u(BOX,BOX,BOX), source=0.0)
+        allocate(x_c(BOX,BOX,BOX), source=0.0)
+        call pcg_u%solve_accum(x_u, maxits=SUPPORT_ITS, rtol=0.0)
+        call pcg_c%solve_accum(x_c, maxits=SUPPORT_ITS, rtol=0.0)
+        ! the window itself, by the set_mask recipe
+        allocate(window(BOX,BOX,BOX), source=1.0)
+        call wimg%new([BOX,BOX,BOX], SMPD)
+        call wimg%set_rmat(window, .false.)
+        call wimg%mask3D_soft(SUPPORT_MSKRAD, backgr=0.)
+        window = wimg%get_rmat()
+        call wimg%kill
+        x_w = window * x_u
+        write(logfhandle,'(a)') '    shell  <window>  rms(constrained)/rms(window*unconstrained)'
+        ratio_ok = .true.
+        do ish = 0, BOX/2 - 1
+            call shell_stats(ish, wmean, rms_c, rms_w)
+            ratio = 0.0
+            if( rms_w > TINY ) ratio = rms_c / rms_w
+            write(logfhandle,'(a,i5,f10.4,f14.5)') '    ', ish, wmean, ratio
+            if( wmean >= SUPPORT_BAND_LO .and. wmean <= SUPPORT_BAND_HI )then
+                if( abs(ratio - 1.0) > SUPPORT_BAND_TOL ) ratio_ok = .false.
+            endif
+        end do
+        if( ratio_ok )then
+            write(logfhandle,'(a)') '    PASS: the constrained solve is the windowed estimate through the band'
+        else
+            write(logfhandle,'(a)') '    FAIL: the constrained solve is not the windowed estimate through the band'
+            all_ok = .false.
+        endif
+        rms_first = -1.0
+        rms_last  = -1.0
+        do irep = 1, SUPPORT_NREP
+            call pcg_c%solve_accum(x_c, maxits=2, rtol=0.0)
+            call band_rms(x_c, rms_c)
+            if( irep == 1 ) rms_first = rms_c
+            rms_last = rms_c
+            write(logfhandle,'(a,i3,a,es14.6)') '    warm start ', irep, ': band rms = ', rms_c
+        end do
+        if( rms_last < SUPPORT_STABILITY_FRAC * rms_first )then
+            write(logfhandle,'(a)') '    FAIL: the window band shrinks under repeated warm starts'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: the window band is stable under repeated warm starts'
+        endif
+        call pcg_u%kill
+        call pcg_c%kill
+        deallocate(x_u, x_c, x_w, window)
+    else
+        write(logfhandle,'(a)') '>>> STAGE 14 SKIPPED: an earlier stage failed'
+    endif
+
     call pcgop%kill
     call pcg_reduce%kill
     call pcg_crop%kill
@@ -2096,6 +2258,44 @@ subroutine exec_test_pcg_recon( self, cline )
         db  = sum((b-mb)**2)
         corr_of = num / sqrt(max(da*db, TINY))
     end function corr_of
+
+    !> per-shell window mean and RMS of x_c and x_w (stage 14); shells by nint(r)
+    subroutine shell_stats( ish, wmean, rms_a, rms_b )
+        integer, intent(in)  :: ish
+        real,    intent(out) :: wmean, rms_a, rms_b
+        real    :: rr, c0, sw, sa, sb
+        integer :: ii, jj, kk, n
+        c0 = real(BOX/2 + 1)
+        n = 0; sw = 0.; sa = 0.; sb = 0.
+        do kk = 1, BOX
+            do jj = 1, BOX
+                do ii = 1, BOX
+                    rr = sqrt((real(ii)-c0)**2 + (real(jj)-c0)**2 + (real(kk)-c0)**2)
+                    if( nint(rr) /= ish ) cycle
+                    n  = n + 1
+                    sw = sw + window(ii,jj,kk)
+                    sa = sa + x_c(ii,jj,kk)**2
+                    sb = sb + x_w(ii,jj,kk)**2
+                end do
+            end do
+        end do
+        wmean = 0.; rms_a = 0.; rms_b = 0.
+        if( n > 0 )then
+            wmean = sw / real(n)
+            rms_a = sqrt(sa / real(n))
+            rms_b = sqrt(sb / real(n))
+        endif
+    end subroutine shell_stats
+
+    !> RMS of a volume over the window band [SUPPORT_BAND_LO, SUPPORT_BAND_HI]
+    subroutine band_rms( vol, rms )
+        real, intent(in)  :: vol(:,:,:)
+        real, intent(out) :: rms
+        integer :: n
+        n = count(window >= SUPPORT_BAND_LO .and. window <= SUPPORT_BAND_HI)
+        rms = 0.
+        if( n > 0 ) rms = sqrt(sum(vol**2, mask=(window >= SUPPORT_BAND_LO .and. window <= SUPPORT_BAND_HI)) / real(n))
+    end subroutine band_rms
 
 end subroutine exec_test_pcg_recon
 

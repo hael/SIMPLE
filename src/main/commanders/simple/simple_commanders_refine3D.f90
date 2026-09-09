@@ -425,6 +425,7 @@ contains
         ! Prepare external input e/o volumes & FSC for refinement and import into project
         subroutine prepare_external_init_vol( init_vol )
             use simple_refine3D_fnames, only: refine3D_startvol_fname, refine3D_fsc_fname
+            use simple_halfmap_diagnostics, only: remove_support_provenance
             type(string), intent(inout) :: init_vol
             type(string)      :: init_even, init_odd, new_vol, new_even, new_odd
             type(image)       :: vol, vol_even, vol_odd
@@ -476,6 +477,7 @@ contains
             call vol_even%write(new_even)
             call vol_odd%write(new_odd)
             call vol%write(new_vol)
+            call remove_support_provenance(new_vol) ! an imported map carries no support record
             call vol_even%mask3D_soft(msk)
             call vol_odd%mask3D_soft(msk)
             call vol_even%fft

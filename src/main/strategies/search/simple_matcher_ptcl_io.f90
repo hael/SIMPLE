@@ -5,10 +5,12 @@ use simple_builder,           only: builder
 use simple_discrete_stack_io, only: dstack_io
 use simple_imghead,           only: find_ldim_nptcls
 use simple_syslib,            only: io_read_nstreams
+use simple_image,             only: image
 implicit none
 #include "simple_local_flags.inc"
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
+public :: prep_rec_observation
 private
 
 interface read_imgbatch
@@ -441,5 +443,36 @@ contains
             handled = .true.
         end function read_sorted_stack_runs
     end subroutine discrete_read_imgbatch
+
+    !> One reconstruction-observation contract for both backends (2026-09-09).
+    !! A cropped particle is noise-normalized at the native box against lmsk,
+    !! Fourier-cropped to the box of obs and returned to real space; the edge
+    !! taper (taper_edges_particle, the treatment norm_noise_taper_edge_pad_fft
+    !! fuses for the gridding pad) follows at the CROPPED box when l_taper is
+    !! set. Without a crop the observation is tapered first and normalized
+    !! second, as in the fused gridding routine. Gridding (prep_imgs4rec) calls
+    !! this for the crop step and tapers/pads/transforms in its fused routine;
+    !! PCG takes the tapered observation and its native Fourier plane. Cropping
+    !! and tapering do not commute, so every backend prepares through here.
+    subroutine prep_rec_observation( ptcl_img, lmsk, obs, l_taper )
+        class(image), intent(inout) :: ptcl_img
+        logical,      intent(in)    :: lmsk(:,:,:)
+        class(image), intent(inout) :: obs
+        logical,      intent(in)    :: l_taper
+        integer :: ldim(3), ldim_obs(3)
+        real    :: sdev_noise, edge_mean
+        ldim     = ptcl_img%get_ldim()
+        ldim_obs = obs%get_ldim()
+        if( ldim_obs(1) > ldim(1) ) THROW_HARD('observation box exceeds the particle box; prep_rec_observation')
+        if( ldim_obs(1) < ldim(1) )then
+            call ptcl_img%norm_noise_fft_clip_shift(lmsk, obs, [0.,0.])
+            call obs%ifft
+            if( l_taper ) call obs%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
+        else
+            call obs%copy(ptcl_img)
+            if( l_taper ) call obs%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
+            call obs%norm_noise(lmsk, sdev_noise)
+        endif
+    end subroutine prep_rec_observation
 
 end module simple_matcher_ptcl_io

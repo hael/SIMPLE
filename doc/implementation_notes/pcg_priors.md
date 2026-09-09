@@ -3735,6 +3735,24 @@ and gridding `_pproc` maps are no longer masked a second time. The sidecar
 moved to `simple_halfmap_diagnostics` (`write/read_support_provenance`,
 file name unchanged). Uncompiled; user compiles and runs the comparison.
 
+### Record (2026-09-09c): backend comparison review -- shared observation, transactional sidecar, hard domain + window, cost records
+
+Findings of `doc/refactoring_notes/abinitio3d_reconstruction_backend_comparison_review.md`
+verified against the code and acted on:
+
+| finding | verified | change |
+|---|---|---|
+| 3.1 cropped observations prepared differently | yes: gridding norm -> Fourier crop -> taper at crop box (`prep_imgs4rec`), PCG norm -> taper at native box -> native plane of the crop disk (three accumulation sites); no-crop order also differed (taper/norm) | `prep_rec_observation` in `simple_matcher_ptcl_io`, called by `prep_imgs4rec` (crop step) and all three PCG accumulation loops; `test=pcg_recon` stage 13 parity gate |
+| 3.2 sidecar lifecycle | yes: stage-boundary `simple_rename` of the state volume left `<vol>_pcg_support.txt` behind (base warm start refused at the next stage's first iteration), final/symmetric copies unpaired, sidecar written before the map | `copy/rename/remove_support_provenance` in `simple_halfmap_diagnostics`, applied at the abinitio3D stage rename, final and symmetric copies, refine3D start-volume rename, noise starts and imports; PCG masters write the map before the sidecar |
+| 4.1 wall time only | yes | per-part bench files with context and thread-seconds; master phase line with threads, thread-seconds and peak RSS |
+| 4.2 support formulations not equal | yes: where `0 < P < 1` the converged constrained solution is the unconstrained one (`P` cancels), so the band depended on the CG state | hard solve domain `window > 0` + one soft output window (`install_support`, `window_mul`, `window_div`; `PCG_HARD_SOLVE_SUPPORT` toggle); stage 14 regressions |
+
+The window band regression (stage 14a) asserts, over shells with window in
+[0.15, 0.85], that the constrained 40-iteration solve equals the windowed
+unconstrained solve within 15% RMS; 14b that six repeated two-iteration
+output-space warm starts keep the band RMS within 10%. Uncompiled; the user
+compiles, runs the test gate and the paired comparison.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

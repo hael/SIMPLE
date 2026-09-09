@@ -203,7 +203,7 @@ contains
         ! before constructing the first state reconstruction.
         call b_ptr%pftc%kill
         if( b_ptr%pftc%exists() ) THROW_HARD('PFTC still allocated at reconstruction phase boundary')
-        if( ctrl%do_bench .and. p_ptr%part == 1 ) rss_after_teardown = get_current_rss_bytes()
+        if( ctrl%do_bench ) rss_after_teardown = get_current_rss_bytes()
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( trim(params%rec_backend) == 'pcg' )then
@@ -216,10 +216,9 @@ contains
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         call b_ptr%esig%kill
-        if( ctrl%do_bench .and. p_ptr%part == 1 ) rss_after_reconstruction = get_current_rss_bytes()
+        if( ctrl%do_bench ) rss_after_reconstruction = get_current_rss_bytes()
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
-            if( p_ptr%part /= 1 ) return
             rt_rec = rt_rec_accum + rt_rec_write
             rt_tot = toc(t_tot)
             peak_rss = get_peak_rss_bytes()
@@ -233,7 +232,18 @@ contains
             if( rss_after_reconstruction >= 0_int64 )then
                 rss_after_reconstruction_gib = real(rss_after_reconstruction,real64) / real(1024_int64**3,real64)
             endif
-            benchfname = refine3D_bench_fname(which_iter)
+            ! every partition writes its own collision-free record so worker time,
+            ! load imbalance and memory can be aggregated; partition 1 also keeps
+            ! the legacy per-iteration file the existing parsers read
+            call write_bench_file(refine3D_bench_fname(which_iter, p_ptr%part, p_ptr%numlen))
+            if( p_ptr%part == 1 ) call write_bench_file(refine3D_bench_fname(which_iter))
+        endif
+
+    contains
+
+        subroutine write_bench_file( fname )
+            type(string), intent(in) :: fname
+            benchfname = fname
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
@@ -244,6 +254,13 @@ contains
             write(fnr,'(a,i0)') 'match3D kto                         : ', p_ptr%kfromto(2)
             write(fnr,'(a,i0)') 'match3D process partition           : ', p_ptr%part
             write(fnr,'(a,i0)') 'match3D process pid                 : ', p_ptr%pid
+            write(fnr,'(a,i0)') 'match3D nparts                      : ', p_ptr%nparts
+            write(fnr,'(a,i0)') 'match3D worker threads              : ', p_ptr%nthr
+            write(fnr,'(a,i0)') 'match3D box                         : ', p_ptr%box
+            write(fnr,'(a,i0)') 'match3D box_crop                    : ', p_ptr%box_crop
+            write(fnr,'(a,a)')  'match3D rec_backend                 : ', trim(p_ptr%rec_backend)
+            write(fnr,'(a,i0)') 'match3D maxits_pcg                  : ', p_ptr%maxits_pcg
+            write(fnr,'(a,es12.4)') 'match3D rtol                        : ', p_ptr%rtol
             write(fnr,'(a,i0)') 'match3D peak RSS (bytes)            : ', peak_rss
             write(fnr,'(a,f0.3)') 'match3D peak RSS (GiB)              : ', peak_rss_gib
             write(fnr,'(a,i0)') 'match3D RSS after align teardown (bytes): ', rss_after_teardown
@@ -258,14 +275,14 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match3D orientation search         :', rt_prep_orisrch + rt_align
             write(fnr,'(a,1x,f0.2)') 'match3D project metadata I/O       :', rt_projio
             write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction     :', rt_rec
+            write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction thread-s:', rt_rec * real(p_ptr%nthr, kind(rt_rec))
             write(fnr,'(a,1x,f0.2)') 'match3D total time                 :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'match3D total thread-s             :', rt_tot * real(p_ptr%nthr, kind(rt_tot))
             write(fnr,'(a,1x,f0.2)') 'match3D % accounted for            :', &
                 &((rt_startup + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
                 &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
             call fclose(fnr)
-        endif
-
-    contains
+        end subroutine write_bench_file
 
         subroutine init_ctrl()
             ctrl%refine_mode   = trim(p_ptr%refine)

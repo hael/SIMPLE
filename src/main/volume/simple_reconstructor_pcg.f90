@@ -26,7 +26,8 @@ integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~
 integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
 integer, parameter :: PCG_RAW_ACCUM_VERSION = 1
 integer, parameter :: PCG_RAW_PROV_LEN = 256
-real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< support floor of the x/P warm-start conversion, see mask_div
+real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< window floor of the x/window warm-start conversion, see window_div
+logical, parameter :: PCG_HARD_SOLVE_SUPPORT = .true. !< solve on the hard domain window > 0 and window the output; .false. = soft P H P, see install_support
 character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
 
 !> stop_reason when dot(p,Hp) is non-positive or non-finite: the iterate is
@@ -92,7 +93,8 @@ type :: reconstructor_pcg
     real,    allocatable :: env(:,:,:)               !< measured KB instrument envelope, see build_env
     real,    allocatable :: invenv(:,:,:)            !< its guarded reciprocal, for deapodization
     logical              :: l_deapod = .true.        !< correct the KB roll-off, see deapod_mul
-    real,    allocatable :: mask(:,:,:)              !< soft spherical support constraint, see set_mask
+    real,    allocatable :: mask(:,:,:)              !< solve support P (hard: window > 0), see install_support
+    real,    allocatable :: window(:,:,:)            !< soft output window; the shipped map is window*u, see set_mask
     logical              :: l_mask = .false.
     type(image)          :: wimg                     !< persistent box^3 work image (keeps its FFTW plans)
     logical              :: wimg_exists = .false.
@@ -169,8 +171,10 @@ type :: reconstructor_pcg
     procedure, private :: build_env
     procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
+    procedure, private :: install_support
     procedure, private :: mask_mul
-    procedure, private :: mask_div
+    procedure, private :: window_mul
+    procedure, private :: window_div
     procedure, private :: calibrate_kernel
     procedure :: measure_kernel_scale
     procedure :: set_op_mode
@@ -506,28 +510,29 @@ contains
         v = v * self%invenv
     end subroutine deapod_mul
 
-    !> soft spherical support as a CONSTRAINT ON THE SOLVE: with x = P u the normal
-    !! equations are (P H P) u = P b (apply_normal, solve). Removes the solvent,
-    !! where deapodization amplifies hardest, and shrinks the problem (~18% of the
-    !! box at mskdiam 180 in a 256 box). Profile = image%mask3D_soft on a unit
-    !! volume (backgr=0.), the same mask the gridding restoration applies, so no
-    !! consumer masks twice; warm starts are converted back to u by mask_div
+    !> spherical support as a CONSTRAINT ON THE SOLVE: the window is image%mask3D_soft
+    !! on a unit volume (backgr=0.), the same soft mask the gridding restoration
+    !! applies; the solve runs on the domain window > 0 (install_support) and the
+    !! shipped map is window*u. Removes the solvent, where deapodization amplifies
+    !! hardest, and shrinks the problem (~18% of the box at mskdiam 180 in a 256 box).
+    !! No consumer masks a second time; warm starts return to u through window_div
     subroutine set_mask( self, mskrad )
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: mskrad
         type(image) :: mimg
         real, allocatable :: ones(:,:,:)
-        if( allocated(self%mask) ) deallocate(self%mask)
+        if( allocated(self%mask)   ) deallocate(self%mask)
+        if( allocated(self%window) ) deallocate(self%window)
         self%l_mask = .false.
         if( mskrad <= 0.0 ) return
         allocate(ones(self%box,self%box,self%box), source=1.0)
         call mimg%new([self%box,self%box,self%box], self%smpd)
         call mimg%set_rmat(ones, .false.)
         call mimg%mask3D_soft(mskrad, backgr=0.)
-        self%mask = mimg%get_rmat()
+        self%window = mimg%get_rmat()
         call mimg%kill
         deallocate(ones)
-        self%l_mask = .true.
+        call self%install_support
     end subroutine set_mask
 
     !> caller-supplied real-space [0,1] volume as the support P (clipped); same
@@ -541,12 +546,30 @@ contains
             THROW_HARD('support mask volume dimensions differ from the solve box; set_mask_volume')
         endif
         if( mskvol%is_ft() ) THROW_HARD('support mask volume must be in real space; set_mask_volume')
-        if( allocated(self%mask) ) deallocate(self%mask)
-        self%mask = mskvol%get_rmat()
-        self%mask = min(1.0, max(0.0, self%mask))
-        if( .not. any(self%mask > 0.0) ) THROW_HARD('support mask volume is empty; set_mask_volume')
-        self%l_mask = .true.
+        if( allocated(self%mask)   ) deallocate(self%mask)
+        if( allocated(self%window) ) deallocate(self%window)
+        self%window = mskvol%get_rmat()
+        self%window = min(1.0, max(0.0, self%window))
+        if( .not. any(self%window > 0.0) ) THROW_HARD('support mask volume is empty; set_mask_volume')
+        call self%install_support
     end subroutine set_mask_volume
+
+    !> solve support from the window. With PCG_HARD_SOLVE_SUPPORT the domain is
+    !! window > 0: P^2 = P, so the projections in operator, RHS and preconditioner
+    !! are exact, u is the estimate on that domain and the shipped map window*u is
+    !! one estimate times one soft window, exactly what the gridding restoration
+    !! ships. The soft alternative (P = window) leaves the band a solver-state
+    !! dependent mixture of P*u and u that no windowed estimate reproduces
+    subroutine install_support( self )
+        class(reconstructor_pcg), intent(inout) :: self
+        if( allocated(self%mask) ) deallocate(self%mask)
+        if( PCG_HARD_SOLVE_SUPPORT )then
+            allocate(self%mask(self%box,self%box,self%box), source=merge(1.0, 0.0, self%window > 0.0))
+        else
+            allocate(self%mask(self%box,self%box,self%box), source=self%window)
+        endif
+        self%l_mask = .true.
+    end subroutine install_support
 
     pure subroutine mask_mul( self, v )
         class(reconstructor_pcg), intent(in)    :: self
@@ -555,21 +578,30 @@ contains
         v = v * self%mask
     end subroutine mask_mul
 
-    !> output-space initial guess (x = P u, every shipped half map) -> CG variable
-    !! u = x/P where P >= PCG_SUPPORT_DIV_MIN, zero elsewhere. Projecting with P
-    !! instead squared the soft edge on every warm-started iteration and compounded
-    !! over a stage. Exact for support-masked input; the floor caps the amplification
-    !! (1/floor) of content not proportional to P (resampling ringing, foreign maps)
-    pure subroutine mask_div( self, v )
+    !> x = window*u, the shipped map
+    pure subroutine window_mul( self, v )
         class(reconstructor_pcg), intent(in)    :: self
         real,                     intent(inout) :: v(self%box,self%box,self%box)
         if( .not. self%l_mask ) return
-        where( self%mask >= PCG_SUPPORT_DIV_MIN )
-            v = v / self%mask
+        v = v * self%window
+    end subroutine window_mul
+
+    !> output-space initial guess (x = window*u, every shipped half map) -> CG
+    !! variable u = x/window where window >= PCG_SUPPORT_DIV_MIN, zero elsewhere.
+    !! Projecting with the window instead squared the soft edge on every
+    !! warm-started iteration and compounded over a stage. Exact for windowed input;
+    !! the floor caps the amplification (1/floor) of content not proportional to
+    !! the window (resampling ringing, foreign maps) to the outermost band voxels
+    pure subroutine window_div( self, v )
+        class(reconstructor_pcg), intent(in)    :: self
+        real,                     intent(inout) :: v(self%box,self%box,self%box)
+        if( .not. self%l_mask ) return
+        where( self%window >= PCG_SUPPORT_DIV_MIN )
+            v = v / self%window
         elsewhere
             v = 0.0
         end where
-    end subroutine mask_div
+    end subroutine window_div
 
     subroutine ensure_wimg( self )
         class(reconstructor_pcg), intent(inout) :: self
@@ -596,6 +628,7 @@ contains
         if( allocated(self%env)      ) deallocate(self%env)
         if( allocated(self%invenv)   ) deallocate(self%invenv)
         if( allocated(self%mask)     ) deallocate(self%mask)
+        if( allocated(self%window)   ) deallocate(self%window)
         if( allocated(self%precond)  ) deallocate(self%precond)
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
@@ -2515,8 +2548,8 @@ contains
         ! b' = P b, completing the (P H P) u = P b normal equations
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
-        ! output-space initial guess -> CG variable (see mask_div)
-        call self%mask_div(x)
+        ! output-space initial guess -> CG variable (see window_div)
+        call self%window_div(x)
         call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve
 
@@ -2530,9 +2563,9 @@ contains
         integer,                  optional, intent(out)   :: niters
         type(pcg_solver_outcome), optional, intent(out)   :: outcome
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; solve_accum')
-        ! the initial guess arrives in the output space (a shipped half map is x = P u):
-        ! convert it to u rather than projecting again, the exit projection defines the output
-        call self%mask_div(x)
+        ! the initial guess arrives in the output space (a shipped half map is
+        ! window*u): convert it to u rather than projecting again, the exit window defines the output
+        call self%window_div(x)
         call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve_accum
 
@@ -2644,9 +2677,9 @@ contains
             p    = z + real(beta) * p
             rho  = rho_new
         end do
-        ! x = P u: u is unconstrained outside the support (P H P annihilates it there)
-        ! but accumulates values through the preconditioner; this makes the output the constrained solution
-        call self%mask_mul(x)
+        ! x = window*u: u lives on the solve domain (P H P and the projected
+        ! preconditioner never leave it); the window makes the output the shipped map
+        call self%window_mul(x)
         result%iteration_count  = n_done
         result%final_rel_update = real(dxx)
         if( n_done > 0 ) result%final_rel_residual = hist(n_done)

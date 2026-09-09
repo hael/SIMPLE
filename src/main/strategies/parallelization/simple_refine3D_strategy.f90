@@ -1,5 +1,5 @@
 module simple_refine3D_strategy
-use, intrinsic :: iso_fortran_env, only: int64
+use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_core_module_api
 use simple_refine3D_fnames
 use simple_matcher_refvol_utils
@@ -18,6 +18,8 @@ use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare
 use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
+use simple_halfmap_diagnostics, only: rename_support_provenance
+use simple_syslib,              only: get_peak_rss_bytes
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -798,8 +800,7 @@ contains
                 call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
                 call xvolassemble%execute(cline_volassemble)
             endif
-            write(logfhandle,'(A,A,A,F9.1,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
-                &trim(params%rec_backend), '): ', real(toc(t_recphase)), ' s'
+            call report_rec_master_phase(params, t_recphase, params%nthr)
             if( trim(params%volrec) .eq. 'yes' )then
                 do state = 1, params%nstates
                     volname = refine3D_state_vol_fname(state)
@@ -1118,6 +1119,7 @@ contains
                 do state = 1,params%nstates
                     ! rename volumes and update cline/params
                     call simple_rename(refine3D_state_vol_fname(state), refine3D_startvol_fname(state))
+                    call rename_support_provenance(refine3D_state_vol_fname(state), refine3D_startvol_fname(state))
                     params%vols(state) = refine3D_startvol_fname(state)
                     vol = 'vol'//int2str(state)
                     call cline%set(vol%to_char(), params%vols(state))
@@ -1351,8 +1353,7 @@ contains
                             &cline_volassemble)
                         call xvolassemble%execute(cline_volassemble)
                     endif
-                    write(logfhandle,'(A,A,A,F9.1,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
-                        &trim(params%rec_backend), '): ', real(toc(t_recphase)), ' s'
+                    call report_rec_master_phase(params, t_recphase, rec3D_master_nthr(params, self%nthr_master))
                     if( trim(params%volrec).eq.'yes' )then
                         ! rename & add volumes to project & update job_descr
                         call build%spproj_field%get_pops(state_pops, 'state')
@@ -1520,5 +1521,25 @@ contains
         call qsys_cleanup(params)
         call self%job_descr%kill
     end subroutine distr_cleanup
+
+    !> one line per iteration with the master reconstruction wall time, its
+    !! thread budget, the thread-seconds product and the master's peak RSS, so
+    !! wall time, compute cost and memory read as separate quantities on both
+    !! backends (comparison protocol, policy section 12)
+    subroutine report_rec_master_phase( params, t_start, nthr )
+        class(parameters),       intent(in) :: params
+        integer(timer_int_kind), intent(in) :: t_start
+        integer,                 intent(in) :: nthr
+        real           :: secs
+        integer(int64) :: peak_rss
+        real(real64)   :: peak_gib
+        secs     = real(toc(t_start))
+        peak_rss = get_peak_rss_bytes()
+        peak_gib = -1.0_real64
+        if( peak_rss >= 0_int64 ) peak_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
+        write(logfhandle,'(A,A,A,F9.1,A,I0,A,F10.1,A,F7.2,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
+            &trim(params%rec_backend), '): ', secs, ' s on ', nthr, ' threads = ', secs*real(nthr), &
+            &' thread-s; master peak RSS ', peak_gib, ' GiB'
+    end subroutine report_rec_master_phase
 
 end module simple_refine3D_strategy

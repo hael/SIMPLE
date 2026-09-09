@@ -233,9 +233,19 @@ contains
         fname = string('reprojection_model')//half_suffix(half)//BIN_EXT
     end function refine3D_reproj_model_fname
 
-    type(string) function refine3D_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)//TXT_EXT
+    !> per-iteration bench record; with part present the collision-free per-partition
+    !! record (REFINE3D_BENCH_ITERnnn_PARTppp.txt), the plain name stays partition 1's legacy file
+    type(string) function refine3D_bench_fname( iter, part, numlen ) result(fname)
+        integer,           intent(in) :: iter
+        integer, optional, intent(in) :: part, numlen
+        integer :: nl
+        fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)
+        if( present(part) )then
+            nl = 1
+            if( present(numlen) ) nl = numlen
+            fname = fname//'_PART'//part_tag(part, nl)
+        endif
+        fname = fname//TXT_EXT
     end function refine3D_bench_fname
 
     type(string) function refine3D_strategy_bench_fname( iter ) result(fname)

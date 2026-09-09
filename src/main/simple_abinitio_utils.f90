@@ -16,6 +16,8 @@ use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma
 use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_vol_pproc_policy,     only: state_mask_is_compatible
+use simple_halfmap_diagnostics,  only: copy_support_provenance, rename_support_provenance, &
+    &remove_support_provenance
 implicit none
 #include "simple_local_flags.inc"
 
@@ -584,8 +586,10 @@ contains
                     vol_sym = refine3D_state_vol_fname(state)
                     if( params%nstates > 1 )then
                         call simple_copy_file(vol_sym, string('symmetric_map_state')//int2str_pad(state,2)//MRC_EXT)
+                        call copy_support_provenance(vol_sym, string('symmetric_map_state')//int2str_pad(state,2)//MRC_EXT)
                     else
                         call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
+                        call copy_support_provenance(vol_sym, string('symmetric_map')//MRC_EXT)
                     endif
                 enddo
                 call cline_symrec%kill
@@ -717,6 +721,7 @@ contains
             src  = refine3D_state_vol_fname(state)
             dest_main = tmpl//MRC_EXT
             call simple_rename(src, dest_main)
+            call rename_support_provenance(src, dest_main)
             vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
             lp_snapshot = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
                 &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
@@ -1126,6 +1131,7 @@ contains
             if( .not. file_exists(vol_name) )cycle
             vol_final      = string(abinitio_rec_fbody())//str_state//MRC_EXT
             call simple_copy_file(vol_name, vol_final)
+            call copy_support_provenance(vol_name, vol_final)
             vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
             lp_snapshot = abinitio_state_fsc_lowpass(state, params%box, params%smpd, lp)
             call write_abinitio_lowpass_snapshot(vol_final, lp_snapshot, vol_final_lp, params%smpd, box=params%box)
@@ -1176,6 +1182,7 @@ contains
             call cline%set('vol'//int2str(s), vol_name)
             params%vols(s) = vol_name
             call noisevol%write(vol_name)
+            call remove_support_provenance(vol_name) ! a noise start carries no support
             call noisevol%gauran(0., b)
             call noisevol%add(signal)
             vol_name = refine3D_startvol_half_fname(s, 'even')
@@ -1216,6 +1223,7 @@ contains
             call vol%norm_ext(ave, v)
             vol_name = refine3D_startvol_fname(s)
             call vol%write(vol_name)
+            call remove_support_provenance(vol_name) ! an imported map carries no support record
             call cline%set('vol'//int2str(s), vol_name)
         enddo
         call vol%kill

@@ -8,7 +8,7 @@ use simple_parameters,        only: parameters
 use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, &
     &pcg_raw_accum_compatible
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
-    &discrete_read_imgbatch_source, killimgbatch
+    &discrete_read_imgbatch_source, killimgbatch, prep_rec_observation
 use simple_sigma2_files,      only: load_sigma2_groups
 use simple_math_ft,           only: resample_sigma2
 use simple_estimate_ssnr,     only: fsc2shrink_filter
@@ -571,13 +571,17 @@ contains
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
-                call write_support_provenance(fname_vol, l_state_support, 'regularized')
             else
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
-                call write_support_provenance(fname_vol, l_base_support_constrained, 'base')
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
+            ! the sidecar follows the published map, never precedes it
+            if( params%l_ml_reg )then
+                call write_support_provenance(fname_vol, l_state_support, 'regularized')
+            else
+                call write_support_provenance(fname_vol, l_base_support_constrained, 'base')
+            endif
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             if( params%l_nonuniform )then
                 ! NU competition, mirroring the gridding volassemble: the
@@ -730,11 +734,12 @@ contains
             type(ori)       :: orientation
             type(ctfparams) :: ctfparms
             type(string)    :: raw_fname_here
+            type(image)     :: obs
             complex, allocatable :: y_batch(:,:,:)
             real,    allocatable :: sig2(:,:), x(:,:,:), rel_res_hist(:)
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
             integer :: i, ii, iptcl, ibatch, niters
-            real    :: shift(2), crop_factor, sdev_noise, edge_mean
+            real    :: shift(2), crop_factor
             logical :: l_warm
             integer(timer_int_kind) :: t_half, t_phase
             real(dp) :: time_metadata, time_particles, time_accum_init, time_accum
@@ -783,8 +788,7 @@ contains
             allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
             call pcgop%begin_accum
             time_accum_init = real(toc(t_phase),dp)
-            sdev_noise = 0.0
-            edge_mean  = 0.0
+            call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
@@ -796,10 +800,10 @@ contains
                     call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
                 endif
                 do ii = 1, batchsz
-                    call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
-                    call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
-                    call build%imgbatch(ii)%fft
-                    y_batch(:,:,ii) = pcgop%extract_native_plane(build%imgbatch(ii))
+                    ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
+                    call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                    call obs%fft
+                    y_batch(:,:,ii) = pcgop%extract_native_plane(obs)
                 enddo
                 time_particles = time_particles + real(toc(t_phase),dp)
                 t_phase = tic()
@@ -818,6 +822,7 @@ contains
                     &size(pinds), pcg_chain_provenance(params))
                 call raw_fname_here%kill
             endif
+            call obs%kill
             t_phase = tic()
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
@@ -1291,11 +1296,12 @@ contains
             type(oris) :: selection
             type(ori) :: orientation
             type(ctfparams) :: ctfparms
+            type(image) :: obs
             complex, allocatable :: y_batch(:,:,:)
             real, allocatable :: sig2(:,:)
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
             integer :: i, ii, iptcl, ibatch
-            real :: shift(2), crop_factor, sdev_noise, edge_mean
+            real :: shift(2), crop_factor
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             call op%set_sym(build%pgrpsyms)
             call op%set_mask(params%msk_crop)
@@ -1325,8 +1331,7 @@ contains
             call op%prep_particles(selection, use_ctf=.true., sig2=sig2)
             allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
             call op%begin_accum
-            sdev_noise = 0.0
-            edge_mean = 0.0
+            call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz = batchlims(2)-batchlims(1)+1
@@ -1337,13 +1342,14 @@ contains
                     call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
                 endif
                 do ii = 1, batchsz
-                    call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
-                    call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
-                    call build%imgbatch(ii)%fft
-                    y_batch(:,:,ii) = op%extract_native_plane(build%imgbatch(ii))
+                    ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
+                    call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                    call obs%fft
+                    y_batch(:,:,ii) = op%extract_native_plane(obs)
                 enddo
                 call op%accumulate_batch(y_batch, batchsz, batchlims(1))
             enddo
+            call obs%kill
             call selection%kill
             call orientation%kill
             deallocate(y_batch, sig2)
@@ -1511,11 +1517,12 @@ contains
             type(ori)       :: orientation
             type(ctfparams) :: ctfparms
             type(string)    :: fname
+            type(image)     :: obs
             complex, allocatable :: y_batch(:,:,:)
             real,    allocatable :: sig2(:,:)
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
             integer :: i, ii, iptcl, ibatch
-            real    :: shift(2), crop_factor, sdev_noise, edge_mean
+            real    :: shift(2), crop_factor
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             fname = refine3D_pcg_raw_accum_fname(state_here, params%part, params%numlen, &
@@ -1554,8 +1561,7 @@ contains
             call pcgop%prep_particles(selection, use_ctf=.true., sig2=sig2)
             allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
             call pcgop%begin_accum
-            sdev_noise = 0.0
-            edge_mean  = 0.0
+            call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
@@ -1566,13 +1572,14 @@ contains
                     call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
                 endif
                 do ii = 1, batchsz
-                    call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
-                    call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
-                    call build%imgbatch(ii)%fft
-                    y_batch(:,:,ii) = pcgop%extract_native_plane(build%imgbatch(ii))
+                    ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
+                    call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                    call obs%fft
+                    y_batch(:,:,ii) = pcgop%extract_native_plane(obs)
                 enddo
                 call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
             enddo
+            call obs%kill
             call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
                 &params%nparts, size(pinds), provenance_here)
             call pcgop%kill
@@ -1836,6 +1843,8 @@ contains
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
             endif
+            call merged%write(fname_vol, del_if_exists=.true.)
+            ! the sidecar follows the published map, never precedes it
             if( params%l_ml_reg )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized')
             else if( l_bootstrap .and. update_weights(state) < 0.99 )then
@@ -1843,7 +1852,6 @@ contains
             else
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base')
             endif
-            call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             if( params%l_nonuniform )then
                 ! NU competition, mirroring the gridding volassemble: the

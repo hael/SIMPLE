@@ -5,7 +5,7 @@ use simple_timer
 use simple_builder,         only: builder
 use simple_classaverager,  only: fourier_2d_accumulator
 use simple_cmdline,         only: cmdline
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
+use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, prep_rec_observation, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
@@ -469,8 +469,9 @@ contains
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
             if( l_crop )then
-                call ptcl_imgs(i)%norm_noise_fft_clip_shift(build%lmsk, crop_imgs(ithr), [0.,0.])
-                call crop_imgs(ithr)%ifft
+                ! backend-neutral crop step (PCG prepares through the same call); the
+                ! fused routine below tapers at the cropped box, pads and transforms
+                call prep_rec_observation(ptcl_imgs(i), build%lmsk, crop_imgs(ithr), .false.)
                 call crop_imgs(ithr)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
                     &build%img_pad_heap(ithr), renorm=.false.)
             else

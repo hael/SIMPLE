@@ -9,6 +9,7 @@ implicit none
 
 public :: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics
 public :: support_provenance_fname, write_support_provenance, read_support_provenance
+public :: copy_support_provenance, rename_support_provenance, remove_support_provenance
 private
 #include "simple_local_flags.inc"
 
@@ -219,6 +220,46 @@ contains
         call fclose(funit)
         call fname%kill
     end subroutine read_support_provenance
+
+    !> The volume and its sidecar are one artifact: every copy, rename or
+    !! fresh write of a state volume goes through these so no valid map loses
+    !! its provenance and no stale sidecar survives beside a map that has none
+    !! (stage snapshots, final copies, start volumes; review 2026-09-09 P1)
+    subroutine copy_support_provenance( src_vol, dest_vol )
+        type(string), intent(in) :: src_vol, dest_vol
+        type(string) :: src, dest
+        src  = support_provenance_fname(src_vol)
+        dest = support_provenance_fname(dest_vol)
+        if( file_exists(src) )then
+            call simple_copy_file(src, dest)
+        else if( file_exists(dest) )then
+            call del_file(dest)
+        endif
+        call src%kill
+        call dest%kill
+    end subroutine copy_support_provenance
+
+    subroutine rename_support_provenance( src_vol, dest_vol )
+        type(string), intent(in) :: src_vol, dest_vol
+        type(string) :: src, dest
+        src  = support_provenance_fname(src_vol)
+        dest = support_provenance_fname(dest_vol)
+        if( file_exists(src) )then
+            call simple_rename(src, dest, overwrite=.true.)
+        else if( file_exists(dest) )then
+            call del_file(dest)
+        endif
+        call src%kill
+        call dest%kill
+    end subroutine rename_support_provenance
+
+    subroutine remove_support_provenance( vol )
+        type(string), intent(in) :: vol
+        type(string) :: fname
+        fname = support_provenance_fname(vol)
+        if( file_exists(fname) ) call del_file(fname)
+        call fname%kill
+    end subroutine remove_support_provenance
 
     subroutine kill_halfmap_diagnostics_result( self )
         class(halfmap_diagnostics_result), intent(inout) :: self

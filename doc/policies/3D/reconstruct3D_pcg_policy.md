@@ -584,18 +584,73 @@ it ships. The one-mask contract that came with it:
 - `postprocess` applies no post-hoc mask to a volume carrying the sidecar
   (previously PCG-only by backend name; an imported map without the
   sidecar still gets the classical spherical/envelope mask);
-- PCG warm starts are no longer re-masked in the strategy, and the solver
-  entry converts an output-space start `x = P u` back to the CG variable
-  (`mask_div`: `u = x/P` where `P >= PCG_SUPPORT_DIV_MIN`, zero below)
-  instead of projecting it again. The former entry projection plus the
-  exit projection squared the soft edge on every warm-started iteration
-  and compounded over a stage (P^2 per iteration);
+- the PCG support is a hard solve domain plus one soft window (review
+  2026-09-09, finding 4.2): `set_mask` builds the window with `mask3D_soft`,
+  the solve runs on the domain `window > 0` (`P^2 = P`, exact projections in
+  operator, RHS and preconditioner) and the shipped map is `window * u`. That
+  is the same "estimate times one soft window" the gridding restoration
+  ships, so the two backends' band treatment is identical and the only
+  estimator difference is that the PCG estimate is zero outside the domain.
+  The soft `P H P` formulation was not equivalent: where `0 < P < 1` the
+  solved variable compensates for `P`, so the band was a solver-state
+  dependent mixture (`PCG_HARD_SOLVE_SUPPORT` in the solver restores it for
+  experiments). Warm starts are never re-masked: the solver entry converts
+  an output-space start back to `u = x / window` where
+  `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead of projecting again;
+  the former entry projection squared the edge on every warm-started
+  iteration and compounded over a stage. Regressions: `test=pcg_recon`
+  stage 14 (band profile of the constrained solve against the windowed
+  unconstrained one; band stability under repeated warm starts);
 - the matcher still applies `mask3D_soft(msk_crop)` to its reprojection
   reference after Fourier filtering (both backends, `mask_matching_reference`).
   That is reference preparation, not an estimate: it restores compact
   support after the filter's ringing and covers user-supplied start volumes.
   In the 12 px cosine band the reference therefore carries P^2; it is the
   one remaining second application and is deliberate.
+
+### Comparison contract (review 2026-09-09)
+
+Two inputs that could change the result independently of the backend are
+now shared, and the measurement records are complete enough to separate wall
+time, compute cost and memory:
+
+- **one observation preparation.** Cropping and edge tapering do not commute.
+  Gridding normalized at the native box, Fourier-cropped, then tapered at the
+  crop box; PCG tapered at the native box and cropped afterwards. Both now go
+  through `prep_rec_observation` (`simple_matcher_ptcl_io`): normalize at the
+  native box, Fourier-crop, taper at the cropped box; gridding pads and
+  transforms in its fused routine, PCG takes the native plane of the tapered
+  observation. Without a crop the observation is tapered first and normalized
+  second on both backends. `test=pcg_recon` stage 13 gates the two routes in
+  real space at 1e-5 relative;
+- **the volume and its support sidecar are one artifact.** Stage-boundary
+  renames, final copies, symmetric-map copies and the refine3D start-volume
+  rename move or copy the sidecar with the map (`copy/rename_support_provenance`);
+  noise starts and imported maps remove a stale sidecar
+  (`remove_support_provenance`); the PCG masters publish the map first and the
+  sidecar second. Before this a PCG half lost its provenance at every stage
+  boundary and the next stage's first base solve was an unintended cold
+  start; a copied final gridding map could be masked a second time by a
+  standalone postprocess;
+- **cost records.** Every partition writes `REFINE3D_BENCH_ITERnnn_PARTppp.txt`
+  (partition 1 also the legacy file) with nparts, worker threads, box,
+  box_crop, backend, `maxits_pcg`, `rtol`, peak and phase RSS, the phase
+  timings and their thread-seconds; the master logs one
+  `RECONSTRUCTION MASTER PHASE (<backend>): s on n threads = thread-s;
+  master peak RSS` line per iteration. Load imbalance is the spread of the
+  per-part partial-reconstruction times; core-hours are the sum of worker
+  thread-seconds plus master thread-seconds.
+
+Baseline profile for the first quality/cost study: `automsk=no`, `envfsc=no`,
+`conical_fsc=no`, no `pcg_mskfile`; identical starting project, maps, seed,
+even/odd assignment, sampling and sigma state, stage schedule and resolution
+limits, `nparts`, threads, queue and hardware between the paired runs; each
+backend in its own clone of the starting project; `maxits_pcg`, `rtol` and the
+operator mode fixed and recorded. Gates before interpreting results:
+prepared-observation parity (stage 13), the support regressions (stage 14),
+no reconstruction losing provenance across a stage boundary, and wall time,
+thread-seconds and peak RSS recomputable from the emitted records. Judge
+quality on paired replicas (at least 10 seeds), never on a single run.
 
 **Shared-memory and distributed execution are two parallelizations of one
 algorithm.** Output conventions, warm starts, and diagnostics are implemented
