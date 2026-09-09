@@ -394,10 +394,11 @@ class SIMPLEBatch:
     Manages the launch of a single classic SIMPLE job (simple_exec or single_exec).
 
     Unlike SIMPLEStream, each job corresponds to one program call rather than a
-    pipeline. Except for new_project, the dispatch script copies the workspace
-    project file into the job directory, runs update_project, then executes the
-    program. A new_project job instead creates its project directly in the job
-    directory without inheriting workspace.simple.
+    pipeline. Project-dependent programs copy the workspace project file into
+    the job directory, run update_project, then execute the program. The SIMPLE
+    new_project and reproject programs do not inherit workspace.simple;
+    new_project creates its project directly in the job directory, while
+    reproject writes standalone reprojection artifacts.
 
     Typical usage:
         simple = SIMPLEBatch(pckg="simple")
@@ -508,6 +509,10 @@ class SIMPLEBatch:
             return False
 
         creates_project = self.executable == "simple_exec" and self.jobtype == "new_project"
+        propagates_project = not (
+            self.executable == "simple_exec"
+            and self.jobtype in ("new_project", "reproject")
+        )
         status_endpoint = dispatchmodel.url + "/api"
         status_prefix, status_suffix = _classic_status_callback_wrapper(
             self.jobid,
@@ -516,7 +521,7 @@ class SIMPLEBatch:
 
         command_string = status_prefix
         setup_failure_guard = " || return $?" if status_suffix else ""
-        if not creates_project:
+        if propagates_project:
             command_string += (
                 "cp -v " + shlex.quote(self.parent_proj)
                 + " workspace.simple" + setup_failure_guard + "\n"
@@ -531,7 +536,7 @@ class SIMPLEBatch:
         if creates_project and "dir" not in self.args:
             command_string += " dir=."
         command_string += " mkdir=no"
-        if not creates_project:
+        if propagates_project:
             command_string += " projfile=workspace.simple"
         command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + shlex.quote(status_endpoint)
         command_string += " >> stdout.log 2>> stderr.log\n"

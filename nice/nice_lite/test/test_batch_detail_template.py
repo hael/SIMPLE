@@ -751,6 +751,52 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('aria-current="page"', rendered)
         self.assertNotIn("mrc2jpeg", batch_view)
 
+    def test_reproject_output_uses_lazy_paginated_projection_thumbnails(self):
+        context = {
+            "jobid": 28,
+            "program": "reproject",
+            "particle_stack_page": {
+                "stacks": [{"name": "reprojs.mrcs", "count": 60}],
+                "particles": [{
+                    "number": 1,
+                    "stack_name": "reprojs.mrcs",
+                    "stack_index": 1,
+                    "width": 240,
+                    "height": 240,
+                }],
+                "total": 60,
+                "page": 1,
+                "pages": 2,
+                "page_numbers": [1, 2],
+                "ellipsis": "…",
+                "has_previous": False,
+                "has_next": True,
+                "next_page": 2,
+                "first_particle": 1,
+                "last_particle": 40,
+            },
+            "arguments": [],
+            "logs": [],
+            "artifact_counts": [{"extension": "MRCS", "count": 1}],
+            "artifact_images": [],
+            "auto_refresh": False,
+        }
+
+        rendered = render_to_string("nice_classic/batchview.html", context)
+
+        output_summary = rendered.split('id="batch_output_summary"', 1)[1].split(
+            "</div>", 1,
+        )[0]
+        self.assertIn("reprojected images", output_summary)
+        self.assertIn("1–40 of 60 from 1 stack", output_summary)
+        self.assertIn("/batchparticle/28/reprojs.mrcs/1", rendered)
+        self.assertIn('data-artifact-preview-kind="projection"', rendered)
+        self.assertIn('alt="reprojected image 1"', rendered)
+        self.assertIn('aria-label="reprojected image pages"', rendered)
+        self.assertIn('aria-label="next projection page"', rendered)
+        self.assertIn('aria-label="last projection page"', rendered)
+        self.assertIn("240 × 240 px", rendered)
+
     def test_import_movie_output_uses_lazy_paginated_thumbnail_tiles(self):
         batch_view = self._read_template("nice_classic/batchview.html")
         context = {

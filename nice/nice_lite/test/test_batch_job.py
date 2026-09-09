@@ -367,6 +367,71 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(thumbnail, b"png")
         render_thumbnail.assert_called_once_with(stack_path, 3, max_size=160)
 
+    def test_reproject_stack_is_previewed_on_demand(self):
+        job_dir = os.path.join(self.workspace_dir, "1_reproject")
+        os.mkdir(job_dir)
+        stack_path = os.path.join(job_dir, "reprojs.mrcs")
+        with open(stack_path, "wb") as stack_file:
+            stack_file.write(b"stack")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_reproject",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "reproject"},
+        )
+        stack_info = SimpleNamespace(width=240, height=240, count=60)
+
+        with (
+            patch.object(batchjob_module, "read_mrc_stack_info", return_value=stack_info),
+            patch.object(
+                batchjob_module,
+                "render_mrc_particle_png",
+                return_value=b"png",
+            ) as render_thumbnail,
+        ):
+            job = BatchJob(id=jobmodel.id)
+            stack_page = job.get_particle_stack_page(page=1, page_size=40)
+            thumbnail = job.get_particle_thumbnail("reprojs.mrcs", 1)
+
+        self.assertEqual(stack_page["total"], 60)
+        self.assertEqual(stack_page["first_particle"], 1)
+        self.assertEqual(stack_page["last_particle"], 40)
+        self.assertEqual(stack_page["particles"][0]["stack_name"], "reprojs.mrcs")
+        self.assertEqual(stack_page["particles"][0]["width"], 240)
+        self.assertEqual(stack_page["particles"][0]["height"], 240)
+        self.assertEqual(thumbnail, b"png")
+        render_thumbnail.assert_called_once_with(stack_path, 1, max_size=160)
+
+    def test_other_programs_do_not_preview_mrc_stacks(self):
+        job_dir = os.path.join(self.workspace_dir, "1_volops")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "output.mrcs"), "wb") as stack_file:
+            stack_file.write(b"stack")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_volops",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "volops"},
+        )
+
+        with (
+            patch.object(batchjob_module, "read_mrc_stack_info") as read_stack_info,
+            patch.object(batchjob_module, "render_mrc_particle_png") as render_thumbnail,
+        ):
+            job = BatchJob(id=jobmodel.id)
+            stack_page = job.get_particle_stack_page()
+            thumbnail = job.get_particle_thumbnail("output.mrcs", 1)
+
+        self.assertEqual(stack_page["particles"], [])
+        self.assertEqual(stack_page["total"], 0)
+        self.assertIsNone(thumbnail)
+        read_stack_info.assert_not_called()
+        render_thumbnail.assert_not_called()
+
     def test_import_movie_thumbnail_is_rendered_only_when_requested(self):
         job_dir = os.path.join(self.workspace_dir, "1_import_movies")
         os.mkdir(job_dir)
@@ -1426,4 +1491,47 @@ class SimpleBatchDispatchTests(TestCase):
             self.assertNotIn("projfile=workspace.simple", content)
             self.assertIn("nice_status_callback()", content)
             self.assertIn('{"jobid":3,"job":{"status":"finished","terminate":true}}', content)
+            submit.assert_called_once()
+
+    def test_reproject_dispatch_does_not_inherit_project(self):
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent_proj = os.path.join(parent_dir, "workspace.simple")
+            with open(parent_proj, "w", encoding="utf-8"):
+                pass
+            base_dir = os.path.join(parent_dir, "reproject")
+            os.mkdir(base_dir)
+            dispatch = type("Dispatch", (), {
+                "tplt": "#!/bin/sh\nexport SIMPLE_PATH=XXXSIMPLEPATHXXX\nXXXSIMPLEXXX",
+                "scmd": "sh",
+                "simple_path": "/opt/simple",
+                "url": "http://localhost:8000",
+            })()
+
+            with (
+                patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+                patch.object(simple_module.DispatchModel.objects, "filter") as dispatch_filter,
+                patch.object(simple_module.shutil, "which", return_value="/bin/sh"),
+                patch.object(simple_module, "_submit") as submit,
+            ):
+                dispatch_filter.return_value.last.return_value = dispatch
+                started = SIMPLEBatch(pckg="simple").start(
+                    {"vol1": "/data/reference.map", "nspace": "60"},
+                    base_dir,
+                    parent_dir,
+                    "reproject",
+                    4,
+                )
+
+            self.assertTrue(started)
+            with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
+                content = script.read()
+            self.assertIn(
+                "simple_exec prg=reproject vol1=/data/reference.map nspace=60 mkdir=no",
+                content,
+            )
+            self.assertNotIn("cp -v", content)
+            self.assertNotIn("prg=update_project", content)
+            self.assertNotIn("projfile=workspace.simple", content)
+            self.assertIn("export SIMPLE_PATH=/opt/simple", content)
+            self.assertIn("http://localhost:8000/api", content)
             submit.assert_called_once()

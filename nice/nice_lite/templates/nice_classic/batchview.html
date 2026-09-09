@@ -461,7 +461,7 @@
                                     <span>picked particles <strong class="ml-1 font-mono text-streamtext">{{ pick_particle_count }}</strong></span>
                                 {% endif %}
                                 {% if particle_stack_page.particles %}
-                                    <span>extracted particles <strong class="ml-1 font-mono text-streamtext">{{ particle_stack_page.first_particle }}–{{ particle_stack_page.last_particle }} of {{ particle_stack_page.total }} from {{ particle_stack_page.stacks|length }} stack{{ particle_stack_page.stacks|length|pluralize }}</strong></span>
+                                    <span>{% if program == "reproject" %}reprojected images{% else %}extracted particles{% endif %} <strong class="ml-1 font-mono text-streamtext">{{ particle_stack_page.first_particle }}–{{ particle_stack_page.last_particle }} of {{ particle_stack_page.total }} from {{ particle_stack_page.stacks|length }} stack{{ particle_stack_page.stacks|length|pluralize }}</strong></span>
                                 {% endif %}
                             </div>
                         {% endif %}
@@ -565,16 +565,16 @@
                                  class="flex flex-wrap items-start gap-2"
                                  style="--artifact-tile-height:clamp(72px,18vw,260px)">
                                 {% for particle in particle_stack_page.particles %}
-                                    <a data-output-grid-tile data-artifact-preview-kind="particle"
+                                    <a data-output-grid-tile data-artifact-preview-kind="{% if program == 'reproject' %}projection{% else %}particle{% endif %}"
                                        href="{% url 'nice_lite:batch_particle_thumbnail' jobid particle.stack_name particle.stack_index %}"
                                        target="_blank" rel="noopener"
                                        class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
                                        style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
-                                       title="{{ particle.stack_name }}, particle {{ particle.stack_index }}{% if particle.width and particle.height %} — {{ particle.width }} × {{ particle.height }} px{% endif %}">
+                                       title="{{ particle.stack_name }}, {% if program == 'reproject' %}projection{% else %}particle{% endif %} {{ particle.stack_index }}{% if particle.width and particle.height %} — {{ particle.width }} × {{ particle.height }} px{% endif %}">
                                         <img src="{% url 'nice_lite:batch_particle_thumbnail' jobid particle.stack_name particle.stack_index %}"
                                              loading="lazy" decoding="async"
                                              class="rounded absolute inset-0 w-full h-full object-cover hover:opacity-90 transition-opacity"
-                                             alt="extracted particle {{ particle.number }}">
+                                             alt="{% if program == 'reproject' %}reprojected image{% else %}extracted particle{% endif %} {{ particle.number }}">
                                         {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=particle.width height=particle.height %}
                                     </a>
                                 {% endfor %}
@@ -582,11 +582,11 @@
 
                             {% if particle_stack_page.pages > 1 %}
                                 <nav class="mt-3 flex flex-wrap items-center justify-center gap-1"
-                                     aria-label="extracted particle pages">
+                                     aria-label="{% if program == 'reproject' %}reprojected image{% else %}extracted particle{% endif %} pages">
                                     {% if particle_stack_page.has_previous %}
                                         <a href="?particle_page={{ particle_stack_page.previous_page }}#batch_particle_gallery"
                                            class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
-                                           aria-label="previous particle page">previous</a>
+                                           aria-label="previous {% if program == 'reproject' %}projection{% else %}particle{% endif %} page">previous</a>
                                     {% endif %}
                                     {% for page_number in particle_stack_page.page_numbers %}
                                         {% if page_number == particle_stack_page.ellipsis %}
@@ -598,13 +598,13 @@
                                         {% else %}
                                             <a href="?particle_page={{ page_number }}#batch_particle_gallery"
                                                class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-center text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
-                                               {% if page_number == particle_stack_page.pages %}aria-label="last particle page"{% endif %}>{{ page_number }}</a>
+                                               {% if page_number == particle_stack_page.pages %}aria-label="last {% if program == 'reproject' %}projection{% else %}particle{% endif %} page"{% endif %}>{{ page_number }}</a>
                                         {% endif %}
                                     {% endfor %}
                                     {% if particle_stack_page.has_next %}
                                         <a href="?particle_page={{ particle_stack_page.next_page }}#batch_particle_gallery"
                                            class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
-                                           aria-label="next particle page">next</a>
+                                           aria-label="next {% if program == 'reproject' %}projection{% else %}particle{% endif %} page">next</a>
                                     {% endif %}
                                 </nav>
                             {% endif %}

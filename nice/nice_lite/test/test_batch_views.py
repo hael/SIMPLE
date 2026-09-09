@@ -507,6 +507,45 @@ class BatchViewTests(SimpleTestCase):
         self.assertEqual(context["artifact_counts"], [{"extension": "MRCS", "count": 1}])
         self.assertTrue(context["output_dimensions_available"])
 
+    def test_reproject_batch_context_paginates_projection_stack_headers(self):
+        project = SimpleNamespace(name="project")
+        workspace = SimpleNamespace(name="workspace", proj=project)
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=1,
+            name="Reproject Volume",
+            desc="",
+            status="finished",
+            cdat="created",
+            args={},
+            master_stats={"package": "simple", "program": "reproject"},
+            dset=workspace,
+        )
+        stack_page = {
+            "stacks": [{"name": "reprojs.mrcs", "count": 60}],
+            "particles": [{
+                "number": 1,
+                "stack_name": "reprojs.mrcs",
+                "stack_index": 1,
+                "width": 240,
+                "height": 240,
+            }],
+            "total": 60,
+        }
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = None
+        batch_job.get_artifact_summary.return_value = {"counts": [], "images": []}
+        batch_job.get_particle_stack_page.return_value = stack_page
+        batch_job.get_safe_job_dir.return_value = "/project/workspace/1_reproject"
+        batch_job.get_log_tails.return_value = []
+
+        context = batch_views._batch_detail_context(batch_job, jobmodel)
+
+        batch_job.get_particle_stack_page.assert_called_once_with(page=1, page_size=40)
+        self.assertIs(context["particle_stack_page"], stack_page)
+        self.assertEqual(context["artifact_counts"], [{"extension": "MRCS", "count": 1}])
+        self.assertTrue(context["output_dimensions_available"])
+
     def test_particle_thumbnail_endpoint_renders_only_requested_particle(self):
         batch_job = Mock()
         batch_job.get_particle_thumbnail.return_value = b"png"

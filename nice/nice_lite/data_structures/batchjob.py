@@ -50,6 +50,7 @@ class BatchJob(Job):
     MOTION_THUMBNAIL_SUFFIX = "_thumb.jpg"
     PICK_INTEGRATED_SUFFIX = "_intg"
     PARTICLE_STACK_PROGRAMS = frozenset(("extract", "reextract"))
+    MRC_STACK_PREVIEW_PROGRAMS = PARTICLE_STACK_PROGRAMS | frozenset(("reproject",))
     IMPORT_MOVIE_EXTENSIONS = frozenset((
         ".mrc", ".mrcs", ".tif", ".tiff", ".eer",
     ))
@@ -625,7 +626,7 @@ class BatchJob(Job):
         }
 
     def get_particle_stack_page(self, page=1, page_size=40):
-        """Return one page of addressable images from owned extract stacks.
+        """Return one page of addressable images from owned output stacks.
 
         Only MRC headers are read here. Pixel data is read later by the image
         endpoint for the thumbnails that the browser actually requests.
@@ -643,7 +644,7 @@ class BatchJob(Job):
             "first_particle": 0,
             "last_particle": 0,
         }
-        if self.prog not in self.PARTICLE_STACK_PROGRAMS:
+        if self.prog not in self.MRC_STACK_PREVIEW_PROGRAMS:
             return empty_page
         if not isinstance(page, int) or isinstance(page, bool) or page < 1:
             page = 1
@@ -729,9 +730,9 @@ class BatchJob(Job):
         }
 
     def get_particle_thumbnail(self, stack_name, particle_index, max_size=160):
-        """Return one owned extract particle as in-memory PNG bytes."""
+        """Return one owned output-stack image as in-memory PNG bytes."""
         if (
-            self.prog not in self.PARTICLE_STACK_PROGRAMS
+            self.prog not in self.MRC_STACK_PREVIEW_PROGRAMS
             or not isinstance(stack_name, str)
             or stack_name != os.path.basename(stack_name)
             or not stack_name.lower().endswith(".mrcs")

@@ -565,7 +565,7 @@ def _batch_detail_context(
         and batch_class_selector is not None
     )
     particle_stack_page = {}
-    if metadata.get("program") in BatchJob.PARTICLE_STACK_PROGRAMS:
+    if metadata.get("program") in BatchJob.MRC_STACK_PREVIEW_PROGRAMS:
         particle_stack_page = batch_job.get_particle_stack_page(
             page=particle_page,
             page_size=_BATCH_PARTICLE_PAGE_SIZE,
@@ -819,7 +819,7 @@ def view_batch_class_deselection_export(request, jobid):
 @require_GET
 @cache_control(private=True, max_age=300, no_transform=True)
 def view_batch_particle_thumbnail(request, jobid, stack_name, particle_index):
-    """Render one owned extract particle on demand without writing a thumbnail."""
+    """Render one owned output-stack image on demand without writing a thumbnail."""
     batch_job, _ = _get_accessible_batch_job(
         request,
         "view_batch_particle_thumbnail",
