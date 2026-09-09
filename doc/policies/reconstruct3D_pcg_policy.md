@@ -175,14 +175,9 @@ regularized replay deterministically replays kernel finalization from the
 persisted raw `(B,D)` and produces the standard maps. It installs the FSC/SSNR
 shell-diagonal `P_tau` in every mode; with NU filtering active the base
 (`_unfil`) pair then seeds the NU candidate bank and the replayed pair joins the
-competition as the auxiliary member, exactly as on gridding. With
-`nu_input=gridding` (opt-in, 2026-09-08) the bank is seeded instead from the
-gridding half pair of the same accumulated data, kept by `end_accum` on request
-(`set_keep_gridding_half`/`get_gridding_half`: exact density division of the
-folded RHS, no floor, no prior, no support mask); the base pair keeps every
-other role. A truncated-CG pair is spectrally regularized and lets the
-competition select fine labels the data do not support (PfCRT record
-2026-09-08b in `doc/implementation_notes/pcg_priors.md`). The replay
+competition as the auxiliary member, exactly as on gridding. (The
+`nu_input=gridding|ml` alternatives of 2026-09-08 were retired on 2026-09-09;
+records in `doc/implementation_notes/pcg_priors.md`.) The replay
 warm-starts from the previous
 refinement iteration's ML half map when one exists on disk — strictly the same
 half (gold-standard independence), constant-FOV `read_and_crop` across crop

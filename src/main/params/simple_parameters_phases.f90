@@ -793,17 +793,6 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
-        ! NU competition input: the unregularized (base) pair, the gridding half
-        ! pair of the same accumulated data (PCG backend only; a no-op on the
-        ! gridding backend, whose unfiltered pair already is that), or the
-        ! ML-regularized pair with no auxiliary member (both backends)
-        select case(trim(self%nu_input))
-            case('base','gridding','ml')
-            case DEFAULT
-                THROW_HARD('nu_input must be base, gridding or ml')
-        end select
-        self%l_nu_input_gridding = trim(self%nu_input) == 'gridding'
-        self%l_nu_input_ml       = trim(self%nu_input) == 'ml'
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
@@ -928,8 +917,6 @@ contains
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
         self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
-        if( self%l_nu_input_ml .and. self%l_nonuniform .and. .not. self%l_ml_reg ) &
-            &THROW_HARD('nu_input=ml requires ml_reg=yes with objfun=euclid when nonuniform filtering is active')
         if( cline%defined('pcg_mskfile') )then
             if( trim(self%rec_backend) /= 'pcg' ) &
                 &THROW_HARD('pcg_mskfile (PCG support constraint) requires rec_backend=pcg')

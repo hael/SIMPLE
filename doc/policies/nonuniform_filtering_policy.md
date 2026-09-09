@@ -46,23 +46,18 @@ member (`ml_reg=yes`, `nu_refine=no`), and the `_nu_filt`/`_nu_locres`
 products and the matching-lp handoff are written exactly as on gridding. The
 former in-solve `Q_NU` replay precision and its controllers were removed.
 
-`nu_input` (2026-09-08, default `base`) selects the pair that seeds the
-competition: `base`, the unregularized pair; `gridding` (PCG backend only), the
-gridding half pair of the same accumulated data (`E T^-1 b / padsc^2`: exact
-density division, no shell floor, no prior, no support mask, at the solution's
-scale); or `ml`, the ML-regularized pair as the sole input with no auxiliary
-member (both backends; requires `ml_reg=yes`). With the like-for-like
-selection of section 9 the ML pair's candidates beyond the FSC tie exactly and
-resolve coarse, which is what makes `ml` viable; the base pair keeps the FSC,
-the `_unfil` product and the warm starts. The competition's unary
-penalizes a finer candidate by the noise it admits from the other half; a
-truncated-CG pair is spectrally regularized, its poorly determined
-high-frequency modes stay damped in both halves, and the competition then
-selects fine labels wherever the halves share any content. On PfCRT that
-populated the finest labels at a 6 A FSC (record 2026-09-08b in
-`doc/implementation_notes/pcg_priors.md`); the gridding pair carries the
-full-band independent noise the competition was designed for. The base pair
-remains the FSC oracle, the `_unfil` product and the ML warm start.
+The competition input is the unregularized (base) pair on both backends.
+Two alternatives were tried and retired on 2026-09-09 (`nu_input=gridding|ml`,
+records 2026-09-08b-g and 2026-09-09 in
+`doc/implementation_notes/pcg_priors.md`): the gridding half of the PCG
+accumulation became moot once the like-for-like selection removed the
+footprint artifact, and the ML-regularized pair cannot seed the competition
+because `P_tau` is a global per-shell shrinkage driven by the global FSC: it
+removes exactly the local content beyond the global FSC that the competition
+must find to advance the band, and the under-converged replay compounds the
+shrinkage across iterations (PfCRT: labels drifted coarser every iteration,
+the sampler settled on the smooth reference, early stopping fired, three runs
+pinned at 8.4-9.1 A).
 
 `nu_refine=yes` enables iterative high-resolution NU shell extension. This is
 on by default in `refine3D_auto`, off by default elsewhere, and explicitly set
@@ -182,9 +177,7 @@ effective resolution comes from the state FSC(0.143) resolution,
 When `nu_refine=yes`, the ML-regularized auxiliary replacement is not supplied;
 the high-resolution shell challenger owns the resolution-extension experiment.
 
-On `rec_backend=pcg` the base input is the unregularized solve pair, or with
-`nu_input=gridding` the gridding half pair of the same accumulated data (see
-section 2).
+On `rec_backend=pcg` the base input is the unregularized solve pair.
 
 ## 6. Spherical Support Contract
 

@@ -113,20 +113,6 @@ type :: reconstructor_pcg
     real,    allocatable :: acc_work(:,:,:)          !< sum_i G_i^dagger |T_i|^2, full-range
     complex, allocatable :: b_work(:,:,:)            !< RHS accumulator, full-range
     real,    allocatable :: b_rhs(:,:,:)             !< folded/deapodized/masked RHS, box^3
-    ! ---- gridding half of the same accumulated data (opt-in) ----
-    ! A truncated-CG solve is spectrally regularized: its poorly determined
-    ! high-frequency modes stay damped, so the two half solutions agree there
-    ! for lack of content and the nonuniform-filter competition hands out fine
-    ! labels the data do not support (PfCRT record 2026-09-08, pcg_priors.md).
-    ! When requested before end_accum, the gridding half of the accumulated
-    ! data -- E T^-1 b, the exact sampling-density division with no shell
-    ! floor, no prior and no support mask -- is kept for that consumer. It
-    ! carries the full-band independent noise of the data at the solve's own
-    ! scale and convention (the first Krylov direction from zero under the
-    ! exact density in place of the floored preconditioner).
-    real,    allocatable :: grid_half(:,:,:)         !< E T^-1 b, box^3
-    logical              :: l_keep_grid = .false.    !< build it in end_accum
-    logical              :: l_grid      = .false.    !< it is available
     logical              :: l_accum = .false.
     logical              :: l_rhs   = .false.
     integer              :: reduction_next_part = 1  !< fixed raw-artifact association order
@@ -229,9 +215,6 @@ type :: reconstructor_pcg
     procedure :: get_env
     procedure :: get_invenv
     procedure :: get_rhs
-    procedure :: set_keep_gridding_half
-    procedure :: get_gridding_half
-    procedure, private :: build_gridding_half
     procedure :: get_raw_accum
     procedure :: get_ml_prior
     procedure :: get_ml_prior_stats
@@ -483,76 +466,6 @@ contains
         if( .not. self%l_rhs ) THROW_HARD('no right-hand side has been built; get_rhs')
         allocate(b(self%box,self%box,self%box), source=self%b_rhs)
     end subroutine get_rhs
-
-    !>  \brief  Request (before end_accum) that the gridding half of the
-    !!          accumulated data be kept for get_gridding_half.
-    subroutine set_keep_gridding_half( self, l_keep )
-        class(reconstructor_pcg), intent(inout) :: self
-        logical,                    intent(in)    :: l_keep
-        self%l_keep_grid = l_keep
-    end subroutine set_keep_gridding_half
-
-    !>  \brief  The gridding half of the accumulated data: b_hat/rho on the
-    !!          padded lattice, folded to the native box, in the solver's own
-    !!          convention (E T^-1 b, exactly what apply_precond returns for
-    !!          the RHS with the exact density in place of the floored,
-    !!          prior-augmented preconditioner). The division follows
-    !!          reconstructor%sampl_dens_correct: wherever rho exceeds 1e-6
-    !!          the numerator is divided, elsewhere the mode is zero. No
-    !!          support mask is applied; the consumer owns its support.
-    subroutine build_gridding_half( self, vol_accum, rho_accum )
-        class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
-        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                               &self%lims3(2,1):self%lims3(2,2),&
-                                                               &self%lims3(3,1):self%lims3(3,2))
-        real, parameter :: RHO_DIV_EPS = 1.e-6
-        integer :: h, hh, k, m, phys(3)
-        call self%ensure_wimg
-        call self%wimg%zero_and_flag_ft()
-        !$omp parallel do collapse(2) default(shared) private(h,hh,k,m,phys) &
-        !$omp schedule(static) proc_bind(close)
-        do m = self%lims3(3,1), self%lims3(3,2)
-            do k = self%lims3(2,1), self%lims3(2,2)
-                do h = 0, self%lims3(1,2)
-                    hh   = self%wrap(h)
-                    phys = self%wimg%comp_addr_phys(h,k,m)
-                    if( rho_accum(hh,k,m) > RHO_DIV_EPS )then
-                        call self%wimg%set_cmat_at(phys(1),phys(2),phys(3), &
-                            &vol_accum(hh,k,m) / rho_accum(hh,k,m))
-                    else
-                        call self%wimg%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0.,0.))
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        call self%wimg%ifft()
-        if( allocated(self%grid_half) ) deallocate(self%grid_half)
-        self%grid_half = center_crop_real3d(self%wimg%get_rmat(), self%box)
-        ! same convention as the solution: apply_precond multiplies the
-        ! density-corrected map by the envelope on the way out, and the
-        ! calibrated operator carries padsc**2 relative to this raw density
-        ! (Khat = padsc**2 x folded density, the RHS scatter one padsc), so the
-        ! exact quotient b_hat/rho sits padsc**2 above the solution; CG absorbs
-        ! that in the preconditioner, this product has to remove it
-        if( self%l_deapod ) self%grid_half = self%grid_half * self%env
-        self%grid_half = self%grid_half / self%padsc**2
-        self%l_grid = .true.
-    end subroutine build_gridding_half
-
-    !>  \brief  Hand out the gridding half kept by end_accum (moved, so it can
-    !!          be taken once per accumulation).
-    subroutine get_gridding_half( self, z )
-        class(reconstructor_pcg), intent(inout) :: self
-        real, allocatable,         intent(out)   :: z(:,:,:)
-        if( .not. self%l_grid ) &
-            &THROW_HARD('no gridding half was kept; request it before end_accum; get_gridding_half')
-        call move_alloc(self%grid_half, z)
-        self%l_grid = .false.
-    end subroutine get_gridding_half
 
     !> Copy the open, unfinalized accumulator-domain statistics. This is a
     !! test/diagnostic boundary only: production distribution persists the
@@ -814,9 +727,6 @@ contains
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
-        if( allocated(self%grid_half)) deallocate(self%grid_half)
-        self%l_keep_grid = .false.
-        self%l_grid      = .false.
         self%l_accum = .false.
         self%l_rhs   = .false.
         self%box    = 0
@@ -1484,9 +1394,6 @@ contains
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
-        if( allocated(self%grid_half)) deallocate(self%grid_half)
-        self%l_keep_grid = .false.
-        self%l_grid      = .false.
         allocate(self%acc_work(self%lims3(1,1):self%lims3(1,2),&
                               &self%lims3(2,1):self%lims3(2,2),&
                               &self%lims3(3,1):self%lims3(3,2)), source=0.0)
@@ -1943,9 +1850,6 @@ contains
         ! move_alloc for the same aliasing reason as accumulate_batch.
         tp = pcg_tic()
         call move_alloc(self%b_work, bwork)
-        ! the gridding half needs the raw density beside the RHS accumulator;
-        ! both are alive only here
-        if( self%l_keep_grid ) call self%build_gridding_half(bwork, self%acc_work)
         self%b_rhs = self%fold_and_ifft(bwork)
         deallocate(bwork)
         call self%deapod_mul(self%b_rhs)

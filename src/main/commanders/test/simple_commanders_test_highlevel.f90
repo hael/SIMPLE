@@ -1148,9 +1148,6 @@ subroutine exec_test_pcg_recon( self, cline )
     real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
     real,    allocatable    :: env(:,:,:), invenv(:,:,:)
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
-    real,    allocatable    :: z_grid(:,:,:)
-    real(dp)                :: gzz, gxz, gxx
-    real                    :: gscale, gcorr
     real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:), sig2_2d(:,:)
     real,    allocatable    :: sig2_crop(:,:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
     complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
@@ -1615,34 +1612,6 @@ subroutine exec_test_pcg_recon( self, cline )
                 write(logfhandle,'(a)') '    PASS: kernel is identical either way'
             endif
         end do
-        ! Gridding half of the accumulated data (nu_input=gridding, the NU
-        ! competition input): the exact density quotient kept by end_accum must
-        ! sit at the solution's scale and correlate with the converged solve.
-        ! The RHS scatter carries one padsc and the calibrated operator
-        ! padsc**2, so an uncorrected quotient is 64x too large (the
-        ! hollow-sphere reference on PfCRT, 2026-09-08).
-        call pcgop%begin_accum
-        call pcgop%accumulate_batch(y_planes, NPROJS, 1)
-        call pcgop%set_keep_gridding_half(.true.)
-        call pcgop%end_accum(.true.)
-        call pcgop%get_gridding_half(z_grid)
-        call pcgop%solve_accum(recon_str, maxits=40, rtol=1.0e-3, niters=niters)
-        gzz = sum(real(z_grid,dp)**2)
-        gxx = sum(real(recon_str,dp)**2)
-        gxz = sum(real(recon_str,dp) * real(z_grid,dp))
-        gscale = 0.
-        gcorr  = 0.
-        if( gzz > 0.d0 ) gscale = real(gxz / gzz)
-        if( gzz > 0.d0 .and. gxx > 0.d0 ) gcorr = real(gxz / sqrt(gxx * gzz))
-        write(logfhandle,'(a,f8.4,a,f8.4,a,i0,a)') '    gridding half vs converged solve: LS scale = ', gscale, &
-            &', corr = ', gcorr, ' (', niters, ' its)'
-        if( abs(gscale - 1.0) > 0.25 .or. gcorr < 0.9 )then
-            write(logfhandle,'(a)') '    FAIL: gridding half is not on the solution scale or does not correlate'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: gridding half sits on the solution scale'
-        endif
-        deallocate(z_grid)
         ! Distributed contract: workers publish raw, unfolded B and D. The
         ! master adds artifacts in ascending part order and only then folds and
         ! finalizes. Split the same particle sequence into two artifacts so the

@@ -2059,7 +2059,6 @@ contains
         call cline_pspec%delete('rec_backend')
         call cline_pspec%delete('maxits_pcg')
         call cline_pspec%delete('rtol')
-        call cline_pspec%delete('nu_input')
         call cline_pspec%delete('trail_seed')
         call cline_pspec%delete('outfile')
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter

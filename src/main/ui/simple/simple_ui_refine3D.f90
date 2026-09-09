@@ -137,13 +137,6 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
-        call reconstruct3D%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
-        &'Half-map pair seeding the nonuniform-filter competition: the unregularized pair, the gridding '//&
-        &'reconstruction of the same accumulated data (PCG only), or the ML-regularized pair with no auxiliary '//&
-        &'member(base|gridding|ml){base}', &
-        &'', .false., 'base', &
-        &choices=ui_choices([character(len=8) :: 'base', 'gridding', 'ml']), visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_PARM, sigma_store, visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
@@ -282,13 +275,6 @@ subroutine new_automask( prgtab )
         &'Reconstruction backend for per-iteration half-map assembly(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
-        &'Half-map pair seeding the nonuniform-filter competition: the unregularized pair, the gridding '//&
-        &'reconstruction of the same accumulated data (PCG only), or the ML-regularized pair with no auxiliary '//&
-        &'member(base|gridding|ml){base}', &
-        &'', .false., 'base', group="search", &
-        &choices=ui_choices([character(len=8) :: 'base', 'gridding', 'ml']), visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
         &'Even Fourier-cropped refinement box; native project geometry remains authoritative', &
@@ -424,13 +410,6 @@ subroutine new_automask( prgtab )
         &'bootstrap/final reconstructions(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
-        call refine3D_auto%add_input(UI_PARM, 'nu_input', 'multi', 'NU competition input', &
-        &'Half-map pair seeding the nonuniform-filter competition: the unregularized pair, the gridding '//&
-        &'reconstruction of the same accumulated data (PCG only), or the ML-regularized pair with no auxiliary '//&
-        &'member(base|gridding|ml){base}', &
-        &'', .false., 'base', group="search", &
-        &choices=ui_choices([character(len=8) :: 'base', 'gridding', 'ml']), visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D_auto%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., group="search", &

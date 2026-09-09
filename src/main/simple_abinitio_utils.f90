@@ -248,7 +248,6 @@ contains
         call child_cline%delete('pcgop')
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('rtol')
-        call child_cline%delete('nu_input')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -264,9 +263,6 @@ contains
         endif
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
-        endif
-        if( cline_refine3D%defined('nu_input') )then
-            call child_cline%set('nu_input', cline_refine3D%get_carg('nu_input'))
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))

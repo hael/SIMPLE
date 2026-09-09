@@ -3684,6 +3684,24 @@ retired (stage 8 overlap 0.96-0.997 for its last ten iterations with the
 FSC flat; streptavidin 2000 s vs 1300 s). Next run: like-for-like +
 uncapped handoff + early stopping, default input and nu_input=ml arms.
 
+Run record (2026-09-09): f4dfb1bd (like-for-like selection, uncapped NU-stage
+handoff, early stopping), PfCRT. Base input, three restarts: 4.20 / 4.03 /
+4.63 A; cross-FSC 0.143 against the July final 3.93 / 3.93 / 4.09 A, band
+means (10-7 A) 0.68 / 0.62 / 0.58, better than July's own restart agreement
+(0.54-0.61); within-run FSC never finer than the cross-run crossing (no
+overfitting signature); handoff walk 7.96 -> 5.97 (stage 6), 5.0 -> 4.14
+(stage 7), 3.98 (stage 8); stage-6 histogram 72% at 11.9 A at FSC 8.6 A
+(July 82%). R3 never populated 4.14 A in stage 7, settled at the 5.0 A band
+(overlap 0.96) and early-stopped stage 8 after 7 iterations. nu_input=ml,
+three restarts: 8.4 / 9.1 / 8.4 A, cross-FSC against July 7.4 A; every NU
+stage early-stopped (9/7/3, 12/6/3, 4/5/3 iterations); labels drifted
+coarser each iteration (7.96 A from 35% to 1.7%, 11.9 A up to 65%) because
+P_tau is a global per-shell shrinkage driven by the global FSC and the
+under-converged replay re-applies it to its own warm start. Both nu_input
+options, the kept gridding half (set_keep_gridding_half/get_gridding_half),
+the auxiliary-slot bypass and the pcg_recon gate were removed the same day;
+the base pair is the competition input, as in July.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery
