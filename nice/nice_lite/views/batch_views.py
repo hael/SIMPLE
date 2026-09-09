@@ -554,12 +554,14 @@ def _batch_detail_context(
             max_previews=_BATCH_PICK_PREVIEW_LIMIT,
             max_coordinates=_BATCH_PICK_COORDINATE_LIMIT,
         )
-        if not pick_micrographs and result_project is not None:
-            pick_micrographs = _pick_micrograph_previews(project_reader, project_stats)
 
     artifact_summary = batch_job.get_artifact_summary()
     artifact_counts = list(artifact_summary.get("counts", []))
-    artifact_images = artifact_summary.get("images", [])
+    artifact_images = (
+        []
+        if metadata.get("program") == "pick"
+        else artifact_summary.get("images", [])
+    )
     class_selector_replaces_artifact_previews = (
         metadata.get("program") == "abinitio2D"
         and batch_class_selector is not None

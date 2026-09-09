@@ -41,6 +41,19 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('target="workspace_iframe"', jobbuilder)
         self.assertIn('name="workspace_iframe"', index)
 
+    def test_project_selector_restores_its_most_recent_workspace(self):
+        index = self._read_template("index.html")
+
+        self.assertIn('onchange="selectProjectWorkspace(this)"', index)
+        self.assertIn('data-recent-workspace-input', index)
+        self.assertIn('const workspaceStorageKey = (projectId) => `${WORKSPACE_KEY}:${projectId}`;', index)
+        self.assertIn('const workspaceId = rememberedWorkspace(select.value);', index)
+        self.assertIn('workspaceInput.value = workspaceId || "";', index)
+        self.assertIn(
+            'sessionStorage.setItem(workspaceStorageKey(currentProjectId), currentWorkspaceId);',
+            index,
+        )
+
     def test_file_browser_openers_forward_current_input_path(self):
         jobbuilder = self._read_template("jobbuilder.html")
         newproject = self._read_template("newproject.html")

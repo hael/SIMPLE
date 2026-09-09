@@ -474,7 +474,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         reference_pick = self._read_template("nice_stream/panelreferencepicking.html")
         slider = self._read_template("nice_stream/includes/_pick_micrograph_slider.html")
         slide = self._read_template("nice_stream/includes/_pick_micrograph_slide.html")
-        batch_pick = self._read_template("nice_classic/includes/_batch_pick_micrograph_preview.html")
+        artifact_preview = self._read_template("nice_classic/includes/_batch_artifact_preview.html")
         slider_script = self._read_static("nice_lite/pick_micrograph_slider.js")
         shared_include = "nice_stream/includes/_pick_micrograph_slider.html"
         shared_slide = "nice_stream/includes/_pick_micrograph_slide.html"
@@ -483,13 +483,18 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn(shared_include, initial_pick)
         self.assertIn(shared_include, reference_pick)
         self.assertIn(shared_slide, slider)
-        self.assertIn(shared_slide, batch_pick)
+        self.assertIn(shared_slide, artifact_preview)
+        self.assertNotIn("nice_classic/includes/_batch_pick_micrograph_preview.html", batch_view)
+        self.assertIn(
+            "nice_classic/includes/_batch_artifact_preview.html' with preview=micrograph pick_overlay=True",
+            batch_view,
+        )
         self.assertIn("nice_lite/pick_micrograph_slider.js", batch_view)
         self.assertIn("pick_micrograph_slider.js' %}?v=18", batch_view)
         self.assertIn("nice_lite/pick_micrograph_slider.js", initial_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", reference_pick)
         self.assertIn("nice_stream/includes/_scroll_btn.html", slider)
-        self.assertIn("data-pick-micrograph-overlay", batch_pick)
+        self.assertIn("data-pick-micrograph-overlay", artifact_preview)
         self.assertIn("object-[100%]", slide)
         self.assertIn("context.arc(", slider_script)
         self.assertIn("context.strokeRect(", slider_script)
@@ -500,6 +505,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("const overlayScale = overlaySize / nativeSize", slider_script)
         self.assertIn("(overlaySize * scale) / 2", slider_script)
         self.assertIn("findNativeOverlaySize", slider_script)
+        self.assertIn("const xoffset = (canvas.width - (scale * xdim)) / 2", slider_script)
+        self.assertIn("const yoffset = (canvas.height - (scale * ydim)) / 2", slider_script)
         self.assertIn("Number(box.x) * scale", slider_script)
         self.assertIn("Number(box.y) * scale", slider_script)
         self.assertIn("--preprocess-contrast", slide)
@@ -508,7 +515,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         rendered = render_to_string("nice_classic/batchview.html", {
             "jobid": 7,
             "pick_micrographs": [{
-                "path": "/project/workspace/1_motion/movie_thumb.jpg",
+                "path": "/project/workspace/3_pick/movie_intg_den.jpg",
                 "number": 9,
                 "xdim": 4096,
                 "ydim": 3072,
@@ -676,7 +683,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("4096 × 3072 px", rendered)
         self.assertIn("pixel size", rendered)
         self.assertIn("1.300 Å/px", rendered)
-        self.assertIn("movie_thumb.jpg", rendered)
+        self.assertIn("movie_intg_den.jpg", rendered)
         self.assertIn("picked micrograph 9", rendered)
 
     def test_extract_output_uses_lazy_paginated_particle_thumbnails(self):

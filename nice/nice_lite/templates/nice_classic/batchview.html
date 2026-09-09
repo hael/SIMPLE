@@ -619,7 +619,7 @@
                             data-pick-overlay-color="#ff3b30"
                             style="--artifact-tile-height:clamp(72px,18vw,260px)">
                             {% for micrograph in pick_micrographs %}
-                                {% include 'nice_classic/includes/_batch_pick_micrograph_preview.html' with micrograph=micrograph %}
+                                {% include 'nice_classic/includes/_batch_artifact_preview.html' with preview=micrograph pick_overlay=True %}
                             {% endfor %}
                             {% if not class_selector_replaces_artifact_previews %}
                                 {% for image in artifact_images %}

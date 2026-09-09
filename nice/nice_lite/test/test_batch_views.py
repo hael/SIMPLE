@@ -680,7 +680,7 @@ class BatchViewTests(SimpleTestCase):
         self.assertTrue(context["ctf_artifact_micrograph_toggle_available"])
         self.assertFalse(context["output_dimensions_available"])
 
-    def test_batch_detail_prefers_pick_previews_from_motion_artifacts(self):
+    def test_batch_detail_uses_picker_generated_denoised_thumbnails(self):
         jobmodel = SimpleNamespace(
             id=7,
             disp=3,
@@ -701,11 +701,18 @@ class BatchViewTests(SimpleTestCase):
         )
         batch_job = Mock()
         batch_job.get_result_project_path.return_value = "/workspace/3_pick/workspace.simple"
-        batch_job.get_artifact_summary.return_value = {"counts": [], "images": []}
+        batch_job.get_artifact_summary.return_value = {
+            "counts": [{"extension": "JPEG", "count": 1}],
+            "images": [{
+                "name": "pickrefs_source.jpeg",
+                "path": "/workspace/3_pick/pickrefs_source.jpeg",
+                "previews": [],
+            }],
+        }
         batch_job.get_safe_job_dir.return_value = "/workspace/3_pick"
         batch_job.get_log_tails.return_value = []
         batch_job.get_pick_micrograph_previews.return_value = [{
-            "path": "/workspace/1_motion/movie_thumb.jpg",
+            "path": "/workspace/3_pick/movie_intg_den.jpg",
             "number": 11,
             "xdim": 4096,
             "ydim": 3072,
@@ -734,12 +741,17 @@ class BatchViewTests(SimpleTestCase):
         )
         project_reader.getFieldStats.assert_not_called()
         self.assertEqual(context["pick_micrographs"], [{
-            "path": "/workspace/1_motion/movie_thumb.jpg",
+            "path": "/workspace/3_pick/movie_intg_den.jpg",
             "number": 11,
             "xdim": 4096,
             "ydim": 3072,
             "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
         }])
+        self.assertEqual(context["artifact_images"], [])
+        self.assertEqual(
+            context["artifact_counts"],
+            [{"extension": "JPEG", "count": 1}],
+        )
         self.assertEqual(context["pick_particle_count"], 5708)
         self.assertTrue(context["pick_box_overlay_available"])
         self.assertTrue(context["output_dimensions_available"])

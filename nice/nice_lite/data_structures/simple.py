@@ -58,7 +58,7 @@ def _classic_status_callback_wrapper(jobid, endpoint):
     the same header accepted by the NICE API.
     """
     running_payload = json.dumps(
-        {"version": 1, "jobid": jobid, "batch_heartbeat": {}},
+        {"version": 1, "jobid": jobid, "batch_heartbeat": {"status": "running"}},
         separators=(",", ":"),
     )
     finished_payload = json.dumps(

@@ -590,46 +590,17 @@ class BatchJobLifecycleTests(TestCase):
             ["image"],
         )
 
-    def test_pick_previews_follow_source_chain_and_read_owned_artifacts(self):
-        motion_dir = os.path.join(self.workspace_dir, "1_motion_correct")
-        os.mkdir(motion_dir)
-        thumbnail_path = os.path.join(motion_dir, "movie_thumb.jpg")
-        with open(thumbnail_path, "wb") as thumbnail_file:
-            thumbnail_file.write(b"image")
-        with open(os.path.join(motion_dir, "movie_intg.mrc"), "wb") as mrc_file:
-            mrc_file.write(b"mrc")
-        motion_job = JobModel.objects.create(
-            dset=self.workspace_model,
-            cdat=timezone.now(),
-            disp=1,
-            dirc="1_motion_correct",
-            status="finished",
-            master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "motion_correct",
-            },
-        )
-
-        ctf_dir = os.path.join(self.workspace_dir, "2_ctf_estimate")
-        os.mkdir(ctf_dir)
-        ctf_job = JobModel.objects.create(
-            dset=self.workspace_model,
-            cdat=timezone.now(),
-            disp=2,
-            dirc="2_ctf_estimate",
-            status="finished",
-            master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "ctf_estimate",
-                "source": {"type": "batch_job", "batch_job_id": motion_job.id},
-            },
-        )
-
+    def test_pick_previews_use_project_dimensions_without_reading_mrc_headers(self):
         pick_dir = os.path.join(self.workspace_dir, "3_pick")
         os.mkdir(pick_dir)
-        with open(os.path.join(pick_dir, "movie_intg.box"), "w", encoding="utf-8") as box_file:
+        project_path = os.path.join(pick_dir, "workspace.simple")
+        with open(project_path, "wb") as project_file:
+            project_file.write(b"project")
+        pick_thumbnail_path = os.path.join(pick_dir, "movie_intg_den.jpg")
+        with open(pick_thumbnail_path, "wb") as thumbnail_file:
+            thumbnail_file.write(b"denoised image")
+        box_path = os.path.join(pick_dir, "movie_intg.box")
+        with open(box_path, "w", encoding="utf-8") as box_file:
             box_file.write("-10 -20 40 60 99.0\ninvalid record\n100 200 20 40\n")
         pick_job = JobModel.objects.create(
             dset=self.workspace_model,
@@ -641,22 +612,27 @@ class BatchJobLifecycleTests(TestCase):
                 "job_type": "batch",
                 "package": "simple",
                 "program": "pick",
-                "source": {"type": "batch_job", "batch_job_id": ctf_job.id},
             },
         )
 
-        mrc_info = SimpleNamespace(width=4096, height=3072)
-        with patch.object(
-            batchjob_module,
-            "read_mrc_stack_info",
-            return_value=mrc_info,
-        ) as read_mrc_info:
+        with (
+            patch.object(batchjob_module, "SIMPLEProjectFileReader") as project_reader,
+            patch.object(batchjob_module, "read_mrc_stack_info") as read_mrc_info,
+        ):
+            project_reader.return_value.read_records.return_value = [{
+                "boxfile": box_path,
+                "thumb_den": pick_thumbnail_path,
+                "xdim": 4096.0,
+                "ydim": 3072.0,
+            }]
             previews = BatchJob(id=pick_job.id).get_pick_micrograph_previews()
 
-        read_mrc_info.assert_called_once_with(os.path.join(motion_dir, "movie_intg.mrc"))
+        project_reader.assert_called_once_with(project_path)
+        project_reader.return_value.read_records.assert_called_once_with("mic")
+        read_mrc_info.assert_not_called()
 
         self.assertEqual(previews, [{
-            "path": thumbnail_path,
+            "path": pick_thumbnail_path,
             "number": 1,
             "xdim": 4096,
             "ydim": 3072,
@@ -1439,7 +1415,7 @@ class SimpleBatchDispatchTests(TestCase):
                     with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
                         content = script.read()
 
-                    running = '{"version":1,"jobid":9,"batch_heartbeat":{}}'
+                    running = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"running"}}'
                     finished = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"finished","terminate":true}}'
                     failed = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"failed","terminate":true}}'
                     command = f"{executable} prg=demo_commander"

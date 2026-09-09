@@ -326,7 +326,6 @@ def _load_batch_class_selection(
         )
 
     classes = []
-    selected_ids = []
     seen_ids = set()
     for ordinal, record in enumerate(class_records):
         class_id = _canonical_class_id(record, ordinal)
@@ -336,8 +335,6 @@ def _load_batch_class_selection(
             )
         seen_ids.add(class_id)
         state = _numeric_record_value(record, "state")
-        if state is None or state > 0:
-            selected_ids.append(class_id)
         classes.append(
             {
                 "class_id": class_id,
@@ -362,8 +359,8 @@ def _load_batch_class_selection(
         stack_path=str(stack_path),
         stack_name=stack_path.name,
         classes=tuple(classes),
-        initial_selected_class_ids=tuple(sorted(selected_ids)),
-        storage_key=f"nice.batch-class-selection.v1.{job_id}.{revision}",
+        initial_selected_class_ids=(),
+        storage_key=f"nice.batch-class-selection.v2.{job_id}.{revision}",
         stack_size=stack_stat.st_size,
         stack_mtime_ns=stack_stat.st_mtime_ns,
         width=stack_info.width,

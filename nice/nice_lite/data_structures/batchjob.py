@@ -6,6 +6,7 @@ import math
 import os
 import shutil
 import signal
+import struct
 import tempfile
 import time
 from collections import Counter
@@ -21,6 +22,7 @@ from django.utils import timezone
 # local imports
 from ..helpers import directory_exists, ensure_directory, analyse_heartbeat, print_error
 from ..models import JobModel, WorkspaceModel
+from .class_selection import ClassSelectionError, SIMPLEProjectFileReader
 from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
 from .mrc import read_mrc_stack_info, render_mrc_particle_png
@@ -49,6 +51,7 @@ class BatchJob(Job):
     CTF_DIAGNOSTIC_SUFFIX = "_ctf_estimate_diag"
     MOTION_THUMBNAIL_SUFFIX = "_thumb.jpg"
     PICK_INTEGRATED_SUFFIX = "_intg"
+    PICK_DENOISED_THUMBNAIL_SUFFIX = "_den.jpg"
     PARTICLE_STACK_PROGRAMS = frozenset(("extract", "reextract"))
     MRC_STACK_PREVIEW_PROGRAMS = PARTICLE_STACK_PROGRAMS | frozenset(("reproject",))
     IMPORT_MOVIE_EXTENSIONS = frozenset((
@@ -430,8 +433,52 @@ class BatchJob(Job):
             return []
         return centers
 
+    def _pick_project_dimensions(self):
+        """Map pick box filenames to dimensions persisted in the result project."""
+        project_path = self.get_result_project_path()
+        if project_path is None:
+            return {}
+        try:
+            records = SIMPLEProjectFileReader(project_path).read_records("mic")
+        except (ClassSelectionError, OSError, OverflowError, struct.error):
+            return {}
+
+        dimensions = {}
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            boxfile = record.get("boxfile")
+            thumbnail = record.get("thumb_den")
+            if not isinstance(boxfile, str) or not isinstance(thumbnail, str):
+                continue
+            box_name = os.path.basename(boxfile)
+            box_stem, box_extension = os.path.splitext(box_name)
+            if (
+                box_extension.lower() != ".box"
+                or os.path.basename(thumbnail)
+                != f"{box_stem}{self.PICK_DENOISED_THUMBNAIL_SUFFIX}"
+            ):
+                continue
+
+            normalized_dimensions = []
+            for key in ("xdim", "ydim"):
+                value = record.get(key)
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    break
+                dimension = float(value)
+                if (
+                    not math.isfinite(dimension)
+                    or dimension <= 0
+                    or not dimension.is_integer()
+                ):
+                    break
+                normalized_dimensions.append(int(dimension))
+            if len(normalized_dimensions) == 2:
+                dimensions[box_name] = tuple(normalized_dimensions)
+        return dimensions
+
     def get_pick_micrograph_previews(self, max_previews=20, max_coordinates=1500):
-        """Build stream-shaped picker previews from owned batch artifacts."""
+        """Build picker previews from same-job denoised thumbnails and boxes."""
         if self.jobmodel is None or self.prog != "pick":
             return []
         if not isinstance(max_previews, int) or isinstance(max_previews, bool) or max_previews <= 0:
@@ -446,13 +493,8 @@ class BatchJob(Job):
         max_coordinates = min(max_coordinates, 5000)
 
         pick_dir = self.get_safe_job_dir()
-        source_motion_job = self._get_source_motion_job()
-        source_dir = (
-            source_motion_job.get_safe_job_dir()
-            if source_motion_job is not None
-            else None
-        )
-        if pick_dir is None or source_dir is None:
+        project_dimensions = self._pick_project_dimensions()
+        if pick_dir is None or not project_dimensions:
             return []
 
         try:
@@ -475,19 +517,12 @@ class BatchJob(Job):
             if box_path is None or not box_stem.endswith(self.PICK_INTEGRATED_SUFFIX):
                 continue
 
-            micrograph_stem = box_stem[:-len(self.PICK_INTEGRATED_SUFFIX)]
-            thumbnail_path = source_motion_job._safe_job_file(
-                f"{micrograph_stem}{self.MOTION_THUMBNAIL_SUFFIX}",
-                source_dir,
+            thumbnail_path = self._safe_job_file(
+                f"{box_stem}{self.PICK_DENOISED_THUMBNAIL_SUFFIX}",
+                pick_dir,
             )
-            integrated_path = source_motion_job._safe_job_file(
-                f"{box_stem}.mrc",
-                source_dir,
-            )
-            if thumbnail_path is None or integrated_path is None:
-                continue
-            dimensions = self._read_mrc_dimensions(integrated_path)
-            if dimensions is None:
+            dimensions = project_dimensions.get(box_name)
+            if thumbnail_path is None or dimensions is None:
                 continue
 
             previews.append({

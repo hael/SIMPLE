@@ -50,6 +50,8 @@ cd "$script_dir"
 printf 'Preparing NICE development database\n'
 "$python_bin" "$manage_py" migrate --noinput
 "$python_bin" "$manage_py" ensurelocaluser
+
+printf 'Configuring local NICE submission template\n'
 "$python_bin" "$manage_py" resetsubmissiontemplate "$build_dir"
 
 printf 'Starting NICE from %s\n' "$script_dir/nice_lite"

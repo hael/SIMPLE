@@ -17,10 +17,11 @@
   Selecting a project or workspace submits a GET form, reloading the page with
   the new selection reflected in the URL query string.
 
-  Per-tab persistence: the resolved selection is cached in this tab's
-  sessionStorage. On a bare load (no selected_*_id in the URL) any id missing
-  from sessionStorage falls back to the selected_*_id cookie set server-side,
-  but a value present in sessionStorage always wins over that cookie.
+  Per-tab persistence: the resolved project and each project's most recently
+  used workspace are cached in this tab's sessionStorage. On a bare load (no
+  selected_*_id in the URL) any id missing from sessionStorage falls back to
+  the selected_*_id cookie set server-side, but a value present in
+  sessionStorage always wins over that cookie.
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -56,7 +57,8 @@
             <div class="flex items-center gap-1.5">
                 <span class="text-xs text-streamlabel">project</span>
                 <form method="GET">
-                    <select name="selected_project_id" onchange="this.form.submit()"
+                    <input type="hidden" name="selected_workspace_id" value="" disabled data-recent-workspace-input>
+                    <select name="selected_project_id" onchange="selectProjectWorkspace(this)"
                             class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
                         {% if not current_project_id %}
                             <option disabled selected value="">select</option>
@@ -107,12 +109,39 @@
         (() => {
             const PROJECT_KEY = "selected_project_id";
             const WORKSPACE_KEY = "selected_workspace_id";
-            const params = new URLSearchParams(window.location.search);
+            const workspaceStorageKey = (projectId) => `${WORKSPACE_KEY}:${projectId}`;
+            const isProjectId = (value) => /^\d+$/.test(value || "") && value !== "0";
+            const rememberedWorkspace = (projectId) => {
+                if (!isProjectId(projectId)) return null;
+                return sessionStorage.getItem(workspaceStorageKey(projectId));
+            };
+
+            // Migrate this tab's previous single-workspace state into the
+            // per-project form without losing the user's current selection.
             const storedProjectId = sessionStorage.getItem(PROJECT_KEY);
-            const storedWorkspaceId = sessionStorage.getItem(WORKSPACE_KEY);
+            const legacyWorkspaceId = sessionStorage.getItem(WORKSPACE_KEY);
+            if (isProjectId(storedProjectId) && legacyWorkspaceId !== null) {
+                const legacyWorkspaceKey = workspaceStorageKey(storedProjectId);
+                if (sessionStorage.getItem(legacyWorkspaceKey) === null) {
+                    sessionStorage.setItem(legacyWorkspaceKey, legacyWorkspaceId);
+                }
+            }
+
+            window.selectProjectWorkspace = (select) => {
+                const workspaceId = rememberedWorkspace(select.value);
+                const workspaceInput = select.form.querySelector("[data-recent-workspace-input]");
+                workspaceInput.disabled = workspaceId === null;
+                workspaceInput.value = workspaceId || "";
+                select.form.submit();
+            };
+
+            const params = new URLSearchParams(window.location.search);
+            const requestedProjectId = params.get(PROJECT_KEY);
+            const projectId = requestedProjectId === null ? storedProjectId : requestedProjectId;
+            const storedWorkspaceId = rememberedWorkspace(projectId);
 
             // Fill in whichever id the URL is missing from this tab's sessionStorage,
-            // so a per-tab selection always wins over the shared selection cookie.
+            // so the tab's project-specific selection wins over the shared cookie.
             const wantsProjectId = !params.has(PROJECT_KEY) && storedProjectId !== null;
             const wantsWorkspaceId = !params.has(WORKSPACE_KEY) && storedWorkspaceId !== null;
             if (wantsProjectId || wantsWorkspaceId) {
@@ -125,13 +154,17 @@
             // Otherwise remember whatever this load ended up resolving (from the URL,
             // or the cookie-backed server default) as this tab's own selection.
             const body = document.body;
-            if (body.dataset.currentProjectId) {
-                sessionStorage.setItem(PROJECT_KEY, body.dataset.currentProjectId);
-            }
-            if (body.dataset.currentWorkspaceId) {
-                sessionStorage.setItem(WORKSPACE_KEY, body.dataset.currentWorkspaceId);
-            } else {
-                sessionStorage.removeItem(WORKSPACE_KEY);
+            const currentProjectId = body.dataset.currentProjectId;
+            const currentWorkspaceId = body.dataset.currentWorkspaceId;
+            if (currentProjectId) {
+                sessionStorage.setItem(PROJECT_KEY, currentProjectId);
+                if (currentWorkspaceId) {
+                    sessionStorage.setItem(WORKSPACE_KEY, currentWorkspaceId);
+                    sessionStorage.setItem(workspaceStorageKey(currentProjectId), currentWorkspaceId);
+                } else {
+                    sessionStorage.removeItem(WORKSPACE_KEY);
+                    sessionStorage.removeItem(workspaceStorageKey(currentProjectId));
+                }
             }
         })();
     </script>
