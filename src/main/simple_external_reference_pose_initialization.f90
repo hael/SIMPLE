@@ -42,7 +42,7 @@ contains
         if( present(lp_init) ) lp = lp_init
         nsample_pose_init = min(nactive, NSAMPLE_POSE_INIT_CAP)
         ufrac_pose_init   = real(nsample_pose_init) / real(nactive)
-        call lpstages_setlims(params%box, 1, params%smpd, lp_init, lp_init, &
+        call lpstages_setlims(params%box, 1, params%smpd, lp, lp, &
             &lpinfo_pose_init)
         cline_pose_init = parent_cline
         call cline_pose_init%set('prg',             'refine3D')
@@ -105,7 +105,7 @@ contains
         call cline_pose_init%delete('endit')
         write(logfhandle,'(A,I0,A,I0,A,F8.4,A,F6.1)') &
             &'>>> FIXED-REFERENCE CC POSE INITIALIZATION STATES/NSAMPLE/FRACTION/LP: ', &
-            &size(reference_vols), '/', nsample_pose_init, '/', ufrac_pose_init, '/', lp_init
+            &size(reference_vols), '/', nsample_pose_init, '/', ufrac_pose_init, '/', lp
         call xrefine3D%execute(cline_pose_init)
         call validate_pose_initialized_states(params%projfile, size(reference_vols), nsample_pose_init)
         cline_sigmas = cline_pose_init
