@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import struct
+import tempfile
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -21,7 +22,7 @@ from ..data_structures.class_selection import (
     ClassSelectionError,
     SIMPLEProjectFileReader,
     batch_class_selection_available,
-    deselected_class_ids,
+    class_selection_flags,
     load_batch_class_selection,
 )
 from ..data_structures.mrc import render_mrc_particle_png
@@ -49,6 +50,7 @@ _BATCH_PICK_COORDINATE_LIMIT = 1500
 _BATCH_PARTICLE_PAGE_SIZE = 40
 _BATCH_MOVIE_PAGE_SIZE = 40
 _BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
+_BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
 
 
 def _positive_finite_number(value):
@@ -776,11 +778,11 @@ def view_batch_class_thumbnail(request, jobid, stack_index):
 
 @login_required(login_url="/login")
 @require_POST
-def view_batch_class_deselection_export(request, jobid):
-    """Download a validated, one-based deselection list for a batch result."""
+def view_batch_class_selection_export(request, jobid):
+    """Download validated, project-ordered 1/0 class-selection state."""
     batch_job, jobmodel = _get_accessible_batch_job(
         request,
-        "view_batch_class_deselection_export",
+        "view_batch_class_selection_export",
         job_id=jobid,
     )
     if batch_job is None or jobmodel.status != "finished":
@@ -793,13 +795,13 @@ def view_batch_class_deselection_export(request, jobid):
             jobmodel.dset.proj.dirc,
             jobmodel.id,
         )
-        deselected_ids = deselected_class_ids(
+        selection_flags = class_selection_flags(
             selection,
             _selected_class_ids(request),
         )
     except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
         logger.warning(
-            "batch class deselection export failed for job %s: %s",
+            "batch class selection export failed for job %s: %s",
             jobmodel.id,
             error,
         )
@@ -807,14 +809,121 @@ def view_batch_class_deselection_export(request, jobid):
         return redirect(_class_selector_redirect(jobmodel.id))
 
     response = HttpResponse(
-        "".join(f"{class_id}\n" for class_id in deselected_ids),
+        "".join(f"{state}\n" for state in selection_flags),
         content_type="text/plain; charset=utf-8",
     )
     response["Content-Disposition"] = (
-        f'attachment; filename="batch_{jobmodel.id}_deselected_classes.txt"'
+        f'attachment; filename="batch_{jobmodel.id}_class_selection.txt"'
     )
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+def _save_batch_class_selection_infile(batch_job, selection_flags):
+    """Atomically replace the fixed class-selection infile in its source job."""
+    job_dir = batch_job.get_safe_job_dir()
+    if job_dir is None:
+        raise ClassSelectionError("The ab initio 2D job directory is unavailable.")
+
+    infile_path = os.path.abspath(
+        os.path.join(job_dir, _BATCH_CLASS_SELECTION_FILENAME)
+    )
+    resolved_infile = os.path.realpath(infile_path)
+    try:
+        infile_is_safe = os.path.commonpath((job_dir, resolved_infile)) == job_dir
+    except ValueError:
+        infile_is_safe = False
+    if not infile_is_safe:
+        raise ClassSelectionError("The class-selection infile path is unsafe.")
+
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            prefix=".class_selection.",
+            dir=job_dir,
+            delete=False,
+        ) as temporary_file:
+            temporary_path = temporary_file.name
+            temporary_file.write(
+                "".join(f"{state}\n" for state in selection_flags)
+            )
+        os.replace(temporary_path, infile_path)
+    except OSError:
+        if temporary_path is not None:
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
+        raise
+    return infile_path
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_batch_class_selection_run(request, jobid):
+    """Save class state beside ab initio 2D output and prefill selection."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "run_batch_class_selection",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    if (
+        jobmodel.status != "finished"
+        or metadata.get("package") != "simple"
+        or metadata.get("program") != "abinitio2D"
+    ):
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "2D class selection requires a finished ab initio 2D job",
+        )
+        return redirect(_class_selector_redirect(jobmodel.id))
+
+    result_project = batch_job.get_result_project_path()
+    try:
+        selection = load_batch_class_selection(
+            result_project,
+            jobmodel.dset.proj.dirc,
+            jobmodel.id,
+        )
+        selected_ids = _selected_class_ids(request)
+        selection_flags = class_selection_flags(selection, selected_ids)
+        if not selected_ids:
+            raise ClassSelectionError(
+                "Select at least one class before running a selection job."
+            )
+        _save_batch_class_selection_infile(batch_job, selection_flags)
+    except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
+        logger.warning(
+            "batch class selection job validation failed for job %s: %s",
+            jobmodel.id,
+            error,
+        )
+        messages.add_message(request, messages.ERROR, f"selection job failed: {error}")
+        return redirect(_class_selector_redirect(jobmodel.id))
+
+    messages.add_message(
+        request,
+        messages.SUCCESS,
+        "class selection infile saved; review and start the selection job",
+    )
+    return redirect(reverse(
+        "nice_lite:workspace",
+        query={
+            "selected_job_id": jobmodel.id,
+            "class_selection": "1",
+            "selected_project_id": jobmodel.dset.proj_id,
+            "selected_workspace_id": jobmodel.dset_id,
+        },
+    ))
 
 
 @login_required(login_url="/login")

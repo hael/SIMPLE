@@ -1,7 +1,6 @@
 !@descr: commanders for operating on projects (spproject) and associated files, the core stuff
 module simple_commanders_project_core
 use simple_commanders_api
-use simple_stream_communicator, only: stream_http_communicator
 implicit none
 #include "simple_local_flags.inc"
 
@@ -872,7 +871,6 @@ contains
         class(commander_selection), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
-        type(stream_http_communicator)  :: http_communicator
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
         integer,            allocatable :: states(:), ptcls_in_state(:)
@@ -891,9 +889,6 @@ contains
             THROW_HARD('exec_selection: only one of STATE/STATES can be provided')
         endif
         call params%new(cline, silent=.true.)
-        ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver%to_char())
-        call http_communicator%send_heartbeat()
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
         ! read project (almost all or largest segments are updated)
@@ -1094,7 +1089,6 @@ contains
             if( spproj%os_mic%get_noris() > 0)    call spproj%write_mics_star()
             if( spproj%os_ptcl2D%get_noris() > 0) call spproj%write_ptcl2D_star()
         endif
-        call http_communicator%term()
         call simple_end('**** SELECTION NORMAL STOP ****')
       contains
 

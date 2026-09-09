@@ -17,6 +17,7 @@ import os
 # django imports
 from django.contrib                 import messages
 from django.shortcuts               import redirect, render
+from django.urls                    import reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http   import require_POST
 
@@ -142,6 +143,25 @@ def _normalize_latest_cls2d(jobs):
                 latest = _filter_by_selection(stats, latest)
                 stats["latest_cls2D"] = sorted(latest, key=lambda entry: entry.get("res", 0) if isinstance(entry, dict) else 0, reverse=False)
 
+
+def _class_selection_job_builder_url(request, project_id, workspace_id):
+    """Return a one-time selection-builder URL requested by the batch output."""
+    if request.GET.get("class_selection") != "1":
+        return ""
+    job_id = get_integer(request.GET, "selected_job_id", silent=True)
+    if job_id is None:
+        return ""
+    return reverse(
+        "nice_lite:new_stream",
+        query={
+            "selected_job_id": job_id,
+            "class_selection": "1",
+            "selected_project_id": project_id,
+            "selected_workspace_id": workspace_id,
+        },
+    )
+
+
 # ------------------------------------------------------------------
 # Views
 # ------------------------------------------------------------------
@@ -181,12 +201,17 @@ def view_workspace(request):
         "folder": workspace_obj.get_linkpath(),
         "description": workspacemodel.desc,
         "jobstats": jobstats,
+        "job_builder_url": _class_selection_job_builder_url(
+            request,
+            project_id,
+            workspace_obj.get_id(),
+        ),
     }
 
     # Render only when payload changed to avoid unnecessary parent iframe redraws.
     checksum = hashlib.md5(json.dumps(context, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_checksum", "none")
-    if old_checksum == "none" or old_checksum != checksum:
+    if context["job_builder_url"] or old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
         context["jobs"] = jobs
         response = render(request, "workspace.html", context)

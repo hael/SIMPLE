@@ -309,6 +309,7 @@
                             <input type="hidden" name="program" value="{{ program.prg }}">
                             <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
                             {% if program.rerun_of %}<input type="hidden" name="rerun_of" value="{{ program.rerun_of }}">{% endif %}
+                            {% if program.class_selection_of %}<input type="hidden" name="class_selection_of" value="{{ program.class_selection_of }}">{% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}

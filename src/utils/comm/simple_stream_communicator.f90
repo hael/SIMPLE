@@ -222,7 +222,7 @@ contains
     subroutine curl_request(self, data)
         class(stream_http_communicator), intent(inout) :: self
         character(*), optional,          intent(in)    :: data
-        type(json_value), pointer :: response_json
+        type(json_value), pointer :: response_json => null()
         type(string) :: cmd, buf
         integer      :: file_unit, stat
         logical      :: found, terminate, valid_json

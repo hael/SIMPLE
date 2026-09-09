@@ -25,6 +25,7 @@ if (root && dataNode) {
     const particleCount = root.querySelector("[data-selected-particle-count]");
     const saveStatus = root.querySelector("[data-class-selector-save-status]");
     const selectionPayload = root.querySelector("[name='selected_class_ids']");
+    const runSelectionButton = root.querySelector("[data-class-selection-run]");
     const sortControl = root.querySelector("[data-class-selector-sort]");
 
     function loadStoredSelection() {
@@ -81,6 +82,7 @@ if (root && dataNode) {
         selectionPayload.value = JSON.stringify(
             [...selected].sort((left, right) => left - right),
         );
+        if (runSelectionButton) runSelectionButton.disabled = selected.size === 0;
     }
 
     function saveSelection() {

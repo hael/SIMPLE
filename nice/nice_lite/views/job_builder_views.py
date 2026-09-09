@@ -37,6 +37,7 @@ _BATCH_LAUNCHER_KEYS = {"prg", "projfile", "mkdir", "niceprocid", "niceserver"}
 _BATCH_WORKSPACE_SOURCE = "workspace"
 _BATCH_JOB_SOURCE_PREFIX = "job"
 _BATCH_SNAPSHOT_SOURCE_PREFIX = "snapshot"
+_BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
 
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,7 @@ def _collect_programs(
     prefill_program=None,
     prefill_args=None,
     rerun_of=None,
+    class_selection_of=None,
 ):
     """Collect program metadata and optionally prefill one saved command."""
     programs = []
@@ -199,6 +201,13 @@ def _collect_programs(
             and rerun_of > 0
         ):
             program_input["rerun_of"] = rerun_of
+        if (
+            prg == prefill_program
+            and isinstance(class_selection_of, int)
+            and not isinstance(class_selection_of, bool)
+            and class_selection_of > 0
+        ):
+            program_input["class_selection_of"] = class_selection_of
         program_inputs.append(program_input)
 
     return programs, program_inputs
@@ -316,6 +325,68 @@ def _is_batch_job(jobmodel):
     """Return True when a shared JobModel record represents a batch job."""
     metadata = getattr(jobmodel, "master_stats", None)
     return isinstance(metadata, dict) and metadata.get("job_type") == "batch"
+
+
+def _resolve_class_selection_prefill(jobmodel):
+    """Resolve the fixed infile and output project for one ab initio 2D job."""
+    batch_job = BatchJob(id=jobmodel.id)
+    loaded_jobmodel = batch_job.get_jobmodel()
+    if loaded_jobmodel is None or loaded_jobmodel.id != jobmodel.id:
+        return None, None, "selected ab initio 2D job is unavailable"
+
+    job_dir = batch_job.get_safe_job_dir()
+    result_project = batch_job.get_result_project_path()
+    if job_dir is None or result_project is None:
+        return None, None, "selected ab initio 2D output is unavailable"
+
+    infile_path = os.path.abspath(
+        os.path.join(job_dir, _BATCH_CLASS_SELECTION_FILENAME)
+    )
+    resolved_infile = os.path.realpath(infile_path)
+    try:
+        infile_is_safe = os.path.commonpath((job_dir, resolved_infile)) == job_dir
+    except ValueError:
+        infile_is_safe = False
+    if (
+        not infile_is_safe
+        or os.path.islink(infile_path)
+        or not os.path.isfile(infile_path)
+    ):
+        return None, None, "class selection infile is unavailable"
+    return result_project, resolved_infile, None
+
+
+def _resolve_class_selection_source(workspace_obj, source_id, username):
+    """Revalidate one ab initio 2D source before launching selection."""
+    if (
+        not isinstance(source_id, int)
+        or isinstance(source_id, bool)
+        or source_id <= 0
+    ):
+        return None, None, "invalid 2D class selection source"
+
+    jobmodel = JobModel.objects.filter(
+        id=source_id,
+        dset_id=workspace_obj.get_id(),
+    ).first()
+    metadata = (
+        jobmodel.master_stats
+        if jobmodel is not None and isinstance(jobmodel.master_stats, dict)
+        else {}
+    )
+    if (
+        not _is_job_accessible(jobmodel, username)
+        or not _is_batch_job(jobmodel)
+        or jobmodel.status != "finished"
+        or metadata.get("package") != "simple"
+        or metadata.get("program") != "abinitio2D"
+    ):
+        return None, None, "invalid 2D class selection source"
+
+    project_path, infile_path, error = _resolve_class_selection_prefill(jobmodel)
+    if error is not None:
+        return None, None, error
+    return project_path, infile_path, None
 
 
 def _batch_job_source(jobmodel, workspace_dir):
@@ -661,6 +732,8 @@ def view_job_builder(request):
     batchui = None
     stream_args = None
     selected_batch_jobmodel = None
+    selected_class_selection_jobmodel = None
+    class_selection_prefill_requested = request.GET.get("class_selection") == "1"
     clear_selected_job_cookie = False
 
     if jobid is not None:
@@ -672,21 +745,36 @@ def view_job_builder(request):
             clear_selected_job_cookie = True
         elif _is_batch_job(streamjobmodel):
             metadata = streamjobmodel.master_stats
-            if (
-                streamjobmodel.status not in BatchJob.RERUNNABLE_STATUSES
-                or metadata.get("package") not in ("simple", "single")
-                or not isinstance(metadata.get("program"), str)
-                or not metadata["program"]
-                or not isinstance(streamjobmodel.args, dict)
-            ):
-                messages.add_message(
-                    request,
-                    messages.ERROR,
-                    "selected batch job cannot be rerun",
-                )
-                clear_selected_job_cookie = True
+            if class_selection_prefill_requested:
+                if (
+                    streamjobmodel.status != "finished"
+                    or metadata.get("package") != "simple"
+                    or metadata.get("program") != "abinitio2D"
+                ):
+                    messages.add_message(
+                        request,
+                        messages.ERROR,
+                        "selected batch job cannot create a 2D class selection",
+                    )
+                    clear_selected_job_cookie = True
+                else:
+                    selected_class_selection_jobmodel = streamjobmodel
             else:
-                selected_batch_jobmodel = streamjobmodel
+                if (
+                    streamjobmodel.status not in BatchJob.RERUNNABLE_STATUSES
+                    or metadata.get("package") not in ("simple", "single")
+                    or not isinstance(metadata.get("program"), str)
+                    or not metadata["program"]
+                    or not isinstance(streamjobmodel.args, dict)
+                ):
+                    messages.add_message(
+                        request,
+                        messages.ERROR,
+                        "selected batch job cannot be rerun",
+                    )
+                    clear_selected_job_cookie = True
+                else:
+                    selected_batch_jobmodel = streamjobmodel
         elif isinstance(streamjobmodel.args, dict):
             stream_args = streamjobmodel.args
 
@@ -731,7 +819,45 @@ def view_job_builder(request):
             context["default_batch_project_file"] = _default_batch_project_file(workspace_obj)
 
     batch_prefill = None
-    if selected_batch_jobmodel is not None:
+    if selected_class_selection_jobmodel is not None:
+        if (
+            workspace_obj is None
+            or selected_class_selection_jobmodel.dset_id != workspace_id
+        ):
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "selected batch job is outside the current workspace",
+            )
+            clear_selected_job_cookie = True
+        elif _get_batch_program(batchui, "simple", "selection") is None:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "2D class selection is no longer available",
+            )
+            clear_selected_job_cookie = True
+        else:
+            parent_proj, infile_path, error = _resolve_class_selection_prefill(
+                selected_class_selection_jobmodel
+            )
+            if error is not None:
+                logger.error("job_builder_class_selection: %s", error)
+                messages.add_message(request, messages.ERROR, error)
+                clear_selected_job_cookie = True
+            else:
+                context["default_batch_project_file"] = parent_proj
+                batch_prefill = {
+                    "class_selection_of": selected_class_selection_jobmodel.id,
+                    "package": "simple",
+                    "program": "selection",
+                    "args": {
+                        "infile": infile_path,
+                        "oritype": "cls2D",
+                    },
+                }
+                context["batch_prefill"] = batch_prefill
+    elif selected_batch_jobmodel is not None:
         metadata = selected_batch_jobmodel.master_stats
         package = metadata["package"]
         program = metadata["program"]
@@ -772,12 +898,16 @@ def view_job_builder(request):
         prefill_program = batch_prefill.get("program") if batch_prefill else None
         prefill_args = batch_prefill.get("args") if batch_prefill else None
         rerun_of = batch_prefill.get("job_id") if batch_prefill else None
+        class_selection_of = (
+            batch_prefill.get("class_selection_of") if batch_prefill else None
+        )
         simple_programs, simple_program_inputs = _collect_programs(
             batchui,
             "simple_exec",
             prefill_program=prefill_program if prefill_package == "simple" else None,
             prefill_args=prefill_args,
             rerun_of=rerun_of,
+            class_selection_of=class_selection_of,
         )
         single_programs, single_program_inputs = _collect_programs(
             batchui,
@@ -785,6 +915,7 @@ def view_job_builder(request):
             prefill_program=prefill_program if prefill_package == "single" else None,
             prefill_args=prefill_args,
             rerun_of=rerun_of,
+            class_selection_of=class_selection_of,
         )
         context["simple_programs"] = simple_programs
         context["simple_program_inputs"] = simple_program_inputs
@@ -847,7 +978,52 @@ def view_create_batch(request):
             messages.add_message(request, messages.ERROR, "invalid batch rerun selection")
             return redirect("nice_lite:workspace")
 
-    args, error = _collect_batch_args(request.POST, program_cfg)
+    class_selection_project = None
+    class_selection_infile = None
+    class_selection_of = None
+    if "class_selection_of" in request.POST:
+        class_selection_of = get_integer(
+            request.POST,
+            "class_selection_of",
+            silent=True,
+        )
+        if (
+            package != "simple"
+            or program != "selection"
+            or rerun_jobmodel is not None
+        ):
+            class_selection_of = None
+        if class_selection_of is None:
+            logger.error("create_batch: invalid 2D class selection source")
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "invalid 2D class selection source",
+            )
+            return redirect("nice_lite:workspace")
+        (
+            class_selection_project,
+            class_selection_infile,
+            error,
+        ) = _resolve_class_selection_source(
+            workspace_obj,
+            class_selection_of,
+            request.user.username,
+        )
+        if error is not None:
+            logger.error("create_batch: %s", error)
+            messages.add_message(request, messages.ERROR, error)
+            return redirect("nice_lite:workspace")
+
+    submitted_args = request.POST
+    if class_selection_of is not None:
+        # These values describe the source project's class segment. Resolve
+        # them again on POST instead of trusting editable or stale form state.
+        submitted_args = request.POST.copy()
+        submitted_args["infile"] = class_selection_infile
+        submitted_args["oritype"] = "cls2D"
+
+    args, error = _collect_batch_args(submitted_args, program_cfg)
     if error is not None:
         logger.error("create_batch: %s", error)
         messages.add_message(request, messages.ERROR, error)
@@ -865,7 +1041,9 @@ def view_create_batch(request):
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
-    project_file = request.POST.get("batch_project_file")
+    project_file = class_selection_project
+    if project_file is None:
+        project_file = request.POST.get("batch_project_file")
     if project_file in (None, ""):
         project_file = _default_batch_project_file(workspace_obj)
     parent_proj, source_metadata, error = _resolve_batch_project_file(

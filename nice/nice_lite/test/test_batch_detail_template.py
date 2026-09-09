@@ -87,6 +87,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
             {
                 "jobid": 7,
                 "status": "finished",
+                "program": "abinitio2D",
                 "result_project": "/project/workspace.simple",
                 "project_sampling_distance": 1.4,
                 "project_summary_available": False,
@@ -154,7 +155,15 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("data-class-selector-select-all", selector)
         self.assertIn(">invert selection</button>", rendered)
         self.assertIn(">reset selection</button>", rendered)
-        self.assertIn("batch_class_deselection_export", selector)
+        self.assertIn("batch_class_selection_export", selector)
+        self.assertIn("download infile", rendered)
+        self.assertIn("batch_class_selection_run", selector)
+        self.assertIn("data-class-selection-run", rendered)
+        self.assertIn("run selection job", rendered)
+        self.assertIn(
+            "runSelectionButton.disabled = selected.size === 0",
+            selector_script,
+        )
         self.assertIn('<option value="resolution" selected>resolution</option>', selector)
         self.assertIn("nice_classic/includes/_batch_display_levels.html", selector)
         self.assertIn("data-class-selector-toolbar", selector)
@@ -342,7 +351,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('target.querySelectorAll("[data-output-grid]")', output_grid_script)
         self.assertIn("output_grid.js?v=2", rendered)
         self.assertIn("pick_micrograph_slider.js?v=18", rendered)
-        self.assertIn("class_selector.js?v=4", rendered)
+        self.assertIn("class_selector.js?v=5", rendered)
 
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):
         batch_view = self._read_template("nice_classic/batchview.html")

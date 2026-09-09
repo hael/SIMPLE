@@ -1,5 +1,8 @@
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlparse
 
 from django.core import signing
 from django.http import HttpResponse, HttpResponseRedirect
@@ -428,7 +431,7 @@ class BatchViewTests(SimpleTestCase):
             max_size=512,
         )
 
-    def test_batch_class_export_returns_sorted_one_based_deselection(self):
+    def test_batch_class_export_returns_project_ordered_state_infile(self):
         jobmodel = SimpleNamespace(
             id=7,
             status="finished",
@@ -437,12 +440,12 @@ class BatchViewTests(SimpleTestCase):
         batch_job = Mock()
         batch_job.get_result_project_path.return_value = "/project/workspace.simple"
         selection = SimpleNamespace(classes=(
-            {"class_id": 1},
-            {"class_id": 2},
             {"class_id": 3},
+            {"class_id": 2},
+            {"class_id": 1},
         ))
         request = self.factory.post(
-            "/batchclass/7/deselection",
+            "/batchclass/7/infile",
             {"selected_class_ids": "[3, 1]"},
         )
         request.user = _AuthUser()
@@ -459,14 +462,124 @@ class BatchViewTests(SimpleTestCase):
                 return_value=selection,
             ),
         ):
-            response = batch_views.view_batch_class_deselection_export(
+            response = batch_views.view_batch_class_selection_export(
                 request,
                 7,
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, b"2\n")
-        self.assertIn("batch_7_deselected_classes.txt", response["Content-Disposition"])
+        self.assertEqual(response.content, b"1\n0\n1\n")
+        self.assertIn("batch_7_class_selection.txt", response["Content-Disposition"])
+
+    def test_batch_class_selection_replaces_infile_and_opens_prefilled_builder(self):
+        temporary_job_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_job_dir.cleanup)
+        infile_path = os.path.join(temporary_job_dir.name, "class_selection.txt")
+        with open(infile_path, "w", encoding="utf-8") as infile:
+            infile.write("stale\n")
+
+        project = SimpleNamespace(id=3, dirc="/project")
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=4,
+            name="Create 2D Class Averages",
+            status="finished",
+            master_stats={"package": "simple", "program": "abinitio2D"},
+            dset=SimpleNamespace(proj=project, proj_id=project.id),
+            dset_id=9,
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = (
+            "/project/.workspace_9/4_abinitio2D/workspace.simple"
+        )
+        batch_job.get_safe_job_dir.return_value = temporary_job_dir.name
+        selection = SimpleNamespace(classes=(
+            {"class_id": 3},
+            {"class_id": 1},
+            {"class_id": 2},
+        ))
+        request = self.factory.post(
+            "/batchclass/7/selection",
+            {"selected_class_ids": "[2, 3]"},
+        )
+        request.user = _AuthUser()
+
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(batch_job, jobmodel),
+            ),
+            patch.object(
+                batch_views,
+                "load_batch_class_selection",
+                return_value=selection,
+            ),
+            patch.object(batch_views.messages, "add_message") as add_message,
+        ):
+            response = batch_views.view_batch_class_selection_run(request, 7)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(urlparse(response.url).path, "/workspace")
+        with open(infile_path, encoding="utf-8") as infile:
+            self.assertEqual(infile.read(), "1\n0\n1\n")
+        query = parse_qs(urlparse(response.url).query)
+        self.assertEqual(
+            query,
+            {
+                "selected_job_id": ["7"],
+                "class_selection": ["1"],
+                "selected_project_id": ["3"],
+                "selected_workspace_id": ["9"],
+            },
+        )
+        self.assertIn(
+            "class selection infile saved; review and start the selection job",
+            add_message.call_args.args[2],
+        )
+
+    def test_batch_class_selection_rejects_empty_selection(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            status="finished",
+            master_stats={"package": "simple", "program": "abinitio2D"},
+            dset=SimpleNamespace(proj=SimpleNamespace(dirc="/project")),
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = "/project/workspace.simple"
+        selection = SimpleNamespace(classes=({"class_id": 1},))
+        request = self.factory.post(
+            "/batchclass/7/selection",
+            {"selected_class_ids": "[]"},
+        )
+        request.user = _AuthUser()
+
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(batch_job, jobmodel),
+            ),
+            patch.object(
+                batch_views,
+                "load_batch_class_selection",
+                return_value=selection,
+            ),
+            patch.object(
+                batch_views,
+                "_save_batch_class_selection_infile",
+            ) as save_infile,
+            patch.object(batch_views.messages, "add_message") as add_message,
+        ):
+            response = batch_views.view_batch_class_selection_run(request, 7)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("?class_selector=1#batch_class_selector", response.url)
+        save_infile.assert_not_called()
+        self.assertIn(
+            "Select at least one class before running a selection job.",
+            add_message.call_args.args[2],
+        )
 
     def test_extract_batch_context_paginates_particle_stack_headers(self):
         project = SimpleNamespace(name="project")

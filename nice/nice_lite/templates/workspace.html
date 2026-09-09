@@ -87,7 +87,7 @@
             </form>
         </div>
 
-        <iframe id="job_builder_iframe" name="job_builder_iframe" src="" height="100%" class="w-[600px] z-2 hidden"></iframe>
+        <iframe id="job_builder_iframe" name="job_builder_iframe" src="{{ job_builder_url }}" height="100%" class="w-[600px] z-2{% if not job_builder_url %} hidden{% endif %}"></iframe>
     </div>
 
     <!-- Workspace details footer (natural flow — no fixed positioning) -->
@@ -194,6 +194,12 @@
 {% include 'messages.html' %}
 
 <script>
+    {% if job_builder_url %}
+    // Consume the one-time open-builder query so Cancel followed by an idle
+    // workspace refresh does not reopen the same form.
+    window.history.replaceState(null, "", "{% url 'nice_lite:workspace' %}");
+    {% endif %}
+
     function toggleJobsIframeLoading(show) {
         const loading = document.getElementById("jobs_iframe_loading");
         if (!loading) return;

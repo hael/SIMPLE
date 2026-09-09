@@ -1,3 +1,5 @@
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -121,6 +123,50 @@ class JobBuilderBranchTests(SimpleTestCase):
         _, program_inputs = job_builder_views._collect_programs(batchui, "simple_exec")
 
         self.assertEqual(program_inputs[0]["requirements"], requirements)
+
+    def test_class_selection_prefill_resolves_regular_source_files(self):
+        temporary_job_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_job_dir.cleanup)
+        project_path = os.path.join(temporary_job_dir.name, "workspace.simple")
+        infile_path = os.path.join(temporary_job_dir.name, "class_selection.txt")
+        for path in (project_path, infile_path):
+            with open(path, "w", encoding="utf-8"):
+                pass
+
+        jobmodel = SimpleNamespace(id=88)
+        batch_job = Mock()
+        batch_job.get_jobmodel.return_value = jobmodel
+        batch_job.get_safe_job_dir.return_value = temporary_job_dir.name
+        batch_job.get_result_project_path.return_value = project_path
+
+        with patch.object(job_builder_views, "BatchJob", return_value=batch_job):
+            result = job_builder_views._resolve_class_selection_prefill(jobmodel)
+
+        self.assertEqual(result, (project_path, infile_path, None))
+
+    def test_class_selection_prefill_rejects_symlinked_infile(self):
+        temporary_root = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_root.cleanup)
+        job_dir = os.path.join(temporary_root.name, "job")
+        os.mkdir(job_dir)
+        project_path = os.path.join(job_dir, "workspace.simple")
+        outside_path = os.path.join(temporary_root.name, "outside.txt")
+        with open(project_path, "w", encoding="utf-8"):
+            pass
+        with open(outside_path, "w", encoding="utf-8"):
+            pass
+        os.symlink(outside_path, os.path.join(job_dir, "class_selection.txt"))
+
+        jobmodel = SimpleNamespace(id=88)
+        batch_job = Mock()
+        batch_job.get_jobmodel.return_value = jobmodel
+        batch_job.get_safe_job_dir.return_value = job_dir
+        batch_job.get_result_project_path.return_value = project_path
+
+        with patch.object(job_builder_views, "BatchJob", return_value=batch_job):
+            result = job_builder_views._resolve_class_selection_prefill(jobmodel)
+
+        self.assertEqual(result, (None, None, "class selection infile is unavailable"))
 
     def test_collect_programs_prefills_saved_values_and_rerun_lineage(self):
         batchui = {
@@ -263,6 +309,93 @@ class JobBuilderBranchTests(SimpleTestCase):
         )
         resolve_project.assert_called_once_with(workspace, jobmodel.master_stats)
 
+    def test_abinitio2d_selection_prefills_new_selection_without_rerun_lineage(self):
+        request = self.factory.get(
+            "/newstream",
+            {
+                "selected_job_id": "88",
+                "class_selection": "1",
+                "selected_project_id": "3",
+                "selected_workspace_id": "4",
+            },
+        )
+        request.user = _AuthUser()
+        jobmodel = SimpleNamespace(
+            id=88,
+            dset_id=4,
+            dset=SimpleNamespace(user="tester"),
+            status="finished",
+            args={},
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "abinitio2D",
+            },
+        )
+        selected_job = Mock()
+        selected_job.get_jobmodel.return_value = jobmodel
+        simple_stream = Mock()
+        simple_stream.loadUIJSON.return_value = True
+        simple_stream.get_ui.return_value = {"user_inputs": []}
+        simple_batch = Mock()
+        simple_batch.loadUIJSON.return_value = True
+        simple_batch.get_ui.return_value = {
+            "selection": {
+                "program": {"executable": "simple_exec"},
+                "inputs": [
+                    {"key": "infile"},
+                    {"key": "oritype", "options": ["cls2D", "ptcl2D"]},
+                ],
+            },
+        }
+        workspace = Mock()
+        project_path = "/workspace/7_abinitio2D/workspace.simple"
+        infile_path = "/workspace/7_abinitio2D/class_selection.txt"
+
+        with (
+            patch.object(job_builder_views, "get_job_id", return_value=88),
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "StreamJob", return_value=selected_job),
+            patch.object(job_builder_views, "SIMPLEStream", return_value=simple_stream),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=simple_batch),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(
+                job_builder_views,
+                "_default_batch_project_file",
+                return_value="/workspace/latest.simple",
+            ),
+            patch.object(
+                job_builder_views,
+                "_resolve_class_selection_prefill",
+                return_value=(project_path, infile_path, None),
+            ) as resolve_selection,
+            patch.object(job_builder_views, "render", side_effect=_render_with_context),
+            patch.object(job_builder_views, "clear_checksum_cookies"),
+        ):
+            response = job_builder_views.view_job_builder(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response._ctx["default_batch_project_file"], project_path)
+        self.assertEqual(response._ctx["batch_prefill"], {
+            "class_selection_of": 88,
+            "package": "simple",
+            "program": "selection",
+            "args": {
+                "infile": infile_path,
+                "oritype": "cls2D",
+            },
+        })
+        program = response._ctx["simple_program_inputs"][0]
+        self.assertNotIn("rerun_of", program)
+        self.assertEqual(program["class_selection_of"], 88)
+        self.assertEqual(
+            [entry["value"] for entry in program["sections"][0]["inputs"]],
+            [infile_path, "cls2D"],
+        )
+        resolve_selection.assert_called_once_with(jobmodel)
+
     def test_job_builder_defaults_file_selector_to_latest_completed_batch_project(self):
         request = self.factory.get("/jobbuilder")
         request.user = _AuthUser()
@@ -337,6 +470,91 @@ class JobBuilderBranchTests(SimpleTestCase):
             "pick",
             {"mode": "fast"},
             display_name="Pick Particles",
+        )
+
+    def test_create_batch_revalidates_class_selection_source_and_forces_cls2d(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "selection",
+            "batch_project_file": "/workspace/wrong.simple",
+            "class_selection_of": "88",
+            "infile": "/workspace/wrong.txt",
+            "oritype": "ptcl2D",
+        })
+        request.user = _AuthUser()
+        workspace = Mock()
+        workspace.get_id.return_value = 4
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "selection": {
+                "program": {
+                    "executable": "simple_exec",
+                    "display_name": "Select",
+                },
+                "inputs": [
+                    {"key": "infile", "required": True},
+                    {
+                        "key": "oritype",
+                        "required": True,
+                        "options": ["cls2D", "ptcl2D"],
+                    },
+                ],
+            },
+        }
+        source_job = SimpleNamespace(
+            id=88,
+            dset=SimpleNamespace(user="tester"),
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "abinitio2D",
+            },
+        )
+        queryset = Mock()
+        queryset.first.return_value = source_job
+        batchjob = Mock()
+        batchjob.new.return_value = True
+        project_path = "/workspace/7_abinitio2D/workspace.simple"
+        infile_path = "/workspace/7_abinitio2D/class_selection.txt"
+        source = {"type": "batch_job", "batch_job_id": 88}
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(
+                job_builder_views.JobModel.objects,
+                "filter",
+                return_value=queryset,
+            ),
+            patch.object(
+                job_builder_views,
+                "_resolve_class_selection_prefill",
+                return_value=(project_path, infile_path, None),
+            ),
+            patch.object(
+                job_builder_views,
+                "_resolve_batch_project_file",
+                return_value=(project_path, source, None),
+            ) as resolve_project,
+            patch.object(job_builder_views, "BatchJob", return_value=batchjob),
+            patch.object(job_builder_views.messages, "add_message"),
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        resolve_project.assert_called_once_with(workspace, project_path)
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "simple",
+            "selection",
+            {"infile": infile_path, "oritype": "cls2D"},
+            display_name="Select",
+            parent_proj=project_path,
+            source=source,
         )
 
     def test_create_batch_preserves_rerun_lineage_name_and_description(self):
@@ -835,3 +1053,97 @@ class WorkspaceAccessBranchTests(SimpleTestCase):
             response = workspace_views.view_workspace(request)
 
         self.assertEqual(response.status_code, 204)
+
+    def test_class_selection_builder_url_carries_workspace_context(self):
+        request = self.factory.get(
+            "/workspace",
+            {"selected_job_id": "88", "class_selection": "1"},
+        )
+
+        with patch.object(
+            workspace_views,
+            "reverse",
+            side_effect=_reverse_with_query,
+        ):
+            builder_url = workspace_views._class_selection_job_builder_url(
+                request,
+                project_id=3,
+                workspace_id=4,
+            )
+
+        self.assertEqual(
+            builder_url,
+            "rev:nice_lite:new_stream?selected_job_id=88&class_selection=1&"
+            "selected_project_id=3&selected_workspace_id=4",
+        )
+
+    def test_workspace_opens_one_time_job_builder_panel(self):
+        rendered = render_to_string(
+            "workspace.html",
+            {
+                "current_workspace_id": 4,
+                "current_workspace_name": "workspace",
+                "jobs": [],
+                "job_builder_url": (
+                    "/newstream?selected_job_id=88&class_selection=1"
+                ),
+            },
+        )
+
+        self.assertIn(
+            'id="job_builder_iframe" name="job_builder_iframe" '
+            'src="/newstream?selected_job_id=88&amp;class_selection=1"',
+            rendered,
+        )
+        self.assertIn('class="w-[600px] z-2"', rendered)
+        self.assertIn(
+            'window.history.replaceState(null, "", "/workspace");',
+            rendered,
+        )
+
+    def test_workspace_builder_request_bypasses_unchanged_checksum(self):
+        request = self.factory.get(
+            "/workspace",
+            {
+                "selected_job_id": "88",
+                "class_selection": "1",
+                "selected_project_id": "3",
+                "selected_workspace_id": "4",
+            },
+        )
+        request.user = _AuthUser()
+        request.COOKIES["workspace_checksum"] = "unchanged"
+
+        project = SimpleNamespace(name="project")
+        workspacemodel = SimpleNamespace(
+            proj=project,
+            name="workspace",
+            cdat="created",
+            mdat="modified",
+            user="tester",
+            desc="",
+        )
+        workspace = Mock()
+        workspace.id = 4
+        workspace.get_id.return_value = 4
+        workspace.get_workspacemodel.return_value = workspacemodel
+        workspace.get_linkpath.return_value = "/workspace"
+        queryset = Mock()
+        queryset.order_by.return_value = []
+        checksum = Mock()
+        checksum.hexdigest.return_value = "unchanged"
+
+        with (
+            patch.object(workspace_views, "get_workspace_id", return_value=4),
+            patch.object(workspace_views, "get_project_id", return_value=3),
+            patch.object(workspace_views, "Workspace", return_value=workspace),
+            patch.object(workspace_views, "_is_workspace_accessible", return_value=True),
+            patch.object(workspace_views.JobModel.objects, "filter", return_value=queryset),
+            patch.object(workspace_views.hashlib, "md5", return_value=checksum),
+            patch.object(workspace_views, "render", side_effect=_render_with_context),
+        ):
+            response = workspace_views.view_workspace(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("selected_job_id=88", response._ctx["job_builder_url"])
+        self.assertIn("class_selection=1", response._ctx["job_builder_url"])

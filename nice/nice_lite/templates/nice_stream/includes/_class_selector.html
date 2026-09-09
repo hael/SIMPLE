@@ -77,12 +77,20 @@
             <span class="min-w-0 text-[9px] text-streamsubtle">
                 {{ batch_class_selector.class_count }} classes from <span class="font-mono">{{ batch_class_selector.stack_name }}</span>; working selection is stored only in this browser
             </span>
-            <form method="POST" action="{% url 'nice_lite:batch_class_deselection_export' jobid %}">
+            <form method="POST" action="{% url 'nice_lite:batch_class_selection_export' jobid %}" class="flex flex-wrap justify-end gap-2">
                 {% csrf_token %}
                 <input type="hidden" name="selected_class_ids" value="[]">
-                <button type="submit" class="min-h-9 rounded-md bg-streamring px-4 py-2 text-[10px] font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                    download deselection file
+                <button type="submit" class="min-h-9 rounded-md border border-streamdivider px-4 py-2 text-[10px] font-medium text-streamlabel hover:bg-streambg hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                    download infile
                 </button>
+                {% if program == "abinitio2D" %}
+                    <button data-class-selection-run type="submit"
+                            formaction="{% url 'nice_lite:batch_class_selection_run' jobid %}"
+                            {% if not batch_class_selector.initial_selected_class_ids %}disabled{% endif %}
+                            class="min-h-9 rounded-md bg-streamring px-4 py-2 text-[10px] font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring disabled:cursor-not-allowed disabled:opacity-50">
+                        run selection job
+                    </button>
+                {% endif %}
             </form>
         </div>
     </div>

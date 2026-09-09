@@ -427,3 +427,13 @@ def deselected_class_ids(selection, selected_class_ids):
             f"Selection contains unknown class IDs: {sorted(unknown_ids)}."
         )
     return sorted(known_ids - selected_ids)
+
+
+def class_selection_flags(selection, selected_class_ids):
+    """Return project-ordered 1/0 state flags for validated selected classes."""
+    deselected_class_ids(selection, selected_class_ids)
+    selected_ids = set(selected_class_ids)
+    return [
+        1 if entry["class_id"] in selected_ids else 0
+        for entry in selection.classes
+    ]

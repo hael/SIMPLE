@@ -70,9 +70,14 @@ urlpatterns = [
         name="batch_class_thumbnail",
     ),
     path(
-        "batchclass/<int:jobid>/deselection",
-        batch_views.view_batch_class_deselection_export,
-        name="batch_class_deselection_export",
+        "batchclass/<int:jobid>/infile",
+        batch_views.view_batch_class_selection_export,
+        name="batch_class_selection_export",
+    ),
+    path(
+        "batchclass/<int:jobid>/selection",
+        batch_views.view_batch_class_selection_run,
+        name="batch_class_selection_run",
     ),
     path(
         "batchmovie/<int:jobid>/<str:token>",
