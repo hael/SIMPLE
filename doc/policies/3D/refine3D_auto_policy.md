@@ -52,13 +52,18 @@ It also supplies overridable defaults when the user has not provided them:
 - `keepvol=no`
 
 The default `envfsc=yes` is guarded, so an explicit user value remains
-authoritative. It generates a density/Otsu envelope from the current merged
-half maps, low-pass filtered at `envmsklp`, and uses it for phase-randomized
-FSC correction and cFAR. On PCG it is also the conservative support for both
-the base and regularized solves. `envmsklp` defaults to
-`ENVMSKLP_DEFAULT` (20 A), while `amsklp` remains the separate NU-evidence
-smoothing scale. The NU-evidence envelope never enters FSC correction or PCG
-solve support.
+authoritative -- except that `automsk=yes` implies `envfsc=yes` (policy
+2026-09-09), so with the default `automsk=yes` envfsc cannot be switched off.
+It generates a density/Otsu envelope from the current merged half maps,
+low-pass filtered at `envmsklp` and dilated by at least `ENVMSKWIDTH_A_MIN`
+(7.5 A), and uses it for phase-randomized FSC correction and cFAR on
+gridding. On PCG it is the conservative support for both the base and
+regularized solves, and the FSC is then reported on the constrained pair
+without post-hoc correction (the `>>> FSC MODE` line says which). `envmsklp`
+defaults to `ENVMSKLP_DEFAULT` (20 A), while `amsklp` remains the separate
+NU-evidence smoothing scale. The NU-evidence envelope never enters FSC
+correction or PCG solve support; on PCG its null is designated on the density
+envelope's dilation ring rather than estimated from the constrained pair.
 
 With `automsk=yes`, the NU filter-field background is the complement of the
 NU evidence envelope (`nu_envmask3D_stateNN.mrc`), derived from the static
@@ -142,6 +147,10 @@ After startup, `refine3D_auto` runs base `refine3D` with:
 After refinement, it runs a final `reconstruct3D` pass from all particle
 images. Final reconstruction sets `postprocess=yes`, sets `nu_refine=no`, and
 turns `filt_mode` back to `none` when the refinement used NU filtering.
+`automsk` is inherited (2026-09-09): on PCG the shipped map is estimated on
+the same density-envelope support as every refinement iteration, with the
+same implied `envfsc=yes` and the same reported `>>> FSC MODE`, rather than
+falling back to the sphere for the map that matters most.
 
 Final-map postprocessing is classical global FSC/B-factor postprocessing. NU
 filtering is a refinement-reference feature, not a separate final-map

@@ -636,7 +636,6 @@ contains
         if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
-        if( .not. cline%defined('binwidth')    ) call cline%set('binwidth',   ENVMSKWIDTH_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
             THROW_HARD('nsample_start/nsample_stop are no longer supported for abinitio3D; set nsample instead')
         endif

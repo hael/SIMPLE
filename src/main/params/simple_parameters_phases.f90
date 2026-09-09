@@ -679,6 +679,7 @@ contains
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         type(atoms) :: atoms_obj
+        integer     :: binwidth_min
         select case(trim(self%memreport))
             case('yes','no')
             case DEFAULT
@@ -793,6 +794,38 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
+        ! automsk=yes implies envfsc=yes on both backends (policy 2026-09-09).
+        ! On PCG the density envelope is the solve support of BOTH the base
+        ! and the ML-regularized solve, so the FSC pair is envelope-constrained
+        ! in the estimator; on gridding the same envelope (automask3D at
+        ! envmsklp) is applied post hoc to the FSC pair with the
+        ! phase-randomized correction. envfsc=yes is the closest post-hoc
+        ! counterpart of the constrained estimate and keeps the two backends'
+        ! FSCs, and therefore their ML regularization, on the same footing;
+        ! it is derived here rather than requested separately.
+        if( trim(self%automsk) .ne. 'no' )then
+            if( .not. self%l_envfsc ) write(logfhandle,'(A)') '>>> automsk='//trim(self%automsk)//&
+                &' implies envfsc=yes (rec_backend='//trim(self%rec_backend)//'); envfsc promoted'
+            self%envfsc   = 'yes'
+            self%l_envfsc = .true.
+        endif
+        ! The density envelope (envfsc mask, PCG solve support, NU evidence
+        ! null shell) is dilated by at least ENVMSKWIDTH_A_MIN, converted to
+        ! layers at the sampling the envelope is built at (smpd_crop) and
+        ! rounded UP so the minimum is a lower bound, so the same physical
+        ! envelope comes out at every crop level and in every program (policy
+        ! 2026-09-09: the former abinitio3D-only default of 7 layers, made
+        ! physical and shared). The minimum replaces the DEFAULT only: an
+        ! explicit binwidth on the command line wins in either direction, so
+        ! a tighter envelope can be tested without touching the constant.
+        if( self%l_envfsc .and. self%smpd_crop > TINY .and. .not. cline%defined('binwidth') )then
+            binwidth_min = max(1, ceiling(ENVMSKWIDTH_A_MIN / self%smpd_crop - 1.e-4))
+            if( self%binwidth < binwidth_min )then
+                write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> density envelope dilation raised to ', binwidth_min, &
+                    &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
+                self%binwidth = binwidth_min
+            endif
+        endif
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')

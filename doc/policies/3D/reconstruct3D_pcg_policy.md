@@ -216,20 +216,23 @@ support and retains the same two-shell FSC headroom.
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
 the default in `abinitio3D`, every PCG solve, base and regularized replay, runs
 on the spherical `mskdiam` support and no density envelope is built. With
-`automsk=yes` the support is phase-specific:
-
-| `envfsc` | Base solve | Regularized replay |
-| --- | --- | --- |
-| `yes` | conservative density support | conservative density support |
-| `no` | spherical support | conservative density support |
+`automsk=yes` the conservative density envelope is the support of BOTH the
+base solve and the regularized replay (policy 2026-09-09; the former
+`envfsc=no` split with a spherical base is retired), and `envfsc=yes` is
+implied: the FSC pair is envelope-constrained inside the estimator, so no
+post-hoc mask and no phase-randomized correction are applied to it, and the
+`>>> FSC MODE` line in the log and the resolution text says so. This is a
+deliberate, reported choice, not a claim that a constrained estimate is free
+of masked-FSC bias.
 
 Before any reconstruction-derived density source exists, the base necessarily
-bootstraps on the sphere for either `envfsc` value and its completed pair
-supplies the conservative replay support. Once a prior reconstruction exists,
-the table applies without exception. No PCG map is multiplied by either mask
-after reconstruction. `envfsc=yes` with `automsk=no` affects only the
-phase-randomized FSC evaluation, never a solve. An explicit `pcg_mskfile`
-remains the development override.
+bootstraps on the sphere and its completed pair supplies the conservative
+replay support. No PCG map is multiplied by either mask after reconstruction.
+`envfsc=yes` with `automsk=no` affects only the phase-randomized FSC
+evaluation, never a solve. An explicit `pcg_mskfile` remains the development
+override and constrains every solve regardless of `automsk`; it is reported as
+the state support, so the FSC mode, the support-provenance sidecar and the NU
+evidence null regime all see a constrained pair.
 
 The original-sampling final reconstructions launched by `abinitio3D` and
 `refine3D_auto` are cold solves. They use a PCG iteration budget of at least
@@ -579,8 +582,9 @@ it ships. The one-mask contract that came with it:
   recorded in the support-provenance sidecar `<vol>_pcg_support.txt`
   (`solve_kind=gridding` for gridding products; the PCG base warm-start
   selector ignores that kind, so the stage-2/3 handoff stays cold);
-- `evaluate_halfmap_pair` masks nothing (the envfsc envelope +
-  phase-randomization correction is a different, opt-in estimator);
+- `evaluate_halfmap_pair` masks nothing of its own (the envfsc envelope +
+  phase-randomization correction is applied only to an unconstrained pair, and
+  the mode actually used is logged as `>>> FSC MODE`);
 - `postprocess` applies no post-hoc mask to a volume carrying the sidecar
   (previously PCG-only by backend name; an imported map without the
   sidecar still gets the classical spherical/envelope mask);

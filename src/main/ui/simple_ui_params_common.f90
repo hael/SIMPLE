@@ -328,7 +328,8 @@ subroutine set_ui_params
 
     call envfsc%set_param(         'envfsc',          'binary', 'Envelope solvent correction for FSC', &
                                    'yes activates on-the-fly density-mask generation smoothed at envmsklp; '//&
-                                   &'no keeps the broad spherical FSC(yes|no){no}', '', .false., 'no', &
+                                   &'no keeps the broad spherical FSC; implied yes under automsk=yes'//&
+                                   &'(yes|no){no}', '', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call envmsklp%set_param(       'envmsklp',        'num',    'Envelope FSC mask low-pass limit', &

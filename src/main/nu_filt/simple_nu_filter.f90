@@ -44,6 +44,7 @@ implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
           set_nu_solvent_envelope, clear_nu_solvent_envelope, &
+          set_nu_evidence_null_shell, clear_nu_evidence_null_shell, &
           retain_nu_filter_setup, nu_filter_setup_is_retained, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
@@ -147,6 +148,13 @@ real,             parameter   :: NU_ENVMASK_MINVOL_FRAC       = 0.1
 real,             parameter   :: NU_ENVMASK_GROW_A            = 1.0
 ! Physical cosine-edge width used to soften the molecular envelope.
 real,             parameter   :: NU_ENVMASK_EDGE_A            = 6.0
+!> score, in null MADs, assigned to voxels outside the evidence calibration
+!! domain: a fixed solvent label the ICM boundary term (beta ~ 1) cannot flip
+real,             parameter   :: NU_ENVMASK_EXCLUDED_SCORE    = -1.0e3
+!> a Euclidean null shell must carry at least this many voxels, and this
+!! fraction of the label domain, for its median/MAD to be trusted
+integer,          parameter   :: NU_ENVMASK_MIN_NULL_VOX      = 1000
+real,             parameter   :: NU_ENVMASK_MIN_NULL_FRAC     = 0.02
 ! Sentinel floor above which a mask-packed unary entry is treated as unpopulated.
 ! Columns are allocated with huge() and compaction can leave stale members behind,
 ! so evidence comparisons must ignore anything at that magnitude.
@@ -251,6 +259,27 @@ logical :: nu_l_solvent_clamp = .false.
 ! envelope (automsk=yes background policy, derived in the same evidence
 ! pass). Part of the frozen-evidence identity via the provenance string.
 character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
+! Null model of the NU evidence envelope (policy 2026-09-09), two regimes:
+! - SPHERICAL base pair (gridding, PCG bootstrap): the null is the robust
+!   median/MAD of the margin over the observed support, where solvent is
+!   the majority population by construction of the generous sphere. No
+!   shell is set; nu_calib_lmask and nu_null_lmask stay unallocated.
+! - ENVELOPE-CONSTRAINED base pair (PCG under automsk=yes): the estimator
+!   has removed the far solvent, so the margin there is an exact zero
+!   spike, not a noise sample, and the remaining support is not a
+!   solvent-majority mixture. The null is then designated by Euclidean
+!   geometry instead of estimated from a mixture: the dilation ring of the
+!   density envelope (dilated minus core, at full weight of the base
+!   support) is solvent by construction, and the median/MAD are taken
+!   there. Labels are free on the observed density envelope
+!   (nu_calib_lmask) and fixed solvent outside it, so the evidence
+!   envelope is nested inside the density envelope.
+! Packed on the setup support; set after setup_nu_dmats, cleared by
+! cleanup_nu_filter.
+logical, allocatable :: nu_calib_lmask(:) !< labels free here; fixed solvent elsewhere
+logical, allocatable :: nu_null_lmask(:)  !< null statistics estimated here (the Euclidean shell)
+integer :: n_nu_calib = 0
+integer :: n_nu_null  = 0
 ! Setup retention across two NU consumers of the same base pair (pcg_priors.md
 ! dev item 4 dedup; historically the removed Q_NU evidence phase followed by
 ! the matching-reference generation): both run on the same base pair with the same optimized, extended,
@@ -333,6 +362,17 @@ type :: nu_envmask_stats
     real    :: pct_signal  = 0.
     real    :: lp_smooth   = 0.
     logical :: l_relative  = .false.
+    ! label domain (observed density envelope, or the observed support) and null set
+    integer :: n_calib          = 0
+    real    :: pct_calib        = 0.  !< domain as a percentage of the support
+    real    :: pct_signal_calib = 0.  !< signal as a percentage of the domain
+    logical :: l_null_majority  = .true. !< solvent held the majority of the domain (mixture regime validity)
+    logical :: l_null_shell     = .false. !< null designated by the Euclidean shell rather than estimated from the mixture
+    integer :: n_null           = 0   !< voxels the null statistics were estimated on
+    real    :: pct_null         = 0.  !< null set as a percentage of the domain
+    real    :: core_med         = 0.  !< median margin inside the core (domain minus shell), separation diagnostic
+    real    :: pct_signal_null  = 0.  !< signal as a percentage of the null shell: the dilation ring carrying evidence
+    logical :: l_null_valid     = .true. !< the null is trusted: majority (mixture) or sufficient shell (Euclidean)
 end type nu_envmask_stats
 
 ! Public scalar metadata for a frozen NU evidence state.  The large packed
@@ -439,6 +479,13 @@ interface
 
     module subroutine clear_nu_solvent_envelope
     end subroutine clear_nu_solvent_envelope
+
+    module subroutine set_nu_evidence_null_shell( envmask, core, dilated, base_support )
+        class(image), target, intent(in) :: envmask, core, dilated, base_support
+    end subroutine set_nu_evidence_null_shell
+
+    module subroutine clear_nu_evidence_null_shell
+    end subroutine clear_nu_evidence_null_shell
 
     module subroutine retain_nu_filter_setup( state )
         integer, intent(in) :: state

@@ -7,15 +7,23 @@ This document describes 3D envelope-mask policy for `refine3D`, staged
 commands remain available. Volume assembly can also generate a density/Otsu
 mask for FSC correction independently of refinement-reference automasking.
 
-The current architecture has two independent controls and artifacts:
+The current architecture has two controls and two artifacts, coupled in one
+direction (policy 2026-09-09):
 
 - `automsk` requests a NU-evidence-derived per-state envelope that defines
   the filter-field background: outside it the NU filter takes the coarsest
   bank candidate, so matching references carry the excluded density heavily
-  low-pass filtered (never removed), on both backends
-- `envfsc` requests an on-the-fly density-derived per-state envelope for
-  phase-randomized FSC correction and cFAR. Non-PCG derived final maps may
-  reuse it; PCG maps are never masked after the solve.
+  low-pass filtered (never removed), on both backends. It is the only
+  envelope that excludes detergent.
+- `envfsc` requests an on-the-fly density-derived per-state envelope (the
+  conservative density envelope). On gridding it is applied post hoc to the
+  FSC pair with phase-randomized solvent correction and to the cFAR copies;
+  on PCG it is the solve support of both the base and the regularized solve,
+  so the FSC pair is envelope-constrained inside the estimator. Non-PCG
+  derived final maps may reuse it; PCG maps are never masked after the solve.
+- `automsk=yes` implies `envfsc=yes` on both backends. The density envelope
+  is derived in parameter validation, never requested separately, because a
+  density-constrained estimate is the envfsc contract by construction.
 
 Volume assembly owns both artifacts on the gridding path; the PCG strategy
 owns their corresponding diagnostics, filter-field constraint, and solve
@@ -37,17 +45,22 @@ with `automsk != no` are rejected. Standalone density-mask utilities are
 outside this refinement invariant.
 
 `envfsc=no` is the general default; `refine3D_auto` defaults it to `yes` unless
-the user supplies a value. With `envfsc=yes`, volume assembly averages the
-current even/odd half maps, low-pass filters the merged map at `envmsklp`,
-applies non-tight Otsu segmentation, retains the largest connected component,
-grows it by `binwidth`, and applies a cosine edge of width `edge`. `envmsklp`
-defaults to `ENVMSKLP_DEFAULT` (20 A) and must be positive when `envfsc=yes`.
-For `abinitio3D`, `binwidth` defaults to `ENVMSKWIDTH_DEFAULT` (7 voxels) and
-is preserved in staged and final reconstruction commands.
-The resulting density envelope is used for masked and randomized-masked FSC,
-cFAR, and compatible final-map postprocessing. This path is independent of
-`automsk` and NU filtering; `amsklp` remains the NU-evidence/standalone
-automasking scale and does not control this density FSC envelope.
+the user supplies a value, and `automsk=yes` promotes it to `yes` everywhere
+(logged when it overrides an explicit or defaulted `no`). With `envfsc=yes`,
+the density envelope is built from the current even/odd average: low-pass at
+`envmsklp`, non-tight Otsu segmentation, largest connected component, spherical
+dilation by `binwidth` layers, and an outward cosine skirt of width `edge`.
+`envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and must be positive when
+`envfsc=yes`. The dilation has a shared physical minimum, `ENVMSKWIDTH_A_MIN`
+(7.5 A, the former abinitio3D default of 7 layers at 1.075 A/pixel): whenever
+the envelope is in use, `binwidth = max(binwidth, ceiling(7.5 A / smpd_crop))`
+at the sampling the envelope is built at, so the same physical envelope comes
+out at every crop level and in every program; an explicit larger `binwidth`
+wins. The density envelope is used for masked and randomized-masked FSC, cFAR,
+the PCG solve support, the Euclidean null shell of the NU evidence envelope,
+and compatible final-map postprocessing. `amsklp` remains the
+NU-evidence/standalone automasking scale and does not control this density
+envelope.
 
 Matching references are never multiplied with an envelope before reprojection
 (2026-09-02): hard-removing density that is present in the particle images
@@ -57,13 +70,32 @@ filter field instead -- the background, defined as the complement of the NU
 evidence envelope derived in the same evidence pass, takes the coarsest bank
 candidate (cisTEM-style heavy background low-pass). The matcher applies the
 spherical soft reference mask only; there is no separate `envref` control.
-Particle images, FSC estimation, and matching-bandwidth selection are
-unchanged by `automsk`.
+Particle images and matching-bandwidth selection are unchanged by `automsk`;
+FSC estimation follows the implied `envfsc=yes` (see below).
 
 NU filtering always uses the spherical support derived from `mskdiam`.
 Envelope masks do not define or restrict the NU objective domain. In
 particular, the correlation-derived NU envelope must never feed FSC correction
 or replace spherical NU support.
+
+The NU evidence envelope's null model has two regimes (policy 2026-09-09),
+keyed on how the base pair was solved:
+
+- spherical base pair (gridding; PCG bootstrap without a lag-one reference):
+  the robust median + `nu_msk_sig` MAD of the margin over the observed
+  support, where the generous sphere makes solvent the majority; validity is
+  the solvent majority
+- envelope-constrained base pair (PCG under `automsk=yes`, or an explicit
+  `pcg_mskfile`): the estimator has removed the far solvent, so the null is
+  designated by Euclidean geometry instead of estimated from a mixture -- the
+  median/MAD are taken on the density envelope's dilation ring (dilated minus
+  core) at full weight of the base support; labels are free on the observed
+  density envelope and fixed solvent outside it, nesting the evidence envelope
+  inside the density envelope; validity is shell sufficiency
+
+If the null is invalid or the envelope is empty, the density envelope itself
+is armed as the filter-field background (logged as `EVIDENCE FALLBACK`); the
+provenance string records which envelope ran.
 
 `mskfile` is no longer part of the CLI policy. Passing `mskfile` is a hard error.
 
@@ -75,11 +107,11 @@ On the gridding backend, volume assembly owns both mask-production paths:
 
 - half-map restoration generates `automask3D_stateNN.mrc` on every active
   `envfsc=yes` calculation, directly from the current half maps
-- NU postprocessing decides whether `nu_envmask3D_stateNN.mrc` should exist
-  and regenerates it according to the cadence below. With `automsk=yes`, it is
-  deliberately derived from the static candidate bank before optimization and
-  adaptive extension so it can constrain that same pass. A diagnostic envelope
-  generated without arming the background may include accepted extensions.
+- NU postprocessing regenerates `nu_envmask3D_stateNN.mrc` on every
+  `automsk=yes` competition. It is deliberately derived from the static
+  candidate bank before optimization and adaptive extension so it can
+  constrain that same pass. A diagnostic envelope generated without arming the
+  background may include accepted extensions.
 
 The NU envelope is generated before `nu_filter_vols` releases the mask-packed
 NU unary storage, and constrains the local filtering field in that same
@@ -87,19 +119,31 @@ assembly pass.
 
 On the PCG backend, the PCG master runs the same assembly-owned NU competition
 (`simple_nu_state_filter`), so the NU-evidence envelope is produced and
-consumed exactly as on gridding. It independently
-builds the conservative density mask used as solve support, but only under
-`automsk=yes`; with `automsk=no` no density mask is built and every PCG solve
-runs on the spherical support (policy 2026-09-06).
+consumed exactly as on gridding, and hands over the support that constrained
+the base pair so the evidence null takes the Euclidean-shell regime. It
+independently builds the conservative density mask used as solve support, but
+only under `automsk=yes`; with `automsk=no` no density mask is built and every
+PCG solve runs on the spherical support (policy 2026-09-06). Under
+`automsk=yes` the density envelope constrains both the base and the
+regularized solve once a prior reconstruction exists (policy 2026-09-09).
 
 ### FSC consumers
 
 The NU-evidence envelope is never used for FSC correction because it is selected
 from cross-half agreement. With `envfsc=no`, the reported radial FSC and cFAR
 are computed on the shipped half-maps, which carry the soft spherical support
-at `msk_crop` from the reconstruction itself (no second mask, 2026-09-09). With `envfsc=yes`, the density envelope is
-passed to phase-randomized FSC correction and the same envelope is applied to
-the cFAR copies.
+at `msk_crop` from the reconstruction itself (no second mask, 2026-09-09). With
+`envfsc=yes` on gridding, the density envelope is passed to phase-randomized
+FSC correction and the same envelope is applied to the cFAR copies. With
+`envfsc=yes` on a support-constrained pair (PCG under `automsk=yes`, or
+`pcg_mskfile`), no post-hoc mask and no phase-randomized correction are
+applied: the envelope is already inside the estimate. This is a deliberate
+choice, not a claim that a constrained estimate is bias-free -- a common
+window on both halves can still contribute correlated power -- and it is
+therefore REPORTED rather than hidden: every diagnostic evaluation logs
+`>>> FSC MODE` and writes the same line into the resolution text, naming one
+of three modes (spherical support, envelope post hoc with solvent correction,
+estimator-constrained without correction).
 
 The randomization onset is the first shell where the genuinely unmasked FSC is
 below 0.8. The two half maps are independently phase-randomized beyond that
@@ -154,9 +198,10 @@ not interchangeable in the FSC or NU-objective paths.
 
 ## Regeneration and recovery
 
-Multi-state NU-evidence envelope generation is supported. The implementation
-regenerates envelopes when they are missing or incompatible, at `startit`, and
-every `AMSK_FREQ` iterations.
+Multi-state NU-evidence envelope generation is supported. The envelope is
+regenerated from the live evidence on every NU competition under
+`automsk=yes`; there is no cadence, and the artifact on disk has no
+in-workflow reader (the former `AMSK_FREQ` planner was removed, 2026-09-09).
 
 Regeneration overwrites the per-state envelope each cycle. The envelope is free
 to **shrink** as resolution improves as well as to grow: there is no monotonic

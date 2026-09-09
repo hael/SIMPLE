@@ -267,6 +267,7 @@ contains
         if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
         if( allocated(nu_observed_mask)   ) deallocate(nu_observed_mask)
         n_nu_observed = 0
+        call clear_nu_evidence_null_shell
         call cleanup_aux_bank
         ldim = 0
         box  = 0
@@ -312,6 +313,90 @@ contains
         nu_l_solvent_clamp = .false.
         nu_solvent_clamp_source = 'density_envelope'
     end subroutine clear_nu_solvent_envelope
+
+    !> Designate the NU evidence null by Euclidean geometry for an
+    !! envelope-constrained base pair (see nu_null_lmask): labels are free on
+    !! the observed voxels of the soft density envelope (at or above half
+    !! height), and the null statistics are estimated on the dilation ring,
+    !! dilated minus core, restricted to voxels the base support carries at
+    !! full weight (its skirt attenuates the noise and is excluded). All
+    !! four inputs are real-space volumes on the setup grid; core and dilated
+    !! are the 0/1 intermediates automask3D exposes. Call after
+    !! setup_nu_dmats.
+    module subroutine set_nu_evidence_null_shell( envmask, core, dilated, base_support )
+        class(image), target, intent(in) :: envmask, core, dilated, base_support
+        real(kind=c_float), pointer :: env_rmat(:,:,:), core_rmat(:,:,:), dil_rmat(:,:,:), sup_rmat(:,:,:)
+        integer :: imask, i, j, k, n_env, n_env_in_sup, n_sup, n_ring, n_ring_full
+        logical :: l_env, l_sup, l_ring
+        if( box < 1 ) THROW_HARD('set_nu_evidence_null_shell requires setup_nu_dmats first')
+        if( .not.allocated(nu_observed_mask) ) &
+            &THROW_HARD('set_nu_evidence_null_shell requires the observed mask; setup_nu_dmats first')
+        call check_input(envmask,      'envelope')
+        call check_input(core,         'core')
+        call check_input(dilated,      'dilated envelope')
+        call check_input(base_support, 'base support')
+        call clear_nu_evidence_null_shell
+        ! pointers into the resident images: no full-volume copies (review
+        ! 2026-09-09), the packed masks are the only allocations
+        call envmask%get_rmat_ptr(env_rmat)
+        call core%get_rmat_ptr(core_rmat)
+        call dilated%get_rmat_ptr(dil_rmat)
+        call base_support%get_rmat_ptr(sup_rmat)
+        allocate(nu_calib_lmask(n_nu_mask), nu_null_lmask(n_nu_mask), source=.false.)
+        n_env = 0; n_env_in_sup = 0; n_sup = 0; n_ring = 0; n_ring_full = 0
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,l_env,l_sup,l_ring) &
+        !$omp reduction(+:n_env,n_env_in_sup,n_sup,n_ring,n_ring_full) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            ! geometry diagnostics over the whole support: how well the current
+            ! density envelope agrees with the support that constrained the
+            ! estimator, and how much of the current ring that support carries
+            ! at full weight
+            l_env  = env_rmat(i,j,k) >= 0.5
+            l_sup  = sup_rmat(i,j,k) >= 0.5
+            l_ring = dil_rmat(i,j,k) >= 0.5 .and. core_rmat(i,j,k) < 0.5
+            if( l_env ) n_env = n_env + 1
+            if( l_sup ) n_sup = n_sup + 1
+            if( l_env .and. l_sup ) n_env_in_sup = n_env_in_sup + 1
+            if( l_ring ) n_ring = n_ring + 1
+            if( .not.nu_observed_mask(imask) ) cycle
+            nu_calib_lmask(imask) = l_env
+            nu_null_lmask(imask)  = l_ring .and. sup_rmat(i,j,k) >= 0.999
+            if( nu_null_lmask(imask) ) n_ring_full = n_ring_full + 1
+        end do
+        !$omp end parallel do
+        nullify(env_rmat, core_rmat, dil_rmat, sup_rmat)
+        n_nu_calib = count(nu_calib_lmask)
+        n_nu_null  = count(nu_null_lmask)
+        if( n_nu_calib < 1 ) THROW_HARD('NU evidence label domain is empty; density envelope and observed support do not overlap')
+        ! one greppable geometry line per state per cycle: Dice overlap of the
+        ! current envelope with the estimator's support, and the fraction of
+        ! the current dilation ring the support carries at full weight
+        write(logfhandle,'(A,F6.3,A,F6.3,A,I0,A,I0)') '>>> NU NULL SHELL GEOMETRY: envelope/support Dice ', &
+            &2.*real(n_env_in_sup)/real(max(1,n_env+n_sup)), ', ring retained at full weight ', &
+            &real(n_ring_full)/real(max(1,n_ring)), ', shell voxels ', n_nu_null, ' of ring ', n_ring
+        ! an insufficient shell is not an error here: the envelope routine
+        ! reports it through l_null_valid and the caller owns the fallback
+
+    contains
+
+        subroutine check_input( vol, what )
+            class(image),     intent(in) :: vol
+            character(len=*), intent(in) :: what
+            if( any(vol%get_ldim() /= ldim) ) THROW_HARD('NU evidence null shell: '//what//' dimensions differ from the setup')
+            if( vol%is_ft() ) THROW_HARD('NU evidence null shell: '//what//' must be in real space')
+        end subroutine check_input
+
+    end subroutine set_nu_evidence_null_shell
+
+    module subroutine clear_nu_evidence_null_shell
+        if( allocated(nu_calib_lmask) ) deallocate(nu_calib_lmask)
+        if( allocated(nu_null_lmask)  ) deallocate(nu_null_lmask)
+        n_nu_calib = 0
+        n_nu_null  = 0
+    end subroutine clear_nu_evidence_null_shell
 
     !> Mark the current setup as retained for the matching-reference pass of
     !! the given state. Requires a live setup; the consumer verifies state

@@ -19,11 +19,24 @@ real,    parameter :: CFAR_CONE_HALF_ANGLE_DEG = 20.
 real,    parameter :: CFAR_FSC_THRESHOLD       = 0.143
 integer, parameter :: CFAR_MIN_COUNT           = 1
 
+! How the reported FSC was obtained. The mask policy is deliberate and is
+! reported rather than hidden (2026-09-09): a density envelope biases the FSC
+! whether it is applied post hoc or inside the estimator, and only the
+! post-hoc application carries the phase-randomized solvent correction.
+character(len=*), parameter :: FSC_MODE_SPHERICAL    = &
+    &'spherical support at msk_crop from the reconstruction; no envelope, no solvent correction'
+character(len=*), parameter :: FSC_MODE_ENVELOPE     = &
+    &'density envelope applied post hoc to the halves; phase-randomized solvent correction applied'
+character(len=*), parameter :: FSC_MODE_CONSTRAINED  = &
+    &'halves estimated on a support envelope (mask inside the estimator); no post-hoc mask, '//&
+    &'no phase-randomized solvent correction: the envelope contribution to the FSC is NOT removed'
+
 type :: halfmap_diagnostics_result
     real, allocatable :: fsc(:)
     real              :: res_fsc05   = 0.
     real              :: res_fsc0143 = 0.
     real              :: cfar        = 0.
+    character(len=200):: fsc_mode    = FSC_MODE_SPHERICAL
   contains
     procedure :: kill => kill_halfmap_diagnostics_result
 end type halfmap_diagnostics_result
@@ -75,9 +88,15 @@ contains
         ! derived and returned, because the automask artifact has other
         ! consumers (postprocess envfsc, final rec).
         l_envfsc_preproc = params%l_envfsc
+        diagnostics%fsc_mode = FSC_MODE_SPHERICAL
+        if( l_envfsc_preproc ) diagnostics%fsc_mode = FSC_MODE_ENVELOPE
         if( present(l_pair_support_constrained) )then
-            if( l_pair_support_constrained ) l_envfsc_preproc = .false.
+            if( l_pair_support_constrained )then
+                l_envfsc_preproc     = .false.
+                diagnostics%fsc_mode = FSC_MODE_CONSTRAINED
+            endif
         endif
+        write(logfhandle,'(A,I0,A)') '>>> FSC MODE: STATE ', state, ', '//trim(diagnostics%fsc_mode)
         if( params%l_envfsc .and. present(envmask) )then
             call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
             call envmask%copy(envmask_work)
@@ -145,6 +164,7 @@ contains
         write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', diagnostics%res_fsc05
         write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', diagnostics%res_fsc0143
         write(fnr,'(A,1X,F6.2)') '>>> CONICAL FSC AREA RATIO (cFAR) SCORE  :', diagnostics%cfar
+        write(fnr,'(A,1X,A)')    '>>> FSC MODE                             :', trim(diagnostics%fsc_mode)
         call fclose(fnr)
         deallocate(res)
     end subroutine write_halfmap_diagnostics
@@ -267,6 +287,7 @@ contains
         self%res_fsc05   = 0.
         self%res_fsc0143 = 0.
         self%cfar        = 0.
+        self%fsc_mode    = FSC_MODE_SPHERICAL
     end subroutine kill_halfmap_diagnostics_result
 
 end module simple_halfmap_diagnostics

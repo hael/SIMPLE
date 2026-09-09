@@ -2574,6 +2574,140 @@ the acceptable-looking outputs do not validate the prior.
    evaluation itself (phase-randomized masked FSC) is unchanged and still
    envfsc-only.
 
+   SOLVE-SUPPORT POLICY, ENVFSC COUPLING (2026-09-09, user-directed).
+   automsk=yes now implies envfsc=yes on BOTH backends; envfsc is derived
+   in `validate_parameter_consistency` (logged when it overrides an
+   explicit or defaulted envfsc=no) and mirrored by
+   `set_refine3D_envfsc_policy` in the abinitio3D stage config so the
+   refine3D command lines read truthfully. Per backend:
+   - PCG: under automsk=yes the density envelope constrains BOTH the
+     base/unfil solve and the ML-regularized replay once a prior
+     reconstruction exists (the first base pair bootstraps on the sphere
+     and seeds the replay support). The strategy no longer consults
+     l_envfsc for the base support (`l_base_support_constrained =
+     l_state_support`; `build_pcg_state_support` throws if the coupling
+     is bypassed). The FSC pair is reported support-constrained, so
+     `evaluate_halfmap_pair` skips the phase-randomized re-masking; the
+     automask artifact is still written for its other consumers. The
+     envfsc=no + automsk=yes split of the 2026-09-01 three-rule policy
+     (spherical base, envelope replay) is retired.
+   - Gridding: the same envelope generator (automask3D of the base-pair
+     average at envmsklp, same binwidth) is applied post hoc to the FSC
+     pair with the phase-randomized correction, and the corrected FSC
+     feeds add_invtausq2rho exactly as the constrained-pair FSC feeds the
+     PCG ML prior. This is the closest post-hoc counterpart of the
+     constrained estimate a gridding assembly can offer: the mask
+     cannot enter the estimator, so the correction is the honest
+     substitute, and it is what makes the two backends' FSC-0.143/0.5
+     numbers and their regularization strength comparable under
+     automsk=yes.
+   Residual, deliberate asymmetries between the backends: (i) the PCG
+   solve support is built from the lag-one reference while the post-hoc
+   gridding envelope (and the automask artifact on both) is built from
+   the current base-pair average -- one iteration of envelope lag,
+   generous mask, negligible; (ii) the shipped PCG halves carry the
+   envelope, the shipped gridding halves carry only the soft spherical
+   support at msk_crop (the support-provenance sidecar records which),
+   so downstream masking (postprocess envfsc, NU evidence background) is
+   post hoc on gridding and already-in-the-map on PCG. automsk=no is
+   unchanged on both: sphere throughout, envfsc as requested. The final
+   classical reconstruct3D that refine3D/refine3D_auto/refine3D_states
+   issue no longer forces automsk=no (2026-09-09, after a refine3D_auto
+   run showed the shipped PCG map solved on the sphere while every
+   iteration had used the envelope): automsk rides along, filt_mode=none
+   and nu_refine=no still make the shipped map classical.
+
+   NU EVIDENCE ENVELOPE UNDER THE DOUBLE SUPPORT (2026-09-09, user-directed).
+   The evidence envelope stays the mask controlling the NU filtering of
+   the volumes: it is the only envelope that excludes detergent (micelle
+   is best explained by the coarsest candidate, so its margin is null),
+   which the density envelope cannot do. What changes is how its null is
+   obtained, in two regimes keyed on how the base pair was solved:
+   - SPHERICAL base pair (gridding; PCG bootstrap without a lag-one
+     reference): the robust median + nu_msk_sig*MAD of the margin over the
+     observed support, unchanged in substance -- the generous sphere makes
+     solvent the majority population -- with the pre-existing >50%-signal
+     warning promoted to the validity verdict (l_null_majority).
+   - ENVELOPE-CONSTRAINED base pair (PCG under automsk=yes): the estimator
+     has removed the far solvent, so its margin is an exact zero spike
+     (with the envelope near half the sphere the median lands on it and
+     the MAD collapses, inflating the envelope), and the remaining support
+     is not a solvent-majority mixture either (with a tight envelope the
+     median lands in the signal and the envelope collapses to the best
+     ordered core while the >50% check stays quiet). The null is therefore
+     DESIGNATED by Euclidean geometry rather than estimated from a
+     mixture: automask3D now exposes its binary core and dilated
+     intermediates, and set_nu_evidence_null_shell takes the median/MAD on
+     the dilation ring (dilated minus core), restricted to voxels the base
+     support carries at full weight (its cosine skirt attenuates the
+     noise). Labels are free on the observed density envelope and fixed
+     solvent outside it (NU_ENVMASK_EXCLUDED_SCORE), nesting the evidence
+     envelope inside the density envelope. Validity is shell sufficiency
+     (NU_ENVMASK_MIN_NULL_VOX, NU_ENVMASK_MIN_NULL_FRAC of the domain);
+     the core-to-shell median margin is logged as the separation
+     diagnostic. The shell width IS binwidth, which used to be 1 layer in
+     refine3D/refine3D_auto (parameter default) and 7 layers in abinitio3D
+     (ENVMSKWIDTH_DEFAULT), i.e. a one-voxel shell and a far tighter PCG
+     solve support in refine3D. RESOLVED (2026-09-09, user-directed): the
+     density envelope dilation has a shared physical minimum,
+     ENVMSKWIDTH_A_MIN = 7.5 A (the former abinitio3D default of 7 layers
+     at 1.075 A/pixel), applied in validate_parameter_consistency whenever
+     the envelope is in use (l_envfsc) as binwidth = max(binwidth,
+     ceiling(7.5/smpd_crop)) at the sampling the envelope is built at (a
+     lower bound, review 2026-09-09), so the
+     same physical envelope comes out at every crop level and in every
+     program; abinitio3D no longer injects a layer count. The minimum
+     replaces the default only: an explicit binwidth wins in either
+     direction. Whether 7.5 A is more than a dataset needs is measured,
+     not argued: the skirt attenuates rather than includes (inside the PCG
+     estimator a weight-0.4 skirt voxel is density at 40%), so the
+     full-weight ring is the only clipping margin, and the NU evidence
+     reports how much of that ring it labels signal
+     (>>> NU DILATION RING OCCUPANCY): signal in the ring means the
+     dilation is capturing density, a null ring means it is pure margin
+     and binwidth can be tightened for that specimen.
+   In both regimes the density-term median/MAD follow the null set, and
+   if the null is invalid or the envelope is empty nonuniform_filter_state
+   arms the density envelope itself as the background
+   (source='density_envelope', logged as EVIDENCE FALLBACK). The PCG
+   callers hand the state support and l_base_support_constrained (in the
+   distributed bootstrap blend: constrained only if both contributions
+   were) to nonuniform_filter_state; gridding passes nothing and stays in
+   the spherical regime. The standalone nu_filt3D route sets no shell.
+   Also removed: the vestigial regeneration planner
+   (plan_state_postprocess / AMSK_FREQ / NU_ENVMASK_ACTION_*) -- the
+   envelope has always been regenerated every cycle from the live
+   evidence and the artifact has no in-workflow reader. Side-by-side
+   lines to compare: NU ENVELOPE OCCUPANCY, "Null model", "Null shell
+   voxels", "Core median margin" against "Null median margin", and
+   whether the background was armed from the evidence envelope or the
+   fallback.
+
+   CODE REVIEW RESPONSE (2026-09-09, automsk_yes_code_review.md). The
+   masked-FSC bias of a support-constrained PCG pair (P1) is acknowledged
+   and deliberately NOT corrected: a common window on both halves can
+   contribute correlated power, but the constraint is the point of the
+   estimator, and the policy is to REPORT what was done rather than to
+   hide it -- evaluate_halfmap_pair now names the mode on every
+   evaluation (>>> FSC MODE in the log and the resolution text: spherical
+   support / envelope post hoc with phase-randomized correction /
+   estimator-constrained without correction). pcg_mskfile (P1) is now
+   returned by build_pcg_state_support as the state support regardless of
+   automsk, so FSC mode, provenance sidecar and the NU null regime see a
+   constrained pair. set_nu_evidence_null_shell (P1) reads the four
+   volumes through get_rmat_ptr and allocates only the two packed masks,
+   and logs the requested geometry diagnostics per state (envelope/support
+   Dice, fraction of the current dilation ring retained at full weight of
+   the base support, shell voxels of ring). core/dilated (P2) are requested
+   from automask3D only on the constrained branch. The dilation minimum
+   (P2) uses ceiling. The public policies (P2: automasking, abinitio3D,
+   refine3D, refine3D_auto, reconstruct3D_pcg) are updated in the same
+   change, including the stale refine3D_policy claim that references are
+   multiplied by the NU envelope. Not done: reusing the gridding FSC
+   envelope in the NU consumer (ownership boundary; one automask3D per
+   state per iteration is the accepted cost). The review's validation
+   matrix (nine cases, peak RSS on a production box) is the user's to run.
+
    msp1 STAGE-7 COLLAPSE ROOT CAUSE (2026-09-06, from the full log sets):
    the external-init repeats (5_abinitio3D) ran next to the completed
    healthy set (4_abinitio3D) of the same project. The legacy sigma
@@ -3339,6 +3473,12 @@ the acceptable-looking outputs do not validate the prior.
      filt_mode=none (bootstrap_rec3D pass 1 forces filt_mode=none and
      is unaffected). `pcg_mskfile` is likewise rejected on NU routes
      (development escape hatch isolated to filt_mode=none).
+     [SUPERSEDED 2026-09-09: validate_nu_replay_request and the NU-route
+     rejection went with the dead-code removal; pcg_mskfile is accepted on
+     every PCG route and, since the 2026-09-09 review, reported as the
+     state support: build_pcg_state_support returns it with l_have=.true.
+     regardless of automsk, so the FSC mode, the support-provenance
+     sidecar and the NU evidence null regime all see a constrained pair.]
    - P2 refine3D_auto envfsc: now a guarded (genuinely overridable)
      default.
    - P2 _pproc: PCG skips all post-hoc mask multiplication in

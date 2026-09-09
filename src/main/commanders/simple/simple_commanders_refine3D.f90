@@ -727,10 +727,9 @@ contains
         call cline_rec3D%delete('box_crop')
         call cline_rec3D%delete('smpd_crop')
         call cline_rec3D%set('objfun', 'cc')
-        if( params%l_nonuniform )then
-            call cline_rec3D%set('filt_mode', 'none')
-            call cline_rec3D%set('automsk', 'no')
-        endif
+        ! classical final map: no nonuniform filtering; automsk rides along so
+        ! the PCG solve support matches the refinement's (2026-09-09)
+        if( params%l_nonuniform ) call cline_rec3D%set('filt_mode', 'none')
         call cline_rec3D%set('nu_refine', 'no')
         call xrec3D%execute(cline_rec3D)
         call params_final_rec%new(cline_rec3D)
@@ -1894,10 +1893,9 @@ contains
             call cline_rec3D%delete('box_crop')
             call cline_rec3D%delete('smpd_crop')
             call cline_rec3D%set('objfun', 'cc')
-            if( params%l_nonuniform )then
-                call cline_rec3D%set('filt_mode', 'none')
-                call cline_rec3D%set('automsk', 'no')
-            endif
+            ! classical final map: no nonuniform filtering; automsk rides along
+            ! so the PCG solve support matches the refinement's (2026-09-09)
+            if( params%l_nonuniform ) call cline_rec3D%set('filt_mode', 'none')
             call cline_rec3D%set('nu_refine', 'no')
             call xrec3D%execute(cline_rec3D)
             call params_final_rec%new(cline_rec3D)
@@ -2128,9 +2126,12 @@ contains
         !! postprocessing that keeps the caller's filt_mode/nu_refine/automsk,
         !! because the residual sigmas depend on the regularization of the
         !! reference they are scored against; the shipped map (l_final=.true.)
-        !! keeps the caller's backend and postprocessing, is classical
-        !! (no nonuniform filtering, no automask) and, on PCG, carries the
-        !! cold-solve iteration budget
+        !! keeps the caller's backend, postprocessing and automsk -- so on PCG
+        !! it is estimated on the same density-envelope support as every
+        !! refinement iteration, with the same reported FSC mode (2026-09-09)
+        !! -- is classical otherwise (no nonuniform filtering, which is a
+        !! matching-reference feature) and, on PCG, carries the cold-solve
+        !! iteration budget
         subroutine prepare_bootstrap_rec_cline( cline_rec, iter, l_final )
             class(cmdline), intent(inout) :: cline_rec
             integer,        intent(in)    :: iter
@@ -2139,7 +2140,6 @@ contains
             if( l_final )then
                 call cline_rec%set('filt_mode', 'none')
                 call cline_rec%set('nu_refine',   'no')
-                call cline_rec%set('automsk',     'no')
                 if( cline_rec%defined('rec_backend') )then
                     if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
                         &call configure_final_pcg_solve_budget(cline, cline_rec)

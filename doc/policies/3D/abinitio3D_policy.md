@@ -404,17 +404,20 @@ static local-resolution field; an explicit `automsk=yes` request uses the
 NU-evidence envelope to fix its background to the coarsest candidate.
 
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
-`GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. The advanced `envfsc`
-control is nevertheless independent of `automsk` and NU filtering. The
-controller forces `envfsc=no` before `ENVFSC_STAGE`, forces it off for the cavgs
-route, and forwards the requested value at and after that boundary. With
-`envfsc=yes`, volume assembly generates a density envelope from the current
-merged half maps for phase-randomized FSC correction and cFAR, using
-`envmsklp` as its smoothing low-pass. The controller forwards `envmsklp` to
-staged and final reconstruction commands; its default is
-`ENVMSKLP_DEFAULT` (20 A). The density-mask growth width defaults to
-`ENVMSKWIDTH_DEFAULT` (7 voxels) through `binwidth` and is likewise preserved
-in staged and final reconstruction commands. The controller keeps a scheduled
+`GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. `automsk=yes` implies
+`envfsc=yes` (policy 2026-09-09), so the two engage together at
+`AUTOMSK_STAGE`/`ENVFSC_STAGE`; the controller forces `envfsc=no` before
+`ENVFSC_STAGE`, forces it off for the cavgs route, and forwards the requested
+or implied value at and after that boundary. With `envfsc=yes`, volume
+assembly generates a density envelope from the current merged half maps for
+phase-randomized FSC correction and cFAR on gridding, and the PCG backend uses
+the same envelope as the support of both solves, using `envmsklp` as its
+smoothing low-pass. The controller forwards `envmsklp` to staged and final
+reconstruction commands; its default is `ENVMSKLP_DEFAULT` (20 A). The
+density-mask dilation is no longer injected as a layer count: every program
+applies the shared physical minimum `ENVMSKWIDTH_A_MIN` (7.5 A) at the
+sampling the envelope is built at, so the envelope keeps the same physical
+width across the autoscaled stages. The controller keeps a scheduled
 `lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
 `nonuniform` is promoted to `nonuniform_lpset`, so the NU frontier can feed an
 explicit merged-reference LP-set matching run, bounded at the high-resolution

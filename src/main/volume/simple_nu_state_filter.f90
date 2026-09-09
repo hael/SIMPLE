@@ -5,7 +5,11 @@
 !  BASE (unregularized) even/odd pair, the ML-regularized pair joining the
 !  competition as the finest auxiliary member (ml_reg=yes, nu_refine=no), the
 !  high-resolution shell walk extending the bank (nu_refine=yes), the
-!  NU-evidence envelope fixing the filter-field background (automsk=yes),
+!  NU-evidence envelope fixing the filter-field background (automsk=yes;
+!  its null estimated robustly over a spherical base pair, or designated by
+!  Euclidean geometry on the density envelope's dilation ring for an
+!  envelope-constrained base pair, with the density envelope as the
+!  fallback background),
 !  synthesis of the filtered even/odd/merged references, the local-resolution
 !  map, and the raw finest selected label as the matching low-pass handoff.
 !  Both reconstruction backends call it (policy 2026-09-06): the PCG path
@@ -13,13 +17,14 @@
 module simple_nu_state_filter
 use simple_core_module_api
 use simple_image,            only: image
+use simple_image_msk,        only: image_msk
 use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
     &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, get_nu_bank_cap_find, &
-    &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, write_nu_evidence_envmask
-use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess
+    &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, write_nu_evidence_envmask, &
+    &set_nu_evidence_null_shell, set_nu_solvent_envelope
 implicit none
 
 public :: nonuniform_filter_state, nu_state_filter_timings, nu_static_aux_replacement
@@ -51,10 +56,11 @@ contains
     !!                    _nu_filt and _nu_locres products derive from them.
     !! align_lp:          raw finest selected label (0 when none), the
     !!                    matching low-pass handoff for the next iteration.
-    subroutine nonuniform_filter_state( params, state, which_iter, vol_base_even, vol_base_odd, &
-            &vol_aux_even, vol_aux_odd, l_use_aux, res0143, volname, eonames, align_lp, timings )
+    subroutine nonuniform_filter_state( params, state, vol_base_even, vol_base_odd, &
+            &vol_aux_even, vol_aux_odd, l_use_aux, res0143, volname, eonames, align_lp, timings, &
+            &base_support, l_base_constrained )
         class(parameters),            intent(in)    :: params
-        integer,                      intent(in)    :: state, which_iter
+        integer,                      intent(in)    :: state
         type(image),                  intent(inout) :: vol_base_even, vol_base_odd
         type(image),                  intent(inout) :: vol_aux_even, vol_aux_odd
         logical,                      intent(in)    :: l_use_aux
@@ -62,19 +68,39 @@ contains
         class(string),                intent(in)    :: volname, eonames(2)
         real,                         intent(out)   :: align_lp
         type(nu_state_filter_timings), optional, intent(inout) :: timings
+        class(image),     optional, intent(in)    :: base_support       !< the support that constrained the base pair (PCG)
+        logical,          optional, intent(in)    :: l_base_constrained !< the base pair was solved on base_support, not the sphere
         type(image), allocatable :: nu_aux_even(:), nu_aux_odd(:)
-        type(image)              :: vol_even_nu, vol_odd_nu
-        type(vol_pproc_plan)     :: pp_plan
+        type(image)              :: vol_even_nu, vol_odd_nu, vol_base_avg, envelope_core, envelope_dilated
+        type(image_msk)          :: density_envelope
+        type(string)             :: nu_envmask_file
         integer(timer_int_kind)  :: t_filter, t_envmask
         integer :: n_highres_steps
         real    :: aux_resolution
+        logical :: l_armed, l_constrained
         align_lp = 0.
         if( L_BENCH_GLOB ) t_filter = tic()
-        call plan_state_postprocess(params, state, which_iter, pp_plan)
-        if( pp_plan%l_nu_envmask_incompatible )then
-            write(logfhandle,'(A,1X,A)') &
-                &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
-                &pp_plan%nu_envmask_file%to_char()
+        l_constrained = .false.
+        if( present(l_base_constrained) ) l_constrained = l_base_constrained
+        if( l_constrained .and. .not.present(base_support) ) &
+            &THROW_HARD('an envelope-constrained base pair must be accompanied by its base support; nonuniform_filter_state')
+        if( trim(params%automsk).ne.'no' )then
+            ! the conservative density envelope of the base pair (the same
+            ! automask3D at envmsklp as the PCG solve support and the envfsc
+            ! mask), built before the setup consumes the pair; the core and
+            ! dilated intermediates are retained only when the Euclidean null
+            ! shell needs them (two full volumes otherwise, review 2026-09-09)
+            call vol_base_avg%copy(vol_base_even)
+            call vol_base_avg%add(vol_base_odd)
+            call vol_base_avg%mul(0.5)
+            if( l_constrained )then
+                call density_envelope%automask3D(params, vol_base_avg, .false., lp_override=params%envmsklp, &
+                    &l_report=.false., core=envelope_core, dilated=envelope_dilated)
+            else
+                call density_envelope%automask3D(params, vol_base_avg, .false., lp_override=params%envmsklp, &
+                    &l_report=.false.)
+            endif
+            call vol_base_avg%kill
         endif
         ! candidate bank from the base pair, auxiliary member from the ML pair
         n_highres_steps = nu_highres_steps_for_state()
@@ -91,13 +117,39 @@ contains
         endif
         if( trim(params%automsk).ne.'no' )then
             ! automsk=yes: the filter-field background is the complement of
-            ! the NU evidence envelope, derived from the unaries of the setup
-            ! that just ran (same pass, no second compute). The objective
-            ! domain remains the spherical mskdiam support; nu_refine
-            ! independently controls high-resolution extension.
+            ! the NU evidence envelope -- the only envelope that excludes
+            ! detergent -- derived from the unaries of the setup that just
+            ! ran (same pass, no second compute) and regenerated every cycle;
+            ! the artifact on disk is overwritten and has no in-workflow
+            ! reader. Its null (policy 2026-09-09): a spherical base pair
+            ! (gridding, PCG bootstrap) keeps the robust median/MAD over the
+            ! solvent-majority support; an envelope-constrained base pair
+            ! (PCG) has had its far solvent removed by the estimator, so the
+            ! null is designated by Euclidean geometry on the density
+            ! envelope's dilation ring and labels are free only on the
+            ! observed density envelope, nesting the evidence envelope
+            ! inside it. If the null is invalid (signal majority, or a shell
+            ! too thin) or the envelope is empty, the background falls back
+            ! to the density envelope itself. The objective domain remains
+            ! the spherical mskdiam support; nu_refine independently controls
+            ! high-resolution extension.
             if( L_BENCH_GLOB ) t_envmask = tic()
+            if( l_constrained ) call set_nu_evidence_null_shell(density_envelope, envelope_core, envelope_dilated, base_support)
+            nu_envmask_file = string(NU_ENVMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
             call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, &
-                &vol_base_even%get_smpd(), state, pp_plan%nu_envmask_file, l_arm_background=.true.)
+                &vol_base_even%get_smpd(), state, nu_envmask_file, l_arm_background=.true., &
+                &l_armed=l_armed)
+            call nu_envmask_file%kill
+            if( .not. l_armed )then
+                call set_nu_solvent_envelope(density_envelope, source='density_envelope')
+                write(logfhandle,'(A,I0)') &
+                    &'>>> NU BACKGROUND: FILTER-FIELD BACKGROUND ARMED FROM THE DENSITY ENVELOPE (EVIDENCE FALLBACK), STATE ', state
+            endif
+            call density_envelope%kill_bimg
+            if( l_constrained )then
+                call envelope_core%kill
+                call envelope_dilated%kill
+            endif
             if( L_BENCH_GLOB .and. present(timings) ) timings%envmask = timings%envmask + toc(t_envmask)
         endif
         ! the auxiliary inputs are copied into the bank; release them
@@ -116,7 +168,6 @@ contains
         call vol_even_nu%kill
         call vol_odd_nu%kill
         call cleanup_nu_filter()
-        call pp_plan%nu_envmask_file%kill
         if( L_BENCH_GLOB .and. present(timings) ) timings%filter = timings%filter + toc(t_filter)
 
     contains

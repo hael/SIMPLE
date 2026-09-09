@@ -33,7 +33,13 @@ end type image_msk
 
 contains
 
-    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override, l_report )
+    !> Conservative density envelope: low-pass at amsklp (or lp_override),
+    !! Otsu (or explicit) binarization, largest connected component, spherical
+    !! dilation by binwidth layers, outward cosine skirt of edge voxels. The
+    !! optional core and dilated outputs expose the two binary intermediates
+    !! (before dilation, and after dilation before the skirt) as 0/1 images,
+    !! so a caller can address the dilation ring by Euclidean geometry.
+    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override, l_report, core, dilated )
         class(image_msk),       intent(inout) :: self
         class(parameters),      intent(in)    :: params
         class(image),           intent(in)    :: vol
@@ -42,6 +48,8 @@ contains
         class(image), optional, intent(inout) :: vol_masked
         real,         optional, intent(in)    :: lp_override
         logical,      optional, intent(in)    :: l_report
+        class(image), optional, intent(inout) :: core    !< binary core before dilation
+        class(image), optional, intent(inout) :: dilated !< binary envelope after dilation, before the skirt
         logical :: l_rep
         if( vol%is_2d() )THROW_HARD('automask3D is intended for volumes only')
         l_rep = .true.
@@ -60,8 +68,10 @@ contains
         if( L_WRITE .and. params%part == 1 ) call self%write(string('automask_lowpass.mrc'))
         ! segmentation
         call self%automask3D_binarize(params, l_tight, pix_thres, l_report=l_rep)
+        if( present(core) ) call core%copy(self)
         ! Morphological growth and soft edge
         call self%grow_bins(self%binwidth)
+        if( present(dilated) ) call dilated%copy(self)
         call self%cos_edge(self%edge)
         ! optionally mask
         if( present(vol_masked) )then

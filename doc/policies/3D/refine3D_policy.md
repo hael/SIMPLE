@@ -196,7 +196,9 @@ an empty directory, and every final reconstruction at a new sampling. Since
   `automsk`: the residual sigmas depend on the regularization of the
   reference they are scored against, so that reference is regularized
   exactly as the refinement's matching references were; the shipped map keeps the
-  caller's backend and, on PCG, starts from nothing at the native box and
+  caller's backend and `automsk` (so on PCG it is estimated on the same
+  density-envelope support as the refinement, 2026-09-09; `filt_mode=none`
+  and `nu_refine=no` keep it classical) and, on PCG, starts from nothing at the native box and
   therefore gets the cold-solve budget of at least `FINAL_PCG_MAXITS_FLOOR`
   (5) iterations whoever the caller is (2026-09-07). The base plus ML solve
   pair of that final PCG reconstruction is inherent to ML regularization:
@@ -220,13 +222,16 @@ probabilistic pre-alignment or matcher work starts. Reference preparation:
 3. determines the active high-pass/low-pass shell range
 4. writes even/odd PFTC reference sections for the matcher
 
-When `automsk=yes`, reference preparation replaces the ordinary spherical
-reference mask with the current compatible `nu_envmask3D_stateNN.mrc`. The
-selected regular or NU-derived reference is background-zeroed using the mask
-transition and multiplied by the mask before projection. A compatible
-density FSC mask is the transition fallback, followed by the sphere. This does not
-modify particles, reconstruction volumes on disk, FSC curves, NU filtering, or
-matching-bandwidth selection, and there is no separate `envref` control.
+When `automsk=yes`, matching references are NOT multiplied by any envelope
+(2026-09-02): the NU-evidence envelope acts only through the NU filter field,
+whose background (the envelope complement) takes the coarsest bank candidate,
+so the excluded density reaches the reference heavily low-pass filtered
+rather than removed. The matcher applies the spherical soft reference mask
+only; there is no separate `envref` control. `automsk=yes` also implies
+`envfsc=yes` (policy 2026-09-09), so FSC evaluation follows the density
+envelope (post hoc with solvent correction on gridding; inside the estimator on
+PCG, reported as `>>> FSC MODE`). Particles and matching-bandwidth selection
+are unchanged.
 
 This path is valid only with `filt_mode=nonuniform|nonuniform_lpset`.
 `automsk=yes` with `none`, `uniform`, or `fsc` is rejected during parameter
@@ -527,14 +532,15 @@ records only the refine3D-side integration contract:
   and remains the resolution authority. PCG always replays with the global
   FSC/SSNR precision `P_tau`; NU filtering is applied afterwards by the shared
   competition, never inside the solve (policy 2026-09-06).
-- **Solve support.** Only the conservative density envelope may constrain a
-  PCG solve, and only under `automsk=yes` (policy 2026-09-06). With
-  `automsk=no` base and replay run on the sphere. With `automsk=yes` and
-  `envfsc=yes` the envelope constrains base and replay; with `envfsc=no` the
-  base is spherical and the replay is density-constrained. The NU-evidence
-  envelope never becomes solve support. Before any reconstruction exists, the
-  base necessarily bootstraps on the sphere and its current pair provides the
-  replay density support.
+- **Solve support.** Only the conservative density envelope (or an explicit
+  `pcg_mskfile`) may constrain a PCG solve, and the density envelope only
+  under `automsk=yes` (policy 2026-09-06). With `automsk=no` base and replay
+  run on the sphere. With `automsk=yes` the envelope constrains both base and
+  replay and `envfsc=yes` is implied (policy 2026-09-09); the FSC is then
+  reported on the constrained pair without post-hoc correction, logged as
+  `>>> FSC MODE`. The NU-evidence envelope never becomes solve support.
+  Before any reconstruction exists, the base necessarily bootstraps on the
+  sphere and its current pair provides the replay density support.
 - **Current exclusions** (hard-errored, not approximated): `projrec=yes`,
   `conical_fsc=yes`, and matrix-free workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.

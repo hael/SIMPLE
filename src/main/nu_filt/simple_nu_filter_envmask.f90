@@ -107,16 +107,59 @@ contains
         if( allocated(base_full) ) deallocate(base_full)
     end subroutine calc_nu_evidence_margin
 
+    !> The packed voxel set on which evidence labels are free: the observed
+    !! density envelope when a Euclidean null shell is set (voxels outside it
+    !! are fixed solvent), else the observed support, else all of it. Never
+    !! the raw support once a pair carries exact zero/zero voxels: those are
+    !! a degenerate spike at margin 0 that pins the median and collapses the
+    !! MAD.
+    subroutine nu_evidence_calibration_mask( calib )
+        logical, allocatable, intent(inout) :: calib(:)
+        if( allocated(calib) ) deallocate(calib)
+        if( allocated(nu_calib_lmask) )then
+            if( size(nu_calib_lmask) /= n_nu_mask ) THROW_HARD('NU evidence label domain size mismatch')
+            allocate(calib(n_nu_mask), source=nu_calib_lmask)
+        else if( allocated(nu_observed_mask) )then
+            if( size(nu_observed_mask) /= n_nu_mask ) THROW_HARD('NU observation mask size mismatch')
+            allocate(calib(n_nu_mask), source=nu_observed_mask)
+        else
+            allocate(calib(n_nu_mask), source=.true.)
+        endif
+        if( count(calib) < 1 ) THROW_HARD('empty NU evidence label domain')
+    end subroutine nu_evidence_calibration_mask
+
+    !> The packed voxel set the null statistics (margin median/MAD, density
+    !! median/MAD) are estimated on: the Euclidean null shell when one is set
+    !! (envelope-constrained base pair), else the label domain itself, where
+    !! the robust statistics resolve the solvent-majority mixture (spherical
+    !! base pair). l_shell reports which regime applies.
+    subroutine nu_evidence_null_mask( nullm, l_shell )
+        logical, allocatable, intent(inout) :: nullm(:)
+        logical,              intent(out)   :: l_shell
+        if( allocated(nullm) ) deallocate(nullm)
+        l_shell = allocated(nu_null_lmask)
+        if( l_shell )then
+            if( size(nu_null_lmask) /= n_nu_mask ) THROW_HARD('NU evidence null shell size mismatch')
+            allocate(nullm(n_nu_mask), source=nu_null_lmask)
+        else
+            call nu_evidence_calibration_mask(nullm)
+        endif
+    end subroutine nu_evidence_null_mask
+
     !>  Robust floor for the relative cost ratio, so that near-zero baseline or
     !!  best-candidate costs cannot manufacture arbitrarily large evidence.
+    !!  Estimated on the calibration domain.
     module real function nu_evidence_baseline_floor( base_full ) result( floor_val )
         real, intent(in) :: base_full(:,:,:)
-        real, allocatable :: work(:)
+        real,    allocatable :: work(:)
+        logical, allocatable :: calib(:)
         integer :: imask, i, j, k, n
         real    :: val
+        call nu_evidence_calibration_mask(calib)
         allocate(work(n_nu_mask), source=0.)
         n = 0
         do imask = 1, n_nu_mask
+            if( .not.calib(imask) ) cycle
             i   = nu_mask_vox(1,imask)
             j   = nu_mask_vox(2,imask)
             k   = nu_mask_vox(3,imask)
@@ -127,7 +170,7 @@ contains
         end do
         floor_val = TINY
         if( n > 0 ) floor_val = max(TINY, 0.1 * median_nocopy(work(:n)))
-        deallocate(work)
+        deallocate(work, calib)
     end function nu_evidence_baseline_floor
 
     module subroutine calc_nu_evidence_score( margin, nsigma, score, stats )
@@ -135,26 +178,64 @@ contains
         real,                    intent(in)    :: nsigma
         real, allocatable,       intent(inout) :: score(:)
         type(nu_envmask_stats),  intent(inout) :: stats
-        real, allocatable :: work(:)
+        real,    allocatable :: work(:), margin_null(:)
+        logical, allocatable :: calib(:), nullm(:)
         real    :: med, mad_val, denom
         integer :: n
+        logical :: l_shell
         n = size(margin)
         if( n < 1 ) THROW_HARD('empty margin vector; calc_nu_evidence_score')
-        ! The null is estimated from the support itself rather than from geometry.
-        ! With a generous support the solvent is the majority population, so the
-        ! median and MAD of the margin describe the no-evidence distribution. The
-        ! reported signal fraction is what tells the caller whether that held.
-        allocate(work(n), source=margin)
+        if( n /= n_nu_mask ) THROW_HARD('margin size mismatch; calc_nu_evidence_score')
+        ! Two regimes. Spherical base pair: the null is the robust median/MAD
+        ! of the margin over the observed support, a solvent-majority mixture
+        ! by construction of the generous sphere; l_null_majority reports
+        ! whether that held. Envelope-constrained base pair: the null is
+        ! designated by Euclidean geometry (the dilation ring of the density
+        ! envelope) and the median/MAD are taken there, where residual weak
+        ! density is the only contamination and the robust pair absorbs it.
+        call nu_evidence_calibration_mask(calib)
+        call nu_evidence_null_mask(nullm, l_shell)
+        stats%n_calib      = count(calib)
+        stats%n_null       = count(nullm)
+        stats%l_null_shell = l_shell
+        if( stats%n_null < 1 )then
+            ! an empty null set (a shell the base support carries nowhere at
+            ! full weight) cannot be calibrated: an unattainable threshold
+            ! yields an empty envelope, and the caller's fallback applies
+            stats%null_med = 0.
+            stats%null_mad = 0.
+            stats%thres    = huge(1.)
+            if( allocated(score) ) deallocate(score)
+            allocate(score(n), source=NU_ENVMASK_EXCLUDED_SCORE)
+            deallocate(calib, nullm)
+            return
+        endif
+        margin_null = pack(margin, nullm)
+        allocate(work(size(margin_null)), source=margin_null)
         med     = median_nocopy(work)
-        mad_val = mad_gau(margin, med)
-        deallocate(work)
+        mad_val = mad_gau(margin_null, med)
+        deallocate(work, margin_null)
         denom = max(mad_val, TINY)
         stats%null_med = med
         stats%null_mad = mad_val
         stats%thres    = med + nsigma * denom
+        if( l_shell )then
+            ! separation diagnostic: the median margin inside the core
+            ! (domain minus shell) against the shell's null median
+            work = pack(margin, calib .and. .not.nullm)
+            if( size(work) > 0 ) stats%core_med = median_nocopy(work)
+            deallocate(work)
+        endif
         if( allocated(score) ) deallocate(score)
         allocate(score(n), source=0.)
-        score = (margin - stats%thres) / denom
+        ! outside the domain the label is solvent by construction, so the
+        ! evidence envelope is nested inside the density envelope
+        where( calib )
+            score = (margin - stats%thres) / denom
+        elsewhere
+            score = NU_ENVMASK_EXCLUDED_SCORE
+        end where
+        deallocate(calib, nullm)
     end subroutine calc_nu_evidence_score
 
     module subroutine add_nu_evidence_density( vol_dens, weight, score, stats )
@@ -163,9 +244,11 @@ contains
         real, allocatable,       intent(inout) :: score(:)
         type(nu_envmask_stats),  intent(inout) :: stats
         real(kind=c_float), pointer :: rmat(:,:,:) => null()
-        real, allocatable :: dens(:), work(:)
+        real,    allocatable :: dens(:), work(:), dens_null(:)
+        logical, allocatable :: calib(:), nullm(:)
         real    :: med, mad_val, denom
         integer :: imask, i, j, k
+        logical :: l_shell
         if( abs(weight) <= TINY ) return
         if( .not.allocated(score) ) THROW_HARD('score not allocated; add_nu_evidence_density')
         if( any(vol_dens%get_ldim() /= ldim) ) &
@@ -180,10 +263,17 @@ contains
             dens(imask) = rmat(i,j,k)
         end do
         !$omp end parallel do
-        allocate(work(n_nu_mask), source=dens)
+        call nu_evidence_calibration_mask(calib)
+        call nu_evidence_null_mask(nullm, l_shell)
+        if( count(nullm) < 1 )then
+            deallocate(dens, calib, nullm)
+            return
+        endif
+        dens_null = pack(dens, nullm)
+        allocate(work(size(dens_null)), source=dens_null)
         med     = median_nocopy(work)
-        mad_val = mad_gau(dens, med)
-        deallocate(work)
+        mad_val = mad_gau(dens_null, med)
+        deallocate(work, dens_null, nullm)
         denom = max(mad_val, TINY)
         stats%dens_med    = med
         stats%dens_mad    = mad_val
@@ -191,9 +281,10 @@ contains
         ! Additive so that strong density can hold in a poorly ordered region that
         ! the resolution evidence alone would carve out. This is the term that
         ! protects flexible periphery, which is otherwise indistinguishable from
-        ! solvent by cross-half consistency.
-        score = score + weight * (dens - med) / denom
-        deallocate(dens)
+        ! solvent by cross-half consistency. Voxels outside the calibration
+        ! domain keep their fixed solvent score.
+        where( calib ) score = score + weight * (dens - med) / denom
+        deallocate(dens, calib)
     end subroutine add_nu_evidence_density
 
     module subroutine segment_nu_evidence( score, p, lmask, stats )
@@ -202,7 +293,7 @@ contains
         logical, allocatable,    intent(inout) :: lmask(:,:,:)
         type(nu_envmask_stats),  intent(inout) :: stats
         logical, allocatable :: lab(:,:,:)
-        integer :: iter, color, imask, i, j, k, ineigh, ni, nj, nk
+        integer :: iter, color, imask, i, j, k, ineigh, ni, nj, nk, nsig
         integer :: n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, deg, nsig, nchanged
         real    :: e_sig, e_sol, beta
         logical :: newlab
@@ -268,6 +359,25 @@ contains
             end do
         endif
         stats%n_signal = count(lab)
+        ! how much of the Euclidean null shell (the density envelope's dilation
+        ! ring) the evidence labels signal: the empirical answer to whether the
+        ! dilation is capturing density or is pure margin
+        stats%pct_signal_null = 0.
+        if( allocated(nu_null_lmask) )then
+            if( size(nu_null_lmask) == n_nu_mask .and. stats%n_null > 0 )then
+                nsig = 0
+                !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) reduction(+:nsig) proc_bind(close)
+                do imask = 1, n_nu_mask
+                    if( .not.nu_null_lmask(imask) ) cycle
+                    i = nu_mask_vox(1,imask)
+                    j = nu_mask_vox(2,imask)
+                    k = nu_mask_vox(3,imask)
+                    if( lab(i,j,k) ) nsig = nsig + 1
+                end do
+                !$omp end parallel do
+                stats%pct_signal_null = 100. * real(nsig) / real(stats%n_null)
+            endif
+        endif
         call move_alloc(lab, lmask)
     end subroutine segment_nu_evidence
 
@@ -291,6 +401,23 @@ contains
         if( stats%n_support > 0 )then
             stats%pct_seed   = 100. * real(stats%n_seed)   / real(stats%n_support)
             stats%pct_signal = 100. * real(stats%n_signal) / real(stats%n_support)
+            stats%pct_calib  = 100. * real(stats%n_calib)  / real(stats%n_support)
+        endif
+        ! validity of the null, per regime: a mixture null (spherical base
+        ! pair) is only meaningful if solvent held the majority of the domain;
+        ! a Euclidean shell (envelope-constrained base pair) needs enough
+        ! voxels for its median/MAD to be stable. Signal cannot exceed the
+        ! domain since everything outside it is fixed solvent.
+        if( stats%n_calib > 0 )then
+            stats%pct_signal_calib = 100. * real(stats%n_signal) / real(stats%n_calib)
+            stats%pct_null         = 100. * real(stats%n_null)   / real(stats%n_calib)
+        endif
+        stats%l_null_majority = stats%pct_signal_calib <= 50.
+        if( stats%l_null_shell )then
+            stats%l_null_valid = stats%n_null >= NU_ENVMASK_MIN_NULL_VOX .and. &
+                &real(stats%n_null) >= NU_ENVMASK_MIN_NULL_FRAC * real(max(1,stats%n_calib))
+        else
+            stats%l_null_valid = stats%l_null_majority
         endif
         if( allocated(margin) ) deallocate(margin)
         if( allocated(score)  ) deallocate(score)
@@ -299,9 +426,9 @@ contains
     !> The one shared NU-evidence envelope producer: build the envelope from
     !! the LIVE raw evidence (setup_nu_dmats plus a completed candidate
     !! evaluation must have run), apply the connected-component/morphology
-    !! topology tail, and write the artifact to the explicit filename. Policy
-    !! stays with the caller: whether and when to regenerate is decided by
-    !! plan_state_postprocess at the call site, and the filename is passed in.
+    !! topology tail, and write the artifact to the explicit filename. The
+    !! filename is passed in by the caller, which regenerates the envelope
+    !! every cycle it runs the competition under automsk=yes.
     !! An empty evidence field warns and writes nothing; every envelope
     !! consumer handles absence.
     module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, l_arm_background, l_armed )
@@ -310,6 +437,7 @@ contains
         integer,           intent(in)  :: state
         class(string),     intent(in)  :: fname
         logical, optional, intent(in)  :: l_arm_background
+        !! l_armed: armed from the evidence envelope (non-empty, valid null)
         logical, optional, intent(out) :: l_armed
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
@@ -341,6 +469,17 @@ contains
             call wait_for_closure(fname)
             write(logfhandle,'(A,I0,A,1X,A)') &
                 &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', fname%to_char()
+            if( .not. envstats%l_null_valid )then
+                if( envstats%l_null_shell )then
+                    write(logfhandle,'(A,I0,A,I0,A,F5.1,A)') '>>> NU EVIDENCE ENVELOPE: STATE ', state, &
+                        &', Euclidean null shell too thin (', envstats%n_null, ' voxels, ', envstats%pct_null, &
+                        &' % of the domain); widen the density envelope dilation (binwidth); the envelope is not armed'
+                else
+                    write(logfhandle,'(A,I0,A,F6.1,A)') '>>> NU EVIDENCE ENVELOPE: STATE ', state, &
+                        &', signal occupies ', envstats%pct_signal_calib, &
+                        &' % of the support; the median/MAD null is not trustworthy and the envelope is not armed'
+                endif
+            endif
             ! automsk=yes background policy: the filter-field background is the
             ! complement of this envelope, derived from the SAME evidence pass
             ! (no second compute). Voxels outside it take the coarsest bank
@@ -348,8 +487,9 @@ contains
             ! down-weights the excluded density's contribution to alignment
             ! without removing it from the reference. The PCG SOLVE support
             ! stays on the conservative density envelope (automsk=yes only),
-            ! never on this evidence mask.
-            if( l_arm )then
+            ! never on this evidence mask. Armed only on a valid null;
+            ! the caller owns the fallback to the density envelope.
+            if( l_arm .and. envstats%l_null_valid )then
                 call set_nu_solvent_envelope(envmask, source='nu_evidence_envelope')
                 if( present(l_armed) ) l_armed = .true.
                 write(logfhandle,'(A,I0)') &
@@ -363,6 +503,13 @@ contains
         write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
             &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
             &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
+        ! the dilation-ring occupancy says whether the density envelope's
+        ! dilation is capturing density (signal in the ring) or is pure
+        ! margin (ring null throughout): the number to consult before
+        ! tightening binwidth / ENVMSKWIDTH_A_MIN
+        if( envstats%l_null_shell ) write(logfhandle,'(A,I0,A,F8.3,A)') &
+            &'>>> NU DILATION RING OCCUPANCY: STATE ', state, ', SIGNAL FRACTION OF THE RING ', &
+            &envstats%pct_signal_null, ' %'
         call envmask%kill_bimg
         if( allocated(l_env) ) deallocate(l_env)
     end subroutine write_nu_evidence_envmask
@@ -404,15 +551,21 @@ contains
     module subroutine print_nu_envmask_stats( stats )
         type(nu_envmask_stats), intent(in) :: stats
         if( .not. (NU_DEV_OUTPUT .and. nu_l_report) )then
-            ! the occupancy warning must never be silenced
-            if( stats%pct_signal > 50. )then
-                write(logfhandle,'(A)') '    WARNING: signal occupies more than half the support, so the median/MAD null'
-                write(logfhandle,'(A)') '             estimate is not trustworthy. Widen mskdiam or raise nu_msk_sig.'
-            endif
+            ! the validity warning must never be silenced
+            call warn_if_invalid
             return
         endif
         write(logfhandle,'(A)')            '>>> NU EVIDENCE ENVELOPE MASK'
         write(logfhandle,'(A,I12)')        '    Support voxels             : ', stats%n_support
+        write(logfhandle,'(A,I12,F9.2,A)') '    Label domain voxels        : ', stats%n_calib, stats%pct_calib, '%'
+        if( stats%l_null_shell )then
+            write(logfhandle,'(A)')        '    Null model                 :   Euclidean shell (dilation ring)'
+            write(logfhandle,'(A,I12,F9.2,A)') '    Null shell voxels          : ', stats%n_null, stats%pct_null, '%'
+            write(logfhandle,'(A,ES12.4)') '    Core median margin         : ', stats%core_med
+            write(logfhandle,'(A,F12.2,A)') '    Signal within null shell   : ', stats%pct_signal_null, '%'
+        else
+            write(logfhandle,'(A)')        '    Null model                 :   robust mixture over the support'
+        endif
         write(logfhandle,'(A,ES12.4)')     '    Null median margin         : ', stats%null_med
         write(logfhandle,'(A,ES12.4)')     '    Null MAD (Gaussian-scaled) : ', stats%null_mad
         write(logfhandle,'(A,F12.3)')      '    Envelope scale (A)         : ', stats%lp_smooth
@@ -428,10 +581,22 @@ contains
         write(logfhandle,'(A,I12)')        '    ICM iterations             : ', stats%nits
         write(logfhandle,'(A,I12,F9.2,A)') '    Seed voxels (raw threshold): ', stats%n_seed,   stats%pct_seed,   '%'
         write(logfhandle,'(A,I12,F9.2,A)') '    Signal voxels (after ICM)  : ', stats%n_signal, stats%pct_signal, '%'
-        if( stats%pct_signal > 50. )then
-            write(logfhandle,'(A)') '    WARNING: signal occupies more than half the support, so the median/MAD null'
-            write(logfhandle,'(A)') '             estimate is not trustworthy. Widen mskdiam or raise nu_msk_sig.'
-        endif
+        write(logfhandle,'(A,F12.2,A)')    '    Signal within domain       : ', stats%pct_signal_calib, '%'
+        call warn_if_invalid
+
+    contains
+
+        subroutine warn_if_invalid
+            if( stats%l_null_valid ) return
+            if( stats%l_null_shell )then
+                write(logfhandle,'(A)') '    WARNING: the Euclidean null shell is too thin for a stable median/MAD;'
+                write(logfhandle,'(A)') '             widen the density envelope dilation (binwidth).'
+            else
+                write(logfhandle,'(A)') '    WARNING: signal occupies more than half the support, so the median/MAD null'
+                write(logfhandle,'(A)') '             estimate is not trustworthy. Widen mskdiam or raise nu_msk_sig.'
+            endif
+        end subroutine warn_if_invalid
+
     end subroutine print_nu_envmask_stats
 
 end submodule simple_nu_filter_envmask

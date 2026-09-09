@@ -419,6 +419,12 @@ contains
         cfg%envfsc = 'no'
         if( l_cavgs ) return
         if( istage >= ENVFSC_STAGE ) cfg%envfsc = trim(params%envfsc)
+        ! automsk=yes implies envfsc=yes on both backends (PCG: the envelope
+        ! is the solve support of both solves; gridding: the same envelope
+        ! masks the FSC pair post hoc with the phase-randomized correction).
+        ! The child's parameters derive it anyway; this keeps the stage
+        ! config truthful (relies on the automsk policy running first).
+        if( cfg%automsk.ne.'no' ) cfg%envfsc = 'yes'
     end subroutine set_refine3D_envfsc_policy
 
     subroutine set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
