@@ -106,6 +106,8 @@ subroutine exec_test_eval_polarftcc( self, cline )
     ang_err   = 16.
     shift_err = 8.
     call b%eulspace%get_ori(irnd_uni(p%nspace), o)
+    ! Preserve the original single-reference test while using the batch projector.
+    p%nspace = 1
     print *,'Particle orientation:'
     call o%print_ori
     print *,'Shift= 0.0 0.0'

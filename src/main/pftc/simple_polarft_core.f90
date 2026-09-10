@@ -375,6 +375,7 @@ contains
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
+        if( iref_to > self%nrefs ) THROW_HARD('reference range exceeds allocated bank in vol_pad2ref_pfts')
         ! The refine3D driver materializes exactly the search shell range
         ! used for this iteration; downstream workers consume that contract.
         kproj     = self%kfromto
@@ -406,6 +407,7 @@ contains
         kproj     = self%kfromto
         ieo       = merge(REF_EVEN, REF_ODD, iseven)
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
+        if( iref_to > self%nrefs ) THROW_HARD('reference range exceeds allocated bank in vol_pad2ref_pfts_opt')
         if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
             ! extract all the slices
             call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &

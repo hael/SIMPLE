@@ -45,7 +45,7 @@ end type commander_test_subproject_distr
 
 type, extends(commander_base) :: commander_test_ptcls_ppca_subproject_distr
     contains
-        procedure :: execute      => exec_test_ptcls_ppca_subproject_distr
+    procedure :: execute      => exec_test_ptcls_ppca_subproject_distr
 end type commander_test_ptcls_ppca_subproject_distr
 
 type, extends(commander_base) :: commander_test_pcg_recon
@@ -66,12 +66,12 @@ end type commander_test_rec3D_backends
 
 !> Collated per-run observables of one rec3D_backends comparison
 type backends_run_summary
-    real    :: g_base05    = 0.    !< gridding base half-pair FSC=0.5 (A)
-    real    :: g_base0143  = 0.    !< gridding base half-pair FSC=0.143 (A)
-    real    :: p_base05    = 0.    !< pcg base (_unfil) half-pair FSC=0.5 -- the negative control
-    real    :: p_base0143  = 0.    !< pcg base (_unfil) half-pair FSC=0.143
-    real    :: p_ship05    = 0.    !< pcg shipped (regularized) half-pair FSC=0.5 -- inflation diagnostic
-    real    :: p_ship0143  = 0.    !< pcg shipped (regularized) half-pair FSC=0.143
+    real    :: g_base05    =  0.   !< gridding base half-pair FSC=0.5 (A)
+    real    :: g_base0143  =  0.   !< gridding base half-pair FSC=0.143 (A)
+    real    :: p_base05    =  0.   !< pcg base (_unfil) half-pair FSC=0.5 -- the negative control
+    real    :: p_base0143  =  0.   !< pcg base (_unfil) half-pair FSC=0.143
+    real    :: p_ship05    =  0.   !< pcg shipped (regularized) half-pair FSC=0.5 -- inflation diagnostic
+    real    :: p_ship0143  =  0.   !< pcg shipped (regularized) half-pair FSC=0.143
     real    :: band_ratio  = -1.   !< median gated-band amplitude ratio pcg/gridding
     real    :: band_fsc    = -1.   !< median gated-band FSC(gridding,pcg) -- backend agreement
     real    :: rad_min     = -1.   !< min normalised in-mask radial ratio -- erosion indicator
@@ -79,7 +79,7 @@ type backends_run_summary
     real    :: centre_bin  = -1.   !< pcg centre-bin ratio (diagnostic)
     real    :: truth_fsc_g = -1.   !< median gated-band FSC(truth,gridding), when vol1 given
     real    :: truth_fsc_p = -1.   !< median gated-band FSC(truth,pcg), when vol1 given
-    integer :: nfail       = 0     !< gate violations in the run
+    integer :: nfail       =  0    !< gate violations in the run
 end type backends_run_summary
 
 contains
@@ -394,12 +394,12 @@ subroutine exec_test_reproject( self, cline )
     endif
     ! ---- run reproject ----
     write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating reprojections'
-    call cline_reproj%set('prg',               'reproject')
+    call cline_reproj%set('prg',              'reproject')
     call cline_reproj%set('vol1',              '6VXX.mrc')
     call cline_reproj%set('smpd',                    SMPD)
     call cline_reproj%set('pgrp',                    'c1')
     call cline_reproj%set('mskdiam',                 180.)
-    call cline_reproj%set('nspace',           real(NSPACE))
+    call cline_reproj%set('nspace',          real(NSPACE))
     call cline_reproj%set('nthr',                     16.)
     call xreproject%execute(cline_reproj)
     call cline_reproj%kill()
@@ -463,12 +463,12 @@ subroutine exec_test_simulated_workflow( self, cline )
     use simple_ui,            only: make_ui
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    character(len=*), parameter :: PROJNAME        = 'simulated_workflow'
-    character(len=*), parameter :: PROJFILE        = PROJNAME//'.simple'
-    character(len=*), parameter :: MOVIE_FILE      = 'simulate_movie.mrc'
-    character(len=*), parameter :: SUBSET_FILE     = 'random_reprojections.mrcs'
-    character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
-    character(len=*), parameter :: PARAMS_FILE     = 'simulate_movie_params.txt'
+    character(len=*), parameter :: PROJNAME       = 'simulated_workflow'
+    character(len=*), parameter :: PROJFILE       = PROJNAME//'.simple'
+    character(len=*), parameter :: MOVIE_FILE     = 'simulate_movie.mrc'
+    character(len=*), parameter :: SUBSET_FILE    = 'random_reprojections.mrcs'
+    character(len=*), parameter :: OPTIMAL_FILE   = 'optimal_movie_average.mrc'
+    character(len=*), parameter :: PARAMS_FILE    = 'simulate_movie_params.txt'
     character(len=*), parameter :: PICKREFS_FILE  = 'pickrefs.mrc'
     character(len=*), parameter :: FILETAB_FILE   = 'simulated_movies.txt'
     character(len=*), parameter :: VOL_DIR        = '0_pdb2mrc'
@@ -774,7 +774,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio3D%set('prg',                'abinitio3D')
     call cline_abinitio3D%set('projfile',           project_path)
     call cline_abinitio3D%set('mkdir',                     'yes')
-    call cline_abinitio3D%set('pgrp',                      pgrp)
+    call cline_abinitio3D%set('pgrp',                       pgrp)
     call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
     call cline_abinitio3D%set('nthr',                       NTHR)
     call xabinitio3D%execute(cline_abinitio3D)
@@ -817,7 +817,7 @@ subroutine exec_test_subproject_distr( self, cline )
     integer,          parameter :: MAXKEYS     = 20
     real,             parameter :: SMPD        = 1.3
     real,             parameter :: MSKDIAM     = 24.0
-    character(len=*), parameter :: PROJNAME = 'test_subproj_distr'
+    character(len=*), parameter :: PROJNAME    = 'test_subproj_distr'
     type(parameters)                    :: params
     type(sp_project)                    :: spproj, spproj_sub, spproj_merged
     type(commander_simulate_noise)      :: xsim_noise
@@ -839,12 +839,12 @@ subroutine exec_test_subproject_distr( self, cline )
     ! are unrelated to the subproject scheduling/merge behavior under test.
     write(logfhandle,'(a)') '>>> Step 1: generate compact synthetic particle stack'
     sim_stk = 'simulated_particles.mrc'
-    call cline_sim%set('prg',        'simulate_noise')
-    call cline_sim%set('mkdir',                  'no')
-    call cline_sim%set('box',                 BOX_SIM)
-    call cline_sim%set('smpd',                   SMPD)
-    call cline_sim%set('nptcls',           NPTCLS_SIM)
-    call cline_sim%set('outstk',              sim_stk)
+    call cline_sim%set('prg',                 'simulate_noise')
+    call cline_sim%set('mkdir',                           'no')
+    call cline_sim%set('box',                          BOX_SIM)
+    call cline_sim%set('smpd',                            SMPD)
+    call cline_sim%set('nptcls',                    NPTCLS_SIM)
+    call cline_sim%set('outstk',                       sim_stk)
     call xsim_noise%execute(cline_sim)
     call cline_sim%kill()
     ! 2. Create project and import synthetic particles without CTF metadata.
@@ -1117,14 +1117,14 @@ subroutine exec_test_pcg_recon( self, cline )
     ! defect or manufacture a false failure.
     real,             parameter :: STREAM_ACCUM_RELTOL = 1.0e-6
     real,             parameter :: STREAM_SOLVE_RELTOL = 5.0e-4
-    real,             parameter :: MASS_SCALE_RELTOL = 5.0e-6
-    real,             parameter :: MASS_SOLVE_RELTOL = 5.0e-4
-    real,             parameter :: CROP_RAW_RELTOL = 2.0e-5
-    integer,          parameter :: STREAM_ITS    = 20
-    integer,          parameter :: KERNEL_COMPARE_ITS = 8
+    real,             parameter :: MASS_SCALE_RELTOL   = 5.0e-6
+    real,             parameter :: MASS_SOLVE_RELTOL   = 5.0e-4
+    real,             parameter :: CROP_RAW_RELTOL     = 2.0e-5
+    integer,          parameter :: STREAM_ITS          = 20
+    integer,          parameter :: KERNEL_COMPARE_ITS  = 8
     ! stage 13: the two backends' cropped observations differ only by the
     ! single-precision FFT round trips of the fused gridding route
-    real,             parameter :: OBS_PARITY_RELTOL = 1.0e-5
+    real,             parameter :: OBS_PARITY_RELTOL   = 1.0e-5
     ! stage 14: window band 8..12 px on the 24 box (mask3D_soft clips the ramp
     ! at the box edge); the constrained result is compared with the windowed
     ! unconstrained solution over the shells where the window is in [0.15,0.85]
@@ -1137,8 +1137,8 @@ subroutine exec_test_pcg_recon( self, cline )
         &4.0, 5.0,-3.0,&
         &0.0,-6.0,-5.0,&
         &3.0,-2.0, 6.0], [3,NBLOBS])
-    real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
-    real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
+    real,             parameter :: SIGMAS(NBLOBS)    = [2.0, 2.5, 1.8, 2.2]
+    real,             parameter :: AMPS(NBLOBS)      = [1.0, 0.8, 0.6, 0.5]
     real,             parameter :: KV = 300., CS = 2.7, FRACA = 0.1
     real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
     real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
