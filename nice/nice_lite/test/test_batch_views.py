@@ -431,6 +431,144 @@ class BatchViewTests(SimpleTestCase):
             max_size=512,
         )
 
+    def test_abinitio3d_volume_viewer_is_explicit_and_omits_server_path(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=9,
+            name="Initial 3D Reconstruction",
+            desc="",
+            status="finished",
+            cdat="created",
+            args={},
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "abinitio3D",
+            },
+            dset=SimpleNamespace(
+                name="workspace",
+                proj=SimpleNamespace(name="project", dirc="/workspace"),
+            ),
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = "/workspace/9_abinitio3D/workspace.simple"
+        batch_job.get_artifact_summary.return_value = {"counts": [], "images": []}
+        batch_job.get_safe_job_dir.return_value = "/workspace/9_abinitio3D"
+        batch_job.get_log_tails.return_value = []
+        batch_job.get_volume_outputs.return_value = [{
+            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "name": "recvol_state01.mrc",
+            "state": 1,
+            "population": 5542,
+            "width": 256,
+            "height": 256,
+            "depth": 256,
+            "voxel_size": (1.3, 1.3, 1.3),
+            "minimum": -2.0,
+            "maximum": 8.0,
+        }]
+
+        with patch.object(batch_views, "SIMPLEProjFile") as projfile:
+            projfile.return_value.getGlobalStats.return_value = {}
+            closed_context = batch_views._batch_detail_context(batch_job, jobmodel)
+            open_context = batch_views._batch_detail_context(
+                batch_job,
+                jobmodel,
+                volume_viewer_requested=True,
+            )
+
+        self.assertTrue(closed_context["volume_viewer_available"])
+        self.assertFalse(closed_context["volume_viewer_requested"])
+        self.assertEqual(closed_context["batch_volume_viewer"], [])
+        self.assertTrue(open_context["volume_viewer_requested"])
+        self.assertEqual(
+            open_context["batch_volume_viewer"][0]["name"],
+            "recvol_state01.mrc",
+        )
+        self.assertNotIn("path", open_context["batch_volume_viewer"][0])
+
+    def test_batch_volume_data_returns_bounded_owned_texture(self):
+        jobmodel = SimpleNamespace(
+            status="finished",
+            master_stats={"program": "abinitio3D"},
+        )
+        batch_job = Mock()
+        batch_job.get_volume_outputs.return_value = [{
+            "name": "recvol_state01.mrc",
+            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+        }]
+        payload = SimpleNamespace(
+            data=b"\x00\x7f\xff",
+            width=3,
+            height=1,
+            depth=1,
+            source_width=256,
+            source_height=256,
+            source_depth=256,
+            voxel_size=(1.3, 1.3, 1.3),
+            minimum=-2.0,
+            maximum=8.0,
+        )
+
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(batch_job, jobmodel),
+            ),
+            patch.object(
+                batch_views,
+                "read_mrc_volume_payload",
+                return_value=payload,
+            ) as read_payload,
+        ):
+            response = batch_views.view_batch_volume_data(
+                self._get_request("/batchvolume/7/recvol_state01.mrc"),
+                7,
+                "recvol_state01.mrc",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, payload.data)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertEqual(response["X-Volume-Dimensions"], "3,1,1")
+        self.assertEqual(response["X-Volume-Source-Dimensions"], "256,256,256")
+        self.assertEqual(response["X-Volume-Voxel-Size"], "1.3,1.3,1.3")
+        self.assertEqual(response["X-Volume-Value-Min"], "-2")
+        self.assertEqual(response["X-Volume-Value-Max"], "8")
+        read_payload.assert_called_once_with(
+            "/workspace/9_abinitio3D/recvol_state01.mrc",
+            max_dimension=128,
+        )
+
+    def test_batch_volume_data_rejects_an_undeclared_filename(self):
+        jobmodel = SimpleNamespace(
+            status="finished",
+            master_stats={"program": "abinitio3D"},
+        )
+        batch_job = Mock()
+        batch_job.get_volume_outputs.return_value = [{
+            "name": "recvol_state01.mrc",
+            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+        }]
+
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(batch_job, jobmodel),
+            ),
+            patch.object(batch_views, "read_mrc_volume_payload") as read_payload,
+        ):
+            response = batch_views.view_batch_volume_data(
+                self._get_request("/batchvolume/7/other.mrc"),
+                7,
+                "other.mrc",
+            )
+
+        self.assertEqual(response.status_code, 404)
+        read_payload.assert_not_called()
+
     def test_batch_class_export_returns_project_ordered_state_infile(self):
         jobmodel = SimpleNamespace(
             id=7,

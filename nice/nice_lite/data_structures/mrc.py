@@ -29,6 +29,36 @@ class MRCStackInfo:
     data_offset: int
 
 
+@dataclass(frozen=True)
+class MRCVolumeInfo:
+    """Validated metadata for one three-dimensional MRC density map."""
+
+    width: int
+    height: int
+    depth: int
+    mode: int
+    data_offset: int
+    voxel_size: tuple
+    minimum: float
+    maximum: float
+
+
+@dataclass(frozen=True)
+class MRCVolumePayload:
+    """A bounded, normalized volume ready for a browser 3D texture."""
+
+    data: bytes
+    width: int
+    height: int
+    depth: int
+    source_width: int
+    source_height: int
+    source_depth: int
+    voxel_size: tuple
+    minimum: float
+    maximum: float
+
+
 def read_mrc_stack_info(path):
     """Return validated MRC stack metadata without reading particle pixels."""
     try:
@@ -70,6 +100,127 @@ def read_mrc_stack_info(path):
         count=count,
         mode=mode,
         data_offset=data_offset,
+    )
+
+
+def read_mrc_volume_info(path):
+    """Return validated 3D-map metadata without reading density voxels."""
+    stack_info = read_mrc_stack_info(path)
+    if stack_info is None or stack_info.count <= 1:
+        return None
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            with mrcfile.open(
+                path,
+                mode="r",
+                permissive=True,
+                header_only=True,
+            ) as volume:
+                voxel_size = tuple(
+                    float(axis)
+                    for axis in (
+                        volume.voxel_size.x,
+                        volume.voxel_size.y,
+                        volume.voxel_size.z,
+                    )
+                )
+                minimum = float(volume.header.dmin)
+                maximum = float(volume.header.dmax)
+    except (OSError, OverflowError, TypeError, ValueError):
+        return None
+
+    if not all(np.isfinite(axis) and axis > 0.0 for axis in voxel_size):
+        voxel_size = (1.0, 1.0, 1.0)
+    if not np.isfinite(minimum) or not np.isfinite(maximum):
+        minimum = maximum = 0.0
+
+    return MRCVolumeInfo(
+        width=stack_info.width,
+        height=stack_info.height,
+        depth=stack_info.count,
+        mode=stack_info.mode,
+        data_offset=stack_info.data_offset,
+        voxel_size=voxel_size,
+        minimum=minimum,
+        maximum=maximum,
+    )
+
+
+def _sample_volume_axis(length, max_dimension):
+    output_length = min(length, max_dimension)
+    return np.minimum(
+        length - 1,
+        ((np.arange(output_length) + 0.5) * length / output_length).astype(np.intp),
+    )
+
+
+def read_mrc_volume_payload(path, max_dimension=128):
+    """Read a bounded 3D texture, normalized to the source density range."""
+    if (
+        not isinstance(max_dimension, int)
+        or isinstance(max_dimension, bool)
+        or not 8 <= max_dimension <= 256
+    ):
+        return None
+
+    info = read_mrc_volume_info(path)
+    if info is None:
+        return None
+
+    source_slices = _sample_volume_axis(info.depth, max_dimension)
+    source_rows = _sample_volume_axis(info.height, max_dimension)
+    source_columns = _sample_volume_axis(info.width, max_dimension)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            with mrcfile.mmap(path, mode="r", permissive=True) as volume:
+                values = volume.data
+                if (
+                    values is None
+                    or values.ndim != 3
+                    or values.shape != (info.depth, info.height, info.width)
+                ):
+                    return None
+                sampled = np.asarray(
+                    values[np.ix_(source_slices, source_rows, source_columns)],
+                    dtype=np.float32,
+                )
+    except (IndexError, OSError, OverflowError, TypeError, ValueError):
+        return None
+
+    finite_mask = np.isfinite(sampled)
+    if not finite_mask.any():
+        return None
+
+    minimum = info.minimum
+    maximum = info.maximum
+    if maximum <= minimum:
+        finite_values = sampled[finite_mask]
+        minimum = float(np.min(finite_values))
+        maximum = float(np.max(finite_values))
+
+    dynamic_range = maximum - minimum
+    if dynamic_range <= 0.0:
+        texture = np.zeros(sampled.shape, dtype=np.uint8)
+    else:
+        safe_values = np.where(finite_mask, sampled, minimum)
+        texture = np.rint(
+            np.clip(255.0 * (safe_values - minimum) / dynamic_range, 0.0, 255.0)
+        ).astype(np.uint8)
+
+    return MRCVolumePayload(
+        data=np.ascontiguousarray(texture).tobytes(order="C"),
+        width=texture.shape[2],
+        height=texture.shape[1],
+        depth=texture.shape[0],
+        source_width=info.width,
+        source_height=info.height,
+        source_depth=info.depth,
+        voxel_size=info.voxel_size,
+        minimum=minimum,
+        maximum=maximum,
     )
 
 

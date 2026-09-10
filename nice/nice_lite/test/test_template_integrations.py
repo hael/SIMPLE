@@ -540,6 +540,18 @@ class TemplateIntegrationTests(SimpleTestCase):
             class_average_rendered,
         )
 
+        job["name"] = "Initial 3D Reconstruction"
+        job["master_stats"]["program"] = "abinitio3D"
+        volume_rendered = render_to_string(
+            "nice_classic/_batch_card.html",
+            {"job": job},
+        )
+
+        self.assertIn(
+            'href="/viewbatch/7?volume_viewer=1#batch_volume_viewer"',
+            volume_rendered,
+        )
+
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")
 

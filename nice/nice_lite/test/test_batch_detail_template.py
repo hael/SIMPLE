@@ -353,6 +353,80 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("pick_micrograph_slider.js?v=18", rendered)
         self.assertIn("class_selector.js?v=5", rendered)
 
+    def test_abinitio3d_output_embeds_the_opt_in_volume_viewer(self):
+        batch_view = self._read_template("nice_classic/batchview.html")
+        viewer = self._read_template(
+            "nice_classic/includes/_batch_volume_viewer.html"
+        )
+        viewer_script = self._read_static("nice_lite/volume_viewer.js")
+        rendered = render_to_string(
+            "nice_classic/batchview.html",
+            {
+                "jobid": 7,
+                "disp": 9,
+                "name": "Initial 3D Reconstruction",
+                "status": "finished",
+                "package": "simple",
+                "program": "abinitio3D",
+                "volume_viewer_available": True,
+                "volume_viewer_requested": True,
+                "batch_volume_viewer": [{
+                    "name": "recvol_state01.mrc",
+                    "state": 1,
+                    "population": 5542,
+                    "width": 256,
+                    "height": 256,
+                    "depth": 256,
+                    "voxel_size": (1.3, 1.3, 1.3),
+                    "minimum": -2.0,
+                    "maximum": 8.0,
+                }],
+                "arguments": [],
+                "logs": [],
+                "artifact_counts": [{"extension": "MRC", "count": 1}],
+                "artifact_images": [],
+                "auto_refresh": False,
+            },
+        )
+
+        self.assertIn("nice_lite/volume_viewer.js?v=2", rendered)
+        self.assertIn('id="batch_volume_viewer" data-volume-viewer', rendered)
+        self.assertIn('value="/batchvolume/7/recvol_state01.mrc"', rendered)
+        self.assertIn("state 1 · recvol_state01.mrc", rendered)
+        self.assertIn('data-volume-threshold type="range"', viewer)
+        self.assertIn("data-volume-colormap", viewer)
+        self.assertIn("data-volume-background", viewer)
+        self.assertIn('<option value="black">black</option>', viewer)
+        self.assertIn('<option value="white">white</option>', viewer)
+        self.assertIn("data-volume-orientation", viewer)
+        self.assertIn('canvas.getContext("webgl2"', viewer_script)
+        self.assertIn("sampler3D", viewer_script)
+        self.assertIn("densityAt", viewer_script)
+        self.assertIn("const MIN_CAMERA_DISTANCE = 0.35", viewer_script)
+        self.assertIn("uBackgroundColor", viewer_script)
+        self.assertIn('backgroundSelect.addEventListener("change", render)', viewer_script)
+        self.assertIn("drag to rotate · scroll to zoom", rendered)
+        self.assertIn("hide volume", rendered)
+        self.assertIn("batch-volume-viewer-layout", batch_view)
+
+        default_off = render_to_string(
+            "nice_classic/batchview.html",
+            {
+                "jobid": 7,
+                "volume_viewer_available": True,
+                "volume_viewer_requested": False,
+                "batch_volume_viewer": [],
+                "arguments": [],
+                "logs": [],
+                "artifact_counts": [],
+                "artifact_images": [],
+                "auto_refresh": False,
+            },
+        )
+        self.assertNotIn('id="batch_volume_viewer" data-volume-viewer', default_off)
+        self.assertNotIn("nice_lite/volume_viewer.js?v=2", default_off)
+        self.assertIn("view volume", default_off)
+
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):
         batch_view = self._read_template("nice_classic/batchview.html")
         diagnostic_path = "/project/workspace/2_ctf_estimate/movie_ctf_estimate_diag.jpg"

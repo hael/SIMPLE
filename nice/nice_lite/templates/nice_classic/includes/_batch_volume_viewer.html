@@ -1,0 +1,61 @@
+{% comment %}Interactive WebGL isosurface viewer for owned ab initio 3D outputs.{% endcomment %}
+<div id="batch_volume_viewer" data-volume-viewer class="mb-4 min-w-0 rounded-lg border border-streamdivider bg-streambg p-3">
+    <div class="batch-volume-viewer-layout">
+        <div class="min-w-0 rounded-md border border-streamdivider bg-streambar p-3 text-[10px] text-streamlabel">
+            <label class="block font-medium uppercase tracking-widest text-streamlabel" for="batch_volume_source">volume</label>
+            <select id="batch_volume_source" data-volume-source
+                    class="mt-2 min-h-9 w-full min-w-0 rounded-md border border-streamdivider bg-streambg px-2 py-1.5 font-mono text-[10px] text-streamtext focus:outline-none focus:ring-2 focus:ring-streamring">
+                {% for volume in batch_volume_viewer %}
+                    <option value="{% url 'nice_lite:batch_volume_data' jobid volume.name %}"
+                            data-volume-name="{{ volume.name }}">
+                        {% if volume.state %}state {{ volume.state }} · {% endif %}{{ volume.name }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <label class="mt-4 block font-medium uppercase tracking-widest text-streamlabel" for="batch_volume_colormap">colormap</label>
+            <select id="batch_volume_colormap" data-volume-colormap
+                    class="mt-2 min-h-9 w-full rounded-md border border-streamdivider bg-streambg px-2 py-1.5 text-[10px] text-streamtext focus:outline-none focus:ring-2 focus:ring-streamring">
+                <option value="viridis">viridis</option>
+                <option value="plasma">plasma</option>
+                <option value="inferno">inferno</option>
+                <option value="magma">magma</option>
+                <option value="bone">bone</option>
+                <option value="coolwarm">coolwarm</option>
+            </select>
+
+            <label class="mt-4 block font-medium uppercase tracking-widest text-streamlabel" for="batch_volume_background">background</label>
+            <select id="batch_volume_background" data-volume-background
+                    class="mt-2 min-h-9 w-full rounded-md border border-streamdivider bg-streambg px-2 py-1.5 text-[10px] text-streamtext focus:outline-none focus:ring-2 focus:ring-streamring">
+                <option value="black">black</option>
+                <option value="white">white</option>
+            </select>
+
+            <label class="mt-4 flex items-center justify-between gap-2 font-medium uppercase tracking-widest text-streamlabel" for="batch_volume_threshold">
+                <span>density threshold</span>
+                <output data-volume-threshold-output for="batch_volume_threshold" class="font-mono normal-case text-streamtext">30%</output>
+            </label>
+            <input id="batch_volume_threshold" data-volume-threshold type="range"
+                   min="0" max="100" step="1" value="30"
+                   class="mt-2 w-full accent-streamaccent"
+                   aria-label="isosurface density threshold">
+
+            <button type="button" data-volume-reset
+                    class="mt-4 min-h-9 w-full rounded-md border border-streamdivider px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                reset view
+            </button>
+
+            <p data-volume-metadata class="mt-4 break-words font-mono text-[9px] leading-4 text-streamsubtle"></p>
+            <p data-volume-status role="status" aria-live="polite" class="mt-2 break-words text-[10px] leading-4 text-streamsubtle">loading volume…</p>
+        </div>
+
+        <div class="relative min-w-0 overflow-hidden rounded-md border border-streamdivider bg-black">
+            <canvas data-volume-canvas tabindex="0" role="img"
+                    aria-label="Interactive 3D isosurface; drag or use arrow keys to rotate and scroll or use plus and minus to zoom"></canvas>
+            <canvas data-volume-orientation width="96" height="96" aria-hidden="true"></canvas>
+            <p class="pointer-events-none absolute bottom-2 right-3 rounded bg-black/60 px-2 py-1 text-[9px] text-gray-300">
+                drag to rotate · scroll to zoom
+            </p>
+        </div>
+    </div>
+</div>

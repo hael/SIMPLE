@@ -131,6 +131,44 @@
             background: transparent;
         }
 
+        .batch-volume-viewer-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 0.75rem;
+        }
+
+        [data-volume-canvas] {
+            display: block;
+            width: 100%;
+            height: clamp(22rem, 65vh, 44rem);
+            cursor: grab;
+            outline: none;
+            touch-action: none;
+        }
+
+        [data-volume-canvas]:active {
+            cursor: grabbing;
+        }
+
+        [data-volume-canvas]:focus-visible {
+            box-shadow: inset 0 0 0 2px var(--color-streamring);
+        }
+
+        [data-volume-orientation] {
+            position: absolute;
+            bottom: 0.25rem;
+            left: 0.25rem;
+            width: 6rem;
+            height: 6rem;
+            pointer-events: none;
+        }
+
+        @media (min-width: 48rem) {
+            .batch-volume-viewer-layout {
+                grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+            }
+        }
+
         @media (min-width: 64rem) {
             [data-display-levels] {
                 display: grid;
@@ -211,6 +249,9 @@
     {% if batch_class_selector %}
         <script type="module" src="{% static 'nice_lite/class_selector.js' %}?v=5"></script>
     {% endif %}
+    {% if batch_volume_viewer %}
+        <script type="module" src="{% static 'nice_lite/volume_viewer.js' %}?v=2"></script>
+    {% endif %}
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans" style="height:100vh;height:100dvh">
     <header class="bg-streambar border-b border-streamline min-h-14 sm:min-h-10 px-3 py-1.5 sm:px-4 sm:py-0 flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-shrink-0">
@@ -277,6 +318,17 @@
                         </button>
                     </h2>
                     <div id="batch_output_controls" class="flex flex-wrap items-center justify-end gap-2">
+                        {% if volume_viewer_available %}
+                            <a href="{% if volume_viewer_requested %}{% url 'nice_lite:view_batch' jobid %}#batch_artifacts_panel{% else %}?volume_viewer=1#batch_volume_viewer{% endif %}"
+                               class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                               aria-controls="batch_volume_viewer">
+                                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" class="w-3.5 h-3.5">
+                                    <path d="m8 1.75 5.5 3.1v6.3L8 14.25l-5.5-3.1v-6.3L8 1.75Z"/>
+                                    <path d="m2.5 4.85 5.5 3.1 5.5-3.1M8 7.95v6.3"/>
+                                </svg>
+                                <span>{% if volume_viewer_requested %}hide volume{% else %}view volume{% endif %}</span>
+                            </a>
+                        {% endif %}
                         {% if pick_box_overlay_available or batch_class_selector %}
                             <div data-pick-overlay-size-control
                                  title="set circle diameter or box size{% if batch_class_selector.sampling_distance %} in angstroms or source-image pixels{% else %} in source-image pixels{% endif %}"
@@ -465,6 +517,9 @@
                                 {% endif %}
                             </div>
                         {% endif %}
+                    {% endif %}
+                    {% if batch_volume_viewer %}
+                        {% include 'nice_classic/includes/_batch_volume_viewer.html' %}
                     {% endif %}
                     {% if batch_class_selector %}
                         {% include 'nice_stream/includes/_class_selector.html' %}

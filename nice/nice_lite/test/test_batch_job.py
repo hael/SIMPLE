@@ -259,6 +259,93 @@ class BatchJobLifecycleTests(TestCase):
 
         self.assertEqual(dimensions, (13, 7))
 
+    def test_abinitio3d_volumes_come_from_owned_project_output_records(self):
+        job_dir = os.path.join(self.workspace_dir, "1_abinitio3D")
+        os.mkdir(job_dir)
+        project_path = os.path.join(job_dir, "workspace.simple")
+        volume_path = os.path.join(job_dir, "recvol_state01.mrc")
+        outside_path = os.path.join(self.tempdir.name, "outside.mrc")
+        for path in (project_path, volume_path, outside_path):
+            with open(path, "wb") as output_file:
+                output_file.write(b"result")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_abinitio3D",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "abinitio3D",
+            },
+        )
+        records = [
+            {
+                "imgkind": "vol",
+                "vol": volume_path,
+                "state": 1.0,
+                "pop": 5542.0,
+            },
+            {"imgkind": "vol", "vol": outside_path, "state": 2.0},
+            {"imgkind": "fsc", "fsc": "fsc_state01.bin", "state": 1.0},
+        ]
+        volume_info = SimpleNamespace(
+            width=256,
+            height=256,
+            depth=256,
+            voxel_size=(1.3, 1.3, 1.3),
+            minimum=-2.0,
+            maximum=8.0,
+        )
+
+        with (
+            patch.object(batchjob_module, "SIMPLEProjectFileReader") as reader,
+            patch.object(
+                batchjob_module,
+                "read_mrc_volume_info",
+                return_value=volume_info,
+            ) as read_volume_info,
+        ):
+            reader.return_value.read_records.return_value = records
+            outputs = BatchJob(id=jobmodel.id).get_volume_outputs()
+
+        reader.assert_called_once_with(project_path)
+        reader.return_value.read_records.assert_called_once_with("out")
+        read_volume_info.assert_called_once_with(volume_path)
+        self.assertEqual(outputs, [{
+            "path": volume_path,
+            "name": "recvol_state01.mrc",
+            "state": 1,
+            "population": 5542,
+            "width": 256,
+            "height": 256,
+            "depth": 256,
+            "voxel_size": (1.3, 1.3, 1.3),
+            "minimum": -2.0,
+            "maximum": 8.0,
+        }])
+
+    def test_non_abinitio3d_jobs_do_not_discover_volume_outputs(self):
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_demo",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "volops",
+            },
+        )
+
+        with patch.object(batchjob_module, "SIMPLEProjectFileReader") as reader:
+            outputs = BatchJob(id=jobmodel.id).get_volume_outputs()
+
+        self.assertEqual(outputs, [])
+        reader.assert_not_called()
+
     def test_extract_particle_stack_pages_read_headers_without_rendering_thumbnails(self):
         job_dir = os.path.join(self.workspace_dir, "1_extract")
         os.mkdir(job_dir)

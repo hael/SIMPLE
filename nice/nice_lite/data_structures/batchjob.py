@@ -25,7 +25,11 @@ from ..models import JobModel, WorkspaceModel
 from .class_selection import ClassSelectionError, SIMPLEProjectFileReader
 from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
-from .mrc import read_mrc_stack_info, render_mrc_particle_png
+from .mrc import (
+    read_mrc_stack_info,
+    read_mrc_volume_info,
+    render_mrc_particle_png,
+)
 from .movie import render_movie_webp
 from .workspace import Workspace
 
@@ -659,6 +663,89 @@ class BatchJob(Job):
             ],
             "images": images,
         }
+
+    def get_volume_outputs(self):
+        """Return project-declared, owned ab initio 3D density volumes."""
+        if self.prog != "abinitio3D" or self.status != "finished":
+            return []
+
+        job_dir = self.get_safe_job_dir()
+        result_project = self.get_result_project_path()
+        if job_dir is None or result_project is None:
+            return []
+        try:
+            records = SIMPLEProjectFileReader(result_project).read_records("out")
+        except (ClassSelectionError, OSError, OverflowError, struct.error):
+            return []
+
+        outputs = []
+        seen_paths = set()
+        for record in records:
+            if not isinstance(record, dict) or record.get("imgkind") != "vol":
+                continue
+            declared_path = record.get("vol")
+            if not isinstance(declared_path, str) or not declared_path.strip():
+                continue
+            declared_path = declared_path.strip()
+            if not os.path.isabs(declared_path):
+                declared_path = os.path.join(
+                    os.path.dirname(result_project),
+                    declared_path,
+                )
+            resolved_path = os.path.realpath(declared_path)
+            volume_name = os.path.basename(resolved_path)
+            safe_path = self._safe_job_file(volume_name, job_dir)
+            if (
+                safe_path is None
+                or safe_path != resolved_path
+                or safe_path in seen_paths
+            ):
+                continue
+
+            info = read_mrc_volume_info(safe_path)
+            if info is None:
+                continue
+            state = record.get("state")
+            if (
+                isinstance(state, bool)
+                or not isinstance(state, (int, float))
+                or not math.isfinite(state)
+                or state <= 0
+                or not float(state).is_integer()
+            ):
+                state = None
+            else:
+                state = int(state)
+            population = record.get("pop")
+            if (
+                isinstance(population, bool)
+                or not isinstance(population, (int, float))
+                or not math.isfinite(population)
+                or population < 0
+            ):
+                population = None
+            elif float(population).is_integer():
+                population = int(population)
+
+            seen_paths.add(safe_path)
+            outputs.append({
+                "path": safe_path,
+                "name": volume_name,
+                "state": state,
+                "population": population,
+                "width": info.width,
+                "height": info.height,
+                "depth": info.depth,
+                "voxel_size": info.voxel_size,
+                "minimum": info.minimum,
+                "maximum": info.maximum,
+            })
+
+        return sorted(outputs, key=lambda output: (
+            output["state"] is None,
+            output["state"] or 0,
+            output["name"],
+        ))
 
     def get_particle_stack_page(self, page=1, page_size=40):
         """Return one page of addressable images from owned output stacks.

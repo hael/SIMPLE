@@ -60,6 +60,11 @@ urlpatterns = [
     path("createbatch",                        views.view_create_batch,                            name="create_batch"),
     path("viewbatch/<int:jobid>",              batch_views.view_batch,                             name="view_batch"),
     path(
+        "batchvolume/<int:jobid>/<str:volume_name>",
+        batch_views.view_batch_volume_data,
+        name="batch_volume_data",
+    ),
+    path(
         "batchparticle/<int:jobid>/<str:stack_name>/<int:particle_index>",
         batch_views.view_batch_particle_thumbnail,
         name="batch_particle_thumbnail",

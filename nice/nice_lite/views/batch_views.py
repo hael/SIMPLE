@@ -25,7 +25,7 @@ from ..data_structures.class_selection import (
     class_selection_flags,
     load_batch_class_selection,
 )
-from ..data_structures.mrc import render_mrc_particle_png
+from ..data_structures.mrc import read_mrc_volume_payload, render_mrc_particle_png
 from ..data_structures.movie import movie_preview_supported, read_movie_dimensions
 from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch, SIMPLEProjFile
@@ -51,6 +51,7 @@ _BATCH_PARTICLE_PAGE_SIZE = 40
 _BATCH_MOVIE_PAGE_SIZE = 40
 _BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
 _BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
+_BATCH_VOLUME_TEXTURE_MAX_DIMENSION = 128
 
 
 def _positive_finite_number(value):
@@ -490,6 +491,7 @@ def _batch_detail_context(
     particle_page=1,
     movie_page=1,
     class_selector_requested=False,
+    volume_viewer_requested=False,
 ):
     """Assemble validated batch metadata, logs, artifacts, and project summary."""
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
@@ -568,6 +570,17 @@ def _batch_detail_context(
         metadata.get("program") == "abinitio2D"
         and batch_class_selector is not None
     )
+    volume_outputs = []
+    if jobmodel.status == "finished" and metadata.get("program") == "abinitio3D":
+        volume_outputs = batch_job.get_volume_outputs()
+    public_volume_outputs = [
+        {
+            key: value
+            for key, value in volume.items()
+            if key != "path"
+        }
+        for volume in volume_outputs
+    ]
     particle_stack_page = {}
     if metadata.get("program") in BatchJob.MRC_STACK_PREVIEW_PROGRAMS:
         particle_stack_page = batch_job.get_particle_stack_page(
@@ -637,6 +650,11 @@ def _batch_detail_context(
         "class_selector_replaces_artifact_previews": (
             class_selector_replaces_artifact_previews
         ),
+        "volume_viewer_available": bool(public_volume_outputs),
+        "volume_viewer_requested": volume_viewer_requested,
+        "batch_volume_viewer": (
+            public_volume_outputs if volume_viewer_requested else []
+        ),
         "pick_micrographs": pick_micrographs,
         "pick_particle_count": pick_particle_count,
         "pick_box_overlay_available": any(
@@ -691,6 +709,11 @@ def _class_selector_requested(request):
     return request.GET.get("class_selector") == "1"
 
 
+def _volume_viewer_requested(request):
+    """Return True only for the explicit, default-off volume-viewer key."""
+    return request.GET.get("volume_viewer") == "1"
+
+
 def _class_selector_redirect(job_id):
     batch_url = reverse("nice_lite:view_batch", args=(job_id,))
     return f"{batch_url}?class_selector=1#batch_class_selector"
@@ -728,12 +751,70 @@ def view_batch(request, jobid):
             particle_page=_positive_page_number(request, "particle_page"),
             movie_page=_positive_page_number(request, "movie_page"),
             class_selector_requested=_class_selector_requested(request),
+            volume_viewer_requested=_volume_viewer_requested(request),
         ),
     )
     response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
     response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
     # Ensure Back renders the checksum-gated workspace instead of returning 204.
     clear_checksum_cookies(request, response)
+    return response
+
+
+@login_required(login_url="/login")
+@require_GET
+@cache_control(private=True, max_age=300, no_transform=True)
+def view_batch_volume_data(request, jobid, volume_name):
+    """Return one bounded 8-bit 3D texture from an owned ab initio 3D output."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_volume_data",
+        job_id=jobid,
+    )
+    metadata = (
+        jobmodel.master_stats
+        if jobmodel is not None and isinstance(jobmodel.master_stats, dict)
+        else {}
+    )
+    if (
+        batch_job is None
+        or jobmodel.status != "finished"
+        or metadata.get("program") != "abinitio3D"
+    ):
+        return HttpResponse(status=404)
+
+    volume = next(
+        (
+            output
+            for output in batch_job.get_volume_outputs()
+            if output.get("name") == volume_name
+        ),
+        None,
+    )
+    if volume is None:
+        return HttpResponse(status=404)
+
+    payload = read_mrc_volume_payload(
+        volume["path"],
+        max_dimension=_BATCH_VOLUME_TEXTURE_MAX_DIMENSION,
+    )
+    if payload is None:
+        return HttpResponse(status=404)
+
+    response = HttpResponse(payload.data, content_type="application/octet-stream")
+    response["Content-Length"] = len(payload.data)
+    response["X-Content-Type-Options"] = "nosniff"
+    response["X-Volume-Dimensions"] = (
+        f"{payload.width},{payload.height},{payload.depth}"
+    )
+    response["X-Volume-Source-Dimensions"] = (
+        f"{payload.source_width},{payload.source_height},{payload.source_depth}"
+    )
+    response["X-Volume-Voxel-Size"] = ",".join(
+        format(axis, ".9g") for axis in payload.voxel_size
+    )
+    response["X-Volume-Value-Min"] = format(payload.minimum, ".9g")
+    response["X-Volume-Value-Max"] = format(payload.maximum, ".9g")
     return response
 
 
