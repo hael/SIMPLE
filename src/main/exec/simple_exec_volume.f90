@@ -3,12 +3,14 @@ module simple_exec_volume
 use simple_cmdline,           only: cmdline
 use simple_commanders_volops,    only: commander_centervol, commander_volops
 use simple_commanders_reproject, only: commander_reproject
+use simple_commanders_atoms,     only: commander_detect_calpha
 implicit none
 
 public :: exec_volume_commander
 private
 
 type(commander_centervol)         :: xcenter
+type(commander_detect_calpha)     :: xdetect_calpha
 type(commander_reproject)         :: xreproject
 type(commander_volops)            :: xvolops
 
@@ -25,6 +27,8 @@ contains
         select case(trim(which))
             case( 'center' )
                 call xcenter%execute(cline)
+            case( 'detect_calpha' )
+                call xdetect_calpha%execute(cline)
             case( 'reproject' )
                 call xreproject%execute(cline)
             case( 'volops' )

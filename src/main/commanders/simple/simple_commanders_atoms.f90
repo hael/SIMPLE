@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_nanoparticle_utils
 use simple_nanoparticle, only: nanoparticle
 use simple_atoms,        only: atoms
+use simple_calpha_finder, only: calpha_finder
 implicit none
 #include "simple_local_flags.inc"
 
@@ -41,6 +42,11 @@ type, extends(commander_base) :: commander_detect_atoms
   contains
     procedure :: execute      => exec_detect_atoms
 end type commander_detect_atoms
+
+type, extends(commander_base) :: commander_detect_calpha
+  contains
+    procedure :: execute      => exec_detect_calpha
+end type commander_detect_calpha
 
 type, extends(commander_base) :: commander_map2model_fsc
   contains
@@ -415,6 +421,36 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    subroutine exec_detect_calpha(self, cline)
+        class(commander_detect_calpha), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters)    :: params
+        type(image)         :: workvol
+        type(calpha_finder) :: finder
+        integer :: work_ldim(3), nsections
+
+        if(.not.cline%defined('angstep')) call cline%set('angstep', 45)
+        if(.not.cline%defined('npeaks'))  call cline%set('npeaks', 100)
+        if(.not.cline%defined('thres'))   call cline%set('thres', 0.25)
+        if(.not.cline%defined('pdbout'))  call cline%set('pdbout', 'calpha_candidates.pdb')
+        if(.not.cline%defined('outvol'))  call cline%set('outvol', 'calpha_scores.mrc')
+        call params%new(cline)
+        if(params%smpd <= 0.) THROW_HARD('smpd must be positive for detect_calpha')
+
+        call find_ldim_nptcls(params%vols(1), work_ldim, nsections)
+        if(work_ldim(3) <= 1) THROW_HARD('vol1 must contain a 3D search volume')
+
+        call workvol%new(work_ldim, params%smpd)
+        call workvol%read(params%vols(1))
+        call finder%new(params%smpd, 4.0)
+        call finder%search(workvol, real(params%angstep), params%npeaks, params%thres, &
+            params%pdbout, params%outvol)
+
+        call finder%kill()
+        call workvol%kill()
+        call simple_end('**** SIMPLE_DETECT_CALPHA NORMAL STOP ****')
+    end subroutine exec_detect_calpha
 
     subroutine exec_map2model_fsc( self, cline )
         use simple_commanders_resolest, only: commander_fsc

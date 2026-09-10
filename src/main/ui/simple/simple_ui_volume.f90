@@ -5,6 +5,7 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('volume', 'Volume Processing', 180)
 type(ui_program), target :: center
+type(ui_program), target :: detect_calpha
 type(ui_program), target :: reproject
 type(ui_program), target :: volops
 
@@ -13,6 +14,7 @@ contains
     subroutine construct_volume_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_center(prgtab)
+        call new_detect_calpha(prgtab)
         call new_reproject(prgtab)
         call new_volops(prgtab)
     end subroutine construct_volume_programs
@@ -57,6 +59,42 @@ subroutine new_center( prgtab )
         ! add to ui_hash
         call add_ui_program('center', center, prgtab, UI_CATEGORY)
     end subroutine new_center
+
+    subroutine new_detect_calpha(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call detect_calpha%new(&
+        &'detect_calpha',&
+        &'Find candidate alpha-carbon positions with a built-in Buccaneer-style density target',&
+        &'searches a cryo-EM map with an analytic local N-C-alpha-C backbone density target using weighted normalized &
+        &correlation. All translations are evaluated by 3D FFT for each coarse sampled orientation.',&
+        &'simple_exec',&
+        &.false., visibility=UI_VIS_ADVANCED, display_name='Detect Alpha Carbons')
+
+        call detect_calpha%add_input(UI_IMG, 'vol1', 'file', 'Search volume', &
+        &'Cryo-EM volume in which candidate alpha carbons will be detected', &
+        &'search volume e.g. work.mrc', .true., '', visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_PARM, smpd, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_FILE, 'pdbout', 'file', 'Candidate PDB', &
+        &'Output candidate C-alpha coordinates; a CSV with scores and rotations is also written', &
+        &'output PDB{calpha_candidates.pdb}', .false., 'calpha_candidates.pdb', &
+        &visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_IMG, 'outvol', 'file', 'Score volume', &
+        &'Output volume containing the best normalized target score at each voxel', &
+        &'output score volume{calpha_scores.mrc}', .false., 'calpha_scores.mrc', &
+        &visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_SRCH, 'angstep', 'num', 'Angular spacing', &
+        &'Approximate spacing of the coarse SO(3) orientation grid in degrees', &
+        &'degrees{45}', .false., 45.0, visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_SRCH, 'npeaks', 'num', 'Maximum candidates', &
+        &'Maximum number of non-overlapping C-alpha candidates to write', &
+        &'candidate count{100}', .false., 100.0, visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_SRCH, 'thres', 'num', 'Minimum score', &
+        &'Minimum weighted normalized correlation score accepted as a candidate', &
+        &'correlation score{0.25}', .false., 0.25, visibility=UI_VIS_STANDARD)
+        call detect_calpha%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call add_ui_program('detect_calpha', detect_calpha, prgtab, UI_CATEGORY)
+    end subroutine new_detect_calpha
 
     subroutine new_reproject( prgtab )
         class(ui_hash), intent(inout) :: prgtab

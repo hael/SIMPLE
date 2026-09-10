@@ -6,6 +6,8 @@ implicit none
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('single', 'SINGLE', 110)
 type(ui_program), target :: atoms_stats
 type(ui_program), target :: detect_atoms
+type(ui_program), target :: detect_calpha
+type(ui_program), target :: detect_calpha_molecules
 type(ui_program), target :: simulate_nanoparticle
 type(ui_program), target :: single_workflow 
 
@@ -15,6 +17,8 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call new_atoms_stats(tsttab)
         call new_detect_atoms(tsttab)
+        call new_detect_calpha(tsttab)
+        call new_detect_calpha_molecules(tsttab)
         call new_simulate_nanoparticle(tsttab)
         call new_single_workflow(tsttab)
     end subroutine construct_test_single_programs
@@ -78,6 +82,36 @@ subroutine new_atoms_stats( tsttab )
         ! add to ui_hash
         call add_ui_program('detect_atoms', detect_atoms, tsttab, UI_CATEGORY)
     end subroutine new_detect_atoms
+
+    subroutine new_detect_calpha(tsttab)
+        class(ui_hash), intent(inout) :: tsttab
+        call detect_calpha%new(&
+        &'detect_calpha',&
+        &'Synthetic built-in C-alpha target and FFT-search test',&
+        &'Builds three analytic backbone sites in memory and checks recovered peak coordinates.',&
+        &'simple_test_exec',&
+        &.false.)
+        call add_ui_program('detect_calpha', detect_calpha, tsttab, UI_CATEGORY)
+    end subroutine new_detect_calpha
+
+    subroutine new_detect_calpha_molecules(tsttab)
+        class(ui_hash), intent(inout) :: tsttab
+        call detect_calpha_molecules%new(&
+        &'detect_calpha_molecules',&
+        &'Evaluate C-alpha detection on the built-in 6VXX and 1JYX molecular models',&
+        &'Simulates maps from the hard-coded structures and reports uniquely matched C-alpha counts, recall, and precision.',&
+        &'simple_test_exec',&
+        &.false.)
+        call detect_calpha_molecules%add_input(UI_PARM, smpd, required_override=.false.)
+        call detect_calpha_molecules%add_input(UI_SRCH, 'angstep', 'num', 'Angular spacing', &
+        &'Approximate spacing of the coarse SO(3) orientation grid in degrees', &
+        &'degrees{45}', .false., 45.0)
+        call detect_calpha_molecules%add_input(UI_SRCH, 'thres', 'num', 'Minimum score', &
+        &'Minimum weighted normalized correlation score accepted as a candidate', &
+        &'correlation score{0.25}', .false., 0.25)
+        call detect_calpha_molecules%add_input(UI_COMP, nthr)
+        call add_ui_program('detect_calpha_molecules', detect_calpha_molecules, tsttab, UI_CATEGORY)
+    end subroutine new_detect_calpha_molecules
 
     subroutine new_simulate_nanoparticle( tsttab )
         class(ui_hash), intent(inout) :: tsttab

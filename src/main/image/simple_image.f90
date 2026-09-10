@@ -225,6 +225,7 @@ contains
     ! FREQUENCY ANALYSIS, file: simple_image_freq_anal.f90
     procedure          :: acf
     procedure          :: ccf
+    procedure          :: ccf_into
     procedure          :: spectrum
     procedure          :: power_spectrum
     procedure          :: guinier_bfac
@@ -1453,6 +1454,10 @@ interface
         class(image), intent(inout) :: self1, self2
         type(image) :: cc
     end function ccf
+
+    module subroutine ccf_into(self1, self2, cc)
+        class(image), intent(inout) :: self1, self2, cc
+    end subroutine ccf_into
 
     module subroutine spectrum( self, which, spec, norm )
         class(image),      intent(inout) :: self

@@ -1,7 +1,9 @@
 !@descr: execution of test single processing commanders
 module simple_test_exec_single
 use simple_cmdline,                only: cmdline
-use simple_commanders_test_single, only: commander_test_atoms_stats, commander_test_detect_atoms, commander_test_simulate_nanoparticle, commander_test_single_workflow
+use simple_commanders_test_single, only: commander_test_atoms_stats, commander_test_detect_atoms, &
+    commander_test_detect_calpha, commander_test_detect_calpha_molecules, &
+    commander_test_simulate_nanoparticle, commander_test_single_workflow
 implicit none
 
 public :: exec_test_single_commander
@@ -9,6 +11,8 @@ private
 
 type(commander_test_atoms_stats)           :: xatoms_stats
 type(commander_test_detect_atoms)          :: xdetect_atoms
+type(commander_test_detect_calpha)         :: xdetect_calpha
+type(commander_test_detect_calpha_molecules) :: xdetect_calpha_molecules
 type(commander_test_simulate_nanoparticle) :: xsimulate_nanoparticle
 type(commander_test_single_workflow)       :: xsingle_workflow
 
@@ -27,6 +31,10 @@ contains
                 call xatoms_stats%execute(cline)
             case( 'detect_atoms' )
                 call xdetect_atoms%execute(cline)
+            case( 'detect_calpha' )
+                call xdetect_calpha%execute(cline)
+            case( 'detect_calpha_molecules' )
+                call xdetect_calpha_molecules%execute(cline)
             case( 'simulate_nanoparticle' )
                 call xsimulate_nanoparticle%execute(cline)
             case( 'single_workflow' )

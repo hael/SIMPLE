@@ -28,6 +28,18 @@ contains
         call cc%ifft()
     end function ccf
 
+    module subroutine ccf_into(self1, self2, cc)
+        class(image), intent(inout) :: self1, self2, cc
+        if(.not.self1%ft) call self1%fft()
+        if(.not.self2%ft) call self2%fft()
+        if(.not.cc%existence) THROW_HARD('Output image is not allocated; ccf_into')
+        if(.not.(self1.eqdims.self2) .or. .not.(self1.eqdims.cc)) &
+            THROW_HARD('Image dimensions differ; ccf_into')
+        cc%cmat = self1%cmat * conjg(self2%cmat)
+        cc%ft = .true.
+        call cc%ifft()
+    end subroutine ccf_into
+
     ! keep serial
     module subroutine spectrum( self, which, spec, norm )
         class(image),      intent(inout) :: self

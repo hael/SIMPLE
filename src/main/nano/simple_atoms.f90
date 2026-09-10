@@ -98,8 +98,9 @@ type :: atoms
     procedure          :: set_element
     procedure          :: set_name
     procedure          :: set_num
-    procedure          :: set_resnum
     procedure          :: set_occupancy
+    procedure          :: set_resname
+    procedure          :: set_resnum
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
@@ -823,6 +824,14 @@ contains
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_occupancy')
         self%occupancy(i) = occupancy
     end subroutine set_occupancy
+
+    subroutine set_resname( self, i, resname )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=3), intent(in)    :: resname
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_resname')
+        self%resname(i) = upperCase(resname)
+    end subroutine set_resname
 
     subroutine set_atom_corr( self, i, corr )
         class(atoms), intent(inout) :: self

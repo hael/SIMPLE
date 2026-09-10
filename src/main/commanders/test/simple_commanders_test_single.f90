@@ -13,6 +13,16 @@ type, extends(commander_base) :: commander_test_detect_atoms
     procedure :: execute      => exec_test_detect_atoms
 end type commander_test_detect_atoms
 
+type, extends(commander_base) :: commander_test_detect_calpha
+  contains
+    procedure :: execute      => exec_test_detect_calpha
+end type commander_test_detect_calpha
+
+type, extends(commander_base) :: commander_test_detect_calpha_molecules
+  contains
+    procedure :: execute      => exec_test_detect_calpha_molecules
+end type commander_test_detect_calpha_molecules
+
 type, extends(commander_base) :: commander_test_simulate_nanoparticle
   contains
     procedure :: execute      => exec_test_simulate_nanoparticle
@@ -92,6 +102,202 @@ subroutine exec_test_detect_atoms( self, cline )
     call xdetat%execute(cline_detat)
     call simple_end('**** SIMPLE_TEST_DETECT_ATOMS NORMAL STOP ****')
 end subroutine exec_test_detect_atoms
+
+subroutine exec_test_detect_calpha( self, cline )
+    use simple_atoms,         only: atoms
+    use simple_calpha_finder, only: calpha_finder
+    class(commander_test_detect_calpha), intent(inout) :: self
+    class(cmdline),                      intent(inout) :: cline
+    character(len=*), parameter :: PDB_FILE = 'test_calpha_candidates.pdb'
+    character(len=*), parameter :: CSV_FILE = 'test_calpha_candidates.csv'
+    character(len=*), parameter :: MRC_FILE = 'test_calpha_scores.mrc'
+    integer,          parameter :: TEST_BOX = 32, NRES = 3
+    type(image)         :: workvol
+    type(atoms)         :: candidates
+    type(calpha_finder) :: finder
+    real(kind=c_float), pointer :: density(:,:,:)
+    real    :: centers(3,NRES), atom_sites(3,3), amplitudes(3), rotation(3,3)
+    real    :: xyz(3), site(3), delta(3), distance, closest
+    integer :: ldim(3), ires, iatom, ix, iy, iz
+
+    write(logfhandle,'(A)') '>>> TEST_DETECT_CALPHA:'
+    ldim            = [TEST_BOX,TEST_BOX,TEST_BOX]
+    centers(:,1)    = [8.,8.,8.]
+    centers(:,2)    = [16.,16.,16.]
+    centers(:,3)    = [24.,24.,24.]
+    atom_sites(:,1) = [0.,0.,0.]
+    atom_sites(:,2) = [1.458*cos(111.2*PI/180.), 1.458*sin(111.2*PI/180.), 0.]
+    atom_sites(:,3) = [1.525,0.,0.]
+    amplitudes      = [1.25,1.0,1.0]
+    rotation(:,1)   = [0.,1.,0.]
+    rotation(:,2)   = [-0.5,0.,sqrt(0.75)]
+    rotation(:,3)   = [sqrt(0.75),0.,0.5]
+    call workvol%new(ldim, 1.0)
+    call workvol%get_rmat_ptr(density)
+    density         = 0.
+    do ires         = 1, NRES
+        do iatom = 1, size(atom_sites,2)
+            site = centers(:,ires) + matmul(rotation, atom_sites(:,iatom))
+            do iz = 1, TEST_BOX
+                do iy = 1, TEST_BOX
+                    do ix = 1, TEST_BOX
+                        xyz = real([ix,iy,iz] - 1)
+                        delta = xyz - site
+                        density(ix,iy,iz) = density(ix,iy,iz) + amplitudes(iatom) * &
+                            exp(-0.5 * sum(delta * delta) / 0.85**2)
+                    enddo
+                enddo
+            enddo
+        enddo
+    enddo
+
+    call finder%new(1.0, 4.0)
+    call finder%search(workvol, 180.0, 10, 0.5, string(PDB_FILE), string(MRC_FILE))
+    if(nlines(string(PDB_FILE)) == 0) THROW_HARD('TEST_DETECT_CALPHA FAILED: no candidates')
+    call candidates%new(string(PDB_FILE))
+    closest = huge(1.)
+    do iatom = 1, candidates%get_n()
+        do ires = 1, NRES
+            distance = sqrt(sum((candidates%get_coord(iatom) - centers(:,ires))**2))
+            closest  = min(closest, distance)
+        enddo
+    enddo
+    if( closest > 1.5 ) THROW_HARD('TEST_DETECT_CALPHA FAILED: peak is displaced')
+
+    call candidates%kill()
+    call finder%kill()
+    call workvol%kill()
+    if(file_exists(PDB_FILE)) call del_file(PDB_FILE)
+    if(file_exists(CSV_FILE)) call del_file(CSV_FILE)
+    if(file_exists(MRC_FILE)) call del_file(MRC_FILE)
+    write(logfhandle,'(A,F7.3,A)') '>>> TEST_DETECT_CALPHA: PASS (closest peak ', closest, ' A)'
+    call simple_end('**** SIMPLE_TEST_DETECT_CALPHA NORMAL STOP ****')
+
+end subroutine exec_test_detect_calpha
+
+subroutine exec_test_detect_calpha_molecules( self, cline )
+    use simple_atoms,         only: atoms
+    use simple_calpha_finder, only: calpha_finder
+    use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    class(commander_test_detect_calpha_molecules), intent(inout) :: self
+    class(cmdline),                                intent(inout) :: cline
+    type(parameters)    :: params
+    type(molecule_data) :: mol
+
+    if( .not.cline%defined('smpd') )    call cline%set('smpd', 1.3)
+    if( .not.cline%defined('angstep') ) call cline%set('angstep', 45)
+    if( .not.cline%defined('thres') )   call cline%set('thres', 0.25)
+    call params%new(cline)
+
+    write(logfhandle,'(A)') '>>> C-ALPHA MOLECULE BENCHMARK:'
+    write(logfhandle,'(A,F6.2,A,I0,A,F6.3)') '    smpd=', params%smpd, &
+        ' A, angstep=', params%angstep, ' degrees, threshold=', params%thres
+    mol = sars_cov2_spkgp_6vxx()
+    call evaluate_molecule('6VXX', mol, 2916, params%smpd, params%angstep, params%thres)
+    mol = betagal_1jyx()
+    call evaluate_molecule('1JYX', mol, 4044, params%smpd, params%angstep, params%thres)
+    call simple_end('**** SIMPLE_TEST_DETECT_CALPHA_MOLECULES NORMAL STOP ****')
+
+contains
+
+    subroutine evaluate_molecule( label, molecule_data_in, expected_truth, smpd, angstep, threshold )
+        character(len=*),    intent(in) :: label
+        type(molecule_data), intent(in) :: molecule_data_in
+        integer,             intent(in) :: expected_truth, angstep
+        real,                intent(in) :: smpd, threshold
+        real, parameter      :: MAP_PADDING = 12.0, MATCH_RADIUS = 2.0
+        type(atoms)          :: molecule, candidates
+        type(calpha_finder)  :: finder
+        type(image)          :: workvol
+        type(string)         :: source_file, truth_file, vol_file, candidate_file, score_file
+        real, allocatable    :: truth_xyz(:,:)
+        logical, allocatable :: truth_matched(:)
+        real    :: span(3), delta(3), best_distance_sq, recall, precision
+        real    :: recall_top_n, precision_top_n
+        integer :: ldim(3), iatom, itruth, ipred, ntruth, npred, nmatched, best_truth
+        integer :: top_n_count, nmatched_top_n
+
+        source_file    = trim(label)//'.pdb'
+        truth_file     = trim(label)//'_calpha_truth.pdb'
+        vol_file       = trim(label)//'_calpha_input.mrc'
+        candidate_file = trim(label)//'_calpha_candidates.pdb'
+        score_file     = trim(label)//'_calpha_scores.mrc'
+        span           = maxval(molecule_data_in%xyz, dim=1) - minval(molecule_data_in%xyz, dim=1)
+        ldim           = max(round2even((span + 2. * MAP_PADDING) / smpd), 16)
+        call molecule%pdb2mrc(pdbfile=source_file, volfile=vol_file, smpd=smpd, &
+            center_pdb=.true., pdb_out=truth_file, vol_dim=ldim, mol=molecule_data_in)
+
+        ntruth = 0
+        do iatom = 1, molecule%get_n()
+            if(molecule%get_name(iatom) == ' CA ' .and. molecule%get_element(iatom) == 'C ') &
+                ntruth = ntruth + 1
+        enddo
+        if(ntruth /= expected_truth) THROW_HARD('Unexpected built-in C-alpha count')
+        allocate(truth_xyz(3,ntruth), source=0.)
+        allocate(truth_matched(ntruth), source=.false.)
+        itruth = 0
+        do iatom = 1, molecule%get_n()
+            if(molecule%get_name(iatom) /= ' CA ' .or. molecule%get_element(iatom) /= 'C ') cycle
+            itruth = itruth + 1
+            truth_xyz(:,itruth) = molecule%get_coord(iatom)
+        enddo
+
+        call workvol%new(ldim, smpd)
+        call workvol%read(vol_file)
+        call finder%new(smpd, 4.0)
+        call finder%search(workvol, real(angstep), 2 * ntruth, threshold, candidate_file, score_file)
+
+        npred = 0
+        if(nlines(candidate_file) > 0)then
+            call candidates%new(candidate_file)
+            npred = candidates%get_n()
+        endif
+        nmatched       = 0
+        nmatched_top_n = 0
+        top_n_count = min(ntruth, npred)
+        do ipred = 1, npred
+            best_truth       = 0
+            best_distance_sq = huge(1.)
+            do itruth = 1, ntruth
+                if(truth_matched(itruth)) cycle
+                delta = candidates%get_coord(ipred) - truth_xyz(:,itruth)
+                if(sum(delta * delta) < best_distance_sq)then
+                    best_distance_sq = sum(delta * delta)
+                    best_truth       = itruth
+                endif
+            enddo
+            if(best_truth > 0 .and. best_distance_sq <= MATCH_RADIUS**2)then
+                truth_matched(best_truth) = .true.
+                nmatched                  = nmatched + 1
+            endif
+            if(ipred == top_n_count) nmatched_top_n = nmatched
+        enddo
+        recall_top_n    = real(nmatched_top_n) / real(ntruth)
+        precision_top_n = 0.
+        if(top_n_count > 0) precision_top_n = real(nmatched_top_n) / real(top_n_count)
+        recall    = real(nmatched) / real(ntruth)
+        precision = 0.
+        if(npred > 0) precision = real(nmatched) / real(npred)
+
+        write(logfhandle,'(A,A)') '>>> ', trim(label)
+        write(logfhandle,'(A,I0,A,I0)') '    truth=', ntruth, ', candidate cap=', 2 * ntruth
+        write(logfhandle,'(A,I0,A,I0,A,F7.3,A,F7.3)') '    top-N: predicted=', top_n_count, &
+            ', matched=', nmatched_top_n, ', recall=', recall_top_n, ', precision=', precision_top_n
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.3,A,F7.3)') '    top-2N: predicted=', npred, &
+            ', matched=', nmatched, ', missed=', ntruth - nmatched, ', recall=', recall, &
+            ', precision=', precision
+        write(logfhandle,'(A,3(I0,1X))') '    map dimensions=', ldim
+        write(logfhandle,'(A,A)') '    candidates: ', candidate_file%to_char()
+        write(logfhandle,'(A,A)') '    score volume: ', score_file%to_char()
+
+        if(npred > 0) call candidates%kill()
+        call finder%kill()
+        call workvol%kill()
+        call molecule%kill()
+        deallocate(truth_xyz, truth_matched)
+    end subroutine evaluate_molecule
+
+end subroutine exec_test_detect_calpha_molecules
 
 subroutine exec_test_simulate_nanoparticle( self, cline )
     use simple_commanders_sim, only: commander_simulate_nanoparticle
