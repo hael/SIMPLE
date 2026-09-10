@@ -75,9 +75,10 @@
             </div>
 
             {% url 'nice_lite:new_stream' as new_stream_action %}
-            <form method="GET" action="{{ new_stream_action }}" target="job_builder_iframe">
+            <form method="GET" action="{{ new_stream_action }}" target="job_builder_iframe"
+                  onsubmit="return toggleJobBuilder(event)">
                 {% csrf_token %}
-                <button type="submit" title="open job builder" aria-label="open job builder"
+                <button type="submit" title="toggle job builder" aria-label="toggle job builder"
                         class="w-12 h-12 rounded-full bg-streamring text-white shadow-lg hover:opacity-90 transition-opacity inline-flex items-center justify-center">
                     <svg class="w-5 h-5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M8 3.25v9.5"/>
@@ -215,6 +216,21 @@
         if (!iframe) return false;
         if (iframe.classList.contains("hidden")) return false;
         return getComputedStyle(iframe).display !== "none";
+    };
+
+    const closeWorkspaceJobBuilder = () => {
+        const iframe = document.getElementById("job_builder_iframe");
+        if (!iframe) return;
+        iframe.setAttribute("src", "");
+        iframe.setAttribute("hidden", "hidden");
+        iframe.classList.add("hidden");
+    };
+
+    const toggleJobBuilder = (event) => {
+        if (!isJobBuilderVisible()) return true;
+        event.preventDefault();
+        closeWorkspaceJobBuilder();
+        return false;
     };
 
     const submitUpdate = (element, event) => {

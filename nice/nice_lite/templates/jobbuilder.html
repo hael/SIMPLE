@@ -39,7 +39,19 @@
     <!-- Tabbed cards -->
     <div class="flex justify-center h-screen">
         <div class="w-full flex flex-col">
-            <div class="text-[12px] font-medium text-streamlabel uppercase tracking-widest p-4">job builder</div>
+            <div class="flex items-center justify-between p-4">
+                <div class="text-[12px] font-medium text-streamlabel uppercase tracking-widest">job builder</div>
+                <div id="batch_argument_label_control" class="hidden">
+                    <label class="inline-flex items-center gap-2 cursor-pointer select-none"
+                           for="batch_argument_label_toggle">
+                        <span class="text-[11px] font-medium text-streamsubtle">command line arguments</span>
+                        <input id="batch_argument_label_toggle" type="checkbox" role="switch"
+                               aria-label="show command-line argument names"
+                               class="peer sr-only">
+                        <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                    </label>
+                </div>
+            </div>
             <div class="mb-4 flex items-center justify-center gap-2 border-t border-b border-streamline py-4">
                 <button id="tab_stream"
                         type="button"
@@ -334,14 +346,14 @@
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
                                                   <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
-                                                      for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                      for="batch_{{ program.prg }}_{{ input.key }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
                                                    <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                 <div class="relative flex items-center">
                                                     {% if input.keytype == "int" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
@@ -365,7 +377,7 @@
                                                             {% for option in input.options %}
                                                                 <option value="{{ option }}"
                                                                     {% if "value" in input and option == input.value %}selected
-                                                                    {% elif input.has_default and option == input.default %}selected
+                                                                    {% elif "value" not in input and input.has_default and option == input.default %}selected
                                                                     {% endif %}>{{ option }}</option>
                                                             {% endfor %}
                                                         </select>
@@ -556,14 +568,14 @@
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
                                                   <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
-                                                      for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                      for="single_{{ program.prg }}_{{ input.key }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
                                                    <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                 <div class="relative flex items-center">
                                                     {% if input.keytype == "int" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
@@ -909,6 +921,45 @@
         const batchPrefillProgram = "{{ batch_prefill.program|default:''|escapejs }}";
         let selectedSimpleProgramKey = batchPrefillPackage === "simple" ? batchPrefillProgram : null;
         let selectedSingleProgramKey = batchPrefillPackage === "single" ? batchPrefillProgram : null;
+        const BATCH_ARGUMENT_LABEL_STORAGE_KEY = "niceBatchArgumentLabels";
+        const batchArgumentLabelControl = document.getElementById("batch_argument_label_control");
+        const batchArgumentLabelToggle = document.getElementById("batch_argument_label_toggle");
+
+        function loadBatchArgumentLabelMode() {
+            try {
+                return window.localStorage.getItem(BATCH_ARGUMENT_LABEL_STORAGE_KEY) === "arguments";
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function setBatchArgumentLabelMode(showArgumentNames, persist = false) {
+            document.querySelectorAll("[data-batch-argument-label]").forEach((label) => {
+                label.textContent = showArgumentNames
+                    ? label.dataset.argumentKey
+                    : label.dataset.friendlyLabel;
+            });
+            if (batchArgumentLabelToggle) {
+                batchArgumentLabelToggle.checked = showArgumentNames;
+            }
+            if (persist) {
+                try {
+                    window.localStorage.setItem(
+                        BATCH_ARGUMENT_LABEL_STORAGE_KEY,
+                        showArgumentNames ? "arguments" : "friendly",
+                    );
+                } catch (error) {
+                    // Keep the current view even when browser storage is unavailable.
+                }
+            }
+        }
+
+        setBatchArgumentLabelMode(loadBatchArgumentLabelMode());
+        if (batchArgumentLabelToggle) {
+            batchArgumentLabelToggle.addEventListener("change", function() {
+                setBatchArgumentLabelMode(batchArgumentLabelToggle.checked, true);
+            });
+        }
 
         function setBuilderTabStyles(activeTabName) {
             const streamTab = document.getElementById("tab_stream");
@@ -925,6 +976,9 @@
             const batchPanel = document.getElementById("panel_batch");
             const simpleBatchCard = document.getElementById("card_simple_batch");
             const singleBatchCard = document.getElementById("card_single_batch");
+            if (batchArgumentLabelControl) {
+                batchArgumentLabelControl.classList.toggle("hidden", tabName === "stream");
+            }
 
             if (tabName === "simple_batch") {
                 streamPanel.classList.add("hidden");

@@ -21,6 +21,19 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("isJobBuilderVisible", content)
         self.assertIn("&& !isJobBuilderVisible()", content)
 
+    def test_job_builder_button_closes_visible_builder_and_opens_hidden_builder(self):
+        workspace = self._read_template("workspace.html")
+
+        self.assertIn('onsubmit="return toggleJobBuilder(event)"', workspace)
+        self.assertIn('title="toggle job builder" aria-label="toggle job builder"', workspace)
+        self.assertIn("const toggleJobBuilder = (event) => {", workspace)
+        self.assertIn("if (!isJobBuilderVisible()) return true;", workspace)
+        self.assertIn("event.preventDefault();", workspace)
+        self.assertIn("closeWorkspaceJobBuilder();", workspace)
+        self.assertIn('iframe.setAttribute("src", "");', workspace)
+        self.assertIn('iframe.setAttribute("hidden", "hidden");', workspace)
+        self.assertIn('iframe.classList.add("hidden");', workspace)
+
     def test_workspace_refresh_button_posts_missing_directory_cleanup(self):
         content = self._read_template("workspace.html")
 
@@ -183,6 +196,81 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertGreaterEqual(jobbuilder.count('absolute right-2'), 2)
         self.assertIn('program.classList.toggle("hidden", !matches)', jobbuilder)
 
+    def test_batch_argument_label_toggle_is_shared_persistent_and_batch_only(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+        context = {
+            "stream_user_inputs": [{
+                "key": "nthr",
+                "keytype": "int",
+                "label": "Stream thread count",
+            }],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{
+                "prg": "demo",
+                "disp": "Demo",
+                "sections": [{
+                    "name": "compute",
+                    "inputs": [{
+                        "key": "nthr",
+                        "keytype": "int",
+                        "label": "Number of threads",
+                    }],
+                }],
+            }],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{
+                "prg": "demo",
+                "disp": "Demo",
+                "sections": [{
+                    "name": "input_output",
+                    "inputs": [{
+                        "key": "mskdiam",
+                        "keytype": "float",
+                        "label": "Mask diameter",
+                    }],
+                }],
+            }],
+            "default_batch_project_file": "/workspace/workspace.simple",
+        }
+        rendered = render_to_string("jobbuilder.html", context)
+
+        self.assertEqual(jobbuilder.count('id="batch_argument_label_control"'), 1)
+        self.assertEqual(jobbuilder.count('id="batch_argument_label_toggle"'), 1)
+        self.assertLess(
+            jobbuilder.index('id="batch_argument_label_control"'),
+            jobbuilder.index('id="tab_stream"'),
+        )
+        self.assertIn('type="checkbox" role="switch"', jobbuilder)
+        self.assertNotRegex(
+            jobbuilder,
+            r'id="batch_argument_label_toggle"[^>]*\bchecked\b',
+        )
+        self.assertIn('>command line arguments</span>', jobbuilder)
+        self.assertIn('aria-label="show command-line argument names"', jobbuilder)
+        self.assertIn(
+            'for="field_nthr">Stream thread count</label>',
+            rendered,
+        )
+        self.assertIn(
+            'data-friendly-label="Number of threads" data-argument-key="nthr">Number of threads</span>',
+            rendered,
+        )
+        self.assertIn(
+            'data-friendly-label="Mask diameter" data-argument-key="mskdiam">Mask diameter</span>',
+            rendered,
+        )
+        self.assertEqual(rendered.count('>input project</label>'), 2)
+        self.assertEqual(rendered.count("<span data-batch-argument-label"), 2)
+        self.assertIn(
+            'window.localStorage.getItem(BATCH_ARGUMENT_LABEL_STORAGE_KEY) === "arguments"',
+            jobbuilder,
+        )
+        self.assertIn('showArgumentNames ? "arguments" : "friendly"', jobbuilder)
+        self.assertIn(
+            'batchArgumentLabelControl.classList.toggle("hidden", tabName === "stream");',
+            jobbuilder,
+        )
+
     def test_batch_tabs_restore_selected_commanders(self):
         jobbuilder = self._read_template("jobbuilder.html")
 
@@ -339,16 +427,26 @@ class TemplateIntegrationTests(SimpleTestCase):
             rendered.count('class="text-xs font-bold text-streamtext whitespace-nowrap"'),
             4,
         )
-        self.assertIn('for="batch_simple_demo_required_arg">required simple', rendered)
-        self.assertIn('for="single_single_demo_required_arg">required single', rendered)
         self.assertIn(
-            'class="text-xs font-medium text-streamtext whitespace-nowrap" '
-            'for="batch_simple_demo_optional_arg">optional simple',
+            'for="batch_simple_demo_required_arg"><span data-batch-argument-label '
+            'data-friendly-label="required simple" data-argument-key="required_arg">required simple</span>',
+            rendered,
+        )
+        self.assertIn(
+            'for="single_single_demo_required_arg"><span data-batch-argument-label '
+            'data-friendly-label="required single" data-argument-key="required_arg">required single</span>',
             rendered,
         )
         self.assertIn(
             'class="text-xs font-medium text-streamtext whitespace-nowrap" '
-            'for="single_single_demo_optional_arg">optional single',
+            'for="batch_simple_demo_optional_arg"><span data-batch-argument-label '
+            'data-friendly-label="optional simple" data-argument-key="optional_arg">optional simple</span>',
+            rendered,
+        )
+        self.assertIn(
+            'class="text-xs font-medium text-streamtext whitespace-nowrap" '
+            'for="single_single_demo_optional_arg"><span data-batch-argument-label '
+            'data-friendly-label="optional single" data-argument-key="optional_arg">optional single</span>',
             rendered,
         )
 
