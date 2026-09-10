@@ -487,7 +487,17 @@ class BatchViewTests(SimpleTestCase):
         )
         self.assertNotIn("path", open_context["batch_volume_viewer"][0])
 
-    def test_batch_volume_data_returns_bounded_owned_texture(self):
+    def test_batch_volume_data_streams_the_owned_mrc_file(self):
+        temporary_job_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_job_dir.cleanup)
+        volume_path = os.path.join(
+            temporary_job_dir.name,
+            "recvol_state01.mrc",
+        )
+        volume_bytes = b"MRC volume bytes"
+        with open(volume_path, "wb") as volume_file:
+            volume_file.write(volume_bytes)
+
         jobmodel = SimpleNamespace(
             status="finished",
             master_stats={"program": "abinitio3D"},
@@ -495,32 +505,13 @@ class BatchViewTests(SimpleTestCase):
         batch_job = Mock()
         batch_job.get_volume_outputs.return_value = [{
             "name": "recvol_state01.mrc",
-            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "path": volume_path,
         }]
-        payload = SimpleNamespace(
-            data=b"\x00\x7f\xff",
-            width=3,
-            height=1,
-            depth=1,
-            source_width=256,
-            source_height=256,
-            source_depth=256,
-            voxel_size=(1.3, 1.3, 1.3),
-            minimum=-2.0,
-            maximum=8.0,
-        )
 
-        with (
-            patch.object(
-                batch_views,
-                "_get_accessible_batch_job",
-                return_value=(batch_job, jobmodel),
-            ),
-            patch.object(
-                batch_views,
-                "read_mrc_volume_payload",
-                return_value=payload,
-            ) as read_payload,
+        with patch.object(
+            batch_views,
+            "_get_accessible_batch_job",
+            return_value=(batch_job, jobmodel),
         ):
             response = batch_views.view_batch_volume_data(
                 self._get_request("/batchvolume/7/recvol_state01.mrc"),
@@ -529,17 +520,15 @@ class BatchViewTests(SimpleTestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, payload.data)
+        self.assertTrue(response.streaming)
         self.assertEqual(response["Content-Type"], "application/octet-stream")
-        self.assertEqual(response["X-Volume-Dimensions"], "3,1,1")
-        self.assertEqual(response["X-Volume-Source-Dimensions"], "256,256,256")
-        self.assertEqual(response["X-Volume-Voxel-Size"], "1.3,1.3,1.3")
-        self.assertEqual(response["X-Volume-Value-Min"], "-2")
-        self.assertEqual(response["X-Volume-Value-Max"], "8")
-        read_payload.assert_called_once_with(
-            "/workspace/9_abinitio3D/recvol_state01.mrc",
-            max_dimension=128,
+        self.assertEqual(response["Content-Length"], str(len(volume_bytes)))
+        self.assertIn(
+            "recvol_state01.mrc",
+            response["Content-Disposition"],
         )
+        self.assertEqual(b"".join(response.streaming_content), volume_bytes)
+        response.close()
 
     def test_batch_volume_data_rejects_an_undeclared_filename(self):
         jobmodel = SimpleNamespace(
@@ -552,13 +541,10 @@ class BatchViewTests(SimpleTestCase):
             "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
         }]
 
-        with (
-            patch.object(
-                batch_views,
-                "_get_accessible_batch_job",
-                return_value=(batch_job, jobmodel),
-            ),
-            patch.object(batch_views, "read_mrc_volume_payload") as read_payload,
+        with patch.object(
+            batch_views,
+            "_get_accessible_batch_job",
+            return_value=(batch_job, jobmodel),
         ):
             response = batch_views.view_batch_volume_data(
                 self._get_request("/batchvolume/7/other.mrc"),
@@ -567,7 +553,6 @@ class BatchViewTests(SimpleTestCase):
             )
 
         self.assertEqual(response.status_code, 404)
-        read_payload.assert_not_called()
 
     def test_batch_class_export_returns_project_ordered_state_infile(self):
         jobmodel = SimpleNamespace(

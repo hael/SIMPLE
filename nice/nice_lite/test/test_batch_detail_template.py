@@ -358,7 +358,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         viewer = self._read_template(
             "nice_classic/includes/_batch_volume_viewer.html"
         )
-        viewer_script = self._read_static("nice_lite/volume_viewer.js")
+        viewer_script = self._read_static("nice_lite/molstar_volume_viewer.js")
         rendered = render_to_string(
             "nice_classic/batchview.html",
             {
@@ -389,23 +389,48 @@ class BatchDetailTemplateTests(SimpleTestCase):
             },
         )
 
-        self.assertIn("nice_lite/volume_viewer.js?v=2", rendered)
+        self.assertIn("molstar@5.11.0/build/viewer/molstar.css", rendered)
+        self.assertIn("molstar@5.11.0/build/viewer/molstar.js", rendered)
+        self.assertIn("nice_lite/molstar_volume_viewer.js?v=2", rendered)
         self.assertIn('id="batch_volume_viewer" data-volume-viewer', rendered)
         self.assertIn('value="/batchvolume/7/recvol_state01.mrc"', rendered)
+        self.assertIn('data-volume-width="256"', rendered)
+        self.assertIn('data-volume-voxel-x="1.3"', rendered)
         self.assertIn("state 1 · recvol_state01.mrc", rendered)
-        self.assertIn('data-volume-threshold type="range"', viewer)
-        self.assertIn("data-volume-colormap", viewer)
         self.assertIn("data-volume-background", viewer)
+        self.assertIn('<option value="white" selected>white</option>', viewer)
         self.assertIn('<option value="black">black</option>', viewer)
-        self.assertIn('<option value="white">white</option>', viewer)
-        self.assertIn("data-volume-orientation", viewer)
-        self.assertIn('canvas.getContext("webgl2"', viewer_script)
-        self.assertIn("sampler3D", viewer_script)
-        self.assertIn("densityAt", viewer_script)
-        self.assertIn("const MIN_CAMERA_DISTANCE = 0.35", viewer_script)
-        self.assertIn("uBackgroundColor", viewer_script)
-        self.assertIn('backgroundSelect.addEventListener("change", render)', viewer_script)
-        self.assertIn("drag to rotate · scroll to zoom", rendered)
+        self.assertIn('data-volume-isovalue type="range"', viewer)
+        self.assertIn("data-volume-isovalue-output", viewer)
+        self.assertIn("data-volume-molstar", viewer)
+        self.assertIn(
+            'data-volume-viewport class="relative min-w-0 overflow-hidden '
+            'rounded-md border border-streamdivider bg-white"',
+            viewer,
+        )
+        self.assertNotIn("data-volume-canvas", viewer)
+        self.assertNotIn("data-volume-orientation", viewer)
+        self.assertIn("window.molstar.Viewer.create", viewer_script)
+        self.assertIn('format: "ccp4"', viewer_script)
+        self.assertIn("viewer.loadVolumeFromUrl", viewer_script)
+        self.assertIn("updateMolstarIsovalue", viewer_script)
+        self.assertIn(
+            "viewer.plugin.managers.volume.hierarchy.current",
+            viewer_script,
+        )
+        self.assertIn("isoValue: {kind: \"absolute\", absoluteValue}", viewer_script)
+        self.assertIn("isovalueInput.addEventListener", viewer_script)
+        self.assertIn("const DEFAULT_SURFACE_COLOR = 0x808080", viewer_script)
+        self.assertIn("const STARTING_ZOOM_FACTOR = 2", viewer_script)
+        self.assertIn("snapshot: startingCameraSnapshot", viewer_script)
+        self.assertIn("layoutShowControls: false", viewer_script)
+        self.assertIn('viewportBackgroundColor: "#ffffff"', viewer_script)
+        self.assertIn("?? BACKGROUND_COLORS.white", viewer_script)
+        self.assertIn("minDistancePadding: 0.1", viewer_script)
+        self.assertIn("backgroundColor: color", viewer_script)
+        self.assertNotIn("sampler3D", viewer_script)
+        self.assertNotIn("getContext", viewer_script)
+        self.assertIn("Mol* · drag to rotate · scroll to zoom", rendered)
         self.assertIn("hide volume", rendered)
         self.assertIn("batch-volume-viewer-layout", batch_view)
 
@@ -424,7 +449,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
             },
         )
         self.assertNotIn('id="batch_volume_viewer" data-volume-viewer', default_off)
-        self.assertNotIn("nice_lite/volume_viewer.js?v=2", default_off)
+        self.assertNotIn("molstar@5.11.0", default_off)
+        self.assertNotIn("nice_lite/molstar_volume_viewer.js?v=2", default_off)
         self.assertIn("view volume", default_off)
 
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):

@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core import signing
 from django.core.paginator import Paginator
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.cache import cache_control
@@ -25,7 +25,7 @@ from ..data_structures.class_selection import (
     class_selection_flags,
     load_batch_class_selection,
 )
-from ..data_structures.mrc import read_mrc_volume_payload, render_mrc_particle_png
+from ..data_structures.mrc import render_mrc_particle_png
 from ..data_structures.movie import movie_preview_supported, read_movie_dimensions
 from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch, SIMPLEProjFile
@@ -51,7 +51,6 @@ _BATCH_PARTICLE_PAGE_SIZE = 40
 _BATCH_MOVIE_PAGE_SIZE = 40
 _BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
 _BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
-_BATCH_VOLUME_TEXTURE_MAX_DIMENSION = 128
 
 
 def _positive_finite_number(value):
@@ -765,7 +764,7 @@ def view_batch(request, jobid):
 @require_GET
 @cache_control(private=True, max_age=300, no_transform=True)
 def view_batch_volume_data(request, jobid, volume_name):
-    """Return one bounded 8-bit 3D texture from an owned ab initio 3D output."""
+    """Stream one owned ab initio 3D MRC output for Mol*."""
     batch_job, jobmodel = _get_accessible_batch_job(
         request,
         "view_batch_volume_data",
@@ -794,27 +793,18 @@ def view_batch_volume_data(request, jobid, volume_name):
     if volume is None:
         return HttpResponse(status=404)
 
-    payload = read_mrc_volume_payload(
-        volume["path"],
-        max_dimension=_BATCH_VOLUME_TEXTURE_MAX_DIMENSION,
-    )
-    if payload is None:
+    try:
+        volume_file = open(volume["path"], "rb")
+    except OSError:
         return HttpResponse(status=404)
 
-    response = HttpResponse(payload.data, content_type="application/octet-stream")
-    response["Content-Length"] = len(payload.data)
+    response = FileResponse(
+        volume_file,
+        as_attachment=False,
+        filename=volume["name"],
+        content_type="application/octet-stream",
+    )
     response["X-Content-Type-Options"] = "nosniff"
-    response["X-Volume-Dimensions"] = (
-        f"{payload.width},{payload.height},{payload.depth}"
-    )
-    response["X-Volume-Source-Dimensions"] = (
-        f"{payload.source_width},{payload.source_height},{payload.source_depth}"
-    )
-    response["X-Volume-Voxel-Size"] = ",".join(
-        format(axis, ".9g") for axis in payload.voxel_size
-    )
-    response["X-Volume-Value-Min"] = format(payload.minimum, ".9g")
-    response["X-Volume-Value-Max"] = format(payload.maximum, ".9g")
     return response
 
 

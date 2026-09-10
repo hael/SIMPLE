@@ -6,6 +6,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    {% if batch_volume_viewer %}
+        <link rel="stylesheet"
+              href="https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.css"
+              integrity="sha384-RIontCdJN53gEl2fmiHN+4bscIBvaUaOiCeeGktXqmFqdEBF+COnSdt9O4IKFSvq"
+              crossorigin="anonymous">
+    {% endif %}
     <style>
         [data-pick-overlay-color-control] {
             position: relative;
@@ -137,30 +143,15 @@
             gap: 0.75rem;
         }
 
-        [data-volume-canvas] {
-            display: block;
+        [data-volume-molstar] {
+            position: relative;
             width: 100%;
             height: clamp(22rem, 65vh, 44rem);
-            cursor: grab;
-            outline: none;
-            touch-action: none;
         }
 
-        [data-volume-canvas]:active {
-            cursor: grabbing;
-        }
-
-        [data-volume-canvas]:focus-visible {
-            box-shadow: inset 0 0 0 2px var(--color-streamring);
-        }
-
-        [data-volume-orientation] {
+        [data-volume-molstar] > .msp-plugin {
             position: absolute;
-            bottom: 0.25rem;
-            left: 0.25rem;
-            width: 6rem;
-            height: 6rem;
-            pointer-events: none;
+            inset: 0;
         }
 
         @media (min-width: 48rem) {
@@ -250,7 +241,11 @@
         <script type="module" src="{% static 'nice_lite/class_selector.js' %}?v=5"></script>
     {% endif %}
     {% if batch_volume_viewer %}
-        <script type="module" src="{% static 'nice_lite/volume_viewer.js' %}?v=2"></script>
+        <script defer
+                src="https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.js"
+                integrity="sha384-5Mfx4eL50NkWPky+mcH//qY0sbml4il0CLFFmrMp8uv/saB3Z6uZMHn2dUpAnH92"
+                crossorigin="anonymous"></script>
+        <script defer src="{% static 'nice_lite/molstar_volume_viewer.js' %}?v=2"></script>
     {% endif %}
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans" style="height:100vh;height:100dvh">

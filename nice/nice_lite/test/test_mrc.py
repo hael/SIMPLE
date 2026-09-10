@@ -10,7 +10,6 @@ from ..data_structures import mrc as mrc_helpers
 from ..data_structures.mrc import (
     read_mrc_stack_info,
     read_mrc_volume_info,
-    read_mrc_volume_payload,
     render_mrc_movie_png,
     render_mrc_movie_webp,
     render_mrc_particle_png,
@@ -138,7 +137,7 @@ class MRCStackTests(SimpleTestCase):
         self.assertIsNone(read_mrc_stack_info(stack_path))
         self.assertIsNone(render_mrc_particle_png(stack_path, 1))
 
-    def test_reads_and_bounds_normalized_volume_texture(self):
+    def test_reads_volume_metadata(self):
         volume_path = os.path.join(self.tempdir.name, "volume.mrc")
         source = np.arange(10 * 9 * 8, dtype=np.float32).reshape((10, 9, 8))
         with mrc_helpers.mrcfile.new(volume_path) as volume:
@@ -147,22 +146,11 @@ class MRCStackTests(SimpleTestCase):
             volume.update_header_stats()
 
         info = read_mrc_volume_info(volume_path)
-        payload = read_mrc_volume_payload(volume_path, max_dimension=8)
 
         self.assertEqual((info.width, info.height, info.depth), (8, 9, 10))
         self.assertEqual(info.voxel_size, (1.5, 2.0, 2.5))
-        self.assertEqual((payload.width, payload.height, payload.depth), (8, 8, 8))
-        self.assertEqual(
-            (payload.source_width, payload.source_height, payload.source_depth),
-            (8, 9, 10),
-        )
-        self.assertEqual(payload.voxel_size, (1.5, 2.0, 2.5))
-        self.assertEqual((payload.minimum, payload.maximum), (0.0, 719.0))
-        self.assertEqual(len(payload.data), 8 * 8 * 8)
-        self.assertEqual(min(payload.data), 0)
-        self.assertEqual(max(payload.data), 255)
 
-    def test_volume_texture_rejects_a_single_image_stack(self):
+    def test_volume_metadata_rejects_a_single_image_stack(self):
         stack_path = os.path.join(self.tempdir.name, "single.mrc")
         _write_mrc_stack(
             stack_path,
@@ -172,4 +160,3 @@ class MRCStackTests(SimpleTestCase):
         )
 
         self.assertIsNone(read_mrc_volume_info(stack_path))
-        self.assertIsNone(read_mrc_volume_payload(stack_path))
