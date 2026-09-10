@@ -88,9 +88,6 @@ character(len=*), parameter :: EXTRACT_STK_FBODY             = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY          = 'extract_params_'
 character(len=*), parameter :: SHAPE_RANKED_CAVGS_MRCNAME    = 'shaped_ranked_cavgs.mrcs'
 character(len=*), parameter :: SHAPE_RANKED_CAVGS_JPGNAME    = 'shaped_ranked_cavgs.jpg'
-! ML
-character(len=*), parameter :: SIGMA2_FBODY                  = 'sigma2_noise_part'
-character(len=*), parameter :: SIGMA2_GROUP_FBODY            = 'sigma2_it_'
 ! OLD DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR                 = 'stderrout/'
 ! NEW DIRECTORIES

@@ -4,18 +4,15 @@ use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_core_module_api
 use simple_polarft_calc,   only: polarft_calc
 use simple_parameters,     only: parameters
-use simple_sigma2_binfile, only: sigma2_binfile
 use simple_sigma2_state,   only: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
     &sigma2_state_read_groups, sigma2_state_read_particles, sigma2_state_write_local_range
 use simple_starfile_wrappers
 implicit none
 
-public :: euclid_sigma2, write_groups_starfile
-public :: read_sigma2_groups_file
-public :: split_sigma2_into_groups, consolidate_sigma2_groups, average_sigma2_groups
-public :: sigma2_star_from_iter, sigma2_group_iter
-public :: fill_sigma2_before_nyq, test_unit
+public :: euclid_sigma2, sigma2_group_iter
+! grouped-STAR I/O for the explicit sigma2_convert boundary only
+public :: write_groups_starfile, read_sigma2_groups_file
 private
 #include "simple_local_flags.inc"
 
@@ -56,7 +53,7 @@ contains
     procedure          :: calc_sigma2
     procedure          :: write_sigma2
     procedure          :: report_euclid_diag
-    procedure, private :: read_groups_starfile, read_sigma2_groups
+    procedure, private :: read_sigma2_groups
     ! destructor
     procedure          :: kill
 end type euclid_sigma2
@@ -429,91 +426,16 @@ contains
         call starfile_table__delete(ostar)
     end subroutine write_groups_starfile
 
-    ! Is deprecated, kept for compatibility. cf read_sigma2_groups below
-    subroutine read_groups_starfile( self, iter, group_pspecs, ngroups, fname )
+    ! Hard-coded reader of the grouped sigma2 STAR written by write_groups_starfile
+    subroutine read_sigma2_groups( self, fname, pspecs, ngroups )
         class(euclid_sigma2),          intent(inout) :: self
-        integer,                       intent(in)    :: iter
-        real,             allocatable, intent(out)   :: group_pspecs(:,:,:)
-        integer,                       intent(out)   :: ngroups
-        class(string),    optional,    intent(in)    :: fname
-        type(string),     allocatable :: names(:)
-        type(starfile_table_type)     :: istarfile
-        type(string)                  :: starfile_fname
-        character                     :: eo_char
-        real(dp)                      :: val
-        integer(C_long)               :: num_objs, object_id
-        integer                       :: kfromto(2), stat, spec_idx, eo, igroup, idx
-        logical                       :: l
-        if( present(fname) )then
-            starfile_fname = fname
-        else
-            starfile_fname = sigma2_star_from_iter(iter)
-        endif
-        if (.not. file_exists(starfile_fname)) then
-            THROW_HARD('euclid_sigma2: read_groups_starfile; file does not exists: ' // starfile_fname%to_char())
-        end if
-        call starfile_table__new(istarfile)
-        ! read header
-        call starfile_table__getnames(istarfile, starfile_fname, names)
-        call starfile_table__read( istarfile, starfile_fname, names(1)%to_char() )
-        l = starfile_table__getValue_int(istarfile, EMDL_MLMODEL_NR_GROUPS, ngroups)
-        l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX, kfromto(1))
-        l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX2, kfromto(2))
-        if( any(kfromto-self%kfromto < 0) )then
-            print *,kfromto,self%kfromto
-            THROW_HARD('Incorrect resolution range: read_groups_starfile')
-        endif
-        ! read values
-        allocate(group_pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
-        call starfile_table__getnames(istarfile, starfile_fname, names)
-        do idx = 1, size(names)
-            if( names(idx)%strlen() < len('1_group_')+1 )cycle
-            if( names(idx)%to_char([2,8]) .ne. '_group_' ) cycle
-            eo_char = names(idx)%to_char([1,1])
-            if ((eo_char .ne. '1').and.(eo_char .ne. '2')) cycle
-            eo = 1
-            if (eo_char == '2') eo = 2
-            igroup = str2int( names(idx)%to_char([9,names(idx)%strlen_trim()]), stat )
-            if( stat > 0 ) cycle
-            if( (igroup < 1).or.(igroup>ngroups) ) cycle
-            call starfile_table__read( istarfile, starfile_fname, names(idx)%to_char() )
-            object_id = starfile_table__firstobject(istarfile)
-            num_objs  = starfile_table__numberofobjects(istarfile)
-            do while( (object_id < num_objs) .and. (object_id >= 0) )
-                l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX, spec_idx)
-                if( l ) then
-                    l = starfile_table__getValue_double(istarfile, EMDL_MLMODEL_SIGMA2_NOISE, val)
-                    if( l ) then
-                        if( (spec_idx >= self%kfromto(1)).and.(spec_idx <= self%kfromto(2)) ) then
-                            group_pspecs(eo,igroup,spec_idx) = real(val)
-                        end if
-                    end if
-                end if
-                object_id = starfile_table__nextobject(istarfile)
-            end do
-        end do
-        call starfile_table__delete(istarfile)
-        deallocate(names)
-    end subroutine read_groups_starfile
-
-    ! Is a much faster hard-coded fortran substitute to %read_groups_starfile
-    ! that employs the starfile library
-    subroutine read_sigma2_groups( self, iter, pspecs, ngroups, filename )
-        class(euclid_sigma2),          intent(inout) :: self
-        integer,                       intent(in)    :: iter
+        class(string),                 intent(in)    :: fname
         real,             allocatable, intent(out)   :: pspecs(:,:,:)
         integer,                       intent(out)   :: ngroups
-        class(string),    optional,    intent(in)    :: filename
         character(len=LENSTR), allocatable :: strings(:)
-        type(string) :: fname
         character(len=LENSTR) :: line, string
         real(dp) :: dval
         integer  :: kfromto(2), i, l, funit, iostat, group, eo, idx, igroup, ieo
-        if( present(filename) )then
-            fname = filename
-        else
-            fname = sigma2_star_from_iter(iter)
-        endif
         if(.not.file_exists(fname))then
             THROW_HARD('File: '//fname%to_char()//' Does not exists; read_sigma2_groups')
         endif
@@ -536,7 +458,7 @@ contains
         call parse_key_int_pair(line, '_rlnSpectralIndex2', kfromto(2))
         if( any(kfromto-self%kfromto < 0) )then
             print *,kfromto,self%kfromto
-            THROW_HARD('Incorrect resolution range: read_groups_starfile')
+            THROW_HARD('Incorrect resolution range: read_sigma2_groups')
         endif
         ! parse data
         allocate(strings(kfromto(1):kfromto(2)), pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
@@ -616,109 +538,9 @@ contains
         type(euclid_sigma2) :: sigma
         call sigma%init_from_group_header(fname)
         kfromto = sigma%kfromto
-        call sigma%read_sigma2_groups(0, group_pspecs, ngroups, filename=fname)
+        call sigma%read_sigma2_groups(fname, group_pspecs, ngroups)
         call sigma%kill
     end subroutine read_sigma2_groups_file
-
-    ! Public modifiers
-
-    ! Updates the lowest resolution info of the file with most frequencies with the other & overwrites it
-    subroutine fill_sigma2_before_nyq( fname1, fname2 )
-        class(string), intent(in)  :: fname1, fname2
-        type(euclid_sigma2)        :: sigma2_1, sigma2_2
-        integer                    :: ngroups1, ngroups2, k0
-        call sigma2_1%init_from_group_header(fname1)
-        call sigma2_2%init_from_group_header(fname2)
-        call sigma2_1%read_sigma2_groups(0, sigma2_1%sigma2_groups, ngroups1, filename=fname1)
-        call sigma2_2%read_sigma2_groups(0, sigma2_2%sigma2_groups, ngroups2, filename=fname2)
-        if( ngroups1 /= ngroups2 ) THROW_HARD('Inconsistent dimensions; fill_sigma2_beyond_nyq')
-        if( sigma2_1%kfromto(1) /= sigma2_2%kfromto(1) ) THROW_HARD('Inconsistent fourier dimensions 1; fill_sigma2_beyond_nyq')
-        k0 = sigma2_1%kfromto(1)
-        if( sigma2_1%kfromto(2) > sigma2_2%kfromto(2) )then
-            sigma2_1%sigma2_groups(:,:,k0:sigma2_2%kfromto(2)) = sigma2_2%sigma2_groups
-            call write_groups_starfile( fname2, sigma2_1%sigma2_groups, ngroups1 )
-        else if(sigma2_1%kfromto(2) == sigma2_2%kfromto(2))then
-            ! nothing to do?
-        else
-            sigma2_2%sigma2_groups(:,:,k0:sigma2_1%kfromto(2)) = sigma2_1%sigma2_groups
-            call write_groups_starfile( fname1, sigma2_2%sigma2_groups, ngroups1 )
-        endif
-        call sigma2_1%kill
-        call sigma2_2%kill
-    end subroutine fill_sigma2_before_nyq
-
-    !> Split a sigma2 doc into individual docs
-    subroutine split_sigma2_into_groups( fname, fnames )
-        class(string), intent(in) :: fname, fnames(:)
-        type(euclid_sigma2)           :: euclidsigma2
-        real,             allocatable :: sigma2_group(:,:,:)
-        integer                       :: igroup, ngroups
-        call euclidsigma2%init_from_group_header(fname)
-        call euclidsigma2%read_sigma2_groups(0, euclidsigma2%sigma2_groups, ngroups, filename=fname)
-        if( ngroups /= size(fnames) ) THROW_HARD('Inconsistent number of groups & stacks! split_group_sigma2')
-        do igroup = 1,ngroups
-            allocate(sigma2_group(2,1,euclidsigma2%kfromto(1):euclidsigma2%kfromto(2)),&
-            &source=euclidsigma2%sigma2_groups(:,igroup:igroup,:))
-            call write_groups_starfile( fnames(igroup), sigma2_group, 1 )
-            deallocate(sigma2_group)
-        enddo
-        call euclidsigma2%kill
-    end subroutine split_sigma2_into_groups
-
-    ! the reverse of split_sigma2_into_groups
-    subroutine consolidate_sigma2_groups( fname, fnames )
-        class(string), intent(in) :: fname, fnames(:)
-        type(euclid_sigma2) :: euclidsigma2
-        real,   allocatable :: sigma2_group(:,:,:)
-        integer             :: igroup, ngroups, n
-        call euclidsigma2%init_from_group_header(fnames(1))
-        call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(1))
-        ngroups = size(fnames)
-        allocate(sigma2_group(2,ngroups,euclidsigma2%kfromto(1):euclidsigma2%kfromto(2)),source=0.0)
-        sigma2_group(:,1,:) = euclidsigma2%sigma2_groups(:,1,:)
-        call euclidsigma2%kill
-        do igroup = 2,ngroups
-            call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(igroup))
-            sigma2_group(:,igroup,:) = euclidsigma2%sigma2_groups(:,1,:)
-            call euclidsigma2%kill
-        enddo
-        call write_groups_starfile(fname, sigma2_group, ngroups)
-        deallocate(sigma2_group)
-    end subroutine consolidate_sigma2_groups
-
-    subroutine average_sigma2_groups( fname, fnames )
-        class(string), intent(in) :: fname, fnames(:)
-        type(euclid_sigma2) :: euclidsigma2
-        real,   allocatable :: sigma2_group(:,:,:)
-        integer             :: i, ngroups, n, nfiles, j
-        nfiles = size(fnames)
-        j = 0
-        do i = 1,nfiles
-            if( .not.file_exists(fnames(i)) ) cycle
-            j = j + 1
-            call euclidsigma2%init_from_group_header(fnames(i))
-            call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(i))
-            if( j==1 )then
-                ngroups      = n
-                sigma2_group = euclidsigma2%sigma2_groups(:,:,:)
-            else
-                if( n /= ngroups ) THROW_HARD('Cannot average with inconsistent number of groups!')
-                sigma2_group(:,:,:) = sigma2_group(:,:,:) + euclidsigma2%sigma2_groups(:,:,:)
-            endif
-            call euclidsigma2%kill
-        enddo
-        if( j > 0 )then
-            if( j>1 ) sigma2_group(:,:,:) = sigma2_group(:,:,:) / real(j)
-            call write_groups_starfile(fname, sigma2_group, ngroups)
-            deallocate(sigma2_group)
-        endif
-    end subroutine average_sigma2_groups
-
-    function sigma2_star_from_iter( iter )
-        integer, intent(in) :: iter
-        type(string) :: sigma2_star_from_iter
-        sigma2_star_from_iter = trim(SIGMA2_GROUP_FBODY)//trim(int2str(iter))//trim(STAR_EXT)
-    end function sigma2_star_from_iter
 
     ! Destructor
 
@@ -738,72 +560,5 @@ contains
         endif
         self%p_ptr => null()
     end subroutine kill
-
-    subroutine test_unit
-        integer, parameter :: ngroups    = 2000
-        integer, parameter :: kfromto(2) = [1,128]
-        integer, parameter :: iter       = 7
-        real,    parameter :: scale      = 0.3
-        type(euclid_sigma2)       :: euclidsigma2
-        type(string)              :: fname, fname1, fname2
-        type(string), allocatable :: fnames(:)
-        real,                      allocatable :: sigma2(:,:,:)
-        integer :: igroup, ng
-        logical :: l_err
-        l_err = .false.
-        ! testing bookkeeping
-        allocate(fnames(ngroups))
-        do igroup = 1,ngroups
-            fnames(igroup) = 'test_'//int2str(igroup)//trim(STAR_EXT)
-        enddo
-        allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
-        ! call seed_rnd()
-        ! call random_number(sigma2)
-        ! sigma2 = sigma2 / 1.e6
-        fname  = sigma2_star_from_iter(iter)
-        call write_groups_starfile( fname, sigma2, ngroups )
-        call split_sigma2_into_groups( fname, fnames )
-        fname  = sigma2_star_from_iter(666)
-        call consolidate_sigma2_groups( fname, fnames)
-        call split_sigma2_into_groups( fname, fnames)
-        do igroup = 1,ngroups
-            fname = fnames(igroup)
-            if(.not.file_exists(fname))then
-                l_err = .true.
-                THROW_WARN('File does not exists for group: '//int2str(igroup))
-            else
-                call euclidsigma2%init_from_group_header(fname)
-                call euclidsigma2%read_sigma2_groups(iter, euclidsigma2%sigma2_groups, ng, filename=fname )
-                if( ng /= 1 )then
-                    l_err = .true.
-                    THROW_WARN('Erroneous group number for group: '//int2str(igroup))
-                endif
-                if( any(abs(euclidsigma2%sigma2_groups-scale) >  0.000001) )then
-                    l_err = .true.
-                    THROW_WARN('Scaling failed for group: '//int2str(igroup))
-                endif
-                if( size(euclidsigma2%sigma2_groups,dim=3) /= (kfromto(2)-kfromto(1)+1) )then
-                    l_err = .true.
-                    THROW_WARN('Incorrect number of frequencies for group: '//int2str(igroup))
-                endif
-                call euclidsigma2%kill
-            endif
-        enddo
-        if( l_err )then
-            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST 1 FAILED'
-        else
-            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST 1 PASSED'
-        endif
-        deallocate(sigma2)
-        allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
-        fname1 = sigma2_star_from_iter(1)
-        call write_groups_starfile( fname1, sigma2, ngroups )
-        deallocate(sigma2)
-        allocate(sigma2(2,ngroups,kfromto(1):2*kfromto(2)),source=2.0)
-        fname2 = sigma2_star_from_iter(2)
-        call write_groups_starfile( fname2, sigma2, ngroups )
-        deallocate(sigma2)
-        call fill_sigma2_before_nyq(fname1, fname2)
-    end subroutine test_unit
 
 end module simple_euclid_sigma2

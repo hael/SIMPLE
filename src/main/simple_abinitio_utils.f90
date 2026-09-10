@@ -975,6 +975,10 @@ contains
                     &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
             end function canonical_final_rec_needs_bootstrap
 
+            !> bootstrap_rec3D's residual sigma pass is a refine3D iteration;
+            !! number it beyond the last stage's iterations so its iteration
+            !! files never collide with the stage's. The canonical sigma state
+            !! is one committed file and carries no iteration number.
             integer function final_rec_bootstrap_sigma_iter() result( iter )
                 iter = 1
                 if( cline_refine3D%defined('endit') )then

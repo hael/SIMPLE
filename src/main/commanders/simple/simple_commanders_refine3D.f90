@@ -237,11 +237,10 @@ contains
         ! alignment, which is where refine3D_auto has been losing particles.
         ! Sigmas come FIRST, from the particle power spectra, so the startup
         ! reconstruction and every refinement iteration share one sigma
-        ! basis. Deriving them instead from the startup half maps (what
-        ! bootstrap_rec3D does, for the case where no box-compatible sigmas
-        ! can exist) leaves the startup regularized against sigmas the
-        ! refinement then discards, and its heavy rescaling conditions the
-        ! euclid system markedly worse (bgal: base residual 0.23 vs 0.08).
+        ! basis. The former half-map estimator left the startup regularized
+        ! against sigmas the refinement then discarded, and its heavy
+        ! rescaling conditioned the euclid system markedly worse (bgal: base
+        ! residual 0.23 vs 0.08).
         ! refine3D validates and reuses this committed canonical state.
         cline_boot = cline
         call strip_refine3D_search_only_args(cline_boot)
@@ -288,8 +287,10 @@ contains
         call cline_rec3D%delete('objfun') ! bootstrap_rec3D owns objfun/ml_reg per pass
         call cline_rec3D%delete('ml_reg')
         if( cline%defined('endit') )then
-            ! write bootstrap sigmas beyond the refinement's own iterations
-            ! so no native-grid canonical sigma state is overwritten
+            ! the residual sigma pass is a refine3D iteration; number it beyond
+            ! the refinement's own iterations so its iteration files never
+            ! collide with the refinement's (the canonical sigma state itself
+            ! is one committed file and carries no iteration number)
             call cline_rec3D%set('which_iter', cline%get_iarg('endit') + 2)
         else
             call cline_rec3D%set('which_iter', MAXITS_REFINE3D_AUTO_CAP + 2)
@@ -306,8 +307,8 @@ contains
         endif
         ! bootstrap_rec3D owns the complete sequence: image-power seed, euclid
         ! ML bootstrap map, one residual sigma2 pass (refine=sigma) against it,
-        ! group consolidation and the shipped euclid ML reconstruction on the
-        ! residual sigmas (which_iter+1 on return). It is also the standalone
+        ! canonical group reduction and the shipped euclid ML reconstruction
+        ! on the residual sigmas (which_iter+1 on return). It is also the standalone
         ! test entry point for this stage (2026-09-07).
         call xbootstrap_rec3D%execute(cline_rec3D)
         call cline_rec3D%set('prg',    'reconstruct3D')
@@ -2000,15 +2001,16 @@ contains
 
     !> Complete sigma2 bootstrap and reconstruction for a project with 3D
     !! orientations but no consumable sigma2 estimate (final reconstructions
-    !! at a new sampling, standalone reconstructions): the particle power
-    !! spectra seed the grouped STAR of which_iter (legacy store) or the
-    !! canonical state, one euclid ML-regularized reconstruction on that seed
-    !! gives the bootstrap map, one residual sigma2 pass (refine=sigma, no
-    !! search) against that map re-estimates every particle's sigma2, the
-    !! groups are consolidated as which_iter+1 and the shipped euclid ML
-    !! reconstruction runs on the residual sigmas. On return the command line
-    !! carries vol1..N and which_iter+1. Standalone test entry point for the
-    !! final-reconstruction stage of abinitio3D and refine3D_auto, e.g.
+    !! at a new sampling, standalone reconstructions): particle power spectra
+    !! seed the canonical state, one euclid ML-regularized reconstruction gives
+    !! the bootstrap map, and one residual sigma2 pass (refine=sigma, no search)
+    !! against that map re-estimates every particle's sigma2 and commits the
+    !! next canonical generation. The shipped euclid ML reconstruction then
+    !! consumes those residual sigmas. On return the command line carries
+    !! vol1..N and which_iter+1; the iteration number labels the residual pass
+    !! and its ordinary iteration artifacts, not the canonical state. This is
+    !! also the standalone test entry point for the final-reconstruction stage
+    !! of abinitio3D and refine3D_auto, e.g.
     !!   simple_exec prg=bootstrap_rec3D projfile=x.simple pgrp=c1 mskdiam=160
     !!               nparts=10 nthr=8 rec_backend=pcg
     subroutine exec_bootstrap_rec3D( self, cline )
@@ -2041,12 +2043,12 @@ contains
         call cline%set('which_iter', which_iter)
         call cline%set('mkdir', 'no') ! child calls must not create nested run directories
         ! 1. One sigma2 basis for every bootstrap (2026-09-06): the particle
-        ! power spectra, exactly what a fresh refinement seeds from, written
-        ! as the grouped STAR of which_iter (legacy store) or the registered
-        ! canonical state. The former half-map power estimator sat on a
-        ! different basis than the residual sigmas a refinement then computes
-        ! and conditioned the euclid system markedly worse (bgal residual
-        ! 0.23 vs 0.08, refine3D_auto startup record).
+        ! power spectra, exactly what a fresh refinement seeds from, committed
+        ! to the registered canonical state; which_iter only numbers the
+        ! residual pass and its iteration files. The former half-map power
+        ! estimator sat on a different basis than the residual sigmas a
+        ! refinement then computes and conditioned the euclid system markedly
+        ! worse (bgal residual 0.23 vs 0.08, refine3D_auto startup record).
         cline_pspec = cline
         call cline_pspec%set('prg',       'calc_pspec')
         call cline_pspec%set('mkdir',              'no')

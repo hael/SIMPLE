@@ -213,7 +213,7 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
         call bootstrap_rec3D%add_input(UI_PARM, 'which_iter', 'num', 'Sigma iteration index',&
-        &'Iteration index recorded for the generated canonical sigma state{1}', 'iteration{1}', .false., 1.0, &
+        &'Iteration number given to the residual sigma pass and its iteration files{1}', 'iteration{1}', .false., 1.0, &
         &visibility=UI_VIS_DEVELOPER)
         call bootstrap_rec3D%add_input(UI_FILE, 'outfile', 'file', 'Resolution output prefix',&
         &'Optional FSC/resolution text output prefix; state tags are appended', 'e.g. resolution',&

@@ -209,7 +209,7 @@
 | `simple_eer_factory` | /Users/elmlundho/src/SIMPLE/src/fileio/simple_eer_factory.f90 | 14 |
 | `simple_error` | /Users/elmlundho/src/SIMPLE/src/fileio/simple_error.f90 | 2 |
 | `simple_estimate_ssnr` | /Users/elmlundho/src/SIMPLE/src/utils/filter/simple_estimate_ssnr.f90 | 22 |
-| `simple_euclid_sigma2` | /Users/elmlundho/src/SIMPLE/src/main/simple_euclid_sigma2.f90 | 26 |
+| `simple_euclid_sigma2` | /Users/elmlundho/src/SIMPLE/src/main/simple_euclid_sigma2.f90 | 19 |
 | `simple_eul_prob_tab` | /Users/elmlundho/src/SIMPLE/src/main/simple_eul_prob_tab.f90 | 40 |
 | `simple_eul_prob_tab2D` | /Users/elmlundho/src/SIMPLE/src/main/simple_eul_prob_tab2D.f90 | 37 |
 | `simple_eul_prob_tab_neigh` | /Users/elmlundho/src/SIMPLE/src/main/simple_eul_prob_tab_neigh.f90 | 46 |

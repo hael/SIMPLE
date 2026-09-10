@@ -50,7 +50,7 @@ contains
         type(commander_reproject) :: xreproject
         ! other
         type(string)              :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
-        integer, allocatable      :: states(:), final_states(:)
+        integer, allocatable      :: states(:)
         type(ori)                 :: o, o_even, o_odd
         type(parameters)          :: params
         type(ctfparams)           :: ctfvars

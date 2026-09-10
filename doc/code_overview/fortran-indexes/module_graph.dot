@@ -1819,7 +1819,6 @@ digraph module_graph {
   "simple_euclid_sigma2" -> "simple_core_module_api";
   "simple_euclid_sigma2" -> "simple_parameters";
   "simple_euclid_sigma2" -> "simple_polarft_calc";
-  "simple_euclid_sigma2" -> "simple_sigma2_binfile";
   "simple_euclid_sigma2" -> "simple_sigma2_state";
   "simple_euclid_sigma2" -> "simple_sigma2_state_file";
   "simple_euclid_sigma2" -> "simple_starfile_wrappers";

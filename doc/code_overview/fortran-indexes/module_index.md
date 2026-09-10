@@ -7601,19 +7601,12 @@ Uses:
 - `simple_core_module_api`
 - `simple_parameters`
 - `simple_polarft_calc`
-- `simple_sigma2_binfile`
 - `simple_sigma2_state`
 - `simple_sigma2_state_file`
 - `simple_starfile_wrappers`
 
 Public symbols:
-- `average_sigma2_groups` — subroutine
-- `consolidate_sigma2_groups` — subroutine
-- `fill_sigma2_before_nyq` — subroutine
 - `read_sigma2_groups_file` — subroutine
-- `sigma2_star_from_iter` — function
-- `split_sigma2_into_groups` — subroutine
-- `test_unit` — subroutine
 - `write_groups_starfile` — subroutine
 
 Private symbols:
@@ -7626,7 +7619,6 @@ Private symbols:
 - `parse_key_int_pair` — subroutine
 - `parse_key_string_pair` — subroutine
 - `read_groups` — subroutine
-- `read_groups_starfile` — subroutine
 - `read_part` — subroutine
 - `read_sigma2_groups` — subroutine
 - `real2str_diag` — function

@@ -141,47 +141,47 @@ contains
             call build%spproj%set_sigma2_state_path(string(SIGMA2_STATE_FNAME))
             call build%spproj%get_sigma2_state_path(state_path, state_path_found)
         endif
-            generation = 1_int64
-            preserve_prefix = .false.
-            if( file_exists(state_path) )then
-                call sigma2_state_read_header(state_path%to_char(), previous_header, state_status, state_message)
-                if( state_status == 0 )then
-                    generation = previous_header%generation + 1_int64
-                    if( previous_header%nptcls > 0 .and. previous_header%nptcls < nptcls )then
-                        prefix_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field, &
-                            &int(previous_header%nptcls))
-                        preserve_prefix = prefix_digest == previous_header%layout_digest .and. &
-                            &previous_header%box == params%box .and. &
-                            &previous_header%kfrom == params%kfromto(1) .and. &
-                            &previous_header%kto == params%kfromto(2) .and. &
-                            &abs(real(previous_header%smpd)-params%smpd) <= 1.e-5*max(1.,params%smpd)
-                        if( preserve_prefix )then
-                            call sigma2_state_validate_file(state_path%to_char(), state_status, state_message, deep=.true.)
-                            preserve_prefix = state_status == 0
-                        endif
+        generation = 1_int64
+        preserve_prefix = .false.
+        if( file_exists(state_path) )then
+            call sigma2_state_read_header(state_path%to_char(), previous_header, state_status, state_message)
+            if( state_status == 0 )then
+                generation = previous_header%generation + 1_int64
+                if( previous_header%nptcls > 0 .and. previous_header%nptcls < nptcls )then
+                    prefix_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field, &
+                        &int(previous_header%nptcls))
+                    preserve_prefix = prefix_digest == previous_header%layout_digest .and. &
+                        &previous_header%box == params%box .and. &
+                        &previous_header%kfrom == params%kfromto(1) .and. &
+                        &previous_header%kto == params%kfromto(2) .and. &
+                        &abs(real(previous_header%smpd)-params%smpd) <= 1.e-5*max(1.,params%smpd)
+                    if( preserve_prefix )then
+                        call sigma2_state_validate_file(state_path%to_char(), state_status, state_message, deep=.true.)
+                        preserve_prefix = state_status == 0
                     endif
                 endif
             endif
-            layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
-            if( layout_digest == 0_int64 ) THROW_HARD('cannot derive canonical sigma2 particle layout identity')
-            if( params%l_sigma_glob )then
-                call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
-                    &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_GLOBAL, generation, &
-                    &layout_digest, SIGMA2_PROV_PSPEC)
-            else
-                call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
-                    &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_STACK, generation, &
-                    &layout_digest, SIGMA2_PROV_PSPEC)
-            endif
-            candidate_path = sigma2_state_candidate_path(state_path%to_char(), generation)
-            call sigma2_state_create_candidate(candidate_path%to_char(), state_header, state_status, state_message)
-            if( state_status /= 0 ) THROW_HARD(trim(state_message))
-            allocate(active(nptcls), eo_ids(nptcls), group_ids(nptcls))
-            do iptcl = 1, nptcls
-                active(iptcl)    = build%spproj_field%get_state(iptcl) > 0
-                eo_ids(iptcl)    = build%spproj_field%get_eo(iptcl)
-                group_ids(iptcl) = build%spproj_field%get_int(iptcl, 'stkind')
-            enddo
+        endif
+        layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
+        if( layout_digest == 0_int64 ) THROW_HARD('cannot derive canonical sigma2 particle layout identity')
+        if( params%l_sigma_glob )then
+            call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
+                &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_GLOBAL, generation, &
+                &layout_digest, SIGMA2_PROV_PSPEC)
+        else
+            call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
+                &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_STACK, generation, &
+                &layout_digest, SIGMA2_PROV_PSPEC)
+        endif
+        candidate_path = sigma2_state_candidate_path(state_path%to_char(), generation)
+        call sigma2_state_create_candidate(candidate_path%to_char(), state_header, state_status, state_message)
+        if( state_status /= 0 ) THROW_HARD(trim(state_message))
+        allocate(active(nptcls), eo_ids(nptcls), group_ids(nptcls))
+        do iptcl = 1, nptcls
+            active(iptcl)    = build%spproj_field%get_state(iptcl) > 0
+            eo_ids(iptcl)    = build%spproj_field%get_eo(iptcl)
+            group_ids(iptcl) = build%spproj_field%get_int(iptcl, 'stkind')
+        enddo
         ! write updated sigmas to disc, one partition at a time
         do ipart = 1,params%nparts
             part_fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
@@ -205,18 +205,18 @@ contains
             deallocate(sigma2_part)
         end do
         if( preserve_prefix )then
-                do prefix_first = 1, int(previous_header%nptcls), 4096
-                    prefix_last = min(prefix_first+4095, int(previous_header%nptcls))
-                    call sigma2_state_read_particles(state_path%to_char(), prefix_first, prefix_last, &
-                        &prefix_spectra, state_status, state_message)
-                    if( state_status /= 0 ) THROW_HARD(trim(state_message))
-                    call sigma2_state_write_particles(candidate_path%to_char(), prefix_first, &
-                        &prefix_spectra, state_status, state_message)
-                    if( state_status /= 0 ) THROW_HARD(trim(state_message))
-                    deallocate(prefix_spectra)
-                enddo
-                write(logfhandle,'(A,I0,A)') '>>> SIGMA2 APPEND: retained ', previous_header%nptcls, &
-                    &' committed particle spectra and bootstrapped the appended suffix'
+            do prefix_first = 1, int(previous_header%nptcls), 4096
+                prefix_last = min(prefix_first+4095, int(previous_header%nptcls))
+                call sigma2_state_read_particles(state_path%to_char(), prefix_first, prefix_last, &
+                    &prefix_spectra, state_status, state_message)
+                if( state_status /= 0 ) THROW_HARD(trim(state_message))
+                call sigma2_state_write_particles(candidate_path%to_char(), prefix_first, &
+                    &prefix_spectra, state_status, state_message)
+                if( state_status /= 0 ) THROW_HARD(trim(state_message))
+                deallocate(prefix_spectra)
+            enddo
+            write(logfhandle,'(A,I0,A)') '>>> SIGMA2 APPEND: retained ', previous_header%nptcls, &
+                &' committed particle spectra and bootstrapped the appended suffix'
         endif
         call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, &
             &state_status, state_message)

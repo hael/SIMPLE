@@ -123,16 +123,15 @@ mismatch and to a reorder for which no trusted map exists.
 
 Canonical workflow bootstrap checks validate the registered header, grid,
 layout, grouping, and committed state. Existence of an iteration STAR is not a
-criterion in canonical mode.
+runtime criterion.
 
-`bootstrap_rec3D` currently derives a grouped curve from half-map differences
-and cannot create the required per-particle state. Therefore:
-
-- a reconstruction command with an associated particle project initializes
-  canonical state through `calc_pspec`;
-- a reconstruction-only command with no particle table may use the existing
-  half-map estimate transiently, but it does not create or replace a canonical
-  particle store.
+`bootstrap_rec3D` requires an associated particle project. It initializes the
+canonical state through `calc_pspec`, reconstructs a bootstrap map on that
+seed, runs a residual-only refinement pass, and commits the resulting
+per-particle records before producing the shipped reconstruction. A Euclidean
+ML-regularized reconstruction with no populated particle table has no
+canonical sigma basis and is unsupported; there is no transient half-map sigma
+fallback.
 
 ### Updates and grouping
 
@@ -319,7 +318,7 @@ Lifecycle and compatibility:
 - exact legacy import, lossy STAR-only import, and STAR export are tested;
 - normal workflows create no part or iteration STAR sigma files;
 - every listed 2D, 3D, streaming, and secondary consumer uses the canonical
-  API before cutover.
+  API.
 
 ## 9. Validation Record
 
@@ -446,7 +445,21 @@ derived logical, every runtime legacy branch, iteration-STAR discovery and
 partition-file propagation, and the stream sigma-directory handoff. The
 explicit STAR/legacy-part import and STAR export converter remains intact.
 
-## 10. Consolidated Maintainer Test Matrix
+A post-cutover source review found no correctness regression and removed
+what the cutover had stranded: the legacy grouped-STAR helpers and their unit
+test in `simple_euclid_sigma2` (the converter keeps `write_groups_starfile`
+and `read_sigma2_groups_file`), the caller-less `imgkind=sigma2` os_out
+accessors on `sp_project`, the `sigma2_noise_part` / `sigma2_it_` name
+constants, and a dead iteration-STAR symlink in the rec3D-backends test
+runner. `which_iter` on `bootstrap_rec3D` and the `endit + 2` offsets in
+refine3D_auto and abinitio3D only number the residual sigma pass and its
+iteration files; the committed state carries no iteration number, and the
+comments now say so.
+
+## 10. Outstanding Maintainer Test Matrix
+
+The earlier validation record captures incremental pre-cutover gates. The
+following post-cutover matrix remains open until results are recorded here.
 
 1. Build the changed executables and run `simple_test_sigma2_state` plus the
    normal unit suite.

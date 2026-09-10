@@ -2328,7 +2328,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     type(image)           :: truth, tvols(3)
     type(kbinterpol)      :: kbwin
     type(string)          :: truth_fname, exec_dir, dirbody
-    type(string), allocatable :: link_list(:)
     real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
     real    :: r05_tmp, r0143_tmp
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
@@ -2348,10 +2347,10 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     if( l_mkdir )then
         ! numbered execution directory like production commanders, with the
         ! settings that define the measurement in the name so a sweep reads as
-        ! a directory listing. Run-directory inputs discovered by name in the
-        ! cwd (sigma2 star files, the NU evidence envelope) are symlinked in;
-        ! the project file is addressed absolutely so its updates land in the
-        ! caller's project, as with any ../-style execution directory.
+        ! a directory listing. The project file is addressed absolutely so its
+        ! updates land in the caller's project, as with any ../-style execution
+        ! directory; the euclid sigmas come from the project's registered
+        ! canonical state, so nothing is discovered by name in the cwd.
         dirbody = string('rec3D_backends')
         if( cline%defined('pgrp')       ) dirbody = dirbody//('_'//cline_tok('pgrp'))
         if( cline%defined('objfun')     ) dirbody = dirbody//('_'//cline_tok('objfun'))
@@ -2368,13 +2367,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call simple_mkdir(exec_dir)
         call cline%set('projfile', simple_abspath(cline%get_carg('projfile')))
         if( cline%defined('vol1') ) call cline%set('vol1', simple_abspath(cline%get_carg('vol1')))
-        call simple_list_files('sigma2_it_*.star', link_list)
-        if( allocated(link_list) )then
-            do i = 1, size(link_list)
-                call syslib_symlink(simple_abspath(link_list(i)), exec_dir//('/'//link_list(i)%to_char()))
-            end do
-            deallocate(link_list)
-        endif
         call simple_getcwd(cwd_orig)   ! the runner returns here after the comparison
         call simple_chdir(exec_dir)
         write(logfhandle,'(a)') '>>> REC3D BACKENDS: EXECUTION DIRECTORY '//exec_dir%to_char()
