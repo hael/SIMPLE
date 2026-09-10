@@ -231,8 +231,8 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: s
-        type(string)         :: vol_even, vol_odd, vol_avg
-        real    :: cur_fil(params%box_crop)
+        type(string)      :: vol_even, vol_odd, vol_avg
+        real, allocatable :: opt_filter(:)
         integer :: filtsz
         logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
         logical :: l_nu_refs_missing
@@ -348,9 +348,11 @@ contains
             ! Optimal filter
             filtsz = build%vol%get_filtsz()
             if( any(build%fsc(s,:) > 0.143) )then
-                call fsc2optlp_sub(filtsz,build%fsc(s,:),cur_fil)
-                call build%vol%apply_filter(cur_fil)
-                call build%vol_odd%apply_filter(cur_fil)
+                allocate(opt_filter(filtsz), source=0.0)
+                call fsc2optlp_sub(filtsz,build%fsc(s,:), opt_filter)
+                call build%vol%apply_filter(opt_filter)
+                call build%vol_odd%apply_filter(opt_filter)
+                deallocate(opt_filter)
                 if( l_nu_refs_missing ) write(logfhandle,'(A,I0,A)') &
                     &'>>> state ', s, ' nonuniform references not assembled yet; '//&
                     &'matching against FSC-filtered raw half maps'
