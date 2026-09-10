@@ -122,24 +122,19 @@ stage. `refine3D` then treats `maxits` as the run length for that stage.
 
 The `cavg_ini` and `cavg_ini_ext` routes enter the particle stages at a stage
 whose starting reconstruction is ML-regularized (`objfun=euclid`) before any
-refine3D iteration has estimated particle sigmas. Sigma files are never
-discovered in other directories (the sibling-directory carry-over was removed
-2026-09-06; it had seeded these starts with foreign iteration-numbered STARs).
+refine3D iteration has estimated particle sigmas.
 `calc_rec` applies the single sigma2 bootstrap rule (`simple_sigma2_bootstrap`,
 `doc/policies/refine3D_policy.md` section 5): for a euclid starting
 reconstruction it calls `ensure_sigma2_for_iteration`, which is a no-op when
-the directory holds a grouped STAR (legacy store) or a registered state
-(canonical store) and otherwise seeds the sigmas from the particle power
-spectra (`calc_pspec`) as the grouped STAR of the consuming stage's start
-iteration and sets `sigma_transition_ready=yes` on the stage command line. The
-starting reconstruction then runs as planned, and the stage's first euclid
-iteration initializes its workers from that STAR, emits per-particle sigma
-files in its own partition layout and replaces the seed with residual sigmas.
+the project owns a compatible committed state and otherwise seeds canonical
+particle spectra from image power with `calc_pspec`. The starting reconstruction
+then runs as planned, and the stage's first euclid iteration replaces the seed
+with residual spectra in the next canonical transaction.
 The final reconstruction at original sampling is one program call,
 `bootstrap_rec3D`, which owns the complete sequence: the same image-power
 seed, a euclid ML bootstrap map on it, one residual sigma pass
-(`refine=sigma`) against that map, consolidation of the residual groups as the
-next iteration and the shipped euclid ML reconstruction on them. Because the
+(`refine=sigma`) against that map, canonical commit of the residual generation,
+and the shipped euclid ML reconstruction on it. Because the
 program takes any project with 3D orientations, it is also the standalone
 test for this stage (`simple_exec prg=bootstrap_rec3D projfile=... pgrp=...
 mskdiam=... nparts=... nthr=... rec_backend=...`), so failures in the final
@@ -151,9 +146,8 @@ regularized like the last stage's matching references); the shipped map is
 classical and runs on the workflow's backend with the PCG cold-solve budget
 applied inside `bootstrap_rec3D` (2026-09-07).
 Whether the final reconstruction refreshes its sigmas at native sampling is
-decided by one rule for both sigma stores: a registration box different from
-the native box (2026-09-07; the canonical store used to reuse its committed
-state regardless). With `sigma_store=canonical`, abinitio3D drops any state
+decided by the registration-box rule: a registration box different from the
+native box forces refresh (2026-09-07). Abinitio3D drops any state
 registration inherited with its input project before the first stage, so
 every run seeds and owns its sigmas in its own directory.
 

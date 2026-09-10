@@ -167,7 +167,7 @@ contains
             call build%spproj%read_segment(params%oritype, params%projfile)
         endif
         ! main clustering/alignment step
-        if( params%cc_objfun==OBJFUN_EUCLID .and. params%l_sigma_canonical )then
+        if( params%cc_objfun==OBJFUN_EUCLID )then
             call prepare_canonical_sigma_update(params, build)
         endif
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
@@ -292,7 +292,7 @@ contains
         ! Each worker emits only its exclusive global particle range; the
         ! calc_group_sigmas barrier below validates exact coverage and is the
         ! sole owner of grouped reduction and atomic publication.
-        if( params%cc_objfun==OBJFUN_EUCLID .and. params%l_sigma_canonical )then
+        if( params%cc_objfun==OBJFUN_EUCLID )then
             call prepare_canonical_sigma_update(params, build)
         endif
         ! Schedule distributed jobs

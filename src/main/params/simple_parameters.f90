@@ -163,7 +163,6 @@ type :: parameters
     character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
-    character(len=3)          :: sigma_transition_ready='no' !< internal: a wrapper-provided grouped sigma STAR for the start iteration is ready(yes|no){no}
     character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
@@ -348,7 +347,6 @@ type :: parameters
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
-    character(len=STDLEN)     :: sigma_store='legacy' !< sigma persistence contract(legacy|canonical){legacy}
     character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|parts_import|star_export)
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -689,7 +687,6 @@ type :: parameters
     logical :: l_prob_align_mode = .false.
     logical :: l_ptcl_src_den    = .false.
     logical :: l_sigma_glob      = .false.
-    logical :: l_sigma_canonical = .false.
     logical :: l_sticky_class_sampling = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided

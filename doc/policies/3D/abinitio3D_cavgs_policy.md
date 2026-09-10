@@ -29,9 +29,9 @@ The route sets:
 - `automsk=no`
 - `nu_refine=no`
 
-`sigma_store=canonical` is an advanced opt-in for single-state,
-`multivol_mode=independent`, and `multivol_mode=docked` validation. The legacy
-store remains the default. At the docked split, state relabelling does not alter
+Canonical sigma persistence is used for single-state,
+`multivol_mode=independent`, and `multivol_mode=docked`. At the docked split,
+state relabelling does not alter
 the canonical row identity or global/stack grouping. The split reconstruction
 therefore reuses the last committed generation directly; candidate creation and
 publication resume with the subsequent matcher pass.
@@ -65,7 +65,7 @@ The temporary project:
 - sets even/odd flags and stack indices for the temporary `ptcl3D` segment
 
 The temporary project never inherits the input project's canonical sigma path.
-When canonical mode is selected, it registers a workflow-local transient state
+It registers a workflow-local transient canonical state
 file for the temporary class-average particle lineage. That file is rebuilt at
 startup and removed with the temporary project after successful completion.
 

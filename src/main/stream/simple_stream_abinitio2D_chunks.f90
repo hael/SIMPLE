@@ -126,7 +126,6 @@ contains
         call simple_rmdir(DIR_PROJS)
         call simple_rmdir(DIR_SNAPSHOT)
         call del_file(POOL_DIR//POOL_PROJFILE)
-        call simple_rmdir(SIGMAS_DIR)
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_ABINITIO2D_CHUNKS NORMAL STOP ****')
 

@@ -35,7 +35,7 @@ type gui_communicator
     logical           :: is_active = .false.
 contains
     procedure :: new
-    procedure :: kill
+    procedure :: kill => kill_gui_communicator
     procedure :: add_metadata
 end type gui_communicator
 
@@ -71,7 +71,7 @@ contains
         end if
     end subroutine new
 
-    subroutine kill( self )
+    subroutine kill_gui_communicator( self )
         class(gui_communicator), intent(inout) :: self
         type(c_ptr)                            :: ptr
         if( .not. self%is_active) return
@@ -86,7 +86,7 @@ contains
         if( c_pthread_mutex_destroy(gui_comm_args_inst%metadata_mutex) /= 0  ) THROW_WARN('failed to destroy metadata mutex')
         call gui_project_metadata_inst%kill()
         self%is_active = .false.
-    end subroutine kill
+    end subroutine kill_gui_communicator
 
     subroutine add_metadata( self, spproj, stage2D )
         class(gui_communicator), intent(inout) :: self

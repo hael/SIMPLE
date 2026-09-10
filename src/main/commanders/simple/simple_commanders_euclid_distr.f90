@@ -28,13 +28,13 @@ contains
         type(builder)                    :: build
         type(sigma2_binfile)             :: binfile
         type(sigma2_state_header)        :: state_header, previous_header
-        type(string)                     :: part_fname,starfile_fname,outbin_fname
+        type(string)                     :: part_fname
         type(string)                     :: state_path,candidate_path
         integer(int64)                   :: generation,layout_digest,prefix_digest
         integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nstks,nyq,pspec_l,pspec_u
         integer                          :: prefix_first,prefix_last
         integer                          :: state_status
-        real(dp),          allocatable   :: group_pspecs(:,:,:), bootstrap_pspecs(:,:)
+        real(dp),          allocatable   :: bootstrap_pspecs(:,:)
         real,              allocatable   :: pspec_ave(:),sigma2_part(:,:),sigma2_output(:,:)
         real(real32),      allocatable   :: prefix_spectra(:,:)
         integer,           allocatable   :: bootstrap_weights(:),eo_ids(:),group_ids(:)
@@ -86,7 +86,6 @@ contains
                 ngroups = max(igroup,ngroups)
             enddo
         endif
-        allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
         allocate(bootstrap_pspecs(2,nyq), source=0.d0)
         allocate(bootstrap_weights(2), source=0)
         allocate(pspec_covered(params%nptcls), source=.false.)
@@ -132,20 +131,16 @@ contains
             else
                 bootstrap_pspecs(eo,:) = 1.d0
             endif
-            do igroup = 1,ngroups
-                group_pspecs(eo,igroup,:) = bootstrap_pspecs(eo,:)
-            enddo
         enddo
-        if( params%l_sigma_canonical )then
-            if( trim(params%oritype) /= 'ptcl2D' .and. trim(params%oritype) /= 'ptcl3D' ) &
-                &THROW_HARD('canonical sigma2 bootstrap requires a particle orientation field')
+        if( trim(params%oritype) /= 'ptcl2D' .and. trim(params%oritype) /= 'ptcl3D' ) &
+            &THROW_HARD('canonical sigma2 bootstrap requires a particle orientation field')
+        call build%spproj%get_sigma2_state_path(state_path, state_path_found)
+        if( .not. state_path_found )then
+            ! execution-local state: registered by name, it lives next to
+            ! the project file that owns it (2026-09-07)
+            call build%spproj%set_sigma2_state_path(string(SIGMA2_STATE_FNAME))
             call build%spproj%get_sigma2_state_path(state_path, state_path_found)
-            if( .not. state_path_found )then
-                ! execution-local state: registered by name, it lives next to
-                ! the project file that owns it (2026-09-07)
-                call build%spproj%set_sigma2_state_path(string(SIGMA2_STATE_FNAME))
-                call build%spproj%get_sigma2_state_path(state_path, state_path_found)
-            endif
+        endif
             generation = 1_int64
             preserve_prefix = .false.
             if( file_exists(state_path) )then
@@ -187,15 +182,6 @@ contains
                 eo_ids(iptcl)    = build%spproj_field%get_eo(iptcl)
                 group_ids(iptcl) = build%spproj_field%get_int(iptcl, 'stkind')
             enddo
-        else
-            ! write group sigmas to the legacy STAR history
-            if( cline%defined('which_iter') )then
-                starfile_fname = SIGMA2_GROUP_FBODY//int2str(params%which_iter)//STAR_EXT
-            else
-                starfile_fname = SIGMA2_GROUP_FBODY//'1'//STAR_EXT
-            endif
-            call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
-        endif
         ! write updated sigmas to disc, one partition at a time
         do ipart = 1,params%nparts
             part_fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
@@ -212,21 +198,13 @@ contains
                 sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) =&
                     &real(bootstrap_pspecs(eo+1,params%kfromto(1):params%kfromto(2)))
             end do
-            if( params%l_sigma_canonical )then
-                call sigma2_state_write_particles(candidate_path%to_char(), pspec_l, &
-                    &real(sigma2_output,real32), state_status, state_message)
-                if( state_status /= 0 ) THROW_HARD(trim(state_message))
-                call del_file(part_fname)
-            else
-                outbin_fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
-                call binfile%new(outbin_fname, fromp=pspec_l, top=pspec_u, &
-                    &kfromto=[params%kfromto(1), params%kfromto(2)])
-                call binfile%write(sigma2_output)
-            endif
+            call sigma2_state_write_particles(candidate_path%to_char(), pspec_l, &
+                &real(sigma2_output,real32), state_status, state_message)
+            if( state_status /= 0 ) THROW_HARD(trim(state_message))
+            call del_file(part_fname)
             deallocate(sigma2_part)
         end do
-        if( params%l_sigma_canonical )then
-            if( preserve_prefix )then
+        if( preserve_prefix )then
                 do prefix_first = 1, int(previous_header%nptcls), 4096
                     prefix_last = min(prefix_first+4095, int(previous_header%nptcls))
                     call sigma2_state_read_particles(state_path%to_char(), prefix_first, prefix_last, &
@@ -239,19 +217,18 @@ contains
                 enddo
                 write(logfhandle,'(A,I0,A)') '>>> SIGMA2 APPEND: retained ', previous_header%nptcls, &
                     &' committed particle spectra and bootstrapped the appended suffix'
-            endif
-            call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, &
-                &state_status, state_message)
-            if( state_status /= 0 ) THROW_HARD(trim(state_message))
-            call sigma2_state_commit(candidate_path%to_char(), state_path%to_char(), active, eo_ids, &
-                &group_ids, state_status, state_message)
-            if( state_status /= 0 ) THROW_HARD(trim(state_message))
-            call build%spproj%set_sigma2_state_path(state_path)
-            call build%spproj%write_segment_inside('projinfo', params%projfile)
-            deallocate(active, eo_ids, group_ids)
         endif
+        call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, &
+            &state_status, state_message)
+        if( state_status /= 0 ) THROW_HARD(trim(state_message))
+        call sigma2_state_commit(candidate_path%to_char(), state_path%to_char(), active, eo_ids, &
+            &group_ids, state_status, state_message)
+        if( state_status /= 0 ) THROW_HARD(trim(state_message))
+        call build%spproj%set_sigma2_state_path(state_path)
+        call build%spproj%write_segment_inside('projinfo', params%projfile)
+        deallocate(active, eo_ids, group_ids)
         ! end gracefully
-        deallocate(group_pspecs,bootstrap_pspecs,bootstrap_weights,pspec_covered)
+        deallocate(bootstrap_pspecs,bootstrap_weights,pspec_covered)
         if( allocated(sigma2_output) ) deallocate(sigma2_output)
         if( allocated(pspec_ave) ) deallocate(pspec_ave)
         call binfile%kill

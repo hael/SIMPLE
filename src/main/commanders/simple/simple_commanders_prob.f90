@@ -69,7 +69,7 @@ contains
         batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         call read_reprojection_model(params, build, batchsz_max)
-        call prep_sigmas_objfun(params, build, .false.)
+        call prep_sigmas_objfun(params, build)
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Fill the partition table in matcher-sized batches to cap particle PFT memo memory.
@@ -135,7 +135,7 @@ contains
         subroutine prepare_prob_neigh_workspace(batchsz_here)
             integer, intent(in) :: batchsz_here
             call read_reprojection_model(params, build, batchsz_here)
-            call prep_sigmas_objfun(params, build, .false.)
+            call prep_sigmas_objfun(params, build)
             call alloc_ptcl_imgs(params, build, tmp_imgs, tmp_imgs_pad, batchsz_here)
             call build%pftc%memoize_refs(eulspace=build%eulspace)
         end subroutine prepare_prob_neigh_workspace
@@ -369,7 +369,7 @@ contains
         call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
         call cavger_read_all
-        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false., .false.)
+        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false.)
         ! Fill the partition table in matcher-sized batches to cap polar FT memo memory.
         call eulprob_obj_part%new_worker(params,build,pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'

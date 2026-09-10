@@ -710,19 +710,6 @@ contains
             case DEFAULT
                 THROW_HARD('internal sigma_commit_deferred must be yes or no')
         end select
-        select case(trim(self%sigma_transition_ready))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('internal sigma_transition_ready must be yes or no')
-        end select
-        select case(trim(self%sigma_store))
-            case('legacy')
-                self%l_sigma_canonical = .false.
-            case('canonical')
-                self%l_sigma_canonical = .true.
-            case DEFAULT
-                THROW_HARD('sigma_store must be legacy or canonical')
-        end select
         select case(trim(self%sigma_action))
             case('','star_import','parts_import','star_export')
             case DEFAULT

@@ -57,7 +57,6 @@
       - `simple_pose_cont_refinement_shift_polish_test.f90`
       - `simple_pose_cont_refinement_shift_test.f90`
       - `simple_pose_cont_refinement_test_helpers.f90`
-      - `simple_test_1jyx_abinitio.f90`
       - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
@@ -199,7 +198,7 @@
       - `simple_nrtxtfile.f90` — deals with text files of numbers
       - `simple_projfile_utils.f90` — project file utilities
       - `simple_sigma2_binfile.f90` — sigma2 file i/o class
-      - `simple_sigma2_files.f90` — discovery and group loading of sigma2 files.
+      - `simple_sigma2_files.f90` — validation and group loading of canonical sigma2 state.
       - `simple_sigma2_state_file.f90` — versioned binary persistence and transaction primitives for canonical sigma2 state
       - `simple_srchspace_map2D_io.f90` — for storing search-space maps on disk
       - `simple_stack_io.f90` — This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes
@@ -672,7 +671,7 @@
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and preconditioned
-        - `simple_vol_pproc_policy.f90` — per-state automask policy decisions consumed by volume assembly
+        - `simple_vol_pproc_policy.f90` — per-state mask artifact compatibility check shared by volume assembly, postprocess and the abinitio final rec
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
         - `simple_volcluster.f90` — clustering of pre-docked volumes from Fourier-shell correlations
         - `simple_volinterp.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms, high-level routines
@@ -736,6 +735,7 @@
       - **gui/** — utilities for feeding information to the GUI
         - `simple_gui_assembler.f90` — Assembles GUI metadata objects into a compact JSON document and sends it to the NICE frontend
         - `simple_gui_assembler_tester.f90` — Unit tests for gui_assembler â lifecycle, hash suppression, and all assemble_stream_* procedures
+        - `simple_gui_communicator.f90` — communication between SIMPLE and the GUI
         - `simple_gui_utils.f90` — various GUI utility functions
         - `simple_guistats.f90` — abstract data type for generating various stats for the gui
         - `simple_nice.f90` — the module implementing New Interface for Cryo-Em (NICE)
@@ -745,6 +745,7 @@
           - `simple_gui_metadata_histogram.f90` — GUI metadata type for a labelled histogram.
           - `simple_gui_metadata_micrograph.f90` — GUI metadata type for a single micrograph and its particle coordinates.
           - `simple_gui_metadata_optics_group.f90` — GUI metadata type for an optics group and its beam-shift scatter plot.
+          - `simple_gui_metadata_project.f90` — GUI metadata for the top-level SIMPLE project â populated from a project file
           - `simple_gui_metadata_tester.f90` — Unit tests for all gui_metadata types â lifecycle, serialisation, and JSON serialisation
           - `simple_gui_metadata_timeplot.f90` — GUI metadata type for a time-series plot with one or two data traces.
           - `simple_gui_metadata_types.f90` — Integer type-tag constants for all GUI metadata kinds.

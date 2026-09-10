@@ -16,13 +16,12 @@ private
 contains
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
-    subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_stream, l_frac_restore, nmany_refs )
+    subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_frac_restore, nmany_refs )
         use simple_matcher_2Dprep, only: prep2dref, calc_2Dref_offset
         class(parameters),          intent(inout) :: params
         class(builder),             intent(inout) :: build
         type(image),                intent(inout) :: ptcl_match_imgs_pad(:)
         integer,                    intent(in)    :: batchsz_max, which_iter
-        logical,                    intent(in)    :: l_stream
         logical,                    intent(in)    :: l_frac_restore
         integer,          optional, intent(in)    :: nmany_refs
         type(image), allocatable :: match_imgs(:)
@@ -36,7 +35,7 @@ contains
         ! create the polarft_calc object
         call build%pftc%new(params, params%ncls, [1,batchsz_max], params%kfromto, nmany_refs=nmany_refs)
         ! objective functions & sigma
-        call prep_sigmas_objfun(params, build, l_stream)
+        call prep_sigmas_objfun(params, build)
         ! prepare the polarizer images
         pdim_srch = build%pftc%get_pdim_srch()
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_srch)

@@ -242,8 +242,7 @@ contains
         ! can exist) leaves the startup regularized against sigmas the
         ! refinement then discards, and its heavy rescaling conditions the
         ! euclid system markedly worse (bgal: base residual 0.23 vs 0.08).
-        ! refine3D reuses these rather than re-deriving them, see
-        ! sigma2_stage_needs_bootstrap.
+        ! refine3D validates and reuses this committed canonical state.
         cline_boot = cline
         call strip_refine3D_search_only_args(cline_boot)
         call cline_boot%set('prg', 'calc_pspec')
@@ -290,7 +289,7 @@ contains
         call cline_rec3D%delete('ml_reg')
         if( cline%defined('endit') )then
             ! write bootstrap sigmas beyond the refinement's own iterations
-            ! so no crop-box sigma star is overwritten
+            ! so no native-grid canonical sigma state is overwritten
             call cline_rec3D%set('which_iter', cline%get_iarg('endit') + 2)
         else
             call cline_rec3D%set('which_iter', MAXITS_REFINE3D_AUTO_CAP + 2)
@@ -2015,7 +2014,7 @@ contains
     subroutine exec_bootstrap_rec3D( self, cline )
         use simple_commanders_rec,    only: commander_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
-        use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline, consolidate_sigma2_groups
+        use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline
         use simple_abinitio_utils,    only: configure_final_pcg_solve_budget, strip_pcg_backend_keys
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -2094,9 +2093,7 @@ contains
             call seed_vols(state)%kill
         enddo
         deallocate(seed_vols)
-        ! 4. Residual groups of which_iter+1 (legacy store); a canonical pass
-        ! commits its own groups and this is a no-op.
-        call consolidate_sigma2_groups(cline, params%projfile, which_iter + 1, params%l_sigma_canonical)
+        ! 4. The residual pass has committed the next canonical generation.
         ! 5. The shipped map: euclid ML-regularized reconstruction on the
         ! residual sigmas, on the caller's backend. A PCG solve at the native
         ! box starts from nothing (no warm start exists at this sampling), so

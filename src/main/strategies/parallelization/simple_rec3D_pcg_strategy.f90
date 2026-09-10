@@ -433,7 +433,7 @@ contains
 
         if( params%cc_objfun == OBJFUN_EUCLID )then
             call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, &
-                &build%spproj_field, cline, l_sigma_loaded)
+                &build%spproj_field, l_sigma_loaded)
             if( .not. l_sigma_loaded ) THROW_HARD('PCG objfun=euclid requires sigma2 files')
         endif
 
@@ -998,7 +998,7 @@ contains
         if( nselected < 1 ) THROW_HARD('no active particles selected for PCG fractional-update validation')
         if( params%cc_objfun == OBJFUN_EUCLID )then
         call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, &
-            &build%spproj_field, cline, l_sigma_loaded)
+            &build%spproj_field, l_sigma_loaded)
             if( .not. l_sigma_loaded ) THROW_HARD('PCG fractional-update validation requires sigma2 for objfun=euclid')
         endif
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
@@ -1409,7 +1409,7 @@ contains
             l_sigma_loaded = allocated(build%esig%sigma2_noise)
             if( .not. l_sigma_loaded )then
                 call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, &
-                    &build%spproj_field, cline, l_sigma_loaded)
+                    &build%spproj_field, l_sigma_loaded)
             endif
             if( .not. l_sigma_loaded ) THROW_HARD('PCG objfun=euclid requires sigma2 files')
         endif

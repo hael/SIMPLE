@@ -297,10 +297,10 @@ contains
         subroutine prepare_alignment_references(batchsz_max)
             integer, intent(in) :: batchsz_max
             if( str_has_substr(ctrl%refine_flag, '_many') )then
-                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream,&
+                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, &
                                         &ctrl%l_frac_restore, nmany_refs=s2D%snhc_nrefs_bound)
             else
-                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream,&
+                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, &
                                         &ctrl%l_frac_restore)
             endif
         end subroutine prepare_alignment_references

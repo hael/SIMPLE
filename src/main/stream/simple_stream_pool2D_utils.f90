@@ -80,7 +80,6 @@ contains
         ncls_rejected_glob = 0
         orig_projfile      = params%projfile
         projfile4gui       = projfilegui
-        l_update_sigmas    = params%cc_objfun == OBJFUN_EUCLID ! only update sigmas for euclid-based clustering
         params%nparts_pool = params%nparts ! backwards compatibility
         ! bookkeeping & directory structure
         numlen             = len(int2str(params%nparts))
@@ -90,17 +89,14 @@ contains
         call simple_mkdir(POOL_DIR, verbose=.false.)
         call simple_mkdir(POOL_DIR//STDERROUT_DIR)
         call simple_mkdir(DIR_SNAPSHOT)
-        if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         pool_proj%projinfo = spproj%projinfo
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%projinfo%delete_entry('sigma2_state')
-        if( params%l_sigma_canonical )then
-            pool_sigma_path = string(POOL_DIR)//'sigma2_state.bin'
-            call pool_proj%set_sigma2_state_path(pool_sigma_path)
-            call pool_sigma_path%kill
-        endif
+        pool_sigma_path = string(POOL_DIR)//'sigma2_state.bin'
+        call pool_proj%set_sigma2_state_path(pool_sigma_path)
+        call pool_sigma_path%kill
         ! update to computational parameters to pool, will be transferred to chunks upon init
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params%walltime)
         ! commit to disk
@@ -114,7 +110,6 @@ contains
         call cline_cluster2D_pool%set('projfile',  POOL_PROJFILE)
         call cline_cluster2D_pool%set('projname',  get_fbody(POOL_PROJFILE,'simple'))
         call cline_cluster2D_pool%set('sigma_est', params%sigma_est)
-        call cline_cluster2D_pool%set('sigma_store', params%sigma_store)
         if( cline%defined('cls_init') )then
             call cline_cluster2D_pool%set('cls_init', params%cls_init)
         else
@@ -140,7 +135,6 @@ contains
         if( cline%defined('worker_server') ) call cline_cluster2D_pool%set('worker_server', cline%get_carg('worker_server'))
         call cline_cluster2D_pool%delete('autoscale')
         ! when the 2D analysis is started from raw particles
-        if( l_no_chunks ) l_update_sigmas = .false.
         ! set # of ptcls beyond which fractional updates will be used
         lim_ufrac_nptcls = STREAM_NPTCLS_MAX
         if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params%nsample_max
@@ -365,8 +359,6 @@ contains
             enddo
             !$omp end parallel do
         endif
-        ! Consolidate sigmas doc
-        call consolidate_sigmas(params, spproj, nstks2update)
         ! update command line with fractional update parameters
         call cline_cluster2D_pool%delete('update_frac')
         frac_update = 1.0
@@ -391,7 +383,7 @@ contains
         ! pool stats
         call generate_pool_stats(params)
         ! execution
-        if( params%l_sigma_canonical .and. params%cc_objfun == OBJFUN_EUCLID )then
+        if( params%cc_objfun == OBJFUN_EUCLID )then
             ! Stream pool membership changes invalidate row identity. Rebuild a
             ! complete canonical bootstrap for the exact pool layout, then run
             ! clustering in the same queued script so no consumer can observe
@@ -669,15 +661,13 @@ contains
     ! Reports alignment info from completed iteration of subset
     ! of particles back to the pool
     subroutine update_pool( params )
-        use simple_euclid_sigma2, only: split_sigma2_into_groups
         class(parameters), intent(inout) :: params
-        type(string), allocatable :: sigma_fnames(:)
         integer,      allocatable :: pops(:)
         type(sp_project) :: spproj
         type(oris)       :: os
         type(class_frcs) :: frcs
-        type(string)     :: stack_fname, ext, fbody, fname
-        integer          :: i, it, jptcl, iptcl, istk, nstks
+        type(string)     :: fname
+        integer          :: i, it, jptcl, iptcl, istk
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available  ) return
         call del_file(POOL_DIR//CLUSTER2D_FINISHED)
@@ -735,25 +725,6 @@ contains
             call pool_proj%os_ptcl2D%get_pops(pops, 'class', maxn=ncls_glob)
             pool_proj%os_cls2D = spproj%os_cls2D
             call pool_proj%os_cls2D%set_all('pop', real(pops))
-            ! updates sigmas
-            if( l_update_sigmas .and. .not. params%l_sigma_canonical )then
-                if( trim(params%sigma_est).eq.'group' )then
-                    ! propagate sigma2 changes back to the micrograph/stack document
-                    nstks = spproj%os_stk%get_noris()
-                    allocate(sigma_fnames(nstks))
-                    do istk = 1,nstks
-                        call spproj%os_stk%getter(istk,'stk',stack_fname)
-                        stack_fname = basename(stack_fname)
-                        ext         = fname2ext(stack_fname)
-                        fbody       = get_fbody(stack_fname, ext)
-                        sigma_fnames(istk) = SIGMAS_DIR//'/'//fbody%to_char()//STAR_EXT
-                    enddo
-                    call split_sigma2_into_groups(sigma2_star_from_iter(pool_iter+1), sigma_fnames)
-                    deallocate(sigma_fnames)
-                else
-                    ! sigma_est=global, nothing to do
-                endif
-            endif
             ! update thumbnail metadata
             if(allocated(pool_jpeg_map)) deallocate(pool_jpeg_map)
             if(allocated(pool_jpeg_pop)) deallocate(pool_jpeg_pop)

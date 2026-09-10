@@ -43,12 +43,10 @@ contains
         params%ncls_start = params%ncls ! backwards compatibility
         nptcls_per_chunk = params%nptcls_per_cls*params%ncls_start
         ncls_glob        = 0
-        l_update_sigmas  = params%cc_objfun == OBJFUN_EUCLID ! only update sigmas for euclid-based clustering
         numlen           = len(int2str(params%nparts))
         l_no_chunks      = .false. ! will be using chunk indeed
         params%nparts_chunk = params%nparts ! required by chunk object, to remove
         ! bookkeeping & directory structure
-        if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         ! pool_proj is only iused as a placeholder for computational info here
         ! used upon chunk generation
         call pool_proj%kill
@@ -77,7 +75,6 @@ contains
         call cline_cluster2D_chunk%set('mskdiam',   params%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      params%ncls_start)
         call cline_cluster2D_chunk%set('sigma_est', params%sigma_est)
-        call cline_cluster2D_chunk%set('sigma_store', params%sigma_store)
         call cline_cluster2D_chunk%set('rank_cavgs','yes')
         call cline_cluster2D_chunk%set('chunk',     'yes')
         ! objective function
@@ -234,8 +231,6 @@ contains
             id    = converged_chunks(i)%get_id()
             ! append to list
             call list%push2chunk_list(fname, id, .false.)
-            ! sigma2 book-keeping
-            call converged_chunks(i)%split_sigmas_into(string(SIGMAS_DIR))
             ! destroy chunk
             call converged_chunks(i)%kill
         enddo

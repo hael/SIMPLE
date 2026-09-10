@@ -2,9 +2,9 @@
 
 Date: 2026-09-04
 
-Status: canonical opt-in implementation complete across the current 2D, 3D,
-streaming, reconstruction, project-merge, conversion, and Flex consumers;
-awaiting the consolidated maintainer build and runtime matrix before cutover.
+Status: cut over on 2026-09-10. Canonical persistence is the only runtime
+sigma2 path across 2D, 3D, streaming, reconstruction, project merge, and Flex.
+Legacy files remain supported only at the explicit `sigma2_convert` boundary.
 
 Purpose: single living design, implementation plan, and validation record.
 
@@ -226,42 +226,38 @@ path.
 
 ## 7. Rollout and Implementation Plan
 
-The canonical path is introduced as an explicit, typed opt-in and remains off
-by default until the validation gate is complete. The selector must use the
-normal `parameters` registration and propagation path; it must not be an ad
-hoc worker environment flag. After all consumers pass and maintainers approve
-cutover, canonical becomes the only runtime path and the temporary selector
-and legacy runtime implementation are removed. The converter remains.
+The canonical path was introduced as a typed opt-in for validation. After the
+maintainer gate, the temporary selector and legacy runtime implementation were
+removed. Canonical state is now unconditional; the converter remains.
 
 1. **Store and safe transactions — complete:** API, header/layout digest,
    local range merge, integrity and recovery, and explicit conversion boundary.
    Direct shared-file writes are deferred as an optional optimization.
 2. **Initialization and reduction — complete:** per-particle power spectra,
    prefix-preserving append, blockwise reduction, and bootstrap identity checks.
-3. **3D migration — complete for canonical opt-in:** matcher full/fractional
+3. **3D migration — complete:** matcher full/fractional
    updates, refine3D variants, external-reference emission, and gridding/PCG
    reconstruction.
-4. **2D/restoration migration — complete for canonical opt-in:** cluster2D,
+4. **2D/restoration migration — complete:** cluster2D,
    abinitio2D checkpoint paths, probabilistic assignment, and class-average
    restoration.
-5. **Streaming/secondary migration — complete for canonical opt-in:** isolated
+5. **Streaming/secondary migration — complete:** isolated
    chunk/pool lineages, safe dynamic-pool rebuild, project concatenation, Flex,
    cleanup, retention, and project-output behavior. Nano remains correlation-only
    and therefore has no sigma state to migrate.
-6. **Cutover — pending maintainer validation:** run the consolidated matrix,
-   then decide whether to change the default and remove legacy runtime I/O.
-   `sigma2_convert` remains as the compatibility boundary.
+6. **Cutover — complete:** canonical state is the only runtime path. Legacy
+   runtime I/O and its CLI selector are removed; `sigma2_convert` remains the
+   compatibility boundary.
 
 ### Implemented scope
 
-The canonical opt-in now provides:
+The canonical implementation provides:
 
 - a versioned binary store with fixed offsets, record and section integrity,
   order-sensitive particle-layout identity, deep validation, candidate copying,
   exact local-range coverage, blockwise even/odd group reduction, file and
   directory sync, and atomic publication;
-- explicit project registration and a typed
-  `sigma_store=legacy|canonical` selector, which remains `legacy` by default;
+- explicit project registration with unconditional canonical persistence;
 - shared-memory and distributed transactions for 2D and 3D matchers, including
   fractional updates, `update_missing`, probabilistic modes, and the optional
   CC residual-emission path;
@@ -281,9 +277,9 @@ The canonical opt-in now provides:
 - an explicit `sigma2_convert` developer command for exact legacy part import,
   lossy grouped-STAR import, and grouped-STAR export, with project identity,
   native-grid, grouping, and exact-range checks;
-- canonical UI opt-ins on the owning 2D, 3D, stream, reconstruction, and Flex
-  programs. Normal canonical workflows do not create legacy part files or
-  iteration-numbered sigma STAR files.
+- canonical persistence on the owning 2D, 3D, stream, reconstruction, and Flex
+  programs. Normal workflows do not create legacy part files or
+  iteration-numbered sigma STAR files, and expose no persistence selector.
 
 `simple_test_sigma2_state` covers both grouping policies, prefix identity,
 candidate preparation, exact range merge, commit publication, corruption and
@@ -394,19 +390,19 @@ and STAR loading remain unchanged. All gridding and PCG reconstruction callers
 were updated through that common boundary. Focused `git diff --check`, Fortran
 index generation with an acyclic module graph, and the unchanged UI audit
 passed. The maintainer subsequently validated both shared-memory and
-distributed `abinitio3D_cavgs` execution with `sigma_store=canonical`, including
+distributed `abinitio3D_cavgs` execution with the canonical store, including
 the standalone reconstruction consumer that exposed the original failure.
 
 Post-run artifact inspection found one remaining `sigma2_it_98.star`. The final
 original-sampling reconstruction was rebuilding its child command line from
-selected parameters and omitted `sigma_store`; its missing-STAR check therefore
-entered the legacy half-map bootstrap and wrote an iteration STAR before the
-regularized reconstruction. The final reconstruction now propagates both
-`sigma_store` and `sigma_est`. In canonical mode it validates the registered
-store against the original native grid, project layout, grouping, and committed
+selected parameters and omitted the then-required store selector; its
+missing-STAR check therefore entered the legacy half-map bootstrap and wrote an iteration STAR before the
+regularized reconstruction. The final reconstruction was changed to propagate
+the selector and `sigma_est`. The current canonical-only path validates the
+registered store against the original native grid, project layout, grouping, and committed
 state. A valid store is consumed directly; an invalid native identity is rebuilt
 from the associated particle project with `calc_pspec`, as required by Section
-4. The legacy half-map/STAR bootstrap remains unchanged for legacy mode.
+4. That legacy bootstrap was subsequently removed at cutover.
 
 Focused `git diff --check`, Fortran source-index generation, and an acyclic
 generated module graph passed after this correction. The maintainer subsequently
@@ -425,14 +421,13 @@ candidate transaction. Source-only validation passed, but shared-memory and
 distributed docked runtime tests remain outstanding.
 
 The integration pass then removed the remaining artificial workflow gates and
-completed the canonical opt-in across the current runtime surface. This added
+completed canonical support across the current runtime surface. This added
 abinitio2D checkpoint recovery, refine3D sparse/update-missing and CC
 emission transactions, direct reconstruct3D and bootstrap initialization,
 stream chunk/pool ownership, prefix-preserving append, exact canonical state
 concatenation in both chunk aggregation and `merge_projects`, the explicit
-converter, and Flex initialization. Canonical selectors are exposed on the
-owning 2D, 3D, stream, reconstruction, and Flex programs while the default
-remains legacy until the consolidated runtime matrix passes.
+converter, and Flex initialization. At that validation stage, canonical
+selectors were exposed on the owning workflows pending the consolidated matrix.
 
 After the integration pass, source-only validation completed successfully:
 
@@ -446,6 +441,11 @@ Compilation and runtime execution were not performed by the agent, in
 accordance with repository policy. The maintainer will run the consolidated
 matrix in Section 10.
 
+On 2026-09-10 the cutover removed the CLI selector, its typed parameter and
+derived logical, every runtime legacy branch, iteration-STAR discovery and
+partition-file propagation, and the stream sigma-directory handoff. The
+explicit STAR/legacy-part import and STAR export converter remains intact.
+
 ## 10. Consolidated Maintainer Test Matrix
 
 1. Build the changed executables and run `simple_test_sigma2_state` plus the
@@ -456,7 +456,7 @@ matrix in Section 10.
    abinitio3D_cavgs cases, including docked multi-state if available. For the
    Streptavidin regression, verify the final symmetry-stage commit is deferred,
    the symmetric reconstruction completes, and the commit follows immediately;
-   repeat the canonical arm at least ten times against the legacy control.
+   repeat the canonical run at least ten times against the established baseline.
 4. Run canonical refine3D shared and distributed with a fractional update and
    `update_missing=yes`; cover an external-reference CC initialization path.
 5. Run direct canonical reconstruct3D and bootstrap_rec3D from a project with no
@@ -471,6 +471,6 @@ matrix in Section 10.
    state path is retained.
 9. Run canonical Flex PCA once and confirm it either reuses a matching state or
    initializes one from particle power.
-10. For every canonical workflow, confirm that no `sigma2_noise_part*.dat` or
+10. For every workflow, confirm that no `sigma2_noise_part*.dat` or
     `sigma2_it_*.star` runtime artifacts are produced and that changing
     `nparts` does not change the registered committed state identity.

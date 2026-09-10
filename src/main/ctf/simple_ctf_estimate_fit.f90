@@ -481,7 +481,7 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: pspec
         real    :: A, gsq, g, hsq, x
-        integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
+        integer :: lims(3,2),h,mh,k,mk, i,j
         A    = real(self%flims1d(2)**2)
         lims = pspec%loop_lims(3)
         mh   = abs(lims(1,1))

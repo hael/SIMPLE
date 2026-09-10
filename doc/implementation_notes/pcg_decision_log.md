@@ -207,7 +207,7 @@ solve summary line. History: dev item 2 (PfCRT REGRESSION gridding_vs_pcg
 2026-09-10, RESULT).
 
 **2026-09-10 -- Replay start rejected when worse than zero (streptavidin
-canonical 9/10).** With `sigma_store=canonical` the PCG backend missed one
+canonical 9/10).** With the canonical sigma store the PCG backend missed one
 streptavidin run in ten (gridding 10/10; legacy 10/10 on both): the map
 had the wrong symmetry axis. The logs of the good and the bad run are
 identical in the sigma flow (no PCG-specific branch exists in the

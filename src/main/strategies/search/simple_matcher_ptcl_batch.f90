@@ -2,7 +2,6 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_euclid_sigma2,   only: sigma2_star_from_iter
 use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached
 use simple_ptcl_cache,      only: ptcl_cache_in_use, ptcl_cache_read_batch
@@ -16,45 +15,25 @@ private
 
 contains
 
-    subroutine prep_sigmas_objfun( params, build, l_stream )
+    subroutine prep_sigmas_objfun( params, build )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
-        logical,           intent(in)    :: l_stream
         type(string)      :: fname
-        logical           :: l_group_only_init, found
+        logical           :: found
         ! cc_emit_sigma is a CC-only update path. CC does not consume sigma,
         ! while Euclidean scoring requires populated grouped sigma values.
         if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
             THROW_HARD('cc_emit_sigma=yes requires objfun=cc; euclid scoring would use unpopulated sigmas')
         endif
         if( params%cc_objfun == OBJFUN_EUCLID .or. trim(params%cc_emit_sigma) == 'yes' )then
-            if( params%l_sigma_canonical )then
-                call build%spproj%get_sigma2_state_path(fname, found)
-                if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-            else
-                fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            endif
+            call build%spproj%get_sigma2_state_path(fname, found)
+            if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
             if( trim(params%cc_emit_sigma) == 'yes' .and. .not. file_exists(fname) )then
                 THROW_HARD('CC residual sigma update requires image-bootstrap sigma2')
             endif
             call build%esig%new(params, build%pftc, fname, params%box)
-            if( params%l_sigma_canonical )then
-                call build%esig%read_part(  build%spproj_field)
-                call build%esig%read_groups(build%spproj_field)
-            else if( trim(params%cc_emit_sigma) == 'yes' )then
-                ! Preserve the image-power bootstrap outside the capped cohort;
-                ! committed CC assignments overwrite only active matching shells.
-                call build%esig%read_part(build%spproj_field)
-            else
-                l_group_only_init = (.not. file_exists(fname)) .and. file_exists(sigma2_star_from_iter(params%which_iter))
-                if( l_stream .or. l_group_only_init )then
-                    call build%esig%read_groups(build%spproj_field)
-                    call build%esig%allocate_ptcls
-                else
-                    call build%esig%read_part(  build%spproj_field)
-                    call build%esig%read_groups(build%spproj_field)
-                endif
-            endif
+            call build%esig%read_part(  build%spproj_field)
+            call build%esig%read_groups(build%spproj_field)
             call fname%kill
         end if
     end subroutine prep_sigmas_objfun

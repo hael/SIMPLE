@@ -34,7 +34,6 @@ contains
             &'Generate reference-free 2D class averages from particle images', &
             &'is a distributed workflow for generating 2D class averages from particles', &
             &UI_VIS_STANDARD, 'Create 2D Class Averages', 'yes')
-        call abinitio2D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call add_ui_program('abinitio2D', abinitio2D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D
 
@@ -157,7 +156,6 @@ contains
             &Set to 0 to run all chunks in parallel.', &
             &'# of parallel chunks (0=all){1}', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio2D_chunks%add_input(UI_PARM, sigma_store, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

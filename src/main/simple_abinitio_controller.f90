@@ -591,7 +591,7 @@ contains
         call cline_refine3D%set('box_crop',               abinitio_stage_box_crop(params, istage))
         call cline_refine3D%set('startit',                cfg%iter)
         call cline_refine3D%set('which_iter',             cfg%iter)
-        if( params%l_sigma_canonical .and. l_srch4symaxis .and. istage == SYMSRCH_STAGE )then
+        if( l_srch4symaxis .and. istage == SYMSRCH_STAGE )then
             call cline_refine3D%set('sigma_commit_deferred', 'yes')
         else
             call cline_refine3D%set('sigma_commit_deferred', 'no')

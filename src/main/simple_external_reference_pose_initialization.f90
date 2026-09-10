@@ -91,7 +91,6 @@ contains
         call cline_sigma_bootstrap%set('objfun',                    'euclid')
         call cline_sigma_bootstrap%set('sigma_est',                 'global')
         call cline_sigma_bootstrap%set('cc_emit_sigma',                 'no')
-        call cline_sigma_bootstrap%set('sigma_transition_ready',        'no')
         call cline_sigma_bootstrap%set('which_iter',          pose_init_iter)
         call cline_sigma_bootstrap%delete('part')
         call cline_sigma_bootstrap%delete('box_crop')
@@ -136,7 +135,6 @@ contains
         call cline_checkpoint%kill
         call cline_pose_init%kill
         call startvol%kill
-        call parent_cline%set('sigma_transition_ready', 'yes')
         write(logfhandle,'(A)') &
             &'>>> FIXED-REFERENCE CC POSE INITIALIZATION COMPLETE; DATA-DERIVED CHECKPOINT MAPS ARE AUTHORITATIVE'
     end subroutine initialize_poses_against_external_references

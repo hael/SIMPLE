@@ -75,7 +75,7 @@ contains
         else
             if( params%cc_objfun == OBJFUN_EUCLID )then
                 call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
-                    &cline, l_sigma_loaded)
+                    &l_sigma_loaded)
                 if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
             endif
             if( trim(params%projrec) == 'yes' )then

@@ -3337,6 +3337,7 @@ Private symbols:
 - `pparms2str` — function
 - `prec2ori` — subroutine
 - `prep_part_jobs` — subroutine
+- `prep_rec_observation` — subroutine
 - `prepare_tree_sub_distmat` — subroutine
 - `prepimgbatch` — subroutine
 - `print` — subroutine
@@ -4073,7 +4074,7 @@ Uses:
 - `simple_cluster_seed`
 - `simple_commanders_api`
 - `simple_commanders_volops`
-- `simple_euclid_sigma2`
+- `simple_halfmap_diagnostics`
 - `simple_matcher_refvol_utils`
 - `simple_parameters`
 - `simple_refine3d_fnames`
@@ -5232,6 +5233,7 @@ Uses:
 - `simple_commanders_cluster2d`
 - `simple_commanders_imgops`
 - `simple_commanders_volops`
+- `simple_gui_communicator`
 - `simple_procimgstk`
 - `simple_sigma2_state`
 - `simple_sigma2_state_file`
@@ -5270,7 +5272,6 @@ Uses:
 - `simple_commander_base`
 - `simple_core_module_api`
 - `simple_default_clines`
-- `simple_euclid_sigma2`
 - `simple_exec_helpers`
 - `simple_image`
 - `simple_image_bin`
@@ -5502,7 +5503,6 @@ Public symbols:
 - `commander_calc_pspec` — type
 - `commander_sigma2_convert` — type
 - `consolidate_canonical` — subroutine
-- `consolidate_channel` — subroutine
 - `exec_calc_group_sigmas` — subroutine
 - `exec_calc_pspec` — subroutine
 - `exec_sigma2_convert` — subroutine
@@ -5876,7 +5876,6 @@ Uses:
 - `simple_projfile_utils`
 - `simple_srch_sort_loc`
 - `simple_strategy2d_utils`
-- `simple_stream_communicator`
 
 Public symbols:
 - `apply_consensus` — subroutine
@@ -6062,6 +6061,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_estimate_ssnr`
 - `simple_external_reference_pose_initialization`
+- `simple_halfmap_diagnostics`
 - `simple_pftc_srch_api`
 - `simple_refine3d_fnames`
 - `simple_refine3d_stage_plan`
@@ -6438,6 +6438,7 @@ Uses:
 - `simple_gridding`
 - `simple_image`
 - `simple_imghead`
+- `simple_matcher_ptcl_io`
 - `simple_micproc`
 - `simple_molecule_data`
 - `simple_parameters`
@@ -6453,6 +6454,7 @@ Uses:
 - `simple_ui`
 
 Public symbols:
+- `band_rms` — subroutine
 - `cline_tok` — function
 - `commander_test_mini_stream` — type
 - `commander_test_pcg_frac_update` — type
@@ -7617,7 +7619,6 @@ Public symbols:
 Private symbols:
 - `allocate_ptcls` — subroutine
 - `calc_sigma2` — subroutine
-- `consolidate_sigma2_history` — subroutine
 - `get_kfromto` — function
 - `init_from_group_header` — subroutine
 - `kill` — subroutine
@@ -9068,6 +9069,8 @@ Public symbols:
 - `gui_assembler` — type
 
 Private symbols:
+- `assemble_batch_heartbeat` — subroutine
+- `assemble_batch_metadata` — subroutine
 - `assemble_stream_heartbeat` — subroutine
 - `assemble_stream_initial_picking` — subroutine
 - `assemble_stream_opening2D` — subroutine
@@ -9093,13 +9096,16 @@ Files:
 Uses:
 - `simple_gui_assembler`
 - `simple_gui_metadata_api`
+- `simple_sp_project`
 - `simple_string`
+- `simple_syslib`
 - `simple_test_utils`
 
 Public symbols:
 - `run_all_gui_assembler_tests` — subroutine
 
 Private symbols:
+- `test_batch_heartbeat` — subroutine
 - `test_clear_hashes` — subroutine
 - `test_initial_picking` — subroutine
 - `test_new_kill` — subroutine
@@ -9109,8 +9115,37 @@ Private symbols:
 - `test_particle_sieving` — subroutine
 - `test_pool2D` — subroutine
 - `test_preprocess` — subroutine
+- `test_project` — subroutine
 - `test_reference_picking` — subroutine
 - `test_set_stoptime` — subroutine
+
+---
+## Module: simple_gui_communicator
+
+Files:
+- `utils/gui/simple_gui_communicator.f90`
+
+Uses:
+- `json_kinds`
+- `json_module`
+- `simple_core_module_api`
+- `simple_gui_assembler`
+- `simple_gui_metadata_project`
+- `simple_gui_metadata_types`
+- `simple_http_post`
+- `simple_parameters`
+- `simple_sp_project`
+- `unix`
+
+Public symbols:
+- `gui_comm_args` — type
+
+Private symbols:
+- `add_metadata` — subroutine
+- `communication_worker` — subroutine
+- `kill_gui_communicator` — subroutine
+- `new` — subroutine
+- `safe_destroy_json_ptr` — subroutine
 
 ---
 ## Module: simple_gui_metadata_api
@@ -9127,6 +9162,7 @@ Uses:
 - `simple_gui_metadata_histogram`
 - `simple_gui_metadata_micrograph`
 - `simple_gui_metadata_optics_group`
+- `simple_gui_metadata_project`
 - `simple_gui_metadata_stream_opening2d`
 - `simple_gui_metadata_stream_optics_assignment`
 - `simple_gui_metadata_stream_particle_sieving`
@@ -9254,6 +9290,38 @@ Private symbols:
 - `get_max_points` — function
 - `jsonise_override` — function
 - `set` — subroutine
+
+---
+## Module: simple_gui_metadata_project
+
+Files:
+- `utils/gui/metadata/simple_gui_metadata_project.f90`
+
+Uses:
+- `json_kinds`
+- `json_module`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_error`
+- `simple_fileio`
+- `simple_gui_metadata_base`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_micrograph`
+- `simple_gui_metadata_types`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `unix`
+
+Public symbols:
+- `gui_metadata_project` — type
+
+Private symbols:
+- `get` — function
+- `gui_metadata_cavg2D_stage` — type
+- `jsonise_override` — function
+- `set_1` — subroutine
+- `set_2` — subroutine
 
 ---
 ## Module: simple_gui_metadata_stream_opening2D
@@ -9619,9 +9687,12 @@ Uses:
 - `simple_parameters`
 
 Public symbols:
+- `copy_support_provenance` — subroutine
 - `evaluate_halfmap_pair` — subroutine
 - `halfmap_diagnostics_result` — type
 - `read_support_provenance` — subroutine
+- `remove_support_provenance` — subroutine
+- `rename_support_provenance` — subroutine
 - `support_provenance_fname` — function
 - `write_halfmap_diagnostics` — subroutine
 - `write_support_provenance` — subroutine
@@ -10521,7 +10592,6 @@ Files:
 
 Uses:
 - `simple_builder`
-- `simple_euclid_sigma2`
 - `simple_imgarr_utils`
 - `simple_matcher_2dprep`
 - `simple_matcher_ptcl_io`
@@ -10549,6 +10619,7 @@ Files:
 Uses:
 - `simple_builder`
 - `simple_discrete_stack_io`
+- `simple_image`
 - `simple_imghead`
 - `simple_pftc_srch_api`
 - `simple_syslib`
@@ -11337,9 +11408,9 @@ Files:
 Uses:
 - `simple_core_module_api`
 - `simple_image`
+- `simple_image_msk`
 - `simple_nu_filter`
 - `simple_parameters`
-- `simple_vol_pproc_policy`
 
 Public symbols:
 - `nonuniform_filter_state` — subroutine
@@ -12739,7 +12810,6 @@ Files:
 Uses:
 - `simple_class_frcs`
 - `simple_core_module_api`
-- `simple_euclid_sigma2`
 - `simple_image`
 - `simple_oris`
 - `simple_sigma2_state`
@@ -13318,8 +13388,6 @@ Private symbols:
 - `load_weighted` — subroutine
 - `ml_shrinkage_filter` — subroutine
 - `new_reduction` — subroutine
-- `override_base_warm_start_from_previous` — subroutine
-- `override_ml_warm_start_from_previous` — subroutine
 - `pcg_chain_provenance` — function
 - `pcg_raw_provenance` — function
 - `prepare_distributed_half_job` — subroutine
@@ -13631,8 +13699,8 @@ Private symbols:
 - `get_ml_prior_stats` — subroutine
 - `get_raw_accum` — subroutine
 - `get_rhs` — subroutine
+- `install_support` — subroutine
 - `kill` — subroutine
-- `mask_div` — subroutine
 - `mask_mul` — subroutine
 - `measure_kernel_scale` — function
 - `new` — subroutine
@@ -13664,6 +13732,8 @@ Private symbols:
 - `transfer_plane_cmplx` — subroutine
 - `update_lambda_from_density` — subroutine
 - `whiten_observation` — function
+- `window_div` — subroutine
+- `window_mul` — subroutine
 - `write_raw_accum` — subroutine
 
 ---
@@ -13756,9 +13826,9 @@ Uses:
 - `simple_convergence`
 - `simple_core_module_api`
 - `simple_decay_funs`
-- `simple_euclid_sigma2`
 - `simple_exec_helpers`
 - `simple_fsc`
+- `simple_halfmap_diagnostics`
 - `simple_image`
 - `simple_image_msk`
 - `simple_matcher_refvol_utils`
@@ -13773,6 +13843,7 @@ Uses:
 - `simple_sigma2_state_file`
 - `simple_sp_project`
 - `simple_strategy3d_matcher`
+- `simple_syslib`
 
 Public symbols:
 - `create_refine3D_strategy` — function
@@ -13787,7 +13858,6 @@ Private symbols:
 - `assert_multistate_populations` — subroutine
 - `carry_over_trail_rec_chains` — subroutine
 - `cleanup_interface` — subroutine
-- `clear_sigma2_partition_files` — subroutine
 - `distr_cleanup` — subroutine
 - `distr_execute_iteration` — subroutine
 - `distr_finalize_iteration` — subroutine
@@ -13811,6 +13881,7 @@ Private symbols:
 - `refresh_resolution_fields_from_fsc` — subroutine
 - `remove_partial_rec_files` — subroutine
 - `remove_pcg_raw_files` — subroutine
+- `report_rec_master_phase` — subroutine
 - `reset_refine3D_bench` — subroutine
 - `seed_multistate_startup_labels` — subroutine
 - `write_strategy_bench_report` — subroutine
@@ -13910,7 +13981,6 @@ Uses:
 - `simple_sigma2_files`
 
 Public symbols:
-- `consolidate_sigma2_groups` — subroutine
 - `ensure_sigma2_for_iteration` — subroutine
 - `prepare_residual_sigma2_pass_cline` — subroutine
 
@@ -13921,7 +13991,6 @@ Files:
 - `fileio/simple_sigma2_files.f90`
 
 Uses:
-- `simple_cmdline`
 - `simple_core_module_api`
 - `simple_euclid_sigma2`
 - `simple_parameters`
@@ -13932,8 +14001,6 @@ Uses:
 
 Public symbols:
 - `load_sigma2_groups` — subroutine
-- `pick_sigma_group_file` — subroutine
-- `pick_sigma_group_file_for_iter` — subroutine
 
 ---
 ## Module: simple_sigma2_state
@@ -15094,6 +15161,7 @@ Private symbols:
 - `refine3D_ctrl` — type
 - `sample_particles_for_update` — subroutine
 - `strategy3D_per_ptcl` — type
+- `write_bench_file` — subroutine
 
 ---
 ## Module: simple_strategy3D_prob
@@ -15291,7 +15359,6 @@ Uses:
 - `simple_commander_base`
 - `simple_core_module_api`
 - `simple_defs_environment`
-- `simple_euclid_sigma2`
 - `simple_gui_utils`
 - `simple_guistats`
 - `simple_image`
@@ -15323,7 +15390,6 @@ Uses:
 - `simple_cmdline`
 - `simple_core_module_api`
 - `simple_defs_environment`
-- `simple_euclid_sigma2`
 - `simple_image`
 - `simple_parameters`
 - `simple_qsys_env`
@@ -15348,7 +15414,6 @@ Private symbols:
 - `print_info` — subroutine
 - `read` — subroutine
 - `remove_folder` — subroutine
-- `split_sigmas_into` — subroutine
 - `terminate_chunk` — subroutine
 - `to_analyze2D` — function
 
@@ -15392,7 +15457,6 @@ Uses:
 - `simple_cmdline`
 - `simple_commanders_cluster2d`
 - `simple_core_module_api`
-- `simple_euclid_sigma2`
 - `simple_image`
 - `simple_parameters`
 - `simple_qsys_funs`
@@ -15406,7 +15470,6 @@ Uses:
 
 Public symbols:
 - `cleanup_root_folder` — subroutine
-- `consolidate_sigmas` — subroutine
 - `setup_downscaling` — subroutine
 - `terminate_chunks` — subroutine
 - `terminate_stream2D` — subroutine
@@ -15764,7 +15827,6 @@ Files:
 
 Uses:
 - `simple_classaverager`
-- `simple_euclid_sigma2`
 - `simple_procimgstk`
 - `simple_ran_tabu`
 - `simple_stream_api`
@@ -17412,12 +17474,9 @@ Files:
 
 Uses:
 - `simple_core_module_api`
-- `simple_parameters`
 
 Public symbols:
-- `plan_state_postprocess` — subroutine
 - `state_mask_is_compatible` — subroutine
-- `vol_pproc_plan` — type
 
 ---
 ## Module: simple_volanalyzer
@@ -18133,6 +18192,7 @@ Public symbols:
 - `calculate_plot` — subroutine
 - `cavger_update_sums` — subroutine
 - `check_file_formats` — subroutine
+- `check_input` — subroutine
 - `check_vol` — subroutine
 - `clamp_evidence_background` — subroutine
 - `clear_polar_memo` — subroutine
@@ -18179,6 +18239,8 @@ Public symbols:
 - `mkfnames` — subroutine
 - `normalize_input_volumes` — subroutine
 - `normalized_masked_value` — subroutine
+- `nu_evidence_calibration_mask` — subroutine
+- `nu_evidence_null_mask` — subroutine
 - `open_pft_or_ctf2_array_for_write` — subroutine
 - `pack_nu_dmat_to_mask_vector` — subroutine
 - `pick` — subroutine
@@ -18214,6 +18276,7 @@ Public symbols:
 - `strip_refine3D_planning_keys` — subroutine
 - `symmetrize` — subroutine
 - `validate_compact_evidence_state` — subroutine
+- `warn_if_invalid` — subroutine
 - `write_abinitio_lowpass_snapshot` — subroutine
 - `write_final_rec_outputs` — subroutine
 

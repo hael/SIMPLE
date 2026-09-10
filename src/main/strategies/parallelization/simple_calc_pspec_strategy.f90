@@ -42,7 +42,7 @@ end type calc_pspec_inmem_strategy
 
 ! Computes every partition of the sigma2 bootstrap in a single process. The
 ! artifacts written are the ones nparts distributed workers would have produced,
-! so downstream consumers of init_pspec_part*/sum_img_part*/sigma2_noise_part*
+! so downstream consumers of the partial power spectra and canonical sigma state
 ! see an unchanged on-disk contract.
 type, extends(calc_pspec_strategy) :: calc_pspec_partitioned_strategy
     type(cmdline)        :: cline_calc_pspec_assemble
@@ -451,8 +451,6 @@ contains
             fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
             call del_file(fname)
             fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
-            call del_file(fname)
-            fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
             call del_file(fname)
         enddo
         call del_file('CALC_PSPEC_FINISHED')

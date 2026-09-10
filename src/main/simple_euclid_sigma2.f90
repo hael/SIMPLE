@@ -14,7 +14,7 @@ implicit none
 public :: euclid_sigma2, write_groups_starfile
 public :: read_sigma2_groups_file
 public :: split_sigma2_into_groups, consolidate_sigma2_groups, average_sigma2_groups
-public :: sigma2_star_from_iter, sigma2_group_iter, sigma2_stage_needs_bootstrap
+public :: sigma2_star_from_iter, sigma2_group_iter
 public :: fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
@@ -44,7 +44,6 @@ type euclid_sigma2
 contains
     ! constructor
     procedure          :: new
-    procedure          :: consolidate_sigma2_history
     procedure, private :: init_from_group_header
     ! utils
     procedure          :: write_info
@@ -71,34 +70,6 @@ contains
         if( matcher_completed ) group_iter = group_iter + 1
     end function sigma2_group_iter
 
-    !> A fresh start normally has to bootstrap the particle sigmas. It does
-    !! not when usable sigmas for the starting iteration are already on disk:
-    !! a workflow that reconstructs before refining (refine3D_auto's startup)
-    !! estimates them once up front, and re-deriving them here would leave
-    !! the startup reconstruction and the refinement on two different sigma
-    !! bases -- the reconstruction regularized against sigmas the refinement
-    !! then discards.
-    !! When this returns false because the grouped STAR exists, refine3D must
-    !! consume that group file before consolidating partition-local files. The
-    !! matcher will emit those files in the current partition layout.
-    !! A later start iteration normally continues from the previous iteration's
-    !! per-particle files; only when the directory holds neither a STAR for the
-    !! start iteration nor any per-particle file is there nothing to continue
-    !! from, and the same image-power bootstrap applies (2026-09-06). Sigma
-    !! files are never discovered in other directories.
-    logical function sigma2_stage_needs_bootstrap( startit ) result( needs_bootstrap )
-        integer, intent(in) :: startit
-        type(string), allocatable :: list(:)
-        needs_bootstrap = .not. file_exists(sigma2_star_from_iter(startit))
-        if( .not. needs_bootstrap ) return
-        if( startit <= 1 ) return
-        call simple_list_files(SIGMA2_FBODY//'*', list)
-        if( allocated(list) )then
-            needs_bootstrap = size(list) < 1
-            deallocate(list)
-        endif
-    end function sigma2_stage_needs_bootstrap
-
     subroutine new( self, params, pftc, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
@@ -123,60 +94,6 @@ contains
         endif
         self%exists       =  .true.
     end subroutine new
-
-    subroutine consolidate_sigma2_history( self, os, pinds, iters )
-        class(euclid_sigma2), intent(inout) :: self
-        class(oris),          intent(in)    :: os
-        integer,              intent(in)    :: pinds(:), iters(:)
-        real, allocatable :: pspecs(:,:,:)
-        integer :: i,nptcls,mincnt,maxcnt,icnt,ngroups,fromp,top,iptcl,eo,igroup
-        if( .not.associated(self%p_ptr) )then
-            THROW_HARD('euclid_sigma2: params pointer is not set')
-        endif
-        nptcls = size(pinds)
-        fromp  = minval(pinds)
-        top    = maxval(pinds)
-        self%fromp = fromp
-        self%top   = top
-        mincnt  = minval(iters, mask=iters>0)
-        maxcnt  = maxval(iters)
-        call self%init_from_group_header( sigma2_star_from_iter(mincnt) )
-        allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%fromp:self%top),source=0.)
-        if( self%p_ptr%l_sigma_glob )then
-            do icnt = mincnt,maxcnt
-                call self%read_sigma2_groups( icnt, pspecs, ngroups )
-                if( ngroups /= 1 )then
-                    THROW_HARD('ngroups must be 1 when global sigma is estimated (p_ptr%l_sigma_glob == .true.)')
-                endif
-                !$omp parallel do default(shared) private(i,iptcl,eo) proc_bind(close) schedule(static)
-                do i = 1,nptcls
-                    if( iters(i) == icnt )then
-                        iptcl = pinds(i)
-                        eo    = os%get_eo(iptcl) + 1
-                        self%sigma2_noise(:,iptcl) = pspecs(eo,1,:)
-                    endif
-                enddo
-                !$omp end parallel do
-                deallocate(pspecs)
-            enddo
-        else
-            do icnt = mincnt,maxcnt
-                call self%read_sigma2_groups( icnt, pspecs, ngroups )
-                !$omp parallel do default(shared) private(i,iptcl,igroup,eo) proc_bind(close) schedule(static)
-                do i = 1,nptcls
-                    if( iters(i) == icnt )then
-                        iptcl  = pinds(i)
-                        igroup = os%get_int(iptcl,'stkind')
-                        eo     = os%get_eo(iptcl) + 1
-                        self%sigma2_noise(:,iptcl) = pspecs(eo,igroup,:)
-                    endif
-                enddo
-                !$omp end parallel do
-                deallocate(pspecs)
-            enddo
-        endif
-        self%exists = .true.
-    end subroutine consolidate_sigma2_history
 
     !>  This is a minimal constructor to allow I/O of groups
     subroutine init_from_group_header( self, fname )
@@ -226,29 +143,22 @@ contains
     subroutine read_part( self, os )
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
-        type(sigma2_binfile) :: binfile
         real(real32), allocatable :: state_part(:,:)
         integer :: status
         character(len=STDLEN) :: message
-        if( self%p_ptr%l_sigma_canonical )then
-            call sigma2_state_read_particles(self%binfname%to_char(), self%fromp, self%top, &
-                &state_part, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            if( size(state_part,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
-                &THROW_HARD('canonical particle sigma2 has incompatible shell bounds')
-            allocate(self%sigma2_part(self%kfromto(1):self%kfromto(2),self%fromp:self%top))
-            self%sigma2_part = real(state_part)
-            deallocate(state_part)
-        else
-            call binfile%new_from_file(self%binfname)
-            call binfile%read(self%sigma2_part)
-        endif
+        call sigma2_state_read_particles(self%binfname%to_char(), self%fromp, self%top, &
+            &state_part, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        if( size(state_part,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
+            &THROW_HARD('canonical particle sigma2 has incompatible shell bounds')
+        allocate(self%sigma2_part(self%kfromto(1):self%kfromto(2),self%fromp:self%top))
+        self%sigma2_part = real(state_part)
+        deallocate(state_part)
     end subroutine read_part
 
-    subroutine read_groups( self, os, fname )
+    subroutine read_groups( self, os )
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
-        class(string), optional, intent(in) :: fname
         integer                             :: iptcl, igroup, ngroups, eo
         real(real32), allocatable           :: state_groups(:,:,:)
         integer                             :: status, ishell
@@ -256,27 +166,21 @@ contains
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
-        if( self%p_ptr%l_sigma_canonical )then
-            call sigma2_state_read_groups(self%binfname%to_char(), state_groups, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            ngroups = size(state_groups,3)
-            if( size(state_groups,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
-                &THROW_HARD('canonical grouped sigma2 has incompatible shell bounds')
-            allocate(self%sigma2_groups(2,ngroups,self%kfromto(1):self%kfromto(2)))
-            do igroup = 1, ngroups
-                do eo = 1, 2
-                    do ishell = self%kfromto(1), self%kfromto(2)
-                        self%sigma2_groups(eo,igroup,ishell) = &
-                            &real(state_groups(ishell-self%kfromto(1)+1,eo,igroup))
-                    enddo
+        call sigma2_state_read_groups(self%binfname%to_char(), state_groups, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        ngroups = size(state_groups,3)
+        if( size(state_groups,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
+            &THROW_HARD('canonical grouped sigma2 has incompatible shell bounds')
+        allocate(self%sigma2_groups(2,ngroups,self%kfromto(1):self%kfromto(2)))
+        do igroup = 1, ngroups
+            do eo = 1, 2
+                do ishell = self%kfromto(1), self%kfromto(2)
+                    self%sigma2_groups(eo,igroup,ishell) = &
+                        &real(state_groups(ishell-self%kfromto(1)+1,eo,igroup))
                 enddo
             enddo
-            deallocate(state_groups)
-        else if( present(fname) )then
-            call self%read_sigma2_groups(self%p_ptr%which_iter, self%sigma2_groups, ngroups, filename=fname)
-        else
-            call self%read_sigma2_groups(self%p_ptr%which_iter, self%sigma2_groups, ngroups)
-        endif
+        enddo
+        deallocate(state_groups)
         if( self%p_ptr%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (p_ptr%l_sigma_glob == .true.)')
             ! copy global sigma to particles
@@ -358,36 +262,25 @@ contains
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self
-        type(sigma2_binfile) :: binfile
         type(sigma2_state_header) :: header
         type(string) :: candidate_path, range_path
         integer(int64) :: next_gen
         integer :: status
         character(len=STDLEN) :: message
-        if( self%p_ptr%l_sigma_canonical )then
-            ! transaction-scoped names: the candidate and this range carry the
-            ! generation the master's update will commit (2026-09-07)
-            call sigma2_state_next_generation(self%binfname%to_char(), next_gen, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            candidate_path = sigma2_state_candidate_path(self%binfname%to_char(), next_gen)
-            range_path = sigma2_state_range_path(self%binfname%to_char(), next_gen, self%p_ptr%part, self%p_ptr%numlen)
-            call sigma2_state_read_header(candidate_path%to_char(), header, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            if( header%generation /= next_gen ) THROW_HARD('canonical sigma2 candidate belongs to another transaction')
-            call sigma2_state_write_local_range(range_path%to_char(), header%generation, header%layout_digest, &
-                &self%fromp, real(self%sigma2_part,real32), self%kfromto(1), self%kfromto(2), status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call candidate_path%kill
-            call range_path%kill
-        else if( file_exists(self%binfname) )then
-            call binfile%new_from_file(self%binfname)
-        else
-            call binfile%new(self%binfname, self%fromp, self%top, self%kfromto)
-        endif
-        if( .not. self%p_ptr%l_sigma_canonical )then
-            call binfile%write(self%sigma2_part)
-            call binfile%kill
-        endif
+        ! transaction-scoped names: the candidate and this range carry the
+        ! generation the master's update will commit (2026-09-07)
+        call sigma2_state_next_generation(self%binfname%to_char(), next_gen, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        candidate_path = sigma2_state_candidate_path(self%binfname%to_char(), next_gen)
+        range_path = sigma2_state_range_path(self%binfname%to_char(), next_gen, self%p_ptr%part, self%p_ptr%numlen)
+        call sigma2_state_read_header(candidate_path%to_char(), header, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        if( header%generation /= next_gen ) THROW_HARD('canonical sigma2 candidate belongs to another transaction')
+        call sigma2_state_write_local_range(range_path%to_char(), header%generation, header%layout_digest, &
+            &self%fromp, real(self%sigma2_part,real32), self%kfromto(1), self%kfromto(2), status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        call candidate_path%kill
+        call range_path%kill
         call self%report_euclid_diag
         ! reset so that the next iteration's report covers only the particles it updates
         if( allocated(self%diag_ratio) ) self%diag_ratio = -1.

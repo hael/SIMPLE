@@ -3351,7 +3351,7 @@ the acceptable-looking outputs do not validate the prior.
        euclid system far better (bgal startup base residual 0.23 with
        the half-map sigmas, 0.08 with calc_pspec's). Worse, refine3D
        then re-derived its own regardless, because
-       `sigma2_stage_needs_bootstrap` was positional
+       the former sigma bootstrap predicate was positional
        (`startit <= 1`) and never checked whether usable sigmas
        existed -- so the startup was regularized against sigmas the
        refinement discarded. That predicate now also requires the

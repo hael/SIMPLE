@@ -44,7 +44,6 @@ type stream_chunk
     procedure          :: calc_sigma2
     procedure          :: analyze2D
     procedure          :: read
-    procedure          :: split_sigmas_into
     procedure, private :: gen_final_cavgs
     procedure          :: remove_folder
     procedure          :: display_iter
@@ -274,7 +273,6 @@ contains
         if( self%p_ptr%nparts_chunk > 1 ) call cline_pspec%set('nparts',self%p_ptr%nparts_chunk)
         call cline_pspec%set('projfile', self%projfile_out)
         call cline_pspec%set('projname', CHUNK_PROJNAME)
-        call cline_pspec%set('sigma_store', self%p_ptr%sigma_store)
         call self%spproj%update_projinfo(cline_pspec)
         call self%spproj%write()
         self%available  = .false.
@@ -350,35 +348,6 @@ contains
             end subroutine average_into
 
     end subroutine read
-
-    ! split sigmas into individually named per stack documents
-    subroutine split_sigmas_into( self, folder )
-        use simple_euclid_sigma2, only: split_sigma2_into_groups, sigma2_star_from_iter
-        class(stream_chunk), intent(in) :: self
-        class(string),       intent(in) :: folder
-        type(string), allocatable :: stks(:)
-        type(string) :: ext, fbody, fname, dest
-        integer      :: i
-        if( self%p_ptr%l_sigma_canonical ) return
-        if( trim(self%p_ptr%sigma_est).eq.'group' )then
-            ! one star file with # of micrograph/stack groups -> # of micrograph groups files
-            allocate(stks(self%nmics))
-            do i = 1, self%nmics
-                fname   = basename(self%orig_stks(i))
-                ext     = fname2ext(fname)
-                fbody   = get_fbody(fname, ext)
-                stks(i) = folder//'/'//fbody//STAR_EXT
-            enddo
-            fname = self%path//sigma2_star_from_iter(self%it)
-            call split_sigma2_into_groups(fname, stks)
-            deallocate(stks)
-        else
-            ! one star file
-            fname = self%path//sigma2_star_from_iter(self%it)
-            dest  = folder//'/chunk_'//int2str(self%id)//STAR_EXT
-            call simple_copy_file(fname,dest)
-        endif
-    end subroutine split_sigmas_into
 
     ! classes generation at original sampling
     subroutine gen_final_cavgs( self, clines )

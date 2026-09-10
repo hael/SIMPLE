@@ -5,7 +5,6 @@ use simple_core_module_api
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 use simple_oris,          only: oris
-use simple_euclid_sigma2, only: average_sigma2_groups
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
     &sigma2_state_project_layout_digest, sigma2_state_reduce_groups
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
@@ -18,7 +17,8 @@ implicit none
 
 contains
 
-    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, cavgs_replace, sigma2_out, update_classno )
+    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, &
+            &cavgs_replace, update_classno )
         class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
         class(string),           intent(in)    :: folder          ! output folder
         class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
@@ -27,21 +27,19 @@ contains
         logical,       optional, intent(in)    :: cavgs_replace   ! replace cavgs
         logical,       optional, intent(in)    :: update_classno  ! update the ptcl class numbers
         class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
-        class(string), optional, intent(in)    :: sigma2_out      ! name for combined sigma2 file
         type(sp_project), allocatable :: chunks(:)
-        type(string),     allocatable :: chunks_sigma2(:), chunks_sigma2_state(:)
+        type(string),     allocatable :: chunks_sigma2_state(:)
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
         type(class_frcs) :: frcs, frcs_chunk
         type(image)      :: img
         type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
-        character(len=STDLEN) :: imgkind_here
-        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp, sigma2_fname
+        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp
         real             :: smpd
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
         logical, allocatable :: chunks_have_canonical(:)
-        logical          :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs, l_merge_sigma2
+        logical          :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs
         logical          :: l_merge_canonical
         logical          :: frcs_initialised
         l_write_proj     = .true.
@@ -54,18 +52,13 @@ contains
         nchunks = size(chunk_fnames)
         if( nchunks < 1 ) THROW_HARD('merge_chunk_projfiles requires at least one chunk project')
         allocate(chunks(nchunks))
-        allocate(chunks_sigma2(nchunks), chunks_sigma2_state(nchunks), chunks_have_canonical(nchunks))
+        allocate(chunks_sigma2_state(nchunks), chunks_have_canonical(nchunks))
         chunks_have_canonical = .false.
         dir = folder%to_char()//'/'
         if( present(projname_out) )then
             projfile_out = dir%to_char()//projname_out%to_char()//trim(METADATA_EXT)
         else
             projfile_out = dir%to_char()//'set'//METADATA_EXT
-        endif
-        if( present(sigma2_out) )then
-            sigma2_fname   = dir%to_char()//sigma2_out%to_char()//trim(STAR_EXT)
-        else
-            sigma2_fname   = dir%to_char()//'sigma2_combined'//trim(STAR_EXT)
         endif
         call merged_proj%os_mic%kill
         call merged_proj%os_stk%kill
@@ -92,7 +85,6 @@ contains
         icls      = 0
         l_merge_evenodd = .true.
         l_merge_frcs    = .true.
-        l_merge_sigma2  = .true.
         do ic = 1,nchunks
             projname = chunk_fnames(ic)
             call chunks(ic)%read_data_info(projname, nmics, nstks, nptcls)
@@ -106,7 +98,6 @@ contains
             if( chunks(ic)%os_out%get_noris() == 0 .or. chunks(ic)%os_cls2D%get_noris() == 0 ) then
                 l_merge_evenodd = .false.
                 l_merge_frcs    = .false.
-                l_merge_sigma2  = .false.
                 cycle
             end if
             call chunks(ic)%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
@@ -119,13 +110,6 @@ contains
             l_merge_evenodd = l_merge_evenodd .and. file_exists(evenname) .and. file_exists(oddname)
             call chunks(ic)%get_frcs(frc_fname, 'frc2D', fail=.false.)
             l_merge_frcs = l_merge_frcs .and. frc_fname /= NIL .and. file_exists(frc_fname)
-            do i = 1,chunks(ic)%os_out%get_noris()
-                if( chunks(ic)%os_out%isthere(i,'imgkind') )then
-                    call chunks(ic)%os_out%get_static(i, 'imgkind', imgkind_here)
-                    if( trim(imgkind_here) == 'sigma2' ) exit
-                endif
-            end do
-            if( i > chunks(ic)%os_out%get_noris() ) l_merge_sigma2 = .false.
             do i = 1,ncls
                 icls = icls+1
                 call img%read(stkname,i)
@@ -141,12 +125,9 @@ contains
         l_merge_canonical = all(chunks_have_canonical)
         if( any(chunks_have_canonical) .and. .not. l_merge_canonical ) &
             &THROW_HARD('cannot merge a mixture of canonical and legacy sigma2 chunk projects')
-        if( l_merge_canonical ) l_merge_sigma2 = .false.
         call img%kill
         if( .not. l_merge_evenodd ) THROW_WARN('merge_chunk_projfiles: missing even/odd class-average stacks; skipping even/odd merge')
         if( .not. l_merge_frcs )    THROW_WARN('merge_chunk_projfiles: missing frc2D data; skipping FRC merge')
-        if( .not. l_merge_sigma2 .and. .not. l_merge_canonical ) &
-            &THROW_WARN('merge_chunk_projfiles: missing sigma2 data; skipping sigma2 merge')
         ncls_tot = icls
         ! micrographs
         if( nallmics > 0 )then
@@ -219,12 +200,6 @@ contains
                 call merged_proj%os_stk%transfer_ori(istk, chunks(ic)%os_stk, i)
             enddo
             deallocate(clsmap)
-            ! sigma2
-            if( l_merge_sigma2 .and. .not. l_merge_canonical )then
-                call chunks(ic)%get_sigma2(chunks_sigma2(ic))
-            else
-                chunks_sigma2(ic) = NIL
-            endif
             ! making sure the compenv is informed
             if( (ic == 1) .and. (merged_proj%compenv%get_noris() == 0) )then
                 call chunks(1)%read_non_data_segments(chunk_fnames(1))
@@ -255,17 +230,12 @@ contains
         else
             THROW_WARN('merge_chunk_projfiles: missing class-average stack; skipping os_out cavg registration: '//cavgs%to_char())
         endif
-        ! merge and add sigmas
-        if( l_merge_sigma2 )then
-            call average_sigma2_groups(sigma2_fname, chunks_sigma2)
-            if( file_exists(sigma2_fname) ) call merged_proj%add_sigma22os_out(sigma2_fname)
-        endif
         if( l_merge_canonical )then
             call merged_proj%update_projinfo(projfile_out)
             call concatenate_canonical_states
         endif
         call chunks_sigma2_state(:)%kill
-        deallocate(chunks_sigma2, chunks_sigma2_state, chunks_have_canonical)
+        deallocate(chunks_sigma2_state, chunks_have_canonical)
         ! propagate 2D states to 3D
         states = merged_proj%os_cls2D%get_all('state')
         call merged_proj%os_cls3D%new(ncls_tot, .false.)

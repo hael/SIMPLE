@@ -206,7 +206,7 @@ contains
         ! regularization is a separate FSC/SSNR prior applied by volassemble.
         if( params%cc_objfun == OBJFUN_EUCLID )then
             call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
-                &cline, l_sigma_loaded)
+                &l_sigma_loaded)
             if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
         endif
         ! Legacy handshake for rec-writing helpers that still inspect this key.
@@ -425,7 +425,6 @@ contains
         integer :: iptcl, ngroups, status
         logical :: found, rebuild
         character(len=STDLEN) :: message
-        if( .not. params%l_sigma_canonical ) return
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
         if( trim(params%oritype) /= 'ptcl3D' ) &
             &THROW_HARD('canonical sigma2 reconstruction requires oritype=ptcl3D')

@@ -137,7 +137,6 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
-        call reconstruct3D%add_input(UI_PARM, sigma_store, visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)
@@ -213,9 +212,8 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
-        call bootstrap_rec3D%add_input(UI_PARM, sigma_store, visibility=UI_VIS_ADVANCED)
         call bootstrap_rec3D%add_input(UI_PARM, 'which_iter', 'num', 'Sigma iteration index',&
-        &'Iteration index used for the generated sigma2_groups file{1}', 'iteration{1}', .false., 1.0, &
+        &'Iteration index recorded for the generated canonical sigma state{1}', 'iteration{1}', .false., 1.0, &
         &visibility=UI_VIS_DEVELOPER)
         call bootstrap_rec3D%add_input(UI_FILE, 'outfile', 'file', 'Resolution output prefix',&
         &'Optional FSC/resolution text output prefix; state tags are appended', 'e.g. resolution',&
@@ -275,7 +273,6 @@ subroutine new_automask( prgtab )
         &'Reconstruction backend for per-iteration half-map assembly(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
         &'Even Fourier-cropped refinement box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, group="search", visibility=UI_VIS_ADVANCED)
@@ -410,7 +407,6 @@ subroutine new_automask( prgtab )
         &'bootstrap/final reconstructions(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
-        call refine3D_auto%add_input(UI_PARM, sigma_store, group="search", visibility=UI_VIS_ADVANCED)
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., group="search", &
         &visibility=UI_VIS_ADVANCED)
@@ -509,7 +505,6 @@ subroutine new_automask( prgtab )
         &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_DEVELOPER)
         call refine3D_states%add_input(UI_SRCH, sigma_est, group='search', visibility=UI_VIS_ADVANCED)
-        call refine3D_states%add_input(UI_PARM, sigma_store, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'pose_policy', 'multi', 'Pose-search policy', &
         &'Pose-search policy(fixed|local|global){global}. Fixed keeps the projection direction and optimizes the in-plane angle and x/y translations; local uses the current geometric neighborhood; global permits full probabilistic matching', &
         &'fixed, local, or global', .false., 'global', group='search', &
@@ -583,7 +578,6 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
         call classify3D_refs%add_input(UI_SRCH, ptcl_src, group='search', visibility=UI_VIS_ADVANCED)
-        call classify3D_refs%add_input(UI_PARM, sigma_store, group='search', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) and map shifts back to particles(yes|no){no}', '', .false., 'no', group='search', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)

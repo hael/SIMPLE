@@ -8,7 +8,6 @@ use simple_stream2D_state
 use simple_class_frcs,             only: class_frcs
 use simple_cmdline,                only: cmdline
 use simple_commander_base,         only: commander_base
-use simple_euclid_sigma2,          only: average_sigma2_groups, sigma2_star_from_iter
 use simple_gui_utils,              only: mic2thumb, mrc2jpeg_tiled
 use simple_guistats,               only: guistats
 use simple_image,                  only: image
@@ -24,7 +23,7 @@ use simple_stack_io,               only: stack_io
 use simple_starproject_stream,     only: starproject_stream
 use simple_stream_chunk,           only: stream_chunk
 use simple_stream_chunk2D_utils,   only: init_chunk_clustering, analyze2D_new_chunks, memoize_chunks, update_chunks
-use simple_stream_cluster2D_utils, only: cleanup_root_folder, consolidate_sigmas, setup_downscaling, terminate_chunks, terminate_stream2D,&
+use simple_stream_cluster2D_utils, only: cleanup_root_folder, setup_downscaling, terminate_chunks, terminate_stream2D,&
                                   &test_repick, tidy_2Dstream_iter, update_user_params2D, write_project_stream2D, write_repick_refs
 use simple_stream_communicator,    only: stream_http_communicator 
 use simple_stream_utils,           only: update_user_params, wait_for_folder, stream_datestr, process_selected_refs, process_selected_refs_2,&

@@ -748,7 +748,7 @@ contains
         chunk_fnames(2) = params%projfile_target
         ! merge spproj & spproj_target projects
         call merge_chunk_projfiles(chunk_fnames, folder, spproj, write_proj=.false., cavgs_out=cavgs, &
-                                   cavgs_replace=.true., sigma2_out=get_fbody(basename(params%projfile), fname2ext(params%projfile)))
+                                   cavgs_replace=.true.)
         call spproj%write(params%projfile)
         ! read cavgs
         cavg_imgs = read_cavgs_into_imgarr(spproj)

@@ -11,7 +11,6 @@ use simple_qsys_env,      only: qsys_env
 use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
-use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap, sigma2_star_from_iter
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
     &sigma2_state_project_layout_digest, sigma2_state_range_path, sigma2_state_validate_identity, &
     &sigma2_state_next_generation
@@ -67,7 +66,6 @@ type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(cmdline)     :: cline_calc_group_sigmas
     type(convergence) :: conv
     logical :: l_sigma
-    logical :: l_sigma_transition_ready
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -88,7 +86,6 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: have_oris
     logical        :: l_multistates
     logical        :: l_combine_eo
-    logical        :: l_sigma_transition_ready
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_rec3D
     type(cmdline) :: cline_calc_pspec_distr
@@ -603,7 +600,6 @@ contains
         if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
         ! objfun=euclid initialisation
         self%l_sigma = sigma_update_enabled(params)
-        self%l_sigma_transition_ready = trim(params%sigma_transition_ready) == 'yes'
         self%cline_calc_group_sigmas = cline
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
         call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
@@ -613,48 +609,14 @@ contains
                 call build%spproj_field%partition_eo
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( params%l_sigma_canonical )then
-                if( canonical_sigma2_needs_bootstrap(params, build) )then
-                    cline_calc_pspec = cline
-                    call strip_refine3D_search_only_args(cline_calc_pspec)
-                    call cline_calc_pspec%set('prg', 'calc_pspec')
-                    call xcalc_pspec%execute(cline_calc_pspec)
-                    call build%spproj%read_segment('projinfo', params%projfile)
-                else
-                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
-                endif
-            else if( sigma2_stage_needs_bootstrap(startit) )then
+            if( canonical_sigma2_needs_bootstrap(params, build) )then
                 cline_calc_pspec = cline
                 call strip_refine3D_search_only_args(cline_calc_pspec)
                 call cline_calc_pspec%set('prg', 'calc_pspec')
-                call xcalc_pspec%execute( cline_calc_pspec )
+                call xcalc_pspec%execute(cline_calc_pspec)
+                call build%spproj%read_segment('projinfo', params%projfile)
             else
-                ! A grouped sigma file is partition-independent. Skip the
-                ! first consolidation so workers can initialize from it and
-                ! emit particle sigma files in the current partition layout.
-                ! A pre-existing STAR for the start iteration is only a
-                ! legitimate handover at a genuine first iteration (startup
-                ! bootstrap). Wrapper-owned transitions at a later stage start
-                ! (external-reference pose initialization, the abinitio3D
-                ! ini3D-route sigma bootstrap) announce their STAR explicitly
-                ! through sigma_transition_ready=yes; any other STAR at a later
-                ! stage start is foreign (2026-09-06), so the per-particle
-                ! files are kept.
-                self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
-                    &(startit <= 1 .and. file_exists(sigma2_star_from_iter(startit)))
-                if( self%l_sigma_transition_ready )then
-                    ! CC residual updates preserve the image-power seed outside
-                    ! updated shells, so their partition files remain authoritative.
-                    if( trim(params%cc_emit_sigma) == 'yes' )then
-                        write(logfhandle,'(A)') &
-                            &'>>> SIGMA2 INIT: retaining image-bootstrap particle sigmas for CC residual update'
-                    else
-                        call clear_sigma2_partition_files
-                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
-                    endif
-                else
-                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
-                endif
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
             endif
         endif
         ! Keep run-time counters consistent with the new high-level loop
@@ -727,28 +689,6 @@ contains
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, current_build=build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        ! Per-iteration sigma update (euclid)
-        if( self%l_sigma .and. params%l_sigma_canonical )then
-            ! Canonical residuals are prepared below and committed only after assembly.
-        else if( self%l_sigma .and. self%l_sigma_transition_ready )then
-            if( trim(params%cc_emit_sigma) == 'yes' )then
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using image-bootstrap particle sigmas for CC residual update'
-            else if( trim(params%sigma_transition_ready) == 'yes' )then
-                write(logfhandle,'(A)') &
-                    &'>>> SIGMA2 INIT: using wrapper-provided grouped sigmas (pose initialization or stage-start bootstrap)'
-            else
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using reusable grouped sigmas for current partition layout'
-            endif
-            self%l_sigma_transition_ready  = .false.
-            params%sigma_transition_ready = 'no'
-            call cline%set('sigma_transition_ready', 'no')
-        else if( self%l_sigma )then
-            call self%cline_calc_group_sigmas%set('which_iter', &
-                sigma2_group_iter(params%which_iter, matcher_completed=.false.))
-            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
-        endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         ! refine=prob* pre-step
@@ -792,7 +732,7 @@ contains
             call remove_partial_rec_files(params)
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
-        if( self%l_sigma .and. params%l_sigma_canonical ) call prepare_canonical_sigma_update(params, build)
+        if( self%l_sigma ) call prepare_canonical_sigma_update(params, build)
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
@@ -829,7 +769,7 @@ contains
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         end select
         if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
-        if( self%l_sigma .and. params%l_sigma_canonical )then
+        if( self%l_sigma )then
             if( canonical_sigma_commit_deferred(params, converged) )then
                 write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
             else
@@ -917,10 +857,10 @@ contains
         type(commander_rec3D)      :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
-        type(string)  :: prev_refine_path, target_name, fname_vol, vol, fsc_file, chain_files(2)
+        type(string)  :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
         type(string), allocatable :: list(:)
         real    :: smpd
-        integer :: state, box, nfiles, i
+        integer :: state, box, nfiles
         logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
@@ -945,7 +885,6 @@ contains
         endif
         ! final iteration with combined e/o
         self%l_combine_eo = .false.
-        self%l_sigma_transition_ready = trim(params%sigma_transition_ready) == 'yes'
         if( trim(params%combine_eo).eq.'yes' )then
             self%l_combine_eo = .true.
             call cline%set('combine_eo','no')
@@ -1028,12 +967,6 @@ contains
                         call chain_files(2)%kill
                     enddo
                 endif
-                if( params%cc_objfun==OBJFUN_EUCLID .and. .not. params%l_sigma_canonical )then
-                    call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
-                    nfiles = size(list)
-                    if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
-                    deallocate(list)
-                endif
             else
                 ! carry over FSCs
                 do state=1,params%nstates
@@ -1044,18 +977,8 @@ contains
                 ! continued run keeps its trailed statistics instead of
                 ! re-seeding from the previous halfmaps
                 if( params%l_trail_rec ) call carry_over_trail_rec_chains(params, prev_refine_path)
-                if( params%cc_objfun==OBJFUN_EUCLID .and. .not. params%l_sigma_canonical )then
-                    call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
-                    nfiles = size(list)
-                    if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
-                    do i=1,nfiles
-                        target_name = string(PATH_HERE)//basename(list(i))
-                        call simple_copy_file(list(i), target_name)
-                    end do
-                    deallocate(list)
-                endif
             endif
-            if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+            if( sigma_update_enabled(params) )then
                 if( canonical_sigma2_needs_bootstrap(params, build) )then
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
                     call build%spproj%read_segment('projinfo', params%projfile)
@@ -1073,35 +996,11 @@ contains
             ! Base objfun=cc never reads sigmas. Wrapper-owned external-reference
             ! transitions bootstrap before entering this strategy.
             if( sigma_update_enabled(params) )then
-                if( params%l_sigma_canonical )then
-                    if( canonical_sigma2_needs_bootstrap(params, build) )then
-                        call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-                        call build%spproj%read_segment('projinfo', params%projfile)
-                    else
-                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
-                    endif
-                else if( sigma2_stage_needs_bootstrap(params%startit) )then
+                if( canonical_sigma2_needs_bootstrap(params, build) )then
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+                    call build%spproj%read_segment('projinfo', params%projfile)
                 else
-                    ! A grouped sigma file is partition-independent. Skip the
-                    ! first consolidation so workers can initialize from it and
-                    ! emit particle sigma files in the current partition layout.
-                    ! genuine first iteration only; see the shared-memory twin
-                    self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
-                        &(params%startit <= 1 .and. file_exists(sigma2_star_from_iter(params%startit)))
-                    if( self%l_sigma_transition_ready )then
-                        ! CC residual updates preserve the image-power seed outside
-                        ! updated shells, so their partition files remain authoritative.
-                        if( trim(params%cc_emit_sigma) == 'yes' )then
-                            write(logfhandle,'(A)') &
-                                &'>>> SIGMA2 INIT: retaining image-bootstrap particle sigmas for CC residual update'
-                        else
-                            call clear_sigma2_partition_files
-                            write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
-                        endif
-                    else
-                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
-                    endif
+                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
                 endif
             endif
             ! check if we have input volume(s) and/or 3D orientations
@@ -1167,7 +1066,6 @@ contains
         ! Keep consistent iteration counters
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         call prev_refine_path%kill
-        call target_name%kill
         call fname_vol%kill
         call vol%kill
         call fsc_file%kill
@@ -1212,19 +1110,6 @@ contains
         call candidate_path%kill
         call range_path%kill
     end subroutine prepare_canonical_sigma_update
-
-    ! Grouped sigmas do not depend on the worker partition layout. Once they
-    ! are selected as the startup source, remove every stale partition-local
-    ! file so all consumers take the group-only initialization path and the
-    ! matcher regenerates one complete set for the current layout.
-    subroutine clear_sigma2_partition_files
-        type(string), allocatable :: files(:)
-        call simple_list_files(SIGMA2_FBODY//'*.dat', files)
-        if( allocated(files) )then
-            call del_files(files)
-            deallocate(files)
-        endif
-    end subroutine clear_sigma2_partition_files
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_commanders_rec_distr, only: commander_volassemble
@@ -1273,26 +1158,6 @@ contains
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        ! per-iteration group sigmas (euclid)
-        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
-            ! Canonical residuals are prepared below and committed only after assembly.
-        else if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
-            if( trim(params%sigma_transition_ready) == 'yes' )then
-                write(logfhandle,'(A)') &
-                    &'>>> SIGMA2 INIT: using wrapper-provided grouped sigmas (pose initialization or stage-start bootstrap)'
-            else
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using reusable grouped sigmas for current partition layout'
-            endif
-            self%l_sigma_transition_ready  = .false.
-            params%sigma_transition_ready = 'no'
-            call cline%set('sigma_transition_ready', 'no')
-        else if( trim(params%objfun).eq.'euclid' )then
-            call self%cline_calc_group_sigmas%set('which_iter', &
-                sigma2_group_iter(iter, matcher_completed=.false.))
-            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
-        endif
         ! ensure spproj is current
         if( self%have_oris .or. iter > params%startit )then
             call build%spproj%read(params%projfile)
@@ -1335,7 +1200,7 @@ contains
             call remove_partial_rec_files(params)
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
-        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+        if( sigma_update_enabled(params) )then
             call prepare_canonical_sigma_update(params, build)
         endif
         ! schedule distributed jobs
@@ -1469,7 +1334,7 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES'
         endif
-        if( sigma_update_enabled(params) .and. params%l_sigma_canonical )then
+        if( sigma_update_enabled(params) )then
             if( canonical_sigma_commit_deferred(params, converged) )then
                 write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
             else

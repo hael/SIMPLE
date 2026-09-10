@@ -516,7 +516,6 @@ contains
             'Particle orientation segment', 'Fixed to ptcl3D', 'ptcl3D', .false., 'ptcl3D', &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_SRCH, sigma_est, visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_PARM, sigma_store, visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_MASK, mskdiam, required_override=.false., &
             group="mask", visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_COMP, nparts, required_override=.false., &

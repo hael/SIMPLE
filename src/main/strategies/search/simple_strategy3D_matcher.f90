@@ -104,8 +104,8 @@ contains
                 ! scheduled partition. Emit the unchanged committed slice so
                 ! an empty update is a valid transaction rather than a
                 ! missing-file failure.
-                if( p_ptr%l_sigma_canonical .and. ctrl%do_emit_sigma )then
-                    call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+                if( ctrl%do_emit_sigma )then
+                    call prep_sigmas_objfun(p_ptr, b_ptr)
                     call b_ptr%esig%write_sigma2
                 endif
                 converged = .true.
@@ -340,7 +340,7 @@ contains
         subroutine prepare_refs_sigmas_and_pftc()
             if( ctrl%do_bench ) t_prep_refs = tic()
             call read_reprojection_model(p_ptr, b_ptr, batchsz_max)
-            call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+            call prep_sigmas_objfun(p_ptr, b_ptr)
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)

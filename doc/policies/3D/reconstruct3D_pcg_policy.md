@@ -461,7 +461,7 @@ Gated on `objfun`, matching `reconstruct3D`: `objfun=cc` runs unweighted
 them. A missing sigma2 file under `objfun=euclid` is a hard error, never a silent
 unweighted fallback — that would quietly change which objective is minimised.
 
-Sigma2 is per-particle-per-shell, read via `euclid_sigma2` over the group STAR
+Sigma2 is per-particle-per-shell, read via `euclid_sigma2` from the canonical state
 file (as `flex_analysis` does), then upsampled to the operator's shell range.
 Discovery/carry-over/loading lives once in `src/fileio/simple_sigma2_files.f90`,
 called by both `flex_analysis` and the `reconstruct3D` PCG strategy. That module is

@@ -6,7 +6,6 @@ use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration
 use simple_commanders_volops,    only: commander_symmetrize_map
 use simple_cluster_seed,         only: gen_labelling
 use simple_class_frcs,           only: class_frcs
-use simple_euclid_sigma2,        only: sigma2_star_from_iter
 use simple_matcher_refvol_utils, only: remove_ref_section_files
 use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
@@ -616,7 +615,6 @@ contains
         class(parameters), intent(in) :: params
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(cmdline) :: cline_calc_group_sigmas
-        if( .not. params%l_sigma_canonical ) return
         if( params%cc_objfun /= OBJFUN_EUCLID .and. trim(params%cc_emit_sigma) /= 'yes' ) return
         if( .not. cline_refine3D%defined('sigma_commit_deferred') ) return
         if( cline_refine3D%get_carg('sigma_commit_deferred') /= 'yes' ) return
@@ -693,16 +691,16 @@ contains
             ! starting reconstruction is ML-regularized before any refine3D
             ! iteration has estimated particle sigmas. One rule for every such
             ! start (2026-09-06): seed from particle power spectra at the
-            ! consuming stage's start iteration and hand over through
-            ! sigma_transition_ready=yes; the stage's first euclid iteration
-            ! replaces the seed with residual sigmas. No-op when the directory
-            ! already holds an estimate (every later stage boundary).
+            ! consuming stage's start iteration and hand it over through the
+            ! canonical state.
+            ! The stage's first euclid iteration replaces the seed with
+            ! residual sigmas. No-op when the project already owns a compatible
+            ! canonical estimate (every later stage boundary).
             sigma_iter = 1
             if( cline_refine3D%defined('startit') ) sigma_iter = max(1, cline_refine3D%get_iarg('startit'))
-            call ensure_sigma2_for_iteration(cline_rec, projfile, sigma_iter, params%l_sigma_canonical, &
-                &params%box, params%smpd, params%l_sigma_glob, &
-                &'ABINITIO3D STAGE '//int2str(istage)//' STARTING RECONSTRUCTION', l_sigma_bootstrapped, &
-                &consumer_cline=cline_refine3D)
+            call ensure_sigma2_for_iteration(cline_rec, projfile, sigma_iter, params%box, params%smpd, &
+                &params%l_sigma_glob, 'ABINITIO3D STAGE '//int2str(istage)//' STARTING RECONSTRUCTION', &
+                &l_sigma_bootstrapped)
             if( l_sigma_bootstrapped ) call cline_rec%set('which_iter', sigma_iter)
         endif
         call xrec3D%execute(cline_rec)
@@ -781,7 +779,6 @@ contains
     end function stage_rec_is_euclid
 
     subroutine randomize_states( params, spproj, projfile, xrec3D, istage, clean_sampling, reconstruct_states )
-        use simple_commanders_euclid,  only: commander_calc_group_sigmas
         class(parameters),     intent(inout) :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
@@ -789,8 +786,6 @@ contains
         integer,               intent(in)    :: istage
         logical, optional,     intent(in)    :: clean_sampling, reconstruct_states
         integer, parameter :: MIN_SPLIT_STATE_POP = 5
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline)                     :: cline_calc_group_sigmas
         integer :: pop, state
         logical :: l_clean_sampling, l_reconstruct_states
         l_clean_sampling     = .true.
@@ -810,20 +805,11 @@ contains
         call cline_refine3D%set(     'nstates', params%nstates)
         call cline_reconstruct3D%set('nstates', params%nstates)
         call cline_reproject%set(    'nstates', params%nstates)
-        ! Legacy reconstruction selects an iteration STAR, so materialize it
-        ! before this matcher-bypassing reconstruction. Canonical state is
-        ! already committed and state relabelling does not change its row
-        ! identity or global/stack grouping; reconstruct3D consumes it directly.
+        ! Canonical state is already committed and state relabelling does not
+        ! change its row identity or global/stack grouping; reconstruct3D
+        ! consumes it directly.
         if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
-            if( params%l_sigma_canonical )then
-                write(logfhandle,'(A)') '>>> DOCKED SPLIT: reusing committed canonical sigmas'
-            else
-                cline_calc_group_sigmas = cline_refine3D
-                call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
-                call strip_pcg_backend_keys(cline_calc_group_sigmas)
-                call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
-                call cline_calc_group_sigmas%kill
-            endif
+            write(logfhandle,'(A)') '>>> DOCKED SPLIT: reusing committed canonical sigmas'
         endif
         ! Multi-state reconstruction
         if( l_reconstruct_states ) call calc_rec(params, projfile, xrec3D, istage)
@@ -878,8 +864,8 @@ contains
         class(commander_base), intent(inout) :: xrec3D
         class(commander_base), intent(inout) :: xbootstrap_rec3D
         logical,               intent(in)    :: l_postprocess
-        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star, vol_envmsk
-        integer      :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, sigma_iter, bootstrap_sigma_iter
+        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, vol_envmsk
+        integer      :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, bootstrap_sigma_iter
         real         :: smpd
         logical      :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
         write(logfhandle,'(A)') '>>>'
@@ -892,29 +878,20 @@ contains
         smpd = spproj%os_stk%get(stkind, 'smpd')
         write(logfhandle,'(A,I0,A,F8.4)') '>>> FINAL RECONSTRUCTION SAMPLING: box=', ldim(1), ' smpd=', smpd
         call prep_final_rec_cline(cline_reconstruct3D, 'reconstruct3D')
-        if( params%l_sigma_canonical .and. final_stage_uses_ml_reg() )then
+        l_bootstrap_sigmas = .false.
+        if( final_stage_uses_ml_reg() )then
             ! a valid committed state is reused directly; a missing, stale,
             ! wrong-grid, wrong-layout or wrong-grouping state is rebuilt from
-            ! particle power and residual-upgraded exactly like a rebuilt
-            ! legacy STAR (bootstrap_rec3D seeds the canonical state itself).
-            ! The registration-box rule is the legacy store's: sigmas
-            ! estimated at a cropped box are refreshed at native sampling
-            ! before the shipped map, whichever store holds them (2026-09-07)
-            sigma_iter         = 0
+            ! particle power and residual-upgraded by bootstrap_rec3D.
+            ! Sigmas estimated at a cropped registration box are refreshed at
+            ! native sampling before the shipped map (2026-09-07).
             l_bootstrap_sigmas = canonical_final_rec_needs_bootstrap()
             if( .not. l_bootstrap_sigmas ) l_bootstrap_sigmas = final_rec_box_changed()
             if( .not. l_bootstrap_sigmas ) write(logfhandle,'(A)') &
                 &'>>> FINAL RECONSTRUCTION: reusing committed canonical sigmas'
-        else
-            sigma_iter = final_rec_sigma_iter()
-            l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
-        endif
-        if( sigma_iter > 0 .and. .not. l_bootstrap_sigmas )then
-            call cline_reconstruct3D%set('which_iter', sigma_iter)
-            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION SIGMA ITERATION: ', sigma_iter
         endif
         if( l_bootstrap_sigmas )then
-            bootstrap_sigma_iter = final_rec_bootstrap_sigma_iter(sigma_iter)
+            bootstrap_sigma_iter = final_rec_bootstrap_sigma_iter()
             call prep_final_rec_cline(cline_reconstruct3D, 'bootstrap_rec3D')
             call cline_reconstruct3D%set('which_iter', bootstrap_sigma_iter)
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION BOOTSTRAP SIGMA ITERATION: ', bootstrap_sigma_iter
@@ -969,48 +946,11 @@ contains
         enddo
         call spproj%write_segment_inside('out', projfile)
         call stkname%kill
-        call sigma_star%kill
 
         contains
 
-            integer function final_rec_sigma_iter() result(iter)
-                integer :: candidates(4), i
-                iter = 0
-                if( .not. final_stage_uses_ml_reg() ) return
-                candidates = 0
-                if( cline_refine3D%defined('endit') )then
-                    candidates(1) = cline_refine3D%get_iarg('endit') + 1
-                    candidates(3) = cline_refine3D%get_iarg('endit')
-                endif
-                if( cline_refine3D%defined('which_iter') )then
-                    candidates(2) = cline_refine3D%get_iarg('which_iter') + 1
-                    candidates(4) = cline_refine3D%get_iarg('which_iter')
-                endif
-                do i = 1,size(candidates)
-                    if( candidates(i) <= 0 )cycle
-                    sigma_star = sigma2_star_from_iter(candidates(i))
-                    if( file_exists(sigma_star) )then
-                        iter = candidates(i)
-                        return
-                    endif
-                enddo
-            end function final_rec_sigma_iter
-
-            logical function final_rec_needs_bootstrap_sigmas( sigma_iter ) result( l_bootstrap )
-                integer, intent(in) :: sigma_iter
-                l_bootstrap = .false.
-                if( .not. final_stage_uses_ml_reg() ) return
-                if( sigma_iter <= 0 )then
-                    l_bootstrap = .true.
-                    write(logfhandle,'(A)') '>>> FINAL RECONSTRUCTION: no compatible sigma file found; bootstrapping sigmas'
-                    return
-                endif
-                l_bootstrap = final_rec_box_changed()
-            end function final_rec_needs_bootstrap_sigmas
-
-            !> the one registration-box rule of both sigma stores: sigmas
-            !! estimated at a cropped registration box are refreshed at the
-            !! final (native) box before the shipped map
+            !> Sigmas estimated at a cropped registration box are refreshed at
+            !! the final (native) box before the shipped map.
             logical function final_rec_box_changed() result( l_changed )
                 integer :: reg_box
                 l_changed = .false.
@@ -1035,15 +975,9 @@ contains
                     &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
             end function canonical_final_rec_needs_bootstrap
 
-            integer function final_rec_bootstrap_sigma_iter( sigma_iter ) result( iter )
-                integer, intent(in) :: sigma_iter
+            integer function final_rec_bootstrap_sigma_iter() result( iter )
                 iter = 1
-                if( sigma_iter > 0 )then
-                    ! Write bootstrap sigmas to the next index so an existing
-                    ! compatible star is never overwritten. In the common
-                    ! refine3D-finalized case this advances endit+1 to endit+2.
-                    iter = sigma_iter + 1
-                else if( cline_refine3D%defined('endit') )then
+                if( cline_refine3D%defined('endit') )then
                     iter = cline_refine3D%get_iarg('endit') + 2
                 else if( cline_refine3D%defined('which_iter') )then
                     iter = cline_refine3D%get_iarg('which_iter') + 2
@@ -1058,7 +992,6 @@ contains
                 call child_cline%set('prg',      prg)
                 call child_cline%set('mkdir',    'no')
                 call child_cline%set('projfile', projfile)
-                call child_cline%set('sigma_store', params%sigma_store)
                 call child_cline%set('sigma_est',   params%sigma_est)
                 ! volassemble appends _STATENN and writes the extension-less
                 ! resolution document next to rec_final_stateNN.mrc.

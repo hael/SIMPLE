@@ -7,7 +7,6 @@ use json_module
 use simple_class_frcs,           only: class_frcs
 use simple_cmdline,              only: cmdline
 use simple_commanders_cluster2D, only: commander_rank_cavgs
-use simple_euclid_sigma2,        only: sigma2_star_from_iter
 use simple_image,                only: image
 use simple_parameters,           only: parameters
 use simple_qsys_funs,            only: qsys_cleanup
@@ -20,7 +19,6 @@ use simple_syslib,               only: get_current_rss_bytes, get_peak_rss_bytes
 implicit none
 
 public :: cleanup_root_folder
-public :: consolidate_sigmas
 public :: setup_downscaling
 public :: terminate_chunks
 public :: terminate_stream2D
@@ -93,7 +91,6 @@ contains
         logical, optional, intent(in)  :: all
         type(string), allocatable :: files(:), folders(:)
         integer :: i
-        call simple_rmdir(SIGMAS_DIR)
  !       call simple_rmdir(DIR_SNAPSHOT) ! need snapshots keeping 
         call del_file(USER_PARAMS2D)
         call del_file(POOL_PROJFILE)
@@ -119,45 +116,6 @@ contains
             endif
         endif
     end subroutine cleanup_root_folder
-
-    ! Private utility to aggregate sigma2
-    subroutine consolidate_sigmas( params, project, nstks )
-        use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
-        class(parameters),          intent(in) :: params
-        type(sp_project),           intent(in) :: project
-        integer,                    intent(in) :: nstks
-        type(string) :: stack_fname, ext, fbody
-        type(string), allocatable :: sigma_fnames(:)
-        integer :: i, istk
-        if( params%l_sigma_canonical ) return
-        if( l_update_sigmas )then
-            if( trim(params%sigma_est).eq.'group' )then
-                allocate(sigma_fnames(nstks))
-                do istk = 1,nstks
-                    call project%os_stk%getter(istk,'stk',stack_fname)
-                    stack_fname = basename(stack_fname)
-                    ext         = fname2ext(stack_fname)
-                    fbody       = get_fbody(stack_fname, ext)
-                    sigma_fnames(istk) = SIGMAS_DIR//'/'//fbody%to_char()//STAR_EXT
-                enddo
-                call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                deallocate(sigma_fnames)
-            else
-                ! sigma_est=global & first iteration
-                if( pool_iter==1 )then
-                    allocate(sigma_fnames(glob_chunk_id))
-                    do i = 1,glob_chunk_id
-                        sigma_fnames(i) = SIGMAS_DIR//'/chunk_'//int2str(i)//STAR_EXT
-                    enddo
-                    call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                    deallocate(sigma_fnames)
-                endif
-            endif
-            do i = 1,params%nparts_pool
-                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
-            enddo
-        endif
-    end subroutine consolidate_sigmas
 
     subroutine debug_print( str )
         character(len=*), intent(in) :: str
@@ -358,7 +316,6 @@ contains
             endif
         endif
         ! cleanup
-        call simple_rmdir(SIGMAS_DIR)
         call del_file(POOL_DIR//POOL_PROJFILE)
         call del_file(projfile4gui)
         if( .not. DEBUG_HERE )then
@@ -427,7 +384,6 @@ contains
             call del_file(prefix//MRC_EXT)
             call del_file(POOL_DIR//CLS2D_STARFBODY//'_iter'//int2str_pad(pool_iter-5,3)//STAR_EXT)
             call del_file(prefix // '.jpg')
-            if( l_update_sigmas ) call del_file(string(POOL_DIR)//sigma2_star_from_iter(pool_iter-5))
         endif
     end subroutine tidy_2Dstream_iter
 

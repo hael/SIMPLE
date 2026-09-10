@@ -79,7 +79,6 @@ contains
         integer :: iptcl, ngroups, status
         logical :: found, rebuild
         character(len=STDLEN) :: message
-        if( .not. params%l_sigma_canonical ) return
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
         rebuild = .true.
         call build%spproj%get_sigma2_state_path(state_path, found)

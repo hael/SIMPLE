@@ -73,7 +73,7 @@ contains
         type(string) :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
         type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_sim
         type(string) :: fname_cvags_vs_reprojs
-        integer      :: i, iter, cnt, cnt2, funit, io_stat, endit, ncavgs
+        integer      :: i, iter, cnt, cnt2, funit, io_stat, ncavgs
         real         :: smpd
         logical      :: fall_over
         fbody       = refine3D_state_vol_fbody(1)
@@ -128,7 +128,6 @@ contains
             call xrefine3D_nano%execute(cline_refine3D_nano)
             call cline_refine3D_nano%set('vol1', fname_simvol)   ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
-            endit = cline_refine3D_nano%get_iarg('endit')        ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             ! model building
@@ -144,13 +143,8 @@ contains
             call simple_copy_file(fname_binary,      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(fname_ccs,         iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_CC.mrc')
             call simple_copy_file(string(SPLITTED), iter_dir//fbody_split//'_iter'//int2str_pad(i,3)//'.mrc')
-            if( params%cc_objfun==OBJFUN_EUCLID )then
-                call simple_copy_file(string(SIGMA2_GROUP_FBODY)//int2str(endit)//STAR_EXT,&
-                    &iter_dir//SIGMA2_GROUP_FBODY//int2str_pad(i,3)//STAR_EXT)
-            endif
             ! clean
             call exec_cmdline(string('rm -f ')//fbody//'_iter*')
-            if( params%cc_objfun==OBJFUN_EUCLID ) call exec_cmdline('rm -f '//SIGMA2_GROUP_FBODY//'*'//STAR_EXT)
             call del_file(fname_atoms)
             call del_file(fname_binary)
             call del_file(fname_ccs)
