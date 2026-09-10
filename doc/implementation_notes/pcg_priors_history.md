@@ -1,6 +1,32 @@
-# PCG priors: experiment record and the NU-evidence prior design
+# PCG backend: the complete experiment record (2026-08-25 to 2026-09-10)
 
-## Status
+> **This is history, frozen on 2026-09-10.** It is the verbatim record of
+> every experiment, measurement, decision and reversal of the PCG
+> reconstruction backend and its priors, kept so that no experiment is
+> re-run and no number has to be re-measured. It is NOT the description of
+> the backend as it stands and it is not maintained as one. For that, read:
+>
+> - `pcg_backend_overview.md` -- what the PCG backend IS today, in four
+>   pages, present tense only;
+> - `pcg_decision_log.md` -- one dated paragraph per decision, in order,
+>   with what forced it and what it superseded; new decisions go there;
+> - the binding contracts: `doc/policies/3D/reconstruct3D_pcg_policy.md`,
+>   the PCG sections of `refine3D_policy.md` and `refine3D_auto_policy.md`,
+>   and `doc/policies/3D/automasking_policy.md`.
+>
+> Reading guide to what follows. The design sections (1-11) were written
+> in late August around estimators that no longer exist: the
+> binary-envelope solvent prior `Q_s` (removed 2026-08-27), the Wilson
+> prior `Q_W` (removed 2026-08-29) and the NU-evidence replay precision
+> `Q_NU` with its auto-lambda/auto-target controllers (removed 2026-09-06).
+> The "Status" text they carry is the status at the time of writing. The
+> dated records under "Staged development plan" and the "Active dev list"
+> (a numbered list that became a journal; items 1-12 with nested records
+> through 2026-09-10) are the primary sources the decision log cites by
+> date. Where an entry is superseded, the decision log says by what; this
+> file was not edited to say so.
+
+## Status (as written 2026-08-29; superseded, see the banner)
 
 This is the single reference for regularization of the PCG reconstruction
 backend: what exists on master, what was tried and removed (with the
@@ -2738,6 +2764,20 @@ the acceptable-looking outputs do not validate the prior.
    line reports INIT= (start residual) next to RESID= so a start worse than
    nothing can never again hide in the sidecar files. The solve-kind field
    of the support-provenance sidecar is now provenance only.
+   RESULT (2026-09-10, ~/for_claude/PfCRT_regression/cold-start, first
+   run at c9808eff): 3.98 A, side chains, identical to the good gridding
+   runs. The stage-6 take-off is back: matching low-pass promoted to
+   5.97 A at the first NU iteration (it 86), 4.44 A by it 90, FSC-0.143
+   7.96 -> 4.44 A within the stage (gridding: 8.9 -> 4.5). The cold base
+   solve reaches RESID 0.06-0.09 in two iterations, BETTER than the
+   warm-started 0.15-0.2 -- the warm start was harming the base too. The
+   ML replay from the shell-shrunk base: INIT 3-8 -> RESID 1-5 in stages
+   3-5 (the shrinkage start is worse than zero for the ML system while the
+   FSC is low across most shells; harmless here, the base pair drives FSC
+   and NU), INIT ~0.2 -> RESID ~0.04 from stage 6 on, a brief INIT 1.4-2
+   at the stage-8 crop transition. Cost unchanged by the change: PCG
+   master phase 15.9 s/it vs gridding 4.2, refine3D parts 12.3 vs 7.6 s/it
+   (the workers write the raw accumulators), 7463 s vs 4817 s total.
 
    msp1 STAGE-7 COLLAPSE ROOT CAUSE (2026-09-06, from the full log sets):
    the external-init repeats (5_abinitio3D) ran next to the completed

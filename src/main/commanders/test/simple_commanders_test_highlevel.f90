@@ -1337,7 +1337,7 @@ subroutine exec_test_pcg_recon( self, cline )
         ! with (see set_mask: x = P u gives (P H P) u = P b). The soft edge
         ! makes P non-idempotent, so a one-sided or asymmetric mask application
         ! breaks the dot-product identity where the unmasked check cannot see
-        ! it. Priors will attach inside this contract (pcg_priors.md S10
+        ! it. Priors will attach inside this contract (pcg_priors_history.md S10
         ! Stage 1.1), so it is asserted here before any of them exist.
         write(logfhandle,'(a)') '>>> STAGE 3b: masked-operator (P H P) symmetry and positive-definiteness'
         call pcgop%set_mask(real(BOX)/3.0)

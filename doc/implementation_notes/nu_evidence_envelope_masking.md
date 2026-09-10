@@ -4,7 +4,7 @@
 > retired: matching references are NEVER multiplied with an envelope
 > (evidence or density) before reprojection — hard-removing density present
 > in the particle images destroys pose discrimination (PfCRT collapse,
-> `pcg_priors.md` item 8). Under `automsk=yes` the evidence envelope now
+> `pcg_priors_history.md` item 8). Under `automsk=yes` the evidence envelope now
 > defines the NU filter-field BACKGROUND (heavy background low-pass,
 > cisTEM-style), and on the PCG backend that field enters reconstruction
 > only through the `Q_NU` precision prior. The `envfsc=yes` density-mask FSC

@@ -166,7 +166,7 @@ real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
 ! non-increasing from coarse to fine.
 integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
 real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
-! Adaptive band granularity (pcg_priors.md Stage 6.6, final form): the band
+! Adaptive band granularity (pcg_priors_history.md Stage 6.6, final form): the band
 ! ladder is derived from the ACTUAL candidate bank at evidence-build time --
 ! the static four bands when the bank is the discrete ladder (abinitio3D's
 ! mode), extended geometrically only over candidates the nu_refine shell walk
@@ -179,7 +179,7 @@ real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric
 !! appended band is KEPT only if its mean support reaches this fraction;
 !! otherwise it is pruned finest-first so a zero-support subdivision
 !! self-neutralizes to the static ladder (measured over-suppression on 1WCM,
-!! pcg_priors.md S6.6 record).
+!! pcg_priors_history.md S6.6 record).
 real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
 !> Adaptive matching low-pass support gate. The promoted cutoff is the finest
 !! value for which this percentage of assigned non-null support selected that
@@ -245,7 +245,7 @@ integer,          allocatable :: nu_mask_vox(:,:)
 logical,          allocatable :: nu_observed_mask(:)
 integer :: n_nu_observed = 0
 real,             allocatable :: nu_smooth_norm(:,:,:)
-! Solvent-constraint clamp (pcg_priors.md dev item 4): the objective and null
+! Solvent-constraint clamp (pcg_priors_history.md dev item 4): the objective and null
 ! competition retain the broad spherical domain. The whitening fit omits exact
 ! zero/zero samples introduced by a narrower PCG solve support because those
 ! are boundary conditions, not noise observations. Solvent voxels are fixed to
@@ -280,7 +280,7 @@ logical, allocatable :: nu_calib_lmask(:) !< labels free here; fixed solvent els
 logical, allocatable :: nu_null_lmask(:)  !< null statistics estimated here (the Euclidean shell)
 integer :: n_nu_calib = 0
 integer :: n_nu_null  = 0
-! Setup retention across two NU consumers of the same base pair (pcg_priors.md
+! Setup retention across two NU consumers of the same base pair (pcg_priors_history.md
 ! dev item 4 dedup; historically the removed Q_NU evidence phase followed by
 ! the matching-reference generation): both run on the same base pair with the same optimized, extended,
 ! solvent-clamped setup when nu_refine=yes -- the evidence phase may retain

@@ -46,6 +46,8 @@ type :: pcg_solver_outcome
     real(dp)          :: restart_trigger_curvature = 0.0_dp !< warm-attempt curvature that caused a cold restart
     integer           :: restart_trigger_iteration = 0      !< warm-attempt iteration that caused a cold restart
     logical           :: cold_restart_used    = .false.     !< outcome is from the one permitted cold retry
+    logical           :: start_rejected       = .false.     !< the nonzero start was worse than zero and was discarded before iterating
+    real              :: rejected_start_initial = 0.0       !< initial relative residual of the discarded start
     logical           :: converged            = .false.
     real, allocatable  :: rel_residual_history(:)
     real, allocatable  :: rel_update_history(:)
@@ -536,7 +538,7 @@ contains
     end subroutine set_mask
 
     !> caller-supplied real-space [0,1] volume as the support P (clipped); same
-    !! contract as set_mask. Experimental focused support (pcg_priors.md dev item 5)
+    !! contract as set_mask. Experimental focused support (pcg_priors_history.md dev item 5)
     subroutine set_mask_volume( self, mskvol )
         class(reconstructor_pcg), intent(inout) :: self
         class(image),             intent(in)    :: mskvol
@@ -2554,7 +2556,10 @@ contains
     end subroutine solve
 
     !> solves against the RHS built by end_accum, no observed planes resident
-    subroutine solve_accum( self, x, maxits, rtol, rel_res_hist, niters, outcome )
+    !! start_max_rel_resid: a nonzero start whose initial relative residual
+    !! exceeds it is discarded for a zero start before the first iteration
+    !! (free: the zero start's residual is b itself, no operator application)
+    subroutine solve_accum( self, x, maxits, rtol, rel_res_hist, niters, outcome, start_max_rel_resid )
         class(reconstructor_pcg),           intent(inout) :: self
         real,                               intent(inout) :: x(self%box,self%box,self%box)
         integer,                  optional, intent(in)    :: maxits
@@ -2562,16 +2567,17 @@ contains
         real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
         integer,                  optional, intent(out)   :: niters
         type(pcg_solver_outcome), optional, intent(out)   :: outcome
+        real,                     optional, intent(in)    :: start_max_rel_resid
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; solve_accum')
         ! the initial guess arrives in the output space (a shipped half map is
         ! window*u): convert it to u rather than projecting again, the exit window defines the output
         call self%window_div(x)
-        call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
+        call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome, start_max_rel_resid)
     end subroutine solve_accum
 
     !> the solver proper. Reads the RHS from self%b_rhs: passing a component of
     !! intent(inout) self as a separate dummy is an aliasing hazard, copying it costs 67 MB at box 256
-    subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters, outcome )
+    subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters, outcome, start_max_rel_resid )
         class(reconstructor_pcg),           intent(inout) :: self
         real,                               intent(inout) :: x(self%box,self%box,self%box)
         integer,                  optional, intent(in)    :: maxits
@@ -2579,6 +2585,7 @@ contains
         real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
         integer,                  optional, intent(out)   :: niters
         type(pcg_solver_outcome), optional, intent(out)   :: outcome
+        real,                     optional, intent(in)    :: start_max_rel_resid
         ! the reported and tested residual is the true ||r||_2/||b||_2 (the
         ! preconditioned M-norm is not monotone in PCG and wanders with a singular M;
         ! kept in the outcome as a diagnostic of how well M models H). The recurrence
@@ -2610,6 +2617,8 @@ contains
         allocate(mnorm_hist(mmaxits), source=-1.0)
         ! profile the iterations only; forming the RHS is a one-off setup cost
         call self%reset_profile
+        bnorm = sqrt(self%dot_real_volume(self%b_rhs,self%b_rhs))
+        if( bnorm <= 0.0_dp ) THROW_HARD('zero right-hand side; nothing to reconstruct; solve')
         if( all(x == 0.0) )then
             ! zero initialization: skip the operator application known to return zero
             allocate(hp(self%box,self%box,self%box), source=0.0)
@@ -2617,15 +2626,25 @@ contains
             hp = self%apply_normal(x)
         endif
         r  = self%b_rhs - hp
+        rnorm = sqrt(self%dot_real_volume(r,r))
+        result%initial_rel_residual = real(rnorm / bnorm)
+        if( present(start_max_rel_resid) )then
+            if( result%initial_rel_residual > start_max_rel_resid .and. any(x /= 0.0) )then
+                ! the start is worse than nothing: discard it before the first
+                ! iteration; the zero start's residual is b, no operator applied
+                result%start_rejected         = .true.
+                result%rejected_start_initial = result%initial_rel_residual
+                x     = 0.0
+                r     = self%b_rhs
+                rnorm = bnorm
+                result%initial_rel_residual = 1.0
+            endif
+        endif
         z  = self%apply_precond(r)
         p  = z
         rho  = self%dot_real_volume(r,z)
         rho0 = rho
         if( rho0 <= 0.0_dp ) THROW_HARD('non-positive initial dot(r,z); preconditioner is not positive definite; solve')
-        bnorm = sqrt(self%dot_real_volume(self%b_rhs,self%b_rhs))
-        if( bnorm <= 0.0_dp ) THROW_HARD('zero right-hand side; nothing to reconstruct; solve')
-        rnorm = sqrt(self%dot_real_volume(r,r))
-        result%initial_rel_residual = real(rnorm / bnorm)
         n_done = 0
         dxx = 0.0_dp
         do iter = 1, mmaxits

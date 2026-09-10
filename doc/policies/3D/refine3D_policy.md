@@ -545,7 +545,7 @@ records only the refine3D-side integration contract:
   `conical_fsc=yes`, and matrix-free workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.
 - New regularization is research, tracked in
-  `doc/implementation_notes/pcg_priors.md`; it cannot be used to close
+  `doc/implementation_notes/pcg_priors_history.md`; it cannot be used to close
   integration gates.
 
 ## 10. Trailing and Combined Even/Odd

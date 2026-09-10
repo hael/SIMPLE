@@ -8,7 +8,11 @@ gridding backend (`simple_nu_state_filter`, policy 2026-09-06). The record of
 the removed prior experiments -- the binary-envelope solvent prior (2026-08-27)
 and the direct NU-evidence replay precision `Q_NU` with its auto-lambda and
 auto-target controllers (2026-09-06) -- lives in
-`doc/implementation_notes/pcg_priors.md`.
+`doc/implementation_notes/pcg_priors_history.md`. A present-tense four-page
+description of the backend is `doc/implementation_notes/pcg_backend_overview.md`
+and the dated list of decisions with their evidence is
+`doc/implementation_notes/pcg_decision_log.md`; new decisions are recorded
+there, and this policy is updated when a decision changes a contract.
 
 The production `reconstruct3D` command accepts the selector
 `rec_backend=gridding|pcg`, with `gridding` unchanged as the default. Its `pcg`
@@ -130,7 +134,7 @@ the absolute coefficient `1e-3` (`PCG_LAMBDA`). The relative-lambda CLI
 (`pcg_lambda_rel`) was removed as unused; the internal `set_lambda_relative`
 mechanism and the deterministic linear fixed-band data scale `s_data(D)`
 remain for tests, diagnostics, and future prior anchoring
-(`pcg_priors.md`). A solve may receive a frozen real-space support. It is fixed
+(`pcg_priors_history.md`). A solve may receive a frozen real-space support. It is fixed
 before CG starts; no state changes or nonlinear clipping occur during an
 iteration, so the operator remains linear.
 
@@ -186,7 +190,7 @@ shell-diagonal `P_tau` in every mode; with NU filtering active the base
 (`_unfil`) pair then seeds the NU candidate bank and the replayed pair joins the
 competition as the auxiliary member, exactly as on gridding. (The
 `nu_input=gridding|ml` alternatives of 2026-09-08 were retired on 2026-09-09;
-records in `doc/implementation_notes/pcg_priors.md`.) The replay starts
+records in `doc/implementation_notes/pcg_priors_history.md`.) The replay starts
 from the CURRENT same-half base solution with the closed-form shrinkage
 initial guess (each shell scaled by the FSC-implied Wiener factor, the
 `P_tau` optimum in closed form; `>>> PCG ML REGULARIZED INIT`), never from a
@@ -266,7 +270,7 @@ regression signal for solver defects that park energy above the matched band,
 where a later stage transition would expose them to euclid matching. The
 structural mitigation is the replay's shell-shrunk base start (the `P_tau`
 optimum in closed form) within the fixed budget, not spectral smoothing (see
-the removed-experiment record in `pcg_priors.md`).
+the removed-experiment record in `pcg_priors_history.md`).
 
 ### Backend regression gate
 

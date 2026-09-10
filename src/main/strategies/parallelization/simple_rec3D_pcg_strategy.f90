@@ -32,8 +32,11 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: PCG_LAMBDA = 1.0e-3
+!> a nonzero start whose initial relative residual exceeds this is discarded
+!! by the solver for a zero start (which has exactly 1.0), before iterating
+real,    parameter :: PCG_START_MAX_REL_RESID = 1.0
 integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling
-! Solve-support envelope (pcg_priors.md dev item 5): the conservative density
+! Solve-support envelope (pcg_priors_history.md dev item 5): the conservative density
 ! envelope (automask3D at envmsklp) replaces the spherical support in the PCG
 ! solves, so the mask constrains the ESTIMATOR rather than post-processing.
 ! The envelope is an automsk=yes feature (policy 2026-09-06) and, once a
@@ -73,10 +76,17 @@ contains
 
     !> Solve with one cold restart: a solve from a NONZERO start (l_nonzero,
     !! the ML replay's shell-shrunk base) that loses positive-definiteness is
-    !! retried once from zero. This procedure is compute-only so it is safe
-    !! inside the concurrent half sections: it touches only the job's own
-    !! operator, iterate, and outcomes. Reporting and fatal handling are
-    !! deferred to handle_cold_restart_outcome on the serial side.
+    !! retried once from zero. A nonzero start that is WORSE THAN ZERO
+    !! (initial relative residual above PCG_START_MAX_REL_RESID; zero has
+    !! exactly 1) is discarded by the solver itself before the first
+    !! iteration, at no cost (2026-09-10, streptavidin canonical set: in the
+    !! low-resolution stages the shrinkage start has INIT 2-4 and two
+    !! iterations left the replay at RESID 0.4-2, a half-converged transient
+    !! that was the matching reference and the symmetry-search input). This
+    !! procedure is compute-only so it is safe inside the concurrent half
+    !! sections: it touches only the job's own operator, iterate, and
+    !! outcomes. Reporting and fatal handling are deferred to
+    !! handle_cold_restart_outcome on the serial side.
     subroutine solve_with_cold_restart( pcgop, x, l_nonzero, maxits, rtol, rel_res_hist, niters, outcome )
         type(reconstructor_pcg),  intent(inout) :: pcgop
         real,                     intent(inout) :: x(:,:,:)
@@ -87,10 +97,16 @@ contains
         integer,                  intent(out)   :: niters
         type(pcg_solver_outcome), intent(out)   :: outcome
         type(pcg_solver_outcome) :: first_failure
-        call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
-            &outcome=outcome)
+        if( l_nonzero )then
+            call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+                &outcome=outcome, start_max_rel_resid=PCG_START_MAX_REL_RESID)
+        else
+            call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+                &outcome=outcome)
+        endif
         if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
         if( .not. l_nonzero ) return
+        if( outcome%start_rejected ) return  ! already a zero start: fatal below
         first_failure = outcome
         x = 0.0
         if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
@@ -109,6 +125,11 @@ contains
         character(len=*), intent(in) :: context, half, solve_kind
         character(len=256) :: error_message
         logical :: l_restarted
+        if( outcome%start_rejected )then
+            write(logfhandle,'(A,ES10.3,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
+                &trim(solve_kind)//'): start worse than zero (INIT=', outcome%rejected_start_initial, &
+                &'); discarded, solved from zero'
+        endif
         l_restarted = outcome%cold_restart_used
         if( l_restarted )then
             write(logfhandle,'(A,I0,A,ES12.4,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
@@ -244,7 +265,7 @@ contains
     !! pcg_mskfile envelope, the per-state density-envelope support when one
     !! was built for this state, else the spherical mskdiam
     !! support. The projected system (P H P) u = P b is what set_mask already
-    !! implements; this only chooses P (pcg_priors.md dev item 5).
+    !! implements; this only chooses P (pcg_priors_history.md dev item 5).
     subroutine set_pcg_solve_support( pcgop, params, state_support, l_state_support )
         class(reconstructor_pcg),  intent(inout) :: pcgop
         class(parameters),         intent(in)    :: params
@@ -592,7 +613,7 @@ contains
             if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
             ! refinement stays within the small fixed-iteration budget the
             ! simulated-data calibration validated; offline harness/benchmark runs legitimately ask
-            ! for rtol-terminated converged solves (pcg_priors.md R3), so above
+            ! for rtol-terminated converged solves (pcg_priors_history.md R3), so above
             ! the production budget we warn rather than refuse
             if( params%maxits_pcg > 100 ) THROW_HARD('maxits_pcg > 100 is not supported')
             if( params%maxits_pcg > 8 )then
@@ -2304,7 +2325,7 @@ contains
     !! validation that the map is right), but the fixed-iteration PCG solve has
     !! been observed to leave beyond-band content orders of magnitude above the
     !! band edge under bootstrap-scale sigma2 (see
-    !! doc/implementation_notes/pcg_priors.md §2, beyond-band excess). Such
+    !! doc/implementation_notes/pcg_priors_history.md §2, beyond-band excess). Such
     !! content is invisible to the matcher until a stage transition extends the
     !! band into it, so this line is the regression signal for that solver
     !! defect. Silent when no matching band is known.

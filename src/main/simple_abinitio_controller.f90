@@ -526,7 +526,7 @@ contains
         ! 6 A although its 3D map reaches 4 A (PfCRT: the July reference run
         ! matched the NU stages at 4.4/4.1/4.0 A; capping at lpfinal pinned
         ! every 2026-09-07 run at 5.97 A and the maps plateaued at 6 A, record
-        ! in pcg_priors.md). Retain a coarser command-line lpstop as an
+        ! in pcg_priors_history.md). Retain a coarser command-line lpstop as an
         ! independent guard so a user ceiling cannot be lost when the stage
         ! cline is rebuilt. The class-average route keeps its own final limit.
         lp_cap = LPSTOP_BOUNDS(1)

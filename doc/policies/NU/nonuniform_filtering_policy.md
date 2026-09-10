@@ -49,7 +49,7 @@ former in-solve `Q_NU` replay precision and its controllers were removed.
 The competition input is the unregularized (base) pair on both backends.
 Two alternatives were tried and retired on 2026-09-09 (`nu_input=gridding|ml`,
 records 2026-09-08b-g and 2026-09-09 in
-`doc/implementation_notes/pcg_priors.md`): the gridding half of the PCG
+`doc/implementation_notes/pcg_priors_history.md`): the gridding half of the PCG
 accumulation became moot once the like-for-like selection removed the
 footprint artifact, and the ML-regularized pair cannot seed the competition
 because `P_tau` is a global per-shell shrinkage driven by the global FSC: it
@@ -309,7 +309,7 @@ what the data support, whatever the pair's noise looks like; the July
 gridding runs populated one to three labels beyond the FSC (4.7/1.8/0.6% of
 the sphere at 6.3 A), which the cap admits. The standalone `nu_filt3D`
 program has no FSC and runs uncapped. Record 2026-09-08b/c in
-`doc/implementation_notes/pcg_priors.md`.
+`doc/implementation_notes/pcg_priors_history.md`.
 
 An opt-in replay-evidence API can compact this full unary bank before it is
 released. Callers must tag the setup source as `base_unfil`; the API fingerprints
@@ -345,7 +345,7 @@ fractions) is confined to it, unobserved voxels are frozen at the explicit
 null with zero band support, and the summary reports `observed_fraction`.
 The spherical NU support itself is unchanged. The compact evidence state is a
 diagnostic and envelope input only; the in-solve `Q_NU` consumer was removed
-on 2026-09-06 (`doc/implementation_notes/pcg_priors.md`).
+on 2026-09-06 (`doc/implementation_notes/pcg_priors_history.md`).
 With `automsk` enabled the NU-evidence envelope is produced. It is
 regenerated from the static candidate bank while the raw per-voxel evidence
 margins are live, then fixed as a coarsest-bank boundary condition during
@@ -374,7 +374,7 @@ field, the larger at maxima, an intermediate one almost never. An honest
 gridding pair never exposes this (adjacent fine candidates differ by the
 admitted noise band); a regularized pair does, and the populated fine label
 then follows the radius table (PfCRT record 2026-09-08d in
-`doc/implementation_notes/pcg_priors.md`). The selection is therefore
+`doc/implementation_notes/pcg_priors_history.md`). The selection is therefore
 sequential, coarse to fine: at each level the incumbent and the candidate
 are both smoothed at the candidate's radius from the raw unaries kept in
 `raw_dmats_mask`, and the candidate wins only with a strictly lower cost.

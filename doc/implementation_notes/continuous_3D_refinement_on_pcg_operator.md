@@ -663,7 +663,7 @@ either way.
   today; especially section 5 (preconditioner and kernelized operator). It
   supersedes the deleted `ctf_sigma_weighted_pcg_reconstruction.md`.
 - `doc/policies/reconstruct3D_pcg_policy.md` and
-  `doc/implementation_notes/pcg_priors.md` -- the production workflow and
+  `doc/implementation_notes/pcg_priors_history.md` -- the production workflow and
   regularization contracts. Note the production performance rule that the
   kernel PCG *solve* is data-free after `(B,D)` accumulation, which does NOT
   hold for the pose objective specified here.

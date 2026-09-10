@@ -370,7 +370,7 @@ contains
         !! reprojection: hard-removing density that is present in the particle
         !! images (e.g. a detergent micelle) makes the reference unable to
         !! explain them, and under the euclid objective the unexplained
-        !! density destroys pose discrimination (PfCRT collapse, pcg_priors.md
+        !! density destroys pose discrimination (PfCRT collapse, pcg_priors_history.md
         !! 2026-09-02). Down-weighting belongs to the NU filter field, which
         !! heavily low-pass filters the background defined by the NU evidence
         !! envelope -- cisTEM-style background filtering that is known not to

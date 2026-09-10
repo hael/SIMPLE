@@ -3,7 +3,7 @@
 ## Status
 
 Proposal (2026-08-27), **SCHEDULED as PRESSING (2026-08-29, user
-direction)** — item 1 on the active dev list in `pcg_priors.md`
+direction)** — item 1 on the active dev list in `pcg_priors_history.md`
 (Stage 6.6 run records). The original precondition is met: the direct
 NU-evidence prior cleared its Gate C/D program and the Stage 6.6
 nu_refine evidence-bank extension validated on 1WCM. The motivation is
@@ -14,7 +14,7 @@ postprocessing experiment that consumes Stage 6 infrastructure, not a
 competitor to it. No solver, base-solve, replay, or artifact behavior
 changes are proposed here. Note the Wilson-target variant 2.3(c) is
 DEAD: the Wilson prior was adjudicated against and removed from the
-codebase (2026-08-29, `pcg_priors.md` Stage 7 record); variants 2.3(a)
+codebase (2026-08-29, `pcg_priors_history.md` Stage 7 record); variants 2.3(a)
 evidence-derived and 2.3(b) local-B remain the candidates.
 
 ## 1. The idea
@@ -54,7 +54,7 @@ x_sharp = sum_b g_b(v) * (B_b x),   g_b(v) >= 0
 with the DC/mean component passed through unchanged. Phases are untouched by
 construction (real nonnegative gains on band-limited real-space components).
 The frozen compact evidence state is shared read-only, exactly as
-`pcg_priors.md` §6/§11 mandates for diagnostics — one evidence identity, no
+`pcg_priors_history.md` §6/§11 mandates for diagnostics — one evidence identity, no
 second NU analysis that can disagree with the replay.
 
 ### 2.2 Two gain layers
@@ -86,7 +86,7 @@ In increasing ambition; (a) is the first implementation:
   (scale, B) to the bandwise cross-half agreement per voxel and invert it.
   Compact and robust to the coarseness of the 4-band frame; effectively a
   model-free local B-factor map with calibrated confidence.
-- **(c) Wilson expected spectrum:** the `pcg_priors.md` §5.5 Wilson object,
+- **(c) Wilson expected spectrum:** the `pcg_priors_history.md` §5.5 Wilson object,
   used here in its gentlest possible role — a sharpening *target* rather
   than a prior. Requires only composition-level assumptions, no atomic
   coordinates. This variant is the natural bridge between the sharpening
@@ -112,7 +112,7 @@ changes change the operator and must be measured, not assumed invariant).
   keeps sole resolution authority; the sharpened map is a
   display/interpretation product. Never feed the sharpened map or its
   evidence into FSC solvent correction or resolution claims.
-- **Not a solver component.** The LocScale risk rows in `pcg_priors.md` §9
+- **Not a solver component.** The LocScale risk rows in `pcg_priors_history.md` §9
   (amplitude target nonlinear in `x`; common targets carrying phases)
   concern in-solve use. As postprocessing none of them apply: the operator
   acts once on a finished estimate, phases are preserved, and no CG
@@ -273,7 +273,7 @@ Acceptance thresholds recorded before the runs, per R9.
 
 | Component | Relationship |
 | --- | --- |
-| `Q_NU` replay (`pcg_priors.md` §5) | Same frozen evidence, same band frame; replay regularizes *in-solve*, sharpening restores *post-hoc*. Complementary, never combined implicitly. |
+| `Q_NU` replay (`pcg_priors_history.md` §5) | Same frozen evidence, same band frame; replay regularizes *in-solve*, sharpening restores *post-hoc*. Complementary, never combined implicitly. |
 | Production NU filter | Sharpening generalizes it: graded gains instead of binary local cutoff selection, plus restoration. Long-term the NU filter is the `g`-restoration-off special case. |
 | Wilson prior (§5.5) | Supplies target 2.3(c); sharpening is the lowest-risk consumer of the Wilson spectrum and a natural first validation of it. |
 | Beyond-band retention watch item (Gate C record) | The Wiener layer is the principled shipped-map rolloff that closes it. |

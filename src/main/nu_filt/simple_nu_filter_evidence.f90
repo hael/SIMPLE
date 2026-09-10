@@ -341,7 +341,7 @@ contains
         ! band is KEPT only if it actually earns support; otherwise the
         ! subdivision would replace the fine tail's partially evidenced
         ! weight with the full penalty and over-suppress genuine signal
-        ! (measured on 1WCM, pcg_priors.md S6.6 run record). Pruning
+        ! (measured on 1WCM, pcg_priors_history.md S6.6 run record). Pruning
         ! truncates finest-first; the static bands are never pruned, so
         ! pre-6.6 behavior is the guaranteed floor.
         do while( nb_active > NU_EVIDENCE_NBANDS )
@@ -637,7 +637,7 @@ contains
         deallocate(vals)
     end function nu_evidence_finest_supported_lp
 
-    !> Replay-readiness contract (pcg_priors.md S6.2): a valid compact state
+    !> Replay-readiness contract (pcg_priors_history.md S6.2): a valid compact state
     !! is necessary but not sufficient to parameterize the replay precision.
     !! The spherical evidence support is deliberately generous and always
     !! contains BOTH substantial solvent and substantial molecule, so the null

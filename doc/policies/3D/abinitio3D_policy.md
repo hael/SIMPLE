@@ -217,7 +217,7 @@ command is rebuilt; the effective ceiling is the coarser of the two limits.
 The workflow logs the acknowledged command-line ceiling before entering the
 stage loop. (Record 2026-09-06: capping the NU stages at the per-stage value
 stalled every NU stage on streptavidin and msp1 on the pcg path; see
-`doc/implementation_notes/pcg_priors.md`, dev item 2.)
+`doc/implementation_notes/pcg_priors_history.md`, dev item 2.)
 
 Saved `_stageNN_lp.mrc` diagnostic volumes are filtered to the current state
 FSC resolution when an FSC exists. The planned stage LP is only a fallback.
