@@ -58,120 +58,29 @@ logical, parameter :: DEBUG = .false.
 contains
 
 
-    !> Cross-iteration ML warm start (drop_legacy_box_division.md S7/S11.2).
-    !! The ML replay used to start from the unregularized base solution, which
-    !! carries full-amplitude beyond-band noise the ML prior drives toward
-    !! zero; on large boxes a 2-4 iteration budget cannot close that gap
-    !! (bgal, box 256: relative residual 6.5 after 2 iterations). The previous
-    !! refinement iteration's ML half map is close to the current ML solution
-    !! (small per-iteration orientation change), and under the data-quotient
-    !! convention a constant-FOV box change is a factor-free Fourier pad/clip,
-    !! so read_and_crop makes the warm start valid across crop changes. Rules:
-    !! each half warm-starts strictly from its own previous half (gold-standard
-    !! FSC independence), no mask is applied here (the previous half already
-    !! carries the solve support; the solver converts the x-space start into
-    !! its CG variable under the exact current support, which also discards
-    !! resampling ringing outside it, and a second mask3D_soft would square the
-    !! soft edge and compound across iterations, 2026-09-09), and the noise starting
-    !! volume of the first iteration is excluded by its workflow-contract name
-    !! (warm-starting the ML system from noise is worse than the base
-    !! solution). When no usable previous half exists, x keeps the base
-    !! solution it already holds.
-    subroutine override_ml_warm_start_from_previous( params, state_here, half, x, context, l_found )
-        class(parameters), intent(in)    :: params
-        integer,           intent(in)    :: state_here
-        character(len=*),  intent(in)    :: half, context
-        real,              intent(inout) :: x(:,:,:)
-        logical,           intent(out)   :: l_found
-        type(string) :: prev_fname
-        type(image)  :: prev
-        l_found = .false.
-        if( state_here < 1 .or. state_here > size(params%vols) ) return
-        if( len_trim(params%vols(state_here)%to_char()) == 0 ) return
-        prev_fname = add2fbody(params%vols(state_here), MRC_EXT, '_'//trim(half))
-        if( index(prev_fname%to_char(), 'startvol') > 0 )then
-            call prev_fname%kill
-            return
-        endif
-        if( .not. file_exists(prev_fname) )then
-            call prev_fname%kill
-            return
-        endif
-        call prev%read_and_crop(prev_fname, params%smpd, params%box_crop, params%smpd_crop)
-        x = prev%get_rmat()
-        call prev%kill
-        l_found = .true.
-        if( NU_DEV_OUTPUT ) &
-        write(logfhandle,'(A)') '>>> PCG ML WARM START ('//trim(context)//'/'//trim(half)//&
-            &'): previous-iteration ML half map '//prev_fname%to_char()
-        call prev_fname%kill
-    end subroutine override_ml_warm_start_from_previous
+    ! No cross-iteration warm starts (policy 2026-09-10, PfCRT regression
+    ! gridding_vs_pcg): the base solve starts from zero and the ML replay from
+    ! the shell-shrunk current base solution, every iteration. Warm-starting
+    ! from the previous iteration's half maps carried an unconverged transient
+    ! of a slightly different system (new FSC prior, new poses) into a
+    ! 2-iteration budget that cannot pull it back; the relative residual of the
+    ! replay then grew iteration over iteration to 10^3-10^4 in the failed
+    ! runs and never fell below 1 in any run. A fixed small budget from a
+    ! state-free start is what the simulated-data calibration validated
+    ! (2 iterations beat gridding; beyond 5 the residual moves but nothing
+    ! interpretable in the map does). The support-provenance solve kind is
+    ! still written for the trailing bootstrap's lag-one FSC pair.
 
-    !> Cross-iteration warm start for the unregularized/base solve. Prefer the
-    !! previous iteration's explicitly saved `_unfil` half whenever the
-    !! shipped pair was regularized. A shipped primary half is eligible only
-    !! when its provenance says that it is itself a base solution; this keeps
-    !! NU/ML regularization out of the base oracle and also avoids accidentally
-    !! selecting a stale `_unfil` artifact after a base-only iteration. A
-    !! volume without solve-kind provenance never seeds the base solve (no
-    !! legacy fallback: a stale `_unfil` next to an imported map would survive
-    !! two CG steps); the caller's zero initialization is retained. Gridding
-    !! products carry solve_kind=gridding in their sidecar and are never
-    !! selected, so the gridding-to-PCG stage handoff stays a cold base solve.
-    !! solve_accum converts the x-space start into its CG variable under the
-    !! exact current solve support; no mask is applied here.
-    subroutine override_base_warm_start_from_previous( params, state_here, half, x, context, l_found )
-        class(parameters), intent(in)    :: params
-        integer,           intent(in)    :: state_here
-        character(len=*),  intent(in)    :: half, context
-        real,              intent(inout) :: x(:,:,:)
-        logical,           intent(out)   :: l_found
-        type(string) :: prev_fname, unfil_fname, seed_fname
-        type(image)  :: prev
-        character(len=16) :: solve_kind
-        logical :: l_support_constrained, l_support_found, l_kind_found
-        l_found = .false.
-        if( state_here < 1 .or. state_here > size(params%vols) ) return
-        if( len_trim(params%vols(state_here)%to_char()) == 0 ) return
-        prev_fname = add2fbody(params%vols(state_here), MRC_EXT, '_'//trim(half))
-        if( index(prev_fname%to_char(), 'startvol') > 0 )then
-            call prev_fname%kill
-            return
-        endif
-        unfil_fname = add2fbody(prev_fname, MRC_EXT, '_unfil')
-        call read_support_provenance(params%vols(state_here), l_support_constrained, &
-            &l_support_found, solve_kind, l_kind_found)
-        if( .not. l_support_found ) l_kind_found = .false.
-        if( l_kind_found .and. trim(solve_kind) == 'base' )then
-            if( file_exists(prev_fname) ) seed_fname = prev_fname
-        else if( l_kind_found .and. trim(solve_kind) == 'regularized' )then
-            if( file_exists(unfil_fname) ) seed_fname = unfil_fname
-        endif
-        if( len_trim(seed_fname%to_char()) == 0 )then
-            call prev_fname%kill
-            call unfil_fname%kill
-            call seed_fname%kill
-            return
-        endif
-        call prev%read_and_crop(seed_fname, params%smpd, params%box_crop, params%smpd_crop)
-        x = prev%get_rmat()
-        call prev%kill
-        l_found = .true.
-        write(logfhandle,'(A)') '>>> PCG BASE WARM START ('//trim(context)//'/'//trim(half)//&
-            &'): previous-iteration base half map '//seed_fname%to_char()
-        call prev_fname%kill
-        call unfil_fname%kill
-        call seed_fname%kill
-    end subroutine override_base_warm_start_from_previous
-
-    !> Solve with one cold restart. This procedure is compute-only so it is
-    !! safe inside the concurrent half sections: it touches only the job's own
+    !> Solve with one cold restart: a solve from a NONZERO start (l_nonzero,
+    !! the ML replay's shell-shrunk base) that loses positive-definiteness is
+    !! retried once from zero. This procedure is compute-only so it is safe
+    !! inside the concurrent half sections: it touches only the job's own
     !! operator, iterate, and outcomes. Reporting and fatal handling are
     !! deferred to handle_cold_restart_outcome on the serial side.
-    subroutine solve_with_cold_restart( pcgop, x, l_warm, maxits, rtol, rel_res_hist, niters, outcome )
+    subroutine solve_with_cold_restart( pcgop, x, l_nonzero, maxits, rtol, rel_res_hist, niters, outcome )
         type(reconstructor_pcg),  intent(inout) :: pcgop
         real,                     intent(inout) :: x(:,:,:)
-        logical,                  intent(in)    :: l_warm
+        logical,                  intent(in)    :: l_nonzero
         integer,                  intent(in)    :: maxits
         real,                     intent(in)    :: rtol
         real, allocatable,        intent(out)   :: rel_res_hist(:)
@@ -181,7 +90,7 @@ contains
         call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
             &outcome=outcome)
         if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
-        if( .not. l_warm ) return
+        if( .not. l_nonzero ) return
         first_failure = outcome
         x = 0.0
         if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
@@ -203,7 +112,7 @@ contains
         l_restarted = outcome%cold_restart_used
         if( l_restarted )then
             write(logfhandle,'(A,I0,A,ES12.4,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
-                &trim(solve_kind)//'): warm-started CG lost positive-definiteness at iteration ', &
+                &trim(solve_kind)//'): CG from the nonzero start lost positive-definiteness at iteration ', &
                 &outcome%restart_trigger_iteration, ' (dot(p,Hp)=', outcome%restart_trigger_curvature, &
                 &'); restarted from zero'
         endif
@@ -221,9 +130,8 @@ contains
         THROW_HARD(error_message)
     end subroutine handle_cold_restart_outcome
 
-    !> Regularized initial guess for a COLD ML replay (no previous ML half
-    !! map to warm-start from: the standalone harness, the first refinement
-    !! iteration, abinitio3D stage handoffs). The documented cold-start gap
+    !> Regularized initial guess of every ML replay (no cross-iteration warm
+    !! starts, 2026-09-10). The documented cold-start gap
     !! is that the regularized optimum differs from ANY unregularized map in
     !! slowly-converging directions -- beyond-band/high-shell noise the ML
     !! prior shrinks -- so a
@@ -682,8 +590,8 @@ contains
                 THROW_HARD('shared PCG entry received distributed parameters')
             endif
             if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
-            ! refinement stays within the small-iteration budget the warm start
-            ! makes sufficient; offline harness/benchmark runs legitimately ask
+            ! refinement stays within the small fixed-iteration budget the
+            ! simulated-data calibration validated; offline harness/benchmark runs legitimately ask
             ! for rtol-terminated converged solves (pcg_priors.md R3), so above
             ! the production budget we warn rather than refuse
             if( params%maxits_pcg > 100 ) THROW_HARD('maxits_pcg > 100 is not supported')
@@ -760,7 +668,6 @@ contains
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
             integer :: i, ii, iptcl, ibatch, niters
             real    :: shift(2), crop_factor
-            logical :: l_warm
             integer(timer_int_kind) :: t_half, t_phase
             real(dp) :: time_metadata, time_particles, time_accum_init, time_accum
             real(dp) :: time_finalize, time_solve, time_total
@@ -847,10 +754,10 @@ contains
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
             time_finalize = real(toc(t_phase),dp)
+            ! the base solve starts from zero (no cross-iteration warm start)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
-            call override_base_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
             t_phase = tic()
-            call solve_with_cold_restart(pcgop, x, l_warm, params%maxits_pcg, params%rtol, &
+            call solve_with_cold_restart(pcgop, x, .false., params%maxits_pcg, params%rtol, &
                 &rel_res_hist, niters, result)
             time_solve = real(toc(t_phase),dp)
             call handle_cold_restart_outcome(result, 'shared', half, 'base')
@@ -863,7 +770,7 @@ contains
                 &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
                 &pcgop%get_data_scale(), pcgop%get_effective_lambda(), pcgop=pcgop)
             call report_solve_summary('SHARED', state_here, half, 'base', size(pinds), niters, &
-                &result%final_rel_residual, time_solve, result%stop_reason)
+                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual)
             if( present(outcome) ) outcome = result
 
             call pcgop%kill
@@ -873,8 +780,8 @@ contains
         end subroutine solve_state_half
 
         !> Reopen the exact raw statistics used for the base half-map, add the
-        !! FSC/SSNR prior only on the master/shared owner, and warm-start from
-        !! the corresponding unregularized solution. No particle data are read
+        !! FSC/SSNR prior only on the master/shared owner, and start from the
+        !! corresponding unregularized solution (shell-shrunk). No particle data are read
         !! a second time and the base solve remains the FSC oracle.
         subroutine regularize_state_half( state_here, eo_here, half, fsc_here, base_volume, volume )
             integer,          intent(in)    :: state_here, eo_here
@@ -890,7 +797,6 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            logical :: l_warm
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -917,15 +823,13 @@ contains
             prior_to_khat_rms  = 0.0
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
+            ! the replay starts from the current base solution with the
+            ! closed-form shrinkage initial guess (encodes the P_tau optimum);
+            ! no cross-iteration warm start
             x = base_volume%get_rmat()
-            call override_ml_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
-            ! the closed-form shrinkage initial guess encodes the P_tau optimum
-            if( .not. l_warm )then
-                call regularized_ml_initial_guess(params, fsc_here, x, 'shared', half)
-            endif
+            call regularized_ml_initial_guess(params, fsc_here, x, 'shared', half)
             t_phase = tic()
-            ! the replay iterate is never zero (previous ML half, or the base
-            ! solution with the shrinkage initial guess): always restart-eligible
+            ! the replay iterate is never zero: restart-eligible
             call solve_with_cold_restart(pcgop, x, .true., params%maxits_pcg, params%rtol, &
                 &rel_res_hist, niters, result)
             time_solve = real(toc(t_phase),dp)
@@ -942,7 +846,7 @@ contains
                 &prior_positive_max=prior_positive_max, prior_to_khat_l1=prior_to_khat_l1, &
                 &prior_to_khat_rms=prior_to_khat_rms, pcgop=pcgop)
             call report_solve_summary('SHARED', state_here, half, 'ml', nptcls, niters, &
-                &result%final_rel_residual, time_solve, result%stop_reason)
+                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual)
             call pcgop%kill
             call fname%kill
             deallocate(x, rel_res_hist)
@@ -1628,7 +1532,7 @@ contains
             real :: prior_positive_min = 0.0, prior_positive_max = 0.0
             real :: prior_to_khat_l1 = 0.0, prior_to_khat_rms = 0.0
             logical :: l_ml_solve = .false., ready = .false., l_concurrent = .false.
-            logical :: l_warm = .false. !< nonzero initial guess: eligible for the cold restart
+            logical :: l_nonzero = .false. !< nonzero initial guess: eligible for the cold restart
         end type distributed_half_job
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -2107,7 +2011,7 @@ contains
             integer :: part_here, n_part, n_full_half
             integer(timer_int_kind) :: t_phase
             real :: realized_fraction, update_weight, current_scale
-            logical :: l_chain_exists, l_seed_chain, l_warm
+            logical :: l_chain_exists, l_seed_chain
 
             job%state = state_here
             job%eo = eo_here
@@ -2201,19 +2105,16 @@ contains
             if( job%l_ml_solve )then
                 call job%pcgop%get_ml_prior_stats(job%prior_npositive, job%prior_positive_min, &
                     &job%prior_positive_max, job%prior_to_khat_l1, job%prior_to_khat_rms)
+                ! the replay starts from the current base solution with the
+                ! shrinkage initial guess; no cross-iteration warm start
                 job%x = warm_start%get_rmat()
-                call override_ml_warm_start_from_previous(params, state_here, half, job%x, &
-                    &'distributed', l_warm)
-                if( .not. l_warm ) &
-                    &call regularized_ml_initial_guess(params, fsc_prior, job%x, 'distributed', half)
-                ! the replay iterate is never zero (previous ML half, or the
-                ! base solution with the shrinkage initial guess)
-                job%l_warm = .true.
+                call regularized_ml_initial_guess(params, fsc_prior, job%x, 'distributed', half)
+                ! the replay iterate is never zero: restart-eligible
+                job%l_nonzero = .true.
             else
+                ! the base solve starts from zero
                 allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
-                call override_base_warm_start_from_previous(params, state_here, half, job%x, &
-                    &'distributed', l_warm)
-                job%l_warm = l_warm
+                job%l_nonzero = .false.
             endif
             job%ready = .true.
         end subroutine prepare_distributed_half_job
@@ -2251,7 +2152,7 @@ contains
             integer(timer_int_kind) :: t_phase, t_end, t_rate
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
-            call solve_with_cold_restart(job%pcgop, job%x, job%l_warm, params%maxits_pcg, params%rtol, &
+            call solve_with_cold_restart(job%pcgop, job%x, job%l_nonzero, params%maxits_pcg, params%rtol, &
                 &job%rel_res_hist, job%niters, job%result)
             call system_clock(count=t_end, count_rate=t_rate)
             job%time_solve = real(t_end-t_phase,dp) / real(t_rate,dp)
@@ -2282,7 +2183,8 @@ contains
                     &pcgop=job%pcgop)
             endif
             call report_solve_summary('DISTRIBUTED', job%state, job%half, job%solve_kind, job%nptcls, &
-                &job%niters, job%result%final_rel_residual, job%time_solve, job%result%stop_reason)
+                &job%niters, job%result%final_rel_residual, job%time_solve, job%result%stop_reason, &
+                &job%result%initial_rel_residual)
             call job%pcgop%kill
             if( allocated(job%x) ) deallocate(job%x)
             if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
@@ -2456,19 +2358,23 @@ contains
         endif
     end subroutine report_beyond_band_excess
 
+    !> One summary line per solve; INIT is the relative residual of the start
+    !! (1.0 from zero) so a start that is worse than nothing is visible in the
+    !! log (the PfCRT regression hid a 10^4 residual in the sidecar files)
     subroutine report_solve_summary( execution_mode, state, half, solve_kind, nptcls, niters, &
-            &residual, solve_time, stop_reason )
+            &residual, solve_time, stop_reason, initial_residual )
         character(len=*), intent(in) :: execution_mode, half, solve_kind, stop_reason
         integer,          intent(in) :: state, nptcls, niters
         real,             intent(in) :: residual
         real(dp),         intent(in) :: solve_time
+        real,             intent(in) :: initial_residual
         character(len=4) :: half_label, kind_label
         half_label = adjustl(half)
         kind_label = adjustl(solve_kind)
-        write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,F7.2,2A)') &
+        write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,ES10.3,A,F7.2,2A)') &
             &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
-            &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | RESID=', residual, &
-            &' | TIME=', solve_time, ' s | STOP=', trim(stop_reason)
+            &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | INIT=', initial_residual, &
+            &' | RESID=', residual, ' | TIME=', solve_time, ' s | STOP=', trim(stop_reason)
         call flush(logfhandle)
     end subroutine report_solve_summary
 

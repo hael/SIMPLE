@@ -2708,6 +2708,37 @@ the acceptable-looking outputs do not validate the prior.
    state per iteration is the accepted cost). The review's validation
    matrix (nine cases, peak RSS on a production box) is the user's to run.
 
+   PfCRT REGRESSION gridding_vs_pcg (2026-09-10, ~/for_claude/PfCRT_regression):
+   abinitio3D, 10 gridding vs 9 PCG restarts, same data. Gridding 8/10 good
+   (3.98-4.3 A, side chains), 2 fail at 8.2 A. PCG 2/8 "almost side chains"
+   at 4.9-5.0 A, 6 fail at 7.2-8.4 A, 57% slower. Log analysis: every
+   refinement solve was ITS=2 fixed (maxits_pcg=2, rtol=0). The base solve
+   exited at relative residual 0.15-0.2; the ML replay NEVER got below 1 in
+   any PCG run at any refinement iteration, and in the three hardest
+   failures (R4, R5, R8) started at 20-100 at the first ML stage and grew
+   monotonically to 10^3-10^4 -- growth across iterations is only possible
+   through the warm start from the previous iteration's ML half, an
+   unconverged transient of a different system (new P_tau, new poses) that
+   two iterations cannot pull back; R8's base warm start joined in (resid
+   1.0-1.5) and the reconstruction collapsed to 103 A. The shipped ML
+   halves (NU auxiliary member, matching references) were CG transients.
+   The systematic 5-vs-4 A gap of the surviving runs has the same origin
+   one level down: at the first NU iteration (stage 6) the gridding base
+   pair supports 6.4% of the mask at 7.96 A and 1.25% at 5.97 A, so the NU
+   handoff promotes the matching low-pass to 5.97 A at once and the map
+   goes 8.9 -> 4.5 A within the stage; the PCG base pair, two warm
+   iterations from a stale start, puts 0% at 7.96 A, the matching low-pass
+   stays at 10.02 A and the take-off never happens. DECISION (user):
+   retire the cross-iteration warm starts. The base solve starts from zero
+   and the ML replay from the shell-shrunk CURRENT base solution (the P_tau
+   optimum in closed form), every iteration; maxits_pcg stays 2 (the
+   simulated-data calibration: two iterations beat gridding, beyond five
+   the residual moves but nothing interpretable in the map does).
+   override_base/ml_warm_start_from_previous removed; the solve summary
+   line reports INIT= (start residual) next to RESID= so a start worse than
+   nothing can never again hide in the sidecar files. The solve-kind field
+   of the support-provenance sidecar is now provenance only.
+
    msp1 STAGE-7 COLLAPSE ROOT CAUSE (2026-09-06, from the full log sets):
    the external-init repeats (5_abinitio3D) ran next to the completed
    healthy set (4_abinitio3D) of the same project. The legacy sigma

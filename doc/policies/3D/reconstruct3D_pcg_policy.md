@@ -154,19 +154,28 @@ iterations, so any backend handoff, prior, or convention change must
 preserve the amplitude scale seen by matching (the historical
 gridding-to-PCG handoff crash was exactly such a jump).
 
-### ML two-map contract and warm starts
+### ML two-map contract and starts
 
 Refinement solves are two phases from one particle accumulation. The *base*
 solve (`H_data + lambda I`) produces the `_unfil` half pair; FSC/cFAR and
-resolution metadata come from that pair. It warm-starts from the previous
-iteration's same-half base solution: the explicit `_unfil` artifact after a
-regularized iteration, or the primary half only when its sidecar identifies it
-as a base solution. A first solve, a volume without a solve-kind sidecar
-(no legacy `_unfil` fallback), or mixed bootstrap output without an eligible
-base artifact starts from zero. Any warm-started solve (base or replay) that
+resolution metadata come from that pair. It starts from zero, every
+iteration: there are NO cross-iteration warm starts (policy 2026-09-10, PfCRT
+regression `gridding_vs_pcg`). Warm-starting from the previous iteration's
+half maps carried an unconverged transient of a slightly different system
+(new FSC prior, new poses) into the fixed 2-iteration budget, which cannot
+pull it back; the replay's relative residual then grew iteration over
+iteration to 10^3-10^4 in the failed runs and never fell below 1 in any run,
+the shipped ML halves were CG transients, and the base pair, two warm
+iterations from a stale start, carried no fine-shell evidence into the NU
+competition at the take-off stage (0% of the mask at 7.96 A where gridding
+had 6.4%). The fixed small budget from a state-free start is what the
+simulated-data calibration validated: two iterations beat gridding, and
+beyond five the residual moves but nothing interpretable in the map does.
+Every solve line reports `INIT=` (the relative residual of the start, 1.0
+from zero) next to `RESID=`. A solve from a nonzero start (the replay) that
 loses positive-definiteness returns `stop_reason=indefinite` from the solver
 and is restarted once from zero (`solve_with_cold_restart`) before the
-failure is fatal; a cold solve that loses positive-definiteness fails
+failure is fatal; a solve from zero that loses positive-definiteness fails
 immediately. Distributed recovery is compute-only inside the even/odd
 sections; restart reporting and fatal handling occur afterward at the serial
 finalization boundary. Solver callers that do not request an outcome retain
@@ -177,13 +186,12 @@ shell-diagonal `P_tau` in every mode; with NU filtering active the base
 (`_unfil`) pair then seeds the NU candidate bank and the replayed pair joins the
 competition as the auxiliary member, exactly as on gridding. (The
 `nu_input=gridding|ml` alternatives of 2026-09-08 were retired on 2026-09-09;
-records in `doc/implementation_notes/pcg_priors.md`.) The replay
-warm-starts from the previous
-refinement iteration's ML half map when one exists on disk — strictly the same
-half (gold-standard independence), constant-FOV `read_and_crop` across crop
-changes, support re-masked after resampling, the first-iteration noise
-`startvol` excluded by name — and otherwise from the base solution. Neither
-precision nor lambda is ever accumulated into raw `B` or `D`.
+records in `doc/implementation_notes/pcg_priors.md`.) The replay starts
+from the CURRENT same-half base solution with the closed-form shrinkage
+initial guess (each shell scaled by the FSC-implied Wiener factor, the
+`P_tau` optimum in closed form; `>>> PCG ML REGULARIZED INIT`), never from a
+previous iteration's ML half. Neither precision nor lambda is ever
+accumulated into raw `B` or `D`.
 
 Every shipped state volume carries a solve-support provenance sidecar
 (`<vol>_pcg_support.txt`, `solve_support=density|sphere` and
@@ -197,12 +205,11 @@ an NU input (fix 2026-09-06). Same recipe and the same kinds of inputs on both
 backends; the maps differ because the estimators differ. The bootstrap reads the support field for the lag-one FSC pair so the envelope and
 phase-randomization FSC preprocessing is skipped exactly when that pair was
 density-constrained in the estimator; a pair without a sidecar is treated as unconstrained, and a
-bootstrap blend is constrained only if both contributions were. The base
-warm-start selector uses the kind field to prevent a regularized or mixed
-primary map from entering the base solve. The NU evidence built from a
-density-constrained pair confines all its calibration statistics to the
-observed (non-zero) voxels of the spherical support
-(`doc/policies/nonuniform_filtering_policy.md`).
+bootstrap blend is constrained only if both contributions were. The kind
+field is provenance only (its former consumer, the base warm-start selector,
+went with the warm starts). The NU evidence built from a density-constrained
+pair designates its null on the density envelope's dilation ring
+(`doc/policies/3D/automasking_policy.md`).
 
 With `nu_refine=no`, PCG uses the established eight signal candidates, four
 fixed evidence bands, integer Potts coordinates, unit candidate masses, and
@@ -238,8 +245,8 @@ The original-sampling final reconstructions launched by `abinitio3D` and
 `refine3D_auto` are cold solves. They use a PCG iteration budget of at least
 five; a larger user-supplied `maxits_pcg` remains in force. An explicit
 positive `rtol` may still stop a converged solve earlier. Ordinary refinement
-iterations retain their normal budget because their base solves warm-start
-from compatible lag-one half maps.
+iterations keep the default budget of two iterations from a state-free start
+(the calibrated regime).
 
 Automatic final-map sharpening estimates its Guinier B-factor from the
 unregularized half-pair average. For an automatically postprocessed PCG
@@ -257,9 +264,9 @@ paths) compares the RMS of shells beyond the matching band with the band-edge
 shell and logs `>>> PCG BEYOND-BAND EXCESS` at ratio >= 10. It is the
 regression signal for solver defects that park energy above the matched band,
 where a later stage transition would expose them to euclid matching. The
-structural mitigation is ML-replay convergence (warm start plus adequate
-iterations), not spectral smoothing (see the removed-experiment record in
-`pcg_priors.md`).
+structural mitigation is the replay's shell-shrunk base start (the `P_tau`
+optimum in closed form) within the fixed budget, not spectral smoothing (see
+the removed-experiment record in `pcg_priors.md`).
 
 ### Backend regression gate
 
@@ -567,9 +574,10 @@ is meaningful because the two paths share everything but the estimator:
   reconstruction`), memory in the peak-RSS fields.
 
 Differences that are the estimator itself and belong in the comparison:
-PCG solves `(H + lambda) x = b` with two warm-started CG iterations per
-half and per kind (base and ML), so its maps carry the previous iteration's
-map; gridding is a fresh density quotient every iteration.
+PCG solves `(H + lambda) x = b` with two CG iterations per half and per
+kind (base from zero, ML from the shell-shrunk base), a fresh estimate every
+iteration like the gridding density quotient (cross-iteration warm starts
+retired 2026-09-10).
 
 The former measurement asymmetry (gridding FSC on the apodized halves for
 legacy parity, PCG on the solved halves) was removed on 2026-09-09: the
@@ -580,8 +588,8 @@ it ships. The one-mask contract that came with it:
   the soft spherical support at `msk_crop` exactly once, installed by the
   estimator (PCG) or by the restoration after deapodization (gridding), and
   recorded in the support-provenance sidecar `<vol>_pcg_support.txt`
-  (`solve_kind=gridding` for gridding products; the PCG base warm-start
-  selector ignores that kind, so the stage-2/3 handoff stays cold);
+  (`solve_kind=gridding` for gridding products; provenance only since the
+  warm starts were retired, 2026-09-10);
 - `evaluate_halfmap_pair` masks nothing of its own (the envfsc envelope +
   phase-randomization correction is applied only to an unconstrained pair, and
   the mode actually used is logged as `>>> FSC MODE`);
@@ -598,13 +606,13 @@ it ships. The one-mask contract that came with it:
   The soft `P H P` formulation was not equivalent: where `0 < P < 1` the
   solved variable compensates for `P`, so the band was a solver-state
   dependent mixture (`PCG_HARD_SOLVE_SUPPORT` in the solver restores it for
-  experiments). Warm starts are never re-masked: the solver entry converts
-  an output-space start back to `u = x / window` where
-  `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead of projecting again;
-  the former entry projection squared the edge on every warm-started
-  iteration and compounded over a stage. Regressions: `test=pcg_recon`
-  stage 14 (band profile of the constrained solve against the windowed
-  unconstrained one; band stability under repeated warm starts);
+  experiments). Nonzero starts (the replay's shell-shrunk base) are never
+  re-masked: the solver entry converts an output-space start back to
+  `u = x / window` where `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead
+  of projecting again; the former entry projection squared the edge on every
+  restarted iteration and compounded over a stage. Regressions:
+  `test=pcg_recon` stage 14 (band profile of the constrained solve against
+  the windowed unconstrained one; band stability under repeated starts);
 - the matcher still applies `mask3D_soft(msk_crop)` to its reprojection
   reference after Fourier filtering (both backends, `mask_matching_reference`).
   That is reference preparation, not an estimate: it restores compact

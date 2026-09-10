@@ -85,8 +85,7 @@ contains
         ! The shipped halves and merged volume carry the soft spherical support
         ! at msk_crop (restore_gridding_pair, restore_merged_volume; the legacy
         ! trailing blend mixes two such volumes). Record it beside the volume
-        ! so postprocess does not mask again; the PCG base warm-start selector
-        ! ignores the gridding kind.
+        ! so postprocess does not mask again.
         call write_support_provenance(volname, .false., 'gridding')
         call cleanup_restore_state()
 

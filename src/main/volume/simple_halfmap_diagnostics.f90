@@ -180,9 +180,10 @@ contains
     !! mixed solve, or a gridding restoration (2026-09-09; the gridding
     !! products carry the same spherical support after deapodization).
     !! Consumers: the PCG trailing bootstrap reads the support field for its
-    !! lag-one FSC pair; the PCG base warm-start selector reads the solve
-    !! kind (gridding products never seed it); postprocess skips its post-hoc
-    !! mask for any volume carrying the sidecar.
+    !! lag-one FSC pair; postprocess skips its post-hoc mask for any volume
+    !! carrying the sidecar. The solve kind is recorded for provenance (the
+    !! former PCG base warm-start selector that read it went with the
+    !! cross-iteration warm starts, 2026-09-10).
     function support_provenance_fname( volname ) result( fname )
         type(string), intent(in) :: volname
         type(string) :: fname

@@ -612,7 +612,7 @@ On finalization:
 - `cls3D` distributed runs map class-orientation output back to particles
 - `JOB_FINISHED` is touched by the shared-memory path
 
-The original-sampling final reconstruction is distinct from an ordinary warm
+The original-sampling final reconstruction is distinct from an ordinary
 refinement iteration. On the PCG backend, both abinitio3D and refine3D_auto
 apply the shared minimum five-iteration budget to this cold solve. An explicit
 positive residual tolerance may still stop convergence earlier. Final
