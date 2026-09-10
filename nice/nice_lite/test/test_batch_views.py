@@ -952,6 +952,8 @@ class BatchViewTests(SimpleTestCase):
             "number": 11,
             "xdim": 4096,
             "ydim": 3072,
+            "width": 512,
+            "height": 512,
             "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
         }]
 
@@ -981,6 +983,8 @@ class BatchViewTests(SimpleTestCase):
             "number": 11,
             "xdim": 4096,
             "ydim": 3072,
+            "width": 512,
+            "height": 512,
             "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
         }])
         self.assertEqual(context["artifact_images"], [])

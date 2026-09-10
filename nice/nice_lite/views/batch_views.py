@@ -605,7 +605,7 @@ def _batch_detail_context(
     output_dimensions_available = (
         _has_positive_dimensions(batch_class_selector)
         or any(
-            _has_positive_dimensions(micrograph, "xdim", "ydim")
+            _has_positive_dimensions(micrograph)
             for micrograph in pick_micrographs
         )
         or any(

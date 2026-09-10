@@ -677,7 +677,7 @@ class BatchJobLifecycleTests(TestCase):
             ["image"],
         )
 
-    def test_pick_previews_use_project_dimensions_without_reading_mrc_headers(self):
+    def test_pick_previews_separate_raster_and_coordinate_dimensions(self):
         pick_dir = os.path.join(self.workspace_dir, "3_pick")
         os.mkdir(pick_dir)
         project_path = os.path.join(pick_dir, "workspace.simple")
@@ -705,6 +705,11 @@ class BatchJobLifecycleTests(TestCase):
         with (
             patch.object(batchjob_module, "SIMPLEProjectFileReader") as project_reader,
             patch.object(batchjob_module, "read_mrc_stack_info") as read_mrc_info,
+            patch.object(
+                BatchJob,
+                "_read_raster_dimensions",
+                return_value=(512, 512),
+            ) as read_raster_dimensions,
         ):
             project_reader.return_value.read_records.return_value = [{
                 "boxfile": box_path,
@@ -716,6 +721,7 @@ class BatchJobLifecycleTests(TestCase):
 
         project_reader.assert_called_once_with(project_path)
         project_reader.return_value.read_records.assert_called_once_with("mic")
+        read_raster_dimensions.assert_called_once_with(pick_thumbnail_path)
         read_mrc_info.assert_not_called()
 
         self.assertEqual(previews, [{
@@ -723,6 +729,8 @@ class BatchJobLifecycleTests(TestCase):
             "number": 1,
             "xdim": 4096,
             "ydim": 3072,
+            "width": 512,
+            "height": 512,
             "boxes": [
                 {"x": 10.0, "y": 10.0, "width": 40.0, "height": 60.0},
                 {"x": 110.0, "y": 220.0, "width": 20.0, "height": 40.0},

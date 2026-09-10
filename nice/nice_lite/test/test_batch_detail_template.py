@@ -628,6 +628,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                 "number": 9,
                 "xdim": 4096,
                 "ydim": 3072,
+                "width": 512,
+                "height": 512,
                 "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
             }],
             "project_sampling_distance": 1.3,
@@ -651,6 +653,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('id="batch_output_tile_size" type="range"', rendered)
         self.assertIn('data-output-grid-target-id="batch_artifacts_panel"', rendered)
         self.assertIn("data-pick-micrograph-grid-preview", rendered)
+        self.assertIn("512 × 512 px", rendered)
+        self.assertNotIn("4096 × 3072 px", rendered)
         self.assertIn('id="batch_pick_overlay_toggle"', rendered)
         self.assertIn('data-pick-overlay-mode="points"', rendered)
         self.assertIn('data-pick-overlay-modes="points,circle,boxes"', rendered)

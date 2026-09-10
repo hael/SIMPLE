@@ -8,12 +8,12 @@
    href="{% url 'nice_lite:image' preview.path %}" target="_blank" rel="noopener"
    class="{% if preview.hidden_by_default %}hidden {% endif %}relative {% if not pick_overlay and preview.crop == 'full' %}inline-flex {% endif %}flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
    style="height:var(--artifact-tile-height){% if pick_overlay or preview.crop != 'full' %};width:var(--artifact-tile-height){% endif %}"
-   title="{% if pick_overlay %}picked micrograph{% if preview.number %} {{ preview.number }}{% endif %}{% if preview.xdim and preview.ydim %} — {{ preview.xdim }} × {{ preview.ydim }} px{% endif %}{% else %}{{ preview.title }}{% if preview.width and preview.height %} — {{ preview.width }} × {{ preview.height }} px{% endif %}{% endif %}">
+   title="{% if pick_overlay %}picked micrograph{% if preview.number %} {{ preview.number }}{% endif %}{% if preview.width and preview.height %} — {{ preview.width }} × {{ preview.height }} px{% endif %}{% else %}{{ preview.title }}{% if preview.width and preview.height %} — {{ preview.width }} × {{ preview.height }} px{% endif %}{% endif %}">
     {% if pick_overlay %}
         <canvas data-pick-micrograph-overlay
                 class="absolute inset-0 pointer-events-none hover:animate-pulse z-10"></canvas>
         {% include 'nice_stream/includes/_pick_micrograph_slide.html' with micrograph=preview grid_tile=True %}
-        {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=preview.xdim height=preview.ydim %}
+        {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=preview.width height=preview.height %}
     {% elif preview.crop == "full" %}
         <img src="{% url 'nice_lite:image' preview.path %}" loading="lazy" alt="{{ preview.alt }}"
              class="h-full w-auto hover:opacity-90 transition-opacity" style="max-width:none">

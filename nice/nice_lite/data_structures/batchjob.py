@@ -482,7 +482,7 @@ class BatchJob(Job):
         return dimensions
 
     def get_pick_micrograph_previews(self, max_previews=20, max_coordinates=1500):
-        """Build picker previews from same-job denoised thumbnails and boxes."""
+        """Build picker previews with separate raster and coordinate dimensions."""
         if self.jobmodel is None or self.prog != "pick":
             return []
         if not isinstance(max_previews, int) or isinstance(max_previews, bool) or max_previews <= 0:
@@ -529,13 +529,17 @@ class BatchJob(Job):
             if thumbnail_path is None or dimensions is None:
                 continue
 
-            previews.append({
+            preview = {
                 "path": thumbnail_path,
                 "number": number,
                 "xdim": dimensions[0],
                 "ydim": dimensions[1],
                 "boxes": self._read_box_centers(box_path, max_coordinates),
-            })
+            }
+            raster_dimensions = self._read_raster_dimensions(thumbnail_path)
+            if raster_dimensions is not None:
+                preview["width"], preview["height"] = raster_dimensions
+            previews.append(preview)
         return previews
 
     @staticmethod
