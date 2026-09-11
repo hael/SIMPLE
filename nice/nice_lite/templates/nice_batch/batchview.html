@@ -2,13 +2,15 @@
   batchview.html — per-batch detail view, loaded inside the workspace iframe.
 
   Structure:
-    - Sub-bar : back link and batch title, with section icons (arguments,
-      logs, and conditionally micrographs/2D classes) on the right; clicking
+    - Sub-bar : back link and batch title, with section icons (overview,
+      and conditionally micrographs/2D classes) on the right; clicking
       an icon shows the matching [data-panel] section below via showJobPanel().
-    - Arguments / logs / 2D classes panels: one [data-panel] section each,
-      only one visible at a time (arguments shown by default). The 2D classes
-      panel (only when "cls2D" is in jobstats) is a selectable tile grid of
-      class averages, shared with the stream classification2D views.
+    - Overview panel (shown by default): logs viewer in the main column,
+      with the arguments viewer and a reserved (currently empty) panel
+      stacked in a smaller side column.
+    - 2D classes panel (only when "cls2D" is in jobstats) is a selectable
+      tile grid of class averages, shared with the stream classification2D
+      views.
     - Job details footer.
 
   Context variables:
@@ -38,21 +40,18 @@
     {% url 'nice_lite:workspace' as back_url %}
     {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp desc=desc job_type='batch' %}
     
-    <!-- arguments panel -->
-     <div data-panel="arguments" class="w-full flex flex-row p-[10px] flex-1 overflow-hidden">
-        <div class="flex flex-col h-full gap-2.5 w-full">
-            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+    <!-- overview panel: logs (main column) with arguments and a reserved column of smaller panels -->
+     <div data-panel="overview" class="w-full flex flex-row gap-2.5 p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full w-72 flex-shrink-0 gap-2.5">
+            <div class="flex flex-col flex-1 min-h-0 bg-streambar rounded-xl text-streamtext border border-streamline overflow-y-auto">
+                {% include 'includes/_stats_viewer.html' %}
+            </div>
+            <div class="flex flex-col flex-1 min-h-0 bg-streambar rounded-xl text-streamtext border border-streamline overflow-y-auto">
                 {% include 'includes/_arguments_viewer.html' %}
             </div>
         </div>
-    </div>
-
-    <!-- logs panel -->
-     <div data-panel="logs" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
-        <div class="flex flex-col h-full gap-2.5 w-full">
-            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
-                {% include 'includes/_log_viewer.html' %}
-            </div>
+        <div class="flex flex-col h-full flex-1 min-w-0 bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+            {% include 'includes/_log_viewer.html' %}
         </div>
     </div>
 

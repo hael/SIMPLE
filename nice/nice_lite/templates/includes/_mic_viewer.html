@@ -20,8 +20,25 @@
   relies on a page-level `lastinteraction` global declared by the including
   page's own script. Only one instance is ever rendered per page.
 {% endcomment %}
-<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+<div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+    {% with mics=jobstats.latest_micrographs|default:jobstats.micrographs %}
+    {% if mics.0.boxes %}
+    <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1.5">
+            <label for="mic_box_overlay_size" class="text-[10px] text-streamlabel">box size</label>
+            <input id="mic_box_overlay_size" type="range" min="1" max="20" step="1" value="1"
+                   oninput="updateMicBoxOverlaySize(this)"
+                   class="h-1 w-20 accent-streamaccent">
+        </div>
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+            <span class="text-[10px] text-streamlabel">boxes</span>
+            <input type="checkbox" checked class="sr-only peer" onchange="toggleMicBoxOverlays(this)">
+            <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+        </label>
+    </div>
+    {% endif %}
+    {% endwith %}
 </div>
 <div id="mic_tile_grid" class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory mt-2">
     {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
@@ -113,7 +130,23 @@
         hideMicMenu();
     };
 
+    let micBoxOverlayRadius = 1;
+    let micBoxOverlaysVisible = true;
+
+    const updateMicBoxOverlaySize = (element) => {
+        micBoxOverlayRadius = Number(element.value) || 1;
+        drawMicBoxOverlays();
+    };
+
+    const toggleMicBoxOverlays = (element) => {
+        micBoxOverlaysVisible = element.checked;
+        for (const overlay of document.querySelectorAll(".boxes-overlay")) {
+            overlay.classList.toggle("hidden", !micBoxOverlaysVisible);
+        }
+    };
+
     const drawMicBoxOverlays = () => {
+        if (!micBoxOverlaysVisible) return;
         for (const overlay of document.querySelectorAll(".boxes-overlay")) {
             const container = overlay.parentElement;
             const width = container ? container.clientWidth : 0;
@@ -142,7 +175,7 @@
             ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
             for (const box of boxes) {
                 ctx.beginPath();
-                ctx.arc((box.x * scale) + xoffset, (box.y * scale) + yoffset, 1, 0, 2 * Math.PI);
+                ctx.arc((box.x * scale) + xoffset, (box.y * scale) + yoffset, micBoxOverlayRadius, 0, 2 * Math.PI);
                 ctx.stroke();
             }
         }

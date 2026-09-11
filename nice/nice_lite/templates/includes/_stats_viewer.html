@@ -1,0 +1,35 @@
+{% comment %}
+  _stats_viewer.html — batch project count-tile summary (micrographs, 2D
+  classes, particles); same tiles/logic as the "Count tiles" section of
+  nice_batch/includes/_batch_card.html, sourced from top-level `jobstats`
+  instead of `job.master_stats.project_metadata`.
+  Expects `jobstats` (dict of batch project metadata).
+{% endcomment %}
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">stats</p>
+</div>
+<div class="p-3">
+    <div class="grid grid-cols-2 gap-2">
+        {% if jobstats.nmics %}
+            {% if jobstats.nmics_selected %}
+                {% include 'includes/_count_tile.html' with count=jobstats.nmics_selected label="micrographs selected" sublabel=jobstats.nmics sublabel_sep="/" %}
+            {% else %}
+                {% include 'includes/_count_tile.html' with count=jobstats.nmics label="micrographs" %}
+            {% endif %}
+        {% endif %}
+        {% if jobstats.ncls2D %}
+            {% if jobstats.ncls2D_selected %}
+                {% include 'includes/_count_tile.html' with count=jobstats.ncls2D_selected label="2D classes selected" sublabel=jobstats.ncls2D sublabel_sep="/" %}
+            {% else %}
+                {% include 'includes/_count_tile.html' with count=jobstats.ncls2D label="2D classes" %}
+            {% endif %}
+        {% endif %}
+        {% if jobstats.nptcls %}
+            {% if jobstats.nptcls_selected %}
+                {% include 'includes/_count_tile.html' with count=jobstats.nptcls_selected label="particles selected" sublabel=jobstats.nptcls sublabel_sep="/" %}
+            {% else %}
+                {% include 'includes/_count_tile.html' with count=jobstats.nptcls label="particles" %}
+            {% endif %}
+        {% endif %}
+    </div>
+</div>

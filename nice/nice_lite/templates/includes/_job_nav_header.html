@@ -23,14 +23,7 @@
         <span class="text-streamlabel text-[10px]">/</span>
         <span class="text-[12px] font-medium text-streamtext">{{ displayid }} · batch{% if page_title %} · {{ page_title }}{% endif %}{% if desc %} · {{ desc }}{% endif %}</span>
         <div class="ml-auto flex items-center gap-3">
-            <span class="job-panel-icon text-streamtext cursor-pointer transition-colors" title="arguments" data-panel-target="arguments" onclick="showJobPanel(this)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
-                    <line x1="3" y1="4" x2="13" y2="4"/>
-                    <line x1="3" y1="8" x2="13" y2="8"/>
-                    <line x1="3" y1="12" x2="9" y2="12"/>
-                </svg>
-            </span>
-            <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="logs" data-panel-target="logs" onclick="showJobPanel(this)">
+            <span class="job-panel-icon text-streamtext cursor-pointer transition-colors" title="overview" data-panel-target="overview" onclick="showJobPanel(this)">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
                     <rect x="3" y="2" width="10" height="12" rx="1"/>
                     <line x1="5.5" y1="5.5" x2="10.5" y2="5.5"/>

@@ -819,7 +819,6 @@ def view_batch(request, jobid):
         "error"  : stderr_entry.get("text") if stderr_entry.get("exists") else None,
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
-        "jobstats": metadata.get("project_metadata", {}),
     }
     
     response = render(request, template, context)
