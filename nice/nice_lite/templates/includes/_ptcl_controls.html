@@ -1,0 +1,31 @@
+{% comment %}
+  _ptcl_controls.html — context menu (contrast/brightness/scale, sort on
+  defocus/index) for the particle tile grid. Self-contained: no context
+  variables required. Wired up by ids/names in _ptcl_viewer.html's script
+  (showPtclMenu/hidePtclMenu/sortPtclDf/sortPtclIdx).
+{% endcomment %}
+<div name="ptclselectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hidePtclMenu(this, event)" oncontextmenu="hidePtclMenu(this, event)">
+    <div name="selectmenubox" class="fixed flex flex-col gap-1 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">contrast</div>
+            <input class="mx-[10px]" oninput="updatePtclContrast(this)" type="range" max="500" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">brightness</div>
+            <input class="mx-[10px]" oninput="updatePtclBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">scale</div>
+            <input class="mx-[10px]" oninput="updatePtclScale(this)" type="range" max="400" min="20" step="10" value="100"></input>
+        </div>
+        <div id="sortdf" class="userbutton w-auto text-center">sort on defocus</div>
+        <div id="sortidx" class="userbutton w-auto text-center">sort on index</div>
+    </div>
+</div>
+<script>
+    window.addEventListener("load", () => {
+        const root = document.querySelector(":root");
+        root.style.setProperty("--ptcl-contrast", 1.0);
+        root.style.setProperty("--ptcl-brightness", 1.0);
+    });
+</script>

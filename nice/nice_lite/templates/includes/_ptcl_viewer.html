@@ -1,0 +1,117 @@
+{% comment %}
+  _ptcl_viewer.html — titled panel of particle sprite-sheet tiles plus the
+  shared context menu. View-only: no selection, toggling, or save controls.
+  Expects `jobstats.particles` in context (list of particle entries from
+  gui_metadata_ptcl: path, pathlp, spritex, spritey, spriteh, spritew, idx,
+  and optional df/box).
+  Params: panel_title (str).
+  Owns the JS for the sort/contrast/brightness/scale context menu and the
+  regular/low-pass display toggle; only one panel instance is ever rendered
+  per page.
+{% endcomment %}
+<div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+</div>
+<div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
+    <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
+        <div id="ptcl_slider" class="flex flex-wrap">
+            {% if "particles" in jobstats %}
+                {% for particle in jobstats.particles %}
+                    {% include 'includes/_ptcl_element.html' %}
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% include 'includes/_ptcl_controls.html' %}
+    </div>
+</div>
+{% if "particles" in jobstats %}
+<div class="flex items-center justify-end mt-3 p-2 border-t border-streamline">
+    <label class="inline-flex items-center gap-2 cursor-pointer">
+        <span class="text-[10px] text-streamlabel">low-pass</span>
+        <input type="checkbox" class="sr-only peer" onchange="togglePtclLp(this)">
+        <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+    </label>
+</div>
+{% endif %}
+<script>
+    let currentPtclMenuContainer = null;
+    let ptclShowLp = false;
+
+    const getPtclNumber = (el, key) => {
+        if (!el) return 0;
+        if (el.dataset && el.dataset[key] !== undefined) return Number(el.dataset[key]);
+        return 0;
+    };
+
+    const showPtclMenu = (element, event) => {
+        event.preventDefault();
+        currentPtclMenuContainer = element.closest("#ptcl_slider");
+        const selectmenu = document.querySelector("[name='ptclselectmenu']");
+        if (!selectmenu) return;
+        const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+        const sortdf = selectmenu.querySelector("#sortdf");
+        const sortidx = selectmenu.querySelector("#sortidx");
+
+        selectmenubox.style.top = event.clientY + "px";
+        selectmenubox.style.left = event.clientX + "px";
+        selectmenu.style.display = "flex";
+        if (sortdf) sortdf.onclick = sortPtclDf;
+        if (sortidx) sortidx.onclick = sortPtclIdx;
+        lastinteraction = Date.now();
+    };
+
+    const hidePtclMenu = () => {
+        for (const selectmenu of document.querySelectorAll("[name='ptclselectmenu']")) {
+            const sortdf = selectmenu.querySelector("#sortdf");
+            const sortidx = selectmenu.querySelector("#sortidx");
+            selectmenu.style.display = "none";
+            if (sortdf) sortdf.onclick = null;
+            if (sortidx) sortidx.onclick = null;
+        }
+        lastinteraction = Date.now();
+    };
+
+    const sortPtclDf = () => {
+        if (!currentPtclMenuContainer) return;
+        const tiles = Array.from(currentPtclMenuContainer.querySelectorAll(".ptclcontainer"));
+        tiles.sort((a, b) => getPtclNumber(a, "df") - getPtclNumber(b, "df"));
+        tiles.forEach((tile) => currentPtclMenuContainer.appendChild(tile));
+        hidePtclMenu();
+    };
+
+    const sortPtclIdx = () => {
+        if (!currentPtclMenuContainer) return;
+        const tiles = Array.from(currentPtclMenuContainer.querySelectorAll(".ptclcontainer"));
+        tiles.sort((a, b) => getPtclNumber(a, "idx") - getPtclNumber(b, "idx"));
+        tiles.forEach((tile) => currentPtclMenuContainer.appendChild(tile));
+        hidePtclMenu();
+    };
+
+    const updatePtclBrightness = (element) => {
+        document.querySelector(":root").style.setProperty("--ptcl-brightness", element.value / 100);
+    };
+
+    const updatePtclContrast = (element) => {
+        document.querySelector(":root").style.setProperty("--ptcl-contrast", element.value / 100);
+    };
+
+    const updatePtclScale = (element) => {
+        const scale = element.value;
+        for (const ptcl of document.querySelectorAll(".ptcl")) {
+            ptcl.style.width = scale + "px";
+            ptcl.style.height = scale + "px";
+        }
+        for (const ptclimg of document.querySelectorAll(".ptclimg")) {
+            ptclimg.style.width = scale + "px";
+            ptclimg.style.height = scale + "px";
+        }
+    };
+
+    const togglePtclLp = (element) => {
+        ptclShowLp = element.checked;
+        for (const ptclimg of document.querySelectorAll(".ptclimg")) {
+            const path = ptclShowLp ? ptclimg.dataset.pathlp : ptclimg.dataset.path;
+            ptclimg.style.backgroundImage = "url(" + path + ")";
+        }
+    };
+</script>

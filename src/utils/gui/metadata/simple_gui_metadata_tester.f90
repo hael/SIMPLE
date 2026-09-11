@@ -12,7 +12,7 @@
 !   Types covered:
 !     gui_metadata_base, gui_metadata_micrograph, gui_metadata_histogram,
 !     gui_metadata_timeplot, gui_metadata_optics_group, gui_metadata_cavg2D,
-!     gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
+!     gui_metadata_ptcl, gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
 !     gui_metadata_stream_update, gui_metadata_stream_picking (initial and
 !     reference picking), gui_metadata_stream_opening2D,
 !     gui_metadata_stream_particle_sieving, gui_metadata_stream_pool2D,
@@ -55,6 +55,9 @@ contains
     call test_set_get_cavg2D()
     call test_serialise_cavg2D()
     call test_jsonise_cavg2D()
+    call test_set_get_ptcl()
+    call test_serialise_ptcl()
+    call test_jsonise_ptcl()
     call test_set_get_stream_preprocess()
     call test_serialise_stream_preprocess()
     call test_jsonise_stream_preprocess()
@@ -540,6 +543,84 @@ contains
     call json%destroy(json_ptr)
     call assert_true(.not.json%failed(), 'json destroyed')
   end subroutine test_jsonise_cavg2D
+
+  !---------------- ptcl ----------------
+
+  ! Verify that all ptcl fields round-trip through set/get, including optional df and box.
+  subroutine test_set_get_ptcl()
+    type(gui_metadata_ptcl) :: meta
+    type(string)            :: path, pathlp
+    integer                 :: idx
+    type(sprite_sheet_pos)  :: sprite
+    real                    :: df
+    integer                 :: box
+    write(*,'(A)') 'test_set_get_ptcl'
+    call meta%new(GUI_METADATA_PTCL_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_PTCL_TYPE, 'type is set correctly')
+    call meta%set(path=string('/test/path/to/ptcls.jpeg'), pathlp=string('/test/path/to/ptcls_lp.jpeg'), &
+                  idx=7, sprite=sprite_sheet_pos(x=25.0, y=50.0, h=800, w=1200), &
+                  i=1, i_max=1, df=1.8, box=128)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_int(meta%get_idx(), 7, 'get_idx returns correct value')
+    call assert_true(meta%get(path=path, pathlp=pathlp, idx=idx, sprite=sprite, df=df, box=box), 'metadata retrieved')
+    call assert_char(path%to_char(),   '/test/path/to/ptcls.jpeg',    'path set/get correctly')
+    call assert_char(pathlp%to_char(), '/test/path/to/ptcls_lp.jpeg', 'pathlp set/get correctly')
+    call assert_int(idx,      7,    'idx set/get correctly')
+    call assert_true(sprite%x == 25.0, 'spritex set/get correctly')
+    call assert_true(sprite%y == 50.0, 'spritey set/get correctly')
+    call assert_int(sprite%h, 800,  'spriteh set/get correctly')
+    call assert_int(sprite%w, 1200, 'spritew set/get correctly')
+    call assert_true(df == 1.8,   'df set/get correctly')
+    call assert_int(box,    128,  'box set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_ptcl
+
+  ! Verify that the ptcl serialise buffer is the expected size.
+  subroutine test_serialise_ptcl()
+    character(len=:),       allocatable :: buffer
+    type(gui_metadata_ptcl)             :: meta
+    write(*,'(A)') 'test_serialise_ptcl'
+    call meta%new(GUI_METADATA_PTCL_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_PTCL_TYPE, 'type is set correctly')
+    call meta%set(path=string('/test/path/to/ptcls.jpeg'), pathlp=string('/test/path/to/ptcls_lp.jpeg'), &
+                  idx=7, sprite=sprite_sheet_pos(x=25.0, y=50.0, h=800, w=1200), &
+                  i=1, i_max=1, df=1.8, box=128)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_serialise_ptcl
+
+  ! Verify the ptcl JSON output is well-formed (non-empty; exact hash left
+  ! for a follow-up build since it depends on the json_module number formatter).
+  subroutine test_jsonise_ptcl()
+    character(kind=CK, len=:), allocatable :: buffer
+    type(gui_metadata_ptcl)                :: meta
+    type(json_core)                        :: json
+    type(json_value),          pointer     :: json_ptr
+    write(*,'(A)') 'test_jsonise_ptcl'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_PTCL_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_PTCL_TYPE, 'type is set correctly')
+    call meta%set(path=string('/test/path/to/ptcls.jpeg'), pathlp=string('/test/path/to/ptcls_lp.jpeg'), &
+                  idx=7, sprite=sprite_sheet_pos(x=25.0, y=50.0, h=800, w=1200), &
+                  i=1, i_max=1, df=1.8, box=128)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_true(len(buffer) > 0, 'json output is non-empty')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+  end subroutine test_jsonise_ptcl
 
   !---------------- stream preprocess ----------------
 

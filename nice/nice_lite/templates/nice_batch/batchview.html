@@ -66,6 +66,17 @@
         </div>
     </div>
 
+    <!-- particles panel -->
+     <div data-panel="particles" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full gap-2.5 w-full">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                {% if "particles" in jobstats and jobstats.particles|length > 0 %}
+                    {% include 'includes/_ptcl_viewer.html' with panel_title='example particles' selectable=True %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <!-- 2D classes panel -->
      <div data-panel="cls2D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
         <div class="flex flex-col h-full gap-2.5 w-full">

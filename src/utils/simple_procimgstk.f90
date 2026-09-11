@@ -776,11 +776,12 @@ contains
         call img%kill
     end subroutine shift_imgfile
 
-    subroutine random_selection_from_imgfile( spproj, fname, box, nran )
+    subroutine random_selection_from_imgfile( spproj, fname, box, nran, pinds )
         use simple_sp_project, only: sp_project
-        class(sp_project), intent(inout) :: spproj
-        class(string),     intent(in)    :: fname
-        integer,           intent(in)    :: nran, box
+        class(sp_project),  intent(inout) :: spproj
+        class(string),      intent(in)    :: fname
+        integer,            intent(in)    :: nran, box
+        integer, optional, allocatable, intent(out) :: pinds(:)
         logical,           allocatable   :: mask(:)
         type(string)   :: stkname
         type(stack_io) :: stkio_w
@@ -797,6 +798,7 @@ contains
         ldim_scaled = [box,box,1]
         doscale     = box /= box_ori
         call raise_exception_imgfile( nptcls, ldim, 'random_selection_from_imgfile' )
+        if( present(pinds) ) allocate(pinds(nran))
         if( doscale )then
             call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will  be overwritten
             call stkio_w%open(fname, smpd, 'write', box=ldim_scaled(1))
@@ -819,6 +821,7 @@ contains
             call progress(i, nran)
             ii = rt%irnd()
             call rt%insert(ii)
+            if( present(pinds) ) pinds(i) = ii
             call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
             call img%read(stkname, ind)
             call img%norm()

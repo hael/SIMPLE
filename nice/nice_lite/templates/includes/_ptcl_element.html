@@ -1,0 +1,20 @@
+{% comment %}
+  _ptcl_element.html — one particle sprite-sheet tile (view-only, no
+  selection or save behaviour).
+  Expects `particle` in context (from the enclosing for-loop): path, pathlp,
+  idx, spritew, spriteh, spritex, spritey, and optional df/box.
+{% endcomment %}
+<div class="flex flex-col snap-center ptclcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline"
+     data-idx="{{ particle.idx }}"{% if particle.df %} data-df="{{ particle.df|floatformat:2 }}"{% endif %}
+     title="idx: {{ particle.idx }}{% if particle.df %}&#013;defocus: {{ particle.df|floatformat:2 }}μm{% endif %}{% if particle.box %}&#013;box: {{ particle.box }}px{% endif %}">
+    <div class="flex justify-between mb-1.5">
+        <span class="text-[10px] text-streamlabel">#{{ particle.idx }}</span>
+        {% if particle.df %}<span class="text-[10px] text-streamlabel">{{ particle.df|floatformat:2 }}μm</span>{% endif %}
+    </div>
+    <div oncontextmenu="showPtclMenu(this, event)" class="ptcl bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+        <div style="background-image:url({% url 'nice_lite:image' particle.path %}); background-size:{{ particle.spritew }}% {{ particle.spriteh }}%; background-position:{{ particle.spritex }}% {{ particle.spritey }}%; filter:contrast(var(--ptcl-contrast)) brightness(var(--ptcl-brightness));"
+             data-path="{% url 'nice_lite:image' particle.path %}" data-pathlp="{% url 'nice_lite:image' particle.pathlp %}"
+             class="ptclimg relative bg-black h-[100px] w-[100px]">
+        </div>
+    </div>
+</div>

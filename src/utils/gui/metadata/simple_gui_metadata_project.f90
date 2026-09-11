@@ -19,7 +19,8 @@
 ! DEPENDENCIES:
 !   unix, json_kinds, json_module, simple_defs, simple_defs_fname, simple_fileio,
 !   simple_string, simple_error, simple_string_utils, simple_sp_project, simple_gui_metadata_base,
-!   simple_gui_metadata_types, simple_gui_metadata_micrograph, simple_gui_metadata_cavg2D
+!   simple_gui_metadata_types, simple_gui_metadata_micrograph, simple_gui_metadata_cavg2D,
+!   simple_procimgstk, simple_gui_utils, simple_syslib
 !==============================================================================
 module simple_gui_metadata_project
   use unix,                           only: c_long, c_time
@@ -33,10 +34,14 @@ module simple_gui_metadata_project
   use simple_string_utils,            only: int2str
   use simple_sp_project,              only: sp_project
   use simple_gui_metadata_base,       only: gui_metadata_base
-  use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE
+  use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE, GUI_METADATA_PTCL_TYPE
   use simple_gui_metadata_micrograph, only: gui_metadata_micrograph
+  use simple_gui_metadata_ptcl,       only: gui_metadata_ptcl
   use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D, sprite_sheet_pos
   use simple_nrtxtfile,               only: nrtxtfile
+  use simple_procimgstk,              only: random_selection_from_imgfile, bp_imgfile
+  use simple_gui_utils,               only: mrc2jpeg_tiled
+  use simple_syslib,                  only: del_file, simple_abspath
 
   implicit none
 
@@ -70,8 +75,11 @@ module simple_gui_metadata_project
     integer                       :: ydim_mic   = 0 ! micrograph height in pixels
     real                          :: smpd_mic   = 0. ! micrograph pixel size (in A)
     integer                       :: pspec_size = 0 ! power spectrum thumbnail size (in pixels)
-    type(gui_metadata_micrograph), allocatable :: meta_micrographs(:)
+    character(len=LONGSTRLEN)     :: ptcls_jpg = '' ! path to a JPEG montage of a random particle sample
+    integer                       :: nptcls_shown = 0 ! number of particles included in ptcls_jpg
+    type(gui_metadata_micrograph),   allocatable :: meta_micrographs(:)
     type(gui_metadata_cavg2D_stage), allocatable :: meta_cavg2D(:)
+    type(gui_metadata_ptcl),         allocatable :: meta_ptcls(:)
   contains
     procedure :: set
     procedure :: get
@@ -92,14 +100,18 @@ contains
     type(gui_metadata_micrograph),   allocatable   :: meta_micrographs_tmp(:)
     type(gui_metadata_cavg2D),       allocatable   :: cavgs_tmp(:)
     real,                            allocatable   :: boxdata(:)
+    integer,                         allocatable   :: micrograph_indices(:)
     type(nrtxtfile)                                :: boxfile
     type(string)                                   :: projname, projfile, cavgsstk, cavgsjpg, boxpath
     character(len=SHORTSTRLEN)                     :: md_oritype
     integer                                        :: i, j, x, y, nmeta_micrographs, ncls_stk, n_valid_micrographs, n_valid_cavgs
     integer                                        :: xtiles, ytiles, xtile, ytile, nrecs, nlines
     integer                                        :: nstage2D, array_idx, out_ind
+    integer                                        :: nptcls_all, nptcls_valid, nptcls_sample, box_ptcls, n_valid_ptcls
     logical                                        :: l_final, l_selection
-    real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs
+    real                                            :: smpd_cavgs, box_cavgs, mskdiam_cavgs, smpd_ptcls
+    type(string)                                    :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
+    integer,                            parameter  :: N_PTCLS_SAMPLE = 100
                 
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_final = present(stage2D)
@@ -177,6 +189,60 @@ contains
                 allocate(meta_micrographs_tmp(n_valid_micrographs))
                 meta_micrographs_tmp = self%meta_micrographs(1:n_valid_micrographs)
                 call move_alloc(meta_micrographs_tmp, self%meta_micrographs)
+            end if
+        end if
+    end if
+    ! add particles: JPEG montage of a random sample of (selected) particles
+    if( allocated(self%meta_ptcls) ) deallocate(self%meta_ptcls)
+    if( md_oritype == 'ptcl' .or. md_oritype == 'all' ) then
+        nptcls_all = spproj%os_ptcl2D%get_noris()
+        if( nptcls_all > 0 ) then
+            if( spproj%os_ptcl2D%isthere('state') ) then
+                nptcls_valid = spproj%os_ptcl2D%count_state_gt_zero()
+            else
+                nptcls_valid = nptcls_all
+            end if
+            nptcls_sample = min(N_PTCLS_SAMPLE, nptcls_valid)
+            if( nptcls_sample > 0 ) then
+                box_ptcls  = nint(spproj%os_stk%get(1, 'box'))
+                smpd_ptcls = spproj%os_stk%get(1, 'smpd')
+                ptclsstk   = 'ptcls_sample' // MRC_EXT
+                ptclsjpg   = 'ptcls_sample' // JPG_EXT
+                ptclslpstk = 'ptcls_sample_lp' // MRC_EXT
+                ptclsjpglp = 'ptcls_sample_lp' // JPG_EXT
+                call random_selection_from_imgfile(spproj, ptclsstk, box_ptcls, nptcls_sample, pinds=micrograph_indices)
+                call mrc2jpeg_tiled(ptclsstk, ptclsjpg, ntiles=n_valid_ptcls)
+                call bp_imgfile(ptclsstk, ptclslpstk, smpd_ptcls, 0., 10.)
+                call mrc2jpeg_tiled(ptclslpstk, ptclsjpglp, ntiles=n_valid_ptcls)
+                call del_file(ptclslpstk)
+                call del_file(ptclsstk)
+                ptclsjpg          = simple_abspath(ptclsjpg)
+                ptclsjpglp        = simple_abspath(ptclsjpglp)
+                self%ptcls_jpg    = ptclsjpg%to_char()
+                self%nptcls_shown = n_valid_ptcls
+                allocate(self%meta_ptcls(n_valid_ptcls))
+                xtiles         = floor(sqrt(real(n_valid_ptcls)))
+                ytiles         = ceiling(real(n_valid_ptcls) / real(xtiles))
+                n_valid_cavgs  = 0
+                do i = 1, n_valid_ptcls
+                    n_valid_cavgs = n_valid_cavgs + 1
+                    xtile = mod(i-1, xtiles)
+                    ytile = (i-1) / xtiles
+                    call self%meta_ptcls(i)%new(GUI_METADATA_PTCL_TYPE)
+                    call self%meta_ptcls(i)%set(path    = ptclsjpg,                           &
+                                                pathlp  = ptclsjpglp,                         &
+                                                i       = i,                                  &
+                                                i_max   = n_valid_ptcls,                      &
+                                                df      = (spproj%os_ptcl2D%get(micrograph_indices(i), 'dfx') + spproj%os_ptcl2D%get(micrograph_indices(i), 'dfy')) / 2.0, &
+                                                box     = box_ptcls,                          &
+                                                idx     = micrograph_indices(i),              &
+                                                sprite  = sprite_sheet_pos(                   &
+                                                    x = xtile * (100.0 / max(1, xtiles - 1)), &
+                                                    y = ytile * (100.0 / max(1, ytiles - 1)), &
+                                                    h = 100 * ytiles,                         &
+                                                    w = 100 * xtiles)                         )
+                end do
+                if( allocated(micrograph_indices) ) deallocate(micrograph_indices)
             end if
         end if
     end if
@@ -294,9 +360,9 @@ contains
   function jsonise_override( self ) result( json_ptr )
     class(gui_metadata_project), intent(inout) :: self
     type(json_core)                            :: json
-    type(json_value),             pointer      :: json_ptr, json_mics_ptr, json_cls2D_ptr, json_stage_ptr
+    type(json_value),             pointer      :: json_ptr, json_mics_ptr, json_cls2D_ptr, json_stage_ptr, json_ptcls_ptr
     type(string)                               :: stage_key
-    integer                                    :: i_mic, i_stage2D
+    integer                                    :: i_mic, i_stage2D, i_ptcl
     logical                                    :: l_add
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( self%l_assigned ) then
@@ -322,6 +388,10 @@ contains
         call json%add(json_ptr, 'xdim_mic', self%xdim_mic)
         call json%add(json_ptr, 'ydim_mic', self%ydim_mic)
       end if
+      if( len_trim(self%ptcls_jpg) > 0 ) then
+        call json%add(json_ptr, 'ptcls_jpg', trim(self%ptcls_jpg))
+        call json%add(json_ptr, 'nptcls_shown', self%nptcls_shown)
+      end if
       ! Add micrographs section if available
       if( allocated(self%meta_micrographs) ) then
         l_add = .false.
@@ -336,6 +406,22 @@ contains
           call json%add(json_ptr, json_mics_ptr)
         else
           call json%destroy(json_mics_ptr)
+        endif
+      endif
+      ! Add particles section if available
+      if( allocated(self%meta_ptcls) ) then
+        l_add = .false.
+        call json%create_array(json_ptcls_ptr, 'particles')
+        do i_ptcl=1, size(self%meta_ptcls)
+          if( self%meta_ptcls(i_ptcl)%assigned() ) then
+            l_add = .true.
+            call json%add(json_ptcls_ptr, self%meta_ptcls(i_ptcl)%jsonise())
+          endif
+        enddo
+        if( l_add ) then
+          call json%add(json_ptr, json_ptcls_ptr)
+        else
+          call json%destroy(json_ptcls_ptr)
         endif
       endif
       ! Add cls2D section if available

@@ -40,6 +40,16 @@
                     </svg>
                 </span>
             {% endif %}
+            {% if "particles" in jobstats %}
+                <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="particles" data-panel-target="particles" onclick="showJobPanel(this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
+                        <circle cx="5" cy="5" r="1.5"/>
+                        <circle cx="11" cy="4.5" r="1.5"/>
+                        <circle cx="4.5" cy="11" r="1.5"/>
+                        <circle cx="10.5" cy="10.5" r="1.5"/>
+                    </svg>
+                </span>
+            {% endif %}
             {% if "cls2D" in jobstats %}
                 <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="2D classes" data-panel-target="cls2D" onclick="showJobPanel(this)">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
