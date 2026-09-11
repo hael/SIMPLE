@@ -55,6 +55,17 @@
         </div>
     </div>
 
+    <!-- movies panel -->
+     <div data-panel="movies" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full gap-2.5 w-full">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                {% if "movies" in jobstats and jobstats.movies|length > 0 %}
+                    {% include 'includes/_mov_viewer.html' with panel_title='movies' selectable=False %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <!-- micrographs panel -->
      <div data-panel="micrographs" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
         <div class="flex flex-col h-full gap-2.5 w-full">

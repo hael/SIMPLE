@@ -58,17 +58,17 @@ contains
   !---------------- setters ----------------
 
   ! Set scalar micrograph fields and mark the object as assigned.
-  subroutine set( self, path, dfx, dfy, ctfres, i, i_max )
+  subroutine set( self, path, i, i_max, dfx, dfy, ctfres )
     class(gui_metadata_micrograph), intent(inout) :: self
     type(string),                   intent(in)    :: path
-    real,                           intent(in)    :: dfx, dfy, ctfres
     integer,                        intent(in)    :: i, i_max
+    real,                 optional, intent(in)    :: dfx, dfy, ctfres
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%path       = path%to_char()
-    self%dfx        = dfx
-    self%dfy        = dfy
-    self%ctfres     = ctfres
+    if( present(dfx)    ) self%dfx    = dfx
+    if( present(dfy)    ) self%dfy    = dfy
+    if( present(ctfres) ) self%ctfres = ctfres
     self%i          = i
     self%i_max      = i_max
   end subroutine set

@@ -138,10 +138,10 @@ contains
                     call spproj%set_boxfile(nprev_intgs+i, boxfname)
                 endif
             end do
-        endif 
+        endif
         ! write project file
         call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
-        call gui_comm%add_metadata(params%projfile, oritype='mic')
+        call gui_comm%add_metadata(params%projfile, oritype='mov')
         call gui_comm%kill()
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies

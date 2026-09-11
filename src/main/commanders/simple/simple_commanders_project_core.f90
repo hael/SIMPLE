@@ -876,9 +876,11 @@ contains
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
         integer,            allocatable :: states(:), ptcls_in_state(:)
+        integer,            allocatable :: cavg_inds_sel(:), cavg_inds_desel(:)
+        type(string)                    :: cls2D_selected_jpg, cls2D_deselected_jpg
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines, fnr, noris, i, nstks, noris_in_state
-        integer                         :: state
+        integer                         :: state, xtiles_sel, ytiles_sel, xtiles_desel, ytiles_desel
         logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d, l_writestar
         class(oris), pointer :: pos => NULL()
         l_append     = .false.
@@ -1068,6 +1070,21 @@ contains
                 if(params%write_imgarr .eq. 'yes') then
                     call spproj%set_cavgs_thumb(params%projfile)
                 end if
+                ! jpeg montages of selected/deselected classes
+                if( count(states /= 0) > 0 )then
+                    cls2D_selected_jpg = string('cls2D_selected')//JPG_EXT
+                    call spproj%cavgs2jpg(cavg_inds_sel, cls2D_selected_jpg, xtiles_sel, ytiles_sel, ignore_states=.false.)
+                    cls2D_selected_jpg = simple_abspath(cls2D_selected_jpg)
+                    write(logfhandle, '(A)') '>>> SELECTED CLASS AVERAGES'
+                    write(logfhandle, '(A)') '>>> JPEG '//cls2D_selected_jpg%to_char()
+                endif
+                if( count(states == 0) > 0 )then
+                    cls2D_deselected_jpg = string('cls2D_deselected')//JPG_EXT
+                    call spproj%cavgs2jpg(cavg_inds_desel, cls2D_deselected_jpg, xtiles_desel, ytiles_desel, ignore_states=.false., invert_states=.true.)
+                    cls2D_deselected_jpg = simple_abspath(cls2D_deselected_jpg)
+                    write(logfhandle, '(A)') '>>> DESELECTED CLASS AVERAGES'
+                    write(logfhandle, '(A)') '>>> JPEG '//cls2D_deselected_jpg%to_char()
+                endif
             case(CLS3D_SEG)
                 if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
                     call spproj%os_cls2D%set_all('state', real(states))

@@ -20,6 +20,7 @@
 !   unix, json_kinds, json_module, simple_defs, simple_defs_fname, simple_fileio,
 !   simple_string, simple_error, simple_string_utils, simple_sp_project, simple_gui_metadata_base,
 !   simple_gui_metadata_types, simple_gui_metadata_micrograph, simple_gui_metadata_cavg2D,
+!   simple_image, simple_math, simple_motion_gain_helpers,
 !   simple_procimgstk, simple_gui_utils, simple_syslib
 !==============================================================================
 module simple_gui_metadata_project
@@ -39,6 +40,9 @@ module simple_gui_metadata_project
   use simple_gui_metadata_ptcl,       only: gui_metadata_ptcl
   use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D, sprite_sheet_pos
   use simple_nrtxtfile,               only: nrtxtfile
+  use simple_image,                   only: image
+  use simple_math,                    only: round2even
+  use simple_motion_gain_helpers,     only: read_movies_and_sum_frames
   use simple_procimgstk,              only: random_selection_from_imgfile, bp_imgfile
   use simple_gui_utils,               only: mrc2jpeg_tiled
   use simple_syslib,                  only: del_file, simple_abspath
@@ -77,6 +81,7 @@ module simple_gui_metadata_project
     integer                       :: pspec_size = 0 ! power spectrum thumbnail size (in pixels)
     character(len=LONGSTRLEN)     :: ptcls_jpg = '' ! path to a JPEG montage of a random particle sample
     integer                       :: nptcls_shown = 0 ! number of particles included in ptcls_jpg
+    type(gui_metadata_micrograph),   allocatable :: meta_movies(:)
     type(gui_metadata_micrograph),   allocatable :: meta_micrographs(:)
     type(gui_metadata_cavg2D_stage), allocatable :: meta_cavg2D(:)
     type(gui_metadata_ptcl),         allocatable :: meta_ptcls(:)
@@ -97,7 +102,7 @@ contains
     integer,             optional,   intent(in)    :: stage2D
     logical,             optional,   intent(in)    :: selection
     type(gui_metadata_cavg2D_stage), allocatable   :: meta_cavg2D_tmp(:)
-    type(gui_metadata_micrograph),   allocatable   :: meta_micrographs_tmp(:)
+    type(gui_metadata_micrograph),   allocatable   :: meta_micrographs_tmp(:), meta_movies_tmp(:)
     type(gui_metadata_cavg2D),       allocatable   :: cavgs_tmp(:)
     real,                            allocatable   :: boxdata(:)
     integer,                         allocatable   :: micrograph_indices(:)
@@ -109,9 +114,14 @@ contains
     integer                                        :: nstage2D, array_idx, out_ind
     integer                                        :: nptcls_all, nptcls_valid, nptcls_sample, box_ptcls, n_valid_ptcls
     logical                                        :: l_final, l_selection
-    real                                            :: smpd_cavgs, box_cavgs, mskdiam_cavgs, smpd_ptcls
-    type(string)                                    :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
+    real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs, smpd_ptcls
+    type(string)                                   :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
     integer,                            parameter  :: N_PTCLS_SAMPLE = 100
+    integer,                            parameter  :: N_MOV_THUMBS = 10
+    type(image)                                    :: movsum, movthumb
+    type(string)                                   :: movfname, movthumbfname
+    integer                                        :: n_movthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
+    real                                            :: scale_thumb
                 
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_final = present(stage2D)
@@ -137,7 +147,47 @@ contains
    ! self%nstks      = spproj%os_stk%get_noris() ! do we really need this?
    ! self%nptcls     = spproj%os_ptcl2D%get_noris()
    ! self%ncls2D     = spproj%os_cls2D%get_noris()
-    self%pspec_size = GUI_PSPECSZ
+   ! self%pspec_size = GUI_PSPECSZ
+    ! add movies (max 10)
+    if( allocated(self%meta_movies) ) deallocate(self%meta_movies)
+    if( md_oritype == 'mov' .or. md_oritype == 'all' ) then
+        self%nmics  = spproj%os_mic%get_noris()
+        n_movthumbs = 0
+        if( self%nmics > 0 ) allocate(self%meta_movies(N_MOV_THUMBS)) 
+        do i = 1, self%nmics
+            if( n_movthumbs >= N_MOV_THUMBS ) exit
+            if( .not. spproj%os_mic%isthere(i, 'imgkind') ) cycle
+            if( spproj%os_mic%get_str(i, 'imgkind') /= 'movie' ) cycle
+            if( spproj%os_mic%isthere(i, 'movthumb') ) cycle ! already generated
+            n_movthumbs = n_movthumbs + 1
+            movfname = spproj%os_mic%get_str(i, 'movie')
+            call read_movies_and_sum_frames([movfname], spproj%os_mic%get(i, 'smpd'), movsum, n_movies_sum, n_frames_sum)
+            ldim_mov      = movsum%get_ldim()
+            scale_thumb   = real(GUI_PSPECSZ) / real(ldim_mov(1))
+            ldim_thumb(1) = round2even(real(ldim_mov(1)) * scale_thumb)
+            ldim_thumb(2) = round2even(real(ldim_mov(2)) * scale_thumb)
+            ldim_thumb(3) = 1
+            call movthumb%new(ldim_thumb, spproj%os_mic%get(i, 'smpd'))
+            call movsum%fft()
+            call movsum%clip(movthumb)
+            call movthumb%ifft()
+            movthumbfname = 'movthumb' // int2str(i) // JPG_EXT
+            call movthumb%write_jpg(movthumbfname, norm=.true., quality=90)
+            movthumbfname = simple_abspath(movthumbfname)
+            call self%meta_movies(n_movthumbs)%new(GUI_METADATA_MICROGRAPH_TYPE)
+            call self%meta_movies(n_movthumbs)%set(path  = movthumbfname  , &
+                                                  i_max  = N_MOV_THUMBS   , &
+                                                  i      = i                )                                 
+            call movsum%kill()
+            call movthumb%kill()
+        end do
+        ! trim unused (unassigned) slots left by skipped micrographs
+        if( n_movthumbs < N_MOV_THUMBS ) then
+            allocate(meta_movies_tmp(n_movthumbs))
+            meta_movies_tmp = self%meta_movies(1:n_movthumbs)
+            call move_alloc(meta_movies_tmp, self%meta_movies)
+        end if
+    end if
     ! add micrographs (max 50)
     if( allocated(self%meta_micrographs) ) deallocate(self%meta_micrographs)
     if( md_oritype == 'mic' .or. md_oritype == 'ptcl' .or. md_oritype == 'all' ) then
@@ -392,6 +442,22 @@ contains
         call json%add(json_ptr, 'ptcls_jpg', trim(self%ptcls_jpg))
         call json%add(json_ptr, 'nptcls_shown', self%nptcls_shown)
       end if
+      ! Add movies section if available
+      if( allocated(self%meta_movies) ) then
+        l_add = .false.
+        call json%create_array(json_mics_ptr, 'movies')
+        do i_mic=1, size(self%meta_movies)
+          if( self%meta_movies(i_mic)%assigned() ) then
+            l_add = .true.
+            call json%add(json_mics_ptr, self%meta_movies(i_mic)%jsonise())
+          endif
+        enddo
+        if( l_add ) then
+          call json%add(json_ptr, json_mics_ptr)
+        else
+          call json%destroy(json_mics_ptr)
+        endif
+      endif
       ! Add micrographs section if available
       if( allocated(self%meta_micrographs) ) then
         l_add = .false.

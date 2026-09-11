@@ -145,7 +145,7 @@ contains
         l_selection = .false.
         if( present(selection) ) l_selection = selection
         if( present(oritype) ) then
-            if( oritype == 'mic' ) then
+            if( oritype == 'mic' .or. oritype == 'mov' ) then
                 call spproj%read_segment('mic', projfile)
             else if( oritype == 'ptcl' ) then
                 call spproj%read_segment('mic',    projfile)

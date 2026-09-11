@@ -1,0 +1,13 @@
+{% comment %}
+  _mov_element.html — one movie frame-sum thumbnail tile (view-only).
+  Expects `movie` in context (from the enclosing for-loop): path, i, i_max.
+  Right-click opens the contrast/brightness/scale/sort menu, see
+  _mov_selection_controls.html.
+{% endcomment %}
+<div class="flex flex-col snap-center movtile rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline"
+     data-idx="{{ movie.i }}" title="movie #{{ movie.i }} of {{ movie.i_max }}">
+    <span class="text-[10px] text-streamlabel mb-1.5">#{{ movie.i }}</span>
+    <div class="movimg bg-black h-[150px] w-[150px] overflow-hidden rounded m-auto" oncontextmenu="showMovMenu(this, event)">
+        <img src="{% url 'nice_lite:image' movie.path %}" class="h-full w-full object-cover" style="filter:contrast(var(--mov-contrast)) brightness(var(--mov-brightness));" loading="lazy">
+    </div>
+</div>

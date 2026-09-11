@@ -1,0 +1,22 @@
+{% comment %}
+  _mov_viewer.html — titled panel of per-movie frame-sum thumbnail tiles.
+  View-only: no selection or save controls; right-click opens the contrast/
+  brightness/scale/sort context menu (_mov_selection_controls.html). Expects
+  `jobstats.movies` in context (list of entries from gui_metadata_micrograph:
+  path, i, i_max). Params: panel_title (str). `selectable` is accepted but
+  unused; movies are always shown view-only.
+{% endcomment %}
+<div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+</div>
+<div id="mov_tile_grid" class="flex flex-row flex-wrap overflow-y-auto snap-y snap-mandatory mt-2">
+    {% if "movies" in jobstats %}
+        {% for movie in jobstats.movies %}
+            {% include 'includes/_mov_element.html' with movie=movie %}
+        {% endfor %}
+        {% include 'includes/_mov_selection_controls.html' %}
+    {% endif %}
+</div>
+<script>
+    let currentMovMenuContainer = null;
+</script>

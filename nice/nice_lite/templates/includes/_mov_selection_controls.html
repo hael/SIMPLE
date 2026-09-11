@@ -1,0 +1,87 @@
+{% comment %}
+  _mov_selection_controls.html — context menu (contrast/brightness/scale,
+  sort on index) for the movie thumbnail tile grid, cf _mic_selection_controls.html.
+  Opened via oncontextmenu="showMovMenu(this, event)" on a tile's thumbnail
+  (see _mov_element.html). Self-contained: wired up by name attributes;
+  function names are Mov-prefixed so they don't collide with the mic/ptcl/
+  cls2D panels' identically-purposed functions when rendered on the same page.
+  Relies on a page-level `lastinteraction` global declared by the including
+  page's own script.
+{% endcomment %}
+<div name="movselectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMovMenu()">
+    <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">contrast</div>
+            <input class="mx-[10px]" oninput="updateMovContrast(this)" type="range" max="500" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">brightness</div>
+            <input class="mx-[10px]" oninput="updateMovBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">scale</div>
+            <input class="mx-[10px]" oninput="updateMovScale(this)" type="range" max="400" min="60" step="10" value="150"></input>
+        </div>
+        <div data-action="sortidx" class="userbutton w-auto text-center">sort on index</div>
+    </div>
+</div>
+<script>
+    const showMovMenu = (element, event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        currentMovMenuContainer = element.closest("#mov_tile_grid");
+        const selectmenu = currentMovMenuContainer.querySelector("[name='movselectmenu']");
+        const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+        const sortmovidx = selectmenu.querySelector("[data-action='sortidx']");
+
+        selectmenu.style.display = "flex";
+        const selectmenurect = selectmenu.getBoundingClientRect();
+        const selectmenuboxrect = selectmenubox.getBoundingClientRect();
+        selectmenubox.style.left = (event.pageX + selectmenuboxrect.width > selectmenurect.width)
+            ? (selectmenurect.width - selectmenuboxrect.width) + "px"
+            : event.pageX + "px";
+        selectmenubox.style.top = (event.pageY + selectmenuboxrect.height > selectmenurect.height)
+            ? (selectmenurect.height - selectmenuboxrect.height) + "px"
+            : event.pageY + "px";
+        if (sortmovidx) sortmovidx.onclick = sortMovIdx;
+        lastinteraction = Date.now();
+    };
+
+    const hideMovMenu = () => {
+        for (const selectmenu of document.querySelectorAll("[name='movselectmenu']")) {
+            const sortmovidx = selectmenu.querySelector("[data-action='sortidx']");
+            selectmenu.style.display = "none";
+            if (sortmovidx) sortmovidx.onclick = null;
+        }
+        lastinteraction = Date.now();
+    };
+
+    const sortMovIdx = () => {
+        if (!currentMovMenuContainer) return;
+        const tiles = Array.from(currentMovMenuContainer.querySelectorAll(".movtile"));
+        tiles.sort((a, b) => Number(a.dataset.idx) - Number(b.dataset.idx));
+        tiles.forEach((tile) => currentMovMenuContainer.appendChild(tile));
+        hideMovMenu();
+    };
+
+    const updateMovContrast = (element) => {
+        document.querySelector(":root").style.setProperty("--mov-contrast", element.value / 100);
+    };
+
+    const updateMovBrightness = (element) => {
+        document.querySelector(":root").style.setProperty("--mov-brightness", element.value / 100);
+    };
+
+    const updateMovScale = (element) => {
+        for (const movimg of document.getElementsByClassName("movimg")) {
+            movimg.style.width = element.value + "px";
+            movimg.style.height = element.value + "px";
+        }
+    };
+
+    window.addEventListener("load", () => {
+        const root = document.querySelector(":root");
+        root.style.setProperty("--mov-contrast", 1.0);
+        root.style.setProperty("--mov-brightness", 1.0);
+    });
+</script>
