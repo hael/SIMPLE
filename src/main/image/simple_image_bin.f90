@@ -147,13 +147,12 @@ contains
 
     ! I/O
 
-    subroutine write_bimg( self, fname, i )
+    subroutine write_bimg( self, fname )
         class(image_bin),  intent(inout) :: self
         class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: i
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%set_rmat(real(self%bimat),.false.)
-        call self%write(fname,i)
+        call self%write(fname)
     end subroutine write_bimg
 
     subroutine read_bimg( self, fname, i )
