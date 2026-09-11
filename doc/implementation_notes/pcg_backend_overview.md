@@ -120,9 +120,13 @@ The NU competition is assembly-owned and identical on both backends
 (`simple_nu_state_filter`): the discrete candidate bank is built from the
 base (`_unfil`) pair, the replay pair joins as the finest auxiliary member
 (`ml_reg=yes, nu_refine=no`), the shell walk extends the bank
-(`nu_refine=yes`, refine3D_auto), and the finest selected label with at
-least 5% assigned support is the matching low-pass handoff. The NU
-objective always runs on the spherical `mskdiam` support.
+(`nu_refine=yes`, refine3D_auto), and the raw finest selected label is the
+matching low-pass handoff. Under `nu_refine=no` the static bank is capped
+at `fsc/1.5` of the base pair; under `nu_refine=yes` the FSC is not
+consulted: the full ladder is retained, the walk is bounded by its
+evidence rules and the grid only, and the handoff carries no support gate
+and no FSC headroom (2026-09-11). The NU objective always runs on the
+spherical `mskdiam` support.
 
 Under `automsk=yes` the NU evidence envelope (`nu_envmask3D_stateNN.mrc`,
 regenerated every competition from the live evidence) is the mask that
@@ -194,7 +198,8 @@ Other lines to grep: `PCG SOLVE SUPPORT` (which support, and why),
 ring the evidence labels signal -- the number to consult before tightening
 `binwidth`), `NU NULL SHELL GEOMETRY` (envelope/support Dice, ring
 retained at full weight), `NU BACKGROUND` (evidence envelope or fallback),
-`NU BANK CAP`, `NU LOW-PASS ASSIGNMENTS`, `NU filter promoted matching
+`NU BANK CAP` (`nu_refine=no`) or `NU BANK UNCAPPED` (`nu_refine=yes`),
+`NU LOW-PASS ASSIGNMENTS`, `NU filter promoted matching
 low-pass`, `PCG BEYOND-BAND EXCESS` (post-band RMS >= 10x the band-edge
 shell; the regression signal for solver defects), `RECONSTRUCTION MASTER
 PHASE` (wall time, thread-seconds, peak RSS). Per-half solve diagnostics

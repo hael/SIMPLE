@@ -4,7 +4,9 @@
 !  volassemble always has: a discrete low-pass candidate bank built from the
 !  BASE (unregularized) even/odd pair, the ML-regularized pair joining the
 !  competition as the finest auxiliary member (ml_reg=yes, nu_refine=no), the
-!  high-resolution shell walk extending the bank (nu_refine=yes), the
+!  high-resolution shell walk extending the bank (nu_refine=yes; bank and
+!  walk uncapped, the NU evidence alone decides how far it goes, 2026-09-11),
+!  the
 !  NU-evidence envelope fixing the filter-field background (automsk=yes;
 !  its null estimated robustly over a spherical base pair, or designated by
 !  Euclidean geometry on the density envelope's dilation ring for an
@@ -22,7 +24,7 @@ use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
-    &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, get_nu_bank_cap_find, &
+    &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
     &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, write_nu_evidence_envmask, &
     &set_nu_evidence_null_shell, set_nu_solvent_envelope
 implicit none
@@ -51,7 +53,10 @@ contains
     !! vol_aux_even/odd:  the ML-regularized pair when l_use_aux (consumed and
     !!                    killed here), ignored otherwise.
     !! res0143:           FSC=0.143 crossing of the base pair, the auxiliary
-    !!                    member's effective resolution (clamped by a set lp).
+    !!                    member's effective resolution (clamped by a set lp)
+    !!                    and the static-bank cap; NOT consulted when
+    !!                    nu_refine=yes, where the bank, the shell walk and
+    !!                    the handoff are NU evidence only.
     !! volname/eonames:   the state's merged and even/odd file names; the
     !!                    _nu_filt and _nu_locres products derive from them.
     !! align_lp:          raw finest selected label (0 when none), the
@@ -76,7 +81,7 @@ contains
         type(string)             :: nu_envmask_file
         integer(timer_int_kind)  :: t_filter, t_envmask
         integer :: n_highres_steps
-        real    :: aux_resolution
+        real    :: aux_resolution, bank_cap_res
         logical :: l_armed, l_constrained
         align_lp = 0.
         if( L_BENCH_GLOB ) t_filter = tic()
@@ -102,18 +107,28 @@ contains
             endif
             call vol_base_avg%kill
         endif
-        ! candidate bank from the base pair, auxiliary member from the ML pair
+        ! candidate bank from the base pair, auxiliary member from the ML pair.
+        ! The FSC-anchored bank cap applies to the static bank only
+        ! (nu_refine=no); with nu_refine=yes the bank is the full ladder and
+        ! the shell walk is unbounded, so resolution extension is decided by
+        ! the NU evidence alone (2026-09-11; the cap pinned refine3D_auto)
         n_highres_steps = nu_highres_steps_for_state()
+        bank_cap_res    = 0.
+        if( .not. params%l_nu_refine ) bank_cap_res = res0143
+        if( params%part == 1 .and. params%l_nu_refine )then   ! same visibility as the NU BANK CAP line
+            write(logfhandle,'(A,F8.3,A)') '>>> NU BANK UNCAPPED (nu_refine=yes): full static ladder and unbounded shell walk; '//&
+                &'bank extent and matching low-pass from NU evidence only (base pair FSC=0.143 ', res0143, ' A not consulted)'
+        endif
         if( l_use_aux )then
             allocate(nu_aux_even(1), nu_aux_odd(1))
             call nu_aux_even(1)%copy(vol_aux_even)
             call nu_aux_odd(1)%copy(vol_aux_odd)
             aux_resolution = nu_aux_effective_resolution()
             call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
-                &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps, fsc_res=res0143)
+                &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps, fsc_res=bank_cap_res)
         else
             call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [real ::], &
-                &n_highres_steps=n_highres_steps, fsc_res=res0143)
+                &n_highres_steps=n_highres_steps, fsc_res=bank_cap_res)
         endif
         if( trim(params%automsk).ne.'no' )then
             ! automsk=yes: the filter-field background is the complement of
@@ -186,18 +201,13 @@ contains
 
         subroutine refine_nonuniform_filter_bank()
             type(nu_highres_extension_stats) :: ext_stats
-            integer :: nsteps, n_accepted_this_iteration, cap_find
+            integer :: nsteps, n_accepted_this_iteration
             if( .not. params%l_nu_refine ) return
             n_accepted_this_iteration = 0
-            ! the shell walk cannot pass the FSC-anchored candidate cap
-            cap_find = get_nu_bank_cap_find()
+            ! the shell walk is bounded by the NU evidence (frontier support,
+            ! challenger acceptance) and the Fourier grid only; no FSC cap
             do
-                if( cap_find > 0 )then
-                    call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats, &
-                        &max_find=cap_find)
-                else
-                    call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats)
-                endif
+                call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats)
                 if( .not. ext_stats%attempted )then
                     if( NU_DEV_OUTPUT .and. params%part == 1 )then
                         if( ext_stats%n_mask == 0 )then

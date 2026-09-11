@@ -186,8 +186,9 @@ while the half maps agreed to 4.3 A at FSC=0.5.)
 
 In the NU stages there is no ceiling (July 2026 policy, restored
 2026-09-08): matching runs at the finest-label handoff, which is bounded by
-the FSC-anchored candidate bank (`doc/policies/nonuniform_filtering_policy.md`
-section 8), so a ceiling only pins the map. Two ceilings were tried and
+the FSC-anchored static candidate bank (`nu_refine=no`,
+`doc/policies/NU/nonuniform_filtering_policy.md` section 8), so a ceiling
+only pins the map. Two ceilings were tried and
 retired: the class-FRC final limit `lpfinal` (6.0 A on PfCRT, whose 2D
 classes stop at 6 A while the 3D map reaches 4 A) pinned the NU stages at
 5.97 A on 2026-09-07; the ladder's hard bound of 4.5 A pinned the 2026-09-08

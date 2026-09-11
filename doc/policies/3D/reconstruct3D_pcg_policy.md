@@ -220,9 +220,10 @@ fixed evidence bands, integer Potts coordinates, unit candidate masses, and
 raw-finest matching handoff. This is the staged-abinitio3D compatibility path.
 With `nu_refine=yes`, accepted high-resolution candidates continue from the
 static bank in Fourier-shell coordinates and use a normalized Voronoi measure
-when their soft evidence is accumulated. Discovery stops two shells beyond
-the evidence-pair FSC=0.143 crossing. The matching handoff requires 5% assigned
-support and retains the same two-shell FSC headroom.
+when their soft evidence is accumulated. Neither the bank nor the shell walk
+nor the matching handoff consults the FSC (2026-09-11): the full static
+ladder is retained, discovery is bounded by the walk's evidence rules and
+the Fourier grid only, and the handoff is the raw finest selected label.
 
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
 the default in `abinitio3D`, every PCG solve, base and regularized replay, runs
@@ -562,7 +563,8 @@ is meaningful because the two paths share everything but the estimator:
   `1/tau2 = <rho>_shell / (tau * fsc/(1-fsc))`, FSC clamped to [0.001,
   0.999], no prior below `hp`, driven by the current iteration's unfiltered
   pair (`add_invtausq2rho` and `build_ml_prior_from_density`);
-- the NU competition, its bank cap and the handoff run on the unfiltered
+- the NU competition, its static-bank cap (`nu_refine=no` only) and the
+  handoff run on the unfiltered
   pair with the regularized pair as auxiliary member through the one
   `nonuniform_filter_state` on both backends; both ship deapodized halves
   and merged maps carrying the same soft spherical support at `msk_crop`

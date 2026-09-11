@@ -57,9 +57,12 @@ contains
         do i = 1, size(lowpass_limits)
             cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
-        ! FSC-anchored candidate cap: keep the static labels coarser than
-        ! fsc_res/NU_BANK_FSC_HEADROOM (at least two, the competition needs a
-        ! pair), and bound the shell walk below by the same shell
+        ! FSC-anchored candidate cap of the static bank (absent or zero
+        ! fsc_res = uncapped; the nu_refine=yes caller passes zero): keep the
+        ! static labels coarser than fsc_res/NU_BANK_FSC_HEADROOM (at least
+        ! two, the competition needs a pair). The retained-step loop below
+        ! honours it too, but that loop only seeds a walk that nu_refine=yes
+        ! owns, so in practice the cap and the walk never coexist
         nu_bank_cap_find = 0
         n_static = size(lowpass_limits)
         if( present(fsc_res) )then
@@ -105,10 +108,6 @@ contains
             call butterworth_filter(cutoff_finds(i), bwfilters(:,i))
         end do
     end subroutine init_nu_filter
-
-    module integer function get_nu_bank_cap_find()
-        get_nu_bank_cap_find = nu_bank_cap_find
-    end function get_nu_bank_cap_find
 
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report

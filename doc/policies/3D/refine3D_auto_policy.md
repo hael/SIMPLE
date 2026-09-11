@@ -28,13 +28,18 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `lplim_crit=0.143`
 - `incrreslim=no`
 
-NU volume filtering is independent of `incrreslim`. On gridding the FSC does
-not cap the NU candidate bank or shell extension. On PCG, where the field is
-an empirical precision rather than a post-hoc filter, adaptive evidence-bank
-discovery is bounded to two Fourier shells beyond the evidence pair's measured
-FSC=0.143 crossing. Bootstrap NU filtering never uses the generic parsed
-startup `lp` as a volume-filter ceiling because it is not evidence about the
-resolution of supplied half maps.
+NU volume filtering is independent of `incrreslim`. With `nu_refine=yes`
+the FSC does not cap the NU candidate bank, the shell walk or the matching
+low-pass handoff on either backend (2026-09-11): the full static ladder is
+retained, the walk is bounded by its evidence rules and the Fourier grid
+only, and the handoff is the raw finest selected label. The FSC's role is
+resolution reporting and convergence, the ML regularizer `P_tau` and the
+`envfsc` correction; it never gates resolution extension. (The `fsc/1.5`
+bank cap of 2026-09-08 remains in static-bank mode, `nu_refine=no`; with
+the walk bounded by it refine3D_auto stopped extending below the
+resolution the evidence supported.) Bootstrap NU filtering never uses the
+generic parsed startup `lp` as a volume-filter ceiling because it is not
+evidence about the resolution of supplied half maps.
 
 It also supplies overridable defaults when the user has not provided them:
 

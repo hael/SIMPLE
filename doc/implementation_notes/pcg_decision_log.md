@@ -227,3 +227,26 @@ store itself is not implicated. History: this log entry.
 
 **2026-09-10 -- Documentation split.** `pcg_priors.md` frozen as
 `pcg_priors_history.md`; this log and `pcg_backend_overview.md` created.
+
+**2026-09-11 -- FSC gate removed from the NU bank and the matching low-pass
+under `nu_refine=yes`; extension is NU evidence only.** refine3D_auto had
+stopped extending in resolution. The 2026-09-08 `fsc/1.5` cap
+(`init_nu_filter(fsc_res=)`, `nu_bank_cap_find`) truncated the static
+bank and bounded the shell walk (`max_find`) by the base pair's FSC=0.143,
+so the finest label -- and with it the matching low-pass handoff -- could
+never lead the global FSC by more than about two ladder labels, while the
+FSC of the base pair lags the local evidence precisely where the map is
+extending; the loop that used to carry refine3D_auto from the FSC to the
+evidence-supported resolution (July 2026) was closed. Decision (Hans):
+`nonuniform_filter_state` passes no FSC to the bank under `nu_refine=yes`
+(full static ladder), the shell walk runs without `max_find`, and the
+handoff stays the raw finest selected label; `get_nu_bank_cap_find`
+removed. The cap remains in static-bank mode (`nu_refine=no`, the
+abinitio3D ladder), where the walk does not run and the PfCRT
+regularized-pair pinning it was written for was in any case fixed at the
+root by the like-for-like coarse-to-fine selection of the same day. Logged
+as `NU BANK UNCAPPED (nu_refine=yes)`. Stale policy text describing a
+PCG-only two-shell FSC bound on the walk and a 5%-support handoff with FSC
+headroom was corrected at the same time (`nonuniform_filtering_policy.md`
+sections 8, 10, 12; `reconstruct3D_pcg_policy.md`;
+`refine3D_auto_policy.md`). Compile and the refine3D_auto rerun are Hans's.

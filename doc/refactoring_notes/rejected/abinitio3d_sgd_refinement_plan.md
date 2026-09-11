@@ -1,5 +1,50 @@
 # Abinitio3D SGD Refinement Implementation Plan
 
+**Status:** Retired 2026-09-11 (written 2026-06-30). Kept for the record; not
+a plan. Every mechanism proposed below was either realized by a different
+route or rejected by adopted design. The text is left as written; read it with
+this header.
+
+- The MVP volume update `V_{t+1} = V_t + eta (V_B - V_t)` with the step
+  weight decoupled from `update_frac` is implemented, in the accumulator
+  domain rather than the volume domain: the persistent `trailrec_stateNN_*`
+  chains blend unregularized e/o Fourier sums and `rho` at full-dataset mass,
+  the realized fraction `f` and the applied weight `u` (`ufrac_trec`) are
+  distinct quantities, and one sampling-density correction follows the blend
+  (`doc/policies/importance_sampling_fractional_update_policy.md` section 7).
+  This is the note's own "running preconditioner" extension and is the
+  stronger form of its MVP; it holds on both `rec_backend=gridding` and
+  `rec_backend=pcg` (`refine3D_pcg_trail_accum_fname`). The volume-domain
+  half-map blend in `volassemble` survives only as the chain bootstrap. No
+  `sgd*` parameter exists.
+- First-order volume updates (preconditioned SGD, momentum, Adam; Phases 6-7)
+  are rejected, not deferred:
+  `doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md`
+  sections 2.3(b) and 8, and the 2026-09-10 retirement of PCG cross-iteration
+  warm starts (`doc/implementation_notes/pcg_decision_log.md`). PCG solves the
+  normal equations from a cold base; it does not step on the volume.
+- Phase 9 ("continuous pose refinement -- do not start here") is the most
+  developed part of the picture. Option 1 became `inpl_cont=yes`: the joint
+  raw-Euclidean `(sx,sy,rotind_frac)` polish in the polar search, default on,
+  under the polish-only principle (`doc/policies/3D/refine3D_policy.md`).
+  Option 3 became `src/main/volume/simple_cartesian_pose_refiner.f90`: the
+  five-parameter tangent-space Levenberg-Marquardt on Cartesian central
+  sections, numerically validated
+  (`doc/implementation_notes/continuous_3D_pose_end_polishing.md`), no
+  production caller yet. Option 2 was skipped.
+- Stale facts: `simple_reconstructor_eo.f90` is retired
+  (`completed/retire_reconstructor_eo_module.md`); `restore_state_from_parts`
+  volume-domain trailing is no longer the primary path.
+- What survives, recorded in
+  `continuous_3D_refinement_on_pcg_operator.md` section 5.4: the Phase 8 idea
+  (top-K compact responsibilities backprojected with weights into the
+  accumulators), the composition of the three existing blocks (accumulator
+  chains, PCG volume solve, Cartesian pose LM) into one minibatch scheme,
+  and a per-stage schedule for `u` as the one optimizer-policy knob from
+  this note that still has a home.
+
+---
+
 ## Summary
 
 This note describes how to turn SIMPLE's existing `abinitio3D`

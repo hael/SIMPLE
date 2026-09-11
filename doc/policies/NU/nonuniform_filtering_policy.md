@@ -297,19 +297,29 @@ The current filter performs these steps:
 10. write the same-grid `_nu_locres` map
 
 The nominal static bank is `[20, 15, 12, 10, 8, 6, 5, 4]` Angstrom before any
-high-resolution extension. Since 2026-09-08 the bank is capped by the pair's
-FSC=0.143 resolution: only candidates coarser than `fsc/1.5` (about two
-ladder labels finer than the FSC) are retained, never fewer than two, and
-the `nu_refine=yes` shell walk is bounded by the same shell. The unary prices
-a finer candidate by the noise it admits from the other half, which holds
-for a gridding pair but not for a spectrally regularized one (truncated CG,
-`P_tau`): on PfCRT a PCG base pair populated the finest label at a 6 A FSC
-and pinned the matching band there. With the cap no candidate exists beyond
-what the data support, whatever the pair's noise looks like; the July
-gridding runs populated one to three labels beyond the FSC (4.7/1.8/0.6% of
-the sphere at 6.3 A), which the cap admits. The standalone `nu_filt3D`
-program has no FSC and runs uncapped. Record 2026-09-08b/c in
-`doc/implementation_notes/pcg_priors_history.md`.
+high-resolution extension. In static-bank mode (`nu_refine=no`, the
+abinitio3D stage ladder) the bank is capped by the pair's FSC=0.143
+resolution (2026-09-08): only candidates coarser than `fsc/1.5` (about two
+ladder labels finer than the FSC) are retained, never fewer than two. The
+unary prices a finer candidate by the noise it admits from the other half,
+which holds for a gridding pair but not for a spectrally regularized one
+(truncated CG, `P_tau`): on PfCRT a PCG base pair populated the finest label
+at a 6 A FSC and pinned the matching band there (the root cause, footprint
+decisions between near-identical unaries, was fixed the same day by the
+coarse-to-fine like-for-like selection of section 9). The July gridding runs
+populated one to three labels beyond the FSC (4.7/1.8/0.6% of the sphere at
+6.3 A), which the cap admits.
+
+With `nu_refine=yes` (refine3D_auto) the FSC is not consulted at all
+(2026-09-11): the full static ladder is retained, the shell walk is bounded
+only by its own evidence rules (section 10) and the Fourier grid, and the
+matching low-pass handoff is the raw finest selected label. This restores
+the pre-2026-09-08 behaviour: bounding the walk by `fsc/1.5` pinned
+refine3D_auto below the resolution the evidence supported, because the FSC
+of the base pair lags the local evidence exactly where the map is
+extending. The standalone `nu_filt3D` program has no FSC and runs uncapped.
+Record 2026-09-08b/c in `doc/implementation_notes/pcg_priors_history.md`;
+decision 2026-09-11 in `doc/implementation_notes/pcg_decision_log.md`.
 
 An opt-in replay-evidence API can compact this full unary bank before it is
 released. Callers must tag the setup source as `base_unfil`; the API fingerprints
@@ -429,9 +439,10 @@ The extension:
 - stops at the first unattempted, unsupported, or rejected challenger
 - never proposes a shell beyond the Fourier grid
 
-For PCG only, adaptive discovery also stops two Fourier shells beyond the
-current evidence-pair FSC=0.143 crossing. This bounds repeated use of the same
-half pair while leaving the established gridding shell walk unchanged.
+No FSC bound applies to the walk on either backend (2026-09-11; the
+earlier PCG-only two-shell bound and the 2026-09-08 `fsc/1.5` cap are both
+retired for `nu_refine=yes`): the frontier support, the challenger
+acceptance and the Fourier grid are the only limits.
 
 The challenge test itself is unary-only. After one or more challengers are
 accepted, the final expanded label field is cleaned with the same ordered-label
@@ -463,11 +474,13 @@ Adding, removing, or thinning densely spaced shell probes therefore does not
 create fine-band support merely by changing the label count. The static
 eight-candidate bank retains integer coordinates and unit masses exactly.
 
-The PCG adaptive matching handoff requires the established 5% assignment
-support and then guarantees two Fourier shells beyond the FSC crossing. This
-keeps the matching/evidence loop able to advance without letting a single
-high-resolution voxel set the global bandwidth. `nu_refine=no` retains the
-historical raw-finest handoff.
+The matching handoff is the raw finest selected label on both backends and
+for both `nu_refine` values (`record_nu_alignment_lowpass_limit`,
+`min_assigned_pct=0`); no FSC headroom and no assignment-support gate enter
+it. Two gates were tried and retired: the 5% support gate of 2026-08-30
+capped the PfCRT matching band at 5-6 A against a 4.1 A map, and the
+`fsc/1.5` bank cap of 2026-09-08 pinned refine3D_auto (retired for
+`nu_refine=yes` on 2026-09-11).
 
 ## 11. Matching References
 
@@ -510,8 +523,10 @@ The unmasked, masked, and randomized-masked diagnostics are written as
 `fscu_stateNN.bin`, `fsct_stateNN.bin`, and `fscn_stateNN.bin`. The corrected
 curve replaces `fsc_stateNN.bin` and its text resolution report.
 
-FSC estimation and NU filtering have separate bandwidth roles. The FSC never
-caps the local filter bank or its high-resolution extension. The NU filter
+FSC estimation and NU filtering have separate bandwidth roles. With
+`nu_refine=yes` the FSC never caps the local filter bank, its
+high-resolution extension or the handoff (static-bank mode keeps the
+section 8 cap). The NU filter
 chooses the cutoff applied at each volume voxel from its full bank. After that
 volume operation, the finest cutoff selected anywhere inside the NU support
 mask becomes the project-level matching `lp` for the next iteration.

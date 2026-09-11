@@ -535,6 +535,30 @@ control, and stratification requirements (half sets, orientation coverage,
 optics groups) -- real complexity that should be paid for only once a measured
 need exists. Defer to stage 5 and revisit with numbers.
 
+What stage 5 would compose, as of 2026-09-11, already exists as three separate
+blocks. The minibatch sufficient statistics `(A_B^* y_B, rho_B)` are the
+accumulator-domain trailing chains of
+`doc/policies/importance_sampling_fractional_update_policy.md` section 7, with
+the realized fraction `f` and the applied weight `u` (`ufrac_trec`) already
+distinct and the chains persisted for `rec_backend=pcg` too. The volume block
+is the PCG solve of this note, from a cold base since the 2026-09-10 warm-start
+retirement. The pose block is `simple_cartesian_pose_refiner` (the stage-1 to
+stage-3 numerics, validated, no caller), whose objective is the same whitened
+residual as section 3.1 -- so the joint objective in `(V, poses)` of section
+3.1 is the one all three blocks minimize. Stage 5 is therefore not "add SGD"
+but "state how the chain's forgetting factor `u`, the cold-base PCG budget, and
+the per-particle LM polish interleave, and measure it". Two items carried over
+from the retired `doc/refactoring_notes/rejected/abinitio3d_sgd_refinement_plan.md`
+belong to that question and nowhere else: weighted backprojection of top-K
+compact responsibilities from the probability tables into the accumulators
+(never built, never rejected; it changes what `(A_B^* y_B, rho_B)` are, not
+how they are solved), and a per-stage schedule for `u` emitted by the
+abinitio3D controller the way it emits `update_frac` -- on the chain `u` is a
+forgetting factor, so decaying it late in a run is Polyak averaging over
+repeated particle visits. Whether either helps is an empirical question with
+no claim attached; the PfCRT and streptavidin runs recorded in
+`pcg_decision_log.md` are the baseline any such measurement must beat.
+
 ## 6. Staged implementation with gates
 
 Each stage must pass its gate before the next begins. This mirrors the staging
