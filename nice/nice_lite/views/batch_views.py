@@ -299,6 +299,7 @@ def _commander_arguments(package, program):
                 "label": label.strip() if isinstance(label, str) and label.strip() else key,
                 "has_default": bool(user_input.get("has_default")) and user_input.get("default") is not None,
                 "default": user_input.get("default"),
+                "visibility": user_input.get("visibility") or "standard",
             })
     return arguments
 
@@ -331,6 +332,7 @@ def _argument_rows(jobmodel):
             "value": value,
             "origin": origin,
             "submitted": origin == "submitted",
+            "visibility": definition["visibility"],
         })
 
     # Preserve legacy or newly removed commander arguments recorded on the job.
@@ -342,7 +344,10 @@ def _argument_rows(jobmodel):
                 "value": saved_args[key],
                 "origin": "submitted",
                 "submitted": True,
+                "visibility": "standard",
             })
+    # Submitted arguments are surfaced first; stable sort preserves definition order otherwise.
+    arguments.sort(key=lambda argument: not argument["submitted"])
     return arguments
 
 

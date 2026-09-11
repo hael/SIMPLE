@@ -1,26 +1,21 @@
 {% comment %}
-  _arguments_viewer.html — submitted/all job-arguments viewer.
-  Based on nice_classic/batchview.html's arguments section (dt/dl argument
-  grid, submitted/all toggle switch); collapsible-panel behavior omitted.
-  Expects `arguments` (list of {key, label, value, origin, submitted}),
-  `submitted_argument_count` (int), and `jobid` (for session-persisted view).
+  _arguments_viewer.html — always-on job-arguments viewer, submitted
+  arguments highlighted and listed first (see batch_views._argument_rows).
+  A "dev" toggle reveals developer-level arguments that weren't submitted,
+  and swaps each row's display name to its command-line argument key.
+  Expects `arguments` (list of {key, label, value, origin, submitted, visibility})
+  and `jobid` (for session-persisted dev-mode preference).
 {% endcomment %}
-<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+<div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">arguments</p>
-</div>
-<div class="flex flex-wrap items-center justify-between gap-3">
-    <h2 id="argument_view_heading" class="min-w-0 flex-1 text-[10px] font-medium uppercase tracking-widest text-streamlabel">submitted arguments</h2>
     {% if arguments %}
-        <label id="argument_view_controls" for="argument_view_toggle"
-                title="toggle between submitted and all arguments"
-                class="min-h-9 flex-shrink-0 inline-flex cursor-pointer select-none items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px]">
-            <span data-argument-view-label="submitted" class="text-streamaccent">submitted</span>
-            <input id="argument_view_toggle" type="checkbox" role="switch"
-                    aria-label="show all arguments" aria-controls="argument_list"
+        <label for="argument_dev_toggle" title="toggle developer-level arguments"
+                class="inline-flex cursor-pointer select-none items-center gap-2 text-[10px]">
+            <span data-argument-dev-label="standard" class="text-streamaccent">standard</span>
+            <input id="argument_dev_toggle" type="checkbox" role="switch"
                     class="peer sr-only">
-            <span aria-hidden="true"
-                  class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
-            <span data-argument-view-label="all" class="text-streamlabel">all</span>
+            <span class="relative h-4 w-8 rounded-full bg-streamline transition-colors peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble peer-checked:bg-streamaccent after:absolute after:left-0.5 after:top-0.5 after:h-3 after:w-3 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4"></span>
+            <span data-argument-dev-label="dev" class="text-streamlabel">dev</span>
         </label>
     {% endif %}
 </div>
@@ -28,10 +23,12 @@
     {% if arguments %}
         <dl id="argument_list" class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
             {% for arg in arguments %}
-                <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
-                    class="min-w-0 break-words text-streamlabel{% if not arg.submitted %} hidden{% endif %}">{{ arg.label }}</dt>
-                <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
-                    class="min-w-0 text-streamtext font-mono{% if not arg.submitted %} hidden{% endif %}"
+                <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}" data-visibility="{{ arg.visibility }}"
+                    class="min-w-0 break-words{% if arg.submitted %} text-streamtext font-semibold{% else %} text-streamlabel{% endif %}">
+                    <span data-batch-argument-label data-friendly-label="{{ arg.label }}" data-argument-key="{{ arg.key }}">{{ arg.label }}</span>
+                </dt>
+                <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}" data-visibility="{{ arg.visibility }}"
+                    class="min-w-0 font-mono{% if arg.submitted %} text-streamtext font-semibold{% else %} text-streamtext{% endif %}"
                     style="overflow-wrap:anywhere">
                     {% if arg.origin == "unset" %}
                         <span class="text-streamlabel">—</span>
@@ -40,60 +37,54 @@
                     {% else %}
                         <span>{{ arg.value }}</span>
                     {% endif %}
-                    <span data-argument-origin class="hidden ml-1 sm:ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
-                        {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
-                    </span>
+                    {% if not arg.submitted %}
+                        <span class="ml-1 sm:ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
+                            {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
+                        </span>
+                    {% endif %}
                 </dd>
             {% endfor %}
         </dl>
     {% endif %}
-    <p id="no_submitted_arguments" class="text-[11px] text-streamsubtle{% if submitted_argument_count %} hidden{% endif %}">no user arguments were submitted</p>
+    <p id="no_arguments" class="text-[11px] text-streamsubtle{% if arguments %} hidden{% endif %}">no arguments available</p>
 </div>
 <script>
-    const batchArgumentViewStorageKey = "nice_batch_argument_view_{{ jobid }}";
-    const batchArgumentViewToggle = document.querySelector("#argument_view_toggle");
-    const setBatchArgumentView = (view) => {
-        const showAll = view === "all";
+    const batchArgumentDevStorageKey = "nice_batch_argument_dev_{{ jobid }}";
+    const batchArgumentDevToggle = document.querySelector("#argument_dev_toggle");
+    const setArgumentDevMode = (devOn) => {
         document.querySelectorAll("[data-argument-row]").forEach((row) => {
-            row.classList.toggle("hidden", !showAll && row.dataset.submitted !== "true");
+            const hideForDev = row.dataset.visibility === "developer" && row.dataset.submitted !== "true" && !devOn;
+            row.classList.toggle("hidden", hideForDev);
         });
-        document.querySelectorAll("[data-argument-origin]").forEach((origin) => {
-            origin.classList.toggle("hidden", !showAll);
+        document.querySelectorAll("[data-batch-argument-label]").forEach((label) => {
+            label.textContent = devOn ? label.dataset.argumentKey : label.dataset.friendlyLabel;
         });
 
-        const noSubmitted = document.querySelector("#no_submitted_arguments");
-        if (noSubmitted) {
-            noSubmitted.classList.toggle("hidden", showAll || {{ submitted_argument_count|default:0 }} > 0);
-        }
-
-        const heading = document.querySelector("#argument_view_heading");
-        if (heading) heading.textContent = showAll ? "all arguments" : "submitted arguments";
-
-        if (batchArgumentViewToggle) batchArgumentViewToggle.checked = showAll;
-        document.querySelectorAll("[data-argument-view-label]").forEach((label) => {
-            const active = label.dataset.argumentViewLabel === view;
+        if (batchArgumentDevToggle) batchArgumentDevToggle.checked = devOn;
+        document.querySelectorAll("[data-argument-dev-label]").forEach((label) => {
+            const active = label.dataset.argumentDevLabel === (devOn ? "dev" : "standard");
             label.classList.toggle("text-streamaccent", active);
             label.classList.toggle("text-streamlabel", !active);
         });
 
         try {
-            sessionStorage.setItem(batchArgumentViewStorageKey, showAll ? "all" : "submitted");
+            sessionStorage.setItem(batchArgumentDevStorageKey, devOn ? "dev" : "standard");
         } catch (error) {
             // Storage can be unavailable without affecting the toggle itself.
         }
     };
 
-    if (batchArgumentViewToggle) {
-        batchArgumentViewToggle.addEventListener("change", () => {
-            setBatchArgumentView(batchArgumentViewToggle.checked ? "all" : "submitted");
+    if (batchArgumentDevToggle) {
+        batchArgumentDevToggle.addEventListener("change", () => {
+            setArgumentDevMode(batchArgumentDevToggle.checked);
         });
     }
-    // Initialize the view based on session storage or default to "submitted"
+    // Initialize dev mode from session storage, defaulting to off.
     try {
-        const savedView = sessionStorage.getItem(batchArgumentViewStorageKey);
-        setBatchArgumentView(savedView === "all" ? "all" : "submitted");
+        const savedDevMode = sessionStorage.getItem(batchArgumentDevStorageKey);
+        setArgumentDevMode(savedDevMode === "dev");
     } catch (error) {
-        setBatchArgumentView("submitted");
+        setArgumentDevMode(false);
     }
 </script>
 

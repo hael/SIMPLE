@@ -130,6 +130,7 @@ class BatchViewTests(SimpleTestCase):
                 "value": "4",
                 "origin": "submitted",
                 "submitted": True,
+                "visibility": "standard",
             },
             {
                 "key": "scale",
@@ -137,6 +138,7 @@ class BatchViewTests(SimpleTestCase):
                 "value": 1.5,
                 "origin": "default",
                 "submitted": False,
+                "visibility": "standard",
             },
             {
                 "key": "mskdiam",
@@ -144,6 +146,7 @@ class BatchViewTests(SimpleTestCase):
                 "value": None,
                 "origin": "unset",
                 "submitted": False,
+                "visibility": "standard",
             },
         ])
         self.assertEqual(context["submitted_argument_count"], 1)
@@ -166,6 +169,7 @@ class BatchViewTests(SimpleTestCase):
             "value": "4",
             "origin": "submitted",
             "submitted": True,
+            "visibility": "standard",
         }])
 
     def test_submitted_mask_diameter_accepts_only_positive_finite_numbers(self):
