@@ -25,7 +25,7 @@ module simple_gui_metadata_project
   use unix,                           only: c_long, c_time
   use json_kinds
   use json_module,                    only: json_core, json_value
-  use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ
+  use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ, SHORTSTRLEN
   use simple_defs_fname,              only: MRC_EXT, JPG_EXT
   use simple_fileio,                  only: swap_suffix, file_exists
   use simple_string,                  only: string
@@ -56,9 +56,12 @@ module simple_gui_metadata_project
     character(len=LONGSTRLEN)     :: projname = '' ! SIMPLE project name
     character(len=LONGSTRLEN)     :: projfile = '' ! path to the *.simple project file
     integer                       :: nmics    = 0  ! number of records in the mic segment
+    integer                       :: nmics_selected = 0  ! number of selected records in the mic segment
     integer                       :: nstks    = 0  ! number of records in the stk segment
     integer                       :: nptcls   = 0  ! number of records in the ptcl2D segment
+    integer                       :: nptcls_selected = 0  ! number of selected records in the ptcl2D segment
     integer                       :: ncls2D   = 0  ! number of records in the cls2D segment
+    integer                       :: ncls2D_selected = 0  ! number of selected records in the cls2D segment
     integer                       :: created  = 0  ! Unix timestamp of first assignment
     real                          :: mskdiam   = 0. ! mask diameter (in A) used for the cls2D run
     real                          :: mskscale  = 0. ! cavgs box size in A (box * smpd), for overlay scaling
@@ -79,25 +82,32 @@ contains
 
   ! Populate the project name and segment record counts from an already
   ! in-memory project, without touching disk.
-  subroutine set( self, spproj, stage2D )
+  subroutine set( self, spproj, oritype, stage2D, selection )
     class(gui_metadata_project),     intent(inout) :: self
     type(sp_project),                intent(inout) :: spproj
+    character(len=*),    optional,   intent(in)    :: oritype
     integer,             optional,   intent(in)    :: stage2D
+    logical,             optional,   intent(in)    :: selection
     type(gui_metadata_cavg2D_stage), allocatable   :: meta_cavg2D_tmp(:)
     type(gui_metadata_micrograph),   allocatable   :: meta_micrographs_tmp(:)
     type(gui_metadata_cavg2D),       allocatable   :: cavgs_tmp(:)
     real,                            allocatable   :: boxdata(:)
     type(nrtxtfile)                                :: boxfile
     type(string)                                   :: projname, projfile, cavgsstk, cavgsjpg, boxpath
+    character(len=SHORTSTRLEN)                     :: md_oritype
     integer                                        :: i, j, x, y, nmeta_micrographs, ncls_stk, n_valid_micrographs, n_valid_cavgs
     integer                                        :: xtiles, ytiles, xtile, ytile, nrecs, nlines
     integer                                        :: nstage2D, array_idx, out_ind
-    logical                                        :: l_final
+    logical                                        :: l_final, l_selection
     real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs
                 
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_final = present(stage2D)
     if( l_final ) l_final = stage2D == 0
+    l_selection = .false.
+    if( present(selection) ) l_selection = selection
+    md_oritype = 'all'
+    if( present(oritype) ) md_oritype = oritype
     if( l_final ) then
         nstage2D = 0
     else
@@ -111,134 +121,152 @@ contains
     self%l_assigned = .true.
     self%projname   = projname%to_char()
     self%projfile   = projfile%to_char()
-    self%nmics      = spproj%os_mic%get_noris()
-    self%nstks      = spproj%os_stk%get_noris()
-    self%nptcls     = spproj%os_ptcl2D%get_noris()
-    self%ncls2D     = spproj%os_cls2D%get_noris()
+    
+   ! self%nstks      = spproj%os_stk%get_noris() ! do we really need this?
+   ! self%nptcls     = spproj%os_ptcl2D%get_noris()
+   ! self%ncls2D     = spproj%os_cls2D%get_noris()
     self%pspec_size = GUI_PSPECSZ
     ! add micrographs (max 50)
     if( allocated(self%meta_micrographs) ) deallocate(self%meta_micrographs)
-    if(spproj%os_mic%isthere('thumb')) then
-        nmeta_micrographs = min(50, self%nmics)
-        allocate(self%meta_micrographs(nmeta_micrographs))
-        self%xdim_mic       = nint(spproj%os_mic%get(1, "xdim"))
-        self%ydim_mic       = nint(spproj%os_mic%get(1, "ydim"))
-        self%smpd_mic       = spproj%os_mic%get(1, "smpd")
-        n_valid_micrographs = 0
-        do i = 1, nmeta_micrographs
-            if( spproj%os_mic%get_state(i) == 0 ) cycle ! needs improvement to work with pagination
-            n_valid_micrographs = n_valid_micrographs + 1
-            call self%meta_micrographs(n_valid_micrographs)%new(GUI_METADATA_MICROGRAPH_TYPE)
-            call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
-                                              dfx   =spproj%os_mic%get(i,     "dfx")    , &
-                                              dfy   =spproj%os_mic%get(i,     "dfy")    , &
-                                              ctfres=spproj%os_mic%get(i,      "ctfres"), &
-                                              i_max =nmeta_micrographs                  , &
-                                              i     =i                                    )
-            call self%meta_micrographs(n_valid_micrographs)%clear_coordinates()
-            boxpath = spproj%os_mic%get_str(i, "boxfile")
-            if( boxpath%strlen() > 0 .and. file_exists(boxpath) ) then
-                call boxfile%new(boxpath, 1)
-                nrecs  = boxfile%get_nrecs_per_line()
-                nlines = boxfile%get_ndatalines()
-                if( nrecs >= 4 ) then
-                    allocate(boxdata(nrecs))
-                    do j = 1, nlines
-                        call boxfile%readNextDataLine(boxdata)
-                        x = nint(boxdata(1) + boxdata(3)/2)
-                        y = nint(boxdata(2) + boxdata(4)/2)
-                        call self%meta_micrographs(n_valid_micrographs)%set_coordinate(j, x, y, self%xdim_mic, self%ydim_mic)
-                    enddo
-                    deallocate(boxdata)
+    if( md_oritype == 'mic' .or. md_oritype == 'ptcl' .or. md_oritype == 'all' ) then
+        self%nmics      = spproj%os_mic%get_noris()
+        self%pspec_size = GUI_PSPECSZ
+        if( md_oritype == 'ptcl' ) then
+            self%nstks  = spproj%os_stk%get_noris()
+            self%nptcls = spproj%os_ptcl2D%get_noris()
+        end if
+        if( l_selection) self%nmics_selected = spproj%os_mic%count_state_gt_zero()
+        if(spproj%os_mic%isthere('thumb')) then
+            nmeta_micrographs = min(50, self%nmics)
+            allocate(self%meta_micrographs(nmeta_micrographs))
+            self%xdim_mic       = nint(spproj%os_mic%get(1, "xdim"))
+            self%ydim_mic       = nint(spproj%os_mic%get(1, "ydim"))
+            self%smpd_mic       = spproj%os_mic%get(1, "smpd")
+            n_valid_micrographs = 0
+            do i = 1, nmeta_micrographs
+                if( spproj%os_mic%get_state(i) == 0 ) cycle ! needs improvement to work with pagination
+                n_valid_micrographs = n_valid_micrographs + 1
+                call self%meta_micrographs(n_valid_micrographs)%new(GUI_METADATA_MICROGRAPH_TYPE)
+                call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
+                                                  dfx   =spproj%os_mic%get(i,     "dfx")    , &
+                                                  dfy   =spproj%os_mic%get(i,     "dfy")    , &
+                                                  ctfres=spproj%os_mic%get(i,      "ctfres"), &
+                                                  i_max =nmeta_micrographs                  , &
+                                                  i     =i                                    )
+                call self%meta_micrographs(n_valid_micrographs)%clear_coordinates()
+                boxpath = spproj%os_mic%get_str(i, "boxfile")
+                if( boxpath%strlen() > 0 .and. file_exists(boxpath) ) then
+                    call boxfile%new(boxpath, 1)
+                    nrecs  = boxfile%get_nrecs_per_line()
+                    nlines = boxfile%get_ndatalines()
+                    if( nrecs >= 4 ) then
+                        allocate(boxdata(nrecs))
+                        do j = 1, nlines
+                            call boxfile%readNextDataLine(boxdata)
+                            x = nint(boxdata(1) + boxdata(3)/2)
+                            y = nint(boxdata(2) + boxdata(4)/2)
+                            call self%meta_micrographs(n_valid_micrographs)%set_coordinate(j, x, y, self%xdim_mic, self%ydim_mic)
+                        enddo
+                        deallocate(boxdata)
+                    endif
+                    call boxfile%kill()
                 endif
-                call boxfile%kill()
-            endif
-        end do
-        ! trim unused (unassigned) slots left by skipped micrographs
-        if( n_valid_micrographs < nmeta_micrographs ) then
-            allocate(meta_micrographs_tmp(n_valid_micrographs))
-            meta_micrographs_tmp = self%meta_micrographs(1:n_valid_micrographs)
-            call move_alloc(meta_micrographs_tmp, self%meta_micrographs)
+            end do
+            ! trim unused (unassigned) slots left by skipped micrographs
+            if( n_valid_micrographs < nmeta_micrographs ) then
+                allocate(meta_micrographs_tmp(n_valid_micrographs))
+                meta_micrographs_tmp = self%meta_micrographs(1:n_valid_micrographs)
+                call move_alloc(meta_micrographs_tmp, self%meta_micrographs)
+            end if
         end if
     end if
     ! add 2D classes
     if( nstage2D == 1 ) then
         if( allocated(self%meta_cavg2D) ) deallocate(self%meta_cavg2D)
     end if
-    if( self%ncls2D > 0 ) then
-        if( l_final ) then
-            ! reuse an existing final slot, or append a new one at the end of the stage array
-            array_idx = 0
-            if( allocated(self%meta_cavg2D) ) then
-                do i = 1, size(self%meta_cavg2D)
-                    if( self%meta_cavg2D(i)%is_final ) then
-                        array_idx = i
-                        exit
+    if( md_oritype == 'cls2D' .or. md_oritype == 'all' ) then
+        self%nstks  = spproj%os_stk%get_noris()
+        self%nptcls = spproj%os_ptcl2D%get_noris()
+        self%ncls2D = spproj%os_cls2D%get_noris()
+        if( l_selection ) then
+            self%nptcls_selected = nint(spproj%os_cls2D%get_sum('pop'))
+            self%ncls2D_selected = spproj%os_cls2D%count_state_gt_zero()
+        end if
+        if( self%ncls2D > 0 ) then
+            if( l_final ) then
+                ! reuse an existing final slot, or append a new one at the end of the stage array
+                array_idx = 0
+                if( allocated(self%meta_cavg2D) ) then
+                    do i = 1, size(self%meta_cavg2D)
+                        if( self%meta_cavg2D(i)%is_final ) then
+                            array_idx = i
+                            exit
+                        end if
+                    end do
+                end if
+                if( array_idx == 0 ) then
+                    if( .not. allocated(self%meta_cavg2D) ) then
+                        allocate(self%meta_cavg2D(1))
+                    else
+                        allocate(meta_cavg2D_tmp(size(self%meta_cavg2D) + 1))
+                        meta_cavg2D_tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
+                        call move_alloc(meta_cavg2D_tmp, self%meta_cavg2D)
                     end if
-                end do
-            end if
-            if( array_idx == 0 ) then
+                    array_idx = size(self%meta_cavg2D)
+                end if
+                self%meta_cavg2D(array_idx)%is_final = .true.
+            else
                 if( .not. allocated(self%meta_cavg2D) ) then
-                    allocate(self%meta_cavg2D(1))
-                else
-                    allocate(meta_cavg2D_tmp(size(self%meta_cavg2D) + 1))
+                    allocate(self%meta_cavg2D(nstage2D))
+                else if( size(self%meta_cavg2D) < nstage2D ) then
+                    ! grow the stage array, preserving previously recorded stage containers
+                    allocate(meta_cavg2D_tmp(nstage2D))
                     meta_cavg2D_tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
                     call move_alloc(meta_cavg2D_tmp, self%meta_cavg2D)
                 end if
-                array_idx = size(self%meta_cavg2D)
+                array_idx = nstage2D
+                self%meta_cavg2D(array_idx)%is_final = .false.
             end if
-            self%meta_cavg2D(array_idx)%is_final = .true.
-        else
-            if( .not. allocated(self%meta_cavg2D) ) then
-                allocate(self%meta_cavg2D(nstage2D))
-            else if( size(self%meta_cavg2D) < nstage2D ) then
-                ! grow the stage array, preserving previously recorded stage containers
-                allocate(meta_cavg2D_tmp(nstage2D))
-                meta_cavg2D_tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
-                call move_alloc(meta_cavg2D_tmp, self%meta_cavg2D)
+            if( allocated(self%meta_cavg2D(array_idx)%cavgs) ) deallocate(self%meta_cavg2D(array_idx)%cavgs)
+            allocate(self%meta_cavg2D(array_idx)%cavgs(self%ncls2D))
+            box_cavgs = 0.
+            out_ind   = 0
+            call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_cavgs, fail=.false., out_ind=out_ind, box=box_cavgs)
+            if( ncls_stk /= self%ncls2D ) THROW_HARD('cavgs stack ncls does not match os_cls2D record count')
+            mskdiam_cavgs = 0.
+            if( out_ind > 0 .and. spproj%os_out%isthere(out_ind, 'mskdiam') ) mskdiam_cavgs = spproj%os_out%get(out_ind, 'mskdiam')
+            self%dim_cavgs = nint(box_cavgs)
+            self%mskdiam   = mskdiam_cavgs
+            self%mskscale  = box_cavgs * smpd_cavgs
+            cavgsjpg       = swap_suffix(cavgsstk, JPG_EXT, MRC_EXT)
+            xtiles         = floor(sqrt(real(self%ncls2D)))
+            ytiles         = ceiling(real(self%ncls2D) / real(xtiles))
+            n_valid_cavgs  = 0
+            do i = 1, self%ncls2D
+                if( spproj%os_cls2D%get_state(i) == 0 ) cycle
+                n_valid_cavgs = n_valid_cavgs + 1
+                xtile = mod(i-1, xtiles)
+                ytile = (i-1) / xtiles
+                call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%new(GUI_METADATA_CAVG2D_TYPE)
+                call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%set(path    = cavgsjpg,               &
+                                            mrcpath = cavgsstk,                           &
+                                            i       = i,                                  &
+                                            i_max   = self%ncls2D,                        &
+                                            res     = spproj%os_cls2D%get(i, 'res'),      &
+                                            pop     = spproj%os_cls2D%get_int(i, 'pop'),  &
+                                            idx     = i,                                  &
+                                            sprite  = sprite_sheet_pos(                   &
+                                                x = xtile * (100.0 / max(1, xtiles - 1)), &
+                                                y = ytile * (100.0 / max(1, ytiles - 1)), &
+                                                h = 100 * ytiles,                         &
+                                                w = 100 * xtiles)                         )
+            end do
+            ! trim unused (unassigned) slots left by skipped classes
+            if( n_valid_cavgs < self%ncls2D ) then
+                allocate(cavgs_tmp(n_valid_cavgs))
+                cavgs_tmp = self%meta_cavg2D(array_idx)%cavgs(1:n_valid_cavgs)
+                call move_alloc(cavgs_tmp, self%meta_cavg2D(array_idx)%cavgs)
             end if
-            array_idx = nstage2D
-            self%meta_cavg2D(array_idx)%is_final = .false.
-        end if
-        if( allocated(self%meta_cavg2D(array_idx)%cavgs) ) deallocate(self%meta_cavg2D(array_idx)%cavgs)
-        allocate(self%meta_cavg2D(array_idx)%cavgs(self%ncls2D))
-        box_cavgs = 0.
-        out_ind   = 0
-        call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_cavgs, fail=.false., out_ind=out_ind, box=box_cavgs)
-        if( ncls_stk /= self%ncls2D ) THROW_HARD('cavgs stack ncls does not match os_cls2D record count')
-        mskdiam_cavgs = 0.
-        if( out_ind > 0 .and. spproj%os_out%isthere(out_ind, 'mskdiam') ) mskdiam_cavgs = spproj%os_out%get(out_ind, 'mskdiam')
-        self%dim_cavgs = nint(box_cavgs)
-        self%mskdiam   = mskdiam_cavgs
-        self%mskscale  = box_cavgs * smpd_cavgs
-        cavgsjpg       = swap_suffix(cavgsstk, JPG_EXT, MRC_EXT)
-        xtiles         = floor(sqrt(real(self%ncls2D)))
-        ytiles         = ceiling(real(self%ncls2D) / real(xtiles))
-        n_valid_cavgs  = 0
-        do i = 1, self%ncls2D
-            if( spproj%os_cls2D%get_state(i) == 0 ) cycle
-            n_valid_cavgs = n_valid_cavgs + 1
-            xtile = mod(i-1, xtiles)
-            ytile = (i-1) / xtiles
-            call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%new(GUI_METADATA_CAVG2D_TYPE)
-            call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%set(path    = cavgsjpg,               &
-                                         mrcpath = cavgsstk,                           &
-                                         i       = i,                                  &
-                                         i_max   = self%ncls2D,                        &
-                                         res     = spproj%os_cls2D%get(i, 'res'),      &
-                                         pop     = spproj%os_cls2D%get_int(i, 'pop'),  &
-                                         idx     = i,                                  &
-                                         sprite  = sprite_sheet_pos(                   &
-                                             x = xtile * (100.0 / max(1, xtiles - 1)), &
-                                             y = ytile * (100.0 / max(1, ytiles - 1)), &
-                                             h = 100 * ytiles,                         &
-                                             w = 100 * xtiles)                         )
-        end do
-        ! trim unused (unassigned) slots left by skipped classes
-        if( n_valid_cavgs < self%ncls2D ) then
-            allocate(cavgs_tmp(n_valid_cavgs))
-            cavgs_tmp = self%meta_cavg2D(array_idx)%cavgs(1:n_valid_cavgs)
-            call move_alloc(cavgs_tmp, self%meta_cavg2D(array_idx)%cavgs)
         end if
     end if
 
@@ -275,10 +303,13 @@ contains
       call json%create_object(json_ptr, '')
       call json%add(json_ptr, 'projname', trim(self%projname))
       call json%add(json_ptr, 'projfile', trim(self%projfile))
-      call json%add(json_ptr, 'nmics',    self%nmics         )
-      call json%add(json_ptr, 'nstks',    self%nstks         )
-      call json%add(json_ptr, 'nptcls',   self%nptcls        )
-      call json%add(json_ptr, 'ncls2D',   self%ncls2D        )
+      if(self%nmics  > 0) call json%add(json_ptr, 'nmics',    self%nmics  )
+      if(self%nstks  > 0) call json%add(json_ptr, 'nstks',    self%nstks  )
+      if(self%nptcls > 0) call json%add(json_ptr, 'nptcls',   self%nptcls )
+      if(self%ncls2D > 0) call json%add(json_ptr, 'ncls2D',   self%ncls2D )
+      if(self%nmics_selected >  0) call json%add(json_ptr, 'nmics_selected', self%nmics_selected)
+      if(self%nptcls_selected > 0) call json%add(json_ptr, 'nptcls_selected', self%nptcls_selected)
+      if(self%ncls2D_selected > 0) call json%add(json_ptr, 'ncls2D_selected', self%ncls2D_selected)
       call json%add(json_ptr, 'created',  self%created       )
       if( self%dim_cavgs > 0 ) call json%add(json_ptr, 'dim_cavgs', self%dim_cavgs)
       if( self%mskscale > 0. ) then

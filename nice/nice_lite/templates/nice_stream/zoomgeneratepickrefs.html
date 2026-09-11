@@ -18,13 +18,13 @@
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
                     {% if "latest_cls2D" in jobstats or "final_cls2D" in jobstats %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" %}
                     {% else %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
+                        {% include 'includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
                     {% endif %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label='particles rejected' variant='rejected' %}
+                    {% include 'includes/_count_tile.html' with count=jobstats.particles_rejected label='particles rejected' variant='rejected' %}
                     {% if "box_size" in jobstats and jobstats.box_size > 0 %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.box_size label="box size" count_unit="px" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.box_size label="box size" count_unit="px" %}
                     {% endif %}
                 </div>
             </div>
@@ -35,13 +35,13 @@
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
                     {% if "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mask_diam label="mask diameter" count_unit="Å" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.mask_diam label="mask diameter" count_unit="Å" %}
                     {% endif %}
                     {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.latest_cls2D|length label="available templates" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.latest_cls2D|length label="available templates" %}
                     {% endif %}
                     {% if "final_cls2D" in jobstats and jobstats.final_cls2D|length > 0 %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.final_cls2D|length label="selected templates" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.final_cls2D|length label="selected templates" %}
                     {% endif %}
                 </div>
             </div>

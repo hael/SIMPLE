@@ -1087,7 +1087,11 @@ contains
         end select        
         ! final full write
         call spproj%write(params%projfile)
-        call gui_comm%add_metadata(spproj, stage2D=0)
+        if( params%oritype == 'mic') then
+            call gui_comm%add_metadata(spproj, oritype='mic', selection=.true.)
+        else if( params%oritype == 'cls2D') then
+            call gui_comm%add_metadata(spproj, oritype='cls2D', stage2D=0, selection=.true.)
+        endif
         if( l_writecls2d ) call spproj%cavgs2mrc()
         if( l_writestar ) then
             if( spproj%os_mic%get_noris() > 0)    call spproj%write_mics_star()

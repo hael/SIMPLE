@@ -1,7 +1,9 @@
 !@descr: project commanders for movie-related things
 module simple_commanders_project_mov
 use simple_commanders_api
-use simple_stream_watcher, only: stream_watcher
+use simple_stream_watcher,   only: stream_watcher
+use simple_gui_communicator, only: gui_communicator
+
 implicit none
 #include "simple_local_flags.inc"
 
@@ -20,7 +22,7 @@ contains
     subroutine exec_import_movies( self, cline )
         class(commander_import_movies), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(simple_nice_comm)    :: nice_comm
+        type(gui_communicator)    :: gui_comm
         type(parameters)          :: params
         type(sp_project)          :: spproj
         type(oris)                :: deftab
@@ -34,6 +36,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         call params%new(cline)
+        call gui_comm%new(params)
         ! parameter input management
         inputted_boxtab     = cline%defined('boxtab')
         inputted_deftab     = cline%defined('deftab')
@@ -46,9 +49,6 @@ contains
         if(.not. file_exists(params%projfile))then
             THROW_HARD('project file: '//params%projfile%to_char()//' does not exists! exec_import_movies')
         endif
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         call spproj%read(params%projfile)
         nprev_intgs  = spproj%get_nintgs()
         nprev_movies = spproj%get_nmovies()
@@ -141,7 +141,8 @@ contains
         endif 
         ! write project file
         call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
-        call nice_comm%terminate()
+        call gui_comm%add_metadata(params%projfile, oritype='mic')
+        call gui_comm%kill()
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
 

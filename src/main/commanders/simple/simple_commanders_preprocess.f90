@@ -60,7 +60,7 @@ contains
         use simple_parameters,              only: parameters
         class(commander_motion_correct), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        class(motion_correct_strategy), allocatable    :: strategy
+        class(motion_correct_strategy),  allocatable   :: strategy
         type(parameters)                               :: params
         type(gui_communicator)                         :: gui_comm
         ! Helps distributed job script generation if it relies on 'prg'
@@ -71,7 +71,7 @@ contains
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
-        call gui_comm%add_metadata(params%projfile)
+        call gui_comm%add_metadata(params%projfile, oritype='mic')
         call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
@@ -119,7 +119,7 @@ contains
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
-        call gui_comm%add_metadata(params%projfile)
+        call gui_comm%add_metadata(params%projfile, oritype='mic')
         call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)

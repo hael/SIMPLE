@@ -18,11 +18,11 @@
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
                     {% if jobstats.micrographs_accepted == jobstats.micrographs_imported %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" %}
                     {% else %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
                     {% endif %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_rejected label="micrographs rejected" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="neutral" %}
+                    {% include 'includes/_count_tile.html' with count=jobstats.micrographs_rejected label="micrographs rejected" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="neutral" %}
                 </div>
             </div>
             <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
@@ -32,11 +32,11 @@
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
                     {% if jobstats.micrographs_accepted == jobstats.micrographs_imported %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" %}
                     {% else %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" variant="action" %}
+                        {% include 'includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" variant="action" %}
                     {% endif %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.box_size label="box size" count_unit="px" %}
+                    {% include 'includes/_count_tile.html' with count=jobstats.box_size label="box size" count_unit="px" %}
                 </div>
             </div>
         </div>

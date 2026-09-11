@@ -29,7 +29,7 @@
             {% elif job.status == "queued" or job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
                 {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
                     {% if job.pckg == "simple" or job.pckg == "single" %}
-                        <form method="POST" action="{% url 'nice_lite:rerun_batch' %}" target="job_builder_iframe" class="pointer-events-auto" onclick="event.stopPropagation()">
+                        <form method="POST" action="{% url 'nice_lite:clone_batch' %}" target="job_builder_iframe" class="pointer-events-auto" onclick="event.stopPropagation()">
                             {% csrf_token %}
                             <input type="hidden" name="selected_job_id" value="{{ job.id }}">
                             <button type="submit"

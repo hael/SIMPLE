@@ -753,8 +753,7 @@ def view_job_builder(request):
                     selected_class_selection_jobmodel = streamjobmodel
             else:
                 if (
-                    streamjobmodel.status not in BatchJob.RERUNNABLE_STATUSES
-                    or streamjobmodel.pckg not in ("simple", "single")
+                    streamjobmodel.pckg not in ("simple", "single")
                     or not streamjobmodel.prog
                     or not isinstance(streamjobmodel.args, dict)
                 ):
@@ -957,7 +956,6 @@ def view_create_batch(request):
             rerun_jobmodel is None
             or not _is_job_accessible(rerun_jobmodel, request.user.username)
             or not _is_batch_job(rerun_jobmodel)
-            or rerun_jobmodel.status not in BatchJob.RERUNNABLE_STATUSES
             or rerun_jobmodel.pckg != package
             or rerun_jobmodel.prog != program
         ):

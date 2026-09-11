@@ -109,35 +109,63 @@ contains
         self%remote_active = .false.
     end subroutine kill_gui_communicator
 
-    subroutine add_metadata_1( self, spproj, stage2D )
-        class(gui_communicator), intent(inout) :: self
-        type(sp_project),        intent(inout) :: spproj
-        integer,    optional,    intent(in)    :: stage2D
-        integer                                :: i_stage2D
+    subroutine add_metadata_1( self, spproj, oritype, stage2D, selection )
+        class(gui_communicator),    intent(inout) :: self
+        type(sp_project),           intent(inout) :: spproj
+        character(len=*), optional, intent(in)    :: oritype
+        integer,          optional, intent(in)    :: stage2D
+        logical,          optional, intent(in)    :: selection
+        character(len=SHORTSTRLEN)                :: md_oritype
+        integer                                   :: i_stage2D
+        logical                                   :: l_selection
         if( .not. self%is_active) return
         i_stage2D = 1
-        if( present(stage2D) ) i_stage2D = stage2D
+        md_oritype = 'all'
+        l_selection = .false.
+        if( present(oritype)   ) md_oritype = oritype
+        if( present(stage2D)   ) i_stage2D = stage2D
+        if( present(selection) ) l_selection = selection
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call gui_project_metadata_inst%set(spproj, i_stage2D)
+        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage2D, l_selection)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
     end subroutine add_metadata_1
 
-    subroutine add_metadata_2( self, projfile, stage2D )
-        class(gui_communicator), intent(inout) :: self
-        type(string),            intent(in)    :: projfile
-        integer,    optional,    intent(in)    :: stage2D
-        type(sp_project)                       :: spproj
-        integer                                :: i_stage2D
+    subroutine add_metadata_2( self, projfile, oritype, stage2D, selection )
+        class(gui_communicator),    intent(inout) :: self
+        type(string),               intent(in)    :: projfile
+        character(len=*), optional, intent(in)    :: oritype
+        integer,          optional, intent(in)    :: stage2D
+        logical,          optional, intent(in)    :: selection
+        type(sp_project)                          :: spproj
+        character(len=SHORTSTRLEN)                :: md_oritype
+        integer                                   :: i_stage2D
+        logical                                   :: l_selection
         if( .not. self%is_active        ) return
         if( .not. file_exists(projfile) ) return
-        call spproj%read_segment('mic',      projfile)
-        call spproj%read_segment('cls2D',    projfile)
+        l_selection = .false.
+        if( present(selection) ) l_selection = selection
+        if( present(oritype) ) then
+            if( oritype == 'mic' ) then
+                call spproj%read_segment('mic', projfile)
+            else if( oritype == 'ptcl' ) then
+                call spproj%read_segment('mic',    projfile)
+                call spproj%read_segment('stk',    projfile)
+                call spproj%read_segment('ptcl2D', projfile)    
+            else if( oritype == 'cls2D' ) then
+                call spproj%read_segment('cls2D', projfile)
+            end if
+        else
+            call spproj%read_segment('mic',      projfile)
+            call spproj%read_segment('cls2D',    projfile)
+        end if
         call spproj%read_segment('projinfo', projfile)
         call spproj%read_segment('out',      projfile)
-        i_stage2D = 1
-        if( present(stage2D) ) i_stage2D = stage2D
+        i_stage2D  = 1
+        md_oritype = 'all'
+        if( present(stage2D) ) i_stage2D  = stage2D
+        if( present(oritype) ) md_oritype = oritype
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call gui_project_metadata_inst%set(spproj, i_stage2D)
+        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage2D, l_selection)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
         call spproj%kill()
     end subroutine add_metadata_2

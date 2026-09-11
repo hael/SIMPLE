@@ -819,6 +819,7 @@ def view_batch(request, jobid):
         "error"  : stderr_entry.get("text") if stderr_entry.get("exists") else None,
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
+        "jobstats": metadata.get("project_metadata", {}),
     }
     
     response = render(request, template, context)
@@ -1248,13 +1249,10 @@ def view_batch_stop(request):
 @login_required(login_url="/login")
 @require_POST
 def view_batch_rerun(request):
-    """Open the job builder with an owned terminal batch job selected."""
+    """Open the job builder with an owned batch job selected, regardless of status."""
     batch_job, jobmodel = _get_accessible_batch_job(request, "rerun_batch")
     if batch_job is None:
         messages.add_message(request, messages.ERROR, "invalid batch job selection")
-        return redirect("nice_lite:workspace")
-    if jobmodel.status not in BatchJob.RERUNNABLE_STATUSES:
-        messages.add_message(request, messages.ERROR, "batch job is not complete")
         return redirect("nice_lite:workspace")
 
     if jobmodel.pckg not in ("simple", "single"):

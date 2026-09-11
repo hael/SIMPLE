@@ -45,11 +45,11 @@
          <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% if jobstats.micrographs_assigned == jobstats.micrographs_imported %}
-                {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_assigned label="micrographs assigned" sublabel=jobstats.micrographs_imported sublabel_sep="/" %}
+                {% include 'includes/_count_tile.html' with count=jobstats.micrographs_assigned label="micrographs assigned" sublabel=jobstats.micrographs_imported sublabel_sep="/" %}
             {% else %}
-                {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_assigned label="micrographs assigned" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
+                {% include 'includes/_count_tile.html' with count=jobstats.micrographs_assigned label="micrographs assigned" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
             {% endif %}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.optics_groups_assigned label="shift groups" %}
+            {% include 'includes/_count_tile.html' with count=jobstats.optics_groups_assigned label="shift groups" %}
         </div>
 
         <!-- Beam shift scatter chart -->

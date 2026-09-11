@@ -47,12 +47,12 @@
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% with net=jobstats.movies_processed|subtract:jobstats.movies_rejected %}
             {% if jobstats.movies_processed|add:jobstats.movies_rejected == jobstats.movies_imported %}
-                {% include 'nice_stream/includes/_count_tile.html' with count=net label="micrographs accepted" sublabel=jobstats.movies_imported sublabel_sep="/" %}
+                {% include 'includes/_count_tile.html' with count=net label="micrographs accepted" sublabel=jobstats.movies_imported sublabel_sep="/" %}
             {% else %}
-                {% include 'nice_stream/includes/_count_tile.html' with count=net label="micrographs accepted" sublabel=jobstats.movies_imported sublabel_sep="/" variant="action" %}
+                {% include 'includes/_count_tile.html' with count=net label="micrographs accepted" sublabel=jobstats.movies_imported sublabel_sep="/" variant="action" %}
             {% endif %}
             {% endwith %}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_rejected label="micrographs rejected"  sublabel=jobstats.movies_imported sublabel_sep="/" variant="neutral" %}
+            {% include 'includes/_count_tile.html' with count=jobstats.movies_rejected label="micrographs rejected"  sublabel=jobstats.movies_imported sublabel_sep="/" variant="neutral" %}
         </div>
 
         <!-- Histogram slider -->

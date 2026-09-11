@@ -3,11 +3,11 @@
   Expects `job` in context and `card_type` ("stream" or "batch") to select the action set.
   stream: view · restart (finished/failed/stopped) · clone ·
           delete (finished/failed/stopped) / kill-delete (queued) / terminate (running/alarm/error).
-  batch:  view (whole-card click) · stop (running) · rerun (finished/failed/stopped,
+  batch:  view (whole-card click) · stop (running) · clone (finished/failed/stopped,
           simple/single package) · delete.
 {% endcomment %}
 {% if card_type == "batch" %}
-<!-- Footer: stop · rerun · delete -->
+<!-- Footer: stop · clone · delete -->
 <div class="relative z-20 mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 pointer-events-none">
     <!-- View -->
     <form method="GET" action="{% url 'nice_lite:view_batch' job.id %}" target="_parent" class="viewform hidden">
@@ -28,15 +28,15 @@
         </form>
     {% endif %}
 
-        <form method="POST" action="{% url 'nice_lite:rerun_batch' %}" target="job_builder_iframe" class="pointer-events-auto" onclick="event.stopPropagation()">
+        <form method="POST" action="{% url 'nice_lite:clone_batch' %}" target="job_builder_iframe" class="pointer-events-auto" onclick="event.stopPropagation()">
             {% csrf_token %}
             <input type="hidden" name="selected_job_id" value="{{ job.id }}">
             <button type="submit"
-                    title="rerun batch job" aria-label="rerun batch job"
+                    title="clone batch job"
                     class="text-streamicon hover:text-streamsubtle transition-colors p-1">
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
-                    <polyline points="14,2 14,6 10,6"/>
+                    <rect x="6" y="6" width="8" height="8" rx="1"/>
+                    <path d="M4 10H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1"/>
                 </svg>
             </button>
         </form>

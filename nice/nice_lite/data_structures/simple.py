@@ -514,21 +514,23 @@ class SIMPLEBatch:
             and self.jobtype in ("new_project", "reproject")
         )
         status_endpoint = dispatchmodel.url + "/api"
-        status_prefix, status_suffix = _classic_status_callback_wrapper(
-            self.jobid,
-            status_endpoint,
-        )
+       # status_prefix, status_suffix = _classic_status_callback_wrapper(
+       #     self.jobid,
+       #     status_endpoint,
+       # )
 
-        command_string = status_prefix
-        setup_failure_guard = " || return $?" if status_suffix else ""
+       # command_string = status_prefix
+       # setup_failure_guard = " || return $?" if status_suffix else ""
+        command_string = ""
         if propagates_project:
             command_string += (
                 "cp -v " + shlex.quote(self.parent_proj)
-                + " workspace.simple" + setup_failure_guard + "\n"
+                 + " workspace.simple" + "\n"
+             #   + " workspace.simple" + setup_failure_guard + "\n"
             )
             command_string += (
-                "simple_exec prg=update_project projfile=workspace.simple"
-                + setup_failure_guard + "\n"
+                "simple_exec prg=update_project projfile=workspace.simple" +"\n"
+              #  + setup_failure_guard + "\n"
             )
         command_string += self.executable + " prg=" + shlex.quote(self.jobtype)
         for key, val in self.args.items():
@@ -540,7 +542,7 @@ class SIMPLEBatch:
             command_string += " projfile=workspace.simple"
         command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + shlex.quote(status_endpoint)
         command_string += " >> stdout.log 2>> stderr.log\n"
-        command_string += status_suffix
+       # command_string += status_suffix
 
         # fill template placeholders and normalise line endings
         try:
