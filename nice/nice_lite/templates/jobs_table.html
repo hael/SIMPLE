@@ -28,7 +28,7 @@
         </thead>
         <tbody>
             {% for job in jobs %}
-                {% if job.master_stats.job_type == "batch" %}
+                {% if job.pckg == "simple" or job.pckg == "single" %}
                     <tr class="border-b border-streamdivider hover:bg-streambar/60">
                         <td class="py-2 pr-3">
                             <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full {% if job.status == 'running' %}bg-streamaction/10 text-streamaction{% elif job.status == 'finished' %}bg-streamring/10 text-streamaccent{% elif job.status == 'failed' or job.status == 'stopped' %}bg-streamerrorsurface text-streamerror{% elif job.status == 'queued' %}bg-streamline/40 text-streamlabel{% else %}bg-streamrejected/10 text-streamrejected{% endif %}">
@@ -36,11 +36,11 @@
                             </span>
                         </td>
                         <td class="py-2 pr-3 text-streamtext font-medium">
-                            <a href="{% url 'nice_lite:view_batch' job.id %}{% if job.status == 'finished' and job.master_stats.program == 'abinitio2D' %}?class_selector=1{% elif job.status == 'finished' and job.master_stats.program == 'abinitio3D' %}?volume_viewer=1#batch_volume_viewer{% endif %}" target="_parent" class="hover:text-streamring transition-colors">
+                            <a href="{% url 'nice_lite:view_batch' job.id %}{% if job.status == 'finished' and job.prog == 'abinitio2D' %}?class_selector=1{% elif job.status == 'finished' and job.prog == 'abinitio3D' %}?volume_viewer=1#batch_volume_viewer{% endif %}" target="_parent" class="hover:text-streamring transition-colors">
                                 {{ job.disp }} {{ job.name }}
                             </a>
                         </td>
-                        <td class="py-2 pr-3 text-streamsubtle">{{ job.master_stats.package }} batch</td>
+                        <td class="py-2 pr-3 text-streamsubtle">{{ job.pckg }} batch</td>
                         <td class="py-2 pr-3 text-streamsubtle truncate max-w-[240px]" title="{{ job.dirc }}">{{ job.dirc }}</td>
                         <td class="py-2 pr-3">
                             <div class="flex items-center justify-end gap-1">
@@ -59,7 +59,7 @@
                                     </form>
                                 {% elif job.status == "queued" or job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
                                     {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
-                                        {% if job.master_stats.package == "simple" or job.master_stats.package == "single" %}
+                                        {% if job.pckg == "simple" or job.pckg == "single" %}
                                             <form method="POST" action="{% url 'nice_lite:rerun_batch' %}" target="job_builder_iframe">
                                                 {% csrf_token %}
                                                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">

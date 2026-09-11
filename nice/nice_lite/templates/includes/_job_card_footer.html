@@ -3,11 +3,16 @@
   Expects `job` in context and `card_type` ("stream" or "batch") to select the action set.
   stream: view · restart (finished/failed/stopped) · clone ·
           delete (finished/failed/stopped) / kill-delete (queued) / terminate (running/alarm/error).
-  batch:  stop (running) · rerun (finished/failed/stopped, simple/single package) · delete.
+  batch:  view (whole-card click) · stop (running) · rerun (finished/failed/stopped,
+          simple/single package) · delete.
 {% endcomment %}
 {% if card_type == "batch" %}
 <!-- Footer: stop · rerun · delete -->
 <div class="relative z-20 mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 pointer-events-none">
+    <!-- View -->
+    <form method="GET" action="{% url 'nice_lite:view_batch' job.id %}" target="_parent" class="viewform hidden">
+        {% csrf_token %}
+    </form>
     {% if job.status == "running" %}
         <form method="POST" action="{% url 'nice_lite:stop_batch' %}" target="_parent" class="pointer-events-auto" onclick="event.stopPropagation()">
             {% csrf_token %}
@@ -21,23 +26,22 @@
                 </svg>
             </button>
         </form>
-    {% elif job.status == "queued" or job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
-        {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
-            {% if job.master_stats.package == "simple" or job.master_stats.package == "single" %}
-                <form method="POST" action="{% url 'nice_lite:rerun_batch' %}" target="job_builder_iframe" class="pointer-events-auto" onclick="event.stopPropagation()">
-                    {% csrf_token %}
-                    <input type="hidden" name="selected_job_id" value="{{ job.id }}">
-                    <button type="submit"
-                            title="rerun batch job" aria-label="rerun batch job"
-                            class="text-streamicon hover:text-streamsubtle transition-colors p-1">
-                        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
-                            <polyline points="14,2 14,6 10,6"/>
-                        </svg>
-                    </button>
-                </form>
-            {% endif %}
-        {% endif %}
+    {% endif %}
+
+        <form method="POST" action="{% url 'nice_lite:rerun_batch' %}" target="job_builder_iframe" class="pointer-events-auto" onclick="event.stopPropagation()">
+            {% csrf_token %}
+            <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+            <button type="submit"
+                    title="rerun batch job" aria-label="rerun batch job"
+                    class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
+                    <polyline points="14,2 14,6 10,6"/>
+                </svg>
+            </button>
+        </form>
+
+    {% if job.status != "running" %}
         <form method="POST" action="{% url 'nice_lite:delete_batch' %}" target="_parent" class="pointer-events-auto" onclick="event.stopPropagation()">
           {% csrf_token %}  
           <input type="hidden" name="selected_job_id" value="{{ job.id }}">

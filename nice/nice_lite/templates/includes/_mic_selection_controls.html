@@ -1,0 +1,132 @@
+{% comment %}
+  _mic_selection_controls.html — two context menus for the micrograph tile
+  grid: one opened from a tile's micrograph half, one from its power-spectrum
+  half (see oncontextmenu on each half in _mic_selection_element.html). Each
+  menu's contrast/brightness sliders control only that image type (CSS vars
+  --preprocess-contrast-mic/-pspec and --preprocess-brightness-mic/-pspec);
+  sort-on-defocus, sort-on-CTF-resolution, scale, and (when `selectable`)
+  select-above/select-below are shared/global and appear identically in both
+  menus.
+  Self-contained: wired up by name/data attributes; opened via
+  showMicMenu(this, event, 'mic'|'pspec'). Function names are Mic-prefixed
+  so they don't collide with _cls2D_viewer.html's identically-purposed
+  functions when both panels render on the same batch page. sortMicDefocus/
+  sortMicCtfRes/selectAboveMic/selectBelowMic are owned by _mic_viewer.html;
+  relies on a page-level `lastinteraction` global declared by the including
+  page's own script. Optional `hide_pspec` (bool): omits the power-spectrum
+  menu, matching tiles rendered without a pspec half.
+{% endcomment %}
+<div name="selectmenu" data-imgtype="mic" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMicMenu()">
+    <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">contrast</div>
+            <input class="mx-[10px]" oninput="updateMicContrast(this, 'mic')" type="range" max="500" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">brightness</div>
+            <input class="mx-[10px]" oninput="updateMicBrightness(this, 'mic')" type="range" max="300" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">scale</div>
+            <input class="mx-[10px]" oninput="updateMicScale(this)" type="range" max="1000" min="100" step="10" value="600"></input>
+        </div>
+        <div data-action="sortdefocus" class="userbutton w-auto text-center">sort on defocus</div>
+        <div data-action="sortctfres" class="userbutton w-auto text-center">sort on CTF res</div>
+        {% if selectable %}
+        <div data-action="selectabove" class="userbutton w-auto text-center">select above</div>
+        <div data-action="selectbelow" class="userbutton w-auto text-center">select below</div>
+        {% endif %}
+    </div>
+</div>
+{% if not hide_pspec %}
+<div name="selectmenu" data-imgtype="pspec" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMicMenu()">
+    <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">contrast</div>
+            <input class="mx-[10px]" oninput="updateMicContrast(this, 'pspec')" type="range" max="500" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">brightness</div>
+            <input class="mx-[10px]" oninput="updateMicBrightness(this, 'pspec')" type="range" max="300" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">scale</div>
+            <input class="mx-[10px]" oninput="updateMicScale(this)" type="range" max="1000" min="100" step="10" value="600"></input>
+        </div>
+        <div data-action="sortdefocus" class="userbutton w-auto text-center">sort on defocus</div>
+        <div data-action="sortctfres" class="userbutton w-auto text-center">sort on CTF res</div>
+        {% if selectable %}
+        <div data-action="selectabove" class="userbutton w-auto text-center">select above</div>
+        <div data-action="selectbelow" class="userbutton w-auto text-center">select below</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+    const showMicMenu = (element, event, imgtype) => {
+        event.preventDefault();
+        event.stopPropagation();
+        currentMicMenuContainer = element.closest("#mic_tile_grid");
+        const miccontainer = element.closest(".miccontainer");
+        const selectmenu = currentMicMenuContainer.querySelector(`[name='selectmenu'][data-imgtype='${imgtype}']`);
+        const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+        const sortmicdefocus = selectmenu.querySelector("[data-action='sortdefocus']");
+        const sortmicctfres = selectmenu.querySelector("[data-action='sortctfres']");
+        const selectabovemic = selectmenu.querySelector("[data-action='selectabove']");
+        const selectbelowmic = selectmenu.querySelector("[data-action='selectbelow']");
+
+        selectmenu.style.display = "flex";
+        const selectmenurect = selectmenu.getBoundingClientRect();
+        const selectmenuboxrect = selectmenubox.getBoundingClientRect();
+        selectmenubox.style.left = (event.pageX + selectmenuboxrect.width > selectmenurect.width)
+            ? (selectmenurect.width - selectmenuboxrect.width) + "px"
+            : event.pageX + "px";
+        selectmenubox.style.top = (event.pageY + selectmenuboxrect.height > selectmenurect.height)
+            ? (selectmenurect.height - selectmenuboxrect.height) + "px"
+            : event.pageY + "px";
+        if (sortmicdefocus) sortmicdefocus.onclick = sortMicDefocus;
+        if (sortmicctfres) sortmicctfres.onclick = sortMicCtfRes;
+        if (selectabovemic) selectabovemic.onclick = () => selectAboveMic(miccontainer);
+        if (selectbelowmic) selectbelowmic.onclick = () => selectBelowMic(miccontainer);
+        lastinteraction = Date.now();
+    };
+
+    const hideMicMenu = () => {
+        for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+            const sortmicdefocus = selectmenu.querySelector("[data-action='sortdefocus']");
+            const sortmicctfres = selectmenu.querySelector("[data-action='sortctfres']");
+            const selectabovemic = selectmenu.querySelector("[data-action='selectabove']");
+            const selectbelowmic = selectmenu.querySelector("[data-action='selectbelow']");
+            selectmenu.style.display = "none";
+            if (sortmicdefocus) sortmicdefocus.onclick = null;
+            if (sortmicctfres) sortmicctfres.onclick = null;
+            if (selectabovemic) selectabovemic.onclick = null;
+            if (selectbelowmic) selectbelowmic.onclick = null;
+        }
+        lastinteraction = Date.now();
+    };
+
+    const updateMicBrightness = (element, imgtype) => {
+        document.querySelector(":root").style.setProperty(`--preprocess-brightness-${imgtype}`, element.value / 100);
+    };
+
+    const updateMicContrast = (element, imgtype) => {
+        document.querySelector(":root").style.setProperty(`--preprocess-contrast-${imgtype}`, element.value / 100);
+    };
+
+    const updateMicScale = (element) => {
+        for (const container of document.getElementsByClassName("miccontainer")) {
+            container.style.width = element.value + "px";
+        }
+        if (typeof drawMicBoxOverlays === "function") drawMicBoxOverlays();
+    };
+
+    window.addEventListener("load", () => {
+        const root = document.querySelector(":root");
+        root.style.setProperty("--preprocess-contrast-mic", 1.0);
+        root.style.setProperty("--preprocess-brightness-mic", 1.0);
+        root.style.setProperty("--preprocess-contrast-pspec", 1.0);
+        root.style.setProperty("--preprocess-brightness-pspec", 1.0);
+    });
+</script>

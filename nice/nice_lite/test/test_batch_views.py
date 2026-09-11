@@ -75,10 +75,9 @@ class BatchViewTests(SimpleTestCase):
             status="finished",
             cdat="created",
             args={"nthr": "4"},
+            pckg="simple",
+            prog="import_movies",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "import_movies",
             },
             dset=workspace,
             dset_id=workspace.id,
@@ -156,13 +155,10 @@ class BatchViewTests(SimpleTestCase):
     def test_argument_rows_fall_back_to_saved_keys(self):
         launcher = Mock()
         launcher.get_ui.return_value = None
-        jobmodel = SimpleNamespace(args={"nthr": "4"})
+        jobmodel = SimpleNamespace(args={"nthr": "4"}, pckg="simple", prog="import_movies")
 
         with patch.object(batch_views, "SIMPLEBatch", return_value=launcher):
-            arguments = batch_views._argument_rows(
-                jobmodel,
-                {"package": "simple", "program": "import_movies"},
-            )
+            arguments = batch_views._argument_rows(jobmodel)
 
         self.assertEqual(arguments, [{
             "key": "nthr",
@@ -311,7 +307,8 @@ class BatchViewTests(SimpleTestCase):
             status="finished",
             cdat="created",
             args={"mskdiam": "190"},
-            master_stats={"package": "simple", "program": "abinitio2D"},
+            pckg="simple",
+            prog="abinitio2D",
             dset=workspace,
         )
         batch_job = Mock()
@@ -440,10 +437,9 @@ class BatchViewTests(SimpleTestCase):
             status="finished",
             cdat="created",
             args={},
+            pckg="simple",
+            prog="abinitio3D",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "abinitio3D",
             },
             dset=SimpleNamespace(
                 name="workspace",
@@ -500,7 +496,7 @@ class BatchViewTests(SimpleTestCase):
 
         jobmodel = SimpleNamespace(
             status="finished",
-            master_stats={"program": "abinitio3D"},
+            prog="abinitio3D",
         )
         batch_job = Mock()
         batch_job.get_volume_outputs.return_value = [{
@@ -533,7 +529,7 @@ class BatchViewTests(SimpleTestCase):
     def test_batch_volume_data_rejects_an_undeclared_filename(self):
         jobmodel = SimpleNamespace(
             status="finished",
-            master_stats={"program": "abinitio3D"},
+            prog="abinitio3D",
         )
         batch_job = Mock()
         batch_job.get_volume_outputs.return_value = [{
@@ -607,7 +603,8 @@ class BatchViewTests(SimpleTestCase):
             disp=4,
             name="Create 2D Class Averages",
             status="finished",
-            master_stats={"package": "simple", "program": "abinitio2D"},
+            pckg="simple",
+            prog="abinitio2D",
             dset=SimpleNamespace(proj=project, proj_id=project.id),
             dset_id=9,
         )
@@ -665,7 +662,8 @@ class BatchViewTests(SimpleTestCase):
         jobmodel = SimpleNamespace(
             id=7,
             status="finished",
-            master_stats={"package": "simple", "program": "abinitio2D"},
+            pckg="simple",
+            prog="abinitio2D",
             dset=SimpleNamespace(proj=SimpleNamespace(dirc="/project")),
         )
         batch_job = Mock()
@@ -715,7 +713,8 @@ class BatchViewTests(SimpleTestCase):
             status="finished",
             cdat="created",
             args={},
-            master_stats={"package": "unknown", "program": "extract"},
+            pckg="unknown",
+            prog="extract",
             dset=workspace,
         )
         particle_stack_page = {
@@ -754,7 +753,8 @@ class BatchViewTests(SimpleTestCase):
             status="finished",
             cdat="created",
             args={},
-            master_stats={"package": "simple", "program": "reproject"},
+            pckg="simple",
+            prog="reproject",
             dset=workspace,
         )
         stack_page = {
@@ -883,10 +883,9 @@ class BatchViewTests(SimpleTestCase):
             status="running",
             cdat="created",
             args={},
+            pckg="unknown",
+            prog="ctf_estimate",
             master_stats={
-                "job_type": "batch",
-                "package": "unknown",
-                "program": "ctf_estimate",
             },
             dset=SimpleNamespace(
                 name="workspace",
@@ -925,10 +924,9 @@ class BatchViewTests(SimpleTestCase):
             status="finished",
             cdat="created",
             args={},
+            pckg="unknown",
+            prog="pick",
             master_stats={
-                "job_type": "batch",
-                "package": "unknown",
-                "program": "pick",
             },
             dset=SimpleNamespace(
                 name="workspace",
@@ -1027,14 +1025,13 @@ class BatchViewTests(SimpleTestCase):
     def test_rerun_opens_job_builder_for_owned_terminal_batch_job(self):
         job = Mock()
         metadata = {
-            "job_type": "batch",
-            "package": "simple",
-            "program": "cluster2D",
             "source": {"type": "project_file", "filename": "input.simple"},
         }
         jobmodel = SimpleNamespace(
             id=7,
             status="finished",
+            pckg="simple",
+            prog="cluster2D",
             master_stats=metadata,
             dset_id=3,
         )
@@ -1061,10 +1058,9 @@ class BatchViewTests(SimpleTestCase):
                 job = Mock()
                 jobmodel = SimpleNamespace(
                     status=status,
+                    pckg=package,
+                    prog="demo",
                     master_stats={
-                        "job_type": "batch",
-                        "package": package,
-                        "program": "demo",
                     },
                 )
                 with (

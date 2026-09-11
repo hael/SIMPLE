@@ -34,7 +34,7 @@
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/includes/_panel_header.html' with panel_title="initial analysis" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
+        {% include 'includes/_panel_header.html' with panel_title="initial analysis" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
 
         <!-- Waiting gauze: shown until particles arrive (below header) -->
         {% if "final_cls2D" not in jobstats and "latest_cls2D" not in jobstats %}

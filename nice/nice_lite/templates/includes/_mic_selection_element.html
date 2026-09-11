@@ -1,0 +1,53 @@
+{% load static timestamps %}
+{% comment %}
+  _mic_selection_element.html — one micrograph tile.
+  Expects `micrograph` ({dfx, dfy, ctfres, path}), `jobstats` (for
+  xdim_mic/ydim_mic dimensions), and optional `selectable` (bool). When
+  selectable, starts selected; click toggles selection (see toggleMic in
+  _mic_viewer.html) and a checkmark/highlight border is shown. Right-click on
+  the micrograph half or the power-spectrum half opens that half's own
+  contrast/brightness menu; sort/select/scale controls are shared and appear
+  in both menus.
+  When `micrograph.boxes` is present (picking panels), a canvas overlay is
+  drawn on the micrograph half from micrograph.xdim/ydim; see
+  drawMicBoxOverlays in _mic_viewer.html. Optional `hide_pspec` (bool): omits
+  the power-spectrum half entirely and widens the micrograph half to fill
+  the tile.
+{% endcomment %}
+<div class="flex flex-col snap-start mictile rounded bg-streambg m-[5px] p-[5px] border-[1px] {% if selectable %}border-streamring bg-streamring/10{% else %}border-streamline{% endif %}">
+    <div class="flex justify-between mx-2">
+        {% if micrograph.dfx and micrograph.dfy %}
+           {% if micrograph.dfx > 0 and micrograph.dfy > 0 %}
+            <span class="text-[10px] font-medium text-streamlabel"><b>average defocus:</b> {{ micrograph.dfx|mean_with:micrograph.dfy|floatformat:1 }}μm</span>
+           {% endif %}
+        {% endif %}
+        {% if micrograph.ctfres %}
+           {% if micrograph.ctfres > 0 %}
+            <span class="text-[10px] font-medium text-streamlabel"><b>CTF resolution:</b> {{ micrograph.ctfres|floatformat:1 }}Å</span>
+           {% endif %}
+        {% endif %}
+    </div>
+    <div class="{% if selectable %}mic {% endif %}miccontainer relative flex p-[5px]" style="width:600px;" {% if selectable %}onclick="toggleMic(this)"{% endif %} data-idx="{{ micrograph.i }}" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} data-defocus={{ micrograph.dfx|mean_with:micrograph.dfy|floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
+        {% comment %} micrograph.path points to a sprite of 2 equal-width images (intg, pspec) side by side; each half is cropped into its own img via a clipping wrapper. {% endcomment %}
+        <div class="micimg-mic overflow-hidden rounded relative {% if hide_pspec %}w-full{% else %}w-1/2 mr-1{% endif %}" oncontextmenu="showMicMenu(this, event, 'mic')">
+            <img style="filter:contrast(var(--preprocess-contrast-mic)) brightness(var(--preprocess-brightness-mic)); width:200%; max-width:200%; margin-left:-100%;" src={% url 'nice_lite:image' micrograph.path %} class="h-auto" loading="lazy">
+            {% if micrograph.boxes %}
+                <canvas class="boxes-overlay absolute inset-0 pointer-events-none z-10" data-xdim="{{ micrograph.xdim }}" data-ydim="{{ micrograph.ydim }}" data-boxes='{{ micrograph.boxes }}'></canvas>
+            {% endif %}
+            {% if jobstats.xdim_mic and jobstats.ydim_mic %}
+                <span class="absolute rounded-md bg-neutral-900 px-2 py-1 text-[9px] leading-none text-white" style="left:0.25rem;bottom:0.25rem;z-index:20">{{ jobstats.xdim_mic }} × {{ jobstats.ydim_mic }} px</span>
+            {% endif %}
+          </div>
+        {% if not hide_pspec %}
+        <div class="micimg-pspec overflow-hidden rounded w-1/2 relative" oncontextmenu="showMicMenu(this, event, 'pspec')">
+            <img style="filter:contrast(var(--preprocess-contrast-pspec)) brightness(var(--preprocess-brightness-pspec)); width:200%; max-width:200%;" src={% url 'nice_lite:image' micrograph.path %} class="h-auto" loading="lazy">
+            {% if jobstats.pspec_size %}
+                <span class="absolute rounded-md bg-neutral-900 px-2 py-1 text-[9px] leading-none text-white" style="left:0.25rem;bottom:0.25rem;z-index:20">{{ jobstats.pspec_size }} px</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if selectable %}
+            <span class="miccheck absolute flex h-5 w-5 items-center justify-center rounded-full bg-streamring text-[11px] font-bold text-white" style="right:0.375rem;top:0.375rem">✓</span>
+        {% endif %}
+    </div>
+</div>

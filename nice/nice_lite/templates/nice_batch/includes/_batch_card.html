@@ -10,7 +10,7 @@
     onclick="this.querySelector('form.viewform').submit();">
 
     <!-- Header: status dot · stream name · open-detail button -->
-    {% include 'includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id active_persistent_workers=job.master_stats.master.active_persistent_workers %}
+    {% include 'includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" "|add:job.pckg|add:" "|add:job.prog status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id active_persistent_workers=job.master_stats.master.active_persistent_workers %}
 
     <!-- Body -->
     <div class="px-3 py-2 flex-1 flex flex-col relative">
@@ -30,65 +30,6 @@
                     <p class="text-[10px] text-streamerror font-medium">{{ job.status }}</p>
                 </div>
             </div>
-
-        {% else %}
-
-            <!-- Count tiles -->
-            <div class="grid grid-cols-2 gap-2">
-                {% if ms.movies_imported > 0 %}
-                    {% if ms.movies_processed == ms.movies_imported %} 
-                        {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" %}
-                    {% else %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" variant="action" %}
-                    {% endif %}
-                {% endif %}
-                {% if cs.particles_imported > 0 %}
-                    {% if cs.particles_accepted == cs.particles_imported %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" %}
-                    {% else %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" variant="action" %}
-                    {% endif %}
-                {% endif %}
-            </div>
-
-            <!-- Thumbnail: 2D class grid or latest micrograph -->
-            {% if "latest_cls2D" in cs and cs.latest_cls2D|length > 0 %}
-                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest 2D classes</div>
-                <div class="grid grid-cols-3 gap-0.5 w-[180px] h-[180px] m-auto">
-                    {% for cls2D in cs.latest_cls2D %}
-                        {% if forloop.counter <= 9 %}
-                            <div class="aspect-square overflow-hidden bg-black rounded-sm">
-                                <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}"
-                                     style="background:url({% url 'nice_lite:image' cls2D.path %});background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%;background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
-                                     class="cls2D w-full h-full">
-                                </div>
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-            {% elif "latest_cls2D" in ss and ss.latest_cls2D|length > 0 %}
-                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest 2D classes</div>
-                <div class="grid grid-cols-3 gap-0.5 w-[180px] h-[180px] m-auto">
-                    {% for cls2D in ss.latest_cls2D %}
-                        {% if forloop.counter <= 9 %}
-                            <div class="aspect-square overflow-hidden bg-black rounded-sm">
-                                <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}"
-                                     style="background:url({% url 'nice_lite:image' cls2D.path %});background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%;background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
-                                     class="cls2D w-full h-full">
-                                </div>
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>    
-            {% elif "latest_micrographs" in ms and ms.latest_micrographs|length > 0 %}
-                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest micrograph</div>
-                <!-- Show right half of the double-width composite image -->
-                <div class="rounded-md overflow-hidden aspect-square bg-black relative w-[180px] h-[180px] m-auto">
-                    <img src="{% url 'nice_lite:image' ms.latest_micrographs.0.path %}"
-                         loading="lazy" alt="latest micrograph"
-                         class="absolute h-full object-cover" style="width:200%;right:0;top:0;object-fit:cover;object-position:100%;">
-                </div>
-            {% endif %}
 
         {% endif %}
 
@@ -151,6 +92,6 @@
     </div>
 
     <!-- Footer: view · restart · clone · delete/terminate -->
-    {% include 'includes/_job_card_footer.html' with card_type='stream' %}
+    {% include 'includes/_job_card_footer.html' with card_type='batch' %}
 </div>
 {% endwith %}

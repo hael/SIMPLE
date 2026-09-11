@@ -3,6 +3,7 @@ module simple_commanders_preprocess
 use simple_commanders_api
 use simple_motion_correct_utils, only: flip_gain
 use simple_mini_stream_utils,    only: segdiampick_preprocess
+use simple_gui_communicator,     only: gui_communicator
 implicit none
 #include "simple_local_flags.inc"
 
@@ -59,15 +60,19 @@ contains
         use simple_parameters,              only: parameters
         class(commander_motion_correct), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        class(motion_correct_strategy), allocatable :: strategy
-        type(parameters) :: params
+        class(motion_correct_strategy), allocatable    :: strategy
+        type(parameters)                               :: params
+        type(gui_communicator)                         :: gui_comm
         ! Helps distributed job script generation if it relies on 'prg'
         call cline%set('prg', 'motion_correct')
         strategy = create_motion_correct_strategy(cline)
         call strategy%initialize(params, cline)
+        call gui_comm%new(params)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
+        call gui_comm%add_metadata(params%projfile)
+        call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_motion_correct
@@ -103,15 +108,19 @@ contains
         use simple_parameters,           only: parameters
         class(commander_ctf_estimate), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        class(ctf_estimate_strategy), allocatable :: strategy
-        type(parameters) :: params
+        class(ctf_estimate_strategy),  allocatable   :: strategy
+        type(parameters)                             :: params
+        type(gui_communicator)                       :: gui_comm
         ! Helps distributed job script generation if it relies on 'prg'
         call cline%set('prg', 'ctf_estimate')
         strategy = create_ctf_estimate_strategy(cline)
         call strategy%initialize(params, cline)
+        call gui_comm%new(params)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
+        call gui_comm%add_metadata(params%projfile)
+        call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_ctf_estimate

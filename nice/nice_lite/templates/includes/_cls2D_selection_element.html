@@ -1,0 +1,22 @@
+{% load humanize %}
+{% comment %}
+  _cls2D_selection_element.html — one selectable 2D class-average tile.
+  Expects `cls2D` in context (from the enclosing for-loop): pop, res, idx, mrcpath,
+  path, spritew, spriteh, spritex, spritey.
+  Optional `mask` (bool): draws the mask-diameter overlay canvas, sized from
+  jobstats.mskscale/jobstats.mskdiam.
+{% endcomment %}
+<div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å">
+    <div class="flex justify-between mb-1.5">
+        <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
+        <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
+    </div>
+    <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto disabledbutton">
+        <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg relative bg-black h-[100px] w-[100px]">
+            {% if mask %}
+                <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mskdiam }}"></canvas>
+            {% endif %}
+            <span aria-hidden="true" class="clscheck hidden absolute flex h-5 w-5 items-center justify-center rounded-full bg-streamring text-[11px] font-bold text-white" style="right:0.375rem;top:0.375rem">✓</span>
+        </div>
+    </div>
+</div>

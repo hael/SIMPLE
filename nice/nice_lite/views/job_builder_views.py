@@ -323,8 +323,7 @@ def _validate_batch_program_args(program, args):
 
 def _is_batch_job(jobmodel):
     """Return True when a shared JobModel record represents a batch job."""
-    metadata = getattr(jobmodel, "master_stats", None)
-    return isinstance(metadata, dict) and metadata.get("job_type") == "batch"
+    return getattr(jobmodel, "pckg", None) in ("simple", "single")
 
 
 def _resolve_class_selection_prefill(jobmodel):
@@ -369,17 +368,12 @@ def _resolve_class_selection_source(workspace_obj, source_id, username):
         id=source_id,
         dset_id=workspace_obj.get_id(),
     ).first()
-    metadata = (
-        jobmodel.master_stats
-        if jobmodel is not None and isinstance(jobmodel.master_stats, dict)
-        else {}
-    )
     if (
         not _is_job_accessible(jobmodel, username)
         or not _is_batch_job(jobmodel)
         or jobmodel.status != "finished"
-        or metadata.get("package") != "simple"
-        or metadata.get("program") != "abinitio2D"
+        or jobmodel.pckg != "simple"
+        or jobmodel.prog != "abinitio2D"
     ):
         return None, None, "invalid 2D class selection source"
 
@@ -408,8 +402,7 @@ def _batch_job_source(jobmodel, workspace_dir):
     if not os.path.isfile(project_path):
         return None
 
-    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
-    job_name = (jobmodel.name or "").strip() or metadata.get("program") or jobmodel.dirc
+    job_name = (jobmodel.name or "").strip() or jobmodel.prog or jobmodel.dirc
     return {
         "key": f"{_BATCH_JOB_SOURCE_PREFIX}:{jobmodel.id}",
         "label": f"job {jobmodel.disp} - {job_name}",
@@ -641,16 +634,16 @@ def _resolve_batch_project_file(workspace_obj, project_file):
     )
 
 
-def resolve_recorded_batch_project(workspace_obj, metadata):
+def resolve_recorded_batch_project(workspace_obj, prog, metadata, parent=0):
     """Resolve persisted batch input provenance for a safe rerun form."""
     if not isinstance(metadata, dict):
         return None, None, "batch job metadata is unavailable"
-    if metadata.get("program") == "new_project":
+    if prog == "new_project":
         return None, None, None
 
     source = metadata.get("source")
     if source is None:
-        parent_id = metadata.get("parent")
+        parent_id = parent
         if (
             isinstance(parent_id, int)
             and not isinstance(parent_id, bool)
@@ -744,12 +737,11 @@ def view_job_builder(request):
             # Drop stale invalid selection state to avoid repeated access errors.
             clear_selected_job_cookie = True
         elif _is_batch_job(streamjobmodel):
-            metadata = streamjobmodel.master_stats
             if class_selection_prefill_requested:
                 if (
                     streamjobmodel.status != "finished"
-                    or metadata.get("package") != "simple"
-                    or metadata.get("program") != "abinitio2D"
+                    or streamjobmodel.pckg != "simple"
+                    or streamjobmodel.prog != "abinitio2D"
                 ):
                     messages.add_message(
                         request,
@@ -762,9 +754,8 @@ def view_job_builder(request):
             else:
                 if (
                     streamjobmodel.status not in BatchJob.RERUNNABLE_STATUSES
-                    or metadata.get("package") not in ("simple", "single")
-                    or not isinstance(metadata.get("program"), str)
-                    or not metadata["program"]
+                    or streamjobmodel.pckg not in ("simple", "single")
+                    or not streamjobmodel.prog
                     or not isinstance(streamjobmodel.args, dict)
                 ):
                     messages.add_message(
@@ -859,8 +850,8 @@ def view_job_builder(request):
                 context["batch_prefill"] = batch_prefill
     elif selected_batch_jobmodel is not None:
         metadata = selected_batch_jobmodel.master_stats
-        package = metadata["package"]
-        program = metadata["program"]
+        package = selected_batch_jobmodel.pckg
+        program = selected_batch_jobmodel.prog
         if workspace_obj is None or selected_batch_jobmodel.dset_id != workspace_id:
             messages.add_message(
                 request,
@@ -878,7 +869,9 @@ def view_job_builder(request):
         else:
             parent_proj, _source, error = resolve_recorded_batch_project(
                 workspace_obj,
+                program,
                 metadata,
+                selected_batch_jobmodel.parent,
             )
             if error is not None:
                 logger.error("job_builder_rerun: %s", error)
@@ -960,19 +953,13 @@ def view_create_batch(request):
                 id=rerun_of,
                 dset_id=workspace_id,
             ).first()
-        rerun_metadata = (
-            rerun_jobmodel.master_stats
-            if rerun_jobmodel is not None
-            and isinstance(rerun_jobmodel.master_stats, dict)
-            else {}
-        )
         if (
             rerun_jobmodel is None
             or not _is_job_accessible(rerun_jobmodel, request.user.username)
             or not _is_batch_job(rerun_jobmodel)
             or rerun_jobmodel.status not in BatchJob.RERUNNABLE_STATUSES
-            or rerun_metadata.get("package") != package
-            or rerun_metadata.get("program") != program
+            or rerun_jobmodel.pckg != package
+            or rerun_jobmodel.prog != program
         ):
             logger.error("create_batch: invalid rerun source %s", rerun_of)
             messages.add_message(request, messages.ERROR, "invalid batch rerun selection")

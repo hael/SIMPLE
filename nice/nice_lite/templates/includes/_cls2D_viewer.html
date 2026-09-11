@@ -1,0 +1,231 @@
+{% comment %}
+  _cls2D_viewer.html — titled panel of selectable 2D class-average
+  tiles plus the shared selection context menu.
+  Expects `jobstats.latest_cls2D` in context (list of cls2D entries), and
+  page-level globals `lastinteraction`, `getNumber`, `updateSelectionBorder`,
+  `updateCounts` (declared in the including page's own script).
+  Params: panel_title (str); mask (bool, optional) forwarded to
+  _cls2D_selection_element.html to draw the mask-diameter overlay.
+  Owns the JS for tile toggling and the selection context menu (contrast/
+  brightness/scale, sort, select-above/below); only one panel instance is
+  ever rendered per page.
+{% endcomment %}
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+    {% if "cls2D" in jobstats %}
+        <label for="cls2d-stage-select" class="text-[10px] text-streamlabel px-2">stage</label>
+        <select id="cls2d-stage-select" class="text-[10px] text-streamlabel" onchange="selectClsStage(this)">
+            {% for key in jobstats.cls2D.keys %}
+                <option value="{{ key }}"{% if forloop.last %} selected{% endif %}>{{ key }}</option>
+            {% endfor %}
+        </select>
+    {% endif %} 
+</div>
+<div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
+    <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
+        <div id="accepted_cls2D_slider" class="flex flex-wrap">
+            {% if "latest_cls2D" in jobstats %}
+                {% for cls2D in jobstats.latest_cls2D %}
+                    {% include 'includes/_cls2D_selection_element.html' with mask=mask %}
+                {% endfor %}
+            {% elif "cls2D" in jobstats %}
+                {% for stage_key, stage_classes in jobstats.cls2D.items %}
+                    <div class="cls2dstagegroup flex flex-wrap w-full{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage_key }}">
+                        {% for cls2D in stage_classes %}
+                            {% include 'includes/_cls2D_selection_element.html' with mask=mask %}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% include 'includes/_cls2D_selection_controls.html' %}
+    </div>
+</div>
+<div class="flex items-center justify-end mt-3 p-2 border-t border-streamline">
+  {% include 'includes/_cls2D_selection_report.html' %}
+</div>
+<script>
+    let currentMenuContainer = null;
+
+    const getNumber = (el, key) => {
+        if (!el) return 0;
+        if (el.dataset && el.dataset[key] !== undefined) return Number(el.dataset[key]);
+        if (el.workspace && el.workspace[key] !== undefined) return Number(el.workspace[key]);
+        return 0;
+    };
+
+    const getActiveClsScope = () => {
+        const slider = document.getElementById("accepted_cls2D_slider");
+        if (!slider) return null;
+        return slider.querySelector(".cls2dstagegroup:not(.hidden)") || slider;
+    };
+
+    const updateSelectionBorder = (cls2D) => {
+        const container = cls2D.closest(".cls2dcontainer");
+        if (!container) return;
+        const clscheck = cls2D.querySelector(".clscheck");
+        if (cls2D.classList.contains("disabledbutton")) {
+            container.classList.remove("border-streamring", "bg-streamring/10");
+            container.classList.add("border-streamline", "bg-streambg");
+            if (clscheck) clscheck.classList.add("hidden");
+        } else {
+            container.classList.remove("border-streamline", "bg-streambg");
+            container.classList.add("border-streamring", "bg-streamring/10");
+            if (clscheck) clscheck.classList.remove("hidden");
+        }
+    };
+
+    const selectClsStage = (select) => {
+        const slider = document.getElementById("accepted_cls2D_slider");
+        if (!slider) return;
+        for (const group of slider.querySelectorAll(".cls2dstagegroup")) {
+            group.classList.toggle("hidden", group.dataset.stage !== select.value);
+        }
+        updateCounts();
+    };
+
+    const toggleCls = (element) => {
+        element.classList.toggle("disabledbutton");
+        const mskcanvas = element.querySelector(".mskcanvas");
+
+        if (element.classList.contains("disabledbutton")) {
+            if (mskcanvas) mskcanvas.classList.add("hidden");
+        } else {
+            if (mskcanvas) mskcanvas.classList.remove("hidden");
+        }
+        updateSelectionBorder(element);
+
+        lastinteraction = Date.now();
+        updateCounts();
+    };
+
+    const showMenu = (element, event) => {
+        event.preventDefault();
+        currentMenuContainer = element.closest("#accepted_cls2D_slider");
+        const selectmenu = document.querySelector("[name='selectmenu']");
+        if (!selectmenu) return;
+        const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+        const sortpop = selectmenu.querySelector("#sortpop");
+        const sortres = selectmenu.querySelector("#sortres");
+        const selectabove = selectmenu.querySelector("#selectabove");
+        const selectbelow = selectmenu.querySelector("#selectbelow");
+
+        selectmenubox.style.top = event.clientY + "px";
+        selectmenubox.style.left = event.clientX + "px";
+        selectmenu.style.display = "flex";
+        if (sortpop) sortpop.onclick = sortPop;
+        if (sortres) sortres.onclick = sortRes;
+        if (selectabove) selectabove.onclick = () => selectAbove(element);
+        if (selectbelow) selectbelow.onclick = () => selectBelow(element);
+        lastinteraction = Date.now();
+    };
+
+    const hideMenu = (element) => {
+        for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+            const sortpop = selectmenu.querySelector("#sortpop");
+            const sortres = selectmenu.querySelector("#sortres");
+            const selectabove = selectmenu.querySelector("#selectabove");
+            const selectbelow = selectmenu.querySelector("#selectbelow");
+            selectmenu.style.display = "none";
+            if (sortpop) sortpop.onclick = null;
+            if (sortres) sortres.onclick = null;
+            if (selectabove) selectabove.onclick = null;
+            if (selectbelow) selectbelow.onclick = null;
+        }
+        lastinteraction = Date.now();
+    };
+
+    const sortPop = () => {
+        if (!currentMenuContainer) return;
+        const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+        templates.sort((a, b) => getNumber(b, "pop") - getNumber(a, "pop"));
+        templates.forEach((item) => currentMenuContainer.appendChild(item));
+        hideMenu();
+    };
+
+    const sortRes = () => {
+        if (!currentMenuContainer) return;
+        const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+        templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
+        templates.forEach((item) => currentMenuContainer.appendChild(item));
+        hideMenu();
+    };
+
+    const selectAbove = (element) => {
+        let threshold = true;
+        for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+            const mskcanvas = clscontainer.querySelector(".mskcanvas");
+            if (threshold) {
+                clscontainer.classList.remove("disabledbutton");
+            } else {
+                clscontainer.classList.add("disabledbutton");
+            }
+
+            if (clscontainer.classList.contains("disabledbutton")) {
+                if (mskcanvas) mskcanvas.classList.add("hidden");
+            } else {
+                if (mskcanvas) mskcanvas.classList.remove("hidden");
+            }
+            updateSelectionBorder(clscontainer);
+
+            if (clscontainer === element) {
+                threshold = false;
+            }
+        }
+        updateCounts();
+        hideMenu();
+    };
+
+    const selectBelow = (element) => {
+        let threshold = false;
+        for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+            const mskcanvas = clscontainer.querySelector(".mskcanvas");
+            if (clscontainer === element) {
+                threshold = true;
+            }
+
+            if (threshold) {
+                clscontainer.classList.remove("disabledbutton");
+            } else {
+                clscontainer.classList.add("disabledbutton");
+            }
+
+            if (clscontainer.classList.contains("disabledbutton")) {
+                if (mskcanvas) mskcanvas.classList.add("hidden");
+            } else {
+                if (mskcanvas) mskcanvas.classList.remove("hidden");
+            }
+            updateSelectionBorder(clscontainer);
+        }
+        updateCounts();
+        hideMenu();
+    };
+
+    const updateBrightness = (element) => {
+        document.querySelector(":root").style.setProperty("--classification2D-brightness", element.value / 100);
+    };
+
+    const updateContrast = (element) => {
+        document.querySelector(":root").style.setProperty("--classification2D-contrast", element.value / 100);
+    };
+
+    const updateScale = (element) => {
+        const scale = element.value;
+        for (const cls2D of document.querySelectorAll(".cls2D")) {
+            cls2D.style.width = scale + "px";
+            cls2D.style.height = scale + "px";
+        }
+        for (const cls2Dimg of document.querySelectorAll(".cls2Dimg")) {
+            cls2Dimg.style.width = scale + "px";
+            cls2Dimg.style.height = scale + "px";
+        }
+        for (const mskcanvas of document.querySelectorAll(".mskcanvas")) {
+            mskcanvas.style.width = scale + "px";
+            mskcanvas.style.height = scale + "px";
+        }
+    };
+
+    window.addEventListener("load", () => {
+        updateCounts();
+    });
+</script>

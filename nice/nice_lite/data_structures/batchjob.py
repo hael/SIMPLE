@@ -97,7 +97,7 @@ class BatchJob(Job):
         """Populate fields from DB. Resets to empty state if not found."""
         self.jobmodel = JobModel.objects.filter(id=self.id).first()
         metadata = self.jobmodel.master_stats if self.jobmodel is not None else None
-        if not isinstance(metadata, dict) or metadata.get("job_type") != "batch":
+        if not isinstance(metadata, dict) or self.jobmodel.pckg not in ("simple", "single"):
             self.jobmodel = None
             self.id = 0
             self.absdir = None
@@ -110,9 +110,9 @@ class BatchJob(Job):
         self.args = self.jobmodel.args
         self.wspc = self.jobmodel.dset
         self.disp = self.jobmodel.disp
-        self.prog = metadata.get("program", "")
-        self.pckg = metadata.get("package", "")
-        self.prnt = metadata.get("parent", 0)
+        self.prog = self.jobmodel.prog
+        self.pckg = self.jobmodel.pckg
+        self.prnt = self.jobmodel.parent
         self.status = self.jobmodel.status
         self.source = metadata.get("source")
         self.absdir = self.get_absdir()
@@ -301,12 +301,10 @@ class BatchJob(Job):
             id=source_job_id,
             dset_id=self.jobmodel.dset_id,
         ).first()
-        source_metadata = source_model.master_stats if source_model is not None else None
         if (
             source_model is None
             or source_model.disp >= self.jobmodel.disp
-            or not isinstance(source_metadata, dict)
-            or source_metadata.get("job_type") != "batch"
+            or source_model.pckg not in ("simple", "single")
         ):
             return None
         return BatchJob(id=source_job_id)
@@ -1042,13 +1040,8 @@ class BatchJob(Job):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _metadata(pckg, prog, parent=0, source=None, rerun_of=None):
-        metadata = {
-            "job_type": "batch",
-            "package": pckg,
-            "program": prog,
-            "parent": parent,
-        }
+    def _metadata(source=None, rerun_of=None):
+        metadata = {}
         if isinstance(source, dict):
             metadata["source"] = dict(source)
         if isinstance(rerun_of, int) and not isinstance(rerun_of, bool) and rerun_of > 0:
@@ -1122,11 +1115,11 @@ class BatchJob(Job):
                 name=self.name,
                 desc=self.desc,
                 dirc=self.dirc,
+                pckg=pckg,
+                prog=prog,
                 status="queued",
                 master_status="queued",
                 master_stats=self._metadata(
-                    pckg,
-                    prog,
                     source=source,
                     rerun_of=rerun_of,
                 ),
@@ -1186,9 +1179,11 @@ class BatchJob(Job):
             args={},
             name=self.name,
             dirc=self.dirc,
+            pckg="simple_stream",
+            prog="link_particle_set",
             status="finished",
             master_status="finished",
-            master_stats=self._metadata("simple_stream", "link_particle_set"),
+            master_stats=self._metadata(),
         )
         jobmodel.save()
         workspacemodel.jcnt = self.disp
@@ -1229,9 +1224,12 @@ class BatchJob(Job):
             name=self.name,
             args=self.args,
             dirc=self.dirc,
+            pckg=self.pckg,
+            prog=self.prog,
             status="queued",
             master_status="queued",
-            master_stats=self._metadata(self.pckg, self.prog, self.prnt),
+            parent=self.prnt,
+            master_stats=self._metadata(),
         )
         jobmodel.save()
         workspacemodel.jcnt = self.disp
@@ -1251,6 +1249,137 @@ class BatchJob(Job):
             self.prog,
             self.id,
             parent_proj=set_proj,
+        )
+
+    def createMicrographDeselection(self, project, workspace, parent_proj, deselected_indices, total_micrographs):
+        """Create and launch a mic-deselection ('selection') batch job."""
+        self.args = {}
+
+        workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
+        if workspacemodel is None:
+            logger.error("createMicrographDeselection: workspace not found")
+            return False
+
+        self.disp = workspacemodel.jcnt + 1
+        self.pckg = "simple"
+        self.prog = "selection"
+        self.name = "micrograph selection"
+        self.dirc = str(self.disp) + "_" + self.prog
+        workspace_dir = os.path.join(project.dirc, workspacemodel.dirc)
+        if not self._create_dir(workspace_dir):
+            return False
+
+        job_dir = os.path.join(workspace_dir, self.dirc)
+        desel_filename = "mic_deselection.txt"
+        deselected_ids = sorted({
+            index for index in deselected_indices
+            if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < total_micrographs
+        })
+        try:
+            with open(os.path.join(job_dir, desel_filename), "w") as deselfile:
+                # deselfile indices are 1-based to match SIMPLE's oritype records.
+                deselfile.writelines(f"{index + 1}\n" for index in deselected_ids)
+        except OSError:
+            logger.error("createMicrographDeselection: failed to write deselection file")
+            return False
+
+        self.args["deselfile"] = desel_filename
+        self.args["oritype"] = "mic"
+
+        jobmodel = JobModel(
+            dset=workspacemodel,
+            cdat=timezone.now(),
+            disp=self.disp,
+            name=self.name,
+            args=self.args,
+            dirc=self.dirc,
+            pckg=self.pckg,
+            prog=self.prog,
+            status="queued",
+            master_status="queued",
+            master_stats=self._metadata(),
+        )
+        jobmodel.save()
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
+
+        self.id = jobmodel.id
+        self.jobmodel = jobmodel
+        self.wspc = workspacemodel
+        self.status = "queued"
+        self.absdir = self.get_absdir()
+
+        simple = SIMPLEBatch(pckg=self.pckg)
+        return simple.start(
+            self.args,
+            job_dir,
+            workspace_dir,
+            self.prog,
+            self.id,
+            parent_proj=parent_proj,
+        )
+
+    def createClassDeselection(self, project, workspace, parent_proj, deselected_ids):
+        """Create and launch a cls2D-deselection ('selection') batch job."""
+        self.args = {}
+
+        workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
+        if workspacemodel is None:
+            logger.error("createClassDeselection: workspace not found")
+            return False
+
+        self.disp = workspacemodel.jcnt + 1
+        self.pckg = "simple"
+        self.prog = "selection"
+        self.name = "classification selection"
+        self.dirc = str(self.disp) + "_" + self.prog
+        workspace_dir = os.path.join(project.dirc, workspacemodel.dirc)
+        if not self._create_dir(workspace_dir):
+            return False
+
+        job_dir = os.path.join(workspace_dir, self.dirc)
+        desel_filename = "cls2D_deselection.txt"
+        try:
+            with open(os.path.join(job_dir, desel_filename), "w") as deselfile:
+                deselfile.writelines(f"{class_id}\n" for class_id in sorted(deselected_ids))
+        except OSError:
+            logger.error("createClassDeselection: failed to write deselection file")
+            return False
+
+        self.args["deselfile"] = desel_filename
+        self.args["oritype"] = "cls2D"
+
+        jobmodel = JobModel(
+            dset=workspacemodel,
+            cdat=timezone.now(),
+            disp=self.disp,
+            name=self.name,
+            args=self.args,
+            dirc=self.dirc,
+            pckg=self.pckg,
+            prog=self.prog,
+            status="queued",
+            master_status="queued",
+            master_stats=self._metadata(),
+        )
+        jobmodel.save()
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
+
+        self.id = jobmodel.id
+        self.jobmodel = jobmodel
+        self.wspc = workspacemodel
+        self.status = "queued"
+        self.absdir = self.get_absdir()
+
+        simple = SIMPLEBatch(pckg=self.pckg)
+        return simple.start(
+            self.args,
+            job_dir,
+            workspace_dir,
+            self.prog,
+            self.id,
+            parent_proj=parent_proj,
         )
 
     # ------------------------------------------------------------------

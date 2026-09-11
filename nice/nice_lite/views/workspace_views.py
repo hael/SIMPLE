@@ -64,7 +64,7 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
 
 def _is_batch_job(jobmodel):
     """Return True for classic jobs stored in the shared JobModel table."""
-    return isinstance(jobmodel.master_stats, dict) and jobmodel.master_stats.get("job_type") == "batch"
+    return jobmodel.pckg in ("simple", "single")
 
 
 def _reconcile_local_batch_completions(jobs):

@@ -1,0 +1,197 @@
+{% comment %}
+  _cls2D_selection_report.html — selection counts, select-all/deselect-all/
+  invert-selection controls, and the running/finished footer actions (mask
+  diameter, snapshot particle set, final particle set) for the cls2D panel.
+  Expects `jobstats`, `status`, `jobid` in context.
+  Owns the JS for selection bookkeeping and the footer actions (updateCounts,
+  selectAll, deselectAll, invertSelection, selectCls, selectClsFinal); only
+  one instance is ever rendered per page.
+{% endcomment %}
+{% if "cls2D" in jobstats or "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+    <div class="flex flex-1 flex-row gap-2">
+        <div class="flex items-baseline justify-between">
+            <span class="text-[11px] text-streamlabel px-2">selected clusters</span>
+            <span id="clustercount" class="text-[11px] font-medium text-streamtext font-mono"></span>
+        </div>
+        <div class="flex items-baseline justify-between">
+            <span class="text-[11px] text-streamlabel px-2">selected particles</span>
+            <span id="particlecount" class="text-[11px] font-medium text-streamtext font-mono"></span>
+        </div>
+    </div>
+    <div class="flex flex-row gap-2">
+        <div id="selectall" onclick="selectAll()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">select all</div>
+        <div id="deselectall" onclick="deselectAll()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">deselect all</div>
+        <div id="invertselection" onclick="invertSelection()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">invert selection</div>
+    </div>
+{% endif %}
+{% if "cls2D" in jobstats %}
+    {% include 'includes/_cls2D_mask_controls.html' with batch_mode=True %}
+{% endif %}
+{% if status == "running" %}
+    {% if jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+        {% include 'includes/_cls2D_mask_controls.html' %}
+        <form method="POST" action="{% url 'nice_lite:snapshot_stream_classification_2D' %}">
+            {% csrf_token %}
+            <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+            <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
+            <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
+            <button type="button" onclick="selectCls(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">create snapshot particle set</button>
+        </form>
+    {% endif %}
+{% elif status == "finished" %}
+    <form method="POST" action={% url 'nice_lite:select_stream_classification_2D' %}>
+        {% csrf_token %}
+        <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+        <input type="hidden" id="final_deselection"     name="final_deselection"     value=""/>
+        <input type="hidden" id="final_selection_ptcls" name="final_selection_ptcls" value=""/>
+        <button class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity" type="button" onclick="selectClsFinal(this)">create final particle set</button>
+    </form>
+{% endif %}
+{% if "cls2D" in jobstats %}
+    <form id="savebatchselection" method="POST" action="{% url 'nice_lite:batch_cls2D_selection' jobid %}">
+        {% csrf_token %}
+        <input type="hidden" id="deselected_class_ids" name="deselected_class_ids" value=""/>
+        <button class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity" type="button" onclick="saveClsSelection(this)">save selection</button>
+    </form>
+{% endif %}
+<script>
+    const selectAll = () => {
+        const scope = getActiveClsScope();
+        if (!scope) return;
+        for (const clscontainer of scope.querySelectorAll(".cls2D")) {
+            const mskcanvas = clscontainer.querySelector(".mskcanvas");
+            clscontainer.classList.remove("disabledbutton");
+            if (mskcanvas) mskcanvas.classList.remove("hidden");
+            updateSelectionBorder(clscontainer);
+        }
+        updateCounts();
+    };
+
+    const deselectAll = () => {
+        const scope = getActiveClsScope();
+        if (!scope) return;
+        for (const clscontainer of scope.querySelectorAll(".cls2D")) {
+            const mskcanvas = clscontainer.querySelector(".mskcanvas");
+            clscontainer.classList.add("disabledbutton");
+            if (mskcanvas) mskcanvas.classList.add("hidden");
+            updateSelectionBorder(clscontainer);
+        }
+        updateCounts();
+    };
+
+    const invertSelection = () => {
+        const scope = getActiveClsScope();
+        if (!scope) return;
+        for (const clscontainer of scope.querySelectorAll(".cls2D")) {
+            const mskcanvas = clscontainer.querySelector(".mskcanvas");
+            clscontainer.classList.toggle("disabledbutton");
+            if (clscontainer.classList.contains("disabledbutton")) {
+                if (mskcanvas) mskcanvas.classList.add("hidden");
+            } else {
+                if (mskcanvas) mskcanvas.classList.remove("hidden");
+            }
+            updateSelectionBorder(clscontainer);
+        }
+        updateCounts();
+    };
+
+    const updateCounts = () => {
+        const clustercount = document.querySelector("#clustercount");
+        const particlecount = document.querySelector("#particlecount");
+        const finalSelectionPtcls = document.querySelector("#final_selection_ptcls");
+        const scope = getActiveClsScope();
+        const cls2dcontainers = scope ? scope.querySelectorAll(".cls2dcontainer") : [];
+
+        let ncls = 0;
+        let nptcls = 0;
+        let nptclsTot = 0;
+
+        for (const cls2dcontainer of cls2dcontainers) {
+            const deselected = cls2dcontainer.querySelector(".disabledbutton");
+            const pop = getNumber(cls2dcontainer, "pop");
+            nptclsTot += pop;
+            if (!deselected) {
+                nptcls += pop;
+                ncls += 1;
+            }
+        }
+
+        if (clustercount) clustercount.innerHTML = ncls.toLocaleString() + " / " + cls2dcontainers.length.toLocaleString();
+        if (particlecount) particlecount.innerHTML = nptcls.toLocaleString() + " / " + nptclsTot.toLocaleString();
+        if (finalSelectionPtcls) finalSelectionPtcls.value = nptcls;
+
+        const savebatchselection = document.getElementById("savebatchselection");
+        if (savebatchselection) {
+            savebatchselection.classList.toggle("hidden", !scope || scope.dataset.stage !== "final");
+        }
+    };
+
+    const selectCls = (element) => {
+        const selected = [];
+        for (const cls2D of document.getElementsByClassName("cls2D")) {
+            const idx = getNumber(cls2D, "idx");
+            if (!cls2D.classList.contains("disabledbutton")) {
+                selected.push(idx);
+            }
+        }
+
+        const selectionField = document.getElementById("snapshot_selection");
+        if (selectionField) selectionField.value = selected;
+
+        const loadinggauze = document.getElementById("loadinggauze");
+        if (loadinggauze) {
+            loadinggauze.innerHTML = "generating snapshot ...";
+            loadinggauze.classList.remove("hidden");
+            loadinggauze.style.opacity = "1";
+        }
+
+        element.form.submit();
+        setTimeout(() => {
+            const psetsIframe = window.parent?.document?.querySelector("#psets_iframe");
+            if (psetsIframe) psetsIframe.src = psetsIframe.src;
+        }, 1500);
+    };
+
+    const selectClsFinal = (element) => {
+        const deselected = [];
+        for (const cls2D of document.getElementsByClassName("cls2D")) {
+            const idx = getNumber(cls2D, "idx");
+            if (cls2D.classList.contains("disabledbutton")) {
+                deselected.push(idx);
+            }
+        }
+
+        const deselectionField = document.getElementById("final_deselection");
+        if (deselectionField) deselectionField.value = deselected;
+
+        const loadinggauze = document.getElementById("loadinggauze");
+        if (loadinggauze) {
+            loadinggauze.innerHTML = "generating final selection ...";
+            loadinggauze.classList.remove("hidden");
+            loadinggauze.style.opacity = "1";
+        }
+
+        element.form.submit();
+        setTimeout(() => {
+            const psetsIframe = window.parent?.document?.querySelector("#psets_iframe");
+            if (psetsIframe) psetsIframe.src = psetsIframe.src;
+        }, 1500);
+    };
+
+    const saveClsSelection = (element) => {
+        const scope = getActiveClsScope();
+        const deselected = [];
+        const cls2Ds = scope ? scope.querySelectorAll(".cls2D") : document.getElementsByClassName("cls2D");
+        for (const cls2D of cls2Ds) {
+            const idx = getNumber(cls2D, "idx");
+            if (cls2D.classList.contains("disabledbutton")) {
+                deselected.push(idx);
+            }
+        }
+
+        const selectionField = document.getElementById("deselected_class_ids");
+        if (selectionField) selectionField.value = JSON.stringify(deselected);
+
+        element.form.submit();
+    };
+</script>

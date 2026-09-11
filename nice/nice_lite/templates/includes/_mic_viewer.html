@@ -1,0 +1,158 @@
+{% comment %}
+  _mic_viewer.html — titled panel of micrograph tiles plus the per-half-image
+  contrast/brightness menus and shared scale/sort/select-above-below menu.
+  Expects `panel_title` (str) and either `jobstats.latest_micrographs` (stream
+  pages) or `jobstats.micrographs` (batch pages) — a list of micrograph
+  entries, each with dfx/dfy/ctfres/path — in context. Optional `selectable`
+  (bool): when true, tiles are click-selectable, select-above/select-below are
+  offered in the context menus, and the selection report (counts, select-all/
+  deselect-all/invert) is shown; used from batch pages only, not from the
+  stream zoom pages. Optional `hide_pspec` (bool): when true, tiles render
+  the micrograph half only (no power-spectrum half or its context menu).
+  Includes `_mic_selection_element.html` per tile, `_mic_selection_controls.html`
+  for the mic/pspec contrast-brightness menus (shared scale/sort/select-above-
+  below), and, when selectable, `_mic_selection_report.html` for selection
+  counts/select-all controls and the mic/pspec show/hide toggles.
+  Owns the tile toggling and sort JS (toggleMic/updateMicSelectionBorder/
+  sortMicDefocus/sortMicCtfRes/selectAboveMic/selectBelowMic) and the
+  pick-box overlay drawing (drawMicBoxOverlays), redrawn on load/resize and
+  whenever a mic image finishes loading or updateMicScale resizes tiles;
+  relies on a page-level `lastinteraction` global declared by the including
+  page's own script. Only one instance is ever rendered per page.
+{% endcomment %}
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+</div>
+<div id="mic_tile_grid" class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory mt-2">
+    {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
+        {% for micrograph in jobstats.latest_micrographs %}
+            {% include 'includes/_mic_selection_element.html' with micrograph=micrograph selectable=selectable hide_pspec=hide_pspec %}
+        {% endfor %}
+        {% include 'includes/_mic_selection_controls.html' with hide_pspec=hide_pspec %}
+    {% elif "micrographs" in jobstats and jobstats.micrographs|length > 0 %}
+        {% for micrograph in jobstats.micrographs %}
+            {% include 'includes/_mic_selection_element.html' with micrograph=micrograph selectable=selectable hide_pspec=hide_pspec %}
+        {% endfor %}
+        {% include 'includes/_mic_selection_controls.html' with hide_pspec=hide_pspec %}
+    {% endif %}
+</div>
+{% if selectable %}
+<div class="flex items-center justify-end mt-3 p-2 border-t border-streamline">
+  {% include 'includes/_mic_selection_report.html' %}
+</div>
+{% endif %}
+<script>
+    let currentMicMenuContainer = null;
+
+    const updateMicSelectionBorder = (mic) => {
+        if (!mic) return;
+        const container = mic.closest(".mictile");
+        if (!container) return;
+        const miccheck = mic.querySelector(".miccheck");
+        if (mic.classList.contains("disabledbutton")) {
+            container.classList.remove("border-streamring", "bg-streamring/10");
+            container.classList.add("border-streamline", "bg-streambg");
+            if (miccheck) miccheck.classList.add("hidden");
+        } else {
+            container.classList.remove("border-streamline", "bg-streambg");
+            container.classList.add("border-streamring", "bg-streamring/10");
+            if (miccheck) miccheck.classList.remove("hidden");
+        }
+    };
+
+    const toggleMic = (element) => {
+        element.classList.toggle("disabledbutton");
+        updateMicSelectionBorder(element);
+        lastinteraction = Date.now();
+        updateMicCounts();
+    };
+
+    const sortMicDefocus = () => {
+        if (!currentMicMenuContainer) return;
+        const tiles = Array.from(currentMicMenuContainer.querySelectorAll(".mictile"));
+        tiles.sort((a, b) => Number(b.querySelector(".mic")?.dataset.defocus) - Number(a.querySelector(".mic")?.dataset.defocus));
+        tiles.forEach((tile) => currentMicMenuContainer.appendChild(tile));
+        hideMicMenu();
+    };
+
+    const sortMicCtfRes = () => {
+        if (!currentMicMenuContainer) return;
+        const tiles = Array.from(currentMicMenuContainer.querySelectorAll(".mictile"));
+        tiles.sort((a, b) => Number(a.querySelector(".mic")?.dataset.ctfres) - Number(b.querySelector(".mic")?.dataset.ctfres));
+        tiles.forEach((tile) => currentMicMenuContainer.appendChild(tile));
+        hideMicMenu();
+    };
+
+    const selectAboveMic = (element) => {
+        let threshold = true;
+        for (const mic of element.parentElement.parentElement.querySelectorAll(".mic")) {
+            if (threshold) {
+                mic.classList.remove("disabledbutton");
+            } else {
+                mic.classList.add("disabledbutton");
+            }
+            updateMicSelectionBorder(mic);
+            if (mic === element) threshold = false;
+        }
+        updateMicCounts();
+        hideMicMenu();
+    };
+
+    const selectBelowMic = (element) => {
+        let threshold = false;
+        for (const mic of element.parentElement.parentElement.querySelectorAll(".mic")) {
+            if (mic === element) threshold = true;
+            if (threshold) {
+                mic.classList.remove("disabledbutton");
+            } else {
+                mic.classList.add("disabledbutton");
+            }
+            updateMicSelectionBorder(mic);
+        }
+        updateMicCounts();
+        hideMicMenu();
+    };
+
+    const drawMicBoxOverlays = () => {
+        for (const overlay of document.querySelectorAll(".boxes-overlay")) {
+            const container = overlay.parentElement;
+            const width = container ? container.clientWidth : 0;
+            const height = container ? container.clientHeight : 0;
+            if (!width || !height) continue;
+            overlay.width = width;
+            overlay.height = height;
+
+            const xdim = Number(overlay.dataset.xdim || 0);
+            const ydim = Number(overlay.dataset.ydim || 0);
+            if (!xdim || !ydim) continue;
+            // The rendered image pads the shorter axis equally to center the micrograph, so scale by the longer axis and offset the shorter one.
+            const scale = xdim > ydim ? width / xdim : height / ydim;
+            const xoffset = (width - (scale * xdim)) / 2;
+            const yoffset = (height - (scale * ydim)) / 2;
+
+            let boxes = [];
+            try {
+                boxes = JSON.parse((overlay.dataset.boxes || "[]").replaceAll("'", '"'));
+            } catch (error) {
+                boxes = [];
+            }
+
+            const ctx = overlay.getContext("2d");
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
+            for (const box of boxes) {
+                ctx.beginPath();
+                ctx.arc((box.x * scale) + xoffset, (box.y * scale) + yoffset, 1, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+        }
+    };
+
+    window.addEventListener("load", () => {
+        drawMicBoxOverlays();
+        for (const img of document.querySelectorAll(".micimg-mic img")) {
+            img.addEventListener("load", drawMicBoxOverlays);
+        }
+    });
+    window.addEventListener("resize", drawMicBoxOverlays);
+</script>

@@ -577,7 +577,9 @@ class TemplateIntegrationTests(SimpleTestCase):
             "name": "import movies",
             "dirc": "1_import_movies",
             "args": {},
-            "master_stats": {"package": "simple"},
+            "pckg": "simple",
+            "prog": "import_movies",
+            "master_stats": {},
             "status": "running",
         }
 
@@ -615,7 +617,9 @@ class TemplateIntegrationTests(SimpleTestCase):
             "name": "Import Movie Data",
             "dirc": "1_import_movies",
             "args": {},
-            "master_stats": {"package": "simple"},
+            "pckg": "simple",
+            "prog": "import_movies",
+            "master_stats": {},
             "status": "finished",
         }
 
@@ -627,7 +631,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertNotIn('<circle cx="8" cy="8" r="3"', rendered)
 
         job["name"] = "Create 2D Class Averages"
-        job["master_stats"]["program"] = "abinitio2D"
+        job["prog"] = "abinitio2D"
         class_average_rendered = render_to_string(
             "nice_classic/_batch_card.html",
             {"job": job},
@@ -639,7 +643,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         )
 
         job["name"] = "Initial 3D Reconstruction"
-        job["master_stats"]["program"] = "abinitio3D"
+        job["prog"] = "abinitio3D"
         volume_rendered = render_to_string(
             "nice_classic/_batch_card.html",
             {"job": job},

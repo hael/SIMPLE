@@ -1,6 +1,7 @@
 !@descr: commanders for operating on projects (spproject) and associated files, the core stuff
 module simple_commanders_project_core
 use simple_commanders_api
+use simple_gui_communicator,       only: gui_communicator
 implicit none
 #include "simple_local_flags.inc"
 
@@ -870,6 +871,7 @@ contains
     subroutine exec_selection( self, cline )
         class(commander_selection), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
+        type(gui_communicator)          :: gui_comm
         type(parameters)                :: params
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
@@ -889,6 +891,7 @@ contains
             THROW_HARD('exec_selection: only one of STATE/STATES can be provided')
         endif
         call params%new(cline, silent=.true.)
+        call gui_comm%new(params)
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
         ! read project (almost all or largest segments are updated)
@@ -1084,11 +1087,13 @@ contains
         end select        
         ! final full write
         call spproj%write(params%projfile)
+        call gui_comm%add_metadata(spproj, stage2D=0)
         if( l_writecls2d ) call spproj%cavgs2mrc()
         if( l_writestar ) then
             if( spproj%os_mic%get_noris() > 0)    call spproj%write_mics_star()
             if( spproj%os_ptcl2D%get_noris() > 0) call spproj%write_ptcl2D_star()
         endif
+        call gui_comm%kill()
         call simple_end('**** SELECTION NORMAL STOP ****')
       contains
 

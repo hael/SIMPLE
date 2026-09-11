@@ -54,9 +54,8 @@ class BatchJobLifecycleTests(TestCase):
         jobmodel = JobModel.objects.get(id=job.id)
         self.assertEqual(jobmodel.args, {"mode": "fast"})
         self.assertEqual(jobmodel.name, "Pick Particles")
-        self.assertEqual(jobmodel.master_stats["job_type"], "batch")
-        self.assertEqual(jobmodel.master_stats["package"], "single")
-        self.assertEqual(jobmodel.master_stats["program"], "pick")
+        self.assertEqual(jobmodel.pckg, "single")
+        self.assertEqual(jobmodel.prog, "pick")
         self.assertEqual(jobmodel.status, "queued")
         start.assert_called_once_with(
             {"mode": "fast"},
@@ -87,10 +86,9 @@ class BatchJobLifecycleTests(TestCase):
             args={"dir_movies": "/data/movies", "nthr": 8},
             status="finished",
             master_status="finished",
+            pckg="simple",
+            prog="import_movies",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "import_movies",
             },
         )
         source = {"type": "project_file", "filename": "workspace.simple"}
@@ -150,7 +148,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_new_project",
             args={"projname": "test"},
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "new_project"},
+            master_stats={},
+            pckg="simple",
+            prog="new_project",
         )
 
         job = BatchJob(id=jobmodel.id)
@@ -174,7 +174,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_demo",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+            master_stats={},
+            pckg="simple",
+            prog="demo",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -200,7 +202,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_motion_correct",
             status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "motion_correct"},
+            master_stats={},
+            pckg="simple",
+            prog="motion_correct",
         )
 
         job = BatchJob(id=jobmodel.id)
@@ -274,10 +278,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_abinitio3D",
             status="finished",
+            pckg="simple",
+            prog="abinitio3D",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "abinitio3D",
             },
         )
         records = [
@@ -333,10 +336,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_demo",
             status="finished",
+            pckg="simple",
+            prog="volops",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "volops",
             },
         )
 
@@ -358,7 +360,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_extract",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "extract"},
+            master_stats={},
+            pckg="simple",
+            prog="extract",
         )
         stack_counts = {"particles_a.mrcs": 3, "particles_b.mrcs": 4}
 
@@ -413,7 +417,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_extract",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "extract"},
+            master_stats={},
+            pckg="simple",
+            prog="extract",
         )
         stack_info = SimpleNamespace(width=128, height=128, count=481)
 
@@ -441,7 +447,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_extract",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "extract"},
+            master_stats={},
+            pckg="simple",
+            prog="extract",
         )
 
         with patch.object(
@@ -466,7 +474,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_reproject",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "reproject"},
+            master_stats={},
+            pckg="simple",
+            prog="reproject",
         )
         stack_info = SimpleNamespace(width=240, height=240, count=60)
 
@@ -502,7 +512,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_volops",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "volops"},
+            master_stats={},
+            pckg="simple",
+            prog="volops",
         )
 
         with (
@@ -532,10 +544,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             args={"dir_movies": self.tempdir.name},
             status="finished",
+            pckg="simple",
+            prog="import_movies",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "import_movies",
             },
         )
 
@@ -573,10 +584,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_motion_correct",
             status="finished",
+            pckg="simple",
+            prog="motion_correct",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "motion_correct",
             },
         )
 
@@ -591,10 +601,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=2,
             dirc="2_ctf_estimate",
             status="finished",
+            pckg="simple",
+            prog="ctf_estimate",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "ctf_estimate",
                 "source": {"type": "batch_job", "batch_job_id": motion_job.id},
             },
         )
@@ -645,10 +654,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="1_import_movies",
             status="finished",
+            pckg="simple",
+            prog="import_movies",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "import_movies",
             },
         )
 
@@ -662,10 +670,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=2,
             dirc="2_ctf_estimate",
             status="finished",
+            pckg="simple",
+            prog="ctf_estimate",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "ctf_estimate",
                 "source": {"type": "batch_job", "batch_job_id": source_job.id},
             },
         )
@@ -695,10 +702,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=3,
             dirc="3_pick",
             status="finished",
+            pckg="simple",
+            prog="pick",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "pick",
             },
         )
 
@@ -746,7 +752,9 @@ class BatchJobLifecycleTests(TestCase):
             disp=1,
             dirc="../outside_job",
             status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+            master_stats={},
+            pckg="simple",
+            prog="demo",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -778,7 +786,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="running",
             master_status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -799,7 +809,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="finished",
             master_status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         with patch.object(batchjob_module.os, "killpg") as killpg:
@@ -820,7 +832,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="running",
             master_status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         process = Mock()
@@ -841,7 +855,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="stopped",
             master_status="stopped",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         response = BatchJob(id=jobmodel.id).updateStats({"job_heartbeat": {}}, None, None)
@@ -859,7 +875,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="running",
             master_status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         BatchJob(id=jobmodel.id).updateStats(
@@ -880,7 +898,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="running",
             master_status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         BatchJob(id=jobmodel.id).updateStats(
@@ -901,7 +921,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="failed",
             master_status="failed",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         response = BatchJob(id=jobmodel.id).updateStats(
@@ -931,7 +953,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_new_project",
             status="queued",
             master_status="queued",
-            master_stats={"job_type": "batch", "package": "simple", "program": "new_project"},
+            master_stats={},
+            pckg="simple",
+            prog="new_project",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -959,7 +983,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="running",
             master_status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -984,7 +1010,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="queued",
             master_status="queued",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -1007,7 +1035,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="queued",
             master_status="queued",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
         job = BatchJob(id=jobmodel.id)
 
@@ -1028,7 +1058,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="running",
             master_status="running",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         deleted = BatchJob(id=jobmodel.id).delete(None, self.workspace)
@@ -1049,7 +1081,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="finished",
             master_status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
         self.workspace_model.jcnt = 1
         self.workspace_model.save(update_fields=["jcnt"])
@@ -1073,7 +1107,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="../outside",
             status="finished",
             master_status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         deleted = BatchJob(id=jobmodel.id).delete(None, self.workspace)
@@ -1170,7 +1206,9 @@ class BatchJobLifecycleTests(TestCase):
                 dirc=f"{disp}_job",
                 status="finished",
                 master_status="finished",
-                master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+                master_stats={},
+                pckg="simple",
+                prog="demo",
             )
             expected.insert(0, {
                 "key": f"job:{jobmodel.id}",
@@ -1189,7 +1227,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="3_failed",
             status="failed",
             master_status="failed",
-            master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+            master_stats={},
+            pckg="simple",
+            prog="demo",
         )
 
         sources = job_builder_views._collect_batch_job_sources(self.workspace)
@@ -1214,7 +1254,9 @@ class BatchJobLifecycleTests(TestCase):
             dirc="1_import_movies",
             status="finished",
             master_status="finished",
-            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+            master_stats={},
+            pckg="simple",
+            prog="import_movies",
         )
 
         resolved_path, metadata, error = job_builder_views._resolve_batch_project_source(
@@ -1265,9 +1307,6 @@ class BatchJobLifecycleTests(TestCase):
         with open(project_path, "w", encoding="utf-8"):
             pass
         metadata = {
-            "job_type": "batch",
-            "package": "simple",
-            "program": "cluster2D",
             "source": {
                 "type": "project_file",
                 "filename": "selected.simple",
@@ -1277,6 +1316,7 @@ class BatchJobLifecycleTests(TestCase):
         resolved_path, source, error = (
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
+                "cluster2D",
                 metadata,
             )
         )
@@ -1287,6 +1327,7 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
+                "cluster2D",
                 {**metadata, "source": {"type": "unknown"}},
             ),
             (None, None, "batch project source is invalid"),
@@ -1296,6 +1337,7 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
+                "cluster2D",
                 metadata,
             ),
             (None, None, "batch project file is unavailable"),
@@ -1305,10 +1347,8 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
+                "new_project",
                 {
-                    "job_type": "batch",
-                    "package": "simple",
-                    "program": "new_project",
                 },
             ),
             (None, None, None),

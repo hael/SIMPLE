@@ -1,6 +1,7 @@
 !@descr: for picking, extraction, and making picking references
 module simple_commanders_pick
 use simple_commanders_api
+use simple_gui_communicator,       only: gui_communicator
 implicit none
 
 public :: commander_pick
@@ -46,14 +47,18 @@ contains
         use simple_parameters,      only: parameters
         class(commander_pick), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        class(pick_strategy), allocatable :: strategy
-        type(parameters) :: params
+        class(pick_strategy), allocatable    :: strategy
+        type(parameters)                     :: params
+        type(gui_communicator)               :: gui_comm
         call cline%set('prg', 'pick')
         strategy = create_pick_strategy(cline)
         call strategy%initialize(params, cline)
+        call gui_comm%new(params)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
+        call gui_comm%add_metadata(params%projfile)
+        call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_pick
@@ -65,16 +70,20 @@ contains
         use simple_parameters,        only: parameters
         class(commander_extract), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        class(extract_strategy), allocatable :: strategy
-        type(parameters) :: params
+        class(extract_strategy), allocatable    :: strategy
+        type(parameters)                        :: params
+        type(gui_communicator)                  :: gui_comm
         ! Helps distributed job script generation if it relies on 'prg'
         call cline%set('prg', 'extract')
         strategy = create_extract_strategy(cline)
         call strategy%apply_defaults(cline)
+        call gui_comm%new(params)
         call strategy%initialize(params, cline)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
+        call gui_comm%add_metadata(params%projfile)
+        call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_extract

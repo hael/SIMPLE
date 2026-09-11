@@ -4,16 +4,14 @@
 !
 ! PURPOSE:
 !   Extends gui_metadata_base with fields identifying the SIMPLE project a
-!   GUI session is attached to.  set() reads the projinfo segment and the
-!   segment record counts of a *.simple project file to populate the project
-!   name, project file path, and micrograph/stack/particle counts, without
-!   loading the full particle/stack/micrograph segments.  The Unix timestamp
-!   at which the metadata was first assigned is also recorded.
+!   GUI session is attached to.  set() populates the project name, project
+!   file path, and micrograph/stack/particle counts from an in-memory
+!   sp_project.  The Unix timestamp at which the metadata was first assigned
+!   is also recorded.
 !
 ! TYPES:
 !   gui_metadata_project — extends gui_metadata_base
-!     set()     — read projfile and populate project name and record counts,
-!                 or populate the same fields from an in-memory sp_project
+!     set()     — populate project name and record counts from an in-memory sp_project
 !     get()     — retrieve project name, project file path, record counts,
 !                 and created timestamp; returns the l_assigned flag
 !     jsonise() — serialise all fields to a json_value tree (base override)
@@ -27,9 +25,9 @@ module simple_gui_metadata_project
   use unix,                           only: c_long, c_time
   use json_kinds
   use json_module,                    only: json_core, json_value
-  use simple_defs,                    only: LONGSTRLEN
+  use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ
   use simple_defs_fname,              only: MRC_EXT, JPG_EXT
-  use simple_fileio,                  only: swap_suffix
+  use simple_fileio,                  only: swap_suffix, file_exists
   use simple_string,                  only: string
   use simple_error,                   only: simple_exception
   use simple_string_utils,            only: int2str
@@ -38,6 +36,7 @@ module simple_gui_metadata_project
   use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE
   use simple_gui_metadata_micrograph, only: gui_metadata_micrograph
   use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D, sprite_sheet_pos
+  use simple_nrtxtfile,               only: nrtxtfile
 
   implicit none
 
@@ -61,50 +60,41 @@ module simple_gui_metadata_project
     integer                       :: nptcls   = 0  ! number of records in the ptcl2D segment
     integer                       :: ncls2D   = 0  ! number of records in the cls2D segment
     integer                       :: created  = 0  ! Unix timestamp of first assignment
+    real                          :: mskdiam   = 0. ! mask diameter (in A) used for the cls2D run
+    real                          :: mskscale  = 0. ! cavgs box size in A (box * smpd), for overlay scaling
+    integer                       :: dim_cavgs = 0  ! cavgs box size (in pixels)
+    integer                       :: xdim_mic   = 0 ! micrograph width in pixels
+    integer                       :: ydim_mic   = 0 ! micrograph height in pixels
+    real                          :: smpd_mic   = 0. ! micrograph pixel size (in A)
+    integer                       :: pspec_size = 0 ! power spectrum thumbnail size (in pixels)
     type(gui_metadata_micrograph), allocatable :: meta_micrographs(:)
     type(gui_metadata_cavg2D_stage), allocatable :: meta_cavg2D(:)
   contains
-    procedure :: set_1
-    procedure :: set_2
-    generic   :: set => set_1, set_2
+    procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override
   end type gui_metadata_project
 
 contains
 
-  ! Read projfile and populate the project name and segment record counts.
-  ! Only the projinfo segment and segment headers are read, so this is cheap
-  ! even for projects with large particle/stack/micrograph segments.
-  subroutine set_1( self, projfile )
-    class(gui_metadata_project), intent(inout) :: self
-    type(string),                intent(in)    :: projfile
-    type(sp_project)                           :: proj
-    type(string)                               :: projname
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    call proj%read_segment('projinfo', projfile)
-    call proj%read_data_info(projfile, self%nmics, self%nstks, self%nptcls)
-    call proj%projinfo%getter(1, 'projname', projname)
-    if( .not. self%l_assigned ) self%created = int(c_time(0_c_long))
-    self%l_assigned = .true.
-    self%projname   = projname%to_char()
-    self%projfile   = projfile%to_char()
-    call proj%kill()
-  end subroutine set_1
-
   ! Populate the project name and segment record counts from an already
   ! in-memory project, without touching disk.
-  subroutine set_2( self, spproj, stage2D )
-    class(gui_metadata_project), intent(inout) :: self
-    type(sp_project),            intent(inout) :: spproj
-    integer,          optional,  intent(in)    :: stage2D
-    type(string)                               :: projname, projfile, cavgsstk, cavgsjpg
-    integer                                    :: i, nmeta_micrographs, ncls_stk
-    integer                                    :: xtiles, ytiles, xtile, ytile
-    integer                                    :: nstage2D, array_idx
-    logical                                    :: l_final
-    real                                       :: smpd_cavgs
-    type(gui_metadata_cavg2D_stage), allocatable :: meta_cavg2D_tmp(:)
+  subroutine set( self, spproj, stage2D )
+    class(gui_metadata_project),     intent(inout) :: self
+    type(sp_project),                intent(inout) :: spproj
+    integer,             optional,   intent(in)    :: stage2D
+    type(gui_metadata_cavg2D_stage), allocatable   :: meta_cavg2D_tmp(:)
+    type(gui_metadata_micrograph),   allocatable   :: meta_micrographs_tmp(:)
+    type(gui_metadata_cavg2D),       allocatable   :: cavgs_tmp(:)
+    real,                            allocatable   :: boxdata(:)
+    type(nrtxtfile)                                :: boxfile
+    type(string)                                   :: projname, projfile, cavgsstk, cavgsjpg, boxpath
+    integer                                        :: i, j, x, y, nmeta_micrographs, ncls_stk, n_valid_micrographs, n_valid_cavgs
+    integer                                        :: xtiles, ytiles, xtile, ytile, nrecs, nlines
+    integer                                        :: nstage2D, array_idx, out_ind
+    logical                                        :: l_final
+    real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs
+                
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_final = present(stage2D)
     if( l_final ) l_final = stage2D == 0
@@ -125,20 +115,51 @@ contains
     self%nstks      = spproj%os_stk%get_noris()
     self%nptcls     = spproj%os_ptcl2D%get_noris()
     self%ncls2D     = spproj%os_cls2D%get_noris()
+    self%pspec_size = GUI_PSPECSZ
     ! add micrographs (max 50)
     if( allocated(self%meta_micrographs) ) deallocate(self%meta_micrographs)
     if(spproj%os_mic%isthere('thumb')) then
         nmeta_micrographs = min(50, self%nmics)
         allocate(self%meta_micrographs(nmeta_micrographs))
+        self%xdim_mic       = nint(spproj%os_mic%get(1, "xdim"))
+        self%ydim_mic       = nint(spproj%os_mic%get(1, "ydim"))
+        self%smpd_mic       = spproj%os_mic%get(1, "smpd")
+        n_valid_micrographs = 0
         do i = 1, nmeta_micrographs
-            call self%meta_micrographs(i)%new(GUI_METADATA_MICROGRAPH_TYPE)
-            call self%meta_micrographs(i)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
+            if( spproj%os_mic%get_state(i) == 0 ) cycle ! needs improvement to work with pagination
+            n_valid_micrographs = n_valid_micrographs + 1
+            call self%meta_micrographs(n_valid_micrographs)%new(GUI_METADATA_MICROGRAPH_TYPE)
+            call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
                                               dfx   =spproj%os_mic%get(i,     "dfx")    , &
                                               dfy   =spproj%os_mic%get(i,     "dfy")    , &
                                               ctfres=spproj%os_mic%get(i,      "ctfres"), &
                                               i_max =nmeta_micrographs                  , &
                                               i     =i                                    )
+            call self%meta_micrographs(n_valid_micrographs)%clear_coordinates()
+            boxpath = spproj%os_mic%get_str(i, "boxfile")
+            if( boxpath%strlen() > 0 .and. file_exists(boxpath) ) then
+                call boxfile%new(boxpath, 1)
+                nrecs  = boxfile%get_nrecs_per_line()
+                nlines = boxfile%get_ndatalines()
+                if( nrecs >= 4 ) then
+                    allocate(boxdata(nrecs))
+                    do j = 1, nlines
+                        call boxfile%readNextDataLine(boxdata)
+                        x = nint(boxdata(1) + boxdata(3)/2)
+                        y = nint(boxdata(2) + boxdata(4)/2)
+                        call self%meta_micrographs(n_valid_micrographs)%set_coordinate(j, x, y, self%xdim_mic, self%ydim_mic)
+                    enddo
+                    deallocate(boxdata)
+                endif
+                call boxfile%kill()
+            endif
         end do
+        ! trim unused (unassigned) slots left by skipped micrographs
+        if( n_valid_micrographs < nmeta_micrographs ) then
+            allocate(meta_micrographs_tmp(n_valid_micrographs))
+            meta_micrographs_tmp = self%meta_micrographs(1:n_valid_micrographs)
+            call move_alloc(meta_micrographs_tmp, self%meta_micrographs)
+        end if
     end if
     ! add 2D classes
     if( nstage2D == 1 ) then
@@ -181,16 +202,26 @@ contains
         end if
         if( allocated(self%meta_cavg2D(array_idx)%cavgs) ) deallocate(self%meta_cavg2D(array_idx)%cavgs)
         allocate(self%meta_cavg2D(array_idx)%cavgs(self%ncls2D))
-        call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_cavgs, fail=.false.)
+        box_cavgs = 0.
+        out_ind   = 0
+        call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_cavgs, fail=.false., out_ind=out_ind, box=box_cavgs)
         if( ncls_stk /= self%ncls2D ) THROW_HARD('cavgs stack ncls does not match os_cls2D record count')
-        cavgsjpg = swap_suffix(cavgsstk, JPG_EXT, MRC_EXT)
-        xtiles   = floor(sqrt(real(self%ncls2D)))
-        ytiles   = ceiling(real(self%ncls2D) / real(xtiles))
+        mskdiam_cavgs = 0.
+        if( out_ind > 0 .and. spproj%os_out%isthere(out_ind, 'mskdiam') ) mskdiam_cavgs = spproj%os_out%get(out_ind, 'mskdiam')
+        self%dim_cavgs = nint(box_cavgs)
+        self%mskdiam   = mskdiam_cavgs
+        self%mskscale  = box_cavgs * smpd_cavgs
+        cavgsjpg       = swap_suffix(cavgsstk, JPG_EXT, MRC_EXT)
+        xtiles         = floor(sqrt(real(self%ncls2D)))
+        ytiles         = ceiling(real(self%ncls2D) / real(xtiles))
+        n_valid_cavgs  = 0
         do i = 1, self%ncls2D
+            if( spproj%os_cls2D%get_state(i) == 0 ) cycle
+            n_valid_cavgs = n_valid_cavgs + 1
             xtile = mod(i-1, xtiles)
             ytile = (i-1) / xtiles
-            call self%meta_cavg2D(array_idx)%cavgs(i)%new(GUI_METADATA_CAVG2D_TYPE)
-            call self%meta_cavg2D(array_idx)%cavgs(i)%set(path    = cavgsjpg,               &
+            call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%new(GUI_METADATA_CAVG2D_TYPE)
+            call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%set(path    = cavgsjpg,               &
                                          mrcpath = cavgsstk,                           &
                                          i       = i,                                  &
                                          i_max   = self%ncls2D,                        &
@@ -203,9 +234,15 @@ contains
                                              h = 100 * ytiles,                         &
                                              w = 100 * xtiles)                         )
         end do
+        ! trim unused (unassigned) slots left by skipped classes
+        if( n_valid_cavgs < self%ncls2D ) then
+            allocate(cavgs_tmp(n_valid_cavgs))
+            cavgs_tmp = self%meta_cavg2D(array_idx)%cavgs(1:n_valid_cavgs)
+            call move_alloc(cavgs_tmp, self%meta_cavg2D(array_idx)%cavgs)
+        end if
     end if
 
-  end subroutine set_2
+  end subroutine set
 
   ! Retrieve the project name, project file path, segment record counts, and
   ! created timestamp. Returns .true. if the object has been assigned.
@@ -243,6 +280,17 @@ contains
       call json%add(json_ptr, 'nptcls',   self%nptcls        )
       call json%add(json_ptr, 'ncls2D',   self%ncls2D        )
       call json%add(json_ptr, 'created',  self%created       )
+      if( self%dim_cavgs > 0 ) call json%add(json_ptr, 'dim_cavgs', self%dim_cavgs)
+      if( self%mskscale > 0. ) then
+        call json%add(json_ptr, 'mskdiam',  dble(self%mskdiam) )
+        call json%add(json_ptr, 'mskscale', dble(self%mskscale))
+      end if
+      if( self%pspec_size > 0 ) call json%add(json_ptr, 'pspec_size', self%pspec_size)
+      if( self%smpd_mic > 0.  ) call json%add(json_ptr, 'smpd_mic', dble(self%smpd_mic))
+      if( self%xdim_mic > 0 .and. self%ydim_mic > 0 ) then
+        call json%add(json_ptr, 'xdim_mic', self%xdim_mic)
+        call json%add(json_ptr, 'ydim_mic', self%ydim_mic)
+      end if
       ! Add micrographs section if available
       if( allocated(self%meta_micrographs) ) then
         l_add = .false.

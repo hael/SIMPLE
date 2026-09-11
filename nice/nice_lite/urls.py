@@ -85,6 +85,14 @@ urlpatterns = [
         name="batch_class_selection_run",
     ),
     path(
+        "batchclass/<int:jobid>/selection",
+        batch_views.view_batch_class_2D_selection,
+        name="batch_classification_2D_selection",
+    ),
+    path("selectbatchmicrograph/<int:jobid>", batch_views.view_batch_micrograph_selection,    name="batch_micrograph_selection"), 
+    path("selectbatchcls2d/<int:jobid>",      batch_views.view_batch_class_2D_selection,      name="batch_cls2D_selection"),
+
+    path(
         "batchmovie/<int:jobid>/<str:token>",
         batch_views.view_batch_movie_thumbnail,
         name="batch_movie_thumbnail",

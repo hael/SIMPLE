@@ -1,0 +1,73 @@
+{% comment %}
+  _log_viewer.html — read-only job log viewer.
+  Behavior (text/image log parts) is based on
+  nice_stream/includes/_zoom_log_errors_parts_body.html; visual styling
+  (tab strip/panel wrapper, header, wrapped pre text) is based on
+  nice_classic's logs panel tabulation in nice_classic/batchview.html.
+  Expects `log` (list of {text} or {image} parts) and optional `error` (string).
+{% endcomment %}
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">logs</p>
+</div>
+<div class="min-w-0 flex-1 min-h-0 flex flex-col p-3">
+    <div data-log-tablist class="flex overflow-x-auto rounded-t-lg bg-streamsurface border border-streamdivider border-b-0 flex-shrink-0">
+        <button type="button" id="job_log_tab_output" data-log-tab data-log-key="output"
+                class="min-w-max min-h-10 px-3 py-2 flex items-center border-t-2 border-r border-streamdivider text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-streamring bg-streambg text-streamtext border-t-streamaccent">
+            <span class="text-[10px] font-medium whitespace-nowrap">standard output</span>
+        </button>
+        {% if error %}
+            <button type="button" id="job_log_tab_error" data-log-tab data-log-key="error"
+                    class="min-w-max min-h-10 px-3 py-2 flex items-center border-t-2 border-r border-streamdivider text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-streamring text-streamlabel border-t-transparent hover:bg-streambg hover:text-streamtext">
+                <span class="text-[10px] font-medium whitespace-nowrap">standard error</span>
+            </button>
+        {% endif %}
+    </div>
+    <div data-log-panels class="flex-1 min-h-0 flex flex-col">
+        <div id="job_log_panel_output" data-log-panel data-log-key="output"
+             class="h-full flex flex-col overflow-hidden rounded-b-lg border border-streamdivider border-t-0 bg-streambg">
+            <div class="logtext flex-1 min-h-0 overflow-auto p-3">
+                {% for logpart in log %}
+                    {% if "text" in logpart %}
+                        <pre class="text-[10px] text-streamsubtle" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ logpart.text }}</pre>
+                    {% elif "image" in logpart %}
+                        <img src="{% url 'nice_lite:image' logpart.image %}" loading="lazy"/>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% if error %}
+            <div id="job_log_panel_error" data-log-panel data-log-key="error"
+                 class="hidden h-full flex flex-col overflow-hidden rounded-b-lg border border-streamdivider border-t-0 bg-streambg">
+                <div class="flex-1 min-h-0 overflow-auto p-3">
+                    <pre class="text-[10px] text-streamerror" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ error }}</pre>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    (function () {
+        var tabs = document.querySelectorAll('[data-log-tab]');
+        var panels = document.querySelectorAll('[data-log-panel]');
+
+        tabs.forEach(function (tab) {
+            if (tab.dataset.tabBound === '1') return;
+            tab.dataset.tabBound = '1';
+            tab.addEventListener('click', function () {
+                var key = tab.dataset.logKey;
+                tabs.forEach(function (otherTab) {
+                    var active = otherTab === tab;
+                    otherTab.classList.toggle('bg-streambg', active);
+                    otherTab.classList.toggle('text-streamtext', active);
+                    otherTab.classList.toggle('border-t-streamaccent', active);
+                    otherTab.classList.toggle('text-streamlabel', !active);
+                    otherTab.classList.toggle('border-t-transparent', !active);
+                });
+                panels.forEach(function (panel) {
+                    panel.classList.toggle('hidden', panel.dataset.logKey !== key);
+                });
+            });
+        });
+    })();
+</script>

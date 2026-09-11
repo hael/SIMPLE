@@ -147,12 +147,7 @@ contains
         else
             call ensure_resume_sigma_state
         endif
-
-        ! TEST EXIT
-        ! call sleep(10)
-        ! call gui_comm%kill()
-        ! call simple_end('**** TEST EXIT AFTER GUI COMMUNICATOR KILL ****')
-        ! call exit(0)
+        
         ! Frequency marching
         do istage = start_stage,stop_stage
             write(logfhandle,'(A)')'>>>'

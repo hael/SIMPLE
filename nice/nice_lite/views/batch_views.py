@@ -23,6 +23,7 @@ from ..data_structures.class_selection import (
     SIMPLEProjectFileReader,
     batch_class_selection_available,
     class_selection_flags,
+    validate_deselected_class_ids,
     load_batch_class_selection,
 )
 from ..data_structures.mrc import render_mrc_particle_png
@@ -138,7 +139,7 @@ def _source_label(jobmodel):
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     source = metadata.get("source")
     if not isinstance(source, dict):
-        if metadata.get("program") == "new_project":
+        if jobmodel.prog == "new_project":
             return "none (creates a project)"
         return "workspace project"
 
@@ -302,13 +303,13 @@ def _commander_arguments(package, program):
     return arguments
 
 
-def _argument_rows(jobmodel, metadata):
+def _argument_rows(jobmodel):
     """Build submitted/default/unset rows from saved args and commander UI."""
     raw_saved_args = jobmodel.args if isinstance(jobmodel.args, dict) else {}
     saved_args = {str(key): value for key, value in raw_saved_args.items()}
     definitions = _commander_arguments(
-        metadata.get("package"),
-        metadata.get("program"),
+        jobmodel.pckg,
+        jobmodel.prog,
     )
     arguments = []
     known_keys = set()
@@ -551,7 +552,7 @@ def _batch_detail_context(
                 error,
             )
             class_selector_error = str(error)
-    if jobmodel.status == "finished" and metadata.get("program") == "pick":
+    if jobmodel.status == "finished" and jobmodel.prog == "pick":
         pick_particle_count = _project_picked_particle_count(result_project)
         pick_micrographs = batch_job.get_pick_micrograph_previews(
             max_previews=_BATCH_PICK_PREVIEW_LIMIT,
@@ -562,15 +563,15 @@ def _batch_detail_context(
     artifact_counts = list(artifact_summary.get("counts", []))
     artifact_images = (
         []
-        if metadata.get("program") == "pick"
+        if jobmodel.prog == "pick"
         else artifact_summary.get("images", [])
     )
     class_selector_replaces_artifact_previews = (
-        metadata.get("program") == "abinitio2D"
+        jobmodel.prog == "abinitio2D"
         and batch_class_selector is not None
     )
     volume_outputs = []
-    if jobmodel.status == "finished" and metadata.get("program") == "abinitio3D":
+    if jobmodel.status == "finished" and jobmodel.prog == "abinitio3D":
         volume_outputs = batch_job.get_volume_outputs()
     public_volume_outputs = [
         {
@@ -581,7 +582,7 @@ def _batch_detail_context(
         for volume in volume_outputs
     ]
     particle_stack_page = {}
-    if metadata.get("program") in BatchJob.MRC_STACK_PREVIEW_PROGRAMS:
+    if jobmodel.prog in BatchJob.MRC_STACK_PREVIEW_PROGRAMS:
         particle_stack_page = batch_job.get_particle_stack_page(
             page=particle_page,
             page_size=_BATCH_PARTICLE_PAGE_SIZE,
@@ -593,7 +594,7 @@ def _batch_detail_context(
             })
     import_movie_page = {}
     if (
-        metadata.get("program") == "import_movies"
+        jobmodel.prog == "import_movies"
         and jobmodel.status == "finished"
     ):
         import_movie_page = _import_movie_page(
@@ -622,7 +623,7 @@ def _batch_detail_context(
             for movie in import_movie_page.get("movies", [])
         )
     )
-    arguments = _argument_rows(jobmodel, metadata)
+    arguments = _argument_rows(jobmodel)
     return {
         "jobid": jobmodel.id,
         "disp": jobmodel.disp,
@@ -630,8 +631,8 @@ def _batch_detail_context(
         "desc": jobmodel.desc,
         "status": jobmodel.status,
         "created": jobmodel.cdat,
-        "package": metadata.get("package", ""),
-        "program": metadata.get("program", ""),
+        "package": jobmodel.pckg,
+        "program": jobmodel.prog,
         "project": jobmodel.dset.proj.name,
         "workspace": jobmodel.dset.name,
         "job_dir": batch_job.get_safe_job_dir() or "unavailable",
@@ -675,7 +676,7 @@ def _batch_detail_context(
         "import_movie_page": import_movie_page,
         "output_dimensions_available": output_dimensions_available,
         "motion_artifact_toggle_available": (
-            metadata.get("program") == "motion_correct"
+            jobmodel.prog == "motion_correct"
             and any(
                 preview.get("visibility_group") == "motion"
                 for image in artifact_images
@@ -683,7 +684,7 @@ def _batch_detail_context(
             )
         ),
         "ctf_artifact_micrograph_toggle_available": (
-            metadata.get("program") == "ctf_estimate"
+            jobmodel.prog == "ctf_estimate"
             and any(
                 preview.get("hidden_by_default")
                 for image in artifact_images
@@ -718,19 +719,48 @@ def _class_selector_redirect(job_id):
     return f"{batch_url}?class_selector=1#batch_class_selector"
 
 
-def _selected_class_ids(request):
+def _deselected_class_ids(request):
     try:
-        selected_ids = json.loads(request.POST.get("selected_class_ids", ""))
+        deselected_ids = json.loads(request.POST.get("deselected_class_ids", ""))
     except (TypeError, json.JSONDecodeError) as error:
         raise ClassSelectionError("Selection data is missing or invalid.") from error
-    if not isinstance(selected_ids, list):
+    if not isinstance(deselected_ids, list):
         raise ClassSelectionError("Selection data is missing or invalid.")
-    return selected_ids
+    return deselected_ids
+
+def _deselected_mic_ids(request):
+    try:
+        deselected_ids = json.loads(request.POST.get("deselected_mic_ids", ""))
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ClassSelectionError("Selection data is missing or invalid.") from error
+    if not isinstance(deselected_ids, list):
+        raise ClassSelectionError("Selection data is missing or invalid.")
+    return deselected_ids
+
+def _log_parts(logtext):
+    """Split log text into text/image parts on ">>> JPEG" markers."""
+    parts = []
+    logpart_str = ""
+    for line in logtext.splitlines():
+        if ">>> JPEG " in line:
+            split_line = line.split()
+            if len(split_line) >= 3:
+                parts.append({"text": logpart_str})
+                parts.append({"image": split_line[2]})
+                logpart_str = ""
+            else:
+                # Keep malformed marker lines in text output instead of crashing.
+                logpart_str += line + "\n"
+        else:
+            logpart_str += line + "\n"
+    if logpart_str != "":
+        parts.append({"text": logpart_str})
+    return parts
 
 
 @login_required(login_url="/login")
 @require_GET
-def view_batch(request, jobid):
+def view_batch_dj(request, jobid):
     """Render the owned SIMPLE/SINGLE batch detail page."""
     batch_job, jobmodel = _get_accessible_batch_job(
         request,
@@ -759,6 +789,46 @@ def view_batch(request, jobid):
     clear_checksum_cookies(request, response)
     return response
 
+@login_required(login_url="/login")
+@require_GET
+def view_batch(request, jobid):
+    """Returns batch view."""
+    template = "nice_batch/batchview.html"
+    batchjob, jobmodel = _get_accessible_batch_job(request, job_id=jobid, log_context="view_batch")
+    if batchjob is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    log_by_name = {entry["name"]: entry for entry in batchjob.get_log_tails()}
+    stdout_entry = log_by_name.get("stdout.log", {})
+    stderr_entry = log_by_name.get("stderr.log", {})
+    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    arguments = _argument_rows(jobmodel)
+
+    context = {
+        "jobid"  : jobmodel.id,
+        "disp"   : jobmodel.disp,
+        "desc"   : jobmodel.desc,
+        "proj"   : jobmodel.dset.proj.name,
+        "dset"   : jobmodel.dset.name,
+        "args"   : jobmodel.args,
+        "created": jobmodel.cdat,
+        "folder" : batchjob.get_absdir(),
+        "jobstats": metadata.get("project_metadata", {}),
+        "log"    : _log_parts(stdout_entry["text"]) if stdout_entry.get("exists") else [],
+        "error"  : stderr_entry.get("text") if stderr_entry.get("exists") else None,
+        "arguments": arguments,
+        "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
+    }
+    
+    response = render(request, template, context)
+
+    response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
+    response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
+    # Ensure Back renders the checksum-gated workspace instead of returning 204.
+    clear_checksum_cookies(request, response)
+    return response
+
 
 @login_required(login_url="/login")
 @require_GET
@@ -770,15 +840,10 @@ def view_batch_volume_data(request, jobid, volume_name):
         "view_batch_volume_data",
         job_id=jobid,
     )
-    metadata = (
-        jobmodel.master_stats
-        if jobmodel is not None and isinstance(jobmodel.master_stats, dict)
-        else {}
-    )
     if (
         batch_job is None
         or jobmodel.status != "finished"
-        or metadata.get("program") != "abinitio3D"
+        or jobmodel.prog != "abinitio3D"
     ):
         return HttpResponse(status=404)
 
@@ -868,7 +933,7 @@ def view_batch_class_selection_export(request, jobid):
         )
         selection_flags = class_selection_flags(
             selection,
-            _selected_class_ids(request),
+            _deselected_class_ids(request),
         )
     except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
         logger.warning(
@@ -945,11 +1010,10 @@ def view_batch_class_selection_run(request, jobid):
         messages.add_message(request, messages.ERROR, "invalid batch job selection")
         return redirect("nice_lite:workspace")
 
-    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     if (
         jobmodel.status != "finished"
-        or metadata.get("package") != "simple"
-        or metadata.get("program") != "abinitio2D"
+        or jobmodel.pckg != "simple"
+        or jobmodel.prog != "abinitio2D"
     ):
         messages.add_message(
             request,
@@ -965,7 +1029,7 @@ def view_batch_class_selection_run(request, jobid):
             jobmodel.dset.proj.dirc,
             jobmodel.id,
         )
-        selected_ids = _selected_class_ids(request)
+        selected_ids = _deselected_class_ids(request)
         selection_flags = class_selection_flags(selection, selected_ids)
         if not selected_ids:
             raise ClassSelectionError(
@@ -995,6 +1059,113 @@ def view_batch_class_selection_run(request, jobid):
             "selected_workspace_id": jobmodel.dset_id,
         },
     ))
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_batch_class_2D_selection(request, jobid):
+    """Create and launch a new cls2D-deselection batch job from the current selection."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_class_2D_selection",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    try:
+        deselected_class_ids = _deselected_class_ids(request)
+        selection = load_batch_class_selection(
+            batch_job.get_result_project_path(),
+            jobmodel.dset.proj.dirc,
+            jobmodel.id,
+        )
+        deselected_ids = validate_deselected_class_ids(selection, deselected_class_ids)
+    except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
+        logger.warning(
+            "batch classification 2D selection failed for job %s: %s",
+            jobmodel.id,
+            error,
+        )
+        messages.add_message(request, messages.ERROR, f"selection failed: {error}")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    selectionjob = BatchJob()
+    project = Project(id=jobmodel.dset.proj.id)
+    workspace = Workspace(jobmodel.dset.id)
+    if not selectionjob.createClassDeselection(
+        project,
+        workspace,
+        batch_job.get_result_project_path(),
+        deselected_ids,
+    ):
+        logger.warning(
+            "batch classification 2D selection job creation failed for job %s",
+            jobmodel.id,
+        )
+        messages.add_message(request, messages.ERROR, "failed to create classification selection job")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    return redirect("nice_lite:workspace")
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_batch_micrograph_selection(request, jobid):
+    """Create and launch a new mic-deselection batch job from the current selection."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_micrograph_selection",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    try:
+        deselected_micrograph_ids = _deselected_mic_ids(request)
+    except ClassSelectionError as error:
+        logger.warning(
+            "batch micrograph selection failed for job %s: %s",
+            jobmodel.id,
+            error,
+        )
+        messages.add_message(request, messages.ERROR, f"selection failed: {error}")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    jobstats = metadata.get("project_metadata", {})
+    micrographs = jobstats.get("micrographs") or jobstats.get("latest_micrographs") or []
+    total_micrographs = len(micrographs)
+
+    result_project = batch_job.get_result_project_path()
+    if result_project is None or total_micrographs == 0:
+        logger.warning(
+            "batch micrograph selection has no source project for job %s",
+            jobmodel.id,
+        )
+        messages.add_message(request, messages.ERROR, "no micrographs available for selection")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    selectionjob = BatchJob()
+    project = Project(id=jobmodel.dset.proj.id)
+    workspace = Workspace(jobmodel.dset.id)
+    if not selectionjob.createMicrographDeselection(
+        project,
+        workspace,
+        result_project,
+        deselected_micrograph_ids,
+        total_micrographs,
+    ):
+        logger.warning(
+            "batch micrograph selection job creation failed for job %s",
+            jobmodel.id,
+        )
+        messages.add_message(request, messages.ERROR, "failed to create micrograph selection job")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    return redirect("nice_lite:workspace")
 
 
 @login_required(login_url="/login")
@@ -1086,8 +1257,7 @@ def view_batch_rerun(request):
         messages.add_message(request, messages.ERROR, "batch job is not complete")
         return redirect("nice_lite:workspace")
 
-    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
-    if metadata.get("package") not in ("simple", "single"):
+    if jobmodel.pckg not in ("simple", "single"):
         messages.add_message(request, messages.ERROR, "batch job cannot be rerun")
         return redirect("nice_lite:workspace")
 

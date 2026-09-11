@@ -32,63 +32,84 @@ private
 type gui_communicator
     private
     type(c_pthread_t) :: comm_thread
-    logical           :: is_active = .false.
+    logical           :: is_active     = .false.
+    logical           :: remote_active = .false.
 contains
     procedure :: new
     procedure :: kill => kill_gui_communicator
-    procedure :: add_metadata
+    procedure :: add_metadata_1
+    procedure :: add_metadata_2
+    generic   :: add_metadata => add_metadata_1, add_metadata_2
 end type gui_communicator
 
 contains
 
     subroutine new( self, params )
         class(gui_communicator), intent(inout) :: self
-        type(parameters),        intent(in)    :: params
+        type(parameters),        intent(inout) :: params
         integer(c_int)                         :: stat
         character(len=:), allocatable          :: niceserver_url
         integer                                :: url_len
         if( self%is_active ) return
+        self%is_active = .true.
+        ! pack url + procid for the worker thread, read back via c_f_pointer on arg
+        niceserver_url                      = params%niceserver%to_char()
+        url_len                             = min(len(niceserver_url), STDLEN - 1)
+        gui_comm_args_inst%procid           = params%niceprocid
+        gui_comm_args_inst%url              = c_null_char
+        gui_comm_args_inst%l_terminate      = .false.
+        gui_comm_args_inst%url(1:url_len)   = transfer(niceserver_url(1:url_len), gui_comm_args_inst%url(1:url_len))
+        gui_comm_args_inst%metadata_project = c_loc(gui_project_metadata_inst)
+        if( c_pthread_mutex_init(gui_comm_args_inst%terminate_mutex, c_null_ptr) /= 0 ) THROW_HARD('failed to initialise termination mutex')
+        if( c_pthread_mutex_init(gui_comm_args_inst%metadata_mutex,  c_null_ptr) /= 0 ) THROW_HARD('failed to initialise metadata mutex')
+        ! initialise the metadata
+        call gui_project_metadata_inst%new(GUI_METADATA_PROJECT_TYPE)
         if( params%niceserver .ne. "" .and. params%niceprocid > 0 ) then
-            self%is_active = .true.
-            ! pack url + procid for the worker thread, read back via c_f_pointer on arg
-            niceserver_url                      = params%niceserver%to_char()
-            url_len                             = min(len(niceserver_url), STDLEN - 1)
-            gui_comm_args_inst%procid           = params%niceprocid
-            gui_comm_args_inst%url              = c_null_char
-            gui_comm_args_inst%l_terminate      = .false.
-            gui_comm_args_inst%url(1:url_len)   = transfer(niceserver_url(1:url_len), gui_comm_args_inst%url(1:url_len))
-            gui_comm_args_inst%metadata_project = c_loc(gui_project_metadata_inst)
-            if( c_pthread_mutex_init(gui_comm_args_inst%terminate_mutex, c_null_ptr) /= 0 ) THROW_HARD('failed to initialise termination mutex')
-            if( c_pthread_mutex_init(gui_comm_args_inst%metadata_mutex,  c_null_ptr) /= 0 ) THROW_HARD('failed to initialise metadata mutex')
-            ! initialise the metadata
-            call gui_project_metadata_inst%new(GUI_METADATA_PROJECT_TYPE)
             ! spawn metadata listener thread
             stat = c_pthread_create(thread        = self%comm_thread, &
                                     attr          = c_null_ptr, &
                                     start_routine = c_funloc(communication_worker), &
                                     arg           = c_loc(gui_comm_args_inst))
             if( stat /= 0 ) THROW_HARD('failed to create metadata listener thread')
+            ! clear the niceprocid and niceserver in the parameters to indicate they have been consumed
+            params%niceprocid  = -1
+            params%niceserver  = ""
+            self%remote_active = .true.
         end if
     end subroutine new
 
     subroutine kill_gui_communicator( self )
         class(gui_communicator), intent(inout) :: self
         type(c_ptr)                            :: ptr
+        type(gui_assembler)                    :: assembler
+        type(string)                           :: metadata_backup
         if( .not. self%is_active) return
         if( c_pthread_mutex_lock(gui_comm_args_inst%terminate_mutex) /= 0    ) THROW_HARD('failed to lock terminate mutex')
         gui_comm_args_inst%l_terminate = .true.
         if( c_pthread_mutex_unlock(gui_comm_args_inst%terminate_mutex) /= 0  ) THROW_HARD('failed to unlock terminate mutex')
-        if( c_pthread_join(self%comm_thread, ptr) /= 0 ) then
-            THROW_WARN('failed to join communication worker thread')
-            return ! thread may still be running, unsafe to destroy mutexes or kill shared metadata
+        if( self%remote_active) then
+            if( c_pthread_join(self%comm_thread, ptr) /= 0 ) then
+                THROW_WARN('failed to join communication worker thread')
+                return ! thread may still be running, unsafe to destroy mutexes or kill shared metadata
+            end if
         end if
+        ! write metadata to file
+        call assembler%new(gui_comm_args_inst%procid)
+        call assembler%set_stoptime()
+        call assembler%assemble_batch_heartbeat()
+        if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to lock metadata mutex')
+        call assembler%assemble_batch_metadata(gui_project_metadata_inst)
+        if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
+        metadata_backup = assembler%to_string()
+        call write_singlelineoftext(string('metadata.json'), metadata_backup)
         if( c_pthread_mutex_destroy(gui_comm_args_inst%terminate_mutex) /= 0 ) THROW_WARN('failed to destroy terminate mutex')
         if( c_pthread_mutex_destroy(gui_comm_args_inst%metadata_mutex) /= 0  ) THROW_WARN('failed to destroy metadata mutex')
         call gui_project_metadata_inst%kill()
-        self%is_active = .false.
+        self%is_active     = .false.
+        self%remote_active = .false.
     end subroutine kill_gui_communicator
 
-    subroutine add_metadata( self, spproj, stage2D )
+    subroutine add_metadata_1( self, spproj, stage2D )
         class(gui_communicator), intent(inout) :: self
         type(sp_project),        intent(inout) :: spproj
         integer,    optional,    intent(in)    :: stage2D
@@ -99,7 +120,27 @@ contains
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
         call gui_project_metadata_inst%set(spproj, i_stage2D)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
-    end subroutine add_metadata
+    end subroutine add_metadata_1
+
+    subroutine add_metadata_2( self, projfile, stage2D )
+        class(gui_communicator), intent(inout) :: self
+        type(string),            intent(in)    :: projfile
+        integer,    optional,    intent(in)    :: stage2D
+        type(sp_project)                       :: spproj
+        integer                                :: i_stage2D
+        if( .not. self%is_active        ) return
+        if( .not. file_exists(projfile) ) return
+        call spproj%read_segment('mic',      projfile)
+        call spproj%read_segment('cls2D',    projfile)
+        call spproj%read_segment('projinfo', projfile)
+        call spproj%read_segment('out',      projfile)
+        i_stage2D = 1
+        if( present(stage2D) ) i_stage2D = stage2D
+        if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
+        call gui_project_metadata_inst%set(spproj, i_stage2D)
+        if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
+        call spproj%kill()
+    end subroutine add_metadata_2
 
     subroutine communication_worker( carg ) bind(c)
         integer, parameter            :: SEND_INTERVAL_SEC = 10
@@ -145,7 +186,6 @@ contains
             if( c_pthread_mutex_unlock(comm_args%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
             last_send_time = now
             my_request     = assembler%to_string()
-            write(logfhandle, '(A,A)') 'Sending request: ', my_request%to_char()
             if( post%request(response, my_request) ) then
                 if( response%code == 200) then
                     ! parse response JSON

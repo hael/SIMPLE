@@ -1,0 +1,32 @@
+{% comment %}
+  _cls2D_selection_controls.html — context menu for the 2D class-average tile grid.
+  Self-contained: no context variables required. Wired up by ids/names in
+  zoomclassification2D.html's script (showMenu/hideMenu/sortPop/sortRes/etc).
+{% endcomment %}
+<div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu(this, event)" oncontextmenu="hideMenu(this, event)">
+    <div name="selectmenubox" class="fixed flex flex-col gap-1 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">contrast</div>
+            <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">brightness</div>
+            <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input>
+        </div>
+        <div class="flex flex-col">
+            <div class="text-[10px] text-streamlabel">scale</div>
+            <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input>
+        </div>
+        <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+        <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+        <div id="selectabove" class="userbutton w-auto text-center">select above</div>
+        <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
+    </div>
+</div>
+<script>
+    window.addEventListener("load", () => {
+        const root = document.querySelector(":root");
+        root.style.setProperty("--classification2D-contrast", 1.0);
+        root.style.setProperty("--classification2D-brightness", 1.0);
+    });
+</script>

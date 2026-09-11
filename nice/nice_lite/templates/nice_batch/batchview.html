@@ -1,0 +1,99 @@
+{% comment %}
+  batchview.html — per-batch detail view, loaded inside the workspace iframe.
+
+  Structure:
+    - Sub-bar : back link and batch title, with section icons (arguments,
+      logs, and conditionally micrographs/2D classes) on the right; clicking
+      an icon shows the matching [data-panel] section below via showJobPanel().
+    - Arguments / logs / 2D classes panels: one [data-panel] section each,
+      only one visible at a time (arguments shown by default). The 2D classes
+      panel (only when "cls2D" is in jobstats) is a selectable tile grid of
+      class averages, shared with the stream classification2D views.
+    - Job details footer.
+
+  Context variables:
+    disp    — human-readable stream number / display name
+    jobid   — primary key of the job, appended as ?selected_job_id= on all iframes
+    desc    — optional user-supplied job description; shown alongside disp when non-empty
+    args    — dict of stream launch parameters (smpd, cs, kv, fraca, etc.)
+    created — job creation timestamp, shown in the job-details footer
+    folder  — absolute path to the job directory, shown in the job-details footer
+    jobstats — dict of batch project metadata (e.g. micrographs, cls2D)
+    log     — list of {text} parts for the logs panel (stdout.log tail)
+    error   — optional error text for the logs panel (stderr.log tail)
+    arguments — list of {key, label, value, origin, submitted} for the arguments panel
+    submitted_argument_count — count of user-submitted arguments
+{% endcomment %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
+
+    <!-- Sub-bar: back link + stream title -->
+    {% url 'nice_lite:workspace' as back_url %}
+    {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp desc=desc job_type='batch' %}
+    
+    <!-- arguments panel -->
+     <div data-panel="arguments" class="w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full gap-2.5 w-full">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                {% include 'includes/_arguments_viewer.html' %}
+            </div>
+        </div>
+    </div>
+
+    <!-- logs panel -->
+     <div data-panel="logs" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full gap-2.5 w-full">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                {% include 'includes/_log_viewer.html' %}
+            </div>
+        </div>
+    </div>
+
+    <!-- micrographs panel -->
+     <div data-panel="micrographs" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full gap-2.5 w-full">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                {% if "micrographs" in jobstats and jobstats.micrographs|length > 0 %}
+                    {% include 'includes/_mic_viewer.html' with panel_title='micrographs' selectable=True %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 2D classes panel -->
+     <div data-panel="cls2D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full gap-2.5 w-full">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                {% if "cls2D" in jobstats and jobstats.cls2D|length > 0 %}                
+                    {% include 'includes/_cls2D_viewer.html' with panel_title='2D classes' mask=True %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% include 'includes/_job_details.html' %}
+
+    {% include 'messages.html' %}
+
+    <script>
+        const showJobPanel = (element) => {
+            const target = element.dataset.panelTarget;
+            document.querySelectorAll("[data-panel]").forEach((panel) => {
+                panel.classList.toggle("hidden", panel.dataset.panel !== target);
+            });
+            document.querySelectorAll(".job-panel-icon").forEach((icon) => {
+                const active = icon === element;
+                icon.classList.toggle("text-streamtext", active);
+                icon.classList.toggle("text-streamlabel", !active);
+            });
+        };
+    </script>
+</body>
+</html>

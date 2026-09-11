@@ -18,11 +18,12 @@ class _AuthUser:
 
 
 class _FakeJob:
-    def __init__(self, status="running", master_stats=None):
+    def __init__(self, status="running", master_stats=None, pckg=""):
         self.classification_2D_stats = {}
         self.particle_sieving_stats = {}
         self.master_stats = master_stats or {}
         self.status = status
+        self.pckg = pckg
 
 
 class _FakeQueryset:
@@ -112,8 +113,8 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         request = self.factory.get("/workspace")
         request.user = _AuthUser()
 
-        queued_job = _FakeJob(status="queued", master_stats={"job_type": "batch"})
-        finished_job = _FakeJob(status="finished", master_stats={"job_type": "batch"})
+        queued_job = _FakeJob(status="queued", master_stats={}, pckg="simple")
+        finished_job = _FakeJob(status="finished", master_stats={}, pckg="simple")
         queued_jobs = _FakeQueryset([], jobs=[queued_job])
         finished_jobs = _FakeQueryset([], jobs=[finished_job])
         workspace_model = SimpleNamespace(

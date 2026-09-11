@@ -17,8 +17,8 @@
 <body class="bg-streambg h-screen flex flex-col font-sans">
   <div class="flex flex-wrap gap-3 content-start flex-1 overflow-y-auto scrollbar-hidden px-5 py-4 ">
       {% for job in jobs %}
-          {% if job.master_stats.job_type == "batch" %}
-              {% include 'nice_classic/_batch_card.html' %}
+          {% if job.pckg == "simple" or job.pckg == "single" %}
+              {% include 'nice_batch/includes/_batch_card.html' %}
           {% else %}
               {% include 'nice_stream/includes/_stream_card.html' %}
           {% endif %}

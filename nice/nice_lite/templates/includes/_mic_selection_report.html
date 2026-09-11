@@ -1,0 +1,105 @@
+{% comment %}
+  _mic_selection_report.html — selection counts, select-all/deselect-all/
+  invert-selection controls, per-image-type show/hide toggles, and the save-
+  selection action for the micrograph viewer panel.
+  Expects `jobstats` in context (jobstats.latest_micrographs or
+  jobstats.micrographs). Owns selectAllMics/deselectAllMics/
+  invertMicSelection/updateMicCounts/toggleMicImageVisibility/
+  saveMicSelection; tile toggling (toggleMic) is owned by _mic_viewer.html.
+  Only one instance is ever rendered per page.
+{% endcomment %}
+{% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 or "micrographs" in jobstats and jobstats.micrographs|length > 0 %}
+    <div class="flex flex-1 flex-row gap-2">
+        <div class="flex items-baseline justify-between">
+            <span class="text-[11px] text-streamlabel px-2">selected micrographs</span>
+            <span id="miccount" class="text-[11px] font-medium text-streamtext font-mono"></span>
+        </div>
+    </div>
+    <div class="flex flex-row gap-3">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+            <span class="text-[11px] text-streamlabel">micrograph</span>
+            <input type="checkbox" checked oninput="toggleMicImageVisibility(this, 'mic')" class="peer sr-only">
+            <span class="relative h-4 w-8 flex-shrink-0 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4"></span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+            <span class="text-[11px] text-streamlabel">power spectrum</span>
+            <input type="checkbox" checked oninput="toggleMicImageVisibility(this, 'pspec')" class="peer sr-only">
+            <span class="relative h-4 w-8 flex-shrink-0 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4"></span>
+        </label>
+    </div>
+    <div class="flex flex-row gap-2">
+        <div id="selectallmics" onclick="selectAllMics()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">select all</div>
+        <div id="deselectallmics" onclick="deselectAllMics()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">deselect all</div>
+        <div id="invertmicselection" onclick="invertMicSelection()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">invert selection</div>
+    </div>
+{% endif %}
+<form id="savebatchselection" method="POST" action="{% url 'nice_lite:batch_micrograph_selection' jobid %}">
+    {% csrf_token %}
+    <input type="hidden" id="deselected_mic_ids" name="deselected_mic_ids" value=""/>
+    <button class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity" type="button" onclick="saveMicSelection(this)">save selection</button>
+</form>
+
+<script>
+    const toggleMicImageVisibility = (element, imgtype) => {
+        for (const img of document.getElementsByClassName(`micimg-${imgtype}`)) {
+            img.classList.toggle("hidden", !element.checked);
+        }
+        lastinteraction = Date.now();
+    };
+
+    const selectAllMics = () => {
+        for (const mictile of document.querySelectorAll(".mictile")) {
+            const mic = mictile.querySelector(".mic");
+            if (mic) mic.classList.remove("disabledbutton");
+            updateMicSelectionBorder(mic);
+        }
+        updateMicCounts();
+    };
+
+    const deselectAllMics = () => {
+        for (const mictile of document.querySelectorAll(".mictile")) {
+            const mic = mictile.querySelector(".mic");
+            if (mic) mic.classList.add("disabledbutton");
+            updateMicSelectionBorder(mic);
+        }
+        updateMicCounts();
+    };
+
+    const invertMicSelection = () => {
+        for (const mictile of document.querySelectorAll(".mictile")) {
+            const mic = mictile.querySelector(".mic");
+            if (mic) mic.classList.toggle("disabledbutton");
+            updateMicSelectionBorder(mic);
+        }
+        updateMicCounts();
+    };
+
+    const updateMicCounts = () => {
+        const miccount = document.querySelector("#miccount");
+        const mictiles = document.querySelectorAll(".mictile");
+
+        let nselected = 0;
+        for (const mictile of mictiles) {
+            const mic = mictile.querySelector(".mic");
+            if (mic && !mic.classList.contains("disabledbutton")) nselected += 1;
+        }
+
+        if (miccount) miccount.innerHTML = nselected.toLocaleString() + " / " + mictiles.length.toLocaleString();
+    };
+
+    const saveMicSelection = (element) => {
+        const deselected = [];
+        for (const mic of document.getElementsByClassName("mic")) {
+            if (mic.classList.contains("disabledbutton")) {
+                deselected.push(Number(mic.dataset.idx));
+            }
+        }
+
+        const selectionField = document.getElementById("deselected_mic_ids");
+        if (selectionField) selectionField.value = JSON.stringify(deselected);
+
+        element.form.submit();
+    };
+
+    window.addEventListener("load", () => updateMicCounts());
+</script>

@@ -54,7 +54,6 @@ module simple_gui_assembler_tester
   use simple_gui_metadata_api, only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
   use simple_gui_assembler,    only: gui_assembler
   use simple_sp_project,       only: sp_project
-  use simple_syslib,           only: del_file
   use simple_test_utils,       only: assert_true, assert_char, assert_int
   use simple_string,           only: string
   implicit none
@@ -468,13 +467,13 @@ contains
 
   !---------------- project assembly ----------------
 
-  ! Build a minimal project, populate gui_metadata_project via both the
-  ! in-memory set(spproj) and on-disk set(projfile) overloads, and verify the
-  ! assembled project section is non-empty.  An exact hash comparison is not
-  ! possible because the section embeds a live Unix timestamp (created).
+  ! Build a minimal project, populate gui_metadata_project via the in-memory
+  ! set(spproj) overload, and verify the assembled project section is
+  ! non-empty.  An exact hash comparison is not possible because the section
+  ! embeds a live Unix timestamp (created).
   subroutine test_project()
     type(gui_assembler)        :: assembler
-    type(gui_metadata_project) :: meta_project_inmem, meta_project_disk
+    type(gui_metadata_project) :: meta_project_inmem
     type(sp_project)           :: proj
     type(string)                :: projfile, projname, json_str
     integer                     :: nmics, nstks, nptcls, created
@@ -489,22 +488,14 @@ contains
         &'meta_project_inmem assigned')
     call assert_int(2,  nmics,  'meta_project_inmem nmics from in-memory project')
     call assert_int(10, nptcls, 'meta_project_inmem nptcls from in-memory project')
-    call proj%write(projfile)
     call proj%kill
-    call meta_project_disk%new(GUI_METADATA_PROJECT_TYPE)
-    call meta_project_disk%set(projfile)
-    call assert_true(meta_project_disk%get(projname, projfile, nmics, nstks, nptcls, created), &
-        &'meta_project_disk assigned')
-    call assert_int(2,  nmics,  'meta_project_disk nmics from project file')
-    call assert_int(10, nptcls, 'meta_project_disk nptcls from project file')
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_batch_metadata(meta_project_disk)
+    call assembler%assemble_batch_metadata(meta_project_inmem)
     json_str = assembler%to_string()
     call assert_true(json_str%strlen() > 0, 'json length greater than 0')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
-    call del_file(projfile)
   end subroutine test_project
 
 end module simple_gui_assembler_tester

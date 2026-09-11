@@ -244,10 +244,10 @@ class JobBuilderBranchTests(SimpleTestCase):
             dset=SimpleNamespace(user="tester"),
             status="finished",
             args={"nthr": "8", "mode": "fast"},
+            pckg="simple",
+            prog="cluster2D",
+            parent=0,
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "cluster2D",
                 "source": {"type": "project_file", "filename": "input.simple"},
             },
         )
@@ -307,7 +307,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             [entry["value"] for entry in program["sections"][0]["inputs"]],
             ["8", "fast"],
         )
-        resolve_project.assert_called_once_with(workspace, jobmodel.master_stats)
+        resolve_project.assert_called_once_with(workspace, "cluster2D", jobmodel.master_stats, 0)
 
     def test_abinitio2d_selection_prefills_new_selection_without_rerun_lineage(self):
         request = self.factory.get(
@@ -326,10 +326,9 @@ class JobBuilderBranchTests(SimpleTestCase):
             dset=SimpleNamespace(user="tester"),
             status="finished",
             args={},
+            pckg="simple",
+            prog="abinitio2D",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "abinitio2D",
             },
         )
         selected_job = Mock()
@@ -505,10 +504,9 @@ class JobBuilderBranchTests(SimpleTestCase):
             id=88,
             dset=SimpleNamespace(user="tester"),
             status="finished",
+            pckg="simple",
+            prog="abinitio2D",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "abinitio2D",
             },
         )
         queryset = Mock()
@@ -580,10 +578,9 @@ class JobBuilderBranchTests(SimpleTestCase):
             status="finished",
             name="Create 2D Classes",
             desc="saved description",
+            pckg="simple",
+            prog="cluster2D",
             master_stats={
-                "job_type": "batch",
-                "package": "simple",
-                "program": "cluster2D",
             },
         )
         queryset = Mock()

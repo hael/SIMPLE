@@ -437,3 +437,23 @@ def class_selection_flags(selection, selected_class_ids):
         1 if entry["class_id"] in selected_ids else 0
         for entry in selection.classes
     ]
+
+
+def validate_deselected_class_ids(selection, deselected_ids):
+    """Validate browser-supplied deselected class IDs and return them canonically."""
+    if not isinstance(deselected_ids, list):
+        raise ClassSelectionError("Selection data is missing or invalid.")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int)
+        for value in deselected_ids
+    ):
+        raise ClassSelectionError("Selection contains a non-integer class ID.")
+
+    known_ids = {entry["class_id"] for entry in selection.classes}
+    deselected_id_set = set(deselected_ids)
+    unknown_ids = deselected_id_set - known_ids
+    if unknown_ids:
+        raise ClassSelectionError(
+            f"Selection contains unknown class IDs: {sorted(unknown_ids)}."
+        )
+    return sorted(deselected_id_set)
