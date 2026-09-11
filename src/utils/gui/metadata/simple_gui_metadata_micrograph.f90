@@ -33,6 +33,7 @@ private
 type, extends( gui_metadata_base ) :: gui_metadata_micrograph
   private
   character(len=LONGSTRLEN) :: path          = ''    ! absolute path to the micrograph file
+  character(len=LONGSTRLEN) :: ctfimg        = ''    ! absolute path to the CTF image file
   real                      :: dfx           = 0.0   ! defocus value along x (Angstroms)
   real                      :: dfy           = 0.0   ! defocus value along y (Angstroms)
   real                      :: ctfres        = 0.0   ! CTF resolution estimate (Angstroms)
@@ -58,17 +59,19 @@ contains
   !---------------- setters ----------------
 
   ! Set scalar micrograph fields and mark the object as assigned.
-  subroutine set( self, path, i, i_max, dfx, dfy, ctfres )
+  subroutine set( self, path, i, i_max, dfx, dfy, ctfres, ctfimg )
     class(gui_metadata_micrograph), intent(inout) :: self
     type(string),                   intent(in)    :: path
     integer,                        intent(in)    :: i, i_max
     real,                 optional, intent(in)    :: dfx, dfy, ctfres
+    type(string),         optional, intent(in)    :: ctfimg
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%path       = path%to_char()
     if( present(dfx)    ) self%dfx    = dfx
     if( present(dfy)    ) self%dfy    = dfy
     if( present(ctfres) ) self%ctfres = ctfres
+    if( present(ctfimg) ) self%ctfimg = ctfimg%to_char()
     self%i          = i
     self%i_max      = i_max
   end subroutine set
@@ -102,10 +105,11 @@ contains
   !---------------- getters ----------------
 
   ! Return all scalar fields; result is .true. if the object has been assigned.
-  function get( self, path, dfx, dfy, ctfres, i, i_max ) result( l_assigned )
+  function get( self, path, dfx, dfy, ctfres, ctfimg, i, i_max ) result( l_assigned )
     class(gui_metadata_micrograph), intent(in)  :: self
     type(string),                   intent(out) :: path
     real,                           intent(out) :: dfx, dfy, ctfres
+    type(string),                   intent(out) :: ctfimg
     integer,                        intent(out) :: i, i_max
     logical                                     :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
@@ -114,6 +118,7 @@ contains
     dfx        = self%dfx
     dfy        = self%dfy
     ctfres     = self%ctfres
+    ctfimg     = trim(self%ctfimg)
     i          = self%i
     i_max      = self%i_max
   end function get
@@ -153,6 +158,7 @@ contains
     call json%add(json_ptr, "ctfres", dble(self%ctfres))
     call json%add(json_ptr, "i",      self%i)
     call json%add(json_ptr, "i_max",  self%i_max)
+    if( trim(self%ctfimg) /= '' ) call json%add(json_ptr, "ctfimg", trim(self%ctfimg))
     if( self%n_coordinates > 0 ) then
       call json%add(json_ptr, "xdim", self%xdim)
       call json%add(json_ptr, "ydim", self%ydim)

@@ -113,7 +113,7 @@ contains
     integer                                        :: xtiles, ytiles, xtile, ytile, nrecs, nlines
     integer                                        :: nstage2D, array_idx, out_ind
     integer                                        :: nptcls_all, nptcls_valid, nptcls_sample, box_ptcls, n_valid_ptcls
-    logical                                        :: l_final, l_selection
+    logical                                        :: l_final, l_selection, l_ctf
     real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs, smpd_ptcls
     type(string)                                   :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
     integer,                            parameter  :: N_PTCLS_SAMPLE = 100
@@ -205,16 +205,28 @@ contains
             self%ydim_mic       = nint(spproj%os_mic%get(1, "ydim"))
             self%smpd_mic       = spproj%os_mic%get(1, "smpd")
             n_valid_micrographs = 0
+            l_ctf = .false.
+            if( spproj%os_mic%isthere('ctfjpg') ) l_ctf = .true.
             do i = 1, nmeta_micrographs
                 if( spproj%os_mic%get_state(i) == 0 ) cycle ! needs improvement to work with pagination
                 n_valid_micrographs = n_valid_micrographs + 1
                 call self%meta_micrographs(n_valid_micrographs)%new(GUI_METADATA_MICROGRAPH_TYPE)
-                call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
-                                                  dfx   =spproj%os_mic%get(i,     "dfx")    , &
-                                                  dfy   =spproj%os_mic%get(i,     "dfy")    , &
-                                                  ctfres=spproj%os_mic%get(i,      "ctfres"), &
-                                                  i_max =nmeta_micrographs                  , &
-                                                  i     =i                                    )
+                if( l_ctf ) then
+                    call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
+                                                      dfx   =spproj%os_mic%get(i,     "dfx")    , &
+                                                      dfy   =spproj%os_mic%get(i,     "dfy")    , &
+                                                      ctfres=spproj%os_mic%get(i,      "ctfres"), &
+                                                      ctfimg=spproj%os_mic%get_str(i, "ctfjpg") , &
+                                                      i_max =nmeta_micrographs                  , &
+                                                      i     =i                                    )
+                else
+                    call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
+                                                      dfx   =spproj%os_mic%get(i,     "dfx")    , &
+                                                      dfy   =spproj%os_mic%get(i,     "dfy")    , &
+                                                      ctfres=spproj%os_mic%get(i,      "ctfres"), &
+                                                      i_max =nmeta_micrographs                  , &
+                                                      i     =i                                    )
+                end if
                 call self%meta_micrographs(n_valid_micrographs)%clear_coordinates()
                 boxpath = spproj%os_mic%get_str(i, "boxfile")
                 if( boxpath%strlen() > 0 .and. file_exists(boxpath) ) then

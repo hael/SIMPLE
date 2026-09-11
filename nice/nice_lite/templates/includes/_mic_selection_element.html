@@ -40,7 +40,11 @@
           </div>
         {% if not hide_pspec %}
         <div class="micimg-pspec overflow-hidden rounded w-1/2 relative" oncontextmenu="showMicMenu(this, event, 'pspec')">
-            <img style="filter:contrast(var(--preprocess-contrast-pspec)) brightness(var(--preprocess-brightness-pspec)); width:200%; max-width:200%;" src={% url 'nice_lite:image' micrograph.path %} class="h-auto" loading="lazy">
+            {% if micrograph.ctfimg %}
+                <img style="filter:contrast(var(--preprocess-contrast-pspec)) brightness(var(--preprocess-brightness-pspec));" src={% url 'nice_lite:image' micrograph.ctfimg %} class="h-auto" loading="lazy">
+            {% else %}
+                <img style="filter:contrast(var(--preprocess-contrast-pspec)) brightness(var(--preprocess-brightness-pspec)); width:200%; max-width:200%;" src={% url 'nice_lite:image' micrograph.path %} class="h-auto" loading="lazy">
+            {% endif %}
             {% if jobstats.pspec_size %}
                 <span class="absolute rounded-md bg-neutral-900 px-2 py-1 text-[9px] leading-none text-white" style="left:0.25rem;bottom:0.25rem;z-index:20">{{ jobstats.pspec_size }} px</span>
             {% endif %}

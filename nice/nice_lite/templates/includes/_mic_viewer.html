@@ -22,7 +22,7 @@
 {% endcomment %}
 <div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
-    {% with mics=jobstats.latest_micrographs|default:jobstats.micrographs %}
+    {% firstof jobstats.latest_micrographs jobstats.micrographs as mics %}
     {% if mics.0.boxes %}
     <div class="flex items-center gap-3">
         <div class="flex items-center gap-1.5">
@@ -38,7 +38,6 @@
         </label>
     </div>
     {% endif %}
-    {% endwith %}
 </div>
 <div id="mic_tile_grid" class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory mt-2">
     {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
