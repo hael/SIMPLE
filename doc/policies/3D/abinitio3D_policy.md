@@ -359,9 +359,11 @@ Checkpoint construction is isolated in
 metadata exist, `abinitio3D` does not run another private post-split loop. It
 hands the checkpoint to `refine3D_states` with `pose_policy=local`, the fixed
 post-split update fraction, sticky cohort eligibility in the fractional
-regime, and the remaining iteration/frequency range. `refine3D_states` then
-owns all post-split matching, coverage enforcement, trailing policy, and final
-native-sampling reconstruction. Local policy maps to
+regime, and the remaining iteration/frequency range. The split state maps
+travel through the project `out` segment, since `refine3D_states` rejects
+`vol1..volN` inputs. `refine3D_states` then owns all post-split matching,
+coverage enforcement, trailing policy, and final native-sampling
+reconstruction. Local policy maps to
 `refine=prob_neigh,prob_neigh_mode=geom`, so every state is evaluated in the
 same neighborhood around the particle's current projection direction.
 

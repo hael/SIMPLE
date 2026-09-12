@@ -537,7 +537,7 @@ contains
         integer, parameter :: STAGE2_NSPACE               = 5000
         integer, parameter :: STAGE2_NSPACE_SUB           = 500
         integer, parameter :: FREQUENCY_BLOCK_NITS        = 3
-        integer, parameter :: INIT_MAXITS_REFINE3D_STATES = 5
+        integer, parameter :: INIT_MAXITS_REFINE3D_STATES = 10
         integer, parameter :: STAGE2_MINITS               = 5
         integer, parameter :: MINITS_REFINE3D_STATES      = 10
         integer, parameter :: MAXITS_REFINE3D_STATES_CAP  = 50
@@ -549,7 +549,7 @@ contains
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_STATES'
         integer :: nstates_project, nptcls_eff, nsample_target, nptcls_per_iter, local_nspace_sub
         integer :: maxits_user, stage_cap, init_niters, stage2_niters, total_iter
-        integer :: maxits_glob_multi, init_stage_cap, min_maxits_required
+        integer :: maxits_glob_multi, init_stage_cap, init_stage_minits, init_sweep_iters, min_maxits_required
         real    :: update_frac_auto, state_overlap, local_ang_bound, local_inpl_bound, local_shift_bound
         logical :: l_maxits_defined, l_init_state_assignment, l_nstates_on_cline, l_flex_requested, l_nsample_auto
         logical :: l_has_project_multistates, l_run_init_stage, l_run_prob_neigh_stage
@@ -559,7 +559,9 @@ contains
         maxits_user    = 0
         init_niters    = 0
         stage2_niters  = 0
-        init_stage_cap = INIT_MAXITS_REFINE3D_STATES
+        init_stage_cap    = INIT_MAXITS_REFINE3D_STATES
+        init_stage_minits = 1
+        init_sweep_iters  = 1
         l_init_state_assignment   = .false.
         l_has_project_multistates = .false.
         l_run_init_stage          = .false.
@@ -571,6 +573,7 @@ contains
         local_inpl_bound          = -1.
         local_shift_bound         = -1.
         call cline%set('prg', 'refine3D_states')
+        call reject_input_volumes()
         l_nstates_on_cline = cline%defined('nstates')
         if( cline%defined('multivol_mode') ) THROW_HARD(WORKFLOW_LABEL//' uses pose_policy, not multivol_mode')
         if( cline%defined('prob_neigh_mode') ) THROW_HARD(WORKFLOW_LABEL//' derives prob_neigh_mode from pose_policy')
@@ -700,7 +703,7 @@ contains
             else
                 call cline%set('lp', params%lpstart)
                 call cline%set('lpstop', params%lpstart)
-                call run_refine3D_states_stage(0, 'prob_state', STAGE1_NSPACE, 0, 1, init_niters, &
+                call run_refine3D_states_stage(0, 'prob_state', STAGE1_NSPACE, 0, init_stage_minits, init_niters, &
                     &init_stage_cap, STATE_OVERLAP_EARLY_REFINE3D_STATES)
             endif
         endif
@@ -794,9 +797,19 @@ contains
                 case('input_oris_refine')
                     l_run_init_stage       = l_init_state_assignment
                     l_run_prob_neigh_stage = .true.
+                    if( l_run_init_stage )then
+                        ! the prob_state init phase must complete one full sweep so
+                        ! every active particle receives an initial state label
+                        init_stage_minits = init_sweep_iters
+                        init_stage_cap    = max(INIT_MAXITS_REFINE3D_STATES, init_sweep_iters)
+                    endif
             end select
             write(logfhandle,'(A,L1,A,L1)') '>>> '//WORKFLOW_LABEL//' STAGES INIT/PROB_NEIGH: ', &
                 &l_run_init_stage, '/', l_run_prob_neigh_stage
+            if( l_run_init_stage .and. trim(params%multivol_mode).eq.'input_oris_refine' )then
+                write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> '//WORKFLOW_LABEL//' INIT STAGE SWEEP/MINITS/MAXITS: ', &
+                    &init_sweep_iters, '/', init_stage_minits, '/', init_stage_cap
+            endif
         end subroutine configure_refine3D_states_stages
 
         subroutine set_refine3D_states_nstates()
@@ -909,6 +922,14 @@ contains
                         &'>>> '//WORKFLOW_LABEL//' ACTIVE PARTICLES/SAMPLE TARGET: ', &
                         &nptcls_eff, '/', nsample_target, ' -> FULL UPDATE'
                 endif
+            endif
+            ! iterations for one full sweep of the active particles: the balanced
+            ! sampler draws lowest-updatecnt particles first, so this many
+            ! fractional updates visit every active particle about once
+            if( params%l_update_frac )then
+                init_sweep_iters = max(1, ceiling(real(nptcls_eff) / real(max(1, nptcls_per_iter))))
+            else
+                init_sweep_iters = 1
             endif
             if( l_maxits_defined )then
                 stage_cap = maxits_user
@@ -1034,13 +1055,6 @@ contains
         subroutine initialize_state_volumes()
             integer :: state
             allocate(init_vols(nstates_project))
-            if( complete_input_volumes_defined() )then
-                call validate_input_volumes()
-                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' USING INPUT STATE VOLUMES'
-                return
-            else if( any_input_volumes_defined() )then
-                THROW_HARD(WORKFLOW_LABEL//' requires either all vol1..volN inputs or none')
-            endif
             if( project_state_volumes_compatible() )then
                 do state = 1,nstates_project
                     call cline%set('vol'//int2str(state), init_vols(state))
@@ -1053,7 +1067,7 @@ contains
                     write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' STARTUP STATE VOLUMES DELEGATED TO BASE REFINE3D'
                     return
                 endif
-                THROW_HARD(WORKFLOW_LABEL//' state=0/1 input without vol1..volN requires distributed startup; set nparts')
+                THROW_HARD(WORKFLOW_LABEL//' state=0/1 input requires distributed startup for state initialization; set nparts')
             endif
             call prepare_startup_reconstruct3D_cline()
             call xrec3D%execute(cline_rec3D)
@@ -1075,11 +1089,6 @@ contains
             ! validate inputs
             nstates_requested = params%nstates
             if( nstates_requested < 3 ) THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3')
-            do state = 1,nstates_requested
-                if( cline%defined('vol'//int2str(state)) )then
-                    THROW_HARD(WORKFLOW_LABEL//' flex=yes does not support vol1..volN inputs')
-                endif
-            enddo
             ! validate project
             call flex_proj%read_segment('ptcl3D', params%projfile)
             nactive_labels = 0
@@ -1164,55 +1173,15 @@ contains
             call cline_rec3D%set('nu_refine', 'no')
         end subroutine prepare_startup_reconstruct3D_cline
 
-        logical function any_input_volumes_defined() result(l_any)
+        subroutine reject_input_volumes()
+            use simple_defs, only: MAXS
             integer :: state
-            l_any = .false.
-            do state = 1,nstates_project
+            do state = 1,MAXS
                 if( cline%defined('vol'//int2str(state)) )then
-                    l_any = .true.
-                    return
+                    THROW_HARD(WORKFLOW_LABEL//' does not accept vol1..volN inputs; use classify3D_refs for supplied references')
                 endif
             enddo
-        end function any_input_volumes_defined
-
-        logical function complete_input_volumes_defined() result(l_complete)
-            integer :: state
-            l_complete = .true.
-            do state = 1,nstates_project
-                if( .not. cline%defined('vol'//int2str(state)) )then
-                    l_complete = .false.
-                    return
-                endif
-            enddo
-        end function complete_input_volumes_defined
-
-        subroutine validate_input_volumes()
-            type(string) :: vol
-            integer :: state, ldim(3), nptcls_dummy
-            real    :: vol_smpd, extent_native, extent_vol
-            do state = 1,nstates_project
-                vol = cline%get_carg('vol'//int2str(state))
-                if( .not. file_exists(vol) ) THROW_HARD('Input volume does not exist: '//vol%to_char())
-                call find_ldim_nptcls(vol, ldim, nptcls_dummy)
-                vol_smpd = find_img_smpd(vol)
-                if( ldim(1) /= ldim(2) .or. ldim(1) /= ldim(3) )then
-                    THROW_HARD('Input state volumes must be cubic')
-                endif
-                if( ldim(1) > params%box )then
-                    THROW_HARD('Input state volumes cannot exceed the native project box')
-                endif
-                ! Any downscaled sampling of the native grid is acceptable — base
-                ! refine3D rescales references to the stage crop, and the abinitio3D
-                ! split checkpoint hands over volumes at the abinitio ladder crop,
-                ! which need not match this workflow's own frequency-stage crop.
-                extent_native = real(params%box) * params%smpd
-                extent_vol    = real(ldim(1))   * vol_smpd
-                if( abs(extent_vol - extent_native) > 0.01 * extent_native )then
-                    THROW_HARD('Input state volumes must cover the native physical extent (box*smpd)')
-                endif
-            enddo
-            call vol%kill
-        end subroutine validate_input_volumes
+        end subroutine reject_input_volumes
 
         logical function project_state_volumes_compatible() result(l_compatible)
             real    :: init_smpd
@@ -1233,8 +1202,9 @@ contains
                     call spproj%kill
                     return
                 endif
-                ! any downscaled sampling of the native grid is acceptable (see
-                ! validate_input_volumes); base refine3D rescales to the stage crop
+                ! any downscaled sampling of the native grid is acceptable: base
+                ! refine3D rescales references to the stage crop, and the abinitio3D
+                ! split checkpoint registers its maps at the abinitio ladder crop
                 if( init_box > params%box .or. &
                     &abs(real(init_box)*init_smpd - real(params%box)*params%smpd) > &
                     &0.01 * real(params%box)*params%smpd )then

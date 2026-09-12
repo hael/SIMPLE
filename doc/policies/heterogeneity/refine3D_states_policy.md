@@ -39,14 +39,16 @@ The project must contain active particles and meaningful 3D orientations. The
 workflow may start from:
 
 1. populated multi-state labels plus compatible project state maps;
-2. state-0/1 input plus `nstates` and a complete `vol1..volN` set;
-3. state-0/1 input plus distributed startup reconstruction;
-4. `flex=yes`, which obtains labels and maps from `flex_pca`;
-5. an `abinitio3D` split checkpoint.
+2. state-0/1 input plus `nstates` and distributed startup reconstruction;
+3. `flex=yes`, which obtains labels and maps from `flex_pca`;
+4. an `abinitio3D` split checkpoint whose state maps are registered in the
+   project `out` segment.
 
-Partial `vol1..volN` input is rejected. Existing multi-state labels determine
-the effective state count; an explicit `nstates` must agree. Every accepted
-state must be populated.
+`vol1..volN` input is rejected: starting state maps must come from the project
+lineage. Classification against supplied references belongs to
+`classify3D_refs`. Existing multi-state labels determine the effective state
+count; an explicit `nstates` must agree. Every accepted state must be
+populated.
 
 ## 3. Pose Policy
 
@@ -84,6 +86,13 @@ The automatic per-iteration target is 10,000 particles per state, capped at
 fractional updates and projection-balanced class sampling. Otherwise it uses a
 full update.
 
+When states are initialized stochastically under `local` or `global`, the
+`prob_state` init phase runs at least one full sweep of the active particles,
+`ceil(1 / update_frac)` iterations, and at most the larger of that sweep and
+ten iterations. The state-overlap exit cannot end the phase before the sweep
+completes, so every active particle receives an initial state label before
+`prob_neigh` refinement starts.
+
 `lpstart` and `lpstop` define one common frequency schedule for all states.
 `simple_refine3D_stage_plan` returns short blocks containing the low-pass,
 crop, translation limit, and global iteration range. Both
@@ -100,7 +109,8 @@ For docked multi-state ab initio work, `abinitio3D` owns the single-state
 scaffold and split-checkpoint construction. The checkpoint preserves state
 labels, maps, sampled/update metadata, the capped cohort, realized update
 fraction, and iteration position. Post-split refinement is dispatched once to
-`refine3D_states` with `pose_policy=local`.
+`refine3D_states` with `pose_policy=local`; the checkpoint state maps reach it
+through the project `out` segment, not as `vol1..volN` inputs.
 
 The split checkpoint is constructed by
 `simple_abinitio3D_split_checkpoint`; the old post-split state-refinement loop

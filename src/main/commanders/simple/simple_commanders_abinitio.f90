@@ -1115,10 +1115,15 @@ contains
             ! refine3D_states owns the state-overlap convergence policy; the
             ! inherited abinitio stage target must not override its default
             call cline_states%delete('overlap')
+            ! refine3D_states rejects vol1..volN inputs and takes its starting
+            ! state maps from the project out segment, where calc_rec registered
+            ! the split-checkpoint reconstructions
+            call spproj%read_segment('out', params%projfile)
             do state = 1,nstates_glob
-                if( .not. cline_states%defined('vol'//int2str(state)) )then
-                    THROW_HARD('abinitio3D split checkpoint did not produce every state volume')
+                if( .not. spproj%isthere_in_osout('vol', state) )then
+                    THROW_HARD('abinitio3D split checkpoint did not register every state volume in the project')
                 endif
+                call cline_states%delete('vol'//int2str(state))
             enddo
             write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.2,A,F7.2)') &
                 &'>>> ABINITIO3D -> REFINE3D_STATES FIRST_ITER/MAXITS/NSAMPLE/LPSTART/LPSTOP: ', &

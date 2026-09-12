@@ -33,8 +33,10 @@ No shift seed from one state is reused to rank another state.
 ## Conformational state refinement (`refine3D_states`)
 
 Input: particles with a common pose scaffold (from a consensus refinement)
-and either state references, an existing label set, a flex-PCA initializer,
-or an `abinitio3D` docked checkpoint.
+and either an existing label set with project state maps, a stochastic state
+initializer, a flex-PCA initializer, or an `abinitio3D` docked checkpoint.
+Supplied reference volumes are not accepted; they belong to
+`classify3D_refs`.
 
 `pose_policy` fixes how much of the pose may move while states are being
 decided:
