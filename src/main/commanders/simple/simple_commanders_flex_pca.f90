@@ -41,6 +41,7 @@ contains
         ! an UPPER BOUND, not an iteration count: the probe stops itself on COV_PROBE_CONV
         if( .not.cline%defined('n_probe_iters') ) call cline%set('n_probe_iters',5)
         if( .not.cline%defined('box_crop') )    call cline%set('box_crop',64)
+        call pickup_project_consensus_volume(cline)
         call derive_flex_pca_band(cline)
         if( .not.cline%defined('ptcl_src') )    call cline%set('ptcl_src','raw')
         if( .not.cline%defined('objfun') )      call cline%set('objfun','euclid')
@@ -129,6 +130,42 @@ contains
         auto = trim(val%to_char()) == 'yes'
         call val%kill
     end function flex_pca_auto_states
+
+    ! Pick up the project consensus map (out segment, imgkind=vol, state 1) when vol1 is not on the
+    ! command line. Called on the master before params%new so the workers inherit the resolved path.
+    ! The mean is read at the native particle sampling, so a consensus map registered at a stage
+    ! crop is rejected here and must be passed explicitly instead.
+    subroutine pickup_project_consensus_volume( cline )
+        class(cmdline), intent(inout) :: cline
+        type(sp_project) :: spproj
+        type(string)     :: projfile, vol1
+        real             :: smpd, vol_smpd
+        integer          :: box, vol_box
+        if( cline%defined('vol1') ) return
+        if( .not. cline%defined('projfile') ) return
+        projfile = cline%get_carg('projfile')
+        if( .not. file_exists(projfile) ) return
+        call spproj%read_segment('out', projfile)
+        if( .not. spproj%isthere_in_osout('vol', 1) )then
+            call spproj%kill
+            THROW_HARD('flex_pca requires a consensus mean map: pass vol1 or register one in the project out segment')
+        endif
+        call spproj%get_vol('vol', 1, vol1, vol_smpd, vol_box)
+        call spproj%kill
+        if( .not. file_exists(vol1) ) THROW_HARD('flex_pca project consensus map does not exist: '//vol1%to_char())
+        call spproj%read_segment('stk', projfile)
+        box  = spproj%get_box()
+        smpd = spproj%get_smpd()
+        call spproj%kill
+        if( vol_box /= box .or. vol_smpd <= 0. .or. abs(vol_smpd - smpd) > 1.e-6 )then
+            THROW_HARD('flex_pca project consensus map must match the native particle sampling; pass vol1 explicitly')
+        endif
+        vol1 = simple_abspath(vol1)
+        call cline%set('vol1', vol1)
+        write(logfhandle,'(A)') '>>> FLEX_PCA consensus map from project: '//vol1%to_char()
+        call projfile%kill
+        call vol1%kill
+    end subroutine pickup_project_consensus_volume
 
     ! Resolve lp and box_rec from project geometry; neither overrides an explicit command-line value.
     ! Called on the master before params%new so the workers inherit the resolved numbers.

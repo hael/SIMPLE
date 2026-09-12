@@ -1082,7 +1082,6 @@ contains
             type(commander_flex_pca) :: xflex
             type(cmdline)            :: cline_flex
             type(sp_project)         :: flex_proj
-            type(string)             :: vol1
             integer :: state, flex_box, nstates_requested, nstates_flex
             integer :: nactive_labels, nstates_labels
             real    :: flex_smpd
@@ -1101,25 +1100,12 @@ contains
             if( nactive_labels > 0 .and. nstates_labels > 1 )then
                 THROW_HARD(WORKFLOW_LABEL//' flex=yes requires an input project with a single state')
             endif
-            call flex_proj%read_segment('out', params%projfile)
-            if( .not. flex_proj%isthere_in_osout('vol', 1) )then
-                THROW_HARD(WORKFLOW_LABEL//' flex=yes requires a consensus project volume')
-            endif
-            call flex_proj%get_vol('vol', 1, vol1, flex_smpd, flex_box)
-            call flex_proj%kill
-            if( .not. file_exists(vol1) )then
-                THROW_HARD(WORKFLOW_LABEL//' flex=yes consensus project volume does not exist')
-            endif
-            if( flex_box /= params%box .or. flex_smpd <= 0. .or. abs(flex_smpd - params%smpd) > 1.e-6 )then
-                THROW_HARD(WORKFLOW_LABEL//' flex=yes consensus volume must match the project particle sampling')
-            endif
-            vol1 = simple_abspath(vol1)
-            ! execution prg=flex_pca
+            ! execution prg=flex_pca; it picks up the project consensus map
+            ! (out segment, state 1) itself and validates it at native sampling
             cline_flex = cline
             call cline_flex%set('prg',        'flex_pca')
             call cline_flex%set('mkdir',      'no')
             call cline_flex%set('npreimages', nstates_requested)
-            call cline_flex%set('vol1',       vol1)
             call cline_flex%delete('nstates')
             call xflex%execute(cline_flex)
             ! output parsing
@@ -1152,7 +1138,6 @@ contains
             call flex_proj%kill
             write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' FLEX_PCA INITIALIZED NSTATES: ', nstates_flex
             call cline_flex%kill
-            call vol1%kill
         end subroutine run_flex_pca
 
         subroutine prepare_startup_reconstruct3D_cline()

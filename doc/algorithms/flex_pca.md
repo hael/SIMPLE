@@ -35,10 +35,10 @@ appear inside the E-step rather than being treated as missing pixels.
 
 ## Algorithm
 
-**Mean.** A consensus map `V_mean` is reconstructed from all particles (or
-loaded). Residual planes `r_i = y_i - a_i C_i S_i P_i V_mean` are formed under
-the same CTF, shift, and Kaiser-Bessel conventions as
-[reconstruction](reconstruction.md).
+**Mean.** A consensus map `V_mean` is loaded from `vol1`, or taken from the
+project's registered consensus map when `vol1` is omitted. Residual planes
+`r_i = y_i - a_i C_i S_i P_i V_mean` are formed under the same CTF, shift, and
+Kaiser-Bessel conventions as [reconstruction](reconstruction.md).
 
 **Initial basis.** The starting subspace is data-free: the lowest-frequency
 Fourier lattice points admitted by the band, chosen greedily with a minimum

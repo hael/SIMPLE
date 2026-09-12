@@ -413,8 +413,9 @@ contains
         &.true., &
         &visibility=UI_VIS_STANDARD, display_name='Covariance Heterogeneity States')
         call flex_pca%add_input(UI_IMG, 'vol1', 'file', &
-            'Consensus mean volume', 'Fixed mean subtracted from every particle', &
-            'e.g. vol1.mrc (consensus mean)', .true., '', &
+            'Consensus mean volume', 'Fixed mean subtracted from every particle; when omitted, the &
+            &project consensus map (out segment, state 1) at native sampling is used', &
+            'e.g. vol1.mrc (consensus mean)', .false., '', &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'neigs', 'num', &
             'Covariance components (default 16)', 'Number of fitted low-rank covariance factors; capped at 48', &

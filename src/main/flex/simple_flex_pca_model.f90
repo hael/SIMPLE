@@ -634,7 +634,9 @@ contains
         integer :: q, i, cnt
         integer, allocatable :: sel(:)
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_pca requires oritype=ptcl3D')
-        if( .not. cline%defined('vol1') ) THROW_HARD('flex_pca requires vol1=<consensus mean map>')
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('flex_pca requires a consensus mean map: pass vol1 or register one in the project out segment')
+        endif
         if( trim(params%ptcl_src) /= 'raw' ) THROW_HARD('flex_pca currently requires ptcl_src=raw')
         if( build%spproj_field%get_n('state') /= 1 ) THROW_HARD('flex_pca requires a project with an eo split')
         ! not sample4rec: its updatecnt > 0 condition belongs to trailing reconstruction

@@ -40,7 +40,8 @@ workflow may start from:
 
 1. populated multi-state labels plus compatible project state maps;
 2. state-0/1 input plus `nstates` and distributed startup reconstruction;
-3. `flex=yes`, which obtains labels and maps from `flex_pca`;
+3. `flex=yes`, which obtains labels and maps from `flex_pca` seeded with the
+   project consensus map;
 4. an `abinitio3D` split checkpoint whose state maps are registered in the
    project `out` segment.
 
