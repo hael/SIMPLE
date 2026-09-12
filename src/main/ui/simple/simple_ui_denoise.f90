@@ -428,6 +428,15 @@ contains
             &indistinct states, so the recovered count is <= this', &
             'max # states 3-32', .false., 16.0, &
         &visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
+            'Minimum state population fraction (default 0 = off)', &
+            'Population floor: every delivered state must hold at least this fraction of the embedded &
+            &particles. Under-populated clusters are dropped, the targets re-placed on the retained &
+            &particles with the count raised by the deficit until npreimages states qualify, and the &
+            &dropped or unassigned particles receive a random label among the delivered states, which &
+            &are then reconstructed from their hard labels. Incompatible with preimage_auto and the merge', &
+            'fraction of particles 0-1', .false., 0.0, &
+        &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'preimage_auto', 'binary', &
             'Determine the state count automatically (default no)', &
             'Raises the state ceiling to 32 (unless npreimages is given) and enables the two-gate merge, &

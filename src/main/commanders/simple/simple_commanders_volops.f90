@@ -308,8 +308,8 @@ contains
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
         type(image_msk)  :: bfac_envmsk
         real    :: fsc0143, fsc05, lplim
-        integer :: ldim(3)
-        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_density_window_bfac
+        integer :: ldim(3), ldim_unfil(3), nptcls_unfil
+        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_density_window_bfac, l_unfil_pair
         logical :: l_support_at_source, l_prov_constrained, l_prov_found
         l_density_window_bfac = .false.
         if( present(density_window_bfac) ) l_density_window_bfac = density_window_bfac
@@ -359,7 +359,20 @@ contains
             if( lplim < 5. )then
                 fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
                 fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
-                if( file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil) )then
+                l_unfil_pair = file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil)
+                if( l_unfil_pair )then
+                    ! the pair must come from the assembly that produced this
+                    ! map; a leftover pair at another box is ignored
+                    call find_ldim_nptcls(fname_even_unfil, ldim_unfil, nptcls_unfil)
+                    l_unfil_pair = all(ldim_unfil == ldim)
+                    if( l_unfil_pair )then
+                        call find_ldim_nptcls(fname_odd_unfil, ldim_unfil, nptcls_unfil)
+                        l_unfil_pair = all(ldim_unfil == ldim)
+                    endif
+                    if( .not. l_unfil_pair ) write(logfhandle,'(A)') &
+                        &'>>> B-FACTOR: ignoring unfiltered pair at a different box than the map'
+                endif
+                if( l_unfil_pair )then
                     call vol_unfil%new(ldim, smpd)
                     call vol_unfil_odd%new(ldim, smpd)
                     call vol_unfil%read(fname_even_unfil)

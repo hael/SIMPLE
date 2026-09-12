@@ -497,6 +497,10 @@ subroutine new_automask( prgtab )
         call refine3D_states%add_input(UI_SRCH, 'flex', 'binary', 'Initialize states with flex PCA', &
         &'Run flex_pca to derive the initial particle states and state volumes(yes|no){no}', '', &
         &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call refine3D_states%add_input(UI_SRCH, 'min_state_frac', 'num', 'Minimum flex state population fraction', &
+        &'With flex=yes, every initial state must hold at least this fraction of the particles; under-populated &
+        &flex clusters are dropped and their particles randomized over the delivered states{0.1}', &
+        &'fraction of particles', .false., 0.1, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
         &'Particles sampled per iteration; set 0 to derive the automatic target from the number of states', &
         &'particles (0=automatic)', .false., 0., group='search', visibility=UI_VIS_DEVELOPER, preserve_default=.true.)

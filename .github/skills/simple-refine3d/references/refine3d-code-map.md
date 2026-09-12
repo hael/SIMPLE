@@ -15,7 +15,7 @@ For normal 3D refinement, the high-level call chain is:
 
 Read them in that order unless the task is tightly scoped.
 
-For public workflow policy, read `doc/policies/refine3D_policy.md` first.
+For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 
 ## Ownership By Layer
 
@@ -70,6 +70,14 @@ For public workflow policy, read `doc/policies/refine3D_policy.md` first.
 
 ### Reconstruction/Postprocessing
 
+- `src/main/simple_final_rec.f90`
+  The shared ending of `abinitio3D`, `refine3D_auto`, `refine3D_states`, and
+  `classify3D_refs`. `calc_final_rec` runs the final all-particle
+  reconstruction at native sampling from the refinement command line it is
+  given, reuses committed canonical sigmas or rebuilds them through
+  `bootstrap_rec3D`, registers state maps, FSCs, and envfsc masks in the
+  project, and writes the final products and orthogonal reprojections. No
+  workflow carries its own copy of this sequence.
 - `simple_matcher_3Drec.f90`
   Partial reconstruction bookkeeping written by the matcher.
 - `simple_matcher_pftc_prep.f90`
@@ -111,6 +119,11 @@ For public workflow policy, read `doc/policies/refine3D_policy.md` first.
   with `set_bp_range3D` first.
 - If `FRCS_FILE` is absent in the bootstrap pass, matcher preparation creates
   neutral in-memory FRCs rather than using silent zeros.
+- Every gridding assembly leaves a `recvol_stateNN_even_unfil.mrc` /
+  `_odd_unfil.mrc` pair that belongs to the map it accompanies: the
+  unregularized halves under ML regularization, copies of the halves
+  otherwise. `postprocess_nu` consumes that pair, and postprocessing ignores a
+  pair whose box differs from the map.
 
 ## Questions To Ask Before Editing
 

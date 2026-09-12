@@ -36,6 +36,7 @@ For deeper navigation, read:
 - Particle-domain update/search: `simple_strategy3D_matcher.f90` and neighboring `search/` modules
 - Probabilistic pre-alignment: `simple_commanders_prob.f90`, `simple_eul_prob_tab*.f90`
 - Volume-domain assembly/postprocess: assembly commanders and `simple_vol_pproc_policy`
+- Final reconstruction ending shared by all 3D workflows: `simple_final_rec.f90` (`calc_final_rec`)
 
 ## Conceptual Boundary
 

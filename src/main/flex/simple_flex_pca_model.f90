@@ -33,6 +33,7 @@ private
 public :: run_flex_pca
 public :: test_flex_pca_embedding_cache_io, test_flex_pca_kernel_bandwidth
     public :: test_flex_pca_state_weights
+    public :: test_flex_pca_population_floor
 public :: test_flex_pca_auto_settings
 public :: auto_box_crop, auto_min_neff, auto_state_count
 
@@ -83,6 +84,7 @@ contains
         real(dp), allocatable :: finch_targets(:,:)
         logical :: l_finch_states
         logical :: l_rot
+        logical :: l_pop_floor
         real(dp), allocatable :: kdist(:,:), kfloor(:)
         real(dp), allocatable :: comp_rho(:)     ! per-component reliability, drives state-target ordering
         ! ---- B1: responsibility-delivered states from the probe-fitted mixture ----
@@ -93,6 +95,7 @@ contains
         logical :: sigma_loaded, l_resume, l_split_eo
         integer(timer_int_kind) :: t_blk
 
+        l_pop_floor = .false.
         call validate_covariance_inputs(params, build, cline, pinds, nptcls)
         ! optional pose degradation, before anything reads the orientations (see the routine)
         call cov_perturb_project_poses(build, pinds, nptcls)
@@ -129,6 +132,11 @@ contains
             if( .not. flex_pca_merge_enabled() ) write(logfhandle,'(A)') &
                 &'>>> FLEX_PCA WARNING: SIMPLE_COV_MERGE=0 disables the merge, so the ceiling will be &
                 &delivered as-is; drop preimage_auto and set npreimages explicitly instead'
+        endif
+        if( params%min_state_frac > 0. )then
+            if( params%l_preimage_auto .or. flex_pca_merge_enabled() )then
+                THROW_HARD('min_state_frac delivers exactly npreimages states; it cannot be combined with preimage_auto or the merge')
+            endif
         endif
         call report_state_memory(params, nstates)
         ! env-only: inert by default (the GMM replaces it), live on the nbins>1 and SIMPLE_COV_GMM=0 opt-outs
@@ -357,10 +365,20 @@ contains
             if( pviews(3,i) < 0.d0 ) pviews(:,i) = -pviews(:,i)
         end do
         if( l_finch_states )then
+            if( params%min_state_frac > 0. )then
+                THROW_HARD('min_state_frac cannot be combined with external or FINCH state targets')
+            endif
             call build_covariance_state_weights(z, nptcls, ncomp, nkern, nstates, state_axis, min_neff, &
                 &eigvals, latent_second, state_weights, targets, bandwidths, neff, labels, &
                 &dist_out=kdist, bfloor_out=kfloor, targets_in=finch_targets, views=pviews)
             deallocate(finch_targets)
+        else if( params%min_state_frac > 0. )then
+            ! population floor: exactly nstates hard-labelled states, every one at or above the
+            ! floor; the kernel-weight consumers below (AUTO-K, bandwidth CV) do not apply
+            l_pop_floor = .true.
+            call place_states_with_population_floor(z, nptcls, ncomp, nkern, nstates, state_axis, min_neff, &
+                &params%min_state_frac, eigvals, latent_second, state_weights, targets, bandwidths, neff, &
+                &labels, comp_rho=comp_rho, views=pviews)
         else
             call build_covariance_state_weights(z, nptcls, ncomp, nkern, nstates, state_axis, min_neff, &
                 &eigvals, latent_second, state_weights, targets, bandwidths, neff, labels, &
@@ -410,7 +428,7 @@ contains
             real(dp), parameter :: AUTOK_COH = 0.45d0
             vak = 0
             call cov_env_int_pub('SIMPLE_COV_AUTO_K', vak)
-            if( vak > 0 )then
+            if( vak > 0 .and. .not. l_pop_floor )then
                 nE = 0
                 do i = 1, nptcls
                     if( build%spproj_field%get_eo(pinds(i)) == 0 ) nE = nE + 1
@@ -521,7 +539,7 @@ contains
                 &' smpd_crop=',params%smpd_crop,' A'
         endif
 
-        if( params%nbins > 1 )then
+        if( params%nbins > 1 .and. .not. l_pop_floor )then
             call cv_select_bandwidths(params, build, pinds, nptcls, nstates, params%nbins, min_neff, &
                 &kdist, kfloor, state_weights, bandwidths, neff)
         endif
@@ -1285,6 +1303,195 @@ contains
         call flush(logfhandle)
         deallocate(wcomp, tvec, tcen, occ, dist, dvec, sorted, pk)
     end subroutine build_covariance_state_weights
+
+    !> Population-floored state placement (min_state_frac > 0): every delivered state must carry at
+    !! least min_state_frac of the embedded particles. Round by round the targets are placed on the
+    !! RETAINED particles, clusters below the floor leave the placement mass together with the
+    !! particles outside every kernel support, and the provisioned count is raised by the deficit,
+    !! until nstates_req clusters qualify. Greedy farthest-point placement spends new centers on
+    !! outliers first, which is why the dropped mass must leave the placement instead of merely
+    !! raising the count. Delivery: the nstates_req most populated qualifying clusters keep their
+    !! members; surplus qualifying clusters attach to the nearest delivered target in the standardized
+    !! latent metric; members of dropped clusters, particles outside every kernel support and particles
+    !! peeled in earlier rounds receive a uniformly random delivered label. The delivered weights are
+    !! the hard-label indicators, so the state maps are ordinary reconstructions of the labelled
+    !! particles. Past the provision cap or the round cap the most populated clusters are kept and a
+    !! warning is issued.
+    subroutine place_states_with_population_floor( z, nptcls, ncomp, nkern, nstates_req, axis, min_neff, &
+        &min_state_frac, eigvals, precision, weights, targets, bandwidths, neff, labels, comp_rho, views )
+        use simple_rnd, only: irnd_uni
+        integer,  intent(in) :: nptcls, ncomp, nkern, nstates_req, axis, min_neff
+        real,     intent(in) :: min_state_frac
+        real(dp), intent(in) :: z(nptcls,ncomp), eigvals(ncomp), precision(ncomp,ncomp,nptcls)
+        real,    allocatable, intent(out) :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
+        integer, allocatable, intent(out) :: labels(:)
+        real(dp), optional,   intent(in)  :: comp_rho(ncomp), views(3,nptcls)
+        integer,  parameter :: ROUND_CAP = 8
+        real,     allocatable :: w_r(:,:), t_r(:,:), bw_r(:), nf_r(:)
+        real(dp), allocatable :: z_r(:,:), p_r(:,:,:), v_r(:,:), sdv(:)
+        integer,  allocatable :: idx(:), lab_r(:), occ(:), order(:), kept(:), deliver(:)
+        logical,  allocatable :: retained(:), qualifies(:)
+        integer  :: nmin, K, round, nret, nk, i, q, s, t, nqual, nrand, nsurplus, kbest, itmp
+        real(dp) :: d2, dbest, zbar
+        logical  :: l_success
+        nk   = max(1, min(ncomp, nkern))
+        nmin = max(1, nint(min_state_frac * real(nptcls)))
+        if( nstates_req * nmin > nptcls )then
+            THROW_HARD('min_state_frac is too large for the requested state count: the floors exceed the particle count')
+        endif
+        allocate(retained(nptcls), source=.true.)
+        K         = nstates_req
+        nret      = nptcls
+        nqual     = 0
+        l_success = .false.
+        do round = 1, ROUND_CAP
+            nret = count(retained)
+            if( allocated(idx) ) deallocate(idx)
+            allocate(idx(nret))
+            t = 0
+            do i = 1, nptcls
+                if( retained(i) )then
+                    t = t + 1
+                    idx(t) = i
+                endif
+            end do
+            allocate(z_r(nret,ncomp), p_r(ncomp,ncomp,nret))
+            do i = 1, nret
+                z_r(i,:)   = z(idx(i),:)
+                p_r(:,:,i) = precision(:,:,idx(i))
+            end do
+            if( present(views) )then
+                allocate(v_r(3,nret))
+                do i = 1, nret
+                    v_r(:,i) = views(:,idx(i))
+                end do
+                call build_covariance_state_weights(z_r, nret, ncomp, nkern, K, axis, &
+                    &max(20, min(min_neff, nret/2)), eigvals, p_r, w_r, t_r, bw_r, nf_r, lab_r, &
+                    &comp_rho=comp_rho, views=v_r)
+                deallocate(v_r)
+            else
+                call build_covariance_state_weights(z_r, nret, ncomp, nkern, K, axis, &
+                    &max(20, min(min_neff, nret/2)), eigvals, p_r, w_r, t_r, bw_r, nf_r, lab_r, &
+                    &comp_rho=comp_rho)
+            endif
+            deallocate(z_r, p_r)
+            if( allocated(occ) ) deallocate(occ, qualifies)
+            allocate(occ(K), source=0)
+            allocate(qualifies(K), source=.false.)
+            do i = 1, nret
+                if( lab_r(i) >= 1 ) occ(lab_r(i)) = occ(lab_r(i)) + 1
+            end do
+            qualifies = occ >= nmin
+            nqual     = count(qualifies)
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0)') '>>> FLEX_PCA POPULATION FLOOR round=', round, &
+                &' provisioned=', K, ' retained=', nret, ' qualifying=', nqual, ' floor=', nmin
+            if( nqual >= nstates_req )then
+                l_success = .true.
+                exit
+            endif
+            ! peel: members of under-populated clusters and particles outside every kernel support
+            ! leave the placement mass, so the next placement spends its centers on the retained mass
+            do i = 1, nret
+                if( lab_r(i) < 1 )then
+                    retained(idx(i)) = .false.
+                else if( .not. qualifies(lab_r(i)) )then
+                    retained(idx(i)) = .false.
+                endif
+            end do
+            if( count(retained) < nstates_req * nmin )then
+                write(logfhandle,'(A)') '>>> FLEX_PCA POPULATION FLOOR: the retained mass can no longer hold the floors'
+                exit
+            endif
+            if( K >= AUTO_NSTATES )then
+                write(logfhandle,'(A)') '>>> FLEX_PCA POPULATION FLOOR: provision cap reached'
+                exit
+            endif
+            K = min(AUTO_NSTATES, K + (nstates_req - nqual))
+        end do
+        if( .not. l_success )then
+            THROW_WARN('flex_pca population floor not reached for every requested state; keeping the most populated clusters')
+        endif
+        ! clusters ordered by population, descending (K <= AUTO_NSTATES, selection sort)
+        allocate(order(K))
+        order = [(s, s=1,K)]
+        do s = 1, K-1
+            kbest = s
+            do t = s+1, K
+                if( occ(order(t)) > occ(order(kbest)) ) kbest = t
+            end do
+            if( kbest /= s )then
+                itmp         = order(s)
+                order(s)     = order(kbest)
+                order(kbest) = itmp
+            endif
+        end do
+        allocate(kept(nstates_req), deliver(K))
+        kept    = order(1:nstates_req)
+        deliver = 0
+        do s = 1, nstates_req
+            deliver(kept(s)) = s
+        end do
+        ! standardized latent metric on the placement components, for attaching surplus clusters
+        allocate(sdv(nk))
+        do q = 1, nk
+            zbar   = sum(z(:,q)) / real(nptcls,dp)
+            sdv(q) = max(sqrt(sum((z(:,q) - zbar)**2) / real(nptcls,dp)), 1.d-12)
+        end do
+        allocate(labels(nptcls), source=0)
+        nsurplus = 0
+        do i = 1, nret
+            s = lab_r(i)
+            if( s < 1 ) cycle
+            if( deliver(s) > 0 )then
+                labels(idx(i)) = deliver(s)
+            else if( qualifies(s) )then
+                ! surplus qualifying cluster: real mass, attached to the nearest delivered target
+                dbest = huge(1.d0)
+                kbest = 1
+                do t = 1, nstates_req
+                    d2 = 0.d0
+                    do q = 1, nk
+                        d2 = d2 + ((z(idx(i),q) - real(t_r(q,kept(t)),dp)) / sdv(q))**2
+                    end do
+                    if( d2 < dbest )then
+                        dbest = d2
+                        kbest = t
+                    endif
+                end do
+                labels(idx(i)) = kbest
+                nsurplus       = nsurplus + 1
+            endif
+        end do
+        ! members of dropped clusters, particles outside every kernel support and particles peeled in
+        ! earlier rounds receive a uniformly random delivered label
+        nrand = 0
+        do i = 1, nptcls
+            if( labels(i) < 1 )then
+                labels(i) = irnd_uni(nstates_req)
+                nrand     = nrand + 1
+            endif
+        end do
+        ! delivered tables: hard-label indicator weights, so the state maps are ordinary
+        ! reconstructions of the labelled particles
+        allocate(weights(nptcls,nstates_req), source=0.)
+        do i = 1, nptcls
+            weights(i,labels(i)) = 1.
+        end do
+        allocate(targets(ncomp,nstates_req), bandwidths(nstates_req), neff(nstates_req))
+        do s = 1, nstates_req
+            targets(:,s)  = t_r(:,kept(s))
+            bandwidths(s) = bw_r(kept(s))
+            neff(s)       = real(count(labels == s))
+        end do
+        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA POPULATION FLOOR delivered states=', nstates_req, &
+            &' surplus-attached=', nsurplus, ' randomized=', nrand
+        do s = 1, nstates_req
+            write(logfhandle,'(A,I3,A,I9,A,I9)') '>>>   state=', s, '  particles=', nint(neff(s)), '  floor=', nmin
+            if( nint(neff(s)) < nmin ) THROW_WARN('flex_pca delivered a state below the population floor')
+        end do
+        call flush(logfhandle)
+        deallocate(retained, idx, w_r, t_r, bw_r, nf_r, lab_r, occ, qualifies, order, kept, deliver, sdv)
+    end subroutine place_states_with_population_floor
 
     !> Arc-length coordinate of every particle on the polyline through the supplied targets.
     !! Projection is Euclidean in the raw latent (the units the targets are given in); each particle
@@ -3579,6 +3786,58 @@ contains
         if( min_neff > 0 ) k = min(k, nptcls/(4*min_neff))
         k = max(FLEX_AUTO_K_MIN, k)
     end function auto_state_count
+
+    !> Two dense clusters plus a far outlier group: the floor must deliver exactly the requested
+    !! states, each holding at least the floor, with every particle labelled and indicator weights.
+    subroutine test_flex_pca_population_floor()
+        use simple_rnd, only: seed_rnd
+        integer,  parameter :: NA = 300, NB = 250, NO = 20, NP = NA+NB+NO, NC = 2, NST = 2
+        real,     parameter :: FRAC = 0.2
+        integer  :: i, q, state, nmin, nlab(NST)
+        real(dp) :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
+        real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
+        integer,  allocatable :: labels(:)
+        write(logfhandle,'(A)') '>>> TEST flex_pca population floor on two clusters plus outliers'
+        call seed_rnd
+        do i = 1, NA
+            z(i,1) = -3.d0 + 0.01d0*real(mod(i,7),dp)
+            z(i,2) =  0.02d0*real(mod(i,5),dp)
+        end do
+        do i = 1, NB
+            z(NA+i,1) = 3.d0 + 0.01d0*real(mod(i,7),dp)
+            z(NA+i,2) = 0.02d0*real(mod(i,5),dp)
+        end do
+        do i = 1, NO
+            z(NA+NB+i,1) = 60.d0 + 0.05d0*real(mod(i,3),dp)
+            z(NA+NB+i,2) = 60.d0 + 0.05d0*real(mod(i,4),dp)
+        end do
+        eigvals = 1.d0
+        prec    = 0.d0
+        do i = 1, NP
+            do q = 1, NC
+                prec(q,q,i) = 1.d0
+            end do
+        end do
+        call place_states_with_population_floor(z, NP, NC, NC, NST, 0, 10, FRAC, eigvals, prec, &
+            &weights, targets, bandwidths, neff, labels)
+        nmin = max(1, nint(FRAC*real(NP)))
+        if( size(labels) /= NP ) THROW_HARD('labels shape wrong')
+        if( any(labels < 1) .or. any(labels > NST) ) THROW_HARD('a particle was left without a delivered state')
+        if( size(weights,1) /= NP .or. size(weights,2) /= NST ) THROW_HARD('weights shape wrong')
+        do i = 1, NP
+            if( abs(sum(weights(i,:)) - 1.) > 1.e-6 ) THROW_HARD('delivered weights are not hard-label indicators')
+        end do
+        nlab = 0
+        do i = 1, NP
+            nlab(labels(i)) = nlab(labels(i)) + 1
+        end do
+        do state = 1, NST
+            if( nlab(state) < nmin ) THROW_HARD('a delivered state is below the population floor')
+            if( nint(neff(state)) /= nlab(state) ) THROW_HARD('neff does not report the delivered population')
+        end do
+        deallocate(weights, targets, bandwidths, neff, labels)
+        write(logfhandle,'(A)') '>>>   PASSED (every particle labelled, every state at or above the floor)'
+    end subroutine test_flex_pca_population_floor
 
     !> The derived settings must reproduce what the validation datasets were actually run at.
     subroutine test_flex_pca_auto_settings()

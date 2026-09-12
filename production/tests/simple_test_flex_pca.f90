@@ -2,7 +2,7 @@
 program simple_test_flex_pca
 use simple_core_module_api
 use simple_flex_pca_model,   only: test_flex_pca_embedding_cache_io, test_flex_pca_kernel_bandwidth, &
-    &test_flex_pca_state_weights, test_flex_pca_auto_settings
+    &test_flex_pca_state_weights, test_flex_pca_population_floor, test_flex_pca_auto_settings
 implicit none
 
 ! resume path
@@ -10,6 +10,7 @@ call test_flex_pca_embedding_cache_io
 ! state stage
 call test_flex_pca_kernel_bandwidth
 call test_flex_pca_state_weights
+call test_flex_pca_population_floor
 ! derived settings
 call test_flex_pca_auto_settings
 

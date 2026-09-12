@@ -589,6 +589,7 @@ type :: parameters
     real    :: local_ang_bound=-1. !< refine3D_states local projection-angle override in degrees; negative is automatic
     real    :: local_inpl_bound=-1. !< refine3D_states local in-plane-angle override in degrees; negative is automatic
     real    :: local_shift_bound=-1. !< refine3D_states local shift override in pixels; negative is automatic
+    real    :: min_state_frac=0.   !< flex_pca population floor: fraction of embedded particles every delivered state must hold; 0=off
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)

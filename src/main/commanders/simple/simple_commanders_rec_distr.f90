@@ -751,9 +751,16 @@ contains
                 call even_restore%finalize_from_base(even_rec)
                 call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(fname_even, del_if_exists=.true.)
+                ! without ML regularization the halves ARE the unregularized pair:
+                ! write the _unfil copies as well, so postprocess_nu and the
+                ! B-factor estimate always find the pair of the assembly that
+                ! wrote the map and never a stale pair from an earlier
+                ! regularized assembly at another box
+                call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
                 call odd_restore%finalize_from_base(odd_rec)
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
+                call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
                 if( .not. l_have_fsc )then
                     call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
                         &state, diagnostics, cones=cones_fsc)

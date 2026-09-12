@@ -41,7 +41,8 @@ workflow may start from:
 1. populated multi-state labels plus compatible project state maps;
 2. state-0/1 input plus `nstates` and distributed startup reconstruction;
 3. `flex=yes`, which obtains labels and maps from `flex_pca` seeded with the
-   project consensus map;
+   project consensus map, under a population floor (`min_state_frac`, default
+   0.1) so that no under-populated flex cluster enters the volume refinement;
 4. an `abinitio3D` split checkpoint whose state maps are registered in the
    project `out` segment.
 
@@ -129,10 +130,14 @@ is enabled until the matcher can enforce this separation.
 
 Before final reconstruction, every active particle must have `updatecnt > 0`.
 A missing-update pass fills remaining assignments without intermediate volume
-reconstruction. Final state maps are then reconstructed and postprocessed from
-all active particles at native project sampling. The workflow writes normal
-state volumes, half maps, FSC/resolution records, diagnostic low-pass outputs,
-and orthogonal reprojections.
+reconstruction. Final state maps are then produced by the shared ending
+`calc_final_rec` (module `simple_final_rec`), the same routine that closes
+`abinitio3D`, `refine3D_auto`, and `classify3D_refs`: committed canonical
+sigmas are reused when valid at native sampling, otherwise `bootstrap_rec3D`
+rebuilds them, and the shipped maps are Euclidean ML reconstructions from all
+active particles at native project sampling. The workflow writes normal state
+volumes, half maps, FSC/resolution records, diagnostic low-pass outputs, and
+orthogonal reprojections.
 
 ## 8. Validation
 

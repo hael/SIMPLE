@@ -934,6 +934,9 @@ contains
             (self%local_shift_bound < 0. .and. abs(self%local_shift_bound + 1.) > 1.e-6) )then
             THROW_HARD('local pose bounds must be -1 (automatic) or non-negative')
         endif
+        if( self%min_state_frac < 0. .or. self%min_state_frac >= 1. )then
+            THROW_HARD('min_state_frac must be in [0,1)')
+        endif
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500

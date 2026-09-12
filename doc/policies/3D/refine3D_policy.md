@@ -181,9 +181,10 @@ an empty directory, and every final reconstruction at a new sampling. Since
   not merged), committed as the next canonical generation, then the shipped euclid
   ML reconstruction runs on the residual sigmas. Since 2026-09-07
   `bootstrap_rec3D` (module `simple_commanders_refine3D`) owns this whole
-  sequence: seed, bootstrap map, residual pass, commit, final map;
-  abinitio3D's `calc_final_rec` and refine3D_auto call it and carry no copy
-  of the sequence. It runs standalone on any project with 3D orientations
+  sequence: seed, bootstrap map, residual pass, commit, final map; the shared
+  ending `calc_final_rec` (module `simple_final_rec`, 2026-09-12), which
+  closes abinitio3D, refine3D_auto, refine3D_states and classify3D_refs,
+  calls it and carries no copy of the sequence. It runs standalone on any project with 3D orientations
   and is the test entry point for the final-reconstruction stage. The
   bootstrap map only serves as the residual reference, so it is always a
   gridding assembly with ML regularization (one particle pass, no
@@ -199,6 +200,13 @@ an empty directory, and every final reconstruction at a new sampling. Since
   pair of that final PCG reconstruction is inherent to ML regularization:
   the prior is built from the base pair's independent-half FSC, which is
   also the reported FSC and the unfiltered pair postprocessing uses.
+- The unfiltered pair belongs to the assembly that wrote the map it
+  accompanies (2026-09-12): every gridding `volassemble` writes the `_unfil`
+  halves, the unregularized pair under ML regularization and copies of the
+  halves otherwise, so `postprocess_nu` always finds a current pair; and
+  postprocessing ignores a pair whose box differs from the map. A final
+  reconstruction at native sampling therefore never reads the cropped pair
+  left behind by the last refinement block.
 - The registration-box rule is the same for both stores (2026-09-07): a
   final reconstruction whose registration (crop) box differs from the native
   box refreshes the sigmas at native sampling (image-power seed, bootstrap

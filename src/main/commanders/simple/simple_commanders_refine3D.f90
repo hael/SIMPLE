@@ -63,16 +63,15 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_abinitio_utils, only: configure_final_pcg_solve_budget, gen_ortho_reprojs4viz, &
-            &write_final_rec_outputs
+        use simple_final_rec,      only: calc_final_rec
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,     only: lpstages_setlims
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_refine3D_strategy, only: strip_refine3D_search_only_args
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)               :: cline_rec3D, cline_boot
-        type(parameters)            :: params, params_final_rec
+        type(cmdline)               :: cline_boot
+        type(parameters)            :: params
         type(sp_project)            :: spproj
         type(string)                :: init_vol
         type(string)                :: pose_init_refs(1), pose_init_checkpoint(1)
@@ -215,20 +214,6 @@ contains
             call cline%delete('smpd_crop')
         endif
         if( l_ref_pose_init_requested ) call initialize_external_reference_poses
-        ! generate an initial 3D reconstruction
-        cline_rec3D = cline
-        call cline_rec3D%set('prg', 'reconstruct3D') ! required for distributed call
-        call cline_rec3D%delete('trail_rec')
-        call cline_rec3D%delete('objfun')
-        call cline_rec3D%delete('objfun_den')
-        call cline_rec3D%delete('objfun_den_w')
-        call cline_rec3D%delete('sigma_est')
-        call cline_rec3D%delete('update_frac')
-        call cline_rec3D%delete('box_crop')           ! original image dimensions
-        call cline_rec3D%delete('smpd_crop')
-        call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call cline_rec3D%set('postprocess', 'no')
-        call cline_rec3D%set('nu_refine', 'no')
         ! STARTUP BOOTSTRAP: reconstruct -> build masks -> re-reconstruct with
         ! the masks and the NU prior, before any matching. Without it the
         ! first iteration matches raw, spherically masked references while
@@ -277,48 +262,11 @@ contains
         call cline%set('prg',                   'refine3D')
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
-        ! re-reconstruct from all particle images at original sampling: the
-        ! refinement sigmas are crop-box incompatible, so bootstrap_rec3D seeds
-        ! compatible sigmas from particle power, upgrades them with one residual
-        ! pass against its bootstrap map and ships the euclid ML final map
-        call cline_rec3D%set('prg', 'bootstrap_rec3D')
-        call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
-        call cline_rec3D%set('postprocess', 'yes')
-        call cline_rec3D%delete('objfun') ! bootstrap_rec3D owns objfun/ml_reg per pass
-        call cline_rec3D%delete('ml_reg')
-        if( cline%defined('endit') )then
-            ! the residual sigma pass is a refine3D iteration; number it beyond
-            ! the refinement's own iterations so its iteration files never
-            ! collide with the refinement's (the canonical sigma state itself
-            ! is one committed file and carries no iteration number)
-            call cline_rec3D%set('which_iter', cline%get_iarg('endit') + 2)
-        else
-            call cline_rec3D%set('which_iter', MAXITS_REFINE3D_AUTO_CAP + 2)
-        endif
-        ! the refinement's filt_mode/nu_refine/automsk ride along: the
-        ! residual sigmas depend on the regularization of the reference they
-        ! are scored against, so the bootstrap map is regularized exactly as
-        ! the matching references were; bootstrap_rec3D makes the shipped map
-        ! classical itself (2026-09-07)
-        if( trim(params%rec_backend) == 'pcg' )then
-            call configure_final_pcg_solve_budget(cline, cline_rec3D)
-            write(logfhandle,'(A,I0)') '>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', &
-                &cline_rec3D%get_iarg('maxits_pcg')
-        endif
-        ! bootstrap_rec3D owns the complete sequence: image-power seed, euclid
-        ! ML bootstrap map, one residual sigma2 pass (refine=sigma) against it,
-        ! canonical group reduction and the shipped euclid ML reconstruction
-        ! on the residual sigmas (which_iter+1 on return). It is also the standalone
-        ! test entry point for this stage (2026-09-07).
-        call xbootstrap_rec3D%execute(cline_rec3D)
-        call cline_rec3D%set('prg',    'reconstruct3D')
-        call cline_rec3D%set('objfun', 'euclid')
-        call cline_rec3D%set('ml_reg', 'yes')
-        call params_final_rec%new(cline_rec3D)
-        params_final_rec%box  = params%box
-        params_final_rec%smpd = params%smpd
-        call spproj%read_segment('out', params_final_rec%projfile)
-        call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%res_target)
+        ! the shared ending (simple_final_rec): final all-particle
+        ! reconstruction at original sampling with sigmas bootstrapped for the
+        ! native box, project registration, final products and reprojections
+        call calc_final_rec(params, spproj, params%projfile, cline, xrec3D, xbootstrap_rec3D, &
+            &l_postprocess=.true., lp_snapshot=params%res_target)
         call spproj%kill
         call init_vol%kill
 
@@ -520,13 +468,13 @@ contains
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_states( self, cline )
-        use simple_abinitio_utils, only: gen_ortho_reprojs4viz, write_final_rec_outputs
+        use simple_final_rec,      only: calc_final_rec
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
         class(commander_refine3D_states), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(cmdline)             :: cline_rec3D
-        type(parameters)          :: params, params_final_rec
+        type(parameters)          :: params
         type(sp_project)          :: spproj
         type(lp_crop_inf)         :: lpinfo_multi(2)
         type(string), allocatable :: init_vols(:)
@@ -546,6 +494,7 @@ contains
         real,    parameter :: STATE_OVERLAP_NEIGH_REFINE3D_STATES         = 0.99
         real,    parameter :: LPSTART_REFINE3D_STATES = 10.0
         real,    parameter :: LPSTOP_REFINE3D_STATES  = 6.0
+        real,    parameter :: MIN_STATE_FRAC_FLEX     = 0.1
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_STATES'
         integer :: nstates_project, nptcls_eff, nsample_target, nptcls_per_iter, local_nspace_sub
         integer :: maxits_user, stage_cap, init_niters, stage2_niters, total_iter
@@ -554,8 +503,9 @@ contains
         logical :: l_maxits_defined, l_init_state_assignment, l_nstates_on_cline, l_flex_requested, l_nsample_auto
         logical :: l_has_project_multistates, l_run_init_stage, l_run_prob_neigh_stage
         ! commanders
-        type(commander_rec3D)    :: xrec3D
-        type(commander_refine3D) :: xrefine3D
+        type(commander_rec3D)           :: xrec3D
+        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
+        type(commander_refine3D)        :: xrefine3D
         maxits_user    = 0
         init_niters    = 0
         stage2_niters  = 0
@@ -622,6 +572,9 @@ contains
             if( .not. l_nstates_on_cline ) THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3')
             nstates_project = cline%get_iarg('nstates')
             if( nstates_project < 3 ) THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3')
+            ! population floor for the flex states: no under-populated cluster
+            ! enters the volume refinement (flex_pca min_state_frac)
+            if( .not. cline%defined('min_state_frac') ) call cline%set('min_state_frac', MIN_STATE_FRAC_FLEX)
         else
             call set_refine3D_states_nstates()
         endif
@@ -714,33 +667,11 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> '//WORKFLOW_LABEL//' STAGE ITERATIONS INIT/PROB_NEIGH/TOTAL: ', &
             &init_niters, '/', stage2_niters, '/', total_iter
         call ensure_all_active_particles_updated()
-        ! re-reconstruct from all particle images
-        cline_rec3D = cline
-        call cline_rec3D%set('prg',            'reconstruct3D')
-        call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
-        call cline_rec3D%set('postprocess',              'yes')
-        call cline_rec3D%delete('trail_rec')
-        call cline_rec3D%delete('refine')
-        call cline_rec3D%delete('objfun_den')
-        call cline_rec3D%delete('objfun_den_w')
-        call cline_rec3D%delete('sigma_est')
-        call cline_rec3D%delete('update_frac')
-        call cline_rec3D%delete('ufrac_trec')
-        call cline_rec3D%delete('endit')
-        call cline_rec3D%delete('box_crop')
-        call cline_rec3D%delete('smpd_crop')
-        call cline_rec3D%set('objfun', 'cc')
-        ! classical final map: no nonuniform filtering; automsk rides along so
-        ! the PCG solve support matches the refinement's (2026-09-09)
-        if( params%l_nonuniform ) call cline_rec3D%set('filt_mode', 'none')
-        call cline_rec3D%set('nu_refine', 'no')
-        call xrec3D%execute(cline_rec3D)
-        call params_final_rec%new(cline_rec3D)
-        params_final_rec%box  = params_final_rec%box_crop
-        params_final_rec%smpd = params_final_rec%smpd_crop
-        call spproj%read_segment('out', params_final_rec%projfile)
-        call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%lpstop)
-        call gen_ortho_reprojs4viz(params_final_rec, spproj)
+        ! the shared ending (simple_final_rec): final all-particle
+        ! reconstruction at native sampling with reused or bootstrapped sigmas,
+        ! project registration, final products and reprojections
+        call calc_final_rec(params, spproj, params%projfile, cline, xrec3D, xbootstrap_rec3D, &
+            &l_postprocess=.true., lp_snapshot=params%lpstop)
         call spproj%kill
         call cleanup_init_vols()
         call pose_policy_arg%kill
@@ -1418,7 +1349,7 @@ contains
     end subroutine exec_refine3D_states
 
     subroutine exec_classify3D_refs( self, cline )
-        use simple_abinitio_utils, only: write_final_rec_outputs, gen_ortho_reprojs4viz
+        use simple_final_rec,      only: calc_final_rec
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
         class(commander_classify3D_refs), intent(inout) :: self
@@ -1433,10 +1364,10 @@ contains
         real,    parameter :: LPSTART_CLASSIFY3D_REFS     = 10.0
         real,    parameter :: LPSTOP_CLASSIFY3D_REFS      = 6.0
         character(len=*), parameter :: WORKFLOW_LABEL     = 'CLASSIFY3D_REFS'
-        type(commander_rec3D)     :: xrec3D
+        type(commander_rec3D)           :: xrec3D
+        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         type(commander_refine3D)  :: xrefine3D
-        type(cmdline)             :: cline_rec3D
-        type(parameters)          :: params, params_final_rec
+        type(parameters)          :: params
         type(sp_project)          :: spproj
         type(lp_crop_inf)         :: lpinfo_master(1)
         type(string), allocatable :: init_vols(:)
@@ -1833,32 +1764,11 @@ contains
         end subroutine run_classify3D_refs_missing_update
 
         subroutine reconstruct_all_particles_volumes
-            cline_rec3D = cline
-            call cline_rec3D%set('prg',            'reconstruct3D')
-            call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
-            call cline_rec3D%set('postprocess',              'yes')
-            call cline_rec3D%delete('trail_rec')
-            call cline_rec3D%delete('refine')
-            call cline_rec3D%delete('objfun_den')
-            call cline_rec3D%delete('objfun_den_w')
-            call cline_rec3D%delete('sigma_est')
-            call cline_rec3D%delete('update_frac')
-            call cline_rec3D%delete('ufrac_trec')
-            call cline_rec3D%delete('endit')
-            call cline_rec3D%delete('box_crop')
-            call cline_rec3D%delete('smpd_crop')
-            call cline_rec3D%set('objfun', 'cc')
-            ! classical final map: no nonuniform filtering; automsk rides along
-            ! so the PCG solve support matches the refinement's (2026-09-09)
-            if( params%l_nonuniform ) call cline_rec3D%set('filt_mode', 'none')
-            call cline_rec3D%set('nu_refine', 'no')
-            call xrec3D%execute(cline_rec3D)
-            call params_final_rec%new(cline_rec3D)
-            params_final_rec%box  = params_final_rec%box_crop
-            params_final_rec%smpd = params_final_rec%smpd_crop
-            call spproj%read_segment('out', params_final_rec%projfile)
-            call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%lpstop)
-            call gen_ortho_reprojs4viz(params_final_rec, spproj)
+            ! the shared ending (simple_final_rec): final all-particle
+            ! reconstruction at native sampling with reused or bootstrapped
+            ! sigmas, project registration, final products and reprojections
+            call calc_final_rec(params, spproj, params%projfile, cline, xrec3D, xbootstrap_rec3D, &
+                &l_postprocess=.true., lp_snapshot=params%lpstop)
         end subroutine reconstruct_all_particles_volumes
 
     end subroutine exec_classify3D_refs

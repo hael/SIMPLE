@@ -131,6 +131,17 @@ deviations from the ensemble mean above 0.98 by default). Latent distance
 alone never triggers a merge, since it is a property of the embedding, not
 of the maps.
 
+**Population floor.** With `min_state_frac > 0` every delivered state must
+hold at least that fraction of the embedded particles. Targets are placed on
+the retained particles round by round: clusters below the floor leave the
+placement mass together with the particles outside every kernel support, and
+the provisioned count is raised by the deficit, until `nstates` clusters
+qualify. The most populated qualifying clusters are delivered, surplus
+qualifying clusters attach to the nearest delivered target, and the dropped
+particles receive a uniformly random delivered label. The delivered maps are
+ordinary reconstructions of the labelled particles, and the floor cannot be
+combined with the merge or with external targets.
+
 ## Rationale
 
 - Keeping the projection operator in the likelihood is what separates
