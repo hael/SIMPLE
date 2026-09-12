@@ -38,13 +38,21 @@ of state maps, half maps, FSCs, masks, and filtering.
 The project must contain active particles and meaningful 3D orientations. The
 workflow may start from:
 
-1. populated multi-state labels plus compatible project state maps;
-2. state-0/1 input plus `nstates` and distributed startup reconstruction;
-3. `flex=yes`, which obtains labels and maps from `flex_pca` seeded with the
-   project consensus map, under a population floor (`min_state_frac`, default
-   0.1) so that no under-populated flex cluster enters the volume refinement;
+1. populated multi-state labels plus compatible project state maps, which
+   continue without state initialization;
+2. state-0/1 input plus `nstates`, initialized by `flex_pca` by default
+   (`flex=yes`): labels and maps derive from the project consensus map under a
+   population floor (`min_state_frac`, default 0.1) so that no
+   under-populated flex cluster enters the volume refinement;
+3. state-0/1 input plus `nstates` and `flex=no`, initialized by the
+   distributed stochastic startup reconstruction;
 4. an `abinitio3D` split checkpoint whose state maps are registered in the
    project `out` segment.
+
+`flex` defaults to `yes`. It is skipped automatically when the project already
+carries multi-state labels, and an explicit `flex=yes` on such a project is an
+error. Flex initialization requires `nstates >= 3`; two-state stochastic
+initialization needs `flex=no`.
 
 `vol1..volN` input is rejected: starting state maps must come from the project
 lineage. Classification against supplied references belongs to

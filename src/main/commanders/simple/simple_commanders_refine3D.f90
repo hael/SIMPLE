@@ -567,11 +567,26 @@ contains
             flex_arg = cline%get_carg('flex')
             l_flex_requested = trim(flex_arg%to_char()).eq.'yes'
             call flex_arg%kill
+        else
+            ! flex=yes is the default for state=0/1 input; a project that already
+            ! carries multi-state labels (continuation, abinitio3D handoff)
+            ! refines those states instead
+            l_flex_requested = .not. project_has_multistate_labels()
+            if( l_flex_requested )then
+                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' STATE INITIALIZATION BY FLEX PCA (DEFAULT flex=yes)'
+                call cline%set('flex', 'yes')
+            else
+                call cline%set('flex', 'no')
+            endif
         endif
         if( l_flex_requested )then
-            if( .not. l_nstates_on_cline ) THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3')
+            if( .not. l_nstates_on_cline )then
+                THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3; pass flex=no for stochastic state initialization')
+            endif
             nstates_project = cline%get_iarg('nstates')
-            if( nstates_project < 3 ) THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3')
+            if( nstates_project < 3 )then
+                THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3; pass flex=no for stochastic state initialization')
+            endif
             ! population floor for the flex states: no under-populated cluster
             ! enters the volume refinement (flex_pca min_state_frac)
             if( .not. cline%defined('min_state_frac') ) call cline%set('min_state_frac', MIN_STATE_FRAC_FLEX)
@@ -742,6 +757,23 @@ contains
                     &init_sweep_iters, '/', init_stage_minits, '/', init_stage_cap
             endif
         end subroutine configure_refine3D_states_stages
+
+        !> whether the input project already carries populated multi-state labels
+        logical function project_has_multistate_labels() result( l_multi )
+            type(sp_project) :: proj
+            type(string)     :: projfile
+            integer :: nactive
+            l_multi = .false.
+            if( .not. cline%defined('projfile') ) THROW_HARD('projfile is required for '//WORKFLOW_LABEL)
+            projfile = cline%get_carg('projfile')
+            call proj%read_segment('ptcl3D', projfile)
+            if( proj%os_ptcl3D%isthere('state') )then
+                nactive = proj%os_ptcl3D%count_state_gt_zero()
+                if( nactive > 0 ) l_multi = proj%os_ptcl3D%get_n('state') > 1
+            endif
+            call proj%kill
+            call projfile%kill
+        end function project_has_multistate_labels
 
         subroutine set_refine3D_states_nstates()
             type(sp_project) :: state_proj

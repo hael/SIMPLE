@@ -1090,6 +1090,7 @@ contains
             call cline_states%set('prg',          'refine3D_states')
             call cline_states%set('mkdir',                       'no')
             call cline_states%set('pose_policy',              'local')
+            call cline_states%set('flex',                        'no') ! the checkpoint already carries the states
             call cline_states%set('nstates',            nstates_glob)
             call cline_states%set('nsample',          nsample_handoff)
             call cline_states%set('maxits',          remaining_niters)

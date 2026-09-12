@@ -495,8 +495,10 @@ subroutine new_automask( prgtab )
         call refine3D_states%add_input(UI_SRCH, maxits, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'flex', 'binary', 'Initialize states with flex PCA', &
-        &'Run flex_pca to derive the initial particle states and state volumes(yes|no){no}', '', &
-        &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        &'Run flex_pca to derive the initial particle states and state volumes; the default for state=0/1 input, &
+        &skipped automatically when the project already carries multi-state labels; flex=no selects stochastic &
+        &state initialization(yes|no){yes}', '', &
+        &.false., 'yes', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'min_state_frac', 'num', 'Minimum flex state population fraction', &
         &'With flex=yes, every initial state must hold at least this fraction of the particles; under-populated &
         &flex clusters are dropped and their particles randomized over the delivered states{0.1}', &
