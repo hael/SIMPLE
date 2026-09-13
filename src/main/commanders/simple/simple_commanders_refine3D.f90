@@ -81,7 +81,12 @@ contains
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_AUTO'
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
-        integer, parameter :: MINITS_REFINE3D_AUTO = 10
+        ! Minimum iteration count before the convergence test (overlap > 0.99)
+        ! may stop the run. Was 10; on PfCRT (2026-09-11) the forced ten
+        ! iterations degraded a converged map (cFAR 0.78 -> 0.62, FSC=0.5
+        ! 4.14 -> 4.31 A over iterations 1-10). Three is enough for the
+        ! startup bootstrap to be superseded; if it is converged, it is converged.
+        integer, parameter :: MINITS_REFINE3D_AUTO = 3
         integer, parameter :: MAXITS_REFINE3D_AUTO_CAP = 50
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
@@ -251,6 +256,11 @@ contains
         call cline_boot%delete('continue')
         call cline_boot%set('postprocess', 'no')
         call cline_boot%set('which_iter',      1)
+        ! the initial volume is the lag-one reference of the startup
+        ! reconstruction: on PCG it supplies the density-envelope support of
+        ! the base pair, so iteration 1 starts from an envelope-constrained
+        ! pair and an estimator-constrained FSC like every later iteration
+        if( l_have_init_vol .and. .not. cline_boot%defined('vol1') ) call cline_boot%set('vol1', init_vol)
         call xrec3D%execute(cline_boot)
         ! the bootstrap reconstruction is now the starting reference, and its
         ! NU-filtered halves, masks and matching-lp handoff are on disk and in
@@ -2071,6 +2081,24 @@ contains
             do istate = 1, params%nstates
                 call cline_rec%delete('vol'//int2str(istate))
             enddo
+            ! The shipped PCG map must be estimated on the density envelope
+            ! like every refinement iteration, and its REPORTED FSC must be
+            ! the estimator-constrained one. build_pcg_state_support derives
+            ! that envelope from vol<state>; with no reference the base pair
+            ! bootstraps on the sphere and the resolution doc reads "density
+            ! envelope applied post hoc ... phase-randomized correction", the
+            ! gridding wording (bgal, 2026-09-11). The bootstrap map of step 2
+            ! (same name, same sampling, automasked as the refinement was) is
+            ! the lag-one reference here.
+            if( l_final )then
+                if( cline_rec%defined('rec_backend') )then
+                    if( cline_rec%get_carg('rec_backend') == 'pcg' )then
+                        do istate = 1, params%nstates
+                            call cline_rec%set('vol'//int2str(istate), refine3D_state_vol_fname(istate))
+                        enddo
+                    endif
+                endif
+            endif
         end subroutine prepare_bootstrap_rec_cline
 
         subroutine register_bootstrap_rec_outputs()

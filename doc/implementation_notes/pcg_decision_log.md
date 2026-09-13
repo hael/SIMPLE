@@ -250,3 +250,39 @@ PCG-only two-shell FSC bound on the walk and a 5%-support handoff with FSC
 headroom was corrected at the same time (`nonuniform_filtering_policy.md`
 sections 8, 10, 12; `reconstruct3D_pcg_policy.md`;
 `refine3D_auto_policy.md`). Compile and the refine3D_auto rerun are Hans's.
+
+**2026-09-11 -- Final and startup PCG reconstructions get a support
+reference.** On bgal the refine3D_auto resolution doc reported the gridding
+FSC wording for a PCG run: `bootstrap_rec3D` deleted `vol<state>` from the
+final `reconstruct3D` command line, so `build_pcg_state_support` found no
+reference, the base pair bootstrapped on the sphere and only the replay
+took the envelope; the reported FSC was the post-hoc/corrected one. Fix:
+the final PCG `reconstruct3D` receives the step-2 gridding bootstrap map
+(same name, same sampling, automasked as the refinement) as `vol<state>`;
+refine3D_auto's startup reconstruction receives the initial volume as
+`vol1`. Both base pairs are now envelope-constrained and `FSC MODE` reads
+estimator-constrained, as in every refinement iteration.
+
+**2026-09-13 -- Ordered-label Potts prior prices the discrete ladder only.**
+Hans's hypothesis: the prior is too conservative for `nu_refine=yes`. In the
+code every accepted shell became one more integer coordinate
+(`new_coords(i) = real(i)` at the three bank rebuilds and in
+`setup_nu_candidate_coords`), so the hinge `(d-1)+(d-1)^2` priced one
+Fourier shell like one ladder rung and grew quadratically with the walk
+length, while adjacent walked candidates differ little in unary; the
+post-extension cleanup (`refine_nu_extension_filtmap_ordered_labels`, run
+after every accepted shell) pulled the leading edge back and the next
+frontier shrank under the 32-voxel / 5% gate. Change
+(`nu_potts_coord_for_label`, `nu_static_ladder_count` in
+`simple_nu_filter_bank.f90`): coordinate = ladder position for labels
+1..min(8, n_base), the finest ladder position for every walked shell. The
+coordinate is no longer a label identity: `nu_effective_base_label_for_candidate`
+returns the clamped label directly, and the evidence-state ordering assertion
+checks `cutoff_finds` instead of coordinates (the evidence posterior keeps its
+own shell-distance continuation). New master log line per cleanup:
+`NU post-extension cleanup: voxels on walked labels a -> b`. Discontinuity
+statistics use the same coordinates and now count walked transitions as
+identical. Compile and rerun are Hans's; the expected signature is walked
+populations surviving the cleanup and `accepted shell steps` advancing across
+iterations.
+

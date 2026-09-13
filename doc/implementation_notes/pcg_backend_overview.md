@@ -175,7 +175,12 @@ string records which envelope ran.
   regularization of the reference they are scored against), one residual
   sigma pass, then the shipped PCG map at the native box: cold, at least
   five iterations, `filt_mode=none`, `nu_refine=no`, `automsk` inherited
-  (so its support matches the refinement's), `postprocess=yes`.
+  (so its support matches the refinement's), `postprocess=yes`, with the
+  gridding bootstrap map passed as `vol<state>` so the density envelope
+  constrains the base pair too and the reported FSC is estimator-constrained
+  (2026-09-11; previously the final base pair bootstrapped on the sphere).
+  refine3D_auto's startup reconstruction likewise receives the initial
+  volume as `vol1`.
 - **Shared-memory** (`nparts=1`) uses `execute_rec3D_pcg_shared`, the same
   policy in one process; shared-memory trailing is not supported.
 

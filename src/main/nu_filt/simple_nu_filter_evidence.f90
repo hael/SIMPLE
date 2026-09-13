@@ -77,8 +77,13 @@ contains
             &THROW_HARD('invalid NU evidence signal-candidate count')
         if( size(dmats_mask,1) /= n_nu_mask .or. size(dmats_mask,2) < n_signal ) &
             &THROW_HARD('NU unary bank shape is incompatible with evidence compaction')
+        ! coarse-to-fine ordering is a property of the bank cutoffs; the Potts
+        ! coordinates are not strictly increasing since the walked shells share
+        ! the finest ladder coordinate (2026-09-13)
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; build_nu_evidence_state')
+        if( size(cutoff_finds) < n_signal ) THROW_HARD('NU evidence cutoff geometry is incomplete')
         do icand = 2, n_signal
-            if( candidate_coords(icand) <= candidate_coords(icand-1) ) &
+            if( cutoff_finds(icand) <= cutoff_finds(icand-1) ) &
                 &THROW_HARD('NU evidence candidate ordering is not strictly coarse-to-fine')
         enddo
 

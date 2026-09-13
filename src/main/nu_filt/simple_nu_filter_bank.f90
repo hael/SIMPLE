@@ -162,9 +162,52 @@ contains
         if( allocated(candidate_coords) ) deallocate(candidate_coords)
         allocate(candidate_coords(n_candidates), source=0.)
         do i = 1, n_base
-            candidate_coords(i) = real(i)
+            candidate_coords(i) = nu_potts_coord_for_label(i, n_base)
         end do
     end subroutine setup_nu_candidate_coords
+
+    !> Number of bank labels that belong to the discrete static ladder. The
+    !! ladder always occupies labels 1..n (a capped static bank retains fewer
+    !! than size(lowpass_limits)); every label beyond it is a walked shell
+    !! (a retained step seeded by init_nu_filter or accepted by the shell walk)
+    module integer function nu_static_ladder_count( n_base )
+        integer, intent(in) :: n_base
+        nu_static_ladder_count = max(1, min(size(lowpass_limits), n_base))
+    end function nu_static_ladder_count
+
+    !> Ordered-label Potts coordinate of bank label ilabel in a bank of n_base
+    !! labels: the ladder position for a static label, the finest ladder
+    !! position for every walked shell (2026-09-13). The hinge therefore never
+    !! prices a transition among walked shells, or between a walked shell and
+    !! the finest static label; the walk is selected on unary evidence alone
+    !! (already AWF-smoothed) under the shell-walk acceptance gate
+    module real function nu_potts_coord_for_label( ilabel, n_base )
+        integer, intent(in) :: ilabel, n_base
+        nu_potts_coord_for_label = real(min(ilabel, nu_static_ladder_count(n_base)))
+    end function nu_potts_coord_for_label
+
+    !> Mask voxels currently assigned to a walked (finer-than-ladder) label
+    module integer function count_nu_walked_label_voxels( candmap, n_base )
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer, intent(in) :: n_base
+        integer :: i, j, k, imask, icand, n_ladder, n
+        n = 0
+        if( .not.allocated(nu_mask_vox) ) then
+            count_nu_walked_label_voxels = 0
+            return
+        endif
+        n_ladder = nu_static_ladder_count(n_base)
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,icand) reduction(+:n) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            icand = int(candmap(i,j,k))
+            if( icand > n_ladder .and. icand <= n_base ) n = n + 1
+        end do
+        !$omp end parallel do
+        count_nu_walked_label_voxels = n
+    end function count_nu_walked_label_voxels
 
     module real function get_nu_filter_bank_finest_lp()
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; get_nu_filter_bank_finest_lp')
@@ -470,11 +513,15 @@ contains
         nu_candidate_coord_for_label = real(ilabel)
     end function nu_candidate_coord_for_label
 
+    !> Base label identity of a candidate: the label itself, clamped to the
+    !! bank. This used to round the Potts coordinate, which was an identity
+    !! map for the base bank; since the walked shells share the finest ladder
+    !! coordinate (2026-09-13) the coordinate is no longer a label and must
+    !! not be used as one (the shell-walk frontier is the finest BANK label)
     module integer function nu_effective_base_label_for_candidate( icand, n_base )
         integer, intent(in) :: icand, n_base
         if( n_base < 1 ) THROW_HARD('empty base bank; nu_effective_base_label_for_candidate')
-        nu_effective_base_label_for_candidate = nint(nu_candidate_coord_for_label(icand))
-        nu_effective_base_label_for_candidate = max(1, min(n_base, nu_effective_base_label_for_candidate))
+        nu_effective_base_label_for_candidate = max(1, min(n_base, icand))
     end function nu_effective_base_label_for_candidate
 
 end submodule simple_nu_filter_bank

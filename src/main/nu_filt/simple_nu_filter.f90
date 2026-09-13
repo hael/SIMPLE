@@ -125,6 +125,14 @@ integer,          parameter   :: DISCONT_STEP_THRESH         = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 6
 ! Adjacent retained-bank coordinate jumps are tolerated by the ordered-label
 ! Potts prior; the quadratic hinge makes larger jumps increasingly expensive.
+! The coordinate is the discrete ladder position for the static labels and
+! the FINEST ladder position for every candidate finer than the ladder
+! (2026-09-13): the walked shells share the finest discrete member's
+! coordinate, so the hinge prices ladder jumps only and never a walk. Before,
+! each accepted shell was one more integer coordinate, so a voxel n shells
+! ahead of a neighbour parked on the finest static label paid (n-1)+(n-1)^2
+! for a filter that is nearly identical to its neighbour's, and the
+! post-extension cleanup pulled the walk's leading edge back label by label.
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
@@ -585,6 +593,19 @@ interface
     module subroutine setup_nu_candidate_coords( n_candidates )
         integer, intent(in) :: n_candidates
     end subroutine setup_nu_candidate_coords
+
+    module integer function nu_static_ladder_count( n_base )
+        integer, intent(in) :: n_base
+    end function nu_static_ladder_count
+
+    module real function nu_potts_coord_for_label( ilabel, n_base )
+        integer, intent(in) :: ilabel, n_base
+    end function nu_potts_coord_for_label
+
+    module integer function count_nu_walked_label_voxels( candmap, n_base )
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer, intent(in) :: n_base
+    end function count_nu_walked_label_voxels
 
     module real function get_nu_filter_bank_finest_lp()
     end function get_nu_filter_bank_finest_lp

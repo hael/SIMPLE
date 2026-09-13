@@ -120,7 +120,10 @@ the finest populated base-bank label.
 
 Under `rec_backend=pcg` the startup reconstruction runs the same NU
 competition inside the PCG master and produces the same `_nu_filt` bootstrap
-references and matching-lp handoff as gridding (policy 2026-09-06).
+references and matching-lp handoff as gridding (policy 2026-09-06). The
+initial volume (external `vol1` or the compatible project volume) is passed
+to it as `vol1` (2026-09-11), so its PCG base pair is envelope-constrained
+from the start instead of bootstrapping on the sphere.
 
 ## 4. Autoscaling and Sampling
 
@@ -137,8 +140,11 @@ iteration is a full update. Otherwise `update_frac` is set to
 `nsample / active_particles`.
 
 Automatic iteration planning targets roughly four updates per active particle,
-caps the run length, and enforces a minimum of ten iterations unless the user
-explicitly supplied `maxits`.
+caps the run length, and enforces a minimum of three iterations unless the user
+explicitly supplied `maxits` (or a larger `minits`). The minimum was ten until
+2026-09-11; on PfCRT the forced iterations degraded an already converged map
+(cFAR 0.78 to 0.62, FSC=0.5 4.14 to 4.31 A over iterations 1-10). Once the
+overlap criterion (0.99) is met after the third iteration the run stops.
 
 ## 5. Refinement and Final Reconstruction
 
@@ -155,7 +161,13 @@ turns `filt_mode` back to `none` when the refinement used NU filtering.
 `automsk` is inherited (2026-09-09): on PCG the shipped map is estimated on
 the same density-envelope support as every refinement iteration, with the
 same implied `envfsc=yes` and the same reported `>>> FSC MODE`, rather than
-falling back to the sphere for the map that matters most.
+falling back to the sphere for the map that matters most. The PCG support
+is derived from a reference volume (`build_pcg_state_support`), so the
+final `reconstruct3D` receives `bootstrap_rec3D`'s own gridding bootstrap
+map as `vol<state>` (2026-09-11); without it the base pair bootstrapped on
+the sphere and the resolution doc reported the gridding wording, "density
+envelope applied post hoc ... phase-randomized correction", for a PCG map
+(bgal). The base pair and the reported FSC are now envelope-constrained.
 
 Final-map postprocessing is classical global FSC/B-factor postprocessing. NU
 filtering is a refinement-reference feature, not a separate final-map

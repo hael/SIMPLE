@@ -218,8 +218,18 @@ contains
             ! challenger acceptance) and the Fourier grid only; no FSC cap
             do
                 call extend_nu_filter_highres_shell_next(vol_base_even, vol_base_odd, stats=ext_stats)
+                ! one line per challenge, always visible on the master: the walk's outcome is
+                ! the resolution-extension evidence and was invisible outside NU_DEV_OUTPUT
+                if( params%part == 1 .and. ext_stats%attempted )then
+                    write(logfhandle,'(A,I0,A,F7.3,A,I0,A,F7.3,A,I0,A,I0,A,F6.2,A,I0,A,I0,A,L1)') &
+                        &'>>> NU SHELL WALK: state ', state, ' challenge ', ext_stats%old_limit, ' A (k=', &
+                        &ext_stats%old_find, ') -> ', ext_stats%new_limit, ' A (k=', ext_stats%new_find, &
+                        &'); frontier ', ext_stats%n_tested, ' voxels, challenger wins ', &
+                        &ext_stats%pct_unary_wins_tested, '% (need 5%), extended ', ext_stats%n_extended, &
+                        &'/', ext_stats%n_seed_min, ' seed; accepted=', ext_stats%applied
+                endif
                 if( .not. ext_stats%attempted )then
-                    if( NU_DEV_OUTPUT .and. params%part == 1 )then
+                    if( params%part == 1 )then
                         if( ext_stats%n_mask == 0 )then
                             write(logfhandle,'(A)') &
                                 &'>>> NU high-resolution extension stopped: empty NU refinement mask'
@@ -243,7 +253,7 @@ contains
                 call refine_nu_extension_filtmap_ordered_labels
                 nsteps = get_nu_filtmap_highres_shell_depth()
                 call write_nu_highres_steps_for_state(nsteps)
-                if( NU_DEV_OUTPUT .and. params%part == 1 )then
+                if( params%part == 1 )then
                     write(logfhandle,'(A,I0,A,I0)') &
                         &'>>> NU high-resolution extension accepted shell steps this iteration: ', &
                         &n_accepted_this_iteration, '; promoted depth for next iteration: ', nsteps

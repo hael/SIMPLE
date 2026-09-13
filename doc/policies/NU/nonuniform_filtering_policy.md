@@ -423,6 +423,11 @@ The ordered-label prior:
 - evaluates penalties on retained-bank coordinates, not raw label numbers
 - tolerates adjacent retained-bank coordinate steps
 - penalizes larger jumps with a linear-quadratic hinge
+- prices the discrete ladder only (2026-09-13): a static label's coordinate
+  is its ladder position; every candidate finer than the finest static label
+  (a walked shell, seeded or accepted) carries the finest static label's
+  coordinate, so transitions among walked shells, and between a walked shell
+  and the finest static label, cost nothing
 - normalizes neighbor penalties by the number of in-mask neighbors
 - preserves the current label on ties within a small tolerance
 
@@ -452,7 +457,20 @@ acceptance and the Fourier grid are the only limits.
 
 The challenge test itself is unary-only. After one or more challengers are
 accepted, the final expanded label field is cleaned with the same ordered-label
-Potts prior used by the static bank.
+Potts prior used by the static bank, in which every walked shell shares the
+finest static label's coordinate (2026-09-13; section 9). Until then each
+accepted shell was one more integer coordinate, priced like a ladder rung:
+a voxel `n` shells ahead of a neighbour parked on the finest static label
+paid `(n-1)+(n-1)^2` for a filter nearly identical to its neighbour's, while
+the unary contrast between adjacent walked shells is small, so the cleanup
+pulled the walk's leading edge back label by label and the next challenge
+found a shrinking frontier (PfCRT: bootstrap walk to 3.74 A with tiny
+populations, no extension in iterations). Within the walked domain the
+selection is now unary-only (the objective is already smoothed at the
+candidate scale) under the acceptance gate above; the ladder keeps its full
+regularization. Each cleanup logs `>>> NU post-extension cleanup: voxels on
+walked labels <before> -> <after>` on the master. The evidence posterior's
+own coordinate continuation below is unchanged.
 
 Accepted shell steps are challenged at full Fourier sampling. The retained
 extension bank is thinned for memory: every second extension shell is kept,

@@ -338,7 +338,7 @@ contains
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine refine_nu_extension_filtmap_ordered_labels
-        integer :: n_base, n_candidates
+        integer :: n_base, n_candidates, n_walked_before, n_walked_after
         if( .not.allocated(filtmap)          ) THROW_HARD('filtmap not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(dmats_mask)       ) THROW_HARD('dmats_mask not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(candidate_coords) ) &
@@ -353,10 +353,20 @@ contains
         call clamp_nu_filtmap_labels(n_base)
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'before post-extension ordered-label cleanup')
+        n_walked_before = count_nu_walked_label_voxels(filtmap, n_base)
         call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
         call clamp_nu_filtmap_labels(n_base)
         ! re-enforce the solvent clamp: the cleanup re-optimizes on unaries
         call apply_nu_solvent_clamp()
+        n_walked_after = count_nu_walked_label_voxels(filtmap, n_base)
+        ! one line per cleanup, visible on the master: how much of the walk
+        ! survives the ordered-label pass is the test of the prior's pricing
+        if( nu_l_report )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0)') &
+                &'>>> NU post-extension cleanup: voxels on walked labels ', n_walked_before, ' -> ', &
+                &n_walked_after, ' of ', n_nu_mask, ' mask voxels; ladder labels ', &
+                &nu_static_ladder_count(n_base), ', bank labels ', n_base
+        endif
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after post-extension ordered-label cleanup')
         call compact_nu_highres_dmat_bank_for_capacity()
@@ -471,7 +481,7 @@ contains
         if( allocated(candidate_coords) )then
             allocate(new_coords(n_keep + n_aux), source=0.)
             do ikeep = 1, n_keep
-                new_coords(ikeep) = real(ikeep)
+                new_coords(ikeep) = nu_potts_coord_for_label(ikeep, n_keep)
             end do
             call move_alloc(new_coords, candidate_coords)
         endif
@@ -585,7 +595,7 @@ contains
             do i = 1, old_n_base
                 if( .not.keep(i) ) cycle
                 ikeep = ikeep + 1
-                new_coords(ikeep) = real(ikeep)
+                new_coords(ikeep) = nu_potts_coord_for_label(ikeep, n_keep)
             end do
             call move_alloc(new_coords, candidate_coords)
         endif
@@ -793,7 +803,7 @@ contains
             n_aux = max(0, size(candidate_coords) - old_n_base)
             allocate(new_coords(active_label + n_aux), source=0.)
             do i = 1, active_label
-                new_coords(i) = real(i)
+                new_coords(i) = nu_potts_coord_for_label(i, active_label)
             end do
             call move_alloc(new_coords, candidate_coords)
         endif
