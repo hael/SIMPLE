@@ -253,15 +253,16 @@ contains
         end do
         !$omp end parallel do
         deallocate(sel)
-        ! solvent-constraint clamp: outside the envelope the label is the
-        ! coarsest candidate. Applied before Potts smoothing as the intended
-        ! initialization AND re-applied after: the smoothing re-optimizes on
-        ! the unaries at every sweep, so a pre-smoothing override alone is
-        ! eroded wherever solvent unaries prefer fine labels
+        ! background clamp: outside the density envelope (no signal:
+        ! unreconstructed under the PCG support, solvent on gridding) the
+        ! label is the coarsest candidate. Applied before Potts smoothing as
+        ! the intended initialization AND re-applied after: the smoothing
+        ! re-optimizes on the unaries at every sweep, so a pre-smoothing
+        ! override alone is eroded wherever background unaries prefer fine labels
         if( nu_l_solvent_clamp )then
             call apply_nu_solvent_clamp(n_clamped)
             if( nu_l_report ) write(logfhandle,'(A,I0,A)') &
-                &'>>> NU SOLVENT CLAMP: ', n_clamped, ' support voxels outside the envelope set to the coarsest candidate'
+                &'>>> NU BACKGROUND CLAMP: ', n_clamped, ' support voxels outside the density envelope set to the coarsest candidate'
         endif
         if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_aux_replacement_margin_stats()
         if( NU_DEV_OUTPUT .and. nu_l_report ) &

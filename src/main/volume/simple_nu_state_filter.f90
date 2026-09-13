@@ -82,7 +82,7 @@ contains
         integer(timer_int_kind)  :: t_filter, t_envmask
         integer :: n_highres_steps
         real    :: aux_resolution, bank_cap_res
-        logical :: l_armed, l_constrained
+        logical :: l_constrained
         align_lp = 0.
         if( L_BENCH_GLOB ) t_filter = tic()
         l_constrained = .false.
@@ -131,36 +131,37 @@ contains
                 &n_highres_steps=n_highres_steps, fsc_res=bank_cap_res)
         endif
         if( trim(params%automsk).ne.'no' )then
-            ! automsk=yes: the filter-field background is the complement of
-            ! the NU evidence envelope -- the only envelope that excludes
-            ! detergent -- derived from the unaries of the setup that just
-            ! ran (same pass, no second compute) and regenerated every cycle;
-            ! the artifact on disk is overwritten and has no in-workflow
-            ! reader. Its null (policy 2026-09-09): a spherical base pair
-            ! (gridding, PCG bootstrap) keeps the robust median/MAD over the
-            ! solvent-majority support; an envelope-constrained base pair
-            ! (PCG) has had its far solvent removed by the estimator, so the
-            ! null is designated by Euclidean geometry on the density
-            ! envelope's dilation ring and labels are free only on the
-            ! observed density envelope, nesting the evidence envelope
-            ! inside it. If the null is invalid (signal majority, or a shell
-            ! too thin) or the envelope is empty, the background falls back
-            ! to the density envelope itself. The objective domain remains
-            ! the spherical mskdiam support; nu_refine independently controls
-            ! high-resolution extension.
+            ! automsk=yes (policy 2026-09-13): the conservative DENSITY
+            ! envelope is the support of the signal model. Outside it there is
+            ! no signal to filter -- unreconstructed (exactly zero) under the
+            ! PCG support projection, solvent noise on gridding -- so the
+            ! filter field takes the coarsest bank candidate there (the null
+            ! of the evidence competition, and an honest local-resolution
+            ! report), and the _nu_filt matching references are multiplied by
+            ! the envelope after filtering, which on PCG restores the solve
+            ! support the candidate filters rang across and on gridding
+            ! flattens the solvent. Inside the envelope the competition is
+            ! free. The NU evidence envelope is still derived from the unaries
+            ! of the setup that just ran (same pass, no second compute) and
+            ! written every cycle, but only as a diagnostic of the evidence
+            ! field: it is never armed and never multiplied into a reference
+            ! (it cuts out detergent density that the particle images contain,
+            ! PfCRT collapse 2026-09-02). Its null (policy 2026-09-09): a
+            ! spherical base pair (gridding, PCG bootstrap) keeps the robust
+            ! median/MAD over the solvent-majority support; an
+            ! envelope-constrained base pair (PCG) has had its far solvent
+            ! removed by the estimator, so the null is designated by
+            ! Euclidean geometry on the density envelope's dilation ring and
+            ! labels are free only on the observed density envelope. The
+            ! objective domain remains the spherical mskdiam support;
+            ! nu_refine independently controls high-resolution extension.
             if( L_BENCH_GLOB ) t_envmask = tic()
             if( l_constrained ) call set_nu_evidence_null_shell(density_envelope, envelope_core, envelope_dilated, base_support)
             nu_envmask_file = string(NU_ENVMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
-            call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, &
-                &vol_base_even%get_smpd(), state, nu_envmask_file, l_arm_background=.true., &
-                &l_armed=l_armed)
+            call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_base_even%get_smpd(), state, nu_envmask_file)
             call nu_envmask_file%kill
-            if( .not. l_armed )then
-                call set_nu_solvent_envelope(density_envelope, source='density_envelope')
-                write(logfhandle,'(A,I0)') &
-                    &'>>> NU BACKGROUND: FILTER-FIELD BACKGROUND ARMED FROM THE DENSITY ENVELOPE (EVIDENCE FALLBACK), STATE ', state
-            endif
-            call density_envelope%kill_bimg
+            call set_nu_solvent_envelope(density_envelope, source='density_envelope')
+            write(logfhandle,'(A,I0)') '>>> NU BACKGROUND: COARSEST CANDIDATE OUTSIDE THE DENSITY ENVELOPE, STATE ', state
             if( l_constrained )then
                 call envelope_core%kill
                 call envelope_dilated%kill
@@ -176,6 +177,15 @@ contains
         call vol_base_even%kill
         call vol_base_odd%kill
         call nu_filter_vols(vol_even_nu, vol_odd_nu)
+        if( trim(params%automsk).ne.'no' )then
+            ! the _nu_filt matching references carry the density envelope
+            ! (policy 2026-09-13): the same support the PCG solve imposes and
+            ! the FSC is corrected with; the shipped maps are not masked here
+            call density_envelope%apply_3Dmask(vol_even_nu)
+            call density_envelope%apply_3Dmask(vol_odd_nu)
+            call density_envelope%kill_bimg
+            write(logfhandle,'(A,I0)') '>>> NU REFERENCES: MULTIPLIED BY THE DENSITY ENVELOPE, STATE ', state
+        endif
         call print_nu_filtmap_lowpass_stats()
         if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
         call write_nonuniform_outputs()

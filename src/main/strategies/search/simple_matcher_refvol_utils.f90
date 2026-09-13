@@ -365,16 +365,16 @@ contains
 
     contains
 
-        !> Matching references take the spherical soft mask ONLY. Never
-        !! multiply a reference with an envelope (evidence or density) before
-        !! reprojection: hard-removing density that is present in the particle
-        !! images (e.g. a detergent micelle) makes the reference unable to
-        !! explain them, and under the euclid objective the unexplained
-        !! density destroys pose discrimination (PfCRT collapse, pcg_priors_history.md
-        !! 2026-09-02). Down-weighting belongs to the NU filter field, which
-        !! heavily low-pass filters the background defined by the NU evidence
-        !! envelope -- cisTEM-style background filtering that is known not to
-        !! break alignment.
+        !> Matching references take the spherical soft mask here. The NU
+        !! evidence envelope is never multiplied into a reference: it cuts out
+        !! detergent density that is present in the particle images, so the
+        !! reference can no longer explain them, and under the euclid objective
+        !! the unexplained density destroys pose discrimination (PfCRT
+        !! collapse, pcg_priors_history.md 2026-09-02). The conservative
+        !! density envelope is different: it retains every density present at
+        !! envmsklp, and under automsk=yes assembly applies it to the _nu_filt
+        !! references (policy 2026-09-13), the same support the PCG solve
+        !! imposes; outside it the filter field takes the coarsest candidate.
         subroutine mask_matching_reference( refvol )
             class(image), intent(inout) :: refvol
             call refvol%mask3D_soft(params%msk_crop, backgr=0.0)

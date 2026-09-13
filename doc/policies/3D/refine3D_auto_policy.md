@@ -70,19 +70,19 @@ NU-evidence smoothing scale. The NU-evidence envelope never enters FSC
 correction or PCG solve support; on PCG its null is designated on the density
 envelope's dilation ring rather than estimated from the constrained pair.
 
-With `automsk=yes`, the NU filter-field background is the complement of the
-NU evidence envelope (`nu_envmask3D_stateNN.mrc`), derived from the static
-candidate bank at the start of the same evidence pass. It is fixed before
-adaptive candidates are challenged, so accepted probes refine precision inside
-a causal boundary rather than redefining their own support. Background voxels take the
-coarsest bank candidate, so matching references carry the envelope-excluded
-density (detergent micelle, disordered belt) heavily low-pass filtered
-rather than removed.
-Matching references always take the spherical soft mask only -- they are
-never multiplied with an envelope before projection, because a reference
-must not hard-remove density that is present in the particle images. The
-PCG solve support remains the conservative density envelope, never the
-evidence envelope. There is no separate `envref` control.
+With `automsk=yes`, the conservative density envelope is the support of the
+signal model (policy 2026-09-13). Outside it there is no signal to filter --
+unreconstructed under the PCG support projection, solvent on gridding -- so
+the filter field takes the coarsest bank candidate there, fixed before
+adaptive candidates are challenged, and the `_nu_filt` matching references
+are multiplied by the envelope after filtering. The NU evidence envelope
+(`nu_envmask3D_stateNN.mrc`) is still derived from the static candidate bank
+at the start of the same evidence pass, as a diagnostic of the evidence
+field; it is never armed and never multiplied into a reference, because it
+cuts out detergent density that the particle images contain. The matcher
+itself applies the spherical soft mask only. The PCG solve support remains
+the conservative density envelope, never the evidence envelope. There is no
+separate `envref` control.
 
 If `filt_mode` is overridden to a non-NU mode, `automsk` must also be set to
 `no`; other combinations are rejected.

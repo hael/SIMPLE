@@ -10,11 +10,15 @@ mask for FSC correction independently of refinement-reference automasking.
 The current architecture has two controls and two artifacts, coupled in one
 direction (policy 2026-09-09):
 
-- `automsk` requests a NU-evidence-derived per-state envelope that defines
-  the filter-field background: outside it the NU filter takes the coarsest
-  bank candidate, so matching references carry the excluded density heavily
-  low-pass filtered (never removed), on both backends. It is the only
-  envelope that excludes detergent.
+- `automsk` makes the conservative density envelope the support of the
+  signal model for NU filtering (policy 2026-09-13): outside it there is no
+  signal to filter -- unreconstructed under the PCG support projection,
+  solvent on gridding -- so the filter field takes the coarsest bank
+  candidate there and the `_nu_filt` matching references are multiplied by
+  the envelope after filtering, on both backends. It also produces the
+  NU-evidence-derived per-state envelope, but only as a diagnostic of the
+  evidence field: that envelope is never armed and never multiplied into a
+  reference.
 - `envfsc` requests an on-the-fly density-derived per-state envelope (the
   conservative density envelope). On gridding it is applied post hoc to the
   FSC pair with phase-randomized solvent correction and to the cFAR copies;
@@ -62,14 +66,18 @@ and compatible final-map postprocessing. `amsklp` remains the
 NU-evidence/standalone automasking scale and does not control this density
 envelope.
 
-Matching references are never multiplied with an envelope before reprojection
-(2026-09-02): hard-removing density that is present in the particle images
-(e.g. a detergent micelle) destroys pose discrimination under the euclid
-objective. With `automsk=yes` the down-weighting happens through the NU
-filter field instead -- the background, defined as the complement of the NU
-evidence envelope derived in the same evidence pass, takes the coarsest bank
-candidate (cisTEM-style heavy background low-pass). The matcher applies the
-spherical soft reference mask only; there is no separate `envref` control.
+Matching references are never multiplied with the NU evidence envelope
+(2026-09-02): it cuts out detergent density that is present in the particle
+images, and a reference that cannot explain that density destroys pose
+discrimination under the euclid objective. The conservative density envelope
+is different: it retains every density present at `envmsklp`, and with
+`automsk=yes` assembly applies it to the `_nu_filt` matching references
+after filtering (policy 2026-09-13), the same support the PCG solve imposes
+and the FSC is corrected with. Outside it the filter field takes the coarsest
+bank candidate, the null of the evidence competition. The NU evidence envelope
+is written in the same pass as a diagnostic and is never armed. The matcher
+itself applies the spherical soft reference mask only; there is no separate
+`envref` control.
 Particle images and matching-bandwidth selection are unchanged by `automsk`;
 FSC estimation follows the implied `envfsc=yes` (see below).
 
@@ -93,9 +101,9 @@ keyed on how the base pair was solved:
   density envelope and fixed solvent outside it, nesting the evidence envelope
   inside the density envelope; validity is shell sufficiency
 
-If the null is invalid or the envelope is empty, the density envelope itself
-is armed as the filter-field background (logged as `EVIDENCE FALLBACK`); the
-provenance string records which envelope ran.
+Null validity is reported as a diagnostic of the evidence field. The density
+envelope is the filter-field background whenever `automsk=yes`, whatever the
+evidence envelope's state (policy 2026-09-13).
 
 `mskfile` is no longer part of the CLI policy. Passing `mskfile` is a hard error.
 
@@ -108,18 +116,17 @@ On the gridding backend, volume assembly owns both mask-production paths:
 - half-map restoration generates `automask3D_stateNN.mrc` on every active
   `envfsc=yes` calculation, directly from the current half maps
 - NU postprocessing regenerates `nu_envmask3D_stateNN.mrc` on every
-  `automsk=yes` competition. It is deliberately derived from the static
-  candidate bank before optimization and adaptive extension so it can
-  constrain that same pass. A diagnostic envelope generated without arming the
-  background may include accepted extensions.
+  `automsk=yes` competition, derived from the static candidate bank before
+  optimization and adaptive extension, as a diagnostic of the evidence the
+  pass started from. It is never armed; the filter-field background is the
+  density envelope.
 
 The NU envelope is generated before `nu_filter_vols` releases the mask-packed
-NU unary storage, and constrains the local filtering field in that same
-assembly pass.
+NU unary storage.
 
 On the PCG backend, the PCG master runs the same assembly-owned NU competition
-(`simple_nu_state_filter`), so the NU-evidence envelope is produced and
-consumed exactly as on gridding, and hands over the support that constrained
+(`simple_nu_state_filter`), so the NU-evidence envelope is produced exactly
+as on gridding, and hands over the support that constrained
 the base pair so the evidence null takes the Euclidean-shell regime. It
 independently builds the conservative density mask used as solve support, but
 only under `automsk=yes`; with `automsk=no` no density mask is built and every
@@ -155,20 +162,21 @@ files are `fscu_stateNN.bin`, `fsct_stateNN.bin`, and `fscn_stateNN.bin`.
 
 Matcher reference preparation never reads or multiplies either envelope.
 References receive only the broad spherical soft mask. With `automsk=yes`, the
-NU-evidence envelope has already influenced the reference through the
-coarsest-bank background assignment in the synthesized NU-filtered maps, on
-both backends.
+density envelope has already been applied at assembly: the synthesized
+`_nu_filt` maps carry it multiplicatively and take the coarsest-bank label
+outside it, on both backends.
 
 ## State-specific artifacts
 
 The two state-specific artifacts are:
 
 - `automask3D_stateNN.mrc`: current density/Otsu envelope produced by
-  `envfsc=yes`; used by FSC/cFAR in memory and compatible non-PCG final
-  postprocessing from disk
+  `envfsc=yes`; used by FSC/cFAR in memory, applied to the `_nu_filt`
+  references at assembly under `automsk=yes`, and reused by compatible
+  non-PCG final postprocessing from disk
 - `nu_envmask3D_stateNN.mrc`: NU-evidence envelope produced by `automsk=yes`;
-  records the envelope that constrains the NU filter/prior background and its
-  regeneration cadence; it is never applied directly to a reference
+  a diagnostic of the cross-half evidence field, never armed as the
+  filter-field background (2026-09-13) and never applied to a reference
 
 Both files are state-local. They have different statistical provenance and are
 not interchangeable in the FSC or NU-objective paths.
@@ -183,15 +191,16 @@ not interchangeable in the FSC or NU-objective paths.
 3. `volassemble` restores the merged state volume.
 4. The NU filter constructs spherical support from `mskdiam` and evaluates the
    static candidate-bank unaries.
-5. If `automsk=yes`, `volassemble` derives
-   `nu_envmask3D_stateNN.mrc` from those live unaries and fixes the envelope
-   background to the coarsest candidate; `automsk=no` leaves the spherical
-   field unconstrained.
+5. If `automsk=yes`, `volassemble` derives `nu_envmask3D_stateNN.mrc` from
+   those live unaries as a diagnostic and fixes the background outside the
+   density envelope to the coarsest candidate; `automsk=no` leaves the
+   spherical field unconstrained.
 6. The NU filter optimizes the static field and accepts any supported
    `nu_refine` extensions inside that fixed background.
-7. The NU envelope affects matching references only through the local filter
-   field; it is never multiplied into a reference and never enters
-   FSC correction or NU objective support.
+7. `volassemble` multiplies the NU-filtered even and odd references by the
+   density envelope before writing them (the merged reference is their
+   average); the NU evidence envelope never enters the filter field, FSC
+   correction, NU objective support, or a reference.
 8. Non-PCG final postprocessing may reuse a compatible
    `automask3D_stateNN.mrc` when `envfsc=yes`; PCG postprocessing applies no
    mask after the solve.

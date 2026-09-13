@@ -853,12 +853,10 @@ interface
         logical, optional, intent(in) :: l_relative
     end subroutine write_nu_evidence_map
 
-    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, l_arm_background, l_armed )
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
         real,              intent(in)  :: nsigma, lp_smooth, smpd
         integer,           intent(in)  :: state
         class(string),     intent(in)  :: fname
-        logical, optional, intent(in)  :: l_arm_background
-        logical, optional, intent(out) :: l_armed
     end subroutine write_nu_evidence_envmask
 
     module subroutine print_nu_envmask_stats( stats )

@@ -397,8 +397,10 @@ Staged `abinitio3D` uses static discrete-bank nonuniform filtering when
 shell extension is reserved for `refine3D_auto` and explicit base
 `refine3D` use. NU always computes its objective over the full spherical
 `mskdiam` support. With the default `automsk=no`, no envelope constrains the
-static local-resolution field; an explicit `automsk=yes` request uses the
-NU-evidence envelope to fix its background to the coarsest candidate.
+static local-resolution field; an explicit `automsk=yes` request fixes the
+filter field outside the density envelope to the coarsest candidate, multiplies
+the `_nu_filt` references by that envelope (policy 2026-09-13), and writes the
+NU-evidence envelope as a diagnostic only.
 
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
 `GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. `automsk=yes` implies
