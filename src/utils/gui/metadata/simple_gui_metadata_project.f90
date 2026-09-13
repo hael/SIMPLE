@@ -20,7 +20,7 @@
 !   unix, json_kinds, json_module, simple_defs, simple_defs_fname, simple_fileio,
 !   simple_string, simple_error, simple_string_utils, simple_sp_project, simple_gui_metadata_base,
 !   simple_gui_metadata_types, simple_gui_metadata_micrograph, simple_gui_metadata_cavg2D,
-!   simple_image, simple_math, simple_motion_gain_helpers,
+!   simple_image, simple_math, simple_eer_factory, simple_motion_gain_helpers,
 !   simple_procimgstk, simple_gui_utils, simple_syslib
 !==============================================================================
 module simple_gui_metadata_project
@@ -29,7 +29,8 @@ module simple_gui_metadata_project
   use json_module,                    only: json_core, json_value
   use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ, SHORTSTRLEN
   use simple_defs_fname,              only: MRC_EXT, JPG_EXT
-  use simple_fileio,                  only: swap_suffix, file_exists
+  use simple_fileio,                  only: swap_suffix, file_exists, fname2format
+  use simple_eer_factory,             only: eer_decoder
   use simple_string,                  only: string
   use simple_error,                   only: simple_exception
   use simple_string_utils,            only: int2str
@@ -118,7 +119,9 @@ contains
     type(string)                                   :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
     integer,                            parameter  :: N_PTCLS_SAMPLE = 100
     integer,                            parameter  :: N_MOV_THUMBS = 10
+    integer,                            parameter  :: EER_THUMB_UPSAMPLING = 1
     type(image)                                    :: movsum, movthumb
+    type(eer_decoder)                              :: eer
     type(string)                                   :: movfname, movthumbfname
     integer                                        :: n_movthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
     real                                            :: scale_thumb
@@ -161,7 +164,15 @@ contains
             if( spproj%os_mic%isthere(i, 'movthumb') ) cycle ! already generated
             n_movthumbs = n_movthumbs + 1
             movfname = spproj%os_mic%get_str(i, 'movie')
-            call read_movies_and_sum_frames([movfname], spproj%os_mic%get(i, 'smpd'), movsum, n_movies_sum, n_frames_sum)
+            if( fname2format(movfname) == 'K' )then
+                ! Decode raw EER events at native 4K sampling before thumbnail downscaling.
+                call eer%new(movfname, spproj%os_mic%get(i, 'smpd'), EER_THUMB_UPSAMPLING)
+                n_frames_sum = eer%get_nframes()
+                call eer%decode_frames(movsum, 1, n_frames_sum)
+                call eer%kill()
+            else
+                call read_movies_and_sum_frames([movfname], spproj%os_mic%get(i, 'smpd'), movsum, n_movies_sum, n_frames_sum)
+            endif
             ldim_mov      = movsum%get_ldim()
             scale_thumb   = real(GUI_PSPECSZ) / real(ldim_mov(1))
             ldim_thumb(1) = round2even(real(ldim_mov(1)) * scale_thumb)
