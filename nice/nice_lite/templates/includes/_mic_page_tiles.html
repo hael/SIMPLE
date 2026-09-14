@@ -1,0 +1,13 @@
+{% comment %}
+  _mic_page_tiles.html — renders one page of micrograph tiles for the
+  batch micrographs pagination endpoint. Expects `micrographs` (list, each
+  with path/dfx/dfy/ctfres/i and optional ctfimg/boxes/xdim/ydim), `jobstats`
+  (for xdim_mic/ydim_mic/pspec_size, same as _mic_viewer.html) plus the
+  same optional `selectable`/`hide_pspec` flags as _mic_viewer.html. Mirrors
+  the tile loop in _mic_viewer.html without the surrounding panel chrome or
+  the shared _mic_selection_controls.html include, since those already exist
+  on the page being updated.
+{% endcomment %}
+{% for micrograph in micrographs %}
+    {% include 'includes/_mic_selection_element.html' with micrograph=micrograph jobstats=jobstats selectable=selectable hide_pspec=hide_pspec %}
+{% endfor %}

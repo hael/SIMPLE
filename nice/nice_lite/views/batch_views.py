@@ -11,8 +11,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core import signing
 from django.core.paginator import Paginator
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.cache import cache_control
 from django.views.decorators.http import require_GET, require_POST
@@ -50,6 +51,7 @@ _BATCH_PICK_PREVIEW_LIMIT = 20
 _BATCH_PICK_COORDINATE_LIMIT = 1500
 _BATCH_PARTICLE_PAGE_SIZE = 40
 _BATCH_MOVIE_PAGE_SIZE = 40
+_BATCH_MICROGRAPH_PAGE_SIZE = 50
 _BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
 _BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
 
@@ -1142,7 +1144,12 @@ def view_batch_micrograph_selection(request, jobid):
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     jobstats = metadata.get("project_metadata", {})
     micrographs = jobstats.get("micrographs") or jobstats.get("latest_micrographs") or []
-    total_micrographs = len(micrographs)
+    # jobstats["micrographs"] is capped at 50 entries; nmics is the true project-wide count.
+    nmics = jobstats.get("nmics")
+    if isinstance(nmics, int) and not isinstance(nmics, bool) and nmics > 0:
+        total_micrographs = nmics
+    else:
+        total_micrographs = len(micrographs)
 
     result_project = batch_job.get_result_project_path()
     if result_project is None or total_micrographs == 0:
@@ -1171,6 +1178,84 @@ def view_batch_micrograph_selection(request, jobid):
         return redirect("nice_lite:view_batch", jobid=jobmodel.id)
 
     return redirect("nice_lite:workspace")
+
+
+@login_required(login_url="/login")
+@require_GET
+def view_batch_micrographs_page(request, jobid):
+    """Return one page of micrograph entries as JSON, read directly from the project file."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_micrographs_page",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        return HttpResponse(status=404)
+
+    project_stats = batch_job.getProjectStats()
+    mic_stats = project_stats.get("mic") if isinstance(project_stats, dict) else None
+    total = mic_stats.get("n") if isinstance(mic_stats, dict) else None
+    if not isinstance(total, int) or isinstance(total, bool) or total <= 0:
+        return JsonResponse({
+            "html": "",
+            "total": 0,
+            "page": 1,
+            "pages": 0,
+            "first_micrograph": 0,
+            "last_micrograph": 0,
+        })
+
+    pages = math.ceil(total / _BATCH_MICROGRAPH_PAGE_SIZE)
+    page = min(_positive_page_number(request, "page"), pages)
+    fromp = ((page - 1) * _BATCH_MICROGRAPH_PAGE_SIZE) + 1
+    top = min(page * _BATCH_MICROGRAPH_PAGE_SIZE, total)
+
+    sort_key = request.GET.get("sort") or None
+    sort_asc = request.GET.get("asc", "1") != "0"
+
+    mic_field_stats = batch_job.getProjectFieldStats(
+        "mic", fromp=fromp, top=top, sortkey=sort_key, sortasc=sort_asc, boxes=True
+    )
+    raw_micrographs = mic_field_stats.get("data") if isinstance(mic_field_stats, dict) else None
+    if not isinstance(raw_micrographs, list):
+        raw_micrographs = []
+
+    # translate raw project-file field names to the names _mic_selection_element.html expects
+    micrographs = []
+    for record in raw_micrographs:
+        if not isinstance(record, dict):
+            continue
+        micrographs.append({
+            "path": record.get("thumb"),
+            "ctfimg": record.get("ctfjpg"),
+            "dfx": record.get("dfx"),
+            "dfy": record.get("dfy"),
+            "ctfres": record.get("ctfres"),
+            "i": record.get("n"),
+            "xdim": record.get("xdim"),
+            "ydim": record.get("ydim"),
+            "boxes": record.get("boxes"),
+        })
+
+    tiles_html = render_to_string(
+        "includes/_mic_page_tiles.html",
+        {
+            "micrographs": micrographs,
+            "jobstats": jobmodel.master_stats.get("project_metadata", {}) if isinstance(jobmodel.master_stats, dict) else {},
+            "selectable": request.GET.get("selectable") == "1",
+            "hide_pspec": request.GET.get("hide_pspec") == "1",
+        },
+        request=request,
+    )
+
+    return JsonResponse({
+        "html": tiles_html,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "first_micrograph": fromp,
+        "last_micrograph": top,
+    })
 
 
 @login_required(login_url="/login")

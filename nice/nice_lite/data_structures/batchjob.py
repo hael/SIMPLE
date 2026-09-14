@@ -1271,14 +1271,14 @@ class BatchJob(Job):
 
         job_dir = os.path.join(workspace_dir, self.dirc)
         desel_filename = "mic_deselection.txt"
+        # deselected_indices are already 1-based (they come from micrograph.i, which matches SIMPLE's oritype numbering).
         deselected_ids = sorted({
             index for index in deselected_indices
-            if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < total_micrographs
+            if isinstance(index, int) and not isinstance(index, bool) and 1 <= index <= total_micrographs
         })
         try:
             with open(os.path.join(job_dir, desel_filename), "w") as deselfile:
-                # deselfile indices are 1-based to match SIMPLE's oritype records.
-                deselfile.writelines(f"{index + 1}\n" for index in deselected_ids)
+                deselfile.writelines(f"{index}\n" for index in deselected_ids)
         except OSError:
             logger.error("createMicrographDeselection: failed to write deselection file")
             return False

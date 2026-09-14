@@ -33,6 +33,7 @@
             <img style="filter:contrast(var(--preprocess-contrast-mic)) brightness(var(--preprocess-brightness-mic)); width:200%; max-width:200%; margin-left:-100%;" src={% url 'nice_lite:image' micrograph.path %} class="h-auto" loading="lazy">
             {% if micrograph.boxes %}
                 <canvas class="boxes-overlay absolute inset-0 pointer-events-none z-10" data-xdim="{{ micrograph.xdim }}" data-ydim="{{ micrograph.ydim }}" data-boxes='{{ micrograph.boxes }}'></canvas>
+                <span class="absolute rounded-md bg-neutral-900 px-2 py-1 text-[9px] leading-none text-white" style="left:0.25rem;top:0.25rem;z-index:20">{{ micrograph.boxes|length }} positions</span>
             {% endif %}
             {% if jobstats.xdim_mic and jobstats.ydim_mic %}
                 <span class="absolute rounded-md bg-neutral-900 px-2 py-1 text-[9px] leading-none text-white" style="left:0.25rem;bottom:0.25rem;z-index:20">{{ jobstats.xdim_mic }} × {{ jobstats.ydim_mic }} px</span>

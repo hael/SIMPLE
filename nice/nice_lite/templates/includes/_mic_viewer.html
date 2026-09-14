@@ -20,35 +20,50 @@
   relies on a page-level `lastinteraction` global declared by the including
   page's own script. Only one instance is ever rendered per page.
 {% endcomment %}
+{% load timestamps %}
 <div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
     {% firstof jobstats.latest_micrographs jobstats.micrographs as mics %}
-    {% if mics.0.boxes %}
     <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1.5">
-            <label for="mic_box_overlay_size" class="text-[10px] text-streamlabel">box size</label>
-            <input id="mic_box_overlay_size" type="range" min="1" max="20" step="1" value="1"
-                   oninput="updateMicBoxOverlaySize(this)"
-                   class="h-1 w-20 accent-streamaccent">
+        {% if mics.0.boxes %}
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1.5">
+                <label for="mic_box_overlay_size" class="text-[10px] text-streamlabel">box size</label>
+                <input id="mic_box_overlay_size" type="range" min="1" max="20" step="1" value="1"
+                       oninput="updateMicBoxOverlaySize(this)"
+                       class="h-1 w-20 accent-streamaccent">
+            </div>
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+                <span class="text-[10px] text-streamlabel">boxes</span>
+                <input type="checkbox" checked class="sr-only peer" onchange="toggleMicBoxOverlays(this)">
+                <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+            </label>
         </div>
-        <label class="inline-flex items-center gap-2 cursor-pointer">
-            <span class="text-[10px] text-streamlabel">boxes</span>
-            <input type="checkbox" checked class="sr-only peer" onchange="toggleMicBoxOverlays(this)">
-            <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
-        </label>
+        {% endif %}
+        {% comment %} Pagination controls (50 micrographs/page); page-change URL is batch-only for now. {% endcomment %}
+        {% if "nmics" in jobstats and jobstats.nmics > 50 %}
+        <div class="flex items-center gap-2" data-total-mics="{{ jobstats.nmics }}" {% if selectable %}data-selectable="1"{% endif %} {% if hide_pspec %}data-hide-pspec="1"{% endif %} {% if jobid %}data-page-url="{% url 'nice_lite:view_batch_micrographs_page' jobid %}"{% endif %}>
+            <button type="button" disabled class="mic-page-prev px-2 py-1 text-[10px] font-medium rounded border border-streamline text-streamlabel hover:bg-streamring/10 disabled:opacity-40 disabled:cursor-not-allowed" onclick="prevMicPage(this)">Prev</button>
+            <span class="mic-page-label text-[10px] text-streamlabel">Page 1 of {{ jobstats.nmics|ceil_div:50 }}</span>
+            <button type="button" class="mic-page-next px-2 py-1 text-[10px] font-medium rounded border border-streamline text-streamlabel hover:bg-streamring/10 disabled:opacity-40 disabled:cursor-not-allowed" onclick="nextMicPage(this)">Next</button>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
-<div id="mic_tile_grid" class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory mt-2">
+<div id="mic_tile_grid" class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory mt-2" data-total-mics="{% firstof jobstats.nmics mics|length %}">
     {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
+        <div id="mic_tiles" class="contents">
         {% for micrograph in jobstats.latest_micrographs %}
             {% include 'includes/_mic_selection_element.html' with micrograph=micrograph selectable=selectable hide_pspec=hide_pspec %}
         {% endfor %}
+        </div>
         {% include 'includes/_mic_selection_controls.html' with hide_pspec=hide_pspec %}
     {% elif "micrographs" in jobstats and jobstats.micrographs|length > 0 %}
+        <div id="mic_tiles" class="contents">
         {% for micrograph in jobstats.micrographs %}
             {% include 'includes/_mic_selection_element.html' with micrograph=micrograph selectable=selectable hide_pspec=hide_pspec %}
         {% endfor %}
+        </div>
         {% include 'includes/_mic_selection_controls.html' with hide_pspec=hide_pspec %}
     {% endif %}
 </div>
@@ -59,6 +74,74 @@
 {% endif %}
 <script>
     let currentMicMenuContainer = null;
+
+    // Indices (micrograph.i) the user has deselected; persists across page changes since pagination re-renders tiles from scratch. Read/written by toggleMic here and by selectAllMics/deselectAllMics/invertMicSelection/updateMicCounts/saveMicSelection in _mic_selection_report.html.
+    let micDeselectedIndices = new Set();
+
+    const micTotalCount = () => Number(document.getElementById("mic_tile_grid")?.dataset.totalMics || document.querySelectorAll(".mictile").length);
+
+    const MIC_PAGE_SIZE = 50;
+    let currentMicPage = 1;
+    let currentMicSortKey = null;
+    let currentMicSortAsc = true;
+
+    // Computes the 1-based start/end micrograph indices for currentMicPage, refreshes the label/button state, and fetches that page's data (honoring the current sort field) when a page-change URL is available.
+    const updateMicPageIndices = (container) => {
+        const total = Number(container.dataset.totalMics || 0);
+        const totalPages = Math.max(1, Math.ceil(total / MIC_PAGE_SIZE));
+        currentMicPage = Math.min(Math.max(currentMicPage, 1), totalPages);
+        const startIdx = ((currentMicPage - 1) * MIC_PAGE_SIZE) + 1;
+        const endIdx = Math.min(currentMicPage * MIC_PAGE_SIZE, total);
+        const label = container.querySelector(".mic-page-label");
+        if (label) label.textContent = `Page ${currentMicPage} of ${totalPages}`;
+        const prevBtn = container.querySelector(".mic-page-prev");
+        const nextBtn = container.querySelector(".mic-page-next");
+        if (prevBtn) prevBtn.disabled = currentMicPage <= 1;
+        if (nextBtn) nextBtn.disabled = currentMicPage >= totalPages;
+        if (container.dataset.pageUrl) {
+            const params = new URLSearchParams({ page: currentMicPage });
+            if (currentMicSortKey) {
+                params.set("sort", currentMicSortKey);
+                params.set("asc", currentMicSortAsc ? "1" : "0");
+            }
+            if (container.dataset.selectable) params.set("selectable", container.dataset.selectable);
+            if (container.dataset.hidePspec) params.set("hide_pspec", container.dataset.hidePspec);
+            fetch(`${container.dataset.pageUrl}?${params}`)
+                .then((response) => (response.ok ? response.json() : null))
+                .then((page) => {
+                    if (!page || typeof page.html !== "string") return;
+                    const tilesContainer = document.getElementById("mic_tiles");
+                    if (!tilesContainer) return;
+                    tilesContainer.innerHTML = page.html;
+                    for (const mic of tilesContainer.querySelectorAll(".mic")) {
+                        if (micDeselectedIndices.has(Number(mic.dataset.idx))) {
+                            mic.classList.add("disabledbutton");
+                        }
+                        updateMicSelectionBorder(mic);
+                    }
+                    for (const img of tilesContainer.querySelectorAll(".micimg-mic img")) {
+                        img.addEventListener("load", drawMicBoxOverlays);
+                    }
+                    drawMicBoxOverlays();
+                    if (typeof updateMicCounts === "function") updateMicCounts();
+                });
+        }
+        return { startIdx, endIdx };
+    };
+
+    const prevMicPage = (element) => {
+        const container = element.closest("[data-total-mics]");
+        if (!container) return;
+        currentMicPage -= 1;
+        updateMicPageIndices(container);
+    };
+
+    const nextMicPage = (element) => {
+        const container = element.closest("[data-total-mics]");
+        if (!container) return;
+        currentMicPage += 1;
+        updateMicPageIndices(container);
+    };
 
     const updateMicSelectionBorder = (mic) => {
         if (!mic) return;
@@ -80,10 +163,18 @@
         element.classList.toggle("disabledbutton");
         updateMicSelectionBorder(element);
         lastinteraction = Date.now();
+        const idx = Number(element.dataset.idx);
+        if (element.classList.contains("disabledbutton")) {
+            micDeselectedIndices.add(idx);
+        } else {
+            micDeselectedIndices.delete(idx);
+        }
         updateMicCounts();
     };
 
     const sortMicDefocus = () => {
+        currentMicSortKey = "dfx";
+        currentMicSortAsc = false;
         if (!currentMicMenuContainer) return;
         const tiles = Array.from(currentMicMenuContainer.querySelectorAll(".mictile"));
         tiles.sort((a, b) => Number(b.querySelector(".mic")?.dataset.defocus) - Number(a.querySelector(".mic")?.dataset.defocus));
@@ -92,6 +183,8 @@
     };
 
     const sortMicCtfRes = () => {
+        currentMicSortKey = "ctfres";
+        currentMicSortAsc = true;
         if (!currentMicMenuContainer) return;
         const tiles = Array.from(currentMicMenuContainer.querySelectorAll(".mictile"));
         tiles.sort((a, b) => Number(a.querySelector(".mic")?.dataset.ctfres) - Number(b.querySelector(".mic")?.dataset.ctfres));

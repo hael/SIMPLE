@@ -30,3 +30,15 @@ def mean_with(value, other):
     except (TypeError, ValueError):
         return None
     return 0.5 * (left + right)
+
+@register.filter
+def ceil_div(value, arg):
+    """Return ceil(value / arg), or None if either is invalid or arg is zero."""
+    try:
+        value = int(value)
+        arg = int(arg)
+    except (TypeError, ValueError):
+        return None
+    if arg == 0:
+        return None
+    return -(-value // arg)

@@ -1163,9 +1163,10 @@ contains
         do j = 1, size(keys)
             if(self%ischar(keys(j)%to_char())) then
                 str_tmp = self%get_str(keys(j)%to_char())
-                call json%add(json_ori, keys(j)%to_char(),str_tmp%to_char())
-                call json%add(json_ori, keys(j)%to_char(), dble(self%get(keys(j)%to_char()))) 
+                call json%add(json_ori, keys(j)%to_char(), str_tmp%to_char())
                 call str_tmp%kill
+            else
+                call json%add(json_ori, keys(j)%to_char(), dble(self%get(keys(j)%to_char())))
             end if
         end do
         if(l_boxes .and. self%isthere('boxfile')) then

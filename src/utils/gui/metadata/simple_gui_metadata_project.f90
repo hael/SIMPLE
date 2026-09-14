@@ -28,7 +28,7 @@ module simple_gui_metadata_project
   use json_kinds
   use json_module,                    only: json_core, json_value
   use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ, SHORTSTRLEN
-  use simple_defs_fname,              only: MRC_EXT, JPG_EXT
+  use simple_defs_fname,              only: MRC_EXT, JPG_EXT, MOVTHUMB_FBODY
   use simple_fileio,                  only: swap_suffix, file_exists, fname2format
   use simple_eer_factory,             only: eer_decoder
   use simple_string,                  only: string
@@ -182,7 +182,7 @@ contains
             call movsum%fft()
             call movsum%clip(movthumb)
             call movthumb%ifft()
-            movthumbfname = 'movthumb' // int2str(i) // JPG_EXT
+            movthumbfname = MOVTHUMB_FBODY // int2str(i) // JPG_EXT
             call movthumb%write_jpg(movthumbfname, norm=.true., quality=90)
             movthumbfname = simple_abspath(movthumbfname)
             call self%meta_movies(n_movthumbs)%new(GUI_METADATA_MICROGRAPH_TYPE)
@@ -263,6 +263,7 @@ contains
                 meta_micrographs_tmp = self%meta_micrographs(1:n_valid_micrographs)
                 call move_alloc(meta_micrographs_tmp, self%meta_micrographs)
             end if
+            
         end if
     end if
     ! add particles: JPEG montage of a random sample of (selected) particles

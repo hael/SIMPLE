@@ -101,7 +101,7 @@ contains
         call assembler%assemble_batch_metadata(gui_project_metadata_inst)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
         metadata_backup = assembler%to_string()
-        call write_singlelineoftext(string('metadata.json'), metadata_backup)
+        call write_singlelineoftext(string(GUI_METADATA_FILE), metadata_backup)
         if( c_pthread_mutex_destroy(gui_comm_args_inst%terminate_mutex) /= 0 ) THROW_WARN('failed to destroy terminate mutex')
         if( c_pthread_mutex_destroy(gui_comm_args_inst%metadata_mutex) /= 0  ) THROW_WARN('failed to destroy metadata mutex')
         call gui_project_metadata_inst%kill()
