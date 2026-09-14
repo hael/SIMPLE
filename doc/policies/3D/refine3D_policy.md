@@ -532,9 +532,11 @@ records only the refine3D-side integration contract:
   normal operator and preconditioner only; it never weights `B`, and nothing
   prior-related is persisted in raw statistics.
 - **FSC ownership.** The FSC comes from the unregularized `_unfil` base pair
-  and remains the resolution authority. PCG always replays with the global
-  FSC/SSNR precision `P_tau`; NU filtering is applied afterwards by the shared
-  competition, never inside the solve (policy 2026-09-06).
+  and remains the resolution authority. The regularized pair is the
+  closed-form `P_tau` optimum of the base pair on the replayed operator
+  (voxelwise, `shrink_by_ml_prior`, 2026-09-14; the replay solve is retired);
+  NU filtering is applied afterwards by the shared competition, never inside
+  the solve (policy 2026-09-06).
 - **Solve support.** Only the conservative density envelope (or an explicit
   `pcg_mskfile`) may constrain a PCG solve, and the density envelope only
   under `automsk=yes` (policy 2026-09-06). With `automsk=no` base and replay

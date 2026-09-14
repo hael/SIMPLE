@@ -184,18 +184,25 @@ immediately. Distributed recovery is compute-only inside the even/odd
 sections; restart reporting and fatal handling occur afterward at the serial
 finalization boundary. Solver callers that do not request an outcome retain
 the historical immediate hard failure. The
-regularized replay deterministically replays kernel finalization from the
-persisted raw `(B,D)` and produces the standard maps. It installs the FSC/SSNR
-shell-diagonal `P_tau` in every mode; with NU filtering active the base
-(`_unfil`) pair then seeds the NU candidate bank and the replayed pair joins the
-competition as the auxiliary member, exactly as on gridding. (The
-`nu_input=gridding|ml` alternatives of 2026-09-08 were retired on 2026-09-09;
-records in `doc/implementation_notes/pcg_priors_history.md`.) The replay starts
-from the CURRENT same-half base solution with the closed-form shrinkage
-initial guess (each shell scaled by the FSC-implied Wiener factor, the
-`P_tau` optimum in closed form; `>>> PCG ML REGULARIZED INIT`), never from a
-previous iteration's ML half. Neither precision nor lambda is ever
-accumulated into raw `B` or `D`.
+regularized pair deterministically replays kernel finalization from the
+persisted raw `(B,D)` with the FSC/SSNR shell-diagonal `P_tau` installed, and
+is the closed-form optimum of the diagonal model on that operator
+(`shrink_by_ml_prior`, 2026-09-14): the CURRENT same-half base solution's
+Fourier coefficients on the padded lattice scaled voxelwise by
+`(rho+floor)/(rho+floor+P_tau)`, i.e. by the ratio of the regularized and
+base preconditioners. Nothing is solved for the regularized pair; the
+`KIND=ml` summary line reports `ITS=0`, `STOP=closed_form`, and the L2 and
+preconditioned residuals of the closed form against the replay system as a
+diagnostic of the support coupling it leaves out. The former replay solve
+(two CG iterations from a shell-isotropic FSC-shrunk base start, retired
+2026-09-14) was prior-dominated over most of Fourier space, its start was
+rejected on every anisotropically sampled dataset, and its L2 residual above
+1 was mostly noise the prior refuses to fit; `pcg_decision_log.md`. With NU
+filtering active the base (`_unfil`) pair seeds the NU candidate bank and the
+regularized pair joins the competition as the auxiliary member, exactly as on
+gridding. (The `nu_input=gridding|ml` alternatives of 2026-09-08 were retired
+on 2026-09-09; records in `doc/implementation_notes/pcg_priors_history.md`.)
+Neither precision nor lambda is ever accumulated into raw `B` or `D`.
 
 Every shipped state volume carries a solve-support provenance sidecar
 (`<vol>_pcg_support.txt`, `solve_support=density|sphere` and
@@ -272,9 +279,9 @@ paths) compares the RMS of shells beyond the matching band with the band-edge
 shell and logs `>>> PCG BEYOND-BAND EXCESS` at ratio >= 10. It is the
 regression signal for solver defects that park energy above the matched band,
 where a later stage transition would expose them to euclid matching. The
-structural mitigation is the replay's shell-shrunk base start (the `P_tau`
-optimum in closed form) within the fixed budget, not spectral smoothing (see
-the removed-experiment record in `pcg_priors_history.md`).
+structural mitigation is the closed-form regularized pair (the voxelwise
+`P_tau` optimum of the base solution, 2026-09-14), not spectral smoothing
+(see the removed-experiment record in `pcg_priors_history.md`).
 
 ### Backend regression gate
 
@@ -583,10 +590,10 @@ is meaningful because the two paths share everything but the estimator:
   reconstruction`), memory in the peak-RSS fields.
 
 Differences that are the estimator itself and belong in the comparison:
-PCG solves `(H + lambda) x = b` with two CG iterations per half and per
-kind (base from zero, ML from the shell-shrunk base), a fresh estimate every
-iteration like the gridding density quotient (cross-iteration warm starts
-retired 2026-09-10).
+PCG solves `(H + lambda) x = b` with two CG iterations per half (base, from
+zero) and takes the regularized pair in closed form from it (2026-09-14), a
+fresh estimate every iteration like the gridding density quotient
+(cross-iteration warm starts retired 2026-09-10).
 
 The former measurement asymmetry (gridding FSC on the apodized halves for
 legacy parity, PCG on the solved halves) was removed on 2026-09-09: the
@@ -615,11 +622,12 @@ it ships. The one-mask contract that came with it:
   The soft `P H P` formulation was not equivalent: where `0 < P < 1` the
   solved variable compensates for `P`, so the band was a solver-state
   dependent mixture (`PCG_HARD_SOLVE_SUPPORT` in the solver restores it for
-  experiments). Nonzero starts (the replay's shell-shrunk base) are never
-  re-masked: the solver entry converts an output-space start back to
-  `u = x / window` where `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead
-  of projecting again; the former entry projection squared the edge on every
-  restarted iteration and compounded over a stage. Regressions:
+  experiments). Output-space maps entering the solver (nonzero starts, and
+  the base map the closed-form regularized pair is derived from) are never
+  re-masked: the entry converts them back to `u = x / window` where
+  `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead of projecting again;
+  the former entry projection squared the edge on every restarted iteration
+  and compounded over a stage. Regressions:
   `test=pcg_recon` stage 14 (band profile of the constrained solve against
   the windowed unconstrained one; band stability under repeated starts);
 - the matcher still applies `mask3D_soft(msk_crop)` to its reprojection

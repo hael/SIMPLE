@@ -40,6 +40,7 @@ type :: pcg_solver_outcome
     integer           :: requested_maxits     = 0
     real              :: initial_rel_residual = 0.0
     real              :: final_rel_residual   = 0.0
+    real              :: final_rel_residual_m = 0.0         !< final relative residual in the preconditioned norm (-1: none)
     real              :: final_rel_update     = 0.0
     real(dp)          :: failure_curvature    = 0.0_dp      !< curvature of this attempt's indefinite stop
     integer           :: failure_iteration    = 0           !< iteration of this attempt's indefinite stop
@@ -209,6 +210,7 @@ type :: reconstructor_pcg
     ! SOLVER
     procedure :: solve
     procedure :: solve_accum
+    procedure :: shrink_by_ml_prior
     procedure, private :: solve_core
     ! PROFILING
     procedure :: reset_profile
@@ -2677,6 +2679,13 @@ contains
             stop_rtol  = rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp)
             stop_xtol  = rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp)
             if( stop_rtol .or. stop_xtol .or. iter == mmaxits )then
+                ! the final preconditioned residual is not on the recurrence
+                ! path (the last z is never formed): one extra preconditioner
+                ! application so the summary can report the norm CG drives
+                z       = self%apply_precond(r)
+                rho_new = self%dot_real_volume(r,z)
+                mnorm   = sqrt(abs(rho_new)/rho0)
+                mnorm_hist(iter) = real(mnorm)
                 iteration_times(iter) = real(pcg_toc(t_it))
                 if( stop_rtol )then
                     result%stop_reason = 'rtol'
@@ -2701,7 +2710,9 @@ contains
         call self%window_mul(x)
         result%iteration_count  = n_done
         result%final_rel_update = real(dxx)
+        result%final_rel_residual_m = -1.0
         if( n_done > 0 ) result%final_rel_residual = hist(n_done)
+        if( n_done > 0 ) result%final_rel_residual_m = mnorm_hist(n_done)
         if( n_done > 0 )then
             allocate(result%rel_residual_history(n_done), source=hist(1:n_done))
             allocate(result%rel_update_history(n_done), source=update_hist(1:n_done))
@@ -2713,6 +2724,70 @@ contains
         if( present(outcome) ) outcome = result
         self%l_profile = .false.
     end subroutine solve_core
+
+    !> The regularized map in closed form (2026-09-14), in place of the
+    !! P_tau replay solve: the base solution's Fourier coefficients on the
+    !! padded lattice scaled voxelwise by
+    !!     (rho + floor) / (rho + floor + P_tau) = 1 - P_tau * precond,
+    !! the replay's own preconditioner and prior. This is the optimum of the
+    !! diagonal model the preconditioner encodes -- the map a first CG step
+    !! from zero targets -- voxelwise, so unlike the retired shell-isotropic
+    !! FSC shrinkage it shrinks undersampled voxels by their own rho. What it
+    !! leaves out is the coupling the support crop introduces, which the
+    !! replay solve was iterating on; the returned relative residuals of the
+    !! result against the replay system (L2 and preconditioned norms, one
+    !! operator application) measure exactly that and are diagnostics only.
+    !! x arrives and leaves as a shipped map (window*u).
+    subroutine shrink_by_ml_prior( self, x, rel_resid_l2, rel_resid_m )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                     intent(inout) :: x(self%box,self%box,self%box)
+        real,                     intent(out)   :: rel_resid_l2, rel_resid_m
+        real, allocatable :: diag(:,:,:), u(:,:,:), r(:,:,:), z(:,:,:), bz(:,:,:)
+        real(dp) :: bnorm, rnorm, bm, rm
+        integer  :: cdim(3), i, j, k
+        if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built; shrink_by_ml_prior')
+        if( .not. self%l_precond  ) THROW_HARD('PCG preconditioner has not been built; shrink_by_ml_prior')
+        if( .not. self%l_rhs      ) THROW_HARD('end_accum has not been called; shrink_by_ml_prior')
+        call self%ensure_wimg
+        cdim = self%wimg%get_array_shape()
+        if( any(shape(self%precond) /= cdim) .or. any(shape(self%ml_prior) /= cdim) ) &
+            &THROW_HARD('PCG preconditioner/prior shape mismatch; shrink_by_ml_prior')
+        allocate(diag(cdim(1),cdim(2),cdim(3)), source=1.0)
+        ! precond = 1/(rho+floor+P_raw) here (the prior was attached before
+        ! end_accum), ml_prior = P_raw*padsc**2; beyond the data (precond 0)
+        ! and below the prior's high-pass (ml_prior 0) the factor is 1
+        !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+        do k = 1, cdim(3)
+            do j = 1, cdim(2)
+                do i = 1, cdim(1)
+                    diag(i,j,k) = min(1.0, max(0.0, 1.0 - &
+                        &(self%ml_prior(i,j,k) / self%padsc**2) * self%precond(i,j,k)))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! output space -> solve domain, shrink, and back (see window_div)
+        allocate(u(self%box,self%box,self%box), source=x)
+        call self%window_div(u)
+        u = self%apply_fourier_diagonal(u, diag)
+        deallocate(diag)
+        ! residual of the closed form against the replay system, diagnostic only
+        ! (b is copied out of self before it meets an intent(inout) dummy)
+        allocate(r(self%box,self%box,self%box), source=self%b_rhs)
+        bz    = self%apply_precond(r)
+        bnorm = sqrt(self%dot_real_volume(r,r))
+        bm    = self%dot_real_volume(r,bz)
+        if( bnorm <= 0.0_dp ) THROW_HARD('zero right-hand side; nothing to regularize; shrink_by_ml_prior')
+        r     = r - self%apply_normal(u)
+        z     = self%apply_precond(r)
+        rnorm = sqrt(self%dot_real_volume(r,r))
+        rm    = self%dot_real_volume(r,z)
+        rel_resid_l2 = real(rnorm / bnorm)
+        rel_resid_m  = real(sqrt(max(rm,0.0_dp) / max(bm,epsilon(1.0_dp))))
+        x = u
+        call self%window_mul(x)
+        deallocate(u, r, z, bz)
+    end subroutine shrink_by_ml_prior
 
     ! PROFILING
 

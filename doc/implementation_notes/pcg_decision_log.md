@@ -314,3 +314,49 @@ identical. Compile and rerun are Hans's; the expected signature is walked
 populations surviving the cleanup and `accepted shell steps` advancing across
 iterations.
 
+**2026-09-14 -- Regularized pair in closed form; replay solve and its
+FSC-shrunk start retired; MRES on the summary line.** Trigger: aldolase
+`refine3D_auto` (18.6k ptcls, box 192) with every replay start rejected
+(`INIT` 3-7) and every from-zero replay at `RESID` 1.0-1.9 after two
+iterations against base `RESID` 0.034 -- the same pattern as every PCG run
+since the warm-start retirement. The sidecars in
+`~/for_claude/PfCRT_regression` show what it is: (1) the preconditioner and
+the kernel operator are both Fourier multipliers, so up to the support crop
+the preconditioned operator is the identity for base and replay alike, and
+in the preconditioned norm they converge alike (`iter2_preconditioned_resid`
+0.18-0.31 base, 0.26-0.45 replay); the L2 residual the summary prints
+collapses for the base (the first step fits `b` everywhere, noise shells
+included) and stays at `~b_k` for the replay wherever the prior dominates
+and the solution is ~0 by design -- it measures unfitted noise, not an
+unconverged map. (2) `P_tau = rho_mean/(tau*SSNR)` with the FSC clamped at
+0.001 is 1000x the density beyond the band; `ml_prior_to_data_khat_l1` is
+400-600 in every abinitio stage and any refinement whose FSC reaches zero
+inside Nyquist (7 only in Sep07 stage 10, the one replay that ever looked
+converged on the L2 number). (3) The FSC-shrunk start `W_k = FSC_k` is the
+`P_tau` optimum only for a shell-isotropic operator; `rho` varies within a
+shell by orders of magnitude and the base solution at undersampled voxels is
+bounded only by the 1% floor, so `(H+P)Wx_base ~ rho_mean(1-FSC)x_base(v)`
+there, tens of times `b(v)`: `INIT >> 1` on every anisotropically sampled
+dataset, rejection correct, start pointless (the first CG direction from
+zero, `M^-1 b`, is already the voxelwise Wiener-shrunk gridding map).
+Decision (Hans): ship the closed form. `reconstructor_pcg%shrink_by_ml_prior`
+scales the base solution's padded-lattice coefficients by
+`1 - P_tau*precond = (rho+floor)/(rho+floor+P_tau)` voxelwise (window
+converted to the solve domain and back), on the replayed operator with the
+prior installed -- the diagonal-model optimum, without the global step-length
+overshoot two CG iterations from zero produce -- and returns the L2 and
+preconditioned residuals of the result against the replay system (one
+operator application) as a diagnostic of the support coupling it leaves out.
+Both execution paths (`regularize_state_half`, the distributed ML job) take
+it; `regularized_ml_initial_guess`, `ml_shrinkage_filter` and
+`fsc2shrink_filter` are removed; no production solve starts nonzero. The
+summary line gains `MRES=` (final preconditioned relative residual; the last
+`z` is now formed at exit so the final entry exists in the sidecar as
+`final_rel_resid_m`), `KIND=ml` reads `ITS=0 STOP=closed_form`. The
+regularized pair costs the raw re-read plus finalization plus ~4 FFT passes
+instead of two CG iterations. What to compare on the aldolase rerun: the
+shipped pair against the former 2-iteration replay (the map Hans judged
+visually good) and against `fsc2optlp` of the `_unfil` pair, by FSC between
+them and by eye; `MRES` of the closed form tells how far the diagonal optimum
+sits from the coupled one. Compile and runs are Hans's.
+

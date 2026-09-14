@@ -38,22 +38,25 @@ Per state and per half, from one particle accumulation:
 - **Base solve** `(H + lambda_0 I) x = b`, `lambda_0 = PCG_LAMBDA = 1e-3`
   (absolute Tikhonov ridge). Its half pair is the `_unfil` pair: the FSC,
   cFAR and resolution authority, and the seed of the NU candidate bank.
-- **ML replay** `(H + P_tau + lambda_0 I) x = b`, replayed from the same
-  raw accumulators with the FSC/SSNR shell-diagonal precision `P_tau`
-  (`tau`, `hp`) in both the operator and the preconditioner. Its pair is
-  the shipped map and the NU auxiliary member.
+- **Regularized pair** (2026-09-14): the closed-form optimum of the
+  diagonal model of `(H + P_tau + lambda_0 I) x = b`, derived from the base
+  solution on the replayed operator (same raw accumulators, the FSC/SSNR
+  shell-diagonal precision `P_tau` from `tau`, `hp`): each Fourier
+  coefficient of the base map on the padded lattice scaled by
+  `(rho+floor)/(rho+floor+P_tau)`, the ratio of the regularized and base
+  preconditioners, voxelwise (`shrink_by_ml_prior`). Nothing is solved for
+  it. Its pair is the shipped map and the NU auxiliary member. It replaced
+  the two-iteration replay solve, which was prior-dominated over most of
+  Fourier space (prior/data 400-600 wherever the FSC reaches zero inside
+  Nyquist), started from a shell-isotropic FSC-shrunk base that was
+  rejected as worse than zero on every anisotropically sampled dataset, and
+  reported an L2 residual above 1 that was mostly noise the prior refuses
+  to fit -- in the preconditioned norm both solves had always converged
+  alike (decision log).
 
-**Starts.** The base solve starts from zero. The replay starts from the
-current same-half base solution passed through the closed-form shrinkage
-filter (each shell scaled by its FSC-implied Wiener factor, the `P_tau`
-optimum in closed form; logged as `PCG ML REGULARIZED INIT`), unless that
-start is worse than zero (initial relative residual above 1), in which
-case the solver discards it before the first iteration -- at no cost, a
-zero start's residual is `b` itself -- and the log says so (`start worse
-than zero ... discarded, solved from zero`); this is the normal case in
-the low-resolution stages, where the shrinkage start has `INIT` 2-4. There
-are no cross-iteration warm starts: nothing from a previous iteration's
-half maps enters a solve (2026-09-10).
+**Starts.** The base solve starts from zero. There are no cross-iteration
+warm starts: nothing from a previous iteration's half maps enters a solve
+(2026-09-10), and no production solve starts nonzero (2026-09-14).
 
 **Budget.** `maxits_pcg=2`, `rtol=0` (exactly two iterations) in
 refinement; the original-sampling final reconstruction uses at least
@@ -190,15 +193,19 @@ Per half and solve, one summary line:
 
     >>> PCG DISTRIBUTED | STATE= 1 | HALF=even | KIND=base | N=  8416 | ITS= 2 | INIT= 1.000E+00 | RESID= 6.100E-02 | TIME=   1.9 s | STOP=fixed_iterations
 
-`INIT` is the relative residual of the start (1.0 from zero), `RESID` the
-final one. Healthy values on PfCRT at box 140-160: base `1 -> 0.06-0.09`,
-replay `~0.2 -> ~0.04` once the map is at 4-5 A; in the low-resolution
-stages the shrinkage start reads `INIT` 2-4, is rejected, and the replay
-runs from zero (`INIT` 1.0). A replay `RESID` that climbs across
-iterations is the signature of a bad start.
+`INIT` is the L2 relative residual of the start (1.0 from zero), `RESID`
+the final one, `MRES` the final residual in the preconditioned norm -- the
+one CG drives, and the one on which the two kinds are comparable
+(2026-09-14; the L2 residual of a prior-dominated system is mostly noise
+the prior refuses to fit). Healthy base values on PfCRT at box 140-160:
+`1 -> 0.06-0.09` (L2), `MRES` 0.2-0.3 after two iterations. The `KIND=ml`
+line is the closed form: `ITS=0`, `STOP=closed_form`, and its `RESID`/`MRES`
+are the residuals of the closed form against the replay system, a
+diagnostic of the support coupling it leaves out, not a convergence
+measure.
 
 Other lines to grep: `PCG SOLVE SUPPORT` (which support, and why),
-`FSC MODE`, `PCG ML REGULARIZED INIT`, `NU ENVELOPE OCCUPANCY`,
+`FSC MODE`, `NU ENVELOPE OCCUPANCY`,
 `NU DILATION RING OCCUPANCY` (how much of the density envelope's dilation
 ring the evidence labels signal -- the number to consult before tightening
 `binwidth`), `NU NULL SHELL GEOMETRY` (envelope/support Dice, ring

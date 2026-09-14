@@ -11,7 +11,6 @@ use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
     &discrete_read_imgbatch_source, killimgbatch, prep_rec_observation
 use simple_sigma2_files,      only: load_sigma2_groups
 use simple_math_ft,           only: resample_sigma2
-use simple_estimate_ssnr,     only: fsc2shrink_filter
 use simple_image,             only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
     &write_halfmap_diagnostics, &
@@ -62,21 +61,34 @@ contains
 
 
     ! No cross-iteration warm starts (policy 2026-09-10, PfCRT regression
-    ! gridding_vs_pcg): the base solve starts from zero and the ML replay from
-    ! the shell-shrunk current base solution, every iteration. Warm-starting
-    ! from the previous iteration's half maps carried an unconverged transient
-    ! of a slightly different system (new FSC prior, new poses) into a
-    ! 2-iteration budget that cannot pull it back; the relative residual of the
-    ! replay then grew iteration over iteration to 10^3-10^4 in the failed
-    ! runs and never fell below 1 in any run. A fixed small budget from a
-    ! state-free start is what the simulated-data calibration validated
-    ! (2 iterations beat gridding; beyond 5 the residual moves but nothing
-    ! interpretable in the map does). The support-provenance solve kind is
-    ! still written for the trailing bootstrap's lag-one FSC pair.
+    ! gridding_vs_pcg): the base solve starts from zero, every iteration.
+    ! Warm-starting from the previous iteration's half maps carried an
+    ! unconverged transient of a slightly different system (new FSC prior,
+    ! new poses) into a 2-iteration budget that cannot pull it back; the
+    ! relative residual of the replay then grew iteration over iteration to
+    ! 10^3-10^4 in the failed runs and never fell below 1 in any run. A fixed
+    ! small budget from a state-free start is what the simulated-data
+    ! calibration validated (2 iterations beat gridding; beyond 5 the residual
+    ! moves but nothing interpretable in the map does).
+    !
+    ! The regularized pair is no longer solved (2026-09-14): it is the
+    ! closed-form P_tau optimum of the base pair, voxelwise on the padded
+    ! lattice (reconstructor_pcg%shrink_by_ml_prior), from the same raw
+    ! statistics and the same prior the replay used. The replay solve was
+    ! prior-dominated over most of Fourier space (prior/data 400-600 wherever
+    ! the FSC reaches zero inside Nyquist), its shell-isotropic FSC-shrinkage
+    ! start was rejected as worse than zero on every anisotropically sampled
+    ! dataset, and two iterations from zero left an L2 residual above 1 that
+    ! read as non-convergence; in the preconditioned norm the two solves had
+    ! always converged alike. The closed form is the map a first CG step from
+    ! zero targets, without the step-length overshoot; its residual against
+    ! the replay system is reported (RESID/MRES on the KIND=ml line) as a
+    ! diagnostic of the support coupling it leaves out. The support-provenance
+    ! solve kind is still written for the trailing bootstrap's lag-one FSC pair.
 
-    !> Solve with one cold restart: a solve from a NONZERO start (l_nonzero,
-    !! the ML replay's shell-shrunk base) that loses positive-definiteness is
-    !! retried once from zero. A nonzero start that is WORSE THAN ZERO
+    !> Solve with one cold restart: a solve from a NONZERO start (l_nonzero;
+    !! no production solve starts nonzero since 2026-09-14) that loses
+    !! positive-definiteness is retried once from zero. A nonzero start that is WORSE THAN ZERO
     !! (initial relative residual above PCG_START_MAX_REL_RESID; zero has
     !! exactly 1) is discarded by the solver itself before the first
     !! iteration, at no cost (2026-09-10, streptavidin canonical set: in the
@@ -151,52 +163,6 @@ contains
         THROW_HARD(error_message)
     end subroutine handle_cold_restart_outcome
 
-    !> Regularized initial guess of every ML replay (no cross-iteration warm
-    !! starts, 2026-09-10). The documented cold-start gap
-    !! is that the regularized optimum differs from ANY unregularized map in
-    !! slowly-converging directions -- beyond-band/high-shell noise the ML
-    !! prior shrinks -- so a
-    !! small iteration budget leaves the solve transient-dominated. Apply
-    !! the regularizers' expected effect to the base solution in closed form
-    !! instead: shrink each shell's amplitude by the FSC (the Wiener
-    !! shrinkage the ML prior's optimum implies; no shrinkage below the hp
-    !! no-prior limit, zero beyond the measured band). CG then corrects an
-    !! approximate optimum rather than constructing it. Pure initialization:
-    !! the quadratic objective has a unique optimum, so this changes the
-    !! convergence path, never the converged solution.
-    subroutine regularized_ml_initial_guess( params, fsc, x, context, half )
-        class(parameters), intent(in)    :: params
-        real,              intent(in)    :: fsc(:)
-        real,              intent(inout) :: x(:,:,:)
-        character(len=*),  intent(in)    :: context, half
-        type(image) :: img
-        real, allocatable :: filt(:)
-        call img%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-        call img%set_rmat(x, .false.)
-        call ml_shrinkage_filter(params, fsc, img%get_filtsz(), filt)
-        call img%fft()
-        call img%apply_filter(filt)
-        call img%ifft()
-        x = img%get_rmat()
-        call img%kill
-        deallocate(filt)
-        write(logfhandle,'(A)') '>>> PCG ML REGULARIZED INIT ('//trim(context)//'/'//trim(half)//&
-            &'): shell-shrunk base'
-    end subroutine regularized_ml_initial_guess
-
-    !> The strategy-side wrapper for the ML shrinkage filter (fsc2shrink_filter
-    !! in simple_estimate_ssnr, alongside the other FSC-derived filters):
-    !! resolves the no-shrinkage high-pass index from the workflow parameters.
-    subroutine ml_shrinkage_filter( params, fsc, nyq, filt )
-        class(parameters), intent(in)  :: params
-        real,              intent(in)  :: fsc(:)
-        integer,           intent(in)  :: nyq
-        real, allocatable, intent(out) :: filt(:)
-        integer :: k_hp
-        k_hp = max(1, calc_fourier_index(params%hp, params%box_crop, params%smpd_crop))
-        call fsc2shrink_filter(fsc, k_hp, nyq, filt)
-    end subroutine ml_shrinkage_filter
-
 
     !> PCG half-map diagnostics through the backend-neutral common evaluator:
     !! this owns the PCG mask policy (params%msk_crop spherical radius on the
@@ -227,7 +193,6 @@ contains
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
             &' FSC=0.143 RESOLUTION = ', diagnostics%res_fsc0143
     end subroutine calculate_pcg_state_diagnostics
-
 
 
 
@@ -384,7 +349,6 @@ contains
             &', conservative density envelope at ', params%envmsklp, ' A from ', trim(source), &
             &' (replaces the spherical support)'
     end subroutine build_pcg_density_support
-
 
 
 
@@ -791,7 +755,8 @@ contains
                 &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
                 &pcgop%get_data_scale(), pcgop%get_effective_lambda(), pcgop=pcgop)
             call report_solve_summary('SHARED', state_here, half, 'base', size(pinds), niters, &
-                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual)
+                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual, &
+                &residual_m=result%final_rel_residual_m)
             if( present(outcome) ) outcome = result
 
             call pcgop%kill
@@ -801,9 +766,10 @@ contains
         end subroutine solve_state_half
 
         !> Reopen the exact raw statistics used for the base half-map, add the
-        !! FSC/SSNR prior only on the master/shared owner, and start from the
-        !! corresponding unregularized solution (shell-shrunk). No particle data are read
-        !! a second time and the base solve remains the FSC oracle.
+        !! FSC/SSNR prior only on the master/shared owner, and take the
+        !! closed-form P_tau optimum of the base solution (shrink_by_ml_prior).
+        !! No particle data are read a second time, nothing is solved, and the
+        !! base solve remains the FSC oracle.
         subroutine regularize_state_half( state_here, eo_here, half, fsc_here, base_volume, volume )
             integer,          intent(in)    :: state_here, eo_here
             character(len=*), intent(in)    :: half
@@ -818,10 +784,11 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
+            real :: rel_l2, rel_m
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            ! regularized replay: always takes the density support when built
+            ! regularized pair: always takes the density support when built
             call set_pcg_solve_support(pcgop, params, state_support_msk, l_state_support)
             call pcgop%begin_reduction
             fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
@@ -844,17 +811,22 @@ contains
             prior_to_khat_rms  = 0.0
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
-            ! the replay starts from the current base solution with the
-            ! closed-form shrinkage initial guess (encodes the P_tau optimum);
-            ! no cross-iteration warm start
             x = base_volume%get_rmat()
-            call regularized_ml_initial_guess(params, fsc_here, x, 'shared', half)
             t_phase = tic()
-            ! the replay iterate is never zero: restart-eligible
-            call solve_with_cold_restart(pcgop, x, .true., params%maxits_pcg, params%rtol, &
-                &rel_res_hist, niters, result)
+            ! closed form; the residuals are those of the result against the
+            ! replay system, diagnostics of the support coupling left out
+            call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
             time_solve = real(toc(t_phase),dp)
-            call handle_cold_restart_outcome(result, 'shared', half, 'ml')
+            niters = 0
+            allocate(rel_res_hist(0))
+            result%stop_reason          = 'closed_form'
+            result%requested_maxits     = 0
+            result%iteration_count      = 0
+            result%initial_rel_residual = rel_l2
+            result%final_rel_residual   = rel_l2
+            result%final_rel_residual_m = rel_m
+            result%final_rel_update     = 0.0
+            result%converged            = .true.
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
@@ -867,7 +839,8 @@ contains
                 &prior_positive_max=prior_positive_max, prior_to_khat_l1=prior_to_khat_l1, &
                 &prior_to_khat_rms=prior_to_khat_rms, pcgop=pcgop)
             call report_solve_summary('SHARED', state_here, half, 'ml', nptcls, niters, &
-                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual)
+                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual, &
+                &residual_m=result%final_rel_residual_m)
             call pcgop%kill
             call fname%kill
             deallocate(x, rel_res_hist)
@@ -910,6 +883,7 @@ contains
             endif
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=', result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',   result%final_rel_residual
+            write(funit,'(A,ES14.6)') 'final_rel_resid_m=',    result%final_rel_residual_m
             write(funit,'(A,ES14.6)') 'final_rel_update=',     result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',       data_scale
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=', lambda_eff
@@ -1991,8 +1965,10 @@ contains
             type(image), optional, intent(in) :: warm_even, warm_odd
 
             if( present(fsc_prior) )then
+                ! regularized pair: closed form of the base pair (warm_even/odd
+                ! are the base solutions it is derived from)
                 if( .not. present(warm_even) .or. .not. present(warm_odd) ) &
-                    &THROW_HARD('distributed PCG ML replay requires both half-map warm starts')
+                    &THROW_HARD('distributed PCG regularized pair requires both base half maps')
                 call prepare_distributed_half_job(state_here, 0, 'even', solve_kind, even_job, &
                     &fsc_prior, warm_even)
                 call prepare_distributed_half_job(state_here, 1, 'odd', solve_kind, odd_job, &
@@ -2043,7 +2019,7 @@ contains
             job%ready = .false.
             job%l_ml_solve = present(fsc_prior)
             if( job%l_ml_solve .neqv. present(warm_start) ) &
-                &THROW_HARD('distributed PCG ML replay requires both FSC and warm start')
+                &THROW_HARD('distributed PCG regularized pair requires both FSC and base map')
             if( allocated(job%x) ) deallocate(job%x)
             if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
 
@@ -2126,12 +2102,10 @@ contains
             if( job%l_ml_solve )then
                 call job%pcgop%get_ml_prior_stats(job%prior_npositive, job%prior_positive_min, &
                     &job%prior_positive_max, job%prior_to_khat_l1, job%prior_to_khat_rms)
-                ! the replay starts from the current base solution with the
-                ! shrinkage initial guess; no cross-iteration warm start
+                ! the regularized map is the closed-form P_tau optimum of the
+                ! current base solution (shrink_by_ml_prior); nothing is solved
                 job%x = warm_start%get_rmat()
-                call regularized_ml_initial_guess(params, fsc_prior, job%x, 'distributed', half)
-                ! the replay iterate is never zero: restart-eligible
-                job%l_nonzero = .true.
+                job%l_nonzero = .false.
             else
                 ! the base solve starts from zero
                 allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
@@ -2171,10 +2145,27 @@ contains
         subroutine solve_prepared_half_job( job )
             type(distributed_half_job), intent(inout) :: job
             integer(timer_int_kind) :: t_phase, t_end, t_rate
+            real :: rel_l2, rel_m
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
-            call solve_with_cold_restart(job%pcgop, job%x, job%l_nonzero, params%maxits_pcg, params%rtol, &
-                &job%rel_res_hist, job%niters, job%result)
+            if( job%l_ml_solve )then
+                ! closed form; the residuals are those of the result against
+                ! the replay system, diagnostics of the support coupling left out
+                call job%pcgop%shrink_by_ml_prior(job%x, rel_l2, rel_m)
+                job%niters = 0
+                allocate(job%rel_res_hist(0))
+                job%result%stop_reason          = 'closed_form'
+                job%result%requested_maxits     = 0
+                job%result%iteration_count      = 0
+                job%result%initial_rel_residual = rel_l2
+                job%result%final_rel_residual   = rel_l2
+                job%result%final_rel_residual_m = rel_m
+                job%result%final_rel_update     = 0.0
+                job%result%converged            = .true.
+            else
+                call solve_with_cold_restart(job%pcgop, job%x, job%l_nonzero, params%maxits_pcg, params%rtol, &
+                    &job%rel_res_hist, job%niters, job%result)
+            endif
             call system_clock(count=t_end, count_rate=t_rate)
             job%time_solve = real(t_end-t_phase,dp) / real(t_rate,dp)
         end subroutine solve_prepared_half_job
@@ -2205,7 +2196,7 @@ contains
             endif
             call report_solve_summary('DISTRIBUTED', job%state, job%half, job%solve_kind, job%nptcls, &
                 &job%niters, job%result%final_rel_residual, job%time_solve, job%result%stop_reason, &
-                &job%result%initial_rel_residual)
+                &job%result%initial_rel_residual, residual_m=job%result%final_rel_residual_m)
             call job%pcgop%kill
             if( allocated(job%x) ) deallocate(job%x)
             if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
@@ -2249,6 +2240,7 @@ contains
             endif
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=',  result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',    result%final_rel_residual
+            write(funit,'(A,ES14.6)') 'final_rel_resid_m=',     result%final_rel_residual_m
             write(funit,'(A,ES14.6)') 'final_rel_update=',      result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',        data_scale
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=',  lambda_eff
@@ -2382,20 +2374,33 @@ contains
     !> One summary line per solve; INIT is the relative residual of the start
     !! (1.0 from zero) so a start that is worse than nothing is visible in the
     !! log (the PfCRT regression hid a 10^4 residual in the sidecar files)
+    !> One line per half and solve kind. INIT/RESID are the true L2 relative
+    !! residuals (start/end); MRES is the final residual in the preconditioned
+    !! norm, the one CG actually drives and the one on which base and
+    !! regularized maps are comparable (2026-09-14): the L2 number of a
+    !! prior-dominated system is mostly noise the prior refuses to fit.
     subroutine report_solve_summary( execution_mode, state, half, solve_kind, nptcls, niters, &
-            &residual, solve_time, stop_reason, initial_residual )
+            &residual, solve_time, stop_reason, initial_residual, residual_m )
         character(len=*), intent(in) :: execution_mode, half, solve_kind, stop_reason
         integer,          intent(in) :: state, nptcls, niters
         real,             intent(in) :: residual
         real(dp),         intent(in) :: solve_time
         real,             intent(in) :: initial_residual
+        real, optional,   intent(in) :: residual_m
         character(len=4) :: half_label, kind_label
         half_label = adjustl(half)
         kind_label = adjustl(solve_kind)
-        write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,ES10.3,A,F7.2,2A)') &
-            &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
-            &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | INIT=', initial_residual, &
-            &' | RESID=', residual, ' | TIME=', solve_time, ' s | STOP=', trim(stop_reason)
+        if( present(residual_m) )then
+            write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,ES10.3,A,ES10.3,A,F7.2,2A)') &
+                &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
+                &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | INIT=', initial_residual, &
+                &' | RESID=', residual, ' | MRES=', residual_m, ' | TIME=', solve_time, ' s | STOP=', trim(stop_reason)
+        else
+            write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,ES10.3,A,F7.2,2A)') &
+                &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
+                &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | INIT=', initial_residual, &
+                &' | RESID=', residual, ' | TIME=', solve_time, ' s | STOP=', trim(stop_reason)
+        endif
         call flush(logfhandle)
     end subroutine report_solve_summary
 

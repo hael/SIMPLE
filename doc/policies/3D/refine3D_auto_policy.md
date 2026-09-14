@@ -86,8 +86,12 @@ itself applies the spherical soft mask only. The PCG solve support remains
 the conservative density envelope, never the evidence envelope. There is no
 separate `envref` control.
 
-If `filt_mode` is overridden to a non-NU mode, `automsk` must also be set to
-`no`; other combinations are rejected.
+`filt_mode` may be overridden to a non-NU mode with `automsk=yes` kept
+(2026-09-14): the density envelope then reaches the references through the
+matcher instead of the `_nu_filt` products, and the matching low-pass comes
+from the FSC at `lplim_crit` instead of the NU handoff. Note that with
+`ml_reg=yes` and a non-NU mode the references are the shipped ML-regularized
+pair, unfiltered by the matcher.
 
 ## 3. Starting Reference
 

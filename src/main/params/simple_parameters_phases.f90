@@ -5,13 +5,15 @@ use simple_sp_project, only: sp_project
 implicit none
 #include "simple_local_flags.inc"
 
-! Programs for which automsk=yes selects the NU-evidence background policy
-! (filter-field background = complement of the evidence envelope, heavy
-! background low-pass in the matching references), and which therefore require
-! a nonuniform filt_mode when automsk is on. Matching references are never
-! multiplied with an envelope; this list exists so the incompatibility is
-! reported at parameter-parse time.
-character(len=15), parameter :: NU_ENVMASK_REF_PRGS(5) = &
+! 3D refinement programs in which automsk means "the conservative density
+! envelope multiplies the matching references": under a nonuniform filt_mode
+! assembly applies it to the _nu_filt products after filtering (and fixes the
+! filter-field background outside it), under every other filt_mode the
+! matcher applies the same automask3D artifact after its own filter
+! (2026-09-14). automsk is therefore independent of filt_mode here; the list
+! exists to reject automsk=tight, which only ever meant Otsu tightness in the
+! standalone density masker and has no meaning for the envelope.
+character(len=15), parameter :: ENVMASK_REF_PRGS(5) = &
     &[character(len=15) :: 'refine3D', 'refine3D_auto', 'abinitio3D', 'refine3D_states', 'classify3D_refs']
 
 contains
@@ -866,16 +868,14 @@ contains
         end select
         if( self%l_envfsc .and. self%envmsklp <= 0. ) &
             &THROW_HARD('envmsklp must be positive when envfsc=yes')
-        ! automsk=tight only ever meant Otsu tightness in the density masker. The
-        ! NU-evidence envelope has no tight variant; nu_msk_sig controls tightness.
-        if( self%l_nonuniform .and. trim(self%automsk).eq.'tight' )then
-            THROW_HARD('automsk=tight is not supported with nonuniform filtering; use nu_msk_sig to set envelope tightness')
-        endif
-        ! Programs for which automsk=yes selects the NU-evidence background
-        ! policy, which needs the NU filter machinery (see NU_ENVMASK_REF_PRGS).
-        if( trim(self%automsk).ne.'no' .and. .not.self%l_nonuniform )then
-            if( any(NU_ENVMASK_REF_PRGS == self%prg%to_char()) )then
-                THROW_HARD('automsk=yes requires filt_mode=nonuniform|nonuniform_lpset in 3D refinement')
+        ! automsk=tight only ever meant Otsu tightness in the standalone density
+        ! masker. In 3D refinement automsk is the density-envelope reference
+        ! policy (yes|no), in every filt_mode (see ENVMASK_REF_PRGS); the
+        ! envelope's tightness is envmsklp/binwidth, the NU evidence envelope's
+        ! is nu_msk_sig.
+        if( trim(self%automsk).eq.'tight' )then
+            if( self%l_nonuniform .or. any(ENVMASK_REF_PRGS == self%prg%to_char()) )then
+                THROW_HARD('automsk=tight is not supported in 3D refinement; use automsk=yes (envmsklp/binwidth set the envelope, nu_msk_sig the NU evidence envelope)')
             endif
         endif
         if( trim(self%nu_envmsk).eq.'yes' .or. &

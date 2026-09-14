@@ -71,10 +71,11 @@ NU-evidence envelope generation, but is valid only while NU filtering is active.
 provide an auxiliary even/odd pair for static NU filtering, but not for
 `nu_refine=yes` shell-extension runs.
 
-Refinement automasking is available only in NU modes:
-`automsk=yes` requires `filt_mode=nonuniform|nonuniform_lpset`;
-`automsk=tight` is rejected because the NU-evidence envelope has no Otsu tight
-variant. All other filtering modes require `automsk=no`.
+Refinement automasking is independent of the filter mode (2026-09-14):
+`automsk=yes` multiplies the matching references by the conservative density
+envelope in every `filt_mode` -- at assembly on the `_nu_filt` products in NU
+modes, in the matcher after its own filter otherwise
+(`automasking_policy.md`). `automsk=tight` is rejected in 3D refinement.
 
 `envfsc=no` is the general default and the broad-sphere FSC remains the
 reported curve. `refine3D_auto` overrides that default to `yes` unless the user

@@ -362,8 +362,44 @@ contains
                 THROW_HARD('no nonuniform references and no FSC to filter the raw half maps; supply lp')
             endif
         endif
+        ! ENVELOPE (non-NU filt_mode): the _nu_filt products carry the density
+        ! envelope from assembly; every other filt_mode filters here, so the
+        ! same envelope is applied here, after the filter (2026-09-14)
+        if( trim(params%automsk).ne.'no' .and. .not. l_nonuniform_mode ) call apply_density_envelope_to_refs()
 
     contains
+
+        !> automsk=yes in a non-NU filt_mode: multiply the filtered references
+        !! by the conservative density envelope assembly wrote for the FSC
+        !! (automask3D_stateNN.mrc at envmsklp, the same support the PCG solve
+        !! imposes and the _nu_filt references carry). The non-NU filters are
+        !! matcher-owned, so filter-then-envelope, the order of the NU products,
+        !! can only be honoured here. Before the first assembly the artifact
+        !! does not exist yet; the references then carry the spherical mask
+        !! only, logged, exactly like the missing-_nu_filt fallback above.
+        subroutine apply_density_envelope_to_refs()
+            type(string) :: fname_envmsk
+            type(image)  :: envmsk
+            fname_envmsk = string(AUTOMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+            if( .not. file_exists(fname_envmsk) )then
+                write(logfhandle,'(A,I0,A)') '>>> state ', s, ' density envelope '//fname_envmsk%to_char()//&
+                    &' not assembled yet; references carry the spherical mask only'
+                call fname_envmsk%kill
+                return
+            endif
+            call envmsk%read_and_crop(fname_envmsk, params%smpd, params%box_crop, params%smpd_crop)
+            call build%vol%ifft
+            call build%vol_odd%ifft
+            call build%vol%zero_env_background(envmsk)
+            call build%vol%mul(envmsk)
+            call build%vol_odd%zero_env_background(envmsk)
+            call build%vol_odd%mul(envmsk)
+            call build%vol%fft
+            call build%vol_odd%fft
+            call envmsk%kill
+            call fname_envmsk%kill
+            write(logfhandle,'(A,I0)') '>>> REFERENCES: MULTIPLIED BY THE DENSITY ENVELOPE, STATE ', s
+        end subroutine apply_density_envelope_to_refs
 
         !> Matching references take the spherical soft mask here. The NU
         !! evidence envelope is never multiplied into a reference: it cuts out
@@ -375,6 +411,8 @@ contains
         !! envmsklp, and under automsk=yes assembly applies it to the _nu_filt
         !! references (policy 2026-09-13), the same support the PCG solve
         !! imposes; outside it the filter field takes the coarsest candidate.
+        !! In every other filt_mode apply_density_envelope_to_refs applies the
+        !! same artifact after the matcher-side filter (2026-09-14).
         subroutine mask_matching_reference( refvol )
             class(image), intent(inout) :: refvol
             call refvol%mask3D_soft(params%msk_crop, backgr=0.0)

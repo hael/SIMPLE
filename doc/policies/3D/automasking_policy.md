@@ -11,11 +11,16 @@ The current architecture has two controls and two artifacts, coupled in one
 direction (policy 2026-09-09):
 
 - `automsk` makes the conservative density envelope the support of the
+  matching references, in every `filt_mode` (2026-09-14). Under
+  `filt_mode=nonuniform|nonuniform_lpset` it is also the support of the
   signal model for NU filtering (policy 2026-09-13): outside it there is no
   signal to filter -- unreconstructed under the PCG support projection,
   solvent on gridding -- so the filter field takes the coarsest bank
   candidate there and the `_nu_filt` matching references are multiplied by
-  the envelope after filtering, on both backends. It also produces the
+  the envelope after filtering, on both backends. Under every other
+  `filt_mode` the matcher multiplies its own filtered references by the same
+  `automask3D_stateNN.mrc` artifact, after its filter, so the order
+  (filter, then envelope) is the same. In NU modes it also produces the
   NU-evidence-derived per-state envelope, but only as a diagnostic of the
   evidence field: that envelope is never armed and never multiplied into a
   reference.
@@ -43,10 +48,13 @@ The user-facing control is:
 - `automsk=tight`: valid for standalone density-mask commands, but rejected in
   NU refinement because the NU-evidence envelope has no Otsu tight variant
 
-In 3D refinement, `automsk=yes` requires
-`filt_mode=nonuniform|nonuniform_lpset`; `automsk=tight` and non-NU filtering
-with `automsk != no` are rejected. Standalone density-mask utilities are
-outside this refinement invariant.
+In 3D refinement `automsk` is independent of `filt_mode` (2026-09-14; until
+then a non-NU `filt_mode` with `automsk=yes` was rejected because the only
+code path applying the envelope to a reference lived inside the NU product
+synthesis). `automsk=tight` is rejected in 3D refinement in every mode: the
+envelope's tightness is `envmsklp`/`binwidth`, the NU evidence envelope's is
+`nu_msk_sig`. Standalone density-mask utilities are outside this refinement
+invariant.
 
 `envfsc=no` is the general default; `refine3D_auto` defaults it to `yes` unless
 the user supplies a value, and `automsk=yes` promotes it to `yes` everywhere
@@ -75,9 +83,11 @@ is different: it retains every density present at `envmsklp`, and with
 after filtering (policy 2026-09-13), the same support the PCG solve imposes
 and the FSC is corrected with. Outside it the filter field takes the coarsest
 bank candidate, the null of the evidence competition. The NU evidence envelope
-is written in the same pass as a diagnostic and is never armed. The matcher
-itself applies the spherical soft reference mask only; there is no separate
-`envref` control.
+is written in the same pass as a diagnostic and is never armed. In a non-NU
+`filt_mode` the matcher applies the same envelope artifact itself, after its
+own filter (`apply_density_envelope_to_refs`, 2026-09-14); before the first
+assembly of a run the artifact does not exist and the references carry the
+spherical mask only, logged. There is no separate `envref` control.
 Particle images and matching-bandwidth selection are unchanged by `automsk`;
 FSC estimation follows the implied `envfsc=yes` (see below).
 
@@ -160,11 +170,15 @@ files are `fscu_stateNN.bin`, `fsct_stateNN.bin`, and `fscn_stateNN.bin`.
 
 ### Matcher reference preparation
 
-Matcher reference preparation never reads or multiplies either envelope.
-References receive only the broad spherical soft mask. With `automsk=yes`, the
-density envelope has already been applied at assembly: the synthesized
-`_nu_filt` maps carry it multiplicatively and take the coarsest-bank label
-outside it, on both backends.
+Matcher reference preparation never reads or multiplies the NU evidence
+envelope. References receive the broad spherical soft mask, and with
+`automsk=yes` the conservative density envelope: in NU modes it has already
+been applied at assembly (the synthesized `_nu_filt` maps carry it
+multiplicatively and take the coarsest-bank label outside it, on both
+backends); in every other `filt_mode` the matcher reads
+`automask3D_stateNN.mrc`, crops it like the references, and multiplies the
+filtered references by it (2026-09-14). On PCG the shipped pair is already
+solved on that support, so the multiplication there only reasserts the skirt.
 
 ## State-specific artifacts
 
@@ -172,7 +186,8 @@ The two state-specific artifacts are:
 
 - `automask3D_stateNN.mrc`: current density/Otsu envelope produced by
   `envfsc=yes`; used by FSC/cFAR in memory, applied to the `_nu_filt`
-  references at assembly under `automsk=yes`, and reused by compatible
+  references at assembly under `automsk=yes` (NU modes) or to the filtered
+  references in the matcher (other modes), and reused by compatible
   non-PCG final postprocessing from disk
 - `nu_envmask3D_stateNN.mrc`: NU-evidence envelope produced by `automsk=yes`;
   a diagnostic of the cross-half evidence field, never armed as the
@@ -200,7 +215,9 @@ not interchangeable in the FSC or NU-objective paths.
 7. `volassemble` multiplies the NU-filtered even and odd references by the
    density envelope before writing them (the merged reference is their
    average); the NU evidence envelope never enters the filter field, FSC
-   correction, NU objective support, or a reference.
+   correction, NU objective support, or a reference. In a non-NU
+   `filt_mode`, steps 4-7 do not run and the matcher applies the envelope
+   from `automask3D_stateNN.mrc` after its own filter.
 8. Non-PCG final postprocessing may reuse a compatible
    `automask3D_stateNN.mrc` when `envfsc=yes`; PCG postprocessing applies no
    mask after the solve.
