@@ -7,50 +7,43 @@ use simple_ctf, only: ctf
 use simple_cartesian_fourier, only: center_embed_real3d, gather_packed_window_grad
 use simple_gridding, only: kb_stencil_centered_crop_inv_envelope_1d
 implicit none
-
-public :: cartesian_pose_refiner, cartesian_pose_data
-public :: POSE_DATA_VALID, POSE_DATA_INVALID_NOISE_RANGE
-public :: SHIFT_LM_ACCEPTED_IMPROVEMENT, SHIFT_LM_FINITE_NO_IMPROVEMENT
-public :: SHIFT_LM_NO_RELIABLE_UPDATE, SHIFT_LM_STEP_BOUND_REJECTED
-public :: SHIFT_LM_INVALID_NUMERICS, SHIFT_LM_ITERATION_LIMIT
-public :: POSE_LM_ACCEPTED_IMPROVEMENT, POSE_LM_FINITE_NO_IMPROVEMENT
-public :: POSE_LM_NO_RELIABLE_UPDATE, POSE_LM_STEP_BOUND_REJECTED
-public :: POSE_LM_INVALID_NUMERICS, POSE_LM_ITERATION_LIMIT
-public :: right_increment_rotation
-public :: pose_lm_system_test, pose_lm_transaction_test
 private
+
 #include "simple_local_flags.inc"
 
-integer, parameter :: SHIFT_LM_ACCEPTED_IMPROVEMENT = 1
-integer, parameter :: SHIFT_LM_FINITE_NO_IMPROVEMENT = 2
-integer, parameter :: SHIFT_LM_NO_RELIABLE_UPDATE = 3
-integer, parameter :: SHIFT_LM_STEP_BOUND_REJECTED = 4
-integer, parameter :: SHIFT_LM_INVALID_NUMERICS = 5
-integer, parameter :: SHIFT_LM_ITERATION_LIMIT = 6
-integer, parameter :: POSE_LM_ACCEPTED_IMPROVEMENT = SHIFT_LM_ACCEPTED_IMPROVEMENT
-integer, parameter :: POSE_LM_FINITE_NO_IMPROVEMENT = SHIFT_LM_FINITE_NO_IMPROVEMENT
-integer, parameter :: POSE_LM_NO_RELIABLE_UPDATE = SHIFT_LM_NO_RELIABLE_UPDATE
-integer, parameter :: POSE_LM_STEP_BOUND_REJECTED = SHIFT_LM_STEP_BOUND_REJECTED
-integer, parameter :: POSE_LM_INVALID_NUMERICS = SHIFT_LM_INVALID_NUMERICS
-integer, parameter :: POSE_LM_ITERATION_LIMIT = SHIFT_LM_ITERATION_LIMIT
+! Types
+public :: cartesian_pose_refiner, cartesian_pose_data, shift_lm_config, pose_lm_config
+public :: pose_lm_result, pose_lm_diagnostics
+
+! LM status codes
+public :: LM_ACCEPTED_IMPROVEMENT, LM_FINITE_NO_IMPROVEMENT
+public :: LM_NO_RELIABLE_UPDATE, LM_STEP_BOUND_REJECTED
+public :: LM_INVALID_NUMERICS, LM_ITERATION_LIMIT
+
+! Public procedures
+public :: right_increment_rotation
+
+! LM result codes shared by the shift-only and five-parameter solvers
+integer, parameter :: LM_ACCEPTED_IMPROVEMENT = 1
+integer, parameter :: LM_FINITE_NO_IMPROVEMENT = 2
+integer, parameter :: LM_NO_RELIABLE_UPDATE = 3
+integer, parameter :: LM_STEP_BOUND_REJECTED = 4
+integer, parameter :: LM_INVALID_NUMERICS = 5
+integer, parameter :: LM_ITERATION_LIMIT = 6
+
+! Internal numerical constants
 real(dp), parameter :: POSE_NUMERIC_FLOOR = epsilon(1._dp)**2
-integer, parameter :: POSE_DATA_VALID = 0
-integer, parameter :: POSE_DATA_INVALID_NOISE_RANGE = 1
 
 !> One shift-free, noise-whitened particle observation for a fixed reference.
 type :: cartesian_pose_data
     private
     complex, allocatable :: observed(:,:), transfer(:,:)
-    integer :: requested_shell_range(2) = 0
+    real, allocatable :: sigma2(:)
     integer :: shell_range(2) = 0
-    integer :: active_samples = 0
     logical :: valid = .false.
 contains
     procedure :: is_valid => pose_data_is_valid
-    procedure :: get_requested_shell_range => pose_data_get_requested_shell_range
     procedure :: get_shell_range => pose_data_get_shell_range
-    procedure :: get_active_sample_count => pose_data_get_active_sample_count
-    procedure :: copy_components_test => pose_data_copy_components_test
 end type cartesian_pose_data
 
 type :: cartesian_pose_refiner
@@ -61,85 +54,127 @@ type :: cartesian_pose_refiner
     integer          :: iwinsz  = 0
     integer          :: wdim    = 0
     integer          :: lims2(2,2) = 0
-    integer          :: sqhp    = 0
-    integer          :: sqlp    = 0
     real             :: padsc   = 1.0
     type(kbinterpol) :: kbwin
     integer, allocatable :: wrap(:)
     complex, allocatable :: cmat(:,:,:)
     logical :: exists = .false.
 contains
-    procedure :: new => new_pose_refiner
-    procedure :: new_prepared_test => new_pose_refiner_prepared_test
+    procedure :: new_inverse_envelope_reference => new_pose_refiner_inverse_envelope_reference
+    procedure :: new_physical_reference => new_pose_refiner_physical_reference
     procedure :: prepare_particle => prepare_pose_particle
     procedure :: prepared_objective_gradient => prepared_pose_objective_gradient
-    procedure :: prepared_normal_terms_test => prepared_pose_normal_terms_test
-    procedure :: prepared_residual_jacobian_test => prepared_pose_residual_jacobian_test
+    procedure :: prepared_sigma_contribution => prepared_pose_sigma_contribution
     procedure :: refine_prepared_pose_lm
     procedure :: kill => kill_fourier_workspace
-    procedure :: get_lims2 => get_fourier_workspace_lims2
-    procedure :: set_shell_range => set_fourier_workspace_shell_range
-    procedure :: sample_with_grad => sample_fourier_with_grad
-    procedure :: sample_slow_test => sample_fourier_slow_test
-    procedure :: shift_residual
-    procedure :: shift_jvp
-    procedure :: shift_jhz
-    procedure :: shift_objective_gradient
+    procedure :: predict_unweighted => predict_unweighted_pose
+    ! Retain the efficient dedicated two-parameter LM path.
     procedure :: refine_shift_lm
-    procedure :: rotation_jvp
-    procedure :: pose_objective_gradient
-    procedure :: refine_pose_lm
+    procedure, private :: sample_with_grad => sample_fourier_with_grad
+    procedure, private :: pose_objective_gradient
+    procedure, private :: refine_pose_lm
     procedure, private :: shift_normal_terms
     procedure, private :: pose_normal_terms
     procedure :: count_stencil_switches
 end type cartesian_pose_refiner
 
+!> Configuration and bounds for one dedicated two-parameter shift solve.
+type :: shift_lm_config
+    real(dp) :: shift_step_bound = 1._dp
+    integer  :: max_iterations = 40
+end type shift_lm_config
+
+!> Configuration and bounds for one five-parameter LM solve.
+!! Particle observations and transfer weights remain owned by cartesian_pose_data.
+type :: pose_lm_config
+    real(dp) :: rotation_scale = 1._dp
+    real(dp) :: shift_step_bound = 1._dp
+    integer  :: max_iterations = 40
+    logical  :: active_parameters(5) = .true.
+    logical  :: use_cumulative_guard = .false.
+    real(dp) :: anchor_rotmat(3,3) = reshape([1._dp,0._dp,0._dp, &
+        &0._dp,1._dp,0._dp,0._dp,0._dp,1._dp],[3,3])
+    real(dp) :: anchor_shift(2) = 0._dp
+    real(dp) :: max_total_rotation = 0._dp
+    real(dp) :: max_total_shift = 0._dp
+end type pose_lm_config
+
+!> Minimal production result from one LM solve.
+type :: pose_lm_result
+    integer :: status = LM_ITERATION_LIMIT
+    integer :: niterations = 0
+end type pose_lm_result
+
+!> Optional scalar diagnostics from one LM solve.
+type :: pose_lm_diagnostics
+    integer :: nattempted = 0
+    integer :: naccepted = 0
+    integer :: nbound_hits = 0
+    integer :: nstencil_switches = 0
+    real(dp) :: max_rotation_step = 0._dp
+    real(dp) :: max_shift_step = 0._dp
 contains
+    procedure :: reset => reset_pose_lm_diagnostics
+end type pose_lm_diagnostics
+
+contains
+
+    subroutine reset_pose_lm_diagnostics(self)
+        class(pose_lm_diagnostics), intent(inout) :: self
+
+        self%nattempted = 0
+        self%naccepted = 0
+        self%nbound_hits = 0
+        self%nstencil_switches = 0
+        self%max_rotation_step = 0._dp
+        self%max_shift_step = 0._dp
+    end subroutine reset_pose_lm_diagnostics
 
     pure logical function pose_data_is_valid(self) result(valid)
         class(cartesian_pose_data), intent(in) :: self
         valid = self%valid
     end function pose_data_is_valid
 
+    !> requested range ∩ available sigma2 shells ∩ Cartesian Nyquist limit
     pure function pose_data_get_shell_range(self) result(shell_range)
         class(cartesian_pose_data), intent(in) :: self
         integer :: shell_range(2)
         shell_range = self%shell_range
     end function pose_data_get_shell_range
 
-    pure function pose_data_get_requested_shell_range(self) result(shell_range)
-        class(cartesian_pose_data), intent(in) :: self
-        integer :: shell_range(2)
-        shell_range = self%requested_shell_range
-    end function pose_data_get_requested_shell_range
+    !> Evaluate SIMPLE's CTF object at one signed full-disk Fourier coordinate.
+    !! Unlike the memoized hot-loop kernel, this route owns no process-global
+    !! Fourier maps and is therefore valid in standalone adapter tests.
+    real function pose_cont_ctf_value(tfun,h,k,box,phshift,phase_flip) result(cval)
+        type(ctf), intent(in) :: tfun
+        integer, intent(in) :: h, k, box
+        real, intent(in) :: phshift
+        logical, intent(in) :: phase_flip
+        real :: angle, spatial_frequency_squared
 
-    pure integer function pose_data_get_active_sample_count(self) result(active_samples)
-        class(cartesian_pose_data), intent(in) :: self
-        active_samples = self%active_samples
-    end function pose_data_get_active_sample_count
+        spatial_frequency_squared = (real(h)*real(h)+real(k)*real(k))/(real(box)*real(box))
+        angle = 0.
+        if( h /= 0 .or. k /= 0 ) angle = atan2(real(k),real(h))
+        cval = tfun%eval_canonical(spatial_frequency_squared,angle,phshift)
+        if( phase_flip ) cval = abs(cval)
+    end function pose_cont_ctf_value
 
-    !> Copy prepared components only for focused validation diagnostics.
-    subroutine pose_data_copy_components_test(self, observed, transfer)
-        class(cartesian_pose_data), intent(in) :: self
-        complex, allocatable, intent(out) :: observed(:,:), transfer(:,:)
-        if( .not. self%valid ) error stop 'cannot copy invalid prepared pose data'
-        observed = self%observed
-        transfer = self%transfer
-    end subroutine pose_data_copy_components_test
-
-    !> Construct one immutable Fourier reference from a physical real-space volume.
-    subroutine new_pose_refiner(self, volume)
+    !> Construct an immutable Cartesian Fourier reference from a physical volume.
+    !! Apply the inverse Kaiser-Bessel envelope exactly once before padding and FFT.
+    subroutine new_pose_refiner_inverse_envelope_reference(self, volume)
         class(cartesian_pose_refiner), intent(inout) :: self
         real, intent(in) :: volume(:,:,:)
         call load_pose_reference(self,volume,.true.)
-    end subroutine new_pose_refiner
+    end subroutine new_pose_refiner_inverse_envelope_reference
 
-    !> Test-only constructor for diagnostics that compare prepared-volume models.
-    subroutine new_pose_refiner_prepared_test(self, volume)
+    !> Construct an immutable Cartesian Fourier reference from a prepared physical volume.
+    !! Preserve the supplied amplitudes: pad and FFT without applying an inverse
+    !! Kaiser-Bessel envelope. This matches the executed refine3D reference boundary.
+    subroutine new_pose_refiner_physical_reference(self, volume)
         class(cartesian_pose_refiner), intent(inout) :: self
         real, intent(in) :: volume(:,:,:)
         call load_pose_reference(self,volume,.false.)
-    end subroutine new_pose_refiner_prepared_test
+    end subroutine new_pose_refiner_physical_reference
 
     subroutine load_pose_reference(self, volume, apply_inverse_envelope)
         class(cartesian_pose_refiner), intent(inout) :: self
@@ -162,8 +197,6 @@ contains
         self%wdim = 2*self%iwinsz+1
         self%lims2(1,:) = [-box/2,box/2]
         self%lims2(2,:) = [-box/2,box/2]
-        self%sqhp = 0
-        self%sqlp = (box/2)**2
         allocate(prepared,source=volume)
         if( apply_inverse_envelope )then
             call kb_stencil_centered_crop_inv_envelope_1d(self%kbwin,self%boxpd,box,inv1d)
@@ -193,8 +226,13 @@ contains
         deallocate(prepared)
     end subroutine load_pose_reference
 
-    !> Prepare the shift-free CTF/noise transfer and whitened observation.
-    subroutine prepare_pose_particle(self, raw_observed, ctfparms, sigma2, requested_range, data, status)
+
+    !> Prepare one particle for repeated Cartesian pose evaluations.
+    !! Store the whitened observation Y/sqrt(sigma2) and the shift-free transfer
+    !! C/sqrt(sigma2) over the valid requested shells. The objective applies the
+    !! candidate shift phase itself, so including a shift here would apply it twice.
+    !! Invalid or unavailable shell variances produce data%valid=.false. without aborting.
+    subroutine prepare_pose_particle(self, raw_observed, ctfparms, sigma2, requested_range, data)
         class(cartesian_pose_refiner), intent(in) :: self
         complex, intent(in) :: raw_observed(self%lims2(1,1):self%lims2(1,2), &
             &self%lims2(2,1):self%lims2(2,2))
@@ -202,18 +240,13 @@ contains
         real, intent(in) :: sigma2(0:)
         integer, intent(in) :: requested_range(2)
         type(cartesian_pose_data), intent(out) :: data
-        integer, intent(out) :: status
         type(ctf) :: tfun
         type(ctfvars) :: ctfvals
-        real :: cval, sigma, s2, cterm, df, phsh
-        real :: wl, half_wl2_cs, sum_df, diff_df, angast, accc, phc
+        real :: cval, sigma
         integer :: h, k, shell, lower_shell, upper_shell, radius_squared
         logical :: use_ctf, phase_flip
 
-        status = POSE_DATA_INVALID_NOISE_RANGE
         data%valid = .false.
-        data%requested_shell_range = requested_range
-        data%active_samples = 0
         lower_shell = max(0,requested_range(1))
         upper_shell = min(requested_range(2),ubound(sigma2,1),self%box/2)
         data%shell_range = [lower_shell,upper_shell]
@@ -225,19 +258,13 @@ contains
             &self%lims2(2,1):self%lims2(2,2)),source=cmplx(0.,0.))
         allocate(data%transfer(self%lims2(1,1):self%lims2(1,2), &
             &self%lims2(2,1):self%lims2(2,2)),source=cmplx(0.,0.))
+        allocate(data%sigma2(lower_shell:upper_shell),source=sigma2(lower_shell:upper_shell))
         use_ctf = ctfparms%ctfflag /= CTFFLAG_NO
         phase_flip = ctfparms%ctfflag == CTFFLAG_FLIP
         if( use_ctf )then
             tfun = ctf(ctfparms%smpd,ctfparms%kv,ctfparms%cs,ctfparms%fraca)
             call tfun%init(ctfparms%dfx,ctfparms%dfy,ctfparms%angast)
             ctfvals = tfun%get_ctfvars(ctfparms%phshift)
-            wl = ctfvals%wl
-            half_wl2_cs = 0.5*wl*wl*ctfvals%cs
-            sum_df = ctfvals%dfx+ctfvals%dfy
-            diff_df = ctfvals%dfx-ctfvals%dfy
-            angast = ctfvals%angast
-            accc = ctfvals%amp_contr_const
-            phc = ctfvals%phshift
         endif
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
@@ -248,51 +275,119 @@ contains
                 sigma = sigma2(shell)
                 cval = 1.0
                 if( use_ctf )then
-                    s2 = real(h*h+k*k)/(real(self%box)*ctfparms%smpd)**2
-                    cterm = cos(2.0*(atan2(real(k),real(h))-angast))
-                    df = 0.5*(sum_df+cterm*diff_df)
-                    phsh = PI*wl*s2*(df-half_wl2_cs*s2)
-                    cval = sin(phsh+phc+accc)
-                    if( phase_flip ) cval = abs(cval)
+                    ! Use SIMPLE's CTF object without depending on process-global
+                    ! Fourier maps initialized by the production matcher.
+                    cval = pose_cont_ctf_value(tfun,h,k,self%box,ctfvals%phshift,phase_flip)
                 endif
                 data%transfer(h,k) = cval/sqrt(sigma)
                 data%observed(h,k) = raw_observed(h,k)/sqrt(sigma)
-                data%active_samples = data%active_samples+1
             enddo
         enddo
         data%valid = .true.
-        status = POSE_DATA_VALID
     end subroutine prepare_pose_particle
 
+    !> Evaluate the weighted Cartesian least-squares objective and its five derivatives.
+    !! Reuse the immutable reference grid and prepared particle so each LM trial changes
+    !! only the three-component rotation increment and two native-pixel shifts.
     subroutine prepared_pose_objective_gradient(self, rotmat, shift, data, objective, gradient)
         class(cartesian_pose_refiner), intent(in) :: self
         real(dp), intent(in) :: rotmat(3,3), shift(2)
         type(cartesian_pose_data), intent(in) :: data
         real(dp), intent(out) :: objective, gradient(5)
         if( .not. data%valid ) error stop 'prepared pose objective requires valid particle data'
-        ! Reuse the immutable Fourier lattice; only the particle shell mask varies.
         call self%pose_objective_gradient(rotmat,shift,data%observed,objective,gradient, &
             &data%transfer,data%shell_range)
     end subroutine prepared_pose_objective_gradient
 
-    subroutine refine_prepared_pose_lm(self, rotmat, shift, data, rotation_scale, max_iterations, &
-        &accepted_objectives, naccepted, status, nattempted, max_rotation_step, max_shift_step, &
-        &nstencil_switches)
+    !> Recompute refine3D accounting at one valid terminal Cartesian pose.
+    !! Undo particle whitening, evaluate the full-disk residual in native Fourier
+    !! coordinates, and return per-shell residual, reference, and particle powers.
+    !! This is intentionally separate from LM acceptance: both accepted and valid
+    !! rejected terminal poses require accounting consistent with their final pose.
+    subroutine prepared_pose_sigma_contribution(self, rotmat, shift, data, sigma_contrib, &
+        &ref_pow, ptcl_pow, v)
+        class(cartesian_pose_refiner), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        type(cartesian_pose_data), intent(in) :: data
+        real, allocatable, intent(out) :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
+        real, intent(out) :: v
+        complex :: value, dvalue_dloc(3), phase
+        complex(dp) :: model, raw_observed, residual
+        real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:)
+        real(dp) :: arg, root_sigma, vnum, vden
+        real(sp) :: loc(3), switch_margin(3)
+        integer, allocatable :: counts(:)
+        integer :: h, k, shell, radius_squared, lower_shell, upper_shell
+
+        if( .not. self%exists ) error stop 'prepared sigma contribution requires a Fourier workspace'
+        v = -1.
+        if( .not. data%valid ) return
+        lower_shell = data%shell_range(1)
+        upper_shell = data%shell_range(2)
+        allocate(sigma_sum(lower_shell:upper_shell), source=0._dp)
+        allocate(ref_sum(lower_shell:upper_shell), source=0._dp)
+        allocate(ptcl_sum(lower_shell:upper_shell), source=0._dp)
+        allocate(counts(lower_shell:upper_shell), source=0)
+        vnum = 0._dp
+        vden = 0._dp
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                radius_squared = h*h+k*k
+                if( radius_squared < lower_shell*lower_shell .or. &
+                    &radius_squared > upper_shell*upper_shell ) cycle
+                shell = nint(sqrt(real(radius_squared)))
+                loc = real(self%padf,sp)*real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc,value,dvalue_dloc,switch_margin)
+                arg = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                root_sigma = sqrt(real(data%sigma2(shell),dp))
+                model = cmplx(phase,kind=dp)*cmplx(data%transfer(h,k),kind=dp)* &
+                    &cmplx(value,kind=dp)*root_sigma
+                raw_observed = cmplx(data%observed(h,k),kind=dp)*root_sigma
+                residual = raw_observed-model
+                sigma_sum(shell) = sigma_sum(shell)+real(conjg(residual)*residual,dp)
+                ref_sum(shell) = ref_sum(shell)+real(conjg(model)*model,dp)
+                ptcl_sum(shell) = ptcl_sum(shell)+real(conjg(raw_observed)*raw_observed,dp)
+                counts(shell) = counts(shell)+1
+                vnum = vnum+real(conjg(residual)*residual,dp)/real(data%sigma2(shell),dp)
+                vden = vden+real(conjg(raw_observed)*raw_observed,dp)/real(data%sigma2(shell),dp)
+            enddo
+        enddo
+        if( any(counts == 0) ) error stop 'prepared sigma contribution found an empty active shell'
+        allocate(sigma_contrib(lower_shell:upper_shell))
+        allocate(ref_pow(lower_shell:upper_shell))
+        allocate(ptcl_pow(lower_shell:upper_shell))
+        sigma_contrib = real(sigma_sum/(2._dp*real(counts,dp)),sp)
+        ref_pow = real(ref_sum/real(counts,dp),sp)
+        ptcl_pow = real(ptcl_sum/real(counts,dp),sp)
+        if( vden > 0._dp )then
+            v = real(vnum/vden,sp)
+        else
+            v = -1.
+        endif
+    end subroutine prepared_pose_sigma_contribution
+
+    !> Refine one pose against an already prepared Cartesian particle.
+    !! This is the production entry point: it couples the particle's immutable
+    !! observation, transfer, and shell range to the bounded five-parameter LM.
+    !! rotmat and shift change only through accepted LM transactions; result is
+    !! always returned, while diagnostics is optional operational evidence.
+    subroutine refine_prepared_pose_lm(self, rotmat, shift, data, config, result, diagnostics)
         class(cartesian_pose_refiner), intent(in) :: self
         real(dp), intent(inout) :: rotmat(3,3), shift(2)
         type(cartesian_pose_data), intent(in) :: data
-        real(dp), intent(in) :: rotation_scale
-        integer, intent(in) :: max_iterations
-        real(dp), intent(out) :: accepted_objectives(0:)
-        integer, intent(out) :: naccepted, status, nattempted, nstencil_switches
-        real(dp), intent(out) :: max_rotation_step, max_shift_step
+        type(pose_lm_config), intent(in) :: config
+        type(pose_lm_result), intent(out) :: result
+        type(pose_lm_diagnostics), optional, intent(out) :: diagnostics
+
         if( .not. data%valid ) error stop 'prepared pose LM requires valid particle data'
-        ! Shell limits are local arguments, so no padded Fourier reference is copied.
-        call self%refine_pose_lm(rotmat,data%observed,shift,rotation_scale,max_iterations, &
-            &accepted_objectives,naccepted,status,nattempted,max_rotation_step,max_shift_step, &
-            &nstencil_switches,transfer=data%transfer,shell_range=data%shell_range)
+        ! Forward the immutable prepared particle and grouped solver policy.
+        call self%refine_pose_lm(rotmat,shift,data,config,result,diagnostics)
     end subroutine refine_prepared_pose_lm
 
+    !> Apply a local tangent-space rotation increment on the right.
+    !! Compute R_new = R exp([omega]x), matching the rotation derivative used by
+    !! the pose Jacobian. omega is a three-component rotation vector in radians.
     pure function right_increment_rotation( rotmat, omega ) result(updated_rotmat)
         real(dp), intent(in) :: rotmat(3,3), omega(3)
         real(dp) :: updated_rotmat(3,3), skew(3,3), exp_skew(3,3)
@@ -307,6 +402,7 @@ contains
             &-omega(3),0._dp,omega(1),omega(2),-omega(1),0._dp],[3,3])
         theta2 = dot_product(omega,omega)
         if( theta2 < 1.e-8_dp )then
+            ! Taylor forms avoid cancellation as the rotation angle approaches zero.
             theta4 = theta2*theta2
             sinc_theta = 1._dp-theta2/6._dp+theta4/120._dp
             cosc_theta = 0.5_dp-theta2/24._dp+theta4/720._dp
@@ -314,7 +410,9 @@ contains
             sinc_theta = sin(sqrt(theta2))/sqrt(theta2)
             cosc_theta = (1._dp-cos(sqrt(theta2)))/theta2
         endif
+        ! Rodrigues' formula evaluates the SO(3) exponential map.
         exp_skew = identity+sinc_theta*skew+cosc_theta*matmul(skew,skew)
+        ! Right multiplication keeps omega in the current particle-pose frame.
         updated_rotmat = matmul(rotmat,exp_skew)
     end function right_increment_rotation
 
@@ -328,31 +426,9 @@ contains
         self%iwinsz = 0
         self%wdim   = 0
         self%lims2  = 0
-        self%sqhp   = 0
-        self%sqlp   = 0
         self%padsc  = 1.0
         self%exists = .false.
     end subroutine kill_fourier_workspace
-
-    !> Return the native packed-plane bounds used by observations and transfers.
-    pure function get_fourier_workspace_lims2( self ) result(lims2)
-        class(cartesian_pose_refiner), intent(in) :: self
-        integer :: lims2(2,2)
-        lims2 = self%lims2
-    end function get_fourier_workspace_lims2
-
-    !> Restrict the local objective to an inclusive native Fourier-shell range.
-    subroutine set_fourier_workspace_shell_range( self, kfromto )
-        class(cartesian_pose_refiner), intent(inout) :: self
-        integer, intent(in) :: kfromto(2)
-        integer :: khi, klo
-        if( .not. self%exists ) error stop 'set_shell_range called on an empty Fourier workspace'
-        klo = max(0,kfromto(1))
-        khi = min(self%box/2,kfromto(2))
-        if( khi < klo ) error stop 'set_shell_range requires an ordered nonempty range'
-        self%sqhp = klo*klo
-        self%sqlp = khi*khi
-    end subroutine set_fourier_workspace_shell_range
 
     !>  \brief  Samples the packed Fourier snapshot and its three fixed-cell
     !!          spatial derivatives at one oversampled-lattice coordinate.
@@ -378,180 +454,66 @@ contains
         dvalue_dloc = self%padsc * dvalue_dloc
     end subroutine sample_fourier_with_grad
 
-    !> Independently traverse the prepared packed reference for acceptance tests.
-    !! This routine deliberately does not call the executed stencil builder or
-    !! the neutral packed gather. It repeats the frozen normalized-KB,
-    !! packed/Friedel, and periodic-wrap contracts in a structurally separate
-    !! slow path.
-    pure subroutine sample_fourier_slow_test(self,loc,value)
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(sp), intent(in) :: loc(3)
-        complex(dp), intent(out) :: value
-        complex(dp) :: fcomp
-        real(dp) :: one_dimensional(self%wdim,3), weight
-        real(sp) :: weight_sum
-        integer :: coordinate, di, dj, dk, hh, kk, mm, ph, pk, pm
-        integer :: i0(3), ny, nz, tap
-
-        if( .not. self%exists ) error stop 'sample_slow_test called on an empty Fourier workspace'
-        i0 = nint(loc)-self%iwinsz
-        if( any(i0 < lbound(self%wrap,1)) .or. &
-            &any(i0+self%wdim-1 > ubound(self%wrap,1)) ) &
-            &error stop 'sample_slow_test location lies outside the periodic wrap table'
-        do coordinate = 1, 3
-            do tap = 1, self%wdim
-                one_dimensional(tap,coordinate) = real(self%kbwin%apod_fast( &
-                    &real(i0(coordinate)+tap-1,sp)-loc(coordinate)),dp)
-            enddo
-            weight_sum = real(sum(one_dimensional(:,coordinate)),sp)
-            one_dimensional(:,coordinate) = one_dimensional(:,coordinate)/real(weight_sum,dp)
-        enddo
-
-        ny = size(self%cmat,2)
-        nz = size(self%cmat,3)
-        value = cmplx(0._dp,0._dp,kind=dp)
-        do dk = 1, self%wdim
-            mm = self%wrap(i0(3)+dk-1)
-            do dj = 1, self%wdim
-                kk = self%wrap(i0(2)+dj-1)
-                do di = 1, self%wdim
-                    hh = self%wrap(i0(1)+di-1)
-                    if( hh >= 0 )then
-                        ph = hh+1
-                        pk = kk+1; if( kk < 0 ) pk = pk+ny
-                        pm = mm+1; if( mm < 0 ) pm = pm+nz
-                        fcomp = cmplx(self%cmat(ph,pk,pm),kind=dp)
-                    else
-                        ph = -hh+1
-                        pk = -kk+1; if( -kk < 0 ) pk = pk+ny
-                        pm = -mm+1; if( -mm < 0 ) pm = pm+nz
-                        fcomp = conjg(cmplx(self%cmat(ph,pk,pm),kind=dp))
-                    endif
-                    weight = one_dimensional(di,1)*one_dimensional(dj,2)* &
-                        &one_dimensional(dk,3)
-                    value = value+weight*fcomp
-                enddo
-            enddo
-        enddo
-        value = real(self%padsc,dp)*value
-    end subroutine sample_fourier_slow_test
-
-    !>  \brief  Fixed-volume, CTF-free, unit-noise residual for a shifted
-    !!          Fourier projection: r = S(t) G(R)V - y.
-    subroutine shift_residual( self, rotmat, shift, observed, residual, objective )
+    !> Form the unweighted full-disk Cartesian prediction S(t) G(R)V.
+    !! This is the reusable forward-model boundary; particle preparation applies
+    !! CTF and shell whitening separately.
+    subroutine predict_unweighted_pose( self, rotmat, shift, prediction )
         class(cartesian_pose_refiner), intent(in) :: self
         real(dp), intent(in) :: rotmat(3,3), shift(2)
-        complex, intent(in)  :: observed(self%lims2(1,1):self%lims2(1,2),&
-                                          &self%lims2(2,1):self%lims2(2,2))
-        complex, intent(out) :: residual(self%lims2(1,1):self%lims2(1,2),&
-                                          &self%lims2(2,1):self%lims2(2,2))
-        real(dp), intent(out) :: objective
+        complex, intent(out) :: prediction(self%lims2(1,1):self%lims2(1,2),&
+                                            &self%lims2(2,1):self%lims2(2,2))
         complex :: value, dvalue_dloc(3), phase
         real(sp) :: loc(3), switch_margin(3)
         real(dp) :: arg
         integer :: h, k
-        if( .not. self%exists ) error stop 'shift_residual called on an empty Fourier workspace'
-        residual = cmplx(0.,0.)
-        objective = 0._dp
+        if( .not. self%exists ) error stop 'predict_unweighted called on an empty Fourier workspace'
+        prediction = cmplx(0.,0.)
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
+                if( h*h+k*k > (self%box/2)**2 ) cycle
                 loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
                 call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
                 arg = 2._dp * real(PI,dp) * &
                     &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
                 phase = cmplx(cos(arg),sin(arg),kind=sp)
-                residual(h,k) = phase * value - observed(h,k)
-                objective = objective + 0.5_dp * real(conjg(cmplx(residual(h,k),kind=dp)) * &
-                    &cmplx(residual(h,k),kind=dp),dp)
+                prediction(h,k) = phase*value
             enddo
         enddo
-    end subroutine shift_residual
+    end subroutine predict_unweighted_pose
 
-    !>  \brief  Directional derivative of the CTF-free, unit-noise residual
-    !!          with respect to the two real image-shift parameters.
-    subroutine shift_jvp( self, rotmat, shift, direction, jv )
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), shift(2), direction(2)
-        complex, intent(out) :: jv(self%lims2(1,1):self%lims2(1,2),&
-                                    &self%lims2(2,1):self%lims2(2,2))
-        complex :: value, dvalue_dloc(3), phase
-        real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: arg, directional_frequency
-        integer :: h, k
-        if( .not. self%exists ) error stop 'shift_jvp called on an empty Fourier workspace'
-        jv = cmplx(0.,0.)
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
-                loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
-                call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
-                arg = 2._dp * real(PI,dp) * &
-                    &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
-                directional_frequency = 2._dp * real(PI,dp) * &
-                    &(real(h,dp)*direction(1) + real(k,dp)*direction(2)) / real(self%box,dp)
-                phase = cmplx(cos(arg),sin(arg),kind=sp)
-                jv(h,k) = cmplx(cmplx(0._dp,directional_frequency,kind=dp) * &
-                    &cmplx(phase*value,kind=dp),kind=sp)
-            enddo
-        enddo
-    end subroutine shift_jvp
-
-    !>  \brief  Real-parameter adjoint of the two shift-Jacobian columns.
-    subroutine shift_jhz( self, rotmat, shift, z, jhz )
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), shift(2)
-        complex, intent(in) :: z(self%lims2(1,1):self%lims2(1,2),&
-                                  &self%lims2(2,1):self%lims2(2,2))
-        real(dp), intent(out) :: jhz(2)
-        complex :: value, dvalue_dloc(3), phase
-        complex(dp) :: jacobian_value
-        real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: arg, frequency
-        integer :: axis, h, k
-        if( .not. self%exists ) error stop 'shift_jhz called on an empty Fourier workspace'
-        jhz = 0._dp
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
-                loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
-                call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
-                arg = 2._dp * real(PI,dp) * &
-                    &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
-                phase = cmplx(cos(arg),sin(arg),kind=sp)
-                do axis = 1, 2
-                    frequency = 2._dp * real(PI,dp) * real(merge(h,k,axis==1),dp) / real(self%box,dp)
-                    jacobian_value = cmplx(0._dp,frequency,kind=dp) * &
-                        &cmplx(phase*value,kind=dp)
-                    jhz(axis) = jhz(axis) + real(conjg(jacobian_value) * &
-                        &cmplx(z(h,k),kind=dp),dp)
-                enddo
-            enddo
-        enddo
-    end subroutine shift_jhz
-
-    !>  \brief  Fused shift objective, gradient and Gauss-Newton block. This
-    !!          avoids materializing derivative planes inside local refinement.
-    subroutine shift_normal_terms( self, rotmat, shift, observed, objective, gradient, hessian, transfer )
+    !>  \brief  Fused shift objective, gradient and two-by-two Gauss-Newton block.
+    !!          Keep this dedicated path: it avoids derivative planes and a masked
+    !!          five-by-five solve when only the two image shifts are active.
+    subroutine shift_normal_terms(self,rotmat,shift,observed,objective,gradient,hessian,transfer,shell_range)
         class(cartesian_pose_refiner), intent(in) :: self
         real(dp), intent(in) :: rotmat(3,3), shift(2)
         complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
                                          &self%lims2(2,1):self%lims2(2,2))
         complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
                                                    &self%lims2(2,1):self%lims2(2,2))
+        integer, optional, intent(in) :: shell_range(2)
         real(dp), intent(out) :: objective, gradient(2), hessian(2,2)
         complex :: value, dvalue_dloc(3), phase
         complex(dp) :: model, residual, jacobian(2)
         real(sp) :: loc(3), switch_margin(3)
         real(dp) :: arg, frequency(2)
-        integer :: axis, h, jaxis, k
+        integer :: axis, h, jaxis, k, active_sqhp, active_sqlp
         if( .not. self%exists ) error stop 'shift_normal_terms called on an empty Fourier workspace'
+        active_sqhp = 0
+        active_sqlp = (self%box/2)**2
+        if( present(shell_range) )then
+            if( shell_range(1) < 0 .or. shell_range(2) > self%box/2 .or. &
+                &shell_range(2) < shell_range(1) ) &
+                &error stop 'shift_normal_terms shell range lies outside the native Fourier disk'
+            active_sqhp = shell_range(1)*shell_range(1)
+            active_sqlp = shell_range(2)*shell_range(2)
+        endif
         objective = 0._dp
         gradient = 0._dp
         hessian = 0._dp
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
+                if( h*h + k*k < active_sqhp .or. h*h + k*k > active_sqlp ) cycle
                 loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
                 call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
                 arg = 2._dp * real(PI,dp) * &
@@ -573,60 +535,6 @@ contains
             enddo
         enddo
     end subroutine shift_normal_terms
-
-    !> Return the shift objective and gradient without exposing the computed
-    !! two-by-two Gauss-Newton block.
-    subroutine shift_objective_gradient( self, rotmat, shift, observed, objective, gradient, transfer )
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), shift(2)
-        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2), &
-                                         &self%lims2(2,1):self%lims2(2,2))
-        real(dp), intent(out) :: objective, gradient(2)
-        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2), &
-                                                   &self%lims2(2,1):self%lims2(2,2))
-        real(dp) :: hessian(2,2)
-        if( present(transfer) )then
-            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian,transfer)
-        else
-            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian)
-        endif
-    end subroutine shift_objective_gradient
-
-    !>  \brief  Directional derivative of the Fourier gather for a right
-    !!          tangent-space rotation. The transfer plane includes CTF and
-    !!          whitening when it is supplied by the production caller.
-    subroutine rotation_jvp( self, rotmat, shift, direction, jv, transfer )
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), shift(2), direction(3)
-        complex, intent(out) :: jv(self%lims2(1,1):self%lims2(1,2),&
-                                    &self%lims2(2,1):self%lims2(2,2))
-        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
-                                                   &self%lims2(2,1):self%lims2(2,2))
-        complex :: value, dvalue_dloc(3), phase
-        complex(dp) :: derivative
-        real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: args, dloc(3)
-        integer :: h, k
-
-        if( .not. self%exists ) error stop 'rotation_jvp called on an empty Fourier workspace'
-        jv = cmplx(0.,0.)
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h+k*k < self%sqhp .or. h*h+k*k > self%sqlp ) cycle
-                loc = real(self%padf,sp)*real(matmul(real([h,k,0],dp),rotmat),sp)
-                call self%sample_with_grad(loc,value,dvalue_dloc,switch_margin)
-                ! For row-vector gathers, d(loc)/d(epsilon) = loc x direction.
-                dloc = [real(loc(2),dp)*direction(3)-real(loc(3),dp)*direction(2), &
-                    &real(loc(3),dp)*direction(1)-real(loc(1),dp)*direction(3), &
-                    &real(loc(1),dp)*direction(2)-real(loc(2),dp)*direction(1)]
-                args = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/real(self%box,dp)
-                phase = cmplx(cos(args),sin(args),kind=sp)
-                derivative = cmplx(phase,kind=dp)*sum(cmplx(dvalue_dloc,kind=dp)*dloc)
-                if( present(transfer) ) derivative = derivative*cmplx(transfer(h,k),kind=dp)
-                jv(h,k) = cmplx(derivative,kind=sp)
-            enddo
-        enddo
-    end subroutine rotation_jvp
 
     !>  \brief  Fused objective, five-vector gradient and Gauss-Newton block
     !!          for three right-rotation coordinates and two pixel shifts.
@@ -651,8 +559,8 @@ contains
         gradient = 0._dp
         hessian = 0._dp
         min_switch_margin = huge(0._dp)
-        active_sqhp = self%sqhp
-        active_sqlp = self%sqlp
+        active_sqhp = 0
+        active_sqlp = (self%box/2)**2
         if( present(shell_range) )then
             if( shell_range(1) < 0 .or. shell_range(2) > self%box/2 .or. &
                 &shell_range(2) < shell_range(1) ) &
@@ -694,70 +602,6 @@ contains
         if( min_switch_margin == huge(0._dp) ) min_switch_margin = 0._dp
     end subroutine pose_normal_terms
 
-    !> Test-only access to the fused prepared-data normal equations.
-    subroutine prepared_pose_normal_terms_test( self, rotmat, shift, data, objective, &
-        &gradient, hessian, min_switch_margin )
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), shift(2)
-        type(cartesian_pose_data), intent(in) :: data
-        real(dp), intent(out) :: objective, gradient(5), hessian(5,5), min_switch_margin
-
-        if( .not. data%valid ) error stop 'prepared normal terms require valid particle data'
-        call self%pose_normal_terms(rotmat,shift,data%observed,objective,gradient,hessian, &
-            &min_switch_margin,data%transfer,data%shell_range)
-    end subroutine prepared_pose_normal_terms_test
-
-    !> Test-only access to each prepared-data residual and Jacobian column.
-    subroutine prepared_pose_residual_jacobian_test( self, rotmat, shift, data, residual, &
-        &jacobian, min_switch_margin )
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), shift(2)
-        type(cartesian_pose_data), intent(in) :: data
-        complex(dp), allocatable, intent(out) :: residual(:,:), jacobian(:,:,:)
-        real(dp), intent(out) :: min_switch_margin
-        complex :: value, dvalue_dloc(3), phase
-        complex(dp) :: weighted_phase, model
-        real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: arg, dloc(3,3), frequency(2)
-        integer :: axis, h, k, radius_squared
-
-        if( .not. self%exists ) &
-            &error stop 'prepared residual Jacobian called on an empty Fourier workspace'
-        if( .not. data%valid ) &
-            &error stop 'prepared residual Jacobian requires valid particle data'
-        allocate(residual(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)))
-        allocate(jacobian(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),5))
-        residual = cmplx(0._dp,0._dp,kind=dp)
-        jacobian = cmplx(0._dp,0._dp,kind=dp)
-        min_switch_margin = huge(0._dp)
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                radius_squared = h*h+k*k
-                if( radius_squared < data%shell_range(1)**2 .or. &
-                    &radius_squared > data%shell_range(2)**2 ) cycle
-                loc = real(self%padf,sp)*real(matmul(real([h,k,0],dp),rotmat),sp)
-                call self%sample_with_grad(loc,value,dvalue_dloc,switch_margin)
-                min_switch_margin = min(min_switch_margin,real(minval(switch_margin),dp))
-                dloc(:,1) = [0._dp,real(loc(3),dp),-real(loc(2),dp)]
-                dloc(:,2) = [-real(loc(3),dp),0._dp,real(loc(1),dp)]
-                dloc(:,3) = [real(loc(2),dp),-real(loc(1),dp),0._dp]
-                arg = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/ &
-                    &real(self%box,dp)
-                phase = cmplx(cos(arg),sin(arg),kind=sp)
-                weighted_phase = cmplx(phase,kind=dp)*cmplx(data%transfer(h,k),kind=dp)
-                model = weighted_phase*cmplx(value,kind=dp)
-                residual(h,k) = model-cmplx(data%observed(h,k),kind=dp)
-                do axis = 1, 3
-                    jacobian(h,k,axis) = weighted_phase* &
-                        &sum(cmplx(dvalue_dloc,kind=dp)*dloc(:,axis))
-                enddo
-                frequency = 2._dp*real(PI,dp)*real([h,k],dp)/real(self%box,dp)
-                jacobian(h,k,4:5) = cmplx(0._dp,frequency,kind=dp)*model
-            enddo
-        enddo
-        if( min_switch_margin == huge(0._dp) ) min_switch_margin = 0._dp
-    end subroutine prepared_pose_residual_jacobian_test
-
     !> Return the joint pose objective and five-vector gradient without exposing
     !! the computed Gauss-Newton block or stencil margin.
     subroutine pose_objective_gradient( self, rotmat, shift, observed, objective, gradient, &
@@ -788,8 +632,8 @@ contains
 
         if( .not. self%exists ) error stop 'count_stencil_switches called on an empty Fourier workspace'
         nswitches = 0
-        active_sqhp = self%sqhp
-        active_sqlp = self%sqlp
+        active_sqhp = 0
+        active_sqlp = (self%box/2)**2
         if( present(shell_range) )then
             if( shell_range(1) < 0 .or. shell_range(2) > self%box/2 .or. &
                 &shell_range(2) < shell_range(1) ) &
@@ -807,52 +651,42 @@ contains
         enddo
     end function count_stencil_switches
 
-    !>  \brief  Damped two-parameter Gauss-Newton refinement. Only accepted,
-    !!          fully recomputed objective values are appended to the trace.
-    subroutine refine_shift_lm( self, rotmat, observed, shift, max_iterations, &
-        &accepted_objectives, naccepted, status, nattempted, max_trial_step, transfer )
+    !> Damped two-parameter Gauss-Newton refinement of one prepared particle.
+    subroutine refine_shift_lm(self,rotmat,shift,data,config,result,diagnostics)
         class(cartesian_pose_refiner), intent(in) :: self
         real(dp), intent(in) :: rotmat(3,3)
-        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
-                                         &self%lims2(2,1):self%lims2(2,2))
         real(dp), intent(inout) :: shift(2)
-        integer, intent(in) :: max_iterations
-        real(dp), intent(out) :: accepted_objectives(0:)
-        integer, intent(out) :: naccepted
-        integer, intent(out), optional :: status, nattempted
-        real(dp), intent(out), optional :: max_trial_step
-        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
-                                                   &self%lims2(2,1):self%lims2(2,2))
+        type(cartesian_pose_data), intent(in) :: data
+        type(shift_lm_config), intent(in) :: config
+        type(pose_lm_result), intent(out) :: result
+        type(pose_lm_diagnostics), optional, intent(out) :: diagnostics
         real(dp) :: gradient(2), hessian(2,2), trial_gradient(2), trial_hessian(2,2)
         real(dp) :: solve_matrix(2,2), diagonal(2), direction(2), trial_shift(2)
         real(dp) :: objective, trial_objective, mu, det, predicted, actual, ratio, maxdiag
         real(dp) :: discriminant, lambda_max, lambda_min, step_norm, relative_reduction
-        integer :: axis, iteration, outcome, attempted
+        integer :: axis, iteration, naccepted
         logical :: bounded_trial
-        if( ubound(accepted_objectives,1) < max_iterations )then
-            error stop 'refine_shift_lm objective trace is shorter than max_iterations+1'
+        result = pose_lm_result()
+        if( present(diagnostics) ) call diagnostics%reset
+        if( .not. data%valid )then
+            result%status = LM_INVALID_NUMERICS
+            return
         endif
-        if( present(transfer) )then
-            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian,transfer)
-        else
-            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian)
-        endif
-        accepted_objectives = huge(0._dp)
-        accepted_objectives(0) = objective
+        if( config%max_iterations < 1 ) error stop 'refine_shift_lm requires at least one iteration'
+        if( config%shift_step_bound <= 0._dp .or. .not. ieee_is_finite(config%shift_step_bound) ) &
+            &error stop 'refine_shift_lm shift step bound must be positive and finite'
+        call self%shift_normal_terms(rotmat,shift,data%observed,objective,gradient,hessian, &
+            &data%transfer,data%shell_range)
         naccepted = 0
-        attempted = 0
         bounded_trial = .false.
-        outcome = SHIFT_LM_ITERATION_LIMIT
-        if( present(max_trial_step) ) max_trial_step = 0._dp
         if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
             &any(.not. ieee_is_finite(hessian)) )then
-            outcome = SHIFT_LM_INVALID_NUMERICS
-            if( present(status) ) status = outcome
-            if( present(nattempted) ) nattempted = attempted
+            result%status = LM_INVALID_NUMERICS
             return
         endif
         mu = 1.e-3_dp
-        do iteration = 1, max_iterations
+        do iteration = 1, config%max_iterations
+            result%niterations = iteration
             maxdiag = max(maxval([(hessian(axis,axis),axis=1,2)]),1._dp)
             ! Eigenvalues diagnose whether both shift directions are observable.
             discriminant = sqrt(max(0._dp,(hessian(1,1)-hessian(2,2))**2 + &
@@ -861,11 +695,11 @@ contains
             lambda_min = 0.5_dp*(hessian(1,1)+hessian(2,2)-discriminant)
             if( lambda_max <= sqrt(epsilon(1._dp))*maxdiag .or. &
                 &lambda_min <= sqrt(epsilon(1._dp))*max(lambda_max,1._dp) )then
-                outcome = SHIFT_LM_NO_RELIABLE_UPDATE
+                result%status = LM_NO_RELIABLE_UPDATE
                 exit
             endif
             if( sqrt(dot_product(gradient,gradient)) < 1.e-8_dp )then
-                outcome = merge(SHIFT_LM_ACCEPTED_IMPROVEMENT,SHIFT_LM_FINITE_NO_IMPROVEMENT,naccepted>0)
+                result%status = merge(LM_ACCEPTED_IMPROVEMENT,LM_FINITE_NO_IMPROVEMENT,naccepted>0)
                 exit
             endif
             do axis = 1, 2
@@ -876,45 +710,41 @@ contains
             solve_matrix(2,2) = solve_matrix(2,2) + mu*diagonal(2)
             det = solve_matrix(1,1)*solve_matrix(2,2) - solve_matrix(1,2)*solve_matrix(2,1)
             if( abs(det) <= epsilon(1._dp)*maxdiag*maxdiag )then
-                outcome = SHIFT_LM_NO_RELIABLE_UPDATE
+                result%status = LM_NO_RELIABLE_UPDATE
                 exit
             endif
             direction(1) = (-solve_matrix(2,2)*gradient(1) + solve_matrix(1,2)*gradient(2)) / det
             direction(2) = ( solve_matrix(2,1)*gradient(1) - solve_matrix(1,1)*gradient(2)) / det
             if( any(.not. ieee_is_finite(direction)) )then
-                outcome = SHIFT_LM_INVALID_NUMERICS
+                result%status = LM_INVALID_NUMERICS
                 exit
             endif
-            ! Shift coordinates are pixels; cap every trial displacement at one pixel.
+            ! Shift coordinates are pixels; cap every trial displacement at the configured radius.
             step_norm = sqrt(dot_product(direction,direction))
-            if( step_norm > 1._dp )then
-                direction = direction/step_norm
+            if( step_norm > config%shift_step_bound )then
+                direction = direction*(config%shift_step_bound/step_norm)
                 bounded_trial = .true.
+                if( present(diagnostics) ) diagnostics%nbound_hits = diagnostics%nbound_hits+1
             endif
-            step_norm = min(step_norm,1._dp)
-            if( present(max_trial_step) ) max_trial_step = max(max_trial_step,step_norm)
+            step_norm = min(step_norm,config%shift_step_bound)
+            if( present(diagnostics) ) diagnostics%max_shift_step = max(diagnostics%max_shift_step,step_norm)
             predicted = -dot_product(gradient,direction) - 0.5_dp * &
                 &dot_product(direction,matmul(hessian,direction))
             if( .not. ieee_is_finite(predicted) )then
-                outcome = SHIFT_LM_INVALID_NUMERICS
+                result%status = LM_INVALID_NUMERICS
                 exit
             elseif( predicted <= 0._dp )then
                 mu = 4._dp * mu
                 cycle
             endif
             trial_shift = shift + direction
-            if( present(transfer) )then
-                call self%shift_normal_terms(rotmat,trial_shift,observed,trial_objective,&
-                    &trial_gradient,trial_hessian,transfer)
-            else
-                call self%shift_normal_terms(rotmat,trial_shift,observed,trial_objective,&
-                    &trial_gradient,trial_hessian)
-            endif
-            attempted = attempted + 1
+            if( present(diagnostics) ) diagnostics%nattempted = diagnostics%nattempted+1
+            call self%shift_normal_terms(rotmat,trial_shift,data%observed,trial_objective,&
+                &trial_gradient,trial_hessian,data%transfer,data%shell_range)
             if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian)) )then
                 mu = 4._dp * mu
-                outcome = SHIFT_LM_INVALID_NUMERICS
+                result%status = LM_INVALID_NUMERICS
                 cycle
             endif
             actual = objective - trial_objective
@@ -926,131 +756,103 @@ contains
                 gradient = trial_gradient
                 hessian = trial_hessian
                 naccepted = naccepted + 1
-                accepted_objectives(naccepted) = objective
+                if( present(diagnostics) ) diagnostics%naccepted = naccepted
                 if( ratio > 0.75_dp ) mu = max(mu/2._dp,epsilon(1._dp))
-                outcome = SHIFT_LM_ACCEPTED_IMPROVEMENT
+                result%status = LM_ACCEPTED_IMPROVEMENT
                 if( step_norm < 1.e-8_dp .or. relative_reduction < 1.e-10_dp ) exit
             else
                 mu = 4._dp * mu
             endif
         enddo
-        if( outcome == SHIFT_LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
-            &outcome = SHIFT_LM_STEP_BOUND_REJECTED
-        if( present(status) ) status = outcome
-        if( present(nattempted) ) nattempted = attempted
+        if( result%status == LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
+            &result%status = LM_STEP_BOUND_REJECTED
     end subroutine refine_shift_lm
 
     !>  \brief  Scaled, bounded five-parameter LM refinement for a right
     !!          rotation increment and two image shifts.
-    subroutine refine_pose_lm( self, rotmat, observed, shift, rotation_scale, max_iterations, &
-        &accepted_objectives, naccepted, status, nattempted, max_rotation_step, &
-        &max_shift_step, nstencil_switches, transfer, accepted_rotmats, accepted_shifts, &
-        &active_parameters, anchor_rotmat, anchor_shift, max_total_rotation, max_total_shift, &
-        &shell_range )
+    subroutine refine_pose_lm(self, rotmat, shift, data, config, result, diagnostics)
         class(cartesian_pose_refiner), intent(in) :: self
         real(dp), intent(inout) :: rotmat(3,3), shift(2)
-        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
-                                         &self%lims2(2,1):self%lims2(2,2))
-        real(dp), intent(in) :: rotation_scale
-        integer, intent(in) :: max_iterations
-        real(dp), intent(out) :: accepted_objectives(0:)
-        integer, intent(out) :: naccepted, status, nattempted
-        real(dp), intent(out) :: max_rotation_step, max_shift_step
-        integer, intent(out) :: nstencil_switches
-        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
-                                                   &self%lims2(2,1):self%lims2(2,2))
-        real(dp), optional, intent(out) :: accepted_rotmats(:,:,0:), accepted_shifts(:,0:)
-        logical, optional, intent(in) :: active_parameters(5)
-        real(dp), optional, intent(in) :: anchor_rotmat(3,3), anchor_shift(2)
-        real(dp), optional, intent(in) :: max_total_rotation, max_total_shift
-        integer, optional, intent(in) :: shell_range(2)
+        type(cartesian_pose_data), intent(in) :: data
+        type(pose_lm_config), intent(in) :: config
+        type(pose_lm_result), intent(out) :: result
+        type(pose_lm_diagnostics), optional, intent(out) :: diagnostics
         real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
         real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
         real(dp) :: diagonal(5), scaled_direction(5), direction(5)
-        real(dp) :: trial_rotmat(3,3), trial_shift(2), selected_rotmat(3,3), selected_shift(2)
+        real(dp) :: trial_rotmat(3,3), trial_shift(2)
         real(dp) :: objective, trial_objective, mu, predicted, actual, ratio, rotation_norm, shift_norm
         real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
         real(dp) :: cumulative_rotation, cumulative_shift, sine_half
-        integer :: iteration, trial_switches
+        integer :: iteration, naccepted, trial_switches
         logical :: active(5), bounded_trial, bounded_step, cumulative_guard
         logical :: accept_trial, identifiable, reliable, stationary
 
-        if( max_iterations < 1 ) error stop 'refine_pose_lm requires at least one LM iteration'
-        if( rotation_scale <= 0._dp .or. .not. ieee_is_finite(rotation_scale) ) &
+        if( config%max_iterations < 1 ) error stop 'refine_pose_lm requires at least one LM iteration'
+        if( config%rotation_scale <= 0._dp .or. .not. ieee_is_finite(config%rotation_scale) ) &
             &error stop 'refine_pose_lm requires a positive finite rotation scale'
-        if( ubound(accepted_objectives,1) < max_iterations ) &
-            &error stop 'refine_pose_lm objective trace is shorter than max_iterations+1'
-        if( present(accepted_rotmats) )then
-            if( size(accepted_rotmats,1) /= 3 .or. size(accepted_rotmats,2) /= 3 .or. &
-                &ubound(accepted_rotmats,3) < max_iterations ) &
-                &error stop 'refine_pose_lm rotation trace has invalid dimensions'
-        endif
-        if( present(accepted_shifts) )then
-            if( size(accepted_shifts,1) /= 2 .or. ubound(accepted_shifts,2) < max_iterations ) &
-                &error stop 'refine_pose_lm shift trace has invalid dimensions'
-        endif
-        active = .true.
-        if( present(active_parameters) ) active = active_parameters
-        if( .not. any(active) ) error stop 'refine_pose_lm requires one active parameter'
-        cumulative_guard = present(anchor_rotmat) .and. present(anchor_shift) .and. &
-            &present(max_total_rotation) .and. present(max_total_shift)
-        if( cumulative_guard .neqv. (present(anchor_rotmat) .or. present(anchor_shift) .or. &
-            &present(max_total_rotation) .or. present(max_total_shift)) ) &
-            &error stop 'refine_pose_lm cumulative guard requires all four arguments'
-        if( cumulative_guard )then
-            if( max_total_rotation <= 0._dp .or. max_total_shift <= 0._dp ) &
-                &error stop 'refine_pose_lm cumulative bounds must be positive'
-        endif
-        call self%pose_normal_terms(rotmat,shift,observed,objective,gradient,hessian, &
-            &min_switch_margin,transfer,shell_range)
-        accepted_objectives = huge(0._dp)
-        accepted_objectives(0) = objective
-        if( present(accepted_rotmats) ) accepted_rotmats(:,:,0) = rotmat
-        if( present(accepted_shifts) ) accepted_shifts(:,0) = shift
+        result%status = LM_ITERATION_LIMIT
+        result%niterations = 0
         naccepted = 0
-        nattempted = 0
-        nstencil_switches = 0
-        max_rotation_step = 0._dp
-        max_shift_step = 0._dp
+        if( present(diagnostics) ) call diagnostics%reset
+        active = config%active_parameters
+        if( .not. any(active) ) error stop 'refine_pose_lm requires one active parameter'
+        cumulative_guard = config%use_cumulative_guard
+        if( cumulative_guard )then
+            if( config%max_total_rotation <= 0._dp .or. config%max_total_shift <= 0._dp .or. &
+                &.not. ieee_is_finite(config%max_total_rotation) .or. &
+                &.not. ieee_is_finite(config%max_total_shift) ) &
+                &error stop 'refine_pose_lm cumulative bounds must be positive and finite'
+            if( any(.not. ieee_is_finite(config%anchor_rotmat)) .or. &
+                &any(.not. ieee_is_finite(config%anchor_shift)) ) &
+                &error stop 'refine_pose_lm cumulative anchor must be finite'
+        endif
+        if( config%shift_step_bound <= 0._dp .or. .not. ieee_is_finite(config%shift_step_bound) ) &
+            &error stop 'refine_pose_lm shift step bound must be positive and finite'
+        call self%pose_normal_terms(rotmat,shift,data%observed,objective,gradient,hessian, &
+            &min_switch_margin,data%transfer,data%shell_range)
         bounded_trial = .false.
-        status = POSE_LM_ITERATION_LIMIT
         if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
             &any(.not. ieee_is_finite(hessian)) )then
-            status = POSE_LM_INVALID_NUMERICS
+            result%status = LM_INVALID_NUMERICS
             return
         endif
 
         mu = 1.e-3_dp
-        do iteration = 1, max_iterations
-            call build_pose_lm_system(gradient,hessian,rotation_scale,mu,active,scaled_gradient, &
+        do iteration = 1, config%max_iterations
+            result%niterations = iteration
+            call build_pose_lm_system(gradient,hessian,config%rotation_scale,mu,active,scaled_gradient, &
                 &scaled_hessian,diagonal,solve_matrix,scaled_direction,direction,identifiable, &
-                &stationary,reliable,bounded_step)
+                &stationary,reliable,bounded_step,config%shift_step_bound)
             if( .not. identifiable )then
-                status = merge(POSE_LM_ACCEPTED_IMPROVEMENT,POSE_LM_NO_RELIABLE_UPDATE,naccepted>0)
+                result%status = merge(LM_ACCEPTED_IMPROVEMENT,LM_NO_RELIABLE_UPDATE,naccepted>0)
                 exit
             endif
             if( stationary )then
-                status = merge(POSE_LM_ACCEPTED_IMPROVEMENT,POSE_LM_FINITE_NO_IMPROVEMENT,naccepted>0)
+                result%status = merge(LM_ACCEPTED_IMPROVEMENT,LM_FINITE_NO_IMPROVEMENT,naccepted>0)
                 exit
             endif
             if( .not. reliable )then
-                status = POSE_LM_NO_RELIABLE_UPDATE
+                result%status = LM_NO_RELIABLE_UPDATE
                 exit
             endif
             if( any(.not. ieee_is_finite(direction)) )then
-                status = POSE_LM_INVALID_NUMERICS
+                result%status = LM_INVALID_NUMERICS
                 exit
             endif
             bounded_trial = bounded_trial .or. bounded_step
+            if( bounded_step .and. present(diagnostics) ) diagnostics%nbound_hits = diagnostics%nbound_hits+1
             rotation_norm = sqrt(dot_product(direction(1:3),direction(1:3)))
             shift_norm = sqrt(dot_product(direction(4:5),direction(4:5)))
-            max_rotation_step = max(max_rotation_step,rotation_norm)
-            max_shift_step = max(max_shift_step,shift_norm)
+            if( present(diagnostics) )then
+                diagnostics%max_rotation_step = max(diagnostics%max_rotation_step,rotation_norm)
+                diagnostics%max_shift_step = max(diagnostics%max_shift_step,shift_norm)
+            endif
             ! Quadratic LM model: predicted = -g^T d - 1/2 d^T H d.
             predicted = -dot_product(gradient,direction)-0.5_dp* &
                 &dot_product(direction,matmul(hessian,direction))
             if( .not. ieee_is_finite(predicted) )then
-                status = POSE_LM_INVALID_NUMERICS
+                result%status = LM_INVALID_NUMERICS
                 exit
             elseif( predicted <= 0._dp )then
                 mu = 4._dp*mu
@@ -1058,125 +860,68 @@ contains
             endif
             trial_rotmat = right_increment_rotation(rotmat,direction(1:3))
             trial_shift = shift+direction(4:5)
-            nattempted = nattempted+1
+            if( present(diagnostics) ) diagnostics%nattempted = diagnostics%nattempted+1
             if( cumulative_guard )then
-                sine_half = sqrt(sum((trial_rotmat-anchor_rotmat)**2))/(2._dp*sqrt(2._dp))
+                sine_half = sqrt(sum((trial_rotmat-config%anchor_rotmat)**2))/(2._dp*sqrt(2._dp))
                 cumulative_rotation = 2._dp*asin(max(0._dp,min(1._dp,sine_half)))
-                cumulative_shift = sqrt(sum((trial_shift-anchor_shift)**2))
-                if( cumulative_rotation > max_total_rotation+10._dp*epsilon(1._dp) .or. &
-                    &cumulative_shift > max_total_shift+10._dp*epsilon(1._dp) )then
+                cumulative_shift = sqrt(sum((trial_shift-config%anchor_shift)**2))
+                if( cumulative_rotation > config%max_total_rotation+10._dp*epsilon(1._dp) .or. &
+                    &cumulative_shift > config%max_total_shift+10._dp*epsilon(1._dp) )then
                     mu = 4._dp*mu
+                    if( .not. bounded_step .and. present(diagnostics) ) &
+                        &diagnostics%nbound_hits = diagnostics%nbound_hits+1
                     bounded_trial = .true.
                     cycle
                 endif
             endif
-            trial_switches = self%count_stencil_switches(rotmat,trial_rotmat,shell_range)
-            nstencil_switches = nstencil_switches+trial_switches
-            call self%pose_normal_terms(trial_rotmat,trial_shift,observed,trial_objective, &
-                &trial_gradient,trial_hessian,trial_switch_margin,transfer,shell_range)
+            trial_switches = self%count_stencil_switches(rotmat,trial_rotmat,data%shell_range)
+            if( present(diagnostics) ) &
+                &diagnostics%nstencil_switches = diagnostics%nstencil_switches+trial_switches
+            call self%pose_normal_terms(trial_rotmat,trial_shift,data%observed,trial_objective, &
+                &trial_gradient,trial_hessian,trial_switch_margin,data%transfer,data%shell_range)
             if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian)) )then
                 mu = 4._dp*mu
-                status = POSE_LM_INVALID_NUMERICS
+                result%status = LM_INVALID_NUMERICS
                 cycle
             endif
             ! Gain ratio compares the recomputed reduction with the local model.
             actual = objective-trial_objective
             ratio = actual/predicted
             accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
-            call select_pose_lm_transaction(rotmat,shift,trial_rotmat,trial_shift,accept_trial, &
-                &selected_rotmat,selected_shift)
             if( accept_trial )then
                 relative_reduction = actual/max(abs(objective),1._dp)
-                rotmat = selected_rotmat
-                shift = selected_shift
+                rotmat = trial_rotmat
+                shift = trial_shift
                 objective = trial_objective
                 gradient = trial_gradient
                 hessian = trial_hessian
                 naccepted = naccepted+1
-                accepted_objectives(naccepted) = objective
-                if( present(accepted_rotmats) ) accepted_rotmats(:,:,naccepted) = rotmat
-                if( present(accepted_shifts) ) accepted_shifts(:,naccepted) = shift
+                if( present(diagnostics) ) diagnostics%naccepted = naccepted
                 if( ratio > 0.75_dp ) mu = max(mu/2._dp,epsilon(1._dp))
-                status = POSE_LM_ACCEPTED_IMPROVEMENT
+                result%status = LM_ACCEPTED_IMPROVEMENT
                 if( max(rotation_norm,shift_norm) < 1.e-8_dp .or. relative_reduction < 1.e-10_dp ) exit
             else
                 mu = 4._dp*mu
             endif
         enddo
-        if( status == POSE_LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
-            &status = POSE_LM_STEP_BOUND_REJECTED
+        if( result%status == LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
+            &result%status = LM_STEP_BOUND_REJECTED
     end subroutine refine_pose_lm
-
-    !> Test-only access to the scaled LM system shared by the production driver.
-    subroutine pose_lm_system_test(gradient,hessian,rotation_scale,mu,objective,trial_objective, &
-        &active,scaled_gradient,scaled_hessian,damping_diagonal,solve_matrix,scaled_step, &
-        &physical_step,predicted,actual,ratio,identifiable,stationary,reliable,bounded,accepted)
-        real(dp), intent(in) :: gradient(5), hessian(5,5), rotation_scale, mu
-        real(dp), intent(in) :: objective, trial_objective
-        logical, intent(in) :: active(5)
-        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
-        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
-        real(dp), intent(out) :: scaled_step(5), physical_step(5)
-        real(dp), intent(out) :: predicted, actual, ratio
-        logical, intent(out) :: identifiable, stationary, reliable, bounded, accepted
-
-        call build_pose_lm_system(gradient,hessian,rotation_scale,mu,active,scaled_gradient, &
-            &scaled_hessian,damping_diagonal,solve_matrix,scaled_step,physical_step, &
-            &identifiable,stationary,reliable,bounded)
-        predicted = 0._dp
-        actual = objective-trial_objective
-        ratio = 0._dp
-        accepted = .false.
-        if( .not. reliable ) return
-        predicted = -dot_product(gradient,physical_step)-0.5_dp* &
-            &dot_product(physical_step,matmul(hessian,physical_step))
-        if( predicted <= 0._dp .or. .not. ieee_is_finite(predicted) ) return
-        ratio = actual/predicted
-        accepted = actual > 0._dp .and. ratio >= 0.25_dp
-    end subroutine pose_lm_system_test
-
-    !> Test-only access to the complete-pose commit or rollback transaction.
-    pure subroutine pose_lm_transaction_test(input_rotmat,input_shift,trial_rotmat,trial_shift, &
-        &accepted,output_rotmat,output_shift)
-        real(dp), intent(in) :: input_rotmat(3,3), input_shift(2)
-        real(dp), intent(in) :: trial_rotmat(3,3), trial_shift(2)
-        logical, intent(in) :: accepted
-        real(dp), intent(out) :: output_rotmat(3,3), output_shift(2)
-
-        call select_pose_lm_transaction(input_rotmat,input_shift,trial_rotmat,trial_shift, &
-            &accepted,output_rotmat,output_shift)
-    end subroutine pose_lm_transaction_test
-
-    !> Commit both pose fields together or retain the complete input pose.
-    pure subroutine select_pose_lm_transaction(input_rotmat,input_shift,trial_rotmat,trial_shift, &
-        &accepted,output_rotmat,output_shift)
-        real(dp), intent(in) :: input_rotmat(3,3), input_shift(2)
-        real(dp), intent(in) :: trial_rotmat(3,3), trial_shift(2)
-        logical, intent(in) :: accepted
-        real(dp), intent(out) :: output_rotmat(3,3), output_shift(2)
-
-        if( accepted )then
-            output_rotmat = trial_rotmat
-            output_shift = trial_shift
-        else
-            output_rotmat = input_rotmat
-            output_shift = input_shift
-        endif
-    end subroutine select_pose_lm_transaction
 
     !> Construct one scaled, damped, and independently bounded pose proposal.
     pure subroutine build_pose_lm_system(gradient,hessian,rotation_scale,mu,active, &
         &scaled_gradient,scaled_hessian,damping_diagonal,solve_matrix,scaled_step, &
-        &physical_step,identifiable,stationary,reliable,bounded)
+        &physical_step,identifiable,stationary,reliable,bounded,shift_step_bound)
         real(dp), intent(in) :: gradient(5), hessian(5,5), rotation_scale, mu
         logical, intent(in) :: active(5)
         real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
         real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
         real(dp), intent(out) :: scaled_step(5), physical_step(5)
         logical, intent(out) :: identifiable, stationary, reliable, bounded
+        real(dp), optional, intent(in) :: shift_step_bound
         real(dp) :: coordinate_scale(5), ignored_step(5), hessian_scale
-        real(dp) :: rotation_norm, shift_norm
+        real(dp) :: rotation_norm, shift_norm, active_shift_bound
         integer :: axis, jaxis
 
         coordinate_scale = [rotation_scale,rotation_scale,rotation_scale,1._dp,1._dp]
@@ -1206,14 +951,16 @@ contains
         call solve_pose_cholesky(solve_matrix,-scaled_gradient,scaled_step,reliable)
         if( .not. reliable ) return
         physical_step = coordinate_scale*scaled_step
+        active_shift_bound = 1._dp
+        if( present(shift_step_bound) ) active_shift_bound = shift_step_bound
         rotation_norm = sqrt(dot_product(physical_step(1:3),physical_step(1:3)))
         if( rotation_norm > rotation_scale )then
             physical_step(1:3) = physical_step(1:3)*(rotation_scale/rotation_norm)
             bounded = .true.
         endif
         shift_norm = sqrt(dot_product(physical_step(4:5),physical_step(4:5)))
-        if( shift_norm > 1._dp )then
-            physical_step(4:5) = physical_step(4:5)/shift_norm
+        if( shift_norm > active_shift_bound )then
+            physical_step(4:5) = physical_step(4:5)*(active_shift_bound/shift_norm)
             bounded = .true.
         endif
     end subroutine build_pose_lm_system

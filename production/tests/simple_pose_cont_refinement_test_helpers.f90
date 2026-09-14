@@ -1,143 +1,81 @@
-! Test-only fixtures discovered through the existing pose-suite filename glob.
 module pose_cont_refinement_test_helpers
-use iso_fortran_env, only: int64
+use simple_defs, only: dp
+use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, cartesian_pose_data
+use simple_type_defs, only: ctfparams, CTFFLAG_NO
 implicit none
 private
 
-integer, parameter, public :: CASE_SKIP_EXIT_STATUS = 77
-integer, parameter, public :: TRUTH_VOLUME_BOX = 24
-
-integer, parameter :: TRUTH_VOLUME_BLOBS = 4
-real, parameter :: TRUTH_VOLUME_CENTRES(3,TRUTH_VOLUME_BLOBS) = reshape([&
-    &-5.0, -3.0,  2.0, &
-    & 4.0,  5.0, -3.0, &
-    & 0.0, -6.0, -5.0, &
-    & 3.0, -2.0,  6.0], [3,TRUTH_VOLUME_BLOBS])
-real, parameter :: TRUTH_VOLUME_SIGMAS(TRUTH_VOLUME_BLOBS) = [2.0, 2.5, 1.8, 2.2]
-real, parameter :: TRUTH_VOLUME_AMPLITUDES(TRUTH_VOLUME_BLOBS) = [1.0, 0.8, 0.6, 0.5]
+integer, parameter, public :: TEST_BOX = 24
 
 public :: assert_true
-public :: assert_int_equal
-public :: assert_real_close
-public :: build_truth_volume
-public :: set_deterministic_seed
-public :: run_current_executable_case
+public :: build_test_volume
+public :: identity_rotation
+public :: prepare_unweighted_particle
+public :: rotation_distance
 
 contains
 
-!> Run one case in a child process so module state cannot leak between groups.
-subroutine run_current_executable_case(case_name, groups_run, groups_passed, groups_skipped, failures)
-    character(len=*), intent(in) :: case_name
-    integer, intent(inout) :: groups_run, groups_passed, groups_skipped, failures
-    character(len=:), allocatable :: executable, command
-    character(len=1024) :: command_message
-    integer :: executable_length, argument_status, command_status, exit_status
+    subroutine assert_true(condition,message)
+        logical, intent(in) :: condition
+        character(len=*), intent(in) :: message
+        if( .not. condition ) error stop trim(message)
+    end subroutine assert_true
 
-    call get_command_argument(0,length=executable_length,status=argument_status)
-    if( argument_status /= 0 .or. executable_length < 1 ) &
-        &error stop 'could not determine test executable path'
-    allocate(character(len=executable_length) :: executable)
-    call get_command_argument(0,executable,status=argument_status)
-    if( argument_status /= 0 ) error stop 'could not read test executable path'
-#if defined(_WIN32)
-    command = 'call "'//executable//'" "case='//trim(case_name)//'"'
-#else
-    command = "'"//executable//"' 'case="//trim(case_name)//"'"
-#endif
-    write(*,'(/,a)') '>>> TEST ['//trim(case_name)//'] START'
-    groups_run = groups_run+1
-    call execute_command_line(command,wait=.true.,exitstat=exit_status,cmdstat=command_status, &
-        &cmdmsg=command_message)
-    if( command_status /= 0 )then
-        failures = failures+1
-        write(*,'(a,i0,a)') '>>> TEST ['//trim(case_name)//'] FAIL (cmdstat=',command_status,')'
-        if( len_trim(command_message) > 0 ) write(*,'(a)') trim(command_message)
-    else if( exit_status == 0 )then
-        groups_passed = groups_passed+1
-        write(*,'(a)') '>>> TEST ['//trim(case_name)//'] PASS'
-    else if( exit_status == CASE_SKIP_EXIT_STATUS )then
-        groups_skipped = groups_skipped+1
-        write(*,'(a)') '>>> TEST ['//trim(case_name)//'] SKIP'
-    else
-        failures = failures+1
-        write(*,'(a,i0,a)') '>>> TEST ['//trim(case_name)//'] FAIL (exitstat=',exit_status,')'
-    endif
-end subroutine run_current_executable_case
+    subroutine build_test_volume(volume)
+        real, allocatable, intent(out) :: volume(:,:,:)
+        real, parameter :: centres(3,4) = reshape([ &
+            &-5.,-3., 2., 4., 5.,-3., 0.,-6.,-5., 3.,-2., 6.],[3,4])
+        real, parameter :: sigmas(4) = [2.,2.5,1.8,2.2]
+        real, parameter :: amplitudes(4) = [1.,0.8,0.6,0.5]
+        real :: centre, dx, dy, dz
+        integer :: blob, i, j, k
 
-!> Stop the selected child case when a logical contract is false.
-subroutine assert_true(condition, message)
-    logical,          intent(in) :: condition
-    character(len=*), intent(in) :: message
-
-    if( .not. condition ) error stop trim(message)
-end subroutine assert_true
-
-!> Stop the selected child case when two integer values differ.
-subroutine assert_int_equal(actual, expected, message)
-    integer,          intent(in) :: actual, expected
-    character(len=*), intent(in) :: message
-    character(len=256) :: detail
-
-    if( actual == expected ) return
-    write(detail,'(a,i0,a,i0)') trim(message)//': actual=', actual, ', expected=', expected
-    error stop trim(detail)
-end subroutine assert_int_equal
-
-!> Stop the selected child case when an absolute real tolerance is exceeded.
-subroutine assert_real_close(actual, expected, tolerance, message)
-    use ieee_arithmetic, only: ieee_is_finite
-    real,             intent(in) :: actual, expected, tolerance
-    character(len=*), intent(in) :: message
-    character(len=256) :: detail
-
-    if( tolerance < 0. ) error stop 'assert_real_close requires a nonnegative tolerance'
-    if( ieee_is_finite(actual) .and. ieee_is_finite(expected) )then
-        if( abs(actual - expected) <= tolerance ) return
-    endif
-    write(detail,'(a,es14.6,a,es14.6,a,es14.6)') trim(message)//': actual=', actual, &
-        &', expected=', expected, ', tolerance=', tolerance
-    error stop trim(detail)
-end subroutine assert_real_close
-
-!> Expand one scalar seed into the compiler's full deterministic random seed.
-subroutine set_deterministic_seed(base_seed)
-    integer, intent(in) :: base_seed
-    integer, allocatable :: seed(:)
-    integer(int64) :: candidate, modulus
-    integer :: i, seed_size
-
-    call random_seed(size=seed_size)
-    allocate(seed(seed_size))
-    modulus = int(huge(0), int64) - 1_int64
-    do i = 1, seed_size
-        candidate = int(base_seed, int64) + 104729_int64 * int(i - 1, int64)
-        seed(i) = int(modulo(candidate, modulus)) + 1
-    enddo
-    call random_seed(put=seed)
-    deallocate(seed)
-end subroutine set_deterministic_seed
-
-!> Build the asymmetric deterministic 3-D truth used by all component tests.
-subroutine build_truth_volume(volume)
-    real, allocatable, intent(out) :: volume(:,:,:)
-    real :: centre, dx, dy, dz
-    integer :: blob, i, j, k
-
-    allocate(volume(TRUTH_VOLUME_BOX,TRUTH_VOLUME_BOX,TRUTH_VOLUME_BOX), source=0.)
-    centre = real(TRUTH_VOLUME_BOX) / 2. + 0.5
-    do k = 1, TRUTH_VOLUME_BOX
-        do j = 1, TRUTH_VOLUME_BOX
-            do i = 1, TRUTH_VOLUME_BOX
-                do blob = 1, TRUTH_VOLUME_BLOBS
-                    dx = real(i) - centre - TRUTH_VOLUME_CENTRES(1,blob)
-                    dy = real(j) - centre - TRUTH_VOLUME_CENTRES(2,blob)
-                    dz = real(k) - centre - TRUTH_VOLUME_CENTRES(3,blob)
-                    volume(i,j,k) = volume(i,j,k) + TRUTH_VOLUME_AMPLITUDES(blob) * &
-                        &exp(-(dx*dx + dy*dy + dz*dz) / (2. * TRUTH_VOLUME_SIGMAS(blob)**2))
+        allocate(volume(TEST_BOX,TEST_BOX,TEST_BOX),source=0.)
+        centre = real(TEST_BOX)/2.+0.5
+        do k = 1, TEST_BOX
+            do j = 1, TEST_BOX
+                do i = 1, TEST_BOX
+                    do blob = 1, 4
+                        dx = real(i)-centre-centres(1,blob)
+                        dy = real(j)-centre-centres(2,blob)
+                        dz = real(k)-centre-centres(3,blob)
+                        volume(i,j,k) = volume(i,j,k)+amplitudes(blob)* &
+                            &exp(-(dx*dx+dy*dy+dz*dz)/(2.*sigmas(blob)**2))
+                    enddo
                 enddo
             enddo
         enddo
-    enddo
-end subroutine build_truth_volume
+    end subroutine build_test_volume
+
+    pure function identity_rotation() result(rotation)
+        real(dp) :: rotation(3,3)
+        rotation = 0._dp
+        rotation(1,1) = 1._dp
+        rotation(2,2) = 1._dp
+        rotation(3,3) = 1._dp
+    end function identity_rotation
+
+    subroutine prepare_unweighted_particle(workspace,observed,data,shell_range)
+        type(cartesian_pose_refiner), intent(in) :: workspace
+        complex, intent(in) :: observed(-TEST_BOX/2:,-TEST_BOX/2:)
+        type(cartesian_pose_data), intent(out) :: data
+        integer, intent(in), optional :: shell_range(2)
+        type(ctfparams) :: no_ctf
+        real :: sigma2(0:TEST_BOX/2)
+        integer :: active_range(2)
+
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2 = 1.
+        active_range = [2,TEST_BOX/2]
+        if( present(shell_range) ) active_range = shell_range
+        call workspace%prepare_particle(observed,no_ctf,sigma2,active_range,data)
+    end subroutine prepare_unweighted_particle
+
+    pure function rotation_distance(left,right) result(distance)
+        real(dp), intent(in) :: left(3,3), right(3,3)
+        real(dp) :: distance, cosine
+        cosine = 0.5_dp*(sum(left*right)-1._dp)
+        distance = acos(max(-1._dp,min(1._dp,cosine)))
+    end function rotation_distance
 
 end module pose_cont_refinement_test_helpers
