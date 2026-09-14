@@ -3,6 +3,7 @@ module simple_calpha_finder
 use simple_core_module_api
 use simple_image, only: image
 use simple_atoms, only: atoms
+use simple_oris,  only: oris
 implicit none
 
 public :: calpha_finder
@@ -206,19 +207,23 @@ contains
     subroutine build_rotation_grid(angstep, rotations)
         real,              intent(in)  :: angstep
         real, allocatable, intent(out) :: rotations(:,:,:)
+        type(oris) :: sphere_dirs
         real    :: delta, zaxis(3), uaxis(3), vaxis(3), xaxis(3), yaxis(3)
-        real    :: z, phi, roll, radial
+        real    :: euls(3), theta, phi, roll, radial
         integer :: naxes, nroll, iaxis, iroll, irot
         delta = angstep * PI_LOCAL / 180.
         naxes = max(1, ceiling(4. * PI_LOCAL / (delta * delta)))
         nroll = max(1, ceiling(2. * PI_LOCAL / delta))
         allocate(rotations(3,3,naxes*nroll))
+        call sphere_dirs%new(naxes, is_ptcl=.false.)
+        call sphere_dirs%spiral()
         irot = 0
         do iaxis = 1, naxes
-            z = 1. - 2. * (real(iaxis) - 0.5) / real(naxes)
-            radial = sqrt(max(0., 1. - z*z))
-            phi = PI_LOCAL * (3. - sqrt(5.)) * real(iaxis - 1)
-            zaxis = [radial*cos(phi), radial*sin(phi), z]
+            euls   = sphere_dirs%get_euler(iaxis)
+            phi    = deg2rad(euls(1))
+            theta  = deg2rad(euls(2))
+            radial = sin(theta)
+            zaxis  = [radial*cos(phi), radial*sin(phi), cos(theta)]
             if(abs(zaxis(3)) < 0.9)then
                 uaxis = cross([0.,0.,1.], zaxis)
             else
@@ -236,6 +241,7 @@ contains
                 rotations(:,3,irot) = zaxis
             enddo
         enddo
+        call sphere_dirs%kill()
     end subroutine build_rotation_grid
 
     subroutine fill_rotated_target( self, rotation, weighted_template, support_template, &
