@@ -129,7 +129,7 @@ contains
         status = 0
         message = ''
         if( .not. file_exists(path) )then
-            status = 1; message = 'sigma2 state file does not exist'; return
+            status = 1; message = 'sigma2 state file does not exist:'//trim(path); return
         endif
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='read', iostat=io_stat)

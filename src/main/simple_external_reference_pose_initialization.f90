@@ -1,7 +1,7 @@
 !@descr: fixed-reference CC pose initialization shared by 3D refinement workflows
 module simple_external_reference_pose_initialization
 use simple_commanders_api
-use simple_commanders_euclid, only: commander_calc_pspec, commander_calc_group_sigmas
+use simple_commanders_euclid, only: commander_calc_pspec
 use simple_estimate_ssnr,     only: lpstages_setlims
 use simple_refine3D_fnames,   only: refine3D_startvol_fname, refine3D_state_vol_fname
 implicit none
@@ -25,9 +25,8 @@ contains
         integer, parameter :: NSAMPLE_POSE_INIT_CAP = 100000
         integer, parameter :: NSPACE_POSE_INIT       = 2500
         real,    parameter :: LP_POSE_INIT           = 15.0
-        type(commander_calc_pspec)        :: xcalc_pspec
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline)     :: cline_sigma_bootstrap, cline_pose_init, cline_sigmas, cline_checkpoint
+        type(commander_calc_pspec) :: xcalc_pspec
+        type(cmdline) :: cline_sigma_bootstrap, cline_pose_init, cline_checkpoint
         type(lp_crop_inf) :: lpinfo_pose_init(1)
         type(string)      :: startvol
         integer :: state, nsample_pose_init
@@ -67,6 +66,7 @@ contains
         call cline_pose_init%set('lp',              lp)
         call cline_pose_init%set('lpstop',          lp)
         call cline_pose_init%set('trs',             lpinfo_pose_init(1)%trslim)
+        call cline_pose_init%set('sigma_commit_deferred', 'no')
         do state = 1,size(reference_vols)
             if( .not. file_exists(reference_vols(state)) )then
                 THROW_HARD('external-reference pose-initialization input volume does not exist')
@@ -107,11 +107,6 @@ contains
             &size(reference_vols), '/', nsample_pose_init, '/', ufrac_pose_init, '/', lp
         call xrefine3D%execute(cline_pose_init)
         call validate_pose_initialized_states(params%projfile, size(reference_vols), nsample_pose_init)
-        cline_sigmas = cline_pose_init
-        call cline_sigmas%set('prg',        'calc_group_sigmas')
-        call cline_sigmas%set('which_iter', pose_init_iter + 1)
-        call xcalc_group_sigmas%execute(cline_sigmas)
-        call cline_sigmas%kill
         cline_checkpoint = cline_pose_init
         call cline_checkpoint%set('prg',         'reconstruct3D')
         call cline_checkpoint%set('objfun',      'cc')
