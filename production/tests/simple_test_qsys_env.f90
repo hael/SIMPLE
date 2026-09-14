@@ -11,7 +11,7 @@ type(cmdline)    :: cline
 type(parameters) :: params
 type(qsys_env)   :: qenv
 type(sp_project) :: project
-type(string)     :: exec_bin, expected_exec_bin, local_simple_path, projfile
+type(string)     :: exec_bin, expected_exec_bin, job_time, local_simple_path, projfile
 integer          :: iostat
 
 projfile = 'test_qsys_env_path_policy.simple'
@@ -39,7 +39,7 @@ params%projfile        = projfile
 params%qsys_name       = 'local'
 params%nparts          = 1
 params%ncunits         = 1
-params%nptcls          = 1
+params%nptcls          = 0
 params%nthr            = 1
 params%worker_priority = 'normal'
 params%worker_server   = ''
@@ -54,10 +54,19 @@ endif
 if( qenv%qdescr%isthere('simple_path') )then
     THROW_HARD('qsys_env retained the legacy simple_path in its queue description')
 endif
+if( .not. qenv%qdescr%isthere('job_time') )then
+    THROW_HARD('qsys_env omitted the derived job time')
+endif
+job_time = qenv%qdescr%get('job_time')
+if( job_time /= '0-0:1:40' )then
+    write(logfhandle,'(A)') 'Expected empty-project job time: 0-0:1:40'
+    write(logfhandle,'(A)') 'Derived job time:                '//job_time%to_char()
+    THROW_HARD('qsys_env derived an invalid empty-project job time')
+endif
 
 call qenv%kill
 call project%kill
 call cline%kill
 call del_file(projfile)
-write(logfhandle,'(A)') 'QSYS LOCAL EXECUTABLE PATH POLICY TEST PASSED'
+write(logfhandle,'(A)') 'QSYS ENV REGRESSION TESTS PASSED'
 end program simple_test_qsys_env

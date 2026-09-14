@@ -140,7 +140,7 @@ contains
         select case(trim(params%split_mode))
             case('even')
                 self%parts = split_nobjs_even(nptcls_here, self%nparts)
-                partsz     = self%parts(1,2) - self%parts(1,1) + 1
+                partsz     = max(1, self%parts(1,2) - self%parts(1,1) + 1)
             case('singles')
                 allocate(self%parts(nptcls_here,2))
                 self%parts(:,:) = 1
