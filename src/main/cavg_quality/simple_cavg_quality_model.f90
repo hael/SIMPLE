@@ -690,7 +690,10 @@ contains
         spec%relational_knn          = 5
         spec%relational_corr_hp      =   1.000000E+02
         spec%relational_corr_lp      =   1.500000E+01
-        spec%relational_corr_trs     =   1.000000E+0
+        ! Promoted snippet (a93af895b) read 1.000000E+0, a truncated ES14.6 literal.
+        ! The sieve training tables were produced at the shared default (10.0 px);
+        ! the learner propagates that value, so the shift range is the shared default.
+        spec%relational_corr_trs     = CAVG_RELATIONAL_DEFAULT_CORR_TRS
         spec%relational_coefficient  =  -3.960855E-01
         spec%boundary_margin         =   0.000000E+00
         spec%min_score_separation    =   5.000000E-02
