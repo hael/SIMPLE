@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('mask'
 type(ui_program), target :: auto_spher_mask
 type(ui_program), target :: automask2D
 type(ui_program), target :: mask
+type(ui_program), target :: automask
 
 contains
 
@@ -15,6 +16,7 @@ contains
         call new_auto_spher_mask(prgtab)
         call new_automask2D(prgtab)
         call new_mask(prgtab)
+        call new_automask(prgtab)
     end subroutine construct_mask_programs
 
 subroutine new_auto_spher_mask( prgtab )
@@ -155,5 +157,49 @@ subroutine new_auto_spher_mask( prgtab )
         ! add to ui_hash
         call add_ui_program('mask', mask, prgtab, UI_CATEGORY)
     end subroutine new_mask
+
+    subroutine new_automask( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call automask%new(&
+        &'automask',&                                    ! name
+        &'Create an automatic envelope mask for a 3D volume',& ! summary
+        &'is a program for automated envelope masking',& ! help
+        &'simple_exec',&                                 ! executable
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                        ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call automask%add_input(UI_IMG, 'vol1', 'file', 'Volume',  'Volume',  'vol1.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        ! parameter input/output
+        call automask%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call automask%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 8., &
+        &visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call automask%add_input(UI_MASK, 'binwidth', 'num', 'Envelope binary layers width',&
+        &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call automask%add_input(UI_MASK, 'thres', 'num', 'Volume threshold',&
+        &'Volume threshold for envelope mask generation', 'Volume threshold, give 0 if unknown', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call automask%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
+        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6., &
+        &visibility=UI_VIS_ADVANCED)
+        call automask%add_input(UI_MASK, automsk, &
+        &visibility=UI_VIS_ADVANCED)
+        ! computer controls
+        call automask%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('automask', automask, prgtab, UI_CATEGORY)
+    end subroutine new_automask
 
 end module simple_ui_mask

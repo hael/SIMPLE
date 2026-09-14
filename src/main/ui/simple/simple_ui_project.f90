@@ -6,19 +6,16 @@ implicit none
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('project', 'Project Management', 10)
 type(ui_program), target :: export_relion
 type(ui_program), target :: export_starproject
-type(ui_program), target :: export_manifoldem_starproject
 type(ui_program), target :: extract_subproj
 type(ui_program), target :: import_boxes
 type(ui_program), target :: import_cavgs
 type(ui_program), target :: import_movies
 type(ui_program), target :: import_particles
-type(ui_program), target :: reimport_particles
 type(ui_program), target :: import_starproject
 type(ui_program), target :: merge_projects
 type(ui_program), target :: new_project
 type(ui_program), target :: print_project_field
 type(ui_program), target :: print_project_info
-type(ui_program), target :: ptcl3D_state_consensus
 type(ui_program), target :: prune_project
 type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
@@ -26,6 +23,7 @@ type(ui_program), target :: update_project
 type(ui_program), target :: validate_projfile
 type(ui_program), target :: zero_project_shifts
 type(ui_program), target :: write_mic_filetab
+type(ui_program), target :: reimport_particles
 
 contains
 
@@ -33,19 +31,16 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_export_relion(prgtab)
         call new_export_starproject(prgtab)
-        call new_export_manifoldem_starproject(prgtab)
         call new_extract_subproj(prgtab)
         call new_import_boxes(prgtab)
         call new_import_cavgs(prgtab)
         call new_import_movies(prgtab)
         call new_import_particles(prgtab)
-        call new_reimport_particles(prgtab)
         call new_import_starproject(prgtab)
         call new_merge_projects(prgtab)
         call new_new_project(prgtab)
         call new_print_project_field(prgtab)
         call new_print_project_info(prgtab)
-        call new_ptcl3D_state_consensus(prgtab)
         call new_prune_project(prgtab)
         call new_replace_project_field(prgtab)
         call new_selection(prgtab)
@@ -53,6 +48,7 @@ contains
         call new_validate_projfile(prgtab)
         call new_zero_project_shifts(prgtab)
         call new_write_mic_filetab(prgtab)
+        call new_reimport_particles(prgtab)
     end subroutine construct_project_programs
 
 subroutine new_export_relion( prgtab )
@@ -122,35 +118,6 @@ subroutine new_export_relion( prgtab )
         ! add to ui_hash
         call add_ui_program('export_starproject', export_starproject, prgtab, UI_CATEGORY)
     end subroutine new_export_starproject
-
-    subroutine new_export_manifoldem_starproject( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call export_manifoldem_starproject%new(&
-        &'export_manifoldem_starproject', &                                      ! name
-        &'Export ManifoldEM-compatible STAR file',&                              ! summary
-        &'is a program to export ptcl3D orientations in the STAR subset parsed by ManifoldEM',& ! descr long
-        &'simple_exec',&                                                         ! executable
-        &.true.)                                                                 ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call export_manifoldem_starproject%add_input(UI_FILE, starfile, required_override=.false., &
-        &visibility=UI_VIS_DEVELOPER)
-        ! parameter input/output
-        call export_manifoldem_starproject%add_input(UI_FILE, projfile, &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! add to ui_hash
-        call add_ui_program('export_manifoldem_starproject', export_manifoldem_starproject, prgtab, UI_CATEGORY)
-    end subroutine new_export_manifoldem_starproject
 
     subroutine new_extract_subproj( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -356,25 +323,6 @@ subroutine new_export_relion( prgtab )
         call add_ui_program('import_particles', import_particles, prgtab, UI_CATEGORY)
     end subroutine new_import_particles
 
-    subroutine new_reimport_particles( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call reimport_particles%new(&
-        &'reimport_particles',&                                    ! name
-        &'Re-import denoised particle stack',&                     ! summary
-        &'is a program for replacing the project particle stack while preserving particle/class metadata',&
-        &'simple_exec',&                                           ! executable
-        &.true.)                                                   ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        call reimport_particles%add_input(UI_IMG, 'stk', 'file', 'Denoised particle stack',&
-        &'Denoised particle stack to replace the project stack', 'e.g. denoised.mrcs', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call reimport_particles%add_input(UI_PARM, ctf_yes, &
-        &visibility=UI_VIS_DEVELOPER)
-        ! add to ui_hash
-        call add_ui_program('reimport_particles', reimport_particles, prgtab, UI_CATEGORY)
-    end subroutine new_reimport_particles
-
     subroutine new_import_starproject( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -442,48 +390,6 @@ subroutine new_export_relion( prgtab )
         ! add to ui_hash
         call add_ui_program('merge_projects', merge_projects, prgtab, UI_CATEGORY)
     end subroutine new_merge_projects
-
-    subroutine new_ptcl3D_state_consensus( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call ptcl3D_state_consensus%new(&
-        &'ptcl3D_state_consensus', &                                    ! name
-        &'Build consensus particle-state assignments across projects',& ! summary
-        &'is a program that builds a consensus particle state assignment from a file table of SIMPLE projects &
-        &and writes it to the target project ptcl3D field', &           ! help
-        &'simple_exec',&                                                ! executable
-        &.false.)                                                       ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call ptcl3D_state_consensus%add_input(UI_FILE, projtab,&
-        &help_override        = 'Text file listing SIMPLE project files (*.simple) containing ptcl3D state assignments',&
-        &placeholder_override = 'e.g. projtab.txt',&
-        &required_override          = .true.,&
-        &group="data", visibility=UI_VIS_STANDARD)
-        ! parameter input/output
-        call ptcl3D_state_consensus%add_input(UI_FILE, projfile,&
-        &help_override        = 'Target SIMPLE project file that receives the consensus ptcl3D state assignment',&
-        &required_override          = .true.,&
-        &group="data", visibility=UI_VIS_STANDARD)
-        call ptcl3D_state_consensus%add_input(UI_SRCH, nstates,&
-        &help_override        = 'Number of state labels to match; inferred from projtab when omitted',&
-        &required_override          = .false.,&
-        &group="state", visibility=UI_VIS_ADVANCED)
-        call ptcl3D_state_consensus%add_input(UI_PARM, prune,&
-        &group="data", visibility=UI_VIS_ADVANCED)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-        ! add to ui_hash
-        call add_ui_program('ptcl3D_state_consensus', ptcl3D_state_consensus, prgtab, UI_CATEGORY)
-    end subroutine new_ptcl3D_state_consensus
 
     subroutine new_validate_projfile( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -913,5 +819,24 @@ subroutine new_export_relion( prgtab )
         ! add to ui_hash
         call add_ui_program('write_mic_filetab', write_mic_filetab, prgtab, UI_CATEGORY)
     end subroutine new_write_mic_filetab
+
+    subroutine new_reimport_particles( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call reimport_particles%new(&
+        &'reimport_particles',&                                    ! name
+        &'Re-import denoised particle stack',&                     ! summary
+        &'is a program for replacing the project particle stack while preserving particle/class metadata',&
+        &'simple_exec',&                                           ! executable
+        &.true.)                                                   ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        call reimport_particles%add_input(UI_IMG, 'stk', 'file', 'Denoised particle stack',&
+        &'Denoised particle stack to replace the project stack', 'e.g. denoised.mrcs', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call reimport_particles%add_input(UI_PARM, ctf_yes, &
+        &visibility=UI_VIS_DEVELOPER)
+        ! add to ui_hash
+        call add_ui_program('reimport_particles', reimport_particles, prgtab, UI_CATEGORY)
+    end subroutine new_reimport_particles
 
 end module simple_ui_project

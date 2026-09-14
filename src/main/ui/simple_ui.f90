@@ -15,7 +15,7 @@ use simple_ui_single_group, only: add_single_programs
 use simple_ui_test_group,   only: add_test_programs
 implicit none
 
-public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
+public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr, count_prgs_in_category
 public :: list_simple_prgs_in_ui, list_simple_test_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
 public :: print_ui_json, write_ui_json
 public :: print_stream_ui_json, validate_ui_json, validate_ui_presentation
@@ -60,6 +60,18 @@ contains
         ptr2prg => null()
         call prgtab%get_ui_program(which_program, ptr2prg)
     end subroutine get_prg_ptr
+
+    integer function count_prgs_in_category( category ) result( nprograms )
+        character(len=*), intent(in) :: category
+        type(ui_program), pointer :: program
+        integer :: iprogram
+        nprograms = 0
+        if( .not. allocated(prgnames) ) return
+        do iprogram = 1, size(prgnames)
+            call prgtab%get_ui_program(prgnames(iprogram), program)
+            if( program%category%to_char() == category ) nprograms = nprograms + 1
+        enddo
+    end function count_prgs_in_category
 
     subroutine validate_ui_presentation
         use simple_linked_list, only: linked_list, list_iterator

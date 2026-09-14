@@ -9,7 +9,7 @@ images under those poses. As in 2D this is solved by alternation: reproject
 the current volumes and assign poses, then reconstruct new volumes from the
 assigned poses. This chapter is one round of that alternation. Coarse-to-fine
 schedules that wrap it are in [ab initio 3D](abinitio3d.md) and
-[heterogeneous refinement](heterogeneous_refinement.md).
+[heterogeneity analysis](heterogeneity_analysis/README.md).
 
 ## Model
 

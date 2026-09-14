@@ -222,8 +222,11 @@ With `nu_refine=yes`, accepted high-resolution candidates continue from the
 static bank in Fourier-shell coordinates and use a normalized Voronoi measure
 when their soft evidence is accumulated. Neither the bank nor the shell walk
 nor the matching handoff consults the FSC (2026-09-11): the full static
-ladder is retained, discovery is bounded by the walk's evidence rules and
-the Fourier grid only, and the handoff is the raw finest selected label.
+ladder is retained, discovery is bounded by the walk's evidence rules (a
+significant majority of the frontier, 2026-09-13) and the Fourier grid only,
+and the handoff is the finest selected label with at least 1% of the signal
+voxels at that label or finer (`nonuniform_filtering_policy.md` sections 10
+and 12).
 
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
 the default in `abinitio3D`, every PCG solve, base and regularized replay, runs

@@ -24,7 +24,8 @@ use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
-    &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
+    &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
+    &NU_HIGHRES_EXTENSION_MAJORITY_Z, &
     &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, write_nu_evidence_envmask, &
     &set_nu_evidence_null_shell, set_nu_solvent_envelope
 implicit none
@@ -221,12 +222,13 @@ contains
                 ! one line per challenge, always visible on the master: the walk's outcome is
                 ! the resolution-extension evidence and was invisible outside NU_DEV_OUTPUT
                 if( params%part == 1 .and. ext_stats%attempted )then
-                    write(logfhandle,'(A,I0,A,F7.3,A,I0,A,F7.3,A,I0,A,I0,A,F6.2,A,I0,A,I0,A,L1)') &
+                    write(logfhandle,'(A,I0,A,F7.3,A,I0,A,F7.3,A,I0,A,I0,A,I0,A,F6.2,A,F8.1,A,F4.1,A,I0,A,L1)') &
                         &'>>> NU SHELL WALK: state ', state, ' challenge ', ext_stats%old_limit, ' A (k=', &
                         &ext_stats%old_find, ') -> ', ext_stats%new_limit, ' A (k=', ext_stats%new_find, &
-                        &'); frontier ', ext_stats%n_tested, ' voxels, challenger wins ', &
-                        &ext_stats%pct_unary_wins_tested, '% (need 5%), extended ', ext_stats%n_extended, &
-                        &'/', ext_stats%n_seed_min, ' seed; accepted=', ext_stats%applied
+                        &'); frontier ', ext_stats%n_tested, ' voxels, challenger wins ', ext_stats%n_unary_wins, &
+                        &' (', ext_stats%pct_unary_wins_tested, '%), majority z=', ext_stats%majority_z, &
+                        &' (need ', NU_HIGHRES_EXTENSION_MAJORITY_Z, ', seed ', ext_stats%n_seed_min, &
+                        &'); accepted=', ext_stats%applied
                 endif
                 if( .not. ext_stats%attempted )then
                     if( params%part == 1 )then
@@ -328,16 +330,28 @@ contains
         end subroutine write_nonuniform_outputs
 
         subroutine record_nu_alignment_lowpass_limit()
-            real :: selected_lp
-            ! raw finest selected label (min_assigned_pct=0): the 5% support
-            ! gate introduced 2026-08-30 capped the PfCRT matching band at
-            ! 5-6 A against a 4.1 A map and refine3D_auto degraded from there
-            selected_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
+            real    :: selected_lp, raw_lp
+            integer :: n_signal
+            ! No gate relative to the whole mask (min_assigned_pct=0): the 5%
+            ! support gate introduced 2026-08-30 capped the PfCRT matching band
+            ! at 5-6 A against a 4.1 A map because the coarsest background
+            ! clamp is a large share of the mask. The floor is relative to the
+            ! SIGNAL voxels instead (2026-09-13): the finest label whose
+            ! cumulative population reaches NU_ALIGN_LP_MIN_SIGNAL_PCT of the
+            ! voxels not under the solvent clamp. The raw finest label let 54
+            ! voxels of 412k set the band at 3.37 A against a 3.62 A map
+            ! (aldolase), and seeded remnants of 4-36 voxels flipped it from
+            ! iteration 2 on.
+            raw_lp      = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
+            selected_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
+                &min_signal_pct=NU_ALIGN_LP_MIN_SIGNAL_PCT, n_signal=n_signal)
             if( selected_lp <= TINY ) return
             align_lp = selected_lp
-            if( NU_DEV_OUTPUT .and. params%part == 1 )then
-                write(logfhandle,'(A,I0,A,F8.3,A)') &
-                    &'>>> NU filter state ', state, ' matching low-pass limit for next iteration: ', selected_lp, ' A'
+            if( params%part == 1 )then
+                write(logfhandle,'(A,I0,A,F8.3,A,F4.1,A,I0,A,F8.3,A)') &
+                    &'>>> NU MATCHING LOW-PASS HANDOFF: state ', state, ', ', selected_lp, &
+                    &' A = finest label with >= ', NU_ALIGN_LP_MIN_SIGNAL_PCT, '% of ', n_signal, &
+                    &' signal voxels at that label or finer (raw finest selected label ', raw_lp, ' A)'
             endif
         end subroutine record_nu_alignment_lowpass_limit
 

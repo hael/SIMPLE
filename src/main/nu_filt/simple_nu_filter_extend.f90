@@ -178,21 +178,32 @@ contains
                 &old_radius_angstrom, ' A (px=', old_radius_px, ') / ', &
                 &new_radius_angstrom, ' A (px=', new_radius_px, ')'
         endif
+        ! majority test with binomial significance (2026-09-13): the voxelwise
+        ! comparison of two filters one shell apart has a 50% null win rate,
+        ! so a percentage threshold alone accepts every shell until the frontier
+        ! halves below the seed floor; the challenger must win on more than half
+        ! of the tested frontier by NU_HIGHRES_EXTENSION_MAJORITY_Z binomial
+        ! standard deviations, on at least n_seed_min voxels
+        if( n_finest > 0 )then
+            local_stats%majority_z = (real(n_extended) - 0.5 * real(n_finest)) / (0.5 * sqrt(real(n_finest)))
+        endif
         if( l_permissive_accept )then
             local_stats%applied = n_extended > 0
         else
             local_stats%accepted_by_frontier = n_extended >= n_seed_min .and. &
-                &local_stats%pct_unary_wins_tested >= accept_pct_eff
+                &local_stats%pct_unary_wins_tested >= accept_pct_eff .and. &
+                &local_stats%majority_z >= NU_HIGHRES_EXTENSION_MAJORITY_Z
             local_stats%applied = n_extended > 0 .and. local_stats%accepted_by_frontier
         endif
         local_stats%promote_next = local_stats%applied
         if( .not. local_stats%applied ) then
             if( NU_DEV_OUTPUT .and. nu_l_report )then
                 if( n_extended > 0 )then
-                    write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') &
+                    write(logfhandle,'(A,F8.3,A,F8.2,A,F5.1,A,I0,A,I0,A)') &
                         &'>>> NU high-resolution extension rejected: challenger wins ', &
-                        &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, &
-                        &'% of tested frontier or lacks absolute support ', n_extended, '/', n_seed_min, ' voxels'
+                        &local_stats%pct_unary_wins_tested, '% of tested frontier, majority z=', &
+                        &local_stats%majority_z, ' (need ', NU_HIGHRES_EXTENSION_MAJORITY_Z, &
+                        &'), support ', n_extended, '/', n_seed_min, ' voxels'
                 else
                     write(logfhandle,'(A,F8.3,A)') &
                         &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'

@@ -49,7 +49,8 @@ map, assign each particle one pose; fix the poses, reconstruct the map. The
 same two-step structure appears in 2D, where the "map" is a set of class
 averages and the pose has no out-of-plane component, and in the continuous
 heterogeneity model, where the pose is fixed and the alternation is between a
-latent coordinate and a basis of volumes ([flex PCA](flex_pca.md)).
+latent coordinate and a basis of volumes
+([flex PCA](heterogeneity_analysis/flex_pca.md)).
 
 **3. Continue from coarse to fine.** The alternation converges to the
 nearest local optimum, and from a random start that optimum is bad. Every
@@ -148,16 +149,22 @@ source pointers confined to the last section.
 
 **Heterogeneity.**
 
-12. [Heterogeneous refinement](heterogeneous_refinement.md). The 3D
-    estimator with a discrete state label per particle, and how states are
-    initialized from external references without importing their biases.
-13. [Flex PCA](flex_pca.md). Continuous variability as a low-rank volume
-    covariance fitted by EM through the projection operator, and its latent
-    coordinates turned into state maps.
+The [heterogeneity-analysis overview](heterogeneity_analysis/README.md)
+explains which workflow fits each source of particle poses and state models.
+
+12. [`refine3D_states`](heterogeneity_analysis/refine3d_states.md). Refine
+    same-lineage conformational states from an existing particle and reference
+    scaffold.
+13. [`classify3D_refs`](heterogeneity_analysis/classify3d_refs.md). Classify
+    particles against external references, then continue from data-derived
+    state maps.
+14. [`flex_pca`](heterogeneity_analysis/flex_pca.md). Fit continuous
+    variability as a low-rank projected covariance model and derive discrete
+    state maps from its latent coordinates.
 
 **Online processing.**
 
-14. [Streaming](streaming_pipeline.md). Steps 1 to 5 recast as an online
+15. [Streaming](streaming_pipeline.md). Steps 1 to 5 recast as an online
     algorithm: bounded chunks, a learned class-quality sieve, and a growing
     pool whose coarse-to-fine schedule is written in iterations rather than
     stages.

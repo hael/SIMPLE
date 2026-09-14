@@ -263,6 +263,34 @@ refine3D_auto's startup reconstruction receives the initial volume as
 `vol1`. Both base pairs are now envelope-constrained and `FSC MODE` reads
 estimator-constrained, as in every refinement iteration.
 
+**2026-09-13 -- Shell-walk acceptance is a majority test; matching handoff
+floor on signal voxels.** Review of the aldolase refine3D_auto log (38.8k
+particles, box 192 at 1.3 A, PCG) with the ladder-only Potts pricing in
+place: the cleanup no longer erases the walk (`voxels on walked labels 62333
+-> 62333`), which exposed the acceptance rule. The challenge compares filters
+one shell apart voxel by voxel with no margin (null win rate 50%) against a 5%
+threshold, so every shell was accepted until the frontier halved below 32
+voxels: depth = log2(frontier/32) = 12 at the bootstrap, 11 at iteration 1,
+with four shells accepted while the majority preferred the coarser filter.
+The raw-finest handoff then set the matching band from 54 voxels (3.37 A vs
+FSC=0.143 3.62 A) and, once the walk died from iteration 2 on (0% wins on
+frontiers of 4-424 voxels), from seeded remnants of 4-36 voxels; the band
+sat finer than the FSC in every iteration, the FSC never moved in 20
+iterations, orientation overlap was 0.998 from iteration 4 and cFAR decayed
+0.70 -> 0.55. Changes: (1) `extend_nu_filter_highres` accepts a shell only if
+`wins - n/2 >= NU_HIGHRES_EXTENSION_MAJORITY_Z (3) * sqrt(n)/2` on the tested
+frontier, seed floor unchanged (`majority_z` in the stats; logged per
+challenge with the win count instead of the previously misleading
+`extended 0` on rejections). (2) `get_nu_filtmap_finest_selected_lp` takes
+`min_signal_pct`: the floor is relative to the signal voxels (mask minus
+`nu_solvent_lmask`, `count_nu_solvent_clamped`), and
+`record_nu_alignment_lowpass_limit` passes `NU_ALIGN_LP_MIN_SIGNAL_PCT` (1%)
+with `min_assigned_pct=0`, logging `NU MATCHING LOW-PASS HANDOFF` on the
+master. On the aldolase bootstrap both rules land at 3.67-3.73 A. Compile and
+rerun are Hans's; the expected signature is a walk that stops where the win
+rate crosses 50%, a handoff at or just finer than the FSC=0.143, and cFAR no
+longer decaying.
+
 **2026-09-13 -- Ordered-label Potts prior prices the discrete ladder only.**
 Hans's hypothesis: the prior is too conservative for `nu_refine=yes`. In the
 code every accepted shell became one more integer coordinate

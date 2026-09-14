@@ -5,9 +5,6 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('other', 'Other Utilities', 190)
 type(ui_program), target :: cif2pdb
-type(ui_program), target :: fractionate_movies
-type(ui_program), target :: split_
-type(ui_program), target :: split_stack
 type(ui_program), target :: sigma2_convert
 
 contains
@@ -15,9 +12,6 @@ contains
     subroutine construct_other_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call new_cif2pdb(prgtab)
-        call new_fractionate_movies(prgtab)
-        call new_split_(prgtab)
-        call new_split_stack(prgtab)
         call new_sigma2_convert(prgtab)
     end subroutine construct_other_programs
 
@@ -47,107 +41,6 @@ subroutine new_cif2pdb( prgtab )
         ! add to ui_hash
         call add_ui_program('cif2pdb', cif2pdb, prgtab, UI_CATEGORY)
     end subroutine new_cif2pdb
-
-    subroutine new_fractionate_movies( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call fractionate_movies%new(&
-        &'fractionate_movies', &
-        &'Re-generate micrographs from selected movie frames',&
-        &'is a distributed program for re-generating micrographs from a subset of movie frames',&
-        &'simple_exec',&
-        &.true., &
-        &visibility=UI_VIS_ADVANCED)
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call fractionate_movies%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
-        & 'Starting movie frame for micrograph re-generation', 'frame index{1}', .false., 1.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call fractionate_movies%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
-        & 'Final movie frame for micrograph re-generation(0=all)', 'frame index{0}', .false., 0.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call fractionate_movies%add_input(UI_PARM, flipgain, &
-        &visibility=UI_VIS_ADVANCED)
-        call fractionate_movies%add_input(UI_PARM, 'mcconvention', 'str', 'Movie alignment convention', &
-        & 'Movie alignment and naming convention(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', &
-        & '(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', .false., 'simple', &
-        &visibility=UI_VIS_ADVANCED)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call fractionate_movies%add_input(UI_COMP, nparts, &
-        &visibility=UI_VIS_STANDARD)
-        call fractionate_movies%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('fractionate_movies', fractionate_movies, prgtab, UI_CATEGORY)
-    end subroutine new_fractionate_movies
-
-    subroutine new_split_( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call split_%new(&
-        &'split',&                                   ! name
-        &'Split a stack into evenly sized substacks',& ! summary
-        &'is a program for splitting a stack into evenly partitioned substacks',& ! help
-        &'simple_exec',&                             ! executable
-        &.false.)                                    ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call split_%add_input(UI_IMG, stk, required_override=.true., &
-        &visibility=UI_VIS_STANDARD)
-        ! parameter input/output
-        call split_%add_input(UI_PARM, smpd, &
-        &visibility=UI_VIS_STANDARD)
-        ! computer controls
-        call split_%add_input(UI_COMP, nparts, &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>               
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! add to ui_hash
-        call add_ui_program('split', split_, prgtab, UI_CATEGORY)
-    end subroutine new_split_
-
-    subroutine new_split_stack( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call split_stack%new(&
-        &'split_stack',&                                              ! name
-        &'Split a project stack into a chosen number of substacks',& ! summary
-        &'is a program for splitting a stack into nparts substacks',& ! help
-        &'simple_exec',&                                              ! executable
-        &.true.)                                                      ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call split_stack%add_input(UI_PARM, 'nparts', 'num', 'Number of parts balanced splitting of the stack', '# parts', '# parts', .true., 1.0, &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-        ! add to ui_hash
-        call add_ui_program('split_stack', split_stack, prgtab, UI_CATEGORY)
-    end subroutine new_split_stack
 
     subroutine new_sigma2_convert( prgtab )
         class(ui_hash), intent(inout) :: prgtab

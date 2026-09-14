@@ -8,6 +8,9 @@ use simple_ui_cluster2D, only: construct_cluster2D_programs
 use simple_ui_cavgproc,  only: construct_cavgproc_programs
 use simple_ui_abinitio3D,only: construct_abinitio3D_programs
 use simple_ui_refine3D,  only: construct_refine3D_programs
+use simple_ui_heterogeneity, only: construct_heterogeneity_programs
+use simple_ui_reconstruct3D, only: construct_reconstruct3D_programs
+use simple_ui_postprocess, only: construct_postprocess_programs
 use simple_ui_denoise,   only: construct_denoise_programs
 use simple_ui_filter,    only: construct_filter_programs
 use simple_ui_image,     only: construct_image_programs
@@ -37,6 +40,9 @@ contains
         call construct_cavgproc_programs(prgtab)
         call construct_abinitio3D_programs(prgtab)
         call construct_refine3D_programs(prgtab)
+        call construct_heterogeneity_programs(prgtab)
+        call construct_reconstruct3D_programs(prgtab)
+        call construct_postprocess_programs(prgtab)
         call construct_denoise_programs(prgtab)
         call construct_filter_programs(prgtab)
         call construct_image_programs(prgtab)

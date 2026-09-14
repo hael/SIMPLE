@@ -444,8 +444,19 @@ The extension:
 - starts from voxels assigned to the finest populated retained label
 - challenges the next unrepresented Fourier shell
 - evaluates the challenger only on that frontier mask
-- accepts a challenger only when enough tested frontier voxels prefer it
-- requires at least 5% challenger wins and a minimum absolute seed support
+- accepts a challenger only when the MAJORITY of the tested frontier prefers
+  it, by at least `NU_HIGHRES_EXTENSION_MAJORITY_Z` (3) binomial standard
+  deviations: `wins - n/2 >= 3 sqrt(n)/2` (2026-09-13), plus the minimum
+  absolute seed support (32 voxels). The voxelwise comparison of two filters
+  one shell apart has a 50% null win rate, so the earlier 5%-of-frontier
+  threshold accepted every shell until the frontier halved below the seed
+  floor (aldolase bootstrap: win rates 53, 80, 64, 58, 59, 46, 45, 38, 31,
+  53, 65, 48, 56%; populations 146744 -> 77508 -> ... -> 54; depth exactly
+  `log2(frontier/32)`; four shells accepted against a majority preferring the
+  coarser filter). Under the majority test the same log gives z = +22, +169,
+  +70, +31, +28, -9: five shells, stop at 3.73 A against a 3.62 A FSC=0.143.
+  Each challenge logs `>>> NU SHELL WALK: ... challenger wins n (p%), majority
+  z=..., accepted=` on the master
 - may accept multiple contiguous shell steps in one iteration
 - stops at the first unattempted, unsupported, or rejected challenger
 - never proposes a shell beyond the Fourier grid
@@ -499,13 +510,22 @@ Adding, removing, or thinning densely spaced shell probes therefore does not
 create fine-band support merely by changing the label count. The static
 eight-candidate bank retains integer coordinates and unit masses exactly.
 
-The matching handoff is the raw finest selected label on both backends and
-for both `nu_refine` values (`record_nu_alignment_lowpass_limit`,
-`min_assigned_pct=0`); no FSC headroom and no assignment-support gate enter
-it. Two gates were tried and retired: the 5% support gate of 2026-08-30
-capped the PfCRT matching band at 5-6 A against a 4.1 A map, and the
-`fsc/1.5` bank cap of 2026-09-08 pinned refine3D_auto (retired for
-`nu_refine=yes` on 2026-09-11).
+The matching handoff on both backends and for both `nu_refine` values
+(`record_nu_alignment_lowpass_limit`) is the finest selected label whose
+cumulative population, that label or finer, reaches
+`NU_ALIGN_LP_MIN_SIGNAL_PCT` (1%) of the SIGNAL voxels of the NU mask, i.e.
+the mask minus the solvent/background clamp (2026-09-13). No FSC headroom
+enters it and no gate relative to the whole mask does (`min_assigned_pct=0`):
+the 5% whole-mask support gate of 2026-08-30 capped the PfCRT matching band
+at 5-6 A against a 4.1 A map because the coarsest background clamp is a large
+share of the mask (aldolase: 157k of 412k voxels), and the `fsc/1.5` bank cap
+of 2026-09-08 pinned refine3D_auto (retired for `nu_refine=yes` on
+2026-09-11). The raw finest label that replaced them (2026-09-02 to
+2026-09-13) let 54 voxels of 412k set the band at 3.37 A against a 3.62 A
+map, and from iteration 2 on seeded remnants of 4-36 voxels flipped it between
+3.52 and 3.57 A while cFAR decayed 0.70 -> 0.55 and the FSC never moved. The
+handoff is logged per state as `>>> NU MATCHING LOW-PASS HANDOFF: ...` with
+the signal-voxel count and the raw finest label beside it.
 
 ## 11. Matching References
 

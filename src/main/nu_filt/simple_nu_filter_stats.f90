@@ -125,14 +125,20 @@ contains
     !! 2026-09-02) and the refinement degraded. Labels are ranked by their
     !! low-pass limits, not indices, so an FSC-derived auxiliary replacement
     !! orders correctly among the bank members.
-    module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct )
-        logical, optional, intent(in) :: mask(:,:,:)
-        real,    optional, intent(in) :: min_assigned_pct
+    !! min_signal_pct (2026-09-13): additional floor relative to the SIGNAL
+    !! voxels, i.e. the assigned voxels not under the solvent/background clamp
+    !! (nu_solvent_lmask): the finest label whose cumulative population reaches
+    !! that fraction of the signal voxels. n_signal returns the signal count.
+    module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct, min_signal_pct, n_signal )
+        logical, optional, intent(in)  :: mask(:,:,:)
+        real,    optional, intent(in)  :: min_assigned_pct
+        real,    optional, intent(in)  :: min_signal_pct
+        integer, optional, intent(out) :: n_signal
         real :: min_pct
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:), label_lps(:)
         logical, allocatable :: visited(:)
-        integer :: ilabel, pick, n_assigned, needed, cum
+        integer :: ilabel, pick, n_assigned, needed, cum, n_sig
         if( .not.allocated(filtmap) )then
             THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_filtmap_finest_selected_lp')
         endif
@@ -144,10 +150,17 @@ contains
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         n_assigned = sum(counts)
+        n_sig = n_assigned - count_nu_solvent_clamped(mask)
+        n_sig = max(0, min(n_assigned, n_sig))
+        if( present(n_signal) ) n_signal = n_sig
         min_pct = NU_ALIGN_LP_MIN_ASSIGNED_PCT
         if( present(min_assigned_pct) ) min_pct = max(0., min_assigned_pct)
         if( n_assigned > 0 )then
             needed = min(n_assigned, max(1, ceiling(real(n_assigned) * min_pct / 100.)))
+            if( present(min_signal_pct) )then
+                if( min_signal_pct > 0. .and. n_sig > 0 ) needed = max(needed, &
+                    &min(n_assigned, ceiling(real(n_sig) * min_signal_pct / 100.)))
+            endif
             allocate(label_lps(size(cutoff_finds)), visited(size(cutoff_finds)))
             do ilabel = 1, size(cutoff_finds)
                 label_lps(ilabel) = nu_label_lowpass_limit(ilabel)
@@ -446,6 +459,37 @@ contains
             active_nu_mask_at = nu_lmask(i,j,k)
         endif
     end function active_nu_mask_at
+
+    !> Active NU-mask voxels under the solvent/background clamp (outside the
+    !! density envelope); zero when no clamp is armed
+    integer function count_nu_solvent_clamped( mask ) result(nclamped)
+        logical, optional, intent(in) :: mask(:,:,:)
+        integer :: i, j, k, imask
+        nclamped = 0
+        if( .not. nu_l_solvent_clamp ) return
+        if( .not. allocated(nu_solvent_lmask) ) return
+        if( present(mask) )then
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nclamped) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
+                        if( nu_solvent_lmask(i,j,k) ) nclamped = nclamped + 1
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) reduction(+:nclamped) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( nu_solvent_lmask(i,j,k) ) nclamped = nclamped + 1
+            end do
+            !$omp end parallel do
+        endif
+    end function count_nu_solvent_clamped
 
     integer function count_active_nu_mask( mask ) result(nactive)
         logical, optional, intent(in) :: mask(:,:,:)

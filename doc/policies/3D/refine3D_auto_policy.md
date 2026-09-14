@@ -31,8 +31,10 @@ the refinement iterations are delegated to `commander_refine3D`.
 NU volume filtering is independent of `incrreslim`. With `nu_refine=yes`
 the FSC does not cap the NU candidate bank, the shell walk or the matching
 low-pass handoff on either backend (2026-09-11): the full static ladder is
-retained, the walk is bounded by its evidence rules and the Fourier grid
-only, and the handoff is the raw finest selected label. The FSC's role is
+retained, the walk is bounded by its evidence rules (a significant majority
+of the frontier, 2026-09-13) and the Fourier grid only, and the handoff is
+the finest selected label with at least 1% of the signal voxels at that label
+or finer (`nonuniform_filtering_policy.md` sections 10, 12). The FSC's role is
 resolution reporting and convergence, the ML regularizer `P_tau` and the
 `envfsc` correction; it never gates resolution extension. (The `fsc/1.5`
 bank cap of 2026-09-08 remains in static-bank mode, `nu_refine=no`; with

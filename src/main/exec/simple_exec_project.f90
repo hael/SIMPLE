@@ -2,8 +2,6 @@
 module simple_exec_project
 use simple_cmdline,                 only: cmdline
 use simple_commanders_relion,       only: commander_export_relion
-use simple_commanders_starproject,  only: commander_import_starproject, commander_export_starproject, &
-    commander_export_manifoldem_starproject
 use simple_commanders_starproject,  only: commander_import_starproject, commander_export_starproject
 use single_commanders_trajectory,   only: commander_extract_substk
 use simple_commanders_project_core, only: commander_new_project, commander_update_project, commander_print_project_info,&
@@ -20,7 +18,6 @@ private
 
 type(commander_export_relion)         :: xexport_relion
 type(commander_export_starproject)    :: xexport_starproject
-type(commander_export_manifoldem_starproject) :: xexport_manifoldem_starproject
 type(commander_extract_substk)        :: xextract_substk
 type(commander_extract_subproj)       :: xextract_subproj
 type(commander_import_boxes)          :: ximport_boxes
@@ -57,8 +54,6 @@ contains
                 call xexport_relion%execute(cline)
             case( 'export_starproject' )
                 call xexport_starproject%execute(cline)
-            case( 'export_manifoldem_starproject' )
-                call xexport_manifoldem_starproject%execute(cline)
             case( 'extract_subproj' )
                 call xextract_subproj%execute(cline)
             case( 'extract_substk' )

@@ -2,7 +2,7 @@ program simple_test_ui_visibility
 use simple_test_utils,    only: assert_char, assert_int, assert_true, report_summary, tests_failed
 use simple_linked_list,   only: linked_list, list_iterator
 use simple_string,        only: string
-use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
+use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr, count_prgs_in_category
 use simple_ui_param,      only: UI_PLACEHOLDER_MAX_LEN, ui_param
 use simple_ui_program,    only: UI_DISPLAY_NAME_MAX_LEN, UI_FILE, UI_PARM, UI_SUMMARY_MAX_LEN, &
     &category_descriptor, ui_cli_param_choices, ui_cli_param_summary, ui_program, ui_program_input, &
@@ -146,6 +146,31 @@ deallocate(supplied_keys)
 call make_ui
 call assert_registered_requirement('binarize', 'input', 1, 1)
 call assert_registered_category('icm2D', 'denoise', 'Denoising', 70)
+call assert_registered_category('refine3D', 'refine3d', 'Refine 3D Workflows', 60)
+call assert_registered_category('flex_pca', 'heterogeneity', 'Heterogeneity Analysis', 65)
+call assert_registered_category('refine3D_states', 'heterogeneity', 'Heterogeneity Analysis', 65)
+call assert_registered_category('classify3D_refs', 'heterogeneity', 'Heterogeneity Analysis', 65)
+call assert_registered_category('ptcl3D_state_consensus', 'heterogeneity', 'Heterogeneity Analysis', 65)
+call assert_int(4, count_prgs_in_category('heterogeneity'), 'heterogeneity program count')
+call assert_registered_category('reconstruct3D', 'reconstruct3d', 'Reconstruct 3D Workflows', 68)
+call assert_registered_category('bootstrap_rec3D', 'reconstruct3d', 'Reconstruct 3D Workflows', 68)
+call assert_int(2, count_prgs_in_category('reconstruct3d'), 'reconstruct3d program count')
+call assert_registered_category('postprocess', 'postprocess', 'Post-processing', 69)
+call assert_registered_category('postprocess_nu', 'postprocess', 'Post-processing', 69)
+call assert_int(2, count_prgs_in_category('postprocess'), 'postprocess program count')
+call assert_registered_category('automask', 'mask', 'Masking', 100)
+call assert_registered_category('cls_split', 'cluster2d', 'Cluster2D Workflows', 30)
+call assert_registered_category('reimport_particles', 'project', 'Project Management', 10)
+call assert_registered_category('fractionate_movies', 'preproc', 'Pre-processing', 20)
+call assert_registered_category('split', 'image', 'General Image Processing', 90)
+call assert_registered_category('split_stack', 'image', 'General Image Processing', 90)
+call assert_registered_category('filter', 'filter', 'Filtering', 80)
+call assert_registered_category('new_project', 'project', 'Project Management', 10)
+call assert_registered_category('export_starproject', 'project', 'Project Management', 10)
+call assert_registered_category('stack', 'image', 'General Image Processing', 90)
+call assert_registered_category('motion_correct', 'preproc', 'Pre-processing', 20)
+call assert_program_not_registered('ppca_volvar')
+call assert_program_not_registered('export_manifoldem_starproject')
 call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
 call assert_registered_category('abinitio2D_stream', 'stream', 'Stream Workflows', 10)
 call assert_registered_category('abinitio2D', 'cluster2d', 'Cluster2D Workflows', 30)
@@ -200,6 +225,13 @@ contains
             call assert_int(expected_order, registered_prg%category_order, trim(name)//' category order')
         endif
     end subroutine assert_registered_category
+
+    subroutine assert_program_not_registered( name )
+        character(len=*), intent(in) :: name
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(.not. associated(registered_prg), trim(name)//' is not registered')
+    end subroutine assert_program_not_registered
 
     subroutine assert_registered_test_category( name, expected_category, expected_display_name, expected_order )
         character(len=*), intent(in) :: name, expected_category, expected_display_name

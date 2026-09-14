@@ -100,6 +100,7 @@ digraph module_graph {
   "simple_builder";
   "simple_butterworth";
   "simple_calc_pspec_strategy";
+  "simple_calpha_finder";
   "simple_cartesian_fourier";
   "simple_cartesian_pose_refiner";
   "simple_cavg_quality_analysis";
@@ -239,6 +240,7 @@ digraph module_graph {
   "simple_fftw3";
   "simple_fileio";
   "simple_fileio_tester";
+  "simple_final_rec";
   "simple_finch";
   "simple_flex_gpu";
   "simple_flex_pca_distr";
@@ -269,6 +271,7 @@ digraph module_graph {
   "simple_gui_metadata_micrograph";
   "simple_gui_metadata_optics_group";
   "simple_gui_metadata_project";
+  "simple_gui_metadata_ptcl";
   "simple_gui_metadata_stream_opening2D";
   "simple_gui_metadata_stream_optics_assignment";
   "simple_gui_metadata_stream_particle_sieving";
@@ -558,6 +561,7 @@ digraph module_graph {
   "simple_ui_dock";
   "simple_ui_filter";
   "simple_ui_hash";
+  "simple_ui_heterogeneity";
   "simple_ui_image";
   "simple_ui_mask";
   "simple_ui_modules";
@@ -565,10 +569,12 @@ digraph module_graph {
   "simple_ui_other";
   "simple_ui_param";
   "simple_ui_params_common";
+  "simple_ui_postprocess";
   "simple_ui_preproc";
   "simple_ui_print";
   "simple_ui_program";
   "simple_ui_project";
+  "simple_ui_reconstruct3D";
   "simple_ui_refine3D";
   "simple_ui_res";
   "simple_ui_sim";
@@ -976,7 +982,6 @@ digraph module_graph {
   "simple_abinitio_utils" -> "simple_sigma2_bootstrap";
   "simple_abinitio_utils" -> "simple_sigma2_state";
   "simple_abinitio_utils" -> "simple_sigma2_state_file";
-  "simple_abinitio_utils" -> "simple_vol_pproc_policy";
   "simple_aff_prop" -> "simple_core_module_api";
   "simple_atoms" -> "simple_core_module_api";
   "simple_atoms" -> "simple_defs_atoms";
@@ -1019,6 +1024,9 @@ digraph module_graph {
   "simple_calc_pspec_strategy" -> "simple_qsys_funs";
   "simple_calc_pspec_strategy" -> "simple_ran_tabu";
   "simple_calc_pspec_strategy" -> "simple_sigma2_binfile";
+  "simple_calpha_finder" -> "simple_atoms";
+  "simple_calpha_finder" -> "simple_core_module_api";
+  "simple_calpha_finder" -> "simple_image";
   "simple_cartesian_fourier" -> "simple_image";
   "simple_cartesian_pose_refiner" -> "simple_cartesian_fourier";
   "simple_cartesian_pose_refiner" -> "simple_core_module_api";
@@ -1201,6 +1209,7 @@ digraph module_graph {
   "simple_commanders_abinitio" -> "simple_commanders_reproject";
   "simple_commanders_abinitio" -> "simple_estimate_ssnr";
   "simple_commanders_abinitio" -> "simple_external_reference_pose_initialization";
+  "simple_commanders_abinitio" -> "simple_final_rec";
   "simple_commanders_abinitio" -> "simple_procimgstk";
   "simple_commanders_abinitio" -> "simple_refine3d_fnames";
   "simple_commanders_abinitio2D" -> "simple_abinitio2d_controller";
@@ -1234,6 +1243,7 @@ digraph module_graph {
   "simple_commanders_api" -> "simple_stack_io";
   "simple_commanders_api" -> "simple_stream_utils";
   "simple_commanders_atoms" -> "simple_atoms";
+  "simple_commanders_atoms" -> "simple_calpha_finder";
   "simple_commanders_atoms" -> "simple_commanders_api";
   "simple_commanders_atoms" -> "simple_commanders_resolest";
   "simple_commanders_atoms" -> "simple_commanders_sim";
@@ -1342,6 +1352,7 @@ digraph module_graph {
   "simple_commanders_pick" -> "simple_commanders_api";
   "simple_commanders_pick" -> "simple_core_module_api";
   "simple_commanders_pick" -> "simple_extract_strategy";
+  "simple_commanders_pick" -> "simple_gui_communicator";
   "simple_commanders_pick" -> "simple_parameters";
   "simple_commanders_pick" -> "simple_pick_strategy";
   "simple_commanders_pick" -> "simple_picker_iter";
@@ -1353,6 +1364,7 @@ digraph module_graph {
   "simple_commanders_preprocess" -> "simple_core_module_api";
   "simple_commanders_preprocess" -> "simple_ctf_estimate_strategy";
   "simple_commanders_preprocess" -> "simple_gen_pspecs_and_thumbs_strategy";
+  "simple_commanders_preprocess" -> "simple_gui_communicator";
   "simple_commanders_preprocess" -> "simple_mini_stream_utils";
   "simple_commanders_preprocess" -> "simple_motion_correct_strategy";
   "simple_commanders_preprocess" -> "simple_motion_correct_utils";
@@ -1375,11 +1387,13 @@ digraph module_graph {
   "simple_commanders_project_cls" -> "simple_commanders_api";
   "simple_commanders_project_core" -> "simple_commanders_api";
   "simple_commanders_project_core" -> "simple_commanders_project_ptcl";
+  "simple_commanders_project_core" -> "simple_gui_communicator";
   "simple_commanders_project_core" -> "simple_imgarr_utils";
   "simple_commanders_project_core" -> "simple_projfile_utils";
   "simple_commanders_project_core" -> "simple_srch_sort_loc";
   "simple_commanders_project_core" -> "simple_strategy2d_utils";
   "simple_commanders_project_mov" -> "simple_commanders_api";
+  "simple_commanders_project_mov" -> "simple_gui_communicator";
   "simple_commanders_project_mov" -> "simple_stream_watcher";
   "simple_commanders_project_ptcl" -> "simple_commanders_api";
   "simple_commanders_project_ptcl" -> "simple_starproject";
@@ -1406,8 +1420,10 @@ digraph module_graph {
   "simple_commanders_refine3D" -> "simple_commanders_flex_pca";
   "simple_commanders_refine3D" -> "simple_commanders_rec";
   "simple_commanders_refine3D" -> "simple_core_module_api";
+  "simple_commanders_refine3D" -> "simple_defs";
   "simple_commanders_refine3D" -> "simple_estimate_ssnr";
   "simple_commanders_refine3D" -> "simple_external_reference_pose_initialization";
+  "simple_commanders_refine3D" -> "simple_final_rec";
   "simple_commanders_refine3D" -> "simple_halfmap_diagnostics";
   "simple_commanders_refine3D" -> "simple_pftc_srch_api";
   "simple_commanders_refine3D" -> "simple_refine3d_fnames";
@@ -1586,6 +1602,8 @@ digraph module_graph {
   "simple_commanders_test_parallel" -> "simple_commanders_sim";
   "simple_commanders_test_parallel" -> "simple_image";
   "simple_commanders_test_parallel" -> "simple_timer";
+  "simple_commanders_test_single" -> "simple_atoms";
+  "simple_commanders_test_single" -> "simple_calpha_finder";
   "simple_commanders_test_single" -> "simple_commanders_api";
   "simple_commanders_test_single" -> "simple_commanders_atoms";
   "simple_commanders_test_single" -> "simple_commanders_project_core";
@@ -1593,6 +1611,7 @@ digraph module_graph {
   "simple_commanders_test_single" -> "simple_commanders_reproject";
   "simple_commanders_test_single" -> "simple_commanders_sim";
   "simple_commanders_test_single" -> "simple_commanders_stkops";
+  "simple_commanders_test_single" -> "simple_molecule_data";
   "simple_commanders_test_single" -> "single_commanders_nano2d";
   "simple_commanders_test_single" -> "single_commanders_nano3d";
   "simple_commanders_test_single" -> "single_commanders_trajectory";
@@ -1658,11 +1677,6 @@ digraph module_graph {
   "simple_commanders_volops" -> "simple_dock_vols";
   "simple_commanders_volops" -> "simple_halfmap_diagnostics";
   "simple_commanders_volops" -> "simple_image_msk";
-  "simple_commanders_volops" -> "simple_imgproc";
-  "simple_commanders_volops" -> "simple_kpca_svd";
-  "simple_commanders_volops" -> "simple_pca";
-  "simple_commanders_volops" -> "simple_pca_svd";
-  "simple_commanders_volops" -> "simple_ppca";
   "simple_commanders_volops" -> "simple_procimgstk";
   "simple_commanders_volops" -> "simple_projector";
   "simple_commanders_volops" -> "simple_segmentation";
@@ -1898,7 +1912,6 @@ digraph module_graph {
   "simple_exec_denoise" -> "simple_commanders_flex_pca";
   "simple_exec_denoise" -> "simple_commanders_imgops";
   "simple_exec_denoise" -> "simple_commanders_resolest";
-  "simple_exec_denoise" -> "simple_commanders_volops";
   "simple_exec_dock" -> "simple_cmdline";
   "simple_exec_dock" -> "simple_commanders_volops";
   "simple_exec_filter" -> "simple_cmdline";
@@ -1959,6 +1972,7 @@ digraph module_graph {
   "simple_exec_validate" -> "simple_commanders_atoms";
   "simple_exec_validate" -> "simple_commanders_validate";
   "simple_exec_volume" -> "simple_cmdline";
+  "simple_exec_volume" -> "simple_commanders_atoms";
   "simple_exec_volume" -> "simple_commanders_reproject";
   "simple_exec_volume" -> "simple_commanders_volops";
   "simple_external_reference_pose_initialization" -> "simple_commanders_api";
@@ -1983,6 +1997,12 @@ digraph module_graph {
   "simple_fileio_tester" -> "simple_string_utils";
   "simple_fileio_tester" -> "simple_syslib";
   "simple_fileio_tester" -> "simple_test_utils";
+  "simple_final_rec" -> "simple_abinitio_utils";
+  "simple_final_rec" -> "simple_commanders_api";
+  "simple_final_rec" -> "simple_parameters";
+  "simple_final_rec" -> "simple_refine3d_fnames";
+  "simple_final_rec" -> "simple_sigma2_files";
+  "simple_final_rec" -> "simple_vol_pproc_policy";
   "simple_finch" -> "simple_core_module_api";
   "simple_finch" -> "simple_kd_tree";
   "simple_flex_gpu" -> "iso_c_binding";
@@ -2033,6 +2053,7 @@ digraph module_graph {
   "simple_flex_pca_model" -> "simple_parameters";
   "simple_flex_pca_model" -> "simple_qsys_funs";
   "simple_flex_pca_model" -> "simple_reconstructor";
+  "simple_flex_pca_model" -> "simple_rnd";
   "simple_flex_pca_model" -> "simple_sigma2_files";
   "simple_flex_pca_model" -> "simple_sp_project";
   "simple_flex_pca_model" -> "simple_srch_sort_loc";
@@ -2121,7 +2142,6 @@ digraph module_graph {
   "simple_gui_assembler_tester" -> "simple_gui_metadata_api";
   "simple_gui_assembler_tester" -> "simple_sp_project";
   "simple_gui_assembler_tester" -> "simple_string";
-  "simple_gui_assembler_tester" -> "simple_syslib";
   "simple_gui_assembler_tester" -> "simple_test_utils";
   "simple_gui_communicator" -> "json_kinds";
   "simple_gui_communicator" -> "json_module";
@@ -2142,6 +2162,7 @@ digraph module_graph {
   "simple_gui_metadata_api" -> "simple_gui_metadata_micrograph";
   "simple_gui_metadata_api" -> "simple_gui_metadata_optics_group";
   "simple_gui_metadata_api" -> "simple_gui_metadata_project";
+  "simple_gui_metadata_api" -> "simple_gui_metadata_ptcl";
   "simple_gui_metadata_api" -> "simple_gui_metadata_stream_opening2d";
   "simple_gui_metadata_api" -> "simple_gui_metadata_stream_optics_assignment";
   "simple_gui_metadata_api" -> "simple_gui_metadata_stream_particle_sieving";
@@ -2182,11 +2203,26 @@ digraph module_graph {
   "simple_gui_metadata_project" -> "simple_gui_metadata_base";
   "simple_gui_metadata_project" -> "simple_gui_metadata_cavg2d";
   "simple_gui_metadata_project" -> "simple_gui_metadata_micrograph";
+  "simple_gui_metadata_project" -> "simple_gui_metadata_ptcl";
   "simple_gui_metadata_project" -> "simple_gui_metadata_types";
+  "simple_gui_metadata_project" -> "simple_gui_utils";
+  "simple_gui_metadata_project" -> "simple_image";
+  "simple_gui_metadata_project" -> "simple_math";
+  "simple_gui_metadata_project" -> "simple_motion_gain_helpers";
+  "simple_gui_metadata_project" -> "simple_nrtxtfile";
+  "simple_gui_metadata_project" -> "simple_procimgstk";
   "simple_gui_metadata_project" -> "simple_sp_project";
   "simple_gui_metadata_project" -> "simple_string";
   "simple_gui_metadata_project" -> "simple_string_utils";
+  "simple_gui_metadata_project" -> "simple_syslib";
   "simple_gui_metadata_project" -> "unix";
+  "simple_gui_metadata_ptcl" -> "json_module";
+  "simple_gui_metadata_ptcl" -> "simple_defs";
+  "simple_gui_metadata_ptcl" -> "simple_error";
+  "simple_gui_metadata_ptcl" -> "simple_gui_metadata_base";
+  "simple_gui_metadata_ptcl" -> "simple_gui_metadata_cavg2d";
+  "simple_gui_metadata_ptcl" -> "simple_gui_metadata_types";
+  "simple_gui_metadata_ptcl" -> "simple_string";
   "simple_gui_metadata_stream_opening2D" -> "json_kinds";
   "simple_gui_metadata_stream_opening2D" -> "json_module";
   "simple_gui_metadata_stream_opening2D" -> "simple_defs";
@@ -3707,6 +3743,7 @@ digraph module_graph {
   "simple_ui_hash" -> "simple_string";
   "simple_ui_hash" -> "simple_ui_program";
   "simple_ui_hash" -> "simple_vrefhash";
+  "simple_ui_heterogeneity" -> "simple_ui_modules";
   "simple_ui_image" -> "simple_ui_modules";
   "simple_ui_mask" -> "simple_ui_modules";
   "simple_ui_modules" -> "simple_ansi_ctrls";
@@ -3726,6 +3763,7 @@ digraph module_graph {
   "simple_ui_params_common" -> "simple_core_module_api";
   "simple_ui_params_common" -> "simple_ui_descriptor_types";
   "simple_ui_params_common" -> "simple_ui_param";
+  "simple_ui_postprocess" -> "simple_ui_modules";
   "simple_ui_preproc" -> "simple_ui_modules";
   "simple_ui_print" -> "simple_ui_modules";
   "simple_ui_program" -> "json_module";
@@ -3737,6 +3775,7 @@ digraph module_graph {
   "simple_ui_program" -> "simple_ui_param";
   "simple_ui_program" -> "simple_ui_visibility";
   "simple_ui_project" -> "simple_ui_modules";
+  "simple_ui_reconstruct3D" -> "simple_ui_modules";
   "simple_ui_refine3D" -> "simple_ui_modules";
   "simple_ui_res" -> "simple_ui_modules";
   "simple_ui_sim" -> "simple_ui_modules";
@@ -3747,13 +3786,16 @@ digraph module_graph {
   "simple_ui_simple_group" -> "simple_ui_dock";
   "simple_ui_simple_group" -> "simple_ui_filter";
   "simple_ui_simple_group" -> "simple_ui_hash";
+  "simple_ui_simple_group" -> "simple_ui_heterogeneity";
   "simple_ui_simple_group" -> "simple_ui_image";
   "simple_ui_simple_group" -> "simple_ui_mask";
   "simple_ui_simple_group" -> "simple_ui_ori";
   "simple_ui_simple_group" -> "simple_ui_other";
+  "simple_ui_simple_group" -> "simple_ui_postprocess";
   "simple_ui_simple_group" -> "simple_ui_preproc";
   "simple_ui_simple_group" -> "simple_ui_print";
   "simple_ui_simple_group" -> "simple_ui_project";
+  "simple_ui_simple_group" -> "simple_ui_reconstruct3d";
   "simple_ui_simple_group" -> "simple_ui_refine3d";
   "simple_ui_simple_group" -> "simple_ui_res";
   "simple_ui_simple_group" -> "simple_ui_sim";
@@ -3925,7 +3967,6 @@ digraph module_graph {
   "subroutine" -> "simple_projector_pft_batch";
   "subroutine" -> "simple_ptcl_cache";
   "subroutine" -> "simple_ran_tabu";
-  "subroutine" -> "simple_sigma2_files";
   "subroutine" -> "simple_sp_project";
   "subroutine" -> "simple_tent_smooth";
 }

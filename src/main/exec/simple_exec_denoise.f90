@@ -2,7 +2,6 @@
 module simple_exec_denoise
 use simple_cmdline,              only: cmdline
 use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D
-use simple_commanders_volops,    only: commander_ppca_volvar
 use simple_commanders_cluster2D, only: commander_ppca_denoise_classes
 use simple_commanders_denoise,   only: commander_cls_split, commander_denoise_project, commander_map_params_from_den
 use simple_commanders_flex_pca,  only: commander_flex_pca
@@ -20,7 +19,6 @@ type(commander_cls_split)                 :: xcls_split
 type(commander_denoise_project)           :: xdenoise_project
 type(commander_map_params_from_den)       :: xmap_params_from_den
 type(commander_flex_pca)                  :: xflex_pca
-type(commander_ppca_volvar)               :: xppca_volvar
 
 contains
 
@@ -49,8 +47,6 @@ contains
                 call xmap_params_from_den%execute(cline)
             case( 'flex_pca' )
                 call xflex_pca%execute(cline)
-            case( 'ppca_volvar' )
-                call xppca_volvar%execute(cline)
             case default
                 l_did_execute = .false.
         end select

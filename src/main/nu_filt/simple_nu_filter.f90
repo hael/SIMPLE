@@ -56,7 +56,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
-          nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, print_nu_evidence_lowpass_histogram,&
+          nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
+          NU_HIGHRES_EXTENSION_MAJORITY_Z, print_nu_evidence_lowpass_histogram,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
@@ -91,6 +92,19 @@ real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
 ! accepted into refinement-style NU banks. Diagnostic callers can pass
 ! accept_pct=0. to request a permissive one-voxel shell walk.
 real,             parameter   :: NU_HIGHRES_EXTENSION_ACCEPT_PCT     = 5.0
+! Shell-walk acceptance is a MAJORITY test with binomial significance
+! (2026-09-13). The challenge compares two filters one Fourier shell apart
+! voxel by voxel with no margin, so the null win rate is 50%, not 0%: with the
+! 5% threshold alone the walk accepted every shell until the frontier halved
+! below the seed floor (aldolase bootstrap: win rates 53..80..31%, populations
+! 146744 -> 77508 -> ... -> 54, depth = log2(frontier/32) = 12 shells, four
+! of them accepted with the MAJORITY of the frontier preferring the coarser
+! filter). A shell is accepted only if the challenger wins on more than half
+! of the frontier by this many binomial standard deviations:
+!   wins - n/2 >= Z * sqrt(n)/2
+! On the same log: z = +22, +169, +70, +31, +28, then -9 -> five shells, stop
+! at 3.73 A against a 3.62 A FSC=0.143. The seed floor still applies.
+real,             parameter   :: NU_HIGHRES_EXTENSION_MAJORITY_Z     = 3.0
 ! Refinement-style shell acceptance also requires enough absolute support so a
 ! tiny frontier cannot march indefinitely. Diagnostic callers can pass
 ! accept_pct=0. to bypass both the frontier fraction and this seed floor.
@@ -200,6 +214,16 @@ real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
 !! its historical raw-finest handoff. Strength mirrors the shell walk's
 !! NU_HIGHRES_EXTENSION_ACCEPT_PCT.
 real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
+! Matching-bandwidth handoff floor relative to the SIGNAL voxels of the NU
+! mask (mask minus the solvent/background clamp), 2026-09-13: the finest label
+! whose cumulative population (that label or finer) reaches this fraction of
+! the signal voxels sets the matching low-pass. The retired 5% gate above was
+! relative to the whole mask, of which the coarsest background clamp can be
+! 40% (aldolase: 157k of 412k), which is why it pinned PfCRT at 5-6 A. The raw
+! finest label (0%) let 54 voxels of 412k set the band at 3.37 A against a
+! 3.62 A map, and from iteration 2 on 4-36 seeded remnant voxels flipped it
+! between 3.52 and 3.57 A while cFAR decayed 0.70 -> 0.55.
+real,             parameter   :: NU_ALIGN_LP_MIN_SIGNAL_PCT   = 1.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 ! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,
 ! postprocess_nu commander): classical shrink-then-sharpen, localized by the
@@ -338,6 +362,7 @@ type :: nu_highres_extension_stats
     real    :: pct_unary_wins_tested = 0.
     real    :: pct_unary_wins_mask = 0.
     real    :: pct_extended_tested = 0.
+    real    :: majority_z           = 0.   ! (wins - n/2) / (sqrt(n)/2) over the tested frontier
     logical :: accepted_by_frontier = .false.
     logical :: memory_limited       = .false.
 end type nu_highres_extension_stats
@@ -802,9 +827,11 @@ interface
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
 
-    module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct )
-        logical, optional, intent(in) :: mask(:,:,:)
-        real,    optional, intent(in) :: min_assigned_pct
+    module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct, min_signal_pct, n_signal )
+        logical, optional, intent(in)  :: mask(:,:,:)
+        real,    optional, intent(in)  :: min_assigned_pct
+        real,    optional, intent(in)  :: min_signal_pct
+        integer, optional, intent(out) :: n_signal
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask )

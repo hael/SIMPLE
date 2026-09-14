@@ -4081,7 +4081,6 @@ Uses:
 - `simple_sigma2_bootstrap`
 - `simple_sigma2_state`
 - `simple_sigma2_state_file`
-- `simple_vol_pproc_policy`
 
 ---
 ## Module: simple_aff_prop
@@ -4169,6 +4168,7 @@ Private symbols:
 - `set_name` — subroutine
 - `set_num` — subroutine
 - `set_occupancy` — subroutine
+- `set_resname` — subroutine
 - `set_resnum` — subroutine
 - `split_tokens` — subroutine
 - `strip_digits` — function
@@ -4355,6 +4355,34 @@ Private symbols:
 - `read_sigma2_bootstrap_selection` — subroutine
 - `sanity_check_calc_pspec_input` — subroutine
 - `write_sigma2_bootstrap_selection` — subroutine
+
+---
+## Module: simple_calpha_finder
+
+Files:
+- `main/nano/simple_calpha_finder.f90`
+
+Uses:
+- `simple_atoms`
+- `simple_core_module_api`
+- `simple_image`
+
+Public symbols:
+- `calpha_finder` — type
+
+Private symbols:
+- `build_rotation_grid` — subroutine
+- `fill_rotated_target` — subroutine
+- `interpolation_cell` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `sample_target` — subroutine
+- `search` — subroutine
+- `suppress_neighborhood` — subroutine
+- `update_scores` — subroutine
+- `write_candidate_files` — subroutine
+- `write_candidates` — subroutine
+- `zero_score_border` — subroutine
 
 ---
 ## Module: simple_cartesian_fourier
@@ -5188,6 +5216,7 @@ Uses:
 - `simple_commanders_reproject`
 - `simple_estimate_ssnr`
 - `simple_external_reference_pose_initialization`
+- `simple_final_rec`
 - `simple_procimgstk`
 - `simple_refine3d_fnames`
 
@@ -5292,6 +5321,7 @@ Files:
 
 Uses:
 - `simple_atoms`
+- `simple_calpha_finder`
 - `simple_commanders_api`
 - `simple_commanders_resolest`
 - `simple_commanders_sim`
@@ -5309,6 +5339,7 @@ Public symbols:
 - `commander_core_atoms_analysis` — type
 - `commander_crys_score` — type
 - `commander_detect_atoms` — type
+- `commander_detect_calpha` — type
 - `commander_map2model_fsc` — type
 - `commander_map_validate` — type
 - `commander_model_validate` — type
@@ -5325,6 +5356,7 @@ Public symbols:
 - `exec_core_atoms_analysis` — subroutine
 - `exec_crys_score` — subroutine
 - `exec_detect_atoms` — subroutine
+- `exec_detect_calpha` — subroutine
 - `exec_map2model_fsc` — subroutine
 - `exec_map_validate` — subroutine
 - `exec_model_validate` — subroutine
@@ -5545,6 +5577,7 @@ Public symbols:
 - `derive_flex_pca_band` — subroutine
 - `ensure_canonical_sigma_state` — subroutine
 - `exec_flex_pca` — subroutine
+- `pickup_project_consensus_volume` — subroutine
 
 ---
 ## Module: simple_commanders_imgops
@@ -5745,6 +5778,7 @@ Uses:
 - `simple_commanders_api`
 - `simple_core_module_api`
 - `simple_extract_strategy`
+- `simple_gui_communicator`
 - `simple_parameters`
 - `simple_pick_strategy`
 - `simple_picker_iter`
@@ -5790,6 +5824,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_ctf_estimate_strategy`
 - `simple_gen_pspecs_and_thumbs_strategy`
+- `simple_gui_communicator`
 - `simple_mini_stream_utils`
 - `simple_motion_correct_strategy`
 - `simple_motion_correct_utils`
@@ -5872,6 +5907,7 @@ Files:
 Uses:
 - `simple_commanders_api`
 - `simple_commanders_project_ptcl`
+- `simple_gui_communicator`
 - `simple_imgarr_utils`
 - `simple_projfile_utils`
 - `simple_srch_sort_loc`
@@ -5923,6 +5959,7 @@ Files:
 
 Uses:
 - `simple_commanders_api`
+- `simple_gui_communicator`
 - `simple_stream_watcher`
 
 Public symbols:
@@ -6059,8 +6096,10 @@ Uses:
 - `simple_commanders_flex_pca`
 - `simple_commanders_rec`
 - `simple_core_module_api`
+- `simple_defs`
 - `simple_estimate_ssnr`
 - `simple_external_reference_pose_initialization`
+- `simple_final_rec`
 - `simple_halfmap_diagnostics`
 - `simple_pftc_srch_api`
 - `simple_refine3d_fnames`
@@ -6101,6 +6140,7 @@ Public symbols:
 - `read_update_coverage` — subroutine
 - `reconstruct_all_particles_volumes` — subroutine
 - `register_bootstrap_rec_outputs` — subroutine
+- `reject_input_volumes` — subroutine
 - `run_classify3D_refs` — subroutine
 - `run_classify3D_refs_missing_update` — subroutine
 - `run_flex_pca` — subroutine
@@ -6118,7 +6158,6 @@ Public symbols:
 - `set_refine3D_states_sampling` — subroutine
 - `validate_classify3D_refs_filtering` — subroutine
 - `validate_classify3D_refs_search_mode` — subroutine
-- `validate_input_volumes` — subroutine
 - `validate_input_volumes` — subroutine
 - `validate_refine3D_states_combine_eo` — subroutine
 - `validate_refine3D_states_filtering` — subroutine
@@ -6249,11 +6288,9 @@ Uses:
 
 Public symbols:
 - `commander_assign_optics_groups` — type
-- `commander_export_manifoldem_starproject` — type
 - `commander_export_starproject` — type
 - `commander_import_starproject` — type
 - `exec_assign_optics_groups` — subroutine
-- `exec_export_manifoldem_starproject` — subroutine
 - `exec_export_starproject` — subroutine
 - `exec_import_starproject` — subroutine
 
@@ -6680,6 +6717,8 @@ Files:
 - `main/commanders/test/simple_commanders_test_single.f90`
 
 Uses:
+- `simple_atoms`
+- `simple_calpha_finder`
 - `simple_commanders_api`
 - `simple_commanders_atoms`
 - `simple_commanders_project_core`
@@ -6687,6 +6726,7 @@ Uses:
 - `simple_commanders_reproject`
 - `simple_commanders_sim`
 - `simple_commanders_stkops`
+- `simple_molecule_data`
 - `single_commanders_nano2d`
 - `single_commanders_nano3d`
 - `single_commanders_trajectory`
@@ -6694,11 +6734,16 @@ Uses:
 Public symbols:
 - `commander_test_atoms_stats` — type
 - `commander_test_detect_atoms` — type
+- `commander_test_detect_calpha` — type
+- `commander_test_detect_calpha_molecules` — type
 - `commander_test_simulate_nanoparticle` — type
 - `commander_test_single_workflow` — type
 - `enter_workflow_stage` — subroutine
+- `evaluate_molecule` — subroutine
 - `exec_test_atoms_stats` — subroutine
 - `exec_test_detect_atoms` — subroutine
+- `exec_test_detect_calpha` — subroutine
+- `exec_test_detect_calpha_molecules` — subroutine
 - `exec_test_simulate_nanoparticle` — subroutine
 - `exec_test_single_workflow` — subroutine
 - `make_glc_trajectory_oris` — subroutine
@@ -6881,11 +6926,6 @@ Uses:
 - `simple_dock_vols`
 - `simple_halfmap_diagnostics`
 - `simple_image_msk`
-- `simple_imgproc`
-- `simple_kpca_svd`
-- `simple_pca`
-- `simple_pca_svd`
-- `simple_ppca`
 - `simple_procimgstk`
 - `simple_projector`
 - `simple_segmentation`
@@ -6902,7 +6942,6 @@ Public symbols:
 - `commander_dock_volpair` — type
 - `commander_noisevol` — type
 - `commander_postprocess` — type
-- `commander_ppca_volvar` — type
 - `commander_sharpvol` — type
 - `commander_symaxis_search` — type
 - `commander_symmetrize_map` — type
@@ -6914,7 +6953,6 @@ Public symbols:
 - `exec_dock_volpair` — subroutine
 - `exec_noisevol` — subroutine
 - `exec_postprocess` — subroutine
-- `exec_ppca_volvar` — subroutine
 - `exec_sharpvol` — subroutine
 - `exec_symaxis_search` — subroutine
 - `exec_symmetrize_map` — subroutine
@@ -7954,7 +7992,6 @@ Uses:
 - `simple_commanders_flex_pca`
 - `simple_commanders_imgops`
 - `simple_commanders_resolest`
-- `simple_commanders_volops`
 
 Public symbols:
 - `exec_denoise_commander` — subroutine
@@ -8209,6 +8246,7 @@ Files:
 
 Uses:
 - `simple_cmdline`
+- `simple_commanders_atoms`
 - `simple_commanders_reproject`
 - `simple_commanders_volops`
 
@@ -8380,6 +8418,26 @@ Private symbols:
 - `test_simple_mkdir_dir_exists_chdir_getcwd_rmdir` — subroutine
 - `test_simple_touch_rename_abspath` — subroutine
 - `test_write_singlelineoftext_and_read_exit_code` — subroutine
+
+---
+## Module: simple_final_rec
+
+Files:
+- `main/simple_final_rec.f90`
+
+Uses:
+- `simple_abinitio_utils`
+- `simple_commanders_api`
+- `simple_parameters`
+- `simple_refine3d_fnames`
+- `simple_sigma2_files`
+- `simple_vol_pproc_policy`
+
+Public symbols:
+- `calc_final_rec` — subroutine
+
+Private symbols:
+- `prep_final_rec_cline` — subroutine
 
 ---
 ## Module: simple_finch
@@ -8580,6 +8638,7 @@ Uses:
 - `simple_parameters`
 - `simple_qsys_funs`
 - `simple_reconstructor`
+- `simple_rnd`
 - `simple_sigma2_files`
 - `simple_sp_project`
 - `simple_srch_sort_loc`
@@ -8589,6 +8648,7 @@ Public symbols:
 - `test_flex_pca_auto_settings` — subroutine
 - `test_flex_pca_embedding_cache_io` — subroutine
 - `test_flex_pca_kernel_bandwidth` — subroutine
+- `test_flex_pca_population_floor` — subroutine
 - `test_flex_pca_state_weights` — subroutine
 
 Private symbols:
@@ -8610,6 +8670,7 @@ Private symbols:
 - `mask_state_weights_by_half` — subroutine
 - `orth_block` — subroutine
 - `path_latent_targets` — subroutine
+- `place_states_with_population_floor` — subroutine
 - `project_onto_target_polyline` — subroutine
 - `read_embedding_cache` — subroutine
 - `read_external_targets` — subroutine
@@ -9090,7 +9151,6 @@ Uses:
 - `simple_gui_metadata_api`
 - `simple_sp_project`
 - `simple_string`
-- `simple_syslib`
 - `simple_test_utils`
 
 Public symbols:
@@ -9133,7 +9193,8 @@ Public symbols:
 - `gui_comm_args` — type
 
 Private symbols:
-- `add_metadata` — subroutine
+- `add_metadata_1` — subroutine
+- `add_metadata_2` — subroutine
 - `communication_worker` — subroutine
 - `kill_gui_communicator` — subroutine
 - `new` — subroutine
@@ -9155,6 +9216,7 @@ Uses:
 - `simple_gui_metadata_micrograph`
 - `simple_gui_metadata_optics_group`
 - `simple_gui_metadata_project`
+- `simple_gui_metadata_ptcl`
 - `simple_gui_metadata_stream_opening2d`
 - `simple_gui_metadata_stream_optics_assignment`
 - `simple_gui_metadata_stream_particle_sieving`
@@ -9299,10 +9361,18 @@ Uses:
 - `simple_gui_metadata_base`
 - `simple_gui_metadata_cavg2d`
 - `simple_gui_metadata_micrograph`
+- `simple_gui_metadata_ptcl`
 - `simple_gui_metadata_types`
+- `simple_gui_utils`
+- `simple_image`
+- `simple_math`
+- `simple_motion_gain_helpers`
+- `simple_nrtxtfile`
+- `simple_procimgstk`
 - `simple_sp_project`
 - `simple_string`
 - `simple_string_utils`
+- `simple_syslib`
 - `unix`
 
 Public symbols:
@@ -9312,8 +9382,33 @@ Private symbols:
 - `get` — function
 - `gui_metadata_cavg2D_stage` — type
 - `jsonise_override` — function
-- `set_1` — subroutine
-- `set_2` — subroutine
+- `set` — subroutine
+
+---
+## Module: simple_gui_metadata_ptcl
+
+Files:
+- `utils/gui/metadata/simple_gui_metadata_ptcl.f90`
+
+Uses:
+- `json_module`
+- `simple_defs`
+- `simple_error`
+- `simple_gui_metadata_base`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_types`
+- `simple_string`
+
+Public symbols:
+- `gui_metadata_ptcl` — type
+
+Private symbols:
+- `get` — function
+- `get_i` — function
+- `get_i_max` — function
+- `get_idx` — function
+- `jsonise_override` — function
+- `set` — subroutine
 
 ---
 ## Module: simple_gui_metadata_stream_opening2D
@@ -9538,6 +9633,7 @@ Private symbols:
 - `test_jsonise_histogram` — subroutine
 - `test_jsonise_micrograph` — subroutine
 - `test_jsonise_optics_group` — subroutine
+- `test_jsonise_ptcl` — subroutine
 - `test_jsonise_stream_initial_picking` — subroutine
 - `test_jsonise_stream_opening2D` — subroutine
 - `test_jsonise_stream_optics_assignment` — subroutine
@@ -9554,6 +9650,7 @@ Private symbols:
 - `test_serialise_histogram` — subroutine
 - `test_serialise_micrograph` — subroutine
 - `test_serialise_optics_group` — subroutine
+- `test_serialise_ptcl` — subroutine
 - `test_serialise_stream_initial_picking` — subroutine
 - `test_serialise_stream_opening2D` — subroutine
 - `test_serialise_stream_optics_assignment` — subroutine
@@ -9568,6 +9665,7 @@ Private symbols:
 - `test_set_get_histogram` — subroutine
 - `test_set_get_micrograph` — subroutine
 - `test_set_get_optics_group` — subroutine
+- `test_set_get_ptcl` — subroutine
 - `test_set_get_stream_initial_picking` — subroutine
 - `test_set_get_stream_opening2D` — subroutine
 - `test_set_get_stream_optics_assignment` — subroutine
@@ -10052,7 +10150,6 @@ Uses:
 
 Public symbols:
 - `make_pcavecs` — subroutine
-- `make_pcavol` — subroutine
 
 ---
 ## Module: simple_ipc_tcp_socket_client
@@ -14413,7 +14510,6 @@ Private symbols:
 - `cluster_tiltinfo` — subroutine
 - `export_cls2D` — subroutine
 - `export_iter3D` — subroutine
-- `export_manifoldem_ptcls3D` — subroutine
 - `export_mics` — subroutine
 - `export_opticsgroups` — subroutine
 - `export_ptcls2D` — subroutine
@@ -16531,6 +16627,8 @@ Public symbols:
 - `construct_test_single_programs` — subroutine
 - `new_atoms_stats` — subroutine
 - `new_detect_atoms` — subroutine
+- `new_detect_calpha` — subroutine
+- `new_detect_calpha_molecules` — subroutine
 - `new_simulate_nanoparticle` — subroutine
 - `new_single_workflow` — subroutine
 
@@ -16878,6 +16976,7 @@ Public symbols:
 - `new_abinitio2D_chunks` — subroutine
 - `new_abinitio2D_descriptor` — subroutine
 - `new_bootstrap_cavgs` — subroutine
+- `new_cls_split` — subroutine
 - `new_make_cavgs` — subroutine
 - `new_map_cavgs_selection` — subroutine
 - `new_sample_classes` — subroutine
@@ -16895,15 +16994,12 @@ Uses:
 
 Public symbols:
 - `construct_denoise_programs` — subroutine
-- `new_cls_split` — subroutine
 - `new_denoise_project` — subroutine
-- `new_flex_pca` — subroutine
 - `new_icm2D` — subroutine
 - `new_icm3D` — subroutine
 - `new_map_params_from_den` — subroutine
 - `new_ppca_denoise` — subroutine
 - `new_ppca_denoise_classes` — subroutine
-- `new_ppca_volvar` — subroutine
 
 ---
 ## Module: simple_ui_descriptor_types
@@ -16948,7 +17044,6 @@ Public symbols:
 - `construct_filter_programs` — subroutine
 - `new_filter` — subroutine
 - `new_nu_filt3D` — subroutine
-- `new_postprocess_nu` — subroutine
 - `new_uniform_filter2D` — subroutine
 - `new_uniform_filter3D` — subroutine
 
@@ -16978,6 +17073,22 @@ Private symbols:
 - `set_ref_ui_program_str` — subroutine
 
 ---
+## Module: simple_ui_heterogeneity
+
+Files:
+- `main/ui/simple/simple_ui_heterogeneity.f90`
+
+Uses:
+- `simple_ui_modules`
+
+Public symbols:
+- `construct_heterogeneity_programs` — subroutine
+- `new_classify3D_refs` — subroutine
+- `new_flex_pca` — subroutine
+- `new_ptcl3D_state_consensus` — subroutine
+- `new_refine3D_states` — subroutine
+
+---
 ## Module: simple_ui_image
 
 Files:
@@ -16994,6 +17105,8 @@ Public symbols:
 - `new_ctfops` — subroutine
 - `new_normalize` — subroutine
 - `new_scale` — subroutine
+- `new_split_` — subroutine
+- `new_split_stack` — subroutine
 - `new_stack` — subroutine
 - `new_stackops` — subroutine
 
@@ -17009,6 +17122,7 @@ Uses:
 Public symbols:
 - `construct_mask_programs` — subroutine
 - `new_auto_spher_mask` — subroutine
+- `new_automask` — subroutine
 - `new_automask2D` — subroutine
 - `new_mask` — subroutine
 
@@ -17056,10 +17170,7 @@ Uses:
 Public symbols:
 - `construct_other_programs` — subroutine
 - `new_cif2pdb` — subroutine
-- `new_fractionate_movies` — subroutine
 - `new_sigma2_convert` — subroutine
-- `new_split_` — subroutine
-- `new_split_stack` — subroutine
 
 ---
 ## Module: simple_ui_param
@@ -17099,6 +17210,20 @@ Public symbols:
 - `set_ui_params` — subroutine
 
 ---
+## Module: simple_ui_postprocess
+
+Files:
+- `main/ui/simple/simple_ui_postprocess.f90`
+
+Uses:
+- `simple_ui_modules`
+
+Public symbols:
+- `construct_postprocess_programs` — subroutine
+- `new_postprocess` — subroutine
+- `new_postprocess_nu` — subroutine
+
+---
 ## Module: simple_ui_preproc
 
 Files:
@@ -17112,6 +17237,7 @@ Public symbols:
 - `new_assign_optics_groups` — subroutine
 - `new_ctf_estimate` — subroutine
 - `new_extract` — subroutine
+- `new_fractionate_movies` — subroutine
 - `new_gen_pspecs_and_thumbs` — subroutine
 - `new_motion_correct` — subroutine
 - `new_particle_sieving` — subroutine
@@ -17208,7 +17334,6 @@ Uses:
 
 Public symbols:
 - `construct_project_programs` — subroutine
-- `new_export_manifoldem_starproject` — subroutine
 - `new_export_relion` — subroutine
 - `new_export_starproject` — subroutine
 - `new_extract_subproj` — subroutine
@@ -17222,7 +17347,6 @@ Public symbols:
 - `new_print_project_field` — subroutine
 - `new_print_project_info` — subroutine
 - `new_prune_project` — subroutine
-- `new_ptcl3D_state_consensus` — subroutine
 - `new_reimport_particles` — subroutine
 - `new_replace_project_field` — subroutine
 - `new_selection` — subroutine
@@ -17230,6 +17354,20 @@ Public symbols:
 - `new_validate_projfile` — subroutine
 - `new_write_mic_filetab` — subroutine
 - `new_zero_project_shifts` — subroutine
+
+---
+## Module: simple_ui_reconstruct3D
+
+Files:
+- `main/ui/simple/simple_ui_reconstruct3D.f90`
+
+Uses:
+- `simple_ui_modules`
+
+Public symbols:
+- `construct_reconstruct3D_programs` — subroutine
+- `new_bootstrap_rec3D` — subroutine
+- `new_reconstruct3D` — subroutine
 
 ---
 ## Module: simple_ui_refine3D
@@ -17242,14 +17380,8 @@ Uses:
 
 Public symbols:
 - `construct_refine3D_programs` — subroutine
-- `new_automask` — subroutine
-- `new_bootstrap_rec3D` — subroutine
-- `new_classify3D_refs` — subroutine
-- `new_postprocess` — subroutine
-- `new_reconstruct3D` — subroutine
 - `new_refine3D` — subroutine
 - `new_refine3D_auto` — subroutine
-- `new_refine3D_states` — subroutine
 
 ---
 ## Module: simple_ui_res
@@ -17296,13 +17428,16 @@ Uses:
 - `simple_ui_dock`
 - `simple_ui_filter`
 - `simple_ui_hash`
+- `simple_ui_heterogeneity`
 - `simple_ui_image`
 - `simple_ui_mask`
 - `simple_ui_ori`
 - `simple_ui_other`
+- `simple_ui_postprocess`
 - `simple_ui_preproc`
 - `simple_ui_print`
 - `simple_ui_project`
+- `simple_ui_reconstruct3d`
 - `simple_ui_refine3d`
 - `simple_ui_res`
 - `simple_ui_sim`
@@ -17455,6 +17590,7 @@ Uses:
 Public symbols:
 - `construct_volume_programs` — subroutine
 - `new_center` — subroutine
+- `new_detect_calpha` — subroutine
 - `new_reproject` — subroutine
 - `new_volops` — subroutine
 
@@ -18159,7 +18295,6 @@ Uses:
 - `simple_projector_pft_batch`
 - `simple_ptcl_cache`
 - `simple_ran_tabu`
-- `simple_sigma2_files`
 - `simple_sp_project`
 - `simple_tent_smooth`
 
@@ -18174,7 +18309,6 @@ Public symbols:
 - `cache_nu_extension_frontier_dmats` — subroutine
 - `cache_nu_highres_extension_frontier_after_selection` — subroutine
 - `calc_class_center_shift` — subroutine
-- `calc_final_rec` — subroutine
 - `calc_heatmap` — subroutine
 - `calc_lplim_final_stage` — function
 - `calc_rec` — subroutine
@@ -18237,7 +18371,6 @@ Public symbols:
 - `pack_nu_dmat_to_mask_vector` — subroutine
 - `pick` — subroutine
 - `prep_class_command_lines` — subroutine
-- `prep_final_rec_cline` — subroutine
 - `prepare_nu_smooth_norm` — subroutine
 - `print_states` — subroutine
 - `promote_stage_lp_from_fsc05` — subroutine

@@ -221,6 +221,7 @@
       - `simple_eul_prob_tab_neigh.f90` — neighborhood extension of probabilistic 3D search table.
       - `simple_eul_prob_tab_utils.f90` — shared utility routines for probabilistic alignment tables
       - `simple_external_reference_pose_initialization.f90` — fixed-reference CC pose initialization shared by 3D refinement workflows
+      - `simple_final_rec.f90` — the shared final all-particle reconstruction at native sampling
       - `simple_micrograph_generator.f90` — used for generating dose fractionated micrographs from movies
       - `simple_particle_extractor.f90` — core functionality for extracting particles from micrographs
       - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb for power spectrum and thumbnails generation
@@ -432,6 +433,7 @@
         - `simple_motion_patched.f90` — patched-based anisotropic motion correction
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
+        - `simple_calpha_finder.f90` — Buccaneer-inspired oriented target detection of alpha carbons in cryo-EM maps
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
         - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building in SINGLE
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
@@ -626,13 +628,16 @@
           - `simple_ui_denoise.f90` — module defining the user interfaces for denoising programs in the simple_exec suite
           - `simple_ui_dock.f90` — module defining the user interfaces for docking programs in the simple_exec suite
           - `simple_ui_filter.f90` — module defining the user interfaces for filtering programs in the simple_exec suite
+          - `simple_ui_heterogeneity.f90` — module defining the user interfaces for heterogeneity-analysis programs in the simple_exec suite
           - `simple_ui_image.f90` — module defining the user interfaces for general image processing programs in the simple_exec suite
           - `simple_ui_mask.f90` — module defining the user interfaces for masking programs in the simple_exec suite
           - `simple_ui_ori.f90` — module defining the user interfaces for orientation processing programs in the simple_exec suite
           - `simple_ui_other.f90` — module defining the user interfaces for miscellaneous programs in the simple_exec suite
           - `simple_ui_preproc.f90` — module defining the user interfaces for pre-processing programs in the simple_exec suite
           - `simple_ui_print.f90` — module defining the user interfaces for printing programs in the simple_exec suite
+          - `simple_ui_postprocess.f90` — module defining the user interfaces for map post-processing programs in the simple_exec suite
           - `simple_ui_project.f90` — module defining the user interfaces for project management programs in the simple_exec suite
+          - `simple_ui_reconstruct3D.f90` — module defining the user interfaces for 3D reconstruction programs in the simple_exec suite
           - `simple_ui_refine3D.f90` — module defining the user interfaces for 3D refinement programs in the simple_exec suite
           - `simple_ui_res.f90` — module defining the user interfaces for resolution estimation programs in the simple_exec suite
           - `simple_ui_sim.f90` — module defining the user interfaces for simulation programs in the simple_exec suite
@@ -746,6 +751,7 @@
           - `simple_gui_metadata_micrograph.f90` — GUI metadata type for a single micrograph and its particle coordinates.
           - `simple_gui_metadata_optics_group.f90` — GUI metadata type for an optics group and its beam-shift scatter plot.
           - `simple_gui_metadata_project.f90` — GUI metadata for the top-level SIMPLE project â populated from a project file
+          - `simple_gui_metadata_ptcl.f90` — GUI metadata type for a single particle entry (sprite-sheet position + stats).
           - `simple_gui_metadata_tester.f90` — Unit tests for all gui_metadata types â lifecycle, serialisation, and JSON serialisation
           - `simple_gui_metadata_timeplot.f90` — GUI metadata type for a time-series plot with one or two data traces.
           - `simple_gui_metadata_types.f90` — Integer type-tag constants for all GUI metadata kinds.

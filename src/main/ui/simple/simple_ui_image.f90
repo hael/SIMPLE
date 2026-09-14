@@ -12,6 +12,8 @@ type(ui_program), target :: normalize_
 type(ui_program), target :: scale
 type(ui_program), target :: stack
 type(ui_program), target :: stackops
+type(ui_program), target :: split_
+type(ui_program), target :: split_stack
 
 contains
 
@@ -25,6 +27,8 @@ contains
         call new_scale(prgtab)
         call new_stack(prgtab)
         call new_stackops(prgtab)
+        call new_split_(prgtab)
+        call new_split_stack(prgtab)
     end subroutine construct_image_programs
 
 subroutine new_binarize( prgtab )
@@ -408,5 +412,64 @@ subroutine new_binarize( prgtab )
         ! add to ui_hash
         call add_ui_program('stackops', stackops, prgtab, UI_CATEGORY)
     end subroutine new_stackops
+
+    subroutine new_split_( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call split_%new(&
+        &'split',&                                   ! name
+        &'Split a stack into evenly sized substacks',& ! summary
+        &'is a program for splitting a stack into evenly partitioned substacks',& ! help
+        &'simple_exec',&                             ! executable
+        &.false.)                                    ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call split_%add_input(UI_IMG, stk, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        ! parameter input/output
+        call split_%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call split_%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('split', split_, prgtab, UI_CATEGORY)
+    end subroutine new_split_
+
+    subroutine new_split_stack( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call split_stack%new(&
+        &'split_stack',&                                              ! name
+        &'Split a project stack into a chosen number of substacks',& ! summary
+        &'is a program for splitting a stack into nparts substacks',& ! help
+        &'simple_exec',&                                              ! executable
+        &.true.)                                                      ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call split_stack%add_input(UI_PARM, 'nparts', 'num', 'Number of parts balanced splitting of the stack', '# parts', '# parts', .true., 1.0, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('split_stack', split_stack, prgtab, UI_CATEGORY)
+    end subroutine new_split_stack
 
 end module simple_ui_image
