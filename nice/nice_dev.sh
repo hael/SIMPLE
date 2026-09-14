@@ -6,6 +6,9 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)
 repo_dir=$(cd -- "$script_dir/.." >/dev/null 2>&1 && pwd)
 build_dir=${SIMPLE_BUILD_DIR:-"$repo_dir/build"}
 python_bin="$build_dir/nice/venv/bin/python3"
+tailwind_bin="$build_dir/nice/venv/bin/tailwindcss"
+tailwind_input="$script_dir/nice_lite/templates/tailwind.css"
+tailwind_output="$script_dir/nice_lite/static/nice_lite/nice_lite.css"
 manage_py="$script_dir/manage.py"
 listen_addr=${NICE_DEV_ADDR:-"127.0.0.1:8000"}
 
@@ -35,6 +38,12 @@ if [[ ! -x "$python_bin" ]]; then
     exit 1
 fi
 
+if [[ ! -x "$tailwind_bin" ]]; then
+    printf 'NICE Tailwind executable not found: %s\n' "$tailwind_bin" >&2
+    printf 'Build SIMPLE once with NICE enabled, or set SIMPLE_BUILD_DIR.\n' >&2
+    exit 1
+fi
+
 if [[ ! -f "$manage_py" ]]; then
     printf 'NICE manage.py not found: %s\n' "$manage_py" >&2
     exit 1
@@ -46,6 +55,18 @@ export PATH="$build_dir/bin:$PATH"
 export LD_LIBRARY_PATH="$build_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 cd "$script_dir"
+
+# Tailwind extracts native modules into TMPDIR, so use the writable repository
+# instead of a system /tmp mount that may reject executable mappings.
+printf 'Building NICE development CSS\n'
+tailwind_tmpdir=$(mktemp -d "$repo_dir/.tailwind-tmp.XXXXXX")
+trap 'rmdir -- "$tailwind_tmpdir" 2>/dev/null || true' EXIT
+TMPDIR="$tailwind_tmpdir" "$tailwind_bin" \
+    -i "$tailwind_input" \
+    -o "$tailwind_output" \
+    --minify
+rmdir -- "$tailwind_tmpdir"
+trap - EXIT
 
 printf 'Preparing NICE development database\n'
 "$python_bin" "$manage_py" migrate --noinput
