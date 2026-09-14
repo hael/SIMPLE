@@ -17,8 +17,11 @@ private
 
 ! Types
 public :: cartesian_pose_data, pose_cont_reference_workspace
-public :: pose_cont_pose, pose_cont_limits
+public :: pose_cont_pose, pose_cont_limits, pose_cont_config
 public :: pose_cont_stage_result, pose_cont_transaction_result, pose_cont_sigma_result
+
+! Refinement routes
+public :: POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 
 ! Status codes
 public :: POSE_CONT_NOT_ATTEMPTED, POSE_CONT_INVALID_PREPARATION
@@ -33,6 +36,8 @@ public :: nearest_pose_cont_inplane_index
 
 integer, parameter  :: POSE_CONT_NOT_ATTEMPTED       = 0
 integer, parameter  :: POSE_CONT_INVALID_PREPARATION = 7
+integer, parameter  :: POSE_CONT_ROUTE_SHIFT_THEN_JOINT = 1
+integer, parameter  :: POSE_CONT_ROUTE_JOINT            = 2
 integer, parameter  :: POSE_CONT_MAXITS        = 40
 real(dp), parameter :: POSE_CONT_ROTATION_STEP = 0.1_dp
 real(dp), parameter :: POSE_CONT_MAX_ROTATION  = 15._dp*real(PI, dp)/180._dp
@@ -48,6 +53,13 @@ type :: pose_cont_limits
     real(dp) :: shift_step_bound = 0._dp
     real(dp) :: max_total_shift = 0._dp
 end type pose_cont_limits
+
+!> Algorithm choices for one pose_cont transaction.
+!! Additional refine3D-facing pose_cont policy belongs here rather than in the
+!! numerical limits or the Cartesian LM owner.
+type :: pose_cont_config
+    integer :: route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
+end type pose_cont_config
 
 !> Per-shell residual accounting evaluated at one terminal particle pose.
 type :: pose_cont_sigma_result
@@ -70,7 +82,7 @@ type :: pose_cont_stage_result
     real(dp) :: max_shift_step = 0._dp
 end type pose_cont_stage_result
 
-!> Transactional result for shift-only staging followed by joint pose refinement.
+!> Transactional result for either supported local LM route.
 type :: pose_cont_transaction_result
     ! Terminal transaction decision and returned pose.
     integer :: status = POSE_CONT_NOT_ATTEMPTED
@@ -271,20 +283,21 @@ contains
         end if
     end subroutine prepare_pose_cont_particle
 
-    subroutine refine_pose_cont_particle(self, state, even, seed, data, limits, result)
+    subroutine refine_pose_cont_particle(self, state, even, seed, data, config, limits, result)
         class(pose_cont_reference_workspace), intent(in) :: self
         integer, intent(in) :: state
         logical, intent(in) :: even
         type(pose_cont_pose), intent(in) :: seed
         type(cartesian_pose_data), intent(in) :: data
+        type(pose_cont_config), intent(in) :: config
         type(pose_cont_limits), intent(in) :: limits
         type(pose_cont_transaction_result), intent(out) :: result
 
         if (.not. self%is_ready(state, even)) THROW_HARD('pose_cont reference slot is not ready')
         if (even) then
-            call run_pose_cont_transaction(self%even(state)%refiner, seed, data, limits, result)
+            call run_pose_cont_transaction(self%even(state)%refiner, seed, data, config, limits, result)
         else
-            call run_pose_cont_transaction(self%odd(state)%refiner, seed, data, limits, result)
+            call run_pose_cont_transaction(self%odd(state)%refiner, seed, data, config, limits, result)
         end if
     end subroutine refine_pose_cont_particle
 
@@ -310,12 +323,13 @@ contains
         end if
     end subroutine pose_cont_sigma_contribution
 
-    !> Run shift-only staging followed by joint five-parameter LM, then commit
-    !! only when the complete transaction improves upon the original seed.
-    subroutine run_pose_cont_transaction(refiner, seed, data, limits, result)
+    !> Run the configured local LM route, then commit only when the complete
+    !! transaction improves upon the original seed.
+    subroutine run_pose_cont_transaction(refiner, seed, data, config, limits, result)
         class(cartesian_pose_refiner), intent(in) :: refiner
         type(pose_cont_pose), intent(in) :: seed
         type(cartesian_pose_data), intent(in) :: data
+        type(pose_cont_config), intent(in) :: config
         type(pose_cont_limits), intent(in) :: limits
         type(pose_cont_transaction_result), intent(out) :: result
         real(dp) :: gradient(5)
@@ -351,33 +365,44 @@ contains
             return
         end if
 
-        ! Stage 1: refine translation only, holding the seed rotation fixed.
         staged_pose = seed
-        shift_config = shift_lm_config(shift_step_bound=limits%shift_step_bound, &
-            &max_iterations=POSE_CONT_MAXITS)
-        call refiner%refine_shift_lm(staged_pose%rotmat, staged_pose%shift, data, &
-            &shift_config, lm_result, diagnostics)
-        call refiner%prepared_objective_gradient(staged_pose%rotmat, staged_pose%shift, data, &
-            &shift_objective_after, gradient)
-        call set_stage_result(result%shift_stage, lm_result, diagnostics, &
-            &result%objective_before, shift_objective_after)
-        result%shift_endpoint = staged_pose
+        shift_objective_after = result%objective_before
 
-        ! Enforce the caller's cumulative native-pixel shift bound explicitly.
-        if (sqrt(sum((staged_pose%shift - seed%shift)**2)) > &
-            &limits%max_total_shift + 10._dp*epsilon(1._dp)) then
-            result%shift_stage%status = LM_STEP_BOUND_REJECTED
-            result%shift_stage%bound_hits = result%shift_stage%bound_hits + 1
-        end if
-        call add_stage_accounting(result, result%shift_stage)
-        if (aborts_pose_cont_route(result%shift_stage%status)) then
-            ! A failed shift stage cannot supply a trustworthy joint-stage seed.
-            result%status = result%shift_stage%status
-            result%objective_after = result%objective_before
-            return
-        end if
+        select case (config%route)
+        case (POSE_CONT_ROUTE_SHIFT_THEN_JOINT)
+            ! Stage 1: refine translation only, holding the seed rotation fixed.
+            shift_config = shift_lm_config(shift_step_bound=limits%shift_step_bound, &
+                &max_iterations=POSE_CONT_MAXITS)
+            call refiner%refine_shift_lm(staged_pose%rotmat, staged_pose%shift, data, &
+                &shift_config, lm_result, diagnostics)
+            call refiner%prepared_objective_gradient(staged_pose%rotmat, staged_pose%shift, data, &
+                &shift_objective_after, gradient)
+            call set_stage_result(result%shift_stage, lm_result, diagnostics, &
+                &result%objective_before, shift_objective_after)
+            result%shift_endpoint = staged_pose
 
-        ! Stage 2: refine three rotations and two shifts from the shift endpoint.
+            ! Enforce the caller's cumulative native-pixel shift bound explicitly.
+            if (sqrt(sum((staged_pose%shift - seed%shift)**2)) > &
+                &limits%max_total_shift + 10._dp*epsilon(1._dp)) then
+                result%shift_stage%status = LM_STEP_BOUND_REJECTED
+                result%shift_stage%bound_hits = result%shift_stage%bound_hits + 1
+            end if
+            call add_stage_accounting(result, result%shift_stage)
+            if (aborts_pose_cont_route(result%shift_stage%status)) then
+                ! A failed shift stage cannot supply a trustworthy joint-stage seed.
+                result%status = result%shift_stage%status
+                result%objective_after = result%objective_before
+                return
+            end if
+        case (POSE_CONT_ROUTE_JOINT)
+            ! Direct joint LM starts from the original seed. The shift stage
+            ! remains explicitly not attempted in the returned accounting.
+        case default
+            error stop 'pose_cont transaction received an invalid route'
+        end select
+
+        ! Joint stage: refine three rotations and two shifts from the route's
+        ! current endpoint (the shift result or the original seed).
         ! Both cumulative guards remain anchored at the original transaction seed.
         joint_config = pose_lm_config(rotation_scale=POSE_CONT_ROTATION_STEP, &
             &shift_step_bound=limits%shift_step_bound, max_iterations=POSE_CONT_MAXITS)

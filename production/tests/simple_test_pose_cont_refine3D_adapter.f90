@@ -3,13 +3,15 @@ use simple_core_module_api, only: CTFFLAG_NO, ctfparams, dp, euler2m
 use simple_image, only: image
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
-    &pose_cont_pose, pose_cont_limits, pose_cont_transaction_result, pose_cont_sigma_result, &
+    &pose_cont_pose, pose_cont_limits, pose_cont_config, &
+    &pose_cont_transaction_result, pose_cont_sigma_result, &
     &cartesian_pose_data, &
     &write_pose_cont_reference_artifact, &
     &remove_pose_cont_reference_artifacts, prepare_pose_cont_observation, &
     &shift_native_to_crop, shift_crop_to_native, nearest_pose_cont_inplane_index, &
     &POSE_CONT_INVALID_PREPARATION, LM_ACCEPTED_IMPROVEMENT, &
-    &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED
+    &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED, POSE_CONT_NOT_ATTEMPTED, &
+    &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 implicit none
 
 integer, parameter :: TEST_BOX = 16
@@ -108,6 +110,7 @@ contains
         type(pose_cont_transaction_result) :: result
         type(pose_cont_sigma_result) :: sigma_result
         type(pose_cont_pose) :: seed
+        type(pose_cont_config) :: config
         type(pose_cont_limits) :: limits
         type(ctfparams) :: no_ctf
         real, allocatable :: volume(:,:,:), sigma2(:)
@@ -135,8 +138,11 @@ contains
         initial_rotation = real(euler2m([20.,36.2,28.7]),dp)
         initial_shift = [-0.08_dp,0.06_dp]
         seed = pose_cont_pose(rotmat=initial_rotation,shift=initial_shift)
+        config = pose_cont_config()
+        call assert_true(config%route == POSE_CONT_ROUTE_SHIFT_THEN_JOINT, &
+            &'adapter configuration default is not shift-then-joint')
         limits = pose_cont_limits(shift_step_bound=1._dp,max_total_shift=5._dp)
-        call workspace%refine_particle(1,.true.,seed,data,limits,result)
+        call workspace%refine_particle(1,.true.,seed,data,config,limits,result)
         call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
             &result%objective_after < result%objective_before, &
             &'adapter transaction did not commit an improving pose')
@@ -151,9 +157,19 @@ contains
             &result%stencil_switches == result%shift_stage%stencil_switches+ &
             &result%joint_stage%stencil_switches,'adapter stage accounting does not balance')
 
+        config%route = POSE_CONT_ROUTE_JOINT
+        call workspace%refine_particle(1,.true.,seed,data,config,limits,result)
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
+            &result%objective_after < result%objective_before, &
+            &'direct-joint adapter route did not commit an improving pose')
+        call assert_true(result%shift_stage%status == POSE_CONT_NOT_ATTEMPTED .and. &
+            &result%shift_stage%attempts == 0 .and. result%joint_stage%attempts > 0, &
+            &'direct-joint adapter route executed or accounted for a shift-only stage')
+
         seed = pose_cont_pose(rotmat=truth_rotation,shift=initial_shift)
+        config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
         limits%max_total_shift = 1.e-30_dp
-        call workspace%refine_particle(1,.true.,seed,data,limits,result)
+        call workspace%refine_particle(1,.true.,seed,data,config,limits,result)
         call assert_true(result%status == LM_STEP_BOUND_REJECTED .and. result%bound_hits > 0, &
             &'adapter did not report a cumulative shift-bound rejection')
         call assert_true(all(result%pose%rotmat == truth_rotation) .and. &
@@ -162,7 +178,7 @@ contains
 
         seed = pose_cont_pose(rotmat=truth_rotation,shift=truth_shift)
         limits%max_total_shift = 5._dp
-        call workspace%refine_particle(1,.true.,seed,data,limits,result)
+        call workspace%refine_particle(1,.true.,seed,data,config,limits,result)
         write(*,'(a,3(1x,i0),4(1x,es12.4))') 'POSE_CONT_ADAPTER_EXACT',result%status, &
             &result%shift_stage%status,result%joint_stage%status,result%objective_before, &
             &result%objective_after,maxval(abs(result%pose%rotmat-truth_rotation)), &
@@ -172,7 +188,15 @@ contains
         call assert_true(all(result%pose%rotmat == truth_rotation) .and. &
             &all(result%pose%shift == truth_shift), &
             &'non-improving adapter transaction changed the input pose')
-        call workspace%refine_particle(1,.true.,seed,invalid_data,limits,result)
+        config%route = POSE_CONT_ROUTE_JOINT
+        call workspace%refine_particle(1,.true.,seed,data,config,limits,result)
+        call assert_true(result%status == LM_FINITE_NO_IMPROVEMENT .and. &
+            &result%shift_stage%status == POSE_CONT_NOT_ATTEMPTED, &
+            &'direct-joint exact-pose transaction did not report finite no-improvement')
+        call assert_true(all(result%pose%rotmat == truth_rotation) .and. &
+            &all(result%pose%shift == truth_shift), &
+            &'direct-joint non-improving transaction changed the input pose')
+        call workspace%refine_particle(1,.true.,seed,invalid_data,config,limits,result)
         call assert_true(result%status == POSE_CONT_INVALID_PREPARATION .and. &
             &all(result%pose%rotmat == truth_rotation) .and. &
             &all(result%pose%shift == truth_shift), &
