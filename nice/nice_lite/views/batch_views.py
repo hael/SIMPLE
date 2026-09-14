@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core import signing
 from django.core.paginator import Paginator
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -54,6 +54,8 @@ _BATCH_MOVIE_PAGE_SIZE = 40
 _BATCH_MICROGRAPH_PAGE_SIZE = 50
 _BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
 _BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
+# manual picking has no established particle box size yet; use a fixed placeholder for written box files.
+_MANUALPICK_BOX_SIZE_PX = 100
 
 
 def _positive_finite_number(value):
@@ -753,6 +755,59 @@ def _deselected_mic_ids(request):
         raise ClassSelectionError("Selection data is missing or invalid.")
     return deselected_ids
 
+def _manual_pick_box_coordinates(request):
+    """Parse and validate manually-picked box centers posted as a JSON array of {x, y}."""
+    try:
+        boxes = json.loads(request.POST.get("boxes", ""))
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(boxes, list):
+        return None
+    coordinates = []
+    for box in boxes:
+        if not isinstance(box, dict):
+            continue
+        x, y = box.get("x"), box.get("y")
+        if isinstance(x, bool) or isinstance(y, bool):
+            continue
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            continue
+        coordinates.append((x, y))
+    return coordinates
+
+def _resolve_manualpick_boxfile(batch_job, boxfile_path):
+    """Validate a mic's stored boxfile path resolves inside the job directory, without requiring it to already exist."""
+    job_dir = batch_job.get_safe_job_dir()
+    if job_dir is None or not isinstance(boxfile_path, str) or not boxfile_path.strip():
+        return None
+    resolved = os.path.realpath(boxfile_path)
+    try:
+        is_safe = os.path.commonpath((job_dir, resolved)) == job_dir
+    except ValueError:
+        is_safe = False
+    if not is_safe or os.path.islink(boxfile_path):
+        return None
+    return resolved
+
+def _translate_mic_field_records(raw_micrographs):
+    """Translate raw project-file mic field names to the names _mic_selection_element.html expects."""
+    micrographs = []
+    for record in raw_micrographs:
+        if not isinstance(record, dict):
+            continue
+        micrographs.append({
+            "path": record.get("thumb"),
+            "ctfimg": record.get("ctfjpg"),
+            "dfx": record.get("dfx"),
+            "dfy": record.get("dfy"),
+            "ctfres": record.get("ctfres"),
+            "i": record.get("n"),
+            "xdim": record.get("xdim"),
+            "ydim": record.get("ydim"),
+            "boxes": record.get("boxes"),
+        })
+    return micrographs
+
 def _log_parts(logtext):
     """Split log text into text/image parts on ">>> JPEG" markers."""
     parts = []
@@ -829,6 +884,30 @@ def _batch_overview_context(batchjob, jobmodel):
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
     }
 
+def _manualpick_overview_context(batchjob, jobmodel):
+    """Overview context for the manual-picker view, with a live first page of mic tiles.
+
+    jobstats.micrographs is a snapshot frozen at manualpick job creation (the job
+    finishes immediately and never streams further updates), so it never reflects
+    picks saved afterwards. Refresh it here with a direct, boxes=True project-file
+    read so already-picked coordinates show up on load.
+    """
+    context = _batch_overview_context(batchjob, jobmodel)
+    jobstats = dict(context["jobstats"])
+
+    project_stats = batchjob.getProjectStats()
+    mic_stats = project_stats.get("mic") if isinstance(project_stats, dict) else None
+    total = mic_stats.get("n") if isinstance(mic_stats, dict) else None
+    if isinstance(total, int) and not isinstance(total, bool) and total > 0:
+        top = min(_BATCH_MICROGRAPH_PAGE_SIZE, total)
+        mic_field_stats = batchjob.getProjectFieldStats("mic", fromp=1, top=top, boxes=True)
+        raw_micrographs = mic_field_stats.get("data") if isinstance(mic_field_stats, dict) else None
+        if isinstance(raw_micrographs, list):
+            jobstats["micrographs"] = _translate_mic_field_records(raw_micrographs)
+
+    context["jobstats"] = jobstats
+    return context
+
 
 @login_required(login_url="/login")
 @require_GET
@@ -859,7 +938,7 @@ def view_batch_manual_picker(request, jobid):
         messages.add_message(request, messages.ERROR, "invalid batch job selection")
         return redirect("nice_lite:workspace")
     
-    response = render(request, template, _batch_overview_context(batchjob, jobmodel))
+    response = render(request, template, _manualpick_overview_context(batchjob, jobmodel))
 
     response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
     response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
@@ -1251,22 +1330,7 @@ def view_batch_micrographs_page(request, jobid):
     if not isinstance(raw_micrographs, list):
         raw_micrographs = []
 
-    # translate raw project-file field names to the names _mic_selection_element.html expects
-    micrographs = []
-    for record in raw_micrographs:
-        if not isinstance(record, dict):
-            continue
-        micrographs.append({
-            "path": record.get("thumb"),
-            "ctfimg": record.get("ctfjpg"),
-            "dfx": record.get("dfx"),
-            "dfy": record.get("dfy"),
-            "ctfres": record.get("ctfres"),
-            "i": record.get("n"),
-            "xdim": record.get("xdim"),
-            "ydim": record.get("ydim"),
-            "boxes": record.get("boxes"),
-        })
+    micrographs = _translate_mic_field_records(raw_micrographs)
 
     tiles_html = render_to_string(
         "includes/_mic_page_tiles.html",
@@ -1288,6 +1352,62 @@ def view_batch_micrographs_page(request, jobid):
         "first_micrograph": fromp,
         "last_micrograph": top,
     })
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_batch_save_manual_pick_boxes(request, jobid):
+    """Overwrite one micrograph's box file with its manually picked coordinates."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_save_manual_pick_boxes",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        return HttpResponse(status=404)
+
+    try:
+        mic_index = int(request.POST.get("mic", ""))
+    except (TypeError, ValueError):
+        return HttpResponseBadRequest("invalid micrograph index")
+    if mic_index <= 0:
+        return HttpResponseBadRequest("invalid micrograph index")
+
+    coordinates = _manual_pick_box_coordinates(request)
+    if coordinates is None:
+        return HttpResponseBadRequest("invalid box data")
+
+    mic_field_stats = batch_job.getProjectFieldStats("mic", fromp=mic_index, top=mic_index)
+    records = mic_field_stats.get("data") if isinstance(mic_field_stats, dict) else None
+    # print_project_field's fromto range is only applied when fromp < top, so a single-index
+    # query (fromp == top) silently returns every mic; match on "n" instead of assuming records[0].
+    record = next(
+        (r for r in records if isinstance(r, dict) and r.get("n") == mic_index),
+        None,
+    ) if isinstance(records, list) else None
+    boxfile_path = _resolve_manualpick_boxfile(
+        batch_job, record.get("boxfile") if isinstance(record, dict) else None
+    )
+    if boxfile_path is None:
+        return HttpResponse(status=404)
+
+    half_box = _MANUALPICK_BOX_SIZE_PX / 2
+    try:
+        with open(boxfile_path, "w", encoding="utf-8") as box_file:
+            box_file.writelines(
+                f"{round(x - half_box)} {round(y - half_box)} "
+                f"{_MANUALPICK_BOX_SIZE_PX} {_MANUALPICK_BOX_SIZE_PX} -3\n"
+                for x, y in coordinates
+            )
+    except OSError:
+        logger.warning(
+            "failed to write manual-pick box file for job %s mic %s",
+            jobmodel.id,
+            mic_index,
+        )
+        return HttpResponse(status=500)
+
+    return JsonResponse({"saved": True, "count": len(coordinates)})
 
 
 @login_required(login_url="/login")

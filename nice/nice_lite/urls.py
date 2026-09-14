@@ -93,6 +93,7 @@ urlpatterns = [
     path("selectbatchmicrograph/<int:jobid>", batch_views.view_batch_micrograph_selection,    name="batch_micrograph_selection"), 
     path("selectbatchcls2d/<int:jobid>",      batch_views.view_batch_class_2D_selection,      name="batch_cls2D_selection"),
     path("batchmicrographspage/<int:jobid>",  batch_views.view_batch_micrographs_page,        name="view_batch_micrographs_page"),
+    path("savebatchmanualpickboxes/<int:jobid>", batch_views.view_batch_save_manual_pick_boxes, name="save_batch_manual_pick_boxes"),
 
     path(
         "batchmovie/<int:jobid>/<str:token>",
