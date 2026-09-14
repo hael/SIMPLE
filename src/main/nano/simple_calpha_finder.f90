@@ -83,20 +83,22 @@ contains
             self%nside, '-voxel grid with sigma ', sigma, ' A'
     end subroutine new
 
-    subroutine search( self, workvol, angstep, npeaks, score_threshold, pdbout, scorevol )
+    subroutine search( self, workvol, angstep, npeaks, score_threshold, pdbout, scorevol, search_mask )
         class(calpha_finder), intent(in)    :: self
         class(image),         intent(inout) :: workvol
         real,                 intent(in)    :: angstep
         integer,              intent(in)    :: npeaks
         real,                 intent(in)    :: score_threshold
         class(string),        intent(in)    :: pdbout, scorevol
+        class(image), optional, intent(inout) :: search_mask
         type(image) :: work_ft, work_sq_ft, weighted_template, support_template
         type(image) :: data_target_corr, data_sum_corr, data_sq_sum_corr, best_scores
-        real(kind=c_float), pointer :: workptr(:,:,:), sqptr(:,:,:), bestptr(:,:,:)
+        real(kind=c_float), pointer :: workptr(:,:,:), sqptr(:,:,:), bestptr(:,:,:), maskptr(:,:,:)
         real,    allocatable :: rotations(:,:,:)
         integer, allocatable :: best_rotation(:,:,:)
+        logical, allocatable :: search_region(:,:,:)
         real(dp) :: sum_w, sum_t, sum_tt
-        integer  :: ldim(3), irot, nrot
+        integer  :: ldim(3), irot, nrot, nsearch
 
         if(.not.self%existence)  THROW_HARD('C-alpha finder is not initialized; search')
         if(.not.workvol%is_3d()) THROW_HARD('Search input must be a 3D map; search')
@@ -111,6 +113,20 @@ contains
         ldim = workvol%get_ldim()
         if(any(ldim <= 2 * (ceiling(self%radius / self%smpd) + 1))) &
             THROW_HARD('Search map is too small for the C-alpha target')
+        allocate(search_region(ldim(1),ldim(2),ldim(3)), source=.true.)
+        if(present(search_mask))then
+            if(search_mask%is_ft()) THROW_HARD('C-alpha search mask must be in real space')
+            if(any(search_mask%get_ldim() /= ldim)) THROW_HARD('C-alpha search mask dimensions do not match map')
+            if(abs(search_mask%get_smpd() - self%smpd) > 1.e-4) &
+                THROW_HARD('C-alpha search mask sampling does not match map')
+            call search_mask%get_rmat_ptr(maskptr)
+            search_region = maskptr(1:ldim(1),1:ldim(2),1:ldim(3)) > TINY
+        endif
+        call clear_search_border(self, search_region)
+        nsearch = count(search_region)
+        if(nsearch == 0) THROW_HARD('C-alpha search mask contains no searchable voxels')
+        write(logfhandle,'(A,I0,A,F6.2,A)') 'C-alpha search region: ', nsearch, ' voxels (', &
+            100. * real(nsearch) / real(product(ldim)), '% of map)'
         call build_rotation_grid(angstep, rotations)
         nrot = size(rotations,3)
         allocate(best_rotation(ldim(1),ldim(2),ldim(3)), source=0)
@@ -141,7 +157,7 @@ contains
             call work_ft%ccf_into(support_template, data_sum_corr)
             call work_sq_ft%ccf_into(support_template, data_sq_sum_corr)
             call update_scores(ldim, sum_w, sum_t, sum_tt, data_target_corr, &
-                data_sum_corr, data_sq_sum_corr, irot, best_scores, best_rotation)
+                data_sum_corr, data_sq_sum_corr, search_region, irot, best_scores, best_rotation)
             if(mod(irot, max(1,nrot/10)) == 0 .or. irot == nrot) &
                 write(logfhandle,'(A,I0,A,I0)') 'C-alpha orientations: ', irot, '/', nrot
         enddo
@@ -158,8 +174,22 @@ contains
         call work_ft%kill()
         call work_sq_ft%kill()
         call best_scores%kill()
-        deallocate(rotations, best_rotation)
+        deallocate(rotations, best_rotation, search_region)
     end subroutine search
+
+    subroutine clear_search_border( self, search_region )
+        class(calpha_finder), intent(in)    :: self
+        logical,              intent(inout) :: search_region(:,:,:)
+        integer :: ldim(3), border
+        ldim   = shape(search_region)
+        border = ceiling(self%radius / self%smpd) + 1
+        search_region(1:border,:,:)                 = .false.
+        search_region(ldim(1)-border+1:ldim(1),:,:) = .false.
+        search_region(:,1:border,:)                 = .false.
+        search_region(:,ldim(2)-border+1:ldim(2),:) = .false.
+        search_region(:,:,1:border)                 = .false.
+        search_region(:,:,ldim(3)-border+1:ldim(3)) = .false.
+    end subroutine clear_search_border
 
     subroutine interpolation_cell(pos, ldim, base, frac, valid)
         real,    intent(in)  :: pos(3)
@@ -303,10 +333,11 @@ contains
     end subroutine sample_target
 
     subroutine update_scores( ldim, sum_w, sum_t, sum_tt, data_target_corr, data_sum_corr, &
-        data_sq_sum_corr, irot, best_scores, best_rotation )
+        data_sq_sum_corr, search_region, irot, best_scores, best_rotation )
         integer,        intent(in)    :: ldim(3), irot
         real(dp),       intent(in)    :: sum_w, sum_t, sum_tt
         class(image),   intent(inout) :: data_target_corr, data_sum_corr, data_sq_sum_corr
+        logical,        intent(in)    :: search_region(:,:,:)
         class(image),   intent(inout) :: best_scores
         integer,        intent(inout) :: best_rotation(:,:,:)
         real(kind=c_float), pointer :: td(:,:,:), d(:,:,:), dd(:,:,:), best(:,:,:)
@@ -324,6 +355,7 @@ contains
         do iz = 1, ldim(3)
             do iy = 1, ldim(2)
                 do ix = 1, ldim(1)
+                    if(.not.search_region(ix,iy,iz)) cycle
                     data_sum    = scale * real(d(ix,iy,iz),dp)
                     data_sq_sum = scale * real(dd(ix,iy,iz),dp)
                     data_var    = data_sq_sum - data_sum * data_sum / sum_w

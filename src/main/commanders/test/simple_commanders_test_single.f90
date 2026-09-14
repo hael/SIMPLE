@@ -178,6 +178,7 @@ end subroutine exec_test_detect_calpha
 subroutine exec_test_detect_calpha_molecules( self, cline )
     use simple_atoms,         only: atoms
     use simple_calpha_finder, only: calpha_finder
+    use simple_image_msk,     only: image_msk
     use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
     class(commander_test_detect_calpha_molecules), intent(inout) :: self
     class(cmdline),                                intent(inout) :: cline
@@ -208,6 +209,7 @@ contains
         real, parameter      :: MAP_PADDING = 12.0, MATCH_RADIUS = 2.0
         type(atoms)          :: molecule, candidates
         type(calpha_finder)  :: finder
+        type(image_msk)      :: density_mask
         type(image)          :: workvol
         type(string)         :: source_file, truth_file, vol_file, candidate_file, score_file
         real, allocatable    :: truth_xyz(:,:)
@@ -244,8 +246,11 @@ contains
 
         call workvol%new(ldim, smpd)
         call workvol%read(vol_file)
+        call density_mask%automask3D(params, workvol, l_tight=.false., l_report=.false.)
+        call density_mask%write(string(trim(label)//'_calpha_mask.mrc'))
         call finder%new(smpd, 4.0)
-        call finder%search(workvol, real(angstep), 2 * ntruth, threshold, candidate_file, score_file)
+        call finder%search(workvol, real(angstep), 2 * ntruth, threshold, candidate_file, score_file, &
+            search_mask=density_mask)
 
         npred = 0
         if(nlines(candidate_file) > 0)then
@@ -292,6 +297,7 @@ contains
 
         if(npred > 0) call candidates%kill()
         call finder%kill()
+        call density_mask%kill()
         call workvol%kill()
         call molecule%kill()
         deallocate(truth_xyz, truth_matched)
