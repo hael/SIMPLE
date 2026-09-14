@@ -1142,9 +1142,18 @@ class BatchJob(Job):
             jobmodel.save()
             return False
 
+        # manualpick has no dedicated SIMPLE program: it runs import_boxes with
+        # reset_boxfiles=yes so os_mic boxfiles point at files in the job dir,
+        # while jobmodel.prog stays "manualpick" for listing/routing purposes.
+        dispatch_prog = "import_boxes" if prog == "manualpick" else prog
+        if prog == "manualpick":
+            self.args = {"reset_boxfiles": "yes"}
+            jobmodel.args = self.args
+            jobmodel.save(update_fields=("args",))
+
         simple = SIMPLEBatch(pckg=pckg)
         launch_options = {"parent_proj": parent_proj} if explicit_parent_proj else {}
-        if simple.start(self.args, self.absdir, workspace_dir, prog, self.id, **launch_options):
+        if simple.start(self.args, self.absdir, workspace_dir, dispatch_prog, self.id, **launch_options):
             return True
 
         self.status = "failed"

@@ -646,6 +646,7 @@ class SIMPLEProjFile:
 
     def _run(self, cmd):
         """Run a simple_exec command and return the parsed JSON, or {} on failure."""
+        print("Running command:", " ".join(cmd))
         try:
             result = subprocess.run(
                 cmd,

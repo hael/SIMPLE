@@ -229,6 +229,24 @@ def _get_batch_program(batchui, package, program):
     return program_cfg
 
 
+# manualpick has no backing SIMPLE program: it just creates a finished job record
+# that routes to the manual-picker detail view (see BatchJob.new/view_batch_manual_picker).
+_MANUALPICK_PROGRAM_CFG = {
+    "program": {
+        "executable": "simple_exec",
+        "display_name": "Manual picking",
+        "summary": "Open a manual particle-picking session for this workspace.",
+        "requirements": [],
+    },
+}
+
+
+def _inject_manualpick_program(batchui):
+    """Add the synthetic manualpick entry to a batch UI catalog in place."""
+    if isinstance(batchui, dict) and "manualpick" not in batchui:
+        batchui["manualpick"] = copy.deepcopy(_MANUALPICK_PROGRAM_CFG)
+
+
 def _collect_batch_args(post, program_cfg):
     """Allow-list and normalize values against authoritative UI JSON metadata."""
     form = _BatchProgramArgumentsForm(post, program_cfg)
@@ -777,6 +795,7 @@ def view_job_builder(request):
     simplebatch = SIMPLEBatch()
     if simplebatch.loadUIJSON():
         batchui = simplebatch.get_ui()
+        _inject_manualpick_program(batchui)
     else:
         messages.add_message(request, messages.ERROR, "failed to read batch ui JSON")
 
@@ -938,7 +957,9 @@ def view_create_batch(request):
     package = request.POST.get("package", "")
     program = request.POST.get("program", "")
     simplebatch = SIMPLEBatch(pckg=package)
-    program_cfg = _get_batch_program(simplebatch.get_ui(), package, program)
+    batchui = simplebatch.get_ui()
+    _inject_manualpick_program(batchui)
+    program_cfg = _get_batch_program(batchui, package, program)
     if program_cfg is None:
         logger.error("create_batch: unknown %s program %s", package, program)
         messages.add_message(request, messages.ERROR, "invalid batch program selection")

@@ -711,6 +711,15 @@ def _positive_page_number(request, query_name):
     return max(1, page)
 
 
+def _positive_tile_width(request):
+    """Return a positive tile_width query value, or None to use the template default."""
+    try:
+        width = int(request.GET.get("tile_width", ""))
+    except (TypeError, ValueError):
+        return None
+    return width if width > 0 else None
+
+
 def _class_selector_requested(request):
     """Return True only for the explicit, default-off batch selector key."""
     return request.GET.get("class_selector") == "1"
@@ -796,23 +805,15 @@ def view_batch_dj(request, jobid):
     clear_checksum_cookies(request, response)
     return response
 
-@login_required(login_url="/login")
-@require_GET
-def view_batch(request, jobid):
-    """Returns batch view."""
-    template = "nice_batch/batchview.html"
-    batchjob, jobmodel = _get_accessible_batch_job(request, job_id=jobid, log_context="view_batch")
-    if batchjob is None:
-        messages.add_message(request, messages.ERROR, "invalid batch job selection")
-        return redirect("nice_lite:workspace")
-
+def _batch_overview_context(batchjob, jobmodel):
+    """Shared overview/logs/arguments context for the batch and manual-picker detail views."""
     log_by_name = {entry["name"]: entry for entry in batchjob.get_log_tails()}
     stdout_entry = log_by_name.get("stdout.log", {})
     stderr_entry = log_by_name.get("stderr.log", {})
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     arguments = _argument_rows(jobmodel)
 
-    context = {
+    return {
         "jobid"  : jobmodel.id,
         "disp"   : jobmodel.disp,
         "desc"   : jobmodel.desc,
@@ -827,8 +828,38 @@ def view_batch(request, jobid):
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
     }
+
+
+@login_required(login_url="/login")
+@require_GET
+def view_batch(request, jobid):
+    """Returns batch view."""
+    template = "nice_batch/batchview.html"
+    batchjob, jobmodel = _get_accessible_batch_job(request, job_id=jobid, log_context="view_batch")
+    if batchjob is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    response = render(request, template, _batch_overview_context(batchjob, jobmodel))
+
+    response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
+    response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
+    # Ensure Back renders the checksum-gated workspace instead of returning 204.
+    clear_checksum_cookies(request, response)
+    return response
+
+
+@login_required(login_url="/login")
+@require_GET
+def view_batch_manual_picker(request, jobid):
+    """Returns the manual-picker detail view for a batch job."""
+    template = "nice_batch/manual_picker.html"
+    batchjob, jobmodel = _get_accessible_batch_job(request, job_id=jobid, log_context="view_batch_manual_picker")
+    if batchjob is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
     
-    response = render(request, template, context)
+    response = render(request, template, _batch_overview_context(batchjob, jobmodel))
 
     response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
     response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
@@ -1244,6 +1275,7 @@ def view_batch_micrographs_page(request, jobid):
             "jobstats": jobmodel.master_stats.get("project_metadata", {}) if isinstance(jobmodel.master_stats, dict) else {},
             "selectable": request.GET.get("selectable") == "1",
             "hide_pspec": request.GET.get("hide_pspec") == "1",
+            "tile_width": _positive_tile_width(request),
         },
         request=request,
     )

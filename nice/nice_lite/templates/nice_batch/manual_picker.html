@@ -1,0 +1,53 @@
+{% comment %}
+  manual_picker.html — manual-picking detail view for a batch job, loaded
+  inside the workspace iframe.
+
+  Structure:
+    - Sub-bar : back link and batch title (via _job_nav_header.html).
+    - Overview panel: mic selector in a side column, with the selected
+      micrograph filling the main column (_manualpick_mic_picker.html).
+    - Job details footer.
+
+  Context variables:
+    disp    — human-readable stream number / display name
+    jobid   — primary key of the job, appended as ?selected_job_id= on all iframes
+    desc    — optional user-supplied job description; shown alongside disp when non-empty
+    args    — dict of stream launch parameters (smpd, cs, kv, fraca, etc.)
+    created — job creation timestamp, shown in the job-details footer
+    folder  — absolute path to the job directory, shown in the job-details footer
+    jobstats — dict of batch project metadata (e.g. micrographs, cls2D)
+    arguments — list of {key, label, value, origin, submitted} for the arguments panel
+    submitted_argument_count — count of user-submitted arguments
+{% endcomment %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
+
+    <!-- Sub-bar: back link + stream title -->
+    {% url 'nice_lite:workspace' as back_url %}
+    {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp desc=desc job_type='batch' %}
+    
+    <!-- overview panel: logs (main column) with arguments and a reserved column of smaller panels -->
+     <div data-panel="overview" class="w-full flex flex-row gap-2.5 p-[10px] flex-1 overflow-hidden">
+        <div class="flex flex-col h-full w-72 flex-shrink-0 gap-2.5">
+            <div class="flex flex-col flex-1 min-h-0 bg-streambar rounded-xl text-streamtext border border-streamline overflow-y-auto">
+                {% include 'includes/_manualpick_mic_selector.html' %}
+            </div>
+        </div>
+        <div class="flex flex-col h-full flex-1 min-w-0 bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+            {% include 'includes/_manualpick_mic_picker.html' %}
+        </div>
+    </div>
+
+    {% include 'includes/_job_details.html' %}
+
+    {% include 'messages.html' %}
+
+</body>
+</html>

@@ -172,7 +172,7 @@ subroutine new_export_relion( prgtab )
         ! <empty>
         ! parameter input/output
         call import_boxes%add_input(UI_FILE, 'boxtab', 'file', 'List of box files', &
-            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '', &
+            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '', &
         &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>

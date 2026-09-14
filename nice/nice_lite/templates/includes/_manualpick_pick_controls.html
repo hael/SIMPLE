@@ -1,0 +1,24 @@
+{% comment %}
+  _manualpick_pick_controls.html — box size/shape controls for manual
+  picking, shown in _manualpick_mic_picker.html's header. Drives the shared
+  micBoxOverlayRadius/micBoxShape globals and drawMicBoxOverlays (owned by
+  _manualpick_mic_selector.html), so both pre-existing and newly-picked boxes
+  redraw immediately. Defaults match _mic_viewer.html's box-size slider
+  (radius 1) and drawMicBoxOverlays' pre-existing circle shape.
+{% endcomment %}
+<div class="flex items-center gap-3">
+    <div class="flex items-center gap-1.5">
+        <label for="mic_pick_box_size" class="text-[10px] text-streamlabel">box size</label>
+        <input id="mic_pick_box_size" type="range" min="1" max="20" step="1" value="1"
+               oninput="updateMicBoxOverlaySize(this)"
+               class="h-1 w-20 accent-streamaccent">
+    </div>
+    <div class="flex items-center gap-1.5">
+        <label for="mic_pick_box_shape" class="text-[10px] text-streamlabel">shape</label>
+        <select id="mic_pick_box_shape" onchange="updateMicBoxShape(this)"
+                class="text-[10px] bg-streambg border border-streamline rounded px-1 py-0.5 text-streamtext">
+            <option value="circle" selected>circle</option>
+            <option value="square">square</option>
+        </select>
+    </div>
+</div>

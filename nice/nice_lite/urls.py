@@ -59,6 +59,7 @@ urlpatterns = [
     path("newstream",                          views.view_job_builder,                             name="new_stream"),
     path("createbatch",                        views.view_create_batch,                            name="create_batch"),
     path("viewbatch/<int:jobid>",              batch_views.view_batch,                             name="view_batch"),
+    path("viewbatchmanualpicker/<int:jobid>",  batch_views.view_batch_manual_picker,               name="view_batch_manual_picker"),
     path(
         "batchvolume/<int:jobid>/<str:volume_name>",
         batch_views.view_batch_volume_data,

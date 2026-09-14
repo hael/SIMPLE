@@ -12,7 +12,7 @@
   drawn on the micrograph half from micrograph.xdim/ydim; see
   drawMicBoxOverlays in _mic_viewer.html. Optional `hide_pspec` (bool): omits
   the power-spectrum half entirely and widens the micrograph half to fill
-  the tile.
+  the tile. Optional `tile_width` (int, px): tile width, defaults to 600.
 {% endcomment %}
 <div class="flex flex-col snap-start mictile rounded bg-streambg m-[5px] p-[5px] border-[1px] {% if selectable %}border-streamring bg-streamring/10{% else %}border-streamline{% endif %}">
     <div class="flex justify-between mx-2">
@@ -27,7 +27,7 @@
            {% endif %}
         {% endif %}
     </div>
-    <div class="{% if selectable %}mic {% endif %}miccontainer relative flex p-[5px]" style="width:600px;" {% if selectable %}onclick="toggleMic(this)"{% endif %} data-idx="{{ micrograph.i }}" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} data-defocus={{ micrograph.dfx|mean_with:micrograph.dfy|floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
+    <div class="{% if selectable %}mic {% endif %}miccontainer relative flex p-[5px]" style="width:{% firstof tile_width 600 %}px;" data-idx="{{ micrograph.i }}" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} data-defocus={{ micrograph.dfx|mean_with:micrograph.dfy|floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å"{% if selectable %} onclick="toggleMic(this)"{% endif %}>
         {% comment %} micrograph.path points to a sprite of 2 equal-width images (intg, pspec) side by side; each half is cropped into its own img via a clipping wrapper. {% endcomment %}
         <div class="micimg-mic overflow-hidden rounded relative {% if hide_pspec %}w-full{% else %}w-1/2 mr-1{% endif %}" oncontextmenu="showMicMenu(this, event, 'mic')">
             <img style="filter:contrast(var(--preprocess-contrast-mic)) brightness(var(--preprocess-brightness-mic)); width:200%; max-width:200%; margin-left:-100%;" src={% url 'nice_lite:image' micrograph.path %} class="h-auto" loading="lazy">

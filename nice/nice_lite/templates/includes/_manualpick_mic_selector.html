@@ -1,0 +1,216 @@
+{% comment %}
+  _manualpick_mic_selector.html — titled panel of micrograph tiles for the
+  manual-picking page, with pagination and pick-box overlays but no
+  contrast/brightness menus, sort, or select-above/below (those belong to
+  the fuller review panel in _mic_viewer.html).
+  Expects `panel_title` (str) and either `jobstats.latest_micrographs` or
+  `jobstats.micrographs` — a list of micrograph entries, each with
+  dfx/dfy/ctfres/path — in context. Tiles always render the micrograph half
+  only (no power-spectrum half); tiles are click-selectable, single-select
+  only (clicking one tile deselects any previously selected tile).
+  Includes `_mic_selection_element.html` per tile. Owns the tile toggling JS
+  (toggleMic/updateMicSelectionBorder) and the pick-box overlay drawing
+  (drawMicBoxOverlays), redrawn on load/resize and whenever a mic image
+  finishes loading; relies on a page-level `lastinteraction` global declared
+  by the including page's own script. toggleMic also calls showSelectedMic
+  (owned by _manualpick_mic_picker.html, expected elsewhere on the page) with
+  the clicked tile's image/box data. Only one instance is ever rendered per
+  page.
+{% endcomment %}
+{% load timestamps %}
+<div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">micrographs</p>
+    {% firstof jobstats.latest_micrographs jobstats.micrographs as mics %}
+    <div class="flex items-center gap-3">
+        {% comment %} Pagination controls (50 micrographs/page); page-change URL is batch-only for now. {% endcomment %}
+        {% if "nmics" in jobstats and jobstats.nmics > 50 %}
+        <div class="flex items-center gap-2" data-total-mics="{{ jobstats.nmics }}" data-selectable="1" data-hide-pspec="1" data-tile-width="100" {% if jobid %}data-page-url="{% url 'nice_lite:view_batch_micrographs_page' jobid %}"{% endif %}>
+            <button type="button" disabled class="mic-page-prev px-2 py-1 text-[10px] font-medium rounded border border-streamline text-streamlabel hover:bg-streamring/10 disabled:opacity-40 disabled:cursor-not-allowed" onclick="prevMicPage(this)">Prev</button>
+            <span class="mic-page-label text-[10px] text-streamlabel">Page 1 of {{ jobstats.nmics|ceil_div:50 }}</span>
+            <button type="button" class="mic-page-next px-2 py-1 text-[10px] font-medium rounded border border-streamline text-streamlabel hover:bg-streamring/10 disabled:opacity-40 disabled:cursor-not-allowed" onclick="nextMicPage(this)">Next</button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<div id="mic_tile_grid" class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory mt-2" data-total-mics="{% firstof jobstats.nmics mics|length %}" data-xdim-mic="{{ jobstats.xdim_mic }}" data-ydim-mic="{{ jobstats.ydim_mic }}">
+    {% if "micrographs" in jobstats and jobstats.micrographs|length > 0 %}
+        <div id="mic_tiles" class="contents">
+        {% for micrograph in jobstats.micrographs %}
+            {% include 'includes/_mic_selection_element.html' with micrograph=micrograph selectable=True hide_pspec=True tile_width=100 %}
+        {% endfor %}
+        </div>
+    {% endif %}
+</div>
+
+<script>
+    // Index (micrograph.i) of the single mic tile selected for picking; persists across page changes since pagination re-renders tiles from scratch.
+    let selectedMicIdx = null;
+
+    const MIC_PAGE_SIZE = 50;
+    let currentMicPage = 1;
+
+    // Computes the 1-based start/end micrograph indices for currentMicPage, refreshes the label/button state, and fetches that page's data when a page-change URL is available.
+    const updateMicPageIndices = (container) => {
+        const total = Number(container.dataset.totalMics || 0);
+        const totalPages = Math.max(1, Math.ceil(total / MIC_PAGE_SIZE));
+        currentMicPage = Math.min(Math.max(currentMicPage, 1), totalPages);
+        const startIdx = ((currentMicPage - 1) * MIC_PAGE_SIZE) + 1;
+        const endIdx = Math.min(currentMicPage * MIC_PAGE_SIZE, total);
+        const label = container.querySelector(".mic-page-label");
+        if (label) label.textContent = `Page ${currentMicPage} of ${totalPages}`;
+        const prevBtn = container.querySelector(".mic-page-prev");
+        const nextBtn = container.querySelector(".mic-page-next");
+        if (prevBtn) prevBtn.disabled = currentMicPage <= 1;
+        if (nextBtn) nextBtn.disabled = currentMicPage >= totalPages;
+        if (container.dataset.pageUrl) {
+            const params = new URLSearchParams({ page: currentMicPage });
+            if (container.dataset.selectable) params.set("selectable", container.dataset.selectable);
+            if (container.dataset.hidePspec) params.set("hide_pspec", container.dataset.hidePspec);
+            if (container.dataset.tileWidth) params.set("tile_width", container.dataset.tileWidth);
+            fetch(`${container.dataset.pageUrl}?${params}`)
+                .then((response) => (response.ok ? response.json() : null))
+                .then((page) => {
+                    if (!page || typeof page.html !== "string") return;
+                    const tilesContainer = document.getElementById("mic_tiles");
+                    if (!tilesContainer) return;
+                    tilesContainer.innerHTML = page.html;
+                    for (const mic of tilesContainer.querySelectorAll(".mic")) {
+                        mic.classList.toggle("disabledbutton", Number(mic.dataset.idx) !== selectedMicIdx);
+                        updateMicSelectionBorder(mic);
+                    }
+                    for (const img of tilesContainer.querySelectorAll(".micimg-mic img")) {
+                        img.addEventListener("load", drawMicBoxOverlays);
+                    }
+                    drawMicBoxOverlays();
+                });
+        }
+        return { startIdx, endIdx };
+    };
+
+    const prevMicPage = (element) => {
+        const container = element.closest("[data-total-mics]");
+        if (!container) return;
+        currentMicPage -= 1;
+        updateMicPageIndices(container);
+    };
+
+    const nextMicPage = (element) => {
+        const container = element.closest("[data-total-mics]");
+        if (!container) return;
+        currentMicPage += 1;
+        updateMicPageIndices(container);
+    };
+
+    const updateMicSelectionBorder = (mic) => {
+        if (!mic) return;
+        const container = mic.closest(".mictile");
+        if (!container) return;
+        const miccheck = mic.querySelector(".miccheck");
+        if (mic.classList.contains("disabledbutton")) {
+            container.classList.remove("border-streamring", "bg-streamring/10");
+            container.classList.add("border-streamline", "bg-streambg");
+            if (miccheck) miccheck.classList.add("hidden");
+        } else {
+            container.classList.remove("border-streamline", "bg-streambg");
+            container.classList.add("border-streamring", "bg-streamring/10");
+            if (miccheck) miccheck.classList.remove("hidden");
+        }
+    };
+
+    const toggleMic = (element) => {
+        selectedMicIdx = Number(element.dataset.idx);
+        for (const mic of document.querySelectorAll("#mic_tile_grid .mic")) {
+            mic.classList.toggle("disabledbutton", Number(mic.dataset.idx) !== selectedMicIdx);
+            updateMicSelectionBorder(mic);
+        }
+        lastinteraction = Date.now();
+        if (typeof showSelectedMic === "function") {
+            const grid = document.getElementById("mic_tile_grid");
+            const img = element.querySelector(".micimg-mic img");
+            const overlay = element.querySelector(".boxes-overlay");
+            showSelectedMic(
+                selectedMicIdx,
+                img ? img.src : "",
+                overlay ? overlay.dataset.boxes : "[]",
+                overlay ? overlay.dataset.xdim : grid?.dataset.xdimMic,
+                overlay ? overlay.dataset.ydim : grid?.dataset.ydimMic
+            );
+        }
+    };
+
+    let micBoxOverlayRadius = 1;
+    let micBoxOverlaysVisible = true;
+    let micBoxShape = "circle";
+
+    const updateMicBoxOverlaySize = (element) => {
+        micBoxOverlayRadius = Number(element.value) || 1;
+        drawMicBoxOverlays();
+    };
+
+    const updateMicBoxShape = (element) => {
+        micBoxShape = element.value === "square" ? "square" : "circle";
+        drawMicBoxOverlays();
+    };
+
+    const toggleMicBoxOverlays = (element) => {
+        micBoxOverlaysVisible = element.checked;
+        for (const overlay of document.querySelectorAll(".boxes-overlay")) {
+            overlay.classList.toggle("hidden", !micBoxOverlaysVisible);
+        }
+    };
+
+    const drawMicBoxOverlays = () => {
+        if (!micBoxOverlaysVisible) return;
+        for (const overlay of document.querySelectorAll(".boxes-overlay")) {
+            const container = overlay.parentElement;
+            const width = container ? container.clientWidth : 0;
+            const height = container ? container.clientHeight : 0;
+            if (!width || !height) continue;
+            overlay.width = width;
+            overlay.height = height;
+
+            const xdim = Number(overlay.dataset.xdim || 0);
+            const ydim = Number(overlay.dataset.ydim || 0);
+            if (!xdim || !ydim) continue;
+            // The rendered image pads the shorter axis equally to center the micrograph, so scale by the longer axis and offset the shorter one.
+            const scale = xdim > ydim ? width / xdim : height / ydim;
+            const xoffset = (width - (scale * xdim)) / 2;
+            const yoffset = (height - (scale * ydim)) / 2;
+
+            let boxes = [];
+            try {
+                boxes = JSON.parse((overlay.dataset.boxes || "[]").replaceAll("'", '"'));
+            } catch (error) {
+                boxes = [];
+            }
+
+            const ctx = overlay.getContext("2d");
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
+            for (const box of boxes) {
+                const px = (box.x * scale) + xoffset;
+                const py = (box.y * scale) + yoffset;
+                ctx.beginPath();
+                if (micBoxShape === "square") {
+                    ctx.strokeRect(px - micBoxOverlayRadius, py - micBoxOverlayRadius, micBoxOverlayRadius * 2, micBoxOverlayRadius * 2);
+                } else {
+                    ctx.arc(px, py, micBoxOverlayRadius, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+            }
+        }
+    };
+
+    window.addEventListener("load", () => {
+        // No mic is selected until the user clicks one; tiles otherwise render pre-selected.
+        for (const mic of document.querySelectorAll("#mic_tile_grid .mic")) {
+            mic.classList.add("disabledbutton");
+            updateMicSelectionBorder(mic);
+        }
+        drawMicBoxOverlays();
+        for (const img of document.querySelectorAll(".micimg-mic img")) {
+            img.addEventListener("load", drawMicBoxOverlays);
+        }
+    });
+    window.addEventListener("resize", drawMicBoxOverlays);
+</script>

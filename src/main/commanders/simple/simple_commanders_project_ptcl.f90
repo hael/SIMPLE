@@ -1,7 +1,9 @@
 !@descr: project commanders for particle-related things
 module simple_commanders_project_ptcl
 use simple_commanders_api
-use simple_stream_watcher, only: stream_watcher
+use simple_stream_watcher,   only: stream_watcher
+use simple_gui_communicator, only: gui_communicator
+
 implicit none
 #include "simple_local_flags.inc"
 
@@ -454,7 +456,7 @@ contains
     subroutine exec_import_boxes( self, cline )
         class(commander_import_boxes), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(simple_nice_comm)    :: nice_comm
+        type(gui_communicator)    :: gui_comm
         type(parameters)          :: params
         type(sp_project)          :: spproj
         integer                   :: nos_mic, nboxf, i
@@ -462,14 +464,12 @@ contains
         type(string)              :: boxfname, intg, cwd, boxname
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
+        call gui_comm%new(params)
         call simple_getcwd(cwd)
         ! project file management
         if( .not. file_exists(params%projfile) )then
             THROW_HARD('project file: '//params%projfile%to_char()//' does not exist! exec_import_boxes')
         endif
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         if(params%reset_boxfiles .eq. 'yes') then
             call spproj%read(params%projfile)
             do i=1,spproj%os_mic%get_noris()
@@ -507,7 +507,8 @@ contains
             ! write project file
             call spproj%write_segment_inside('mic') ! all that's needed here
         end if
-        call nice_comm%terminate()
+        call gui_comm%add_metadata(params%projfile, oritype='mic')
+        call gui_comm%kill()
         call simple_end('**** IMPORT_BOXES NORMAL STOP ****')
     end subroutine exec_import_boxes
 

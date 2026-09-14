@@ -1170,41 +1170,44 @@ contains
             end if
         end do
         if(l_boxes .and. self%isthere('boxfile')) then
-            call json%create_array(boxes_array, "boxes")
-            box_tmp = self%get('boxfile')
-            call boxfile%new(box_tmp, 1)
-            call box_tmp%kill
-            allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
-            if(boxfile%get_nrecs_per_line() == 5) then
-                ! standard boxfile
-                do i=1, boxfile%get_ndatalines()
-                    call boxfile%readNextDataLine(boxdata(:,i))
-                    call json%create_object(box, "")
-                    x = nint(boxdata(1,i) + boxdata(3,i)/2)
-                    y = nint(boxdata(2,i) + boxdata(4,i)/2)
-                    call json%add(box, "x",    x)
-                    call json%add(box, "y",    y)
-                    call json%add(boxes_array, box)
-                enddo
-            else if(boxfile%get_nrecs_per_line() == 6) then
-                ! multipick boxfile
-                do i=1, boxfile%get_ndatalines()
-                    call boxfile%readNextDataLine(boxdata(:,i))
-                    call json%create_object(box, "")
-                    x = nint(boxdata(1,i) + boxdata(3,i)/2)
-                    y = nint(boxdata(2,i) + boxdata(3,i)/2)
-                    diameter = floor(boxdata(4,i))
-                    type     = nint(boxdata(6,i))
-                    call json%add(box, "x",        x)
-                    call json%add(box, "y",        y)
-                    call json%add(box, "diameter", diameter)
-                    call json%add(box, "type",     type)
-                    call json%add(boxes_array, box)
-                enddo
+            box_tmp = self%get_str('boxfile')
+            ! boxfile may be set (e.g. by manual-pick reset_boxfiles) before the physical file is written
+            if( file_exists(box_tmp) ) then
+                call json%create_array(boxes_array, "boxes")
+                call boxfile%new(box_tmp, 1)
+                allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
+                if(boxfile%get_nrecs_per_line() == 5) then
+                    ! standard boxfile
+                    do i=1, boxfile%get_ndatalines()
+                        call boxfile%readNextDataLine(boxdata(:,i))
+                        call json%create_object(box, "")
+                        x = nint(boxdata(1,i) + boxdata(3,i)/2)
+                        y = nint(boxdata(2,i) + boxdata(4,i)/2)
+                        call json%add(box, "x",    x)
+                        call json%add(box, "y",    y)
+                        call json%add(boxes_array, box)
+                    enddo
+                else if(boxfile%get_nrecs_per_line() == 6) then
+                    ! multipick boxfile
+                    do i=1, boxfile%get_ndatalines()
+                        call boxfile%readNextDataLine(boxdata(:,i))
+                        call json%create_object(box, "")
+                        x = nint(boxdata(1,i) + boxdata(3,i)/2)
+                        y = nint(boxdata(2,i) + boxdata(3,i)/2)
+                        diameter = floor(boxdata(4,i))
+                        type     = nint(boxdata(6,i))
+                        call json%add(box, "x",        x)
+                        call json%add(box, "y",        y)
+                        call json%add(box, "diameter", diameter)
+                        call json%add(box, "type",     type)
+                        call json%add(boxes_array, box)
+                    enddo
+                endif
+                call boxfile%kill()
+                if(allocated(boxdata)) deallocate(boxdata)
+                call json%add(json_ori, boxes_array)
             endif
-            call boxfile%kill()
-            if(allocated(boxdata)) deallocate(boxdata)
-            call json%add(json_ori, boxes_array)
+            call box_tmp%kill
         endif
     end subroutine ori2json
 
