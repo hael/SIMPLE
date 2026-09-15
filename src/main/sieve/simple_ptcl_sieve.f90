@@ -55,7 +55,7 @@ module simple_ptcl_sieve
   use simple_sp_project,                  only: sp_project
   use simple_imgarr_utils,                only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr
   use simple_string_utils,                only: int2str
-  use simple_projfile_utils,              only: merge_chunk_projfiles
+  use simple_projfile_utils,              only: merge_chunk_projfiles, merge_chunk_projfiles_without_sigma2
   use simple_commanders_cavgs,            only: commander_cluster_cavgs
   use simple_cavg_quality_model,          only: CAVG_QUALITY_MODEL_SIEVE_DEFAULT, cavg_quality_model
   use simple_cavg_quality_types,          only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE, &
@@ -1036,14 +1036,17 @@ contains
   ! written to completedir. In coarse_only mode, combines rejection-complete
   ! coarse chunks; otherwise combines complete fine chunks.
   ! No-op if no eligible chunks exist or if the combined file already exists.
-  subroutine combine_completed_chunks( self, combined_projfile )
+  subroutine combine_completed_chunks( self, combined_projfile, with_sigma2 )
     class(ptcl_sieve), intent(inout) :: self
     type(string),      intent(in)    :: combined_projfile
+    logical, intent(in), optional :: with_sigma2
     type(string),     allocatable :: projfiles(:)
     type(sp_project)              :: combined_project
     integer(timer_int_kind)       :: t0
     integer                       :: i, nptcls_tot, nptcls_sel_tot, n_complete, n_chunks
-    logical                       :: use_pass_1
+    logical                       :: use_pass_1, l_with_sigma2
+    l_with_sigma2 = .true.
+    if( present(with_sigma2) ) l_with_sigma2 = with_sigma2
 
     use_pass_1 = self%coarse_only
     if( use_pass_1 ) then
@@ -1090,8 +1093,11 @@ contains
       return
     end if
     projfiles = projfiles(:n_complete)
-
-    call merge_chunk_projfiles(projfiles, simple_abspath(self%completedir), combined_project, write_proj=.false.)
+    if( l_with_sigma2 ) then
+      call merge_chunk_projfiles(projfiles, simple_abspath(self%completedir), combined_project, write_proj=.false.)
+    else
+      call merge_chunk_projfiles_without_sigma2(projfiles, simple_abspath(self%completedir), combined_project)
+    end if
     call combined_project%write(combined_projfile)
     call combined_project%kill()
     deallocate(projfiles)

@@ -53,7 +53,7 @@ use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_C
 use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
-use simple_projfile_utils,        only: merge_chunk_projfiles, merge_selected_project_files
+use simple_projfile_utils,        only: merge_selected_project_files
 use simple_procimgstk,            only: scale_imgfile
 use simple_fileio,                only: swap_suffix
 use simple_defs,                  only: MSK_EXP_FAC, BOX_EXP_FAC, COSMSKHALFWIDTH, CWD_GLOB
@@ -425,7 +425,7 @@ contains
                 if( cycle_plan(n_cycles) == 1 ) then
                     if( sieve%get_finished() ) then
                         write(logfhandle,'(A)') '>>> ALL SIEVE CHUNKS PROCESSED, COMBINING RESULTS...'
-                        call sieve%combine_completed_chunks(cycle_projfile)
+                        call sieve%combine_completed_chunks(cycle_projfile, with_sigma2=.false.)
                         call sieve%kill()
                         call spproj_all%kill()
                         call spproj_all%read(cycle_projfile)
