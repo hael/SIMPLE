@@ -19,9 +19,9 @@
         </div>
     </div>
     <div class="flex flex-row gap-2">
-        <div id="selectall" onclick="selectAll()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">select all</div>
-        <div id="deselectall" onclick="deselectAll()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">deselect all</div>
-        <div id="invertselection" onclick="invertSelection()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">invert selection</div>
+        <button id="selectall" class="selectionbutton" type="button" onclick="selectAll()">select all</button>
+        <button id="deselectall" class="selectionbutton" type="button" onclick="deselectAll()">deselect all</button>
+        <button id="invertselection" class="selectionbutton" type="button" onclick="invertSelection()">invert selection</button>
     </div>
 {% endif %}
 {% if "cls2D" in jobstats %}
@@ -51,7 +51,7 @@
     <form id="savebatchselection" method="POST" action="{% url 'nice_lite:batch_cls2D_selection' jobid %}">
         {% csrf_token %}
         <input type="hidden" id="deselected_class_ids" name="deselected_class_ids" value=""/>
-        <button class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity" type="button" onclick="saveClsSelection(this)">save selection</button>
+        <button class="selectionbutton" type="button" onclick="saveClsSelection(this)">save selection</button>
     </form>
 {% endif %}
 <script>

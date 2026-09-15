@@ -75,6 +75,11 @@
   }
 }
 @layer components {
+    .selectionbutton {
+        @apply rounded-lg bg-streamring px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 cursor-pointer;
+    }
+}
+@layer components {
     .disabledbutton {
         background-image:unset !important;
         background-size: unset !important;

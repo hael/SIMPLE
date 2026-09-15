@@ -28,15 +28,15 @@
         </label>
     </div>
     <div class="flex flex-row gap-2">
-        <div id="selectallmics" onclick="selectAllMics()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">select all</div>
-        <div id="deselectallmics" onclick="deselectAllMics()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">deselect all</div>
-        <div id="invertmicselection" onclick="invertMicSelection()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">invert selection</div>
+        <button id="selectallmics" class="selectionbutton" type="button" onclick="selectAllMics()">select all</button>
+        <button id="deselectallmics" class="selectionbutton" type="button" onclick="deselectAllMics()">deselect all</button>
+        <button id="invertmicselection" class="selectionbutton" type="button" onclick="invertMicSelection()">invert selection</button>
     </div>
 {% endif %}
 <form id="savebatchselection" method="POST" action="{% url 'nice_lite:batch_micrograph_selection' jobid %}">
     {% csrf_token %}
     <input type="hidden" id="deselected_mic_ids" name="deselected_mic_ids" value=""/>
-    <button class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity" type="button" onclick="saveMicSelection(this)">save selection</button>
+    <button class="selectionbutton" type="button" onclick="saveMicSelection(this)">save selection</button>
 </form>
 
 <script>
