@@ -660,8 +660,7 @@ contains
   ! imported_projects.txt file table with all currently included project files.
   subroutine generate_chunks_coarse( self, project_list )
     class(ptcl_sieve), intent(inout) :: self
-    type(rec_list),        intent(inout) :: project_list
-
+    type(rec_list),    intent(inout) :: project_list
     type(string),     allocatable   :: projfiles(:), projfiles_all(:)
     type(string),     allocatable   :: unique_projfiles(:)
     logical,          allocatable   :: included(:)
@@ -1039,7 +1038,7 @@ contains
   ! No-op if no eligible chunks exist or if the combined file already exists.
   subroutine combine_completed_chunks( self, combined_projfile )
     class(ptcl_sieve), intent(inout) :: self
-    type(string),          intent(in)    :: combined_projfile
+    type(string),      intent(in)    :: combined_projfile
     type(string),     allocatable :: projfiles(:)
     type(sp_project)              :: combined_project
     integer(timer_int_kind)       :: t0
@@ -1460,6 +1459,7 @@ contains
   end subroutine reject_cavgs
 
   subroutine cleanup_chunk( self, chunk, label )
+    use simple_sigma2_state_file, only: SIGMA2_STATE_FNAME
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(inout) :: chunk
     type(string),        intent(in)    :: label
@@ -1551,6 +1551,7 @@ contains
       if( fname == string('COMPLETE') ) cycle
       if( fname == string(REJECTION_FAILED) ) cycle
       if( fname == string(FRCS_FILE) ) cycle
+      if( fname == string(SIGMA2_STATE_FNAME) ) cycle
       if( fname_keep_last_iter_jpeg%strlen() > 0 .and. fname == fname_keep_last_iter_jpeg ) cycle
       if( fname_keep_last_iter_stk%strlen()  > 0 .and. fname == fname_keep_last_iter_stk  ) cycle
       if( fname_keep_last_iter_even_stk%strlen() > 0 .and. fname == fname_keep_last_iter_even_stk ) cycle
