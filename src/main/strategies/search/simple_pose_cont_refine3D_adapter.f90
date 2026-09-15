@@ -1,4 +1,4 @@
-!@descr: Reference and particle-data adapters for standalone refine3D pose_cont
+!@descr: Reference, particle-data, and transaction adapters for refine3D pose_cont
 module simple_pose_cont_refine3D_adapter
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api, only: CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES, &
@@ -18,7 +18,7 @@ private
 ! Types
 public :: cartesian_pose_data, pose_cont_reference_workspace
 public :: pose_cont_pose, pose_cont_limits, pose_cont_config
-public :: pose_cont_stage_result, pose_cont_transaction_result, pose_cont_sigma_result
+public :: pose_cont_stage_result, pose_cont_transaction_result
 
 ! Refinement routes
 public :: POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
@@ -32,15 +32,11 @@ public :: LM_STEP_BOUND_REJECTED, LM_INVALID_NUMERICS, LM_ITERATION_LIMIT
 public :: write_pose_cont_reference_artifact, remove_pose_cont_reference_artifacts
 public :: prepare_pose_cont_observation
 public :: shift_native_to_crop, shift_crop_to_native
-public :: nearest_pose_cont_inplane_index
 
 integer, parameter  :: POSE_CONT_NOT_ATTEMPTED       = 0
-integer, parameter  :: POSE_CONT_INVALID_PREPARATION = 7
+integer, parameter  :: POSE_CONT_INVALID_PREPARATION = -1
 integer, parameter  :: POSE_CONT_ROUTE_SHIFT_THEN_JOINT = 1
 integer, parameter  :: POSE_CONT_ROUTE_JOINT            = 2
-integer, parameter  :: POSE_CONT_MAXITS        = 40
-real(dp), parameter :: POSE_CONT_ROTATION_STEP = 0.1_dp
-real(dp), parameter :: POSE_CONT_MAX_ROTATION  = 15._dp*real(PI, dp)/180._dp
 
 !> Rotation and shift coordinates for an input, staged, or returned pose.
 type :: pose_cont_pose
@@ -48,7 +44,7 @@ type :: pose_cont_pose
     real(dp) :: shift(2) = 0._dp
 end type pose_cont_pose
 
-!> Runtime bounds applied by the shift-only and joint LM stages.
+!> Cropped-box pixel bounds applied by the shift-only and joint LM stages.
 type :: pose_cont_limits
     real(dp) :: shift_step_bound = 0._dp
     real(dp) :: max_total_shift = 0._dp
@@ -59,15 +55,10 @@ end type pose_cont_limits
 !! numerical limits or the Cartesian LM owner.
 type :: pose_cont_config
     integer :: route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
+    integer :: max_iterations = 40       !< maximum iterations in each enabled LM stage
+    real(dp) :: rotation_scale = 0.1_dp  !< radians per joint-LM proposal
+    real(dp) :: max_total_rotation = 15._dp*real(PI,dp)/180._dp !< radians from the seed
 end type pose_cont_config
-
-!> Per-shell residual accounting evaluated at one terminal particle pose.
-type :: pose_cont_sigma_result
-    real, allocatable :: sigma_contrib(:)
-    real, allocatable :: ref_pow(:)
-    real, allocatable :: ptcl_pow(:)
-    real              :: relative_objective = 0.
-end type pose_cont_sigma_result
 
 !> Result and accounting shared by the shift-only and joint LM stages.
 type :: pose_cont_stage_result
@@ -127,7 +118,6 @@ contains
     procedure :: is_ready => pose_cont_reference_workspace_is_ready
     procedure :: prepare_particle => prepare_pose_cont_particle
     procedure :: refine_particle => refine_pose_cont_particle
-    procedure :: sigma_contribution => pose_cont_sigma_contribution
 end type pose_cont_reference_workspace
 
 contains
@@ -302,26 +292,8 @@ contains
     end subroutine refine_pose_cont_particle
 
     ! ========================================================================
-    ! Production sigma accounting and pose transaction
+    ! Production pose transaction
     ! ========================================================================
-
-    subroutine pose_cont_sigma_contribution(self, state, even, seed, data, result)
-        class(pose_cont_reference_workspace), intent(in) :: self
-        integer, intent(in) :: state
-        logical, intent(in) :: even
-        type(pose_cont_pose), intent(in) :: seed
-        type(cartesian_pose_data), intent(in) :: data
-        type(pose_cont_sigma_result), intent(out) :: result
-
-        if (.not. self%is_ready(state, even)) THROW_HARD('pose_cont reference slot is not ready')
-        if (even) then
-            call self%even(state)%refiner%prepared_sigma_contribution(seed%rotmat, seed%shift, data, &
-                &result%sigma_contrib, result%ref_pow, result%ptcl_pow, result%relative_objective)
-        else
-            call self%odd(state)%refiner%prepared_sigma_contribution(seed%rotmat, seed%shift, data, &
-                &result%sigma_contrib, result%ref_pow, result%ptcl_pow, result%relative_objective)
-        end if
-    end subroutine pose_cont_sigma_contribution
 
     !> Run the configured local LM route, then commit only when the complete
     !! transaction improves upon the original seed.
@@ -372,7 +344,7 @@ contains
         case (POSE_CONT_ROUTE_SHIFT_THEN_JOINT)
             ! Stage 1: refine translation only, holding the seed rotation fixed.
             shift_config = shift_lm_config(shift_step_bound=limits%shift_step_bound, &
-                &max_iterations=POSE_CONT_MAXITS)
+                &max_iterations=config%max_iterations)
             call refiner%refine_shift_lm(staged_pose%rotmat, staged_pose%shift, data, &
                 &shift_config, lm_result, diagnostics)
             call refiner%prepared_objective_gradient(staged_pose%rotmat, staged_pose%shift, data, &
@@ -381,7 +353,7 @@ contains
                 &result%objective_before, shift_objective_after)
             result%shift_endpoint = staged_pose
 
-            ! Enforce the caller's cumulative native-pixel shift bound explicitly.
+            ! Enforce the caller's cumulative working-grid shift bound explicitly.
             if (sqrt(sum((staged_pose%shift - seed%shift)**2)) > &
                 &limits%max_total_shift + 10._dp*epsilon(1._dp)) then
                 result%shift_stage%status = LM_STEP_BOUND_REJECTED
@@ -404,12 +376,12 @@ contains
         ! Joint stage: refine three rotations and two shifts from the route's
         ! current endpoint (the shift result or the original seed).
         ! Both cumulative guards remain anchored at the original transaction seed.
-        joint_config = pose_lm_config(rotation_scale=POSE_CONT_ROTATION_STEP, &
-            &shift_step_bound=limits%shift_step_bound, max_iterations=POSE_CONT_MAXITS)
+        joint_config = pose_lm_config(rotation_scale=config%rotation_scale, &
+            &shift_step_bound=limits%shift_step_bound, max_iterations=config%max_iterations)
         joint_config%use_cumulative_guard = .true.
         joint_config%anchor_rotmat = seed%rotmat
         joint_config%anchor_shift = seed%shift
-        joint_config%max_total_rotation = POSE_CONT_MAX_ROTATION
+        joint_config%max_total_rotation = config%max_total_rotation
         joint_config%max_total_shift = limits%max_total_shift
         call refiner%refine_prepared_pose_lm(staged_pose%rotmat, staged_pose%shift, data, &
             &joint_config, lm_result, diagnostics)
@@ -560,14 +532,7 @@ contains
         shift_native = shift_crop*real(box)/real(box_crop)
     end function shift_crop_to_native
 
-    !> Map a continuous in-plane rotation to the established uniform PFTC grid.
-    pure integer function nearest_pose_cont_inplane_index(rotation, dang, nrots) result(index)
-        real, intent(in) :: rotation, dang
-        integer, intent(in) :: nrots
-        if (dang <= 0. .or. nrots < 1) error stop 'pose_cont in-plane grid is invalid'
-        index = modulo(nint(rotation/dang), nrots) + 1
-    end function nearest_pose_cont_inplane_index
-
+    !> Validate the half-set label before deriving an artifact filename.
     subroutine validate_half(half)
         character(len=*), intent(in) :: half
         if (trim(half) /= 'even' .and. trim(half) /= 'odd') &

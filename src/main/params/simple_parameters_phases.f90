@@ -824,6 +824,16 @@ contains
             case DEFAULT
                 THROW_HARD('inpl_cont must be yes or no')
         end select
+        select case(trim(self%pose_cont))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('pose_cont must be yes or no')
+        end select
+        select case(trim(self%pose_cont_route))
+            case('shift_then_joint','joint')
+            case DEFAULT
+                THROW_HARD('pose_cont_route must be shift_then_joint or joint')
+        end select
         self%l_dose_weight = cline%defined('total_dose')
         if( self%fraction_dose_target < 0.01 )then
             THROW_HARD('Invalid : fraction_dose_target'//real2str(self%fraction_dose_target))

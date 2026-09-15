@@ -55,6 +55,18 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
+        &'Experimental five-parameter pose refinement', &
+        &'Run transactional Cartesian LM after the established matcher result(yes|no){no}', '', &
+        &.false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'pose_cont_route', 'multi', &
+        &'Continuous pose LM route', &
+        &'Continuous pose LM route(shift_then_joint|joint){shift_then_joint}', '', &
+        &.false., 'shift_then_joint', group="search", &
+        &choices=ui_choices([character(len=16) :: 'shift_then_joint', 'joint']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, maxits, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, update_frac, group="search", &

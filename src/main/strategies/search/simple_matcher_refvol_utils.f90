@@ -6,6 +6,7 @@ use simple_parameters,      only: parameters
 use simple_cmdline,         only: cmdline
 use simple_image,           only: image
 use simple_refine3D_fnames, only: refine3D_reproj_model_fname
+use simple_pose_cont_refine3D_adapter, only: write_pose_cont_reference_artifact
 implicit none
 
 public :: read_mask_filter_reproject_refvols
@@ -555,6 +556,8 @@ contains
                 call build%vol%shift(xyz)
             endif
             call build%vol%ifft()
+            if( trim(params%pose_cont) == 'yes' ) &
+                &call write_pose_cont_reference_artifact(build%vol, s, 'even')
             call build%vol%pad_fft(build%vol_pad)
             call build%vol_pad%expand_cmat()
             call vol_pad2ref_pfts_opt(build%pftc, build%vol_pad, build%eulspace, s, .true.)
@@ -567,6 +570,8 @@ contains
                 call build%vol_odd%shift(xyz)
             endif
             call build%vol_odd%ifft()
+            if( trim(params%pose_cont) == 'yes' ) &
+                &call write_pose_cont_reference_artifact(build%vol_odd, s, 'odd')
             call build%vol_odd%pad_fft(build%vol_odd_pad)
             call build%vol_odd_pad%expand_cmat()
             call vol_pad2ref_pfts_opt(build%pftc, build%vol_odd_pad, build%eulspace, s, .false.)

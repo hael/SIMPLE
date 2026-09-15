@@ -4,26 +4,64 @@ use simple_image, only: image
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_limits, pose_cont_config, &
-    &pose_cont_transaction_result, pose_cont_sigma_result, &
+    &pose_cont_transaction_result, &
     &cartesian_pose_data, &
     &write_pose_cont_reference_artifact, &
     &remove_pose_cont_reference_artifacts, prepare_pose_cont_observation, &
-    &shift_native_to_crop, shift_crop_to_native, nearest_pose_cont_inplane_index, &
+    &shift_native_to_crop, shift_crop_to_native, &
     &POSE_CONT_INVALID_PREPARATION, LM_ACCEPTED_IMPROVEMENT, &
     &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED, POSE_CONT_NOT_ATTEMPTED, &
     &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
+use pose_cont_refine3D_adapter_1jyx_test, only: run_pose_cont_1jyx_reconstruction
 implicit none
 
 integer, parameter :: TEST_BOX = 16
 real, parameter :: TEST_SMPD = 1.5
-real(dp), parameter :: OBJECTIVE_TOL = 1.e-8_dp
+character(len=32) :: selected_case
+integer :: occurrences
 
-call test_reference_workspace_lifecycle()
-call test_observation_and_coordinate_adapters()
-call test_transaction_and_sigma_contracts()
-write(*,'(a)') 'POSE_CONT_REFINE3D_ADAPTER: PASS'
+call find_selected_case(selected_case,occurrences)
+if( occurrences > 1 ) error stop 'pose-cont adapter suite accepts only one case= argument'
+if( occurrences == 0 )then
+    call run_adapter_contracts()
+else
+    select case(trim(selected_case))
+    case('adapter')
+        call run_adapter_contracts()
+    case('1jyx_reconstruction')
+        call run_pose_cont_1jyx_reconstruction()
+    case default
+        error stop 'pose-cont adapter suite requires case=adapter or case=1jyx_reconstruction'
+    end select
+endif
 
 contains
+
+    subroutine run_adapter_contracts()
+        call test_reference_workspace_lifecycle()
+        call test_observation_and_coordinate_adapters()
+        call test_transaction_contracts()
+        write(*,'(a)') 'POSE_CONT_REFINE3D_ADAPTER: PASS'
+    end subroutine run_adapter_contracts
+
+    subroutine find_selected_case(case_name,count)
+        character(len=*), intent(out) :: case_name
+        integer, intent(out) :: count
+        character(len=256) :: argument
+        integer :: iarg, separator, status
+
+        case_name = ''
+        count = 0
+        do iarg = 1, command_argument_count()
+            call get_command_argument(iarg,argument,status=status)
+            if( status /= 0 ) error stop 'could not read pose-cont adapter test argument'
+            separator = index(argument,'=')
+            if( separator <= 1 ) cycle
+            if( trim(argument(:separator-1)) /= 'case' ) cycle
+            count = count+1
+            case_name = trim(argument(separator+1:))
+        enddo
+    end subroutine find_selected_case
 
     subroutine test_reference_workspace_lifecycle()
         type(pose_cont_reference_workspace) :: workspace
@@ -93,22 +131,17 @@ contains
             &'native-to-cropped shift conversion used the wrong scale')
         call assert_true(maxval(abs(shift_crop_to_native(crop_shift,NATIVE_BOX,TEST_BOX)-native_shift)) &
             &<= epsilon(1.),'cropped-to-native shift conversion is not reversible')
-        call assert_true(nearest_pose_cont_inplane_index(359.,10.,36) == 1 .and. &
-            &nearest_pose_cont_inplane_index(16.,10.,36) == 3, &
-            &'continuous in-plane angle did not map to the periodic PFTC grid')
-
         call raw%kill()
         call oracle%kill()
         call work%kill()
         call oracle_work%kill()
     end subroutine test_observation_and_coordinate_adapters
 
-    subroutine test_transaction_and_sigma_contracts()
+    subroutine test_transaction_contracts()
         type(cartesian_pose_refiner) :: generator
         type(pose_cont_reference_workspace) :: workspace
         type(cartesian_pose_data) :: data, invalid_data
         type(pose_cont_transaction_result) :: result
-        type(pose_cont_sigma_result) :: sigma_result
         type(pose_cont_pose) :: seed
         type(pose_cont_config) :: config
         type(pose_cont_limits) :: limits
@@ -202,19 +235,10 @@ contains
             &all(result%pose%shift == truth_shift), &
             &'invalid particle preparation changed the input pose')
 
-        call workspace%sigma_contribution(1,.true.,seed,data,sigma_result)
-        call assert_true(lbound(sigma_result%sigma_contrib,1) == 2 .and. &
-            &ubound(sigma_result%sigma_contrib,1) == TEST_BOX/2-1, &
-            &'adapter sigma contribution changed the active shell range')
-        call assert_true(maxval(abs(sigma_result%sigma_contrib)) <= real(OBJECTIVE_TOL) .and. &
-            &maxval(abs(sigma_result%ref_pow-sigma_result%ptcl_pow)) <= 2.e-5 .and. &
-            &abs(sigma_result%relative_objective) <= real(OBJECTIVE_TOL), &
-            &'adapter sigma contribution disagrees at a known exact pose')
-
         call generator%kill()
         call workspace%kill()
         call remove_pose_cont_reference_artifacts(1)
-    end subroutine test_transaction_and_sigma_contracts
+    end subroutine test_transaction_contracts
 
     subroutine write_reference(volume,even)
         real, intent(in) :: volume(:,:,:)

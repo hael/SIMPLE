@@ -27,6 +27,12 @@ use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_strategy3D,              only: strategy3D
+use simple_ori_utils,               only: dm2euler
+use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
+    &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
+    &cartesian_pose_data, prepare_pose_cont_observation, shift_native_to_crop, &
+    &shift_crop_to_native, LM_ACCEPTED_IMPROVEMENT, &
+    &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 implicit none
 
 public :: refine3D_exec
@@ -43,6 +49,7 @@ type :: refine3D_ctrl
     logical :: do_emit_sigma
     logical :: do_write_oris
     logical :: do_bench
+    logical :: do_pose_cont
   contains
     procedure :: print_flags
 end type refine3D_ctrl
@@ -69,7 +76,11 @@ contains
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
+        type(pose_cont_reference_workspace) :: pose_cont_refs
+        type(pose_cont_config) :: pose_config
+        type(pose_cont_limits) :: pose_limits
         real                :: frac_greedy
+        real(dp)            :: pose_cont_crop_scale
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: has_been_searched
@@ -216,6 +227,7 @@ contains
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         call b_ptr%esig%kill
+        call pose_cont_refs%kill
         if( ctrl%do_bench ) rss_after_reconstruction = get_current_rss_bytes()
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
@@ -290,9 +302,29 @@ contains
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
             ctrl%do_projrec    = trim(p_ptr%projrec) == 'yes'
             ctrl%do_bench      = L_BENCH_GLOB
+            ctrl%do_pose_cont  = trim(p_ptr%pose_cont) == 'yes'
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
             ctrl%do_emit_sigma = p_ptr%cc_objfun == OBJFUN_EUCLID .or. trim(p_ptr%cc_emit_sigma) == 'yes'
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
+            if( ctrl%do_pose_cont )then
+                if( p_ptr%cc_objfun /= OBJFUN_EUCLID ) &
+                    &THROW_HARD('pose_cont requires objfun=euclid')
+                if( ctrl%do_prob_align .or. ctrl%do_sigma_mode .or. ctrl%refine_mode == 'eval' ) &
+                    &THROW_HARD('pose_cont requires an ordinary pose-search refinement mode')
+                select case(trim(p_ptr%pose_cont_route))
+                    case('shift_then_joint')
+                        pose_config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
+                    case('joint')
+                        pose_config%route = POSE_CONT_ROUTE_JOINT
+                    case DEFAULT
+                        THROW_HARD('unsupported pose_cont_route')
+                end select
+                ! The adapter works in cropped-box pixels; express the one-native-
+                ! pixel proposal and five-native-pixel capture bounds on that grid.
+                pose_cont_crop_scale = real(p_ptr%box_crop,dp)/real(p_ptr%box,dp)
+                pose_limits = pose_cont_limits(shift_step_bound=pose_cont_crop_scale, &
+                    &max_total_shift=5._dp*pose_cont_crop_scale)
+            endif
             select case(ctrl%refine_mode)
                 case('eval','sigma')
                     ctrl%do_write_partial_recs = .false.
@@ -340,6 +372,10 @@ contains
         subroutine prepare_refs_sigmas_and_pftc()
             if( ctrl%do_bench ) t_prep_refs = tic()
             call read_reprojection_model(p_ptr, b_ptr, batchsz_max)
+            ! Real-space artifacts bridge the reference-materialization process
+            ! and every matcher worker; each worker loads them only once here.
+            if( ctrl%do_pose_cont ) &
+                &call pose_cont_refs%new_from_artifacts(p_ptr%nstates,p_ptr%box_crop,p_ptr%smpd_crop)
             call prep_sigmas_objfun(p_ptr, b_ptr)
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
@@ -414,6 +450,7 @@ contains
             if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                 call strategy3Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy3Dspecs(iptcl_batch), b_ptr)
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
+                if( ctrl%do_pose_cont ) call run_pose_cont_after_pftc(iptcl,iptcl_batch,ithr)
                 if( trim(p_ptr%inpl_cont) == 'yes' )then
                     call strategy3Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
                         &attempted, improved, no_improvement, invalid)
@@ -427,6 +464,83 @@ contains
                 nullify(strategy3Dsrch(iptcl_batch)%ptr)
             endif
         end subroutine choose_and_run_strategy
+
+        !> Run transactional Cartesian LM from the established matcher winner.
+        !! With inpl_cont=yes this seed includes its accepted polish; otherwise
+        !! it is the ordinary PFTC result. Only an accepted pose_cont result is
+        !! committed, so rejected or invalid transactions preserve that seed.
+        subroutine run_pose_cont_after_pftc(iptcl, iptcl_batch, ithr)
+            integer, intent(in) :: iptcl, iptcl_batch, ithr
+            type(ori) :: winner
+            type(ctfparams) :: ctfparms, cropped_ctfparms
+            type(cartesian_pose_data) :: data
+            type(pose_cont_pose) :: seed
+            type(pose_cont_transaction_result) :: result
+            complex, allocatable :: observed(:,:)
+            real, allocatable :: sigma2(:)
+            real :: euler(3), shift_native(2)
+            integer :: state, eo
+            logical :: even
+
+            ! Stage 1: capture the authoritative PFTC/inpl_cont winner.
+            call b_ptr%spproj_field%get_ori(iptcl,winner)
+            state = winner%get_state()
+            eo = winner%get_eo()
+            select case(eo)
+                case(0)
+                    even = .true.
+                case(1)
+                    even = .false.
+                case default
+                    THROW_HARD('pose_cont requires an even/odd half-set assignment')
+            end select
+
+            ! Stage 2: prepare the cropped Cartesian observation and its
+            ! per-shell noise weights for the local objective.
+            ctfparms = b_ptr%spproj%get_ctfparams(p_ptr%oritype,iptcl)
+            call prepare_pose_cont_observation(b_ptr%imgbatch(iptcl_batch),b_ptr%lmsk, &
+                &ptcl_match_imgs(ithr),p_ptr%msk_crop,p_ptr%smpd_crop,ctfparms, &
+                &observed,cropped_ctfparms)
+            if( .not. allocated(b_ptr%esig%sigma2_noise) ) &
+                &THROW_HARD('pose_cont requires allocated sigma2 noise')
+            if( p_ptr%kfromto(1) < lbound(b_ptr%esig%sigma2_noise,1) .or. &
+                &p_ptr%kfromto(2) > ubound(b_ptr%esig%sigma2_noise,1) ) &
+                &THROW_HARD('pose_cont shell range exceeds sigma2 noise bounds')
+            if( iptcl < lbound(b_ptr%esig%sigma2_noise,2) .or. &
+                &iptcl > ubound(b_ptr%esig%sigma2_noise,2) ) &
+                &THROW_HARD('pose_cont particle index exceeds sigma2 noise bounds')
+            allocate(sigma2(0:p_ptr%kfromto(2)),source=1.)
+            sigma2(p_ptr%kfromto(1):p_ptr%kfromto(2)) = &
+                &b_ptr%esig%sigma2_noise(p_ptr%kfromto(1):p_ptr%kfromto(2),iptcl)
+            call pose_cont_refs%prepare_particle(state,even,observed,cropped_ctfparms, &
+                &sigma2,p_ptr%kfromto,data)
+            seed%rotmat = real(winner%get_mat(),dp)
+            seed%shift = real(shift_native_to_crop(winner%get_2Dshift(), &
+                &p_ptr%box,p_ptr%box_crop),dp)
+
+            ! Stage 3: run the selected local LM route transactionally.
+            call pose_cont_refs%refine_particle(state,even,seed,data,pose_config,pose_limits,result)
+
+            ! Stage 4: commit only an accepted Cartesian improvement. Rejected
+            ! or invalid transactions leave the established pose unchanged.
+            if( result%status == LM_ACCEPTED_IMPROVEMENT )then
+                ! Convert the accepted Cartesian pose back to SIMPLE's native
+                ! project coordinates before sigma evaluation/reconstruction.
+                euler = real(dm2euler(result%pose%rotmat))
+                shift_native = shift_crop_to_native(real(result%pose%shift), &
+                    &p_ptr%box,p_ptr%box_crop)
+                call winner%set_euler(euler)
+                call winner%set_shift(shift_native)
+
+                ! Keep the nearest discrete companions consistent for legacy
+                ! PFTC/sigma consumers. All other fields, including corr,
+                ! state, and half-set identity, remain those of the winner.
+                call winner%set('proj',real(b_ptr%eulspace%find_closest_proj(winner)))
+                call winner%set('inpl',real(b_ptr%pftc%get_roind(360.-winner%e3get())))
+                call b_ptr%spproj_field%set_ori(iptcl,winner)
+            endif
+            call winner%kill
+        end subroutine run_pose_cont_after_pftc
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return
@@ -461,6 +575,7 @@ contains
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
+        write(logfhandle,*) 'do_pose_cont          : ', ctrl%do_pose_cont
     end subroutine print_flags
 
 end module simple_strategy3D_matcher

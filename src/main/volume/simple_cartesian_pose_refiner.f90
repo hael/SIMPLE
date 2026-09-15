@@ -809,6 +809,8 @@ contains
         endif
         if( config%shift_step_bound <= 0._dp .or. .not. ieee_is_finite(config%shift_step_bound) ) &
             &error stop 'refine_pose_lm shift step bound must be positive and finite'
+        ! Evaluate the seed pose once. This full Fourier-disk traversal builds
+        ! the objective, five-vector gradient, and 5-by-5 Gauss-Newton matrix.
         call self%pose_normal_terms(rotmat,shift,data%observed,objective,gradient,hessian, &
             &min_switch_margin,data%transfer,data%shell_range)
         bounded_trial = .false.
@@ -821,9 +823,13 @@ contains
         mu = 1.e-3_dp
         do iteration = 1, config%max_iterations
             result%niterations = iteration
+            ! Form and solve the small damped LM system. This 5-by-5 algebra is
+            ! inexpensive compared with evaluating the Fourier plane.
             call build_pose_lm_system(gradient,hessian,config%rotation_scale,mu,active,scaled_gradient, &
                 &scaled_hessian,diagonal,solve_matrix,scaled_direction,direction,identifiable, &
                 &stationary,reliable,bounded_step,config%shift_step_bound)
+            ! Stop when the local system is stationary, unidentifiable, or
+            ! numerically unreliable; retain any improvement already accepted.
             if( .not. identifiable )then
                 result%status = merge(LM_ACCEPTED_IMPROVEMENT,LM_NO_RELIABLE_UPDATE,naccepted>0)
                 exit
@@ -848,7 +854,8 @@ contains
                 diagnostics%max_rotation_step = max(diagnostics%max_rotation_step,rotation_norm)
                 diagnostics%max_shift_step = max(diagnostics%max_shift_step,shift_norm)
             endif
-            ! Quadratic LM model: predicted = -g^T d - 1/2 d^T H d.
+            ! Predict the reduction from the local quadratic LM model:
+            ! predicted = -g^T d - 1/2 d^T H d.
             predicted = -dot_product(gradient,direction)-0.5_dp* &
                 &dot_product(direction,matmul(hessian,direction))
             if( .not. ieee_is_finite(predicted) )then
@@ -858,10 +865,14 @@ contains
                 mu = 4._dp*mu
                 cycle
             endif
+            ! Apply the proposed three-component SO(3) increment and the two
+            ! image-shift increments without changing the accepted pose yet.
             trial_rotmat = right_increment_rotation(rotmat,direction(1:3))
             trial_shift = shift+direction(4:5)
             if( present(diagnostics) ) diagnostics%nattempted = diagnostics%nattempted+1
             if( cumulative_guard )then
+                ! Reject proposals that leave the transaction's rotation or
+                ! shift capture basin; increase damping and try a smaller step.
                 sine_half = sqrt(sum((trial_rotmat-config%anchor_rotmat)**2))/(2._dp*sqrt(2._dp))
                 cumulative_rotation = 2._dp*asin(max(0._dp,min(1._dp,sine_half)))
                 cumulative_shift = sqrt(sum((trial_shift-config%anchor_shift)**2))
@@ -877,6 +888,9 @@ contains
             trial_switches = self%count_stencil_switches(rotmat,trial_rotmat,data%shell_range)
             if( present(diagnostics) ) &
                 &diagnostics%nstencil_switches = diagnostics%nstencil_switches+trial_switches
+            ! Recompute the trial objective, gradient, and normal matrix from
+            ! the full active Fourier disk. This repeated O(N^2) interpolation
+            ! and accumulation is the dominant cost of each LM iteration.
             call self%pose_normal_terms(trial_rotmat,trial_shift,data%observed,trial_objective, &
                 &trial_gradient,trial_hessian,trial_switch_margin,data%transfer,data%shell_range)
             if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
@@ -885,7 +899,9 @@ contains
                 result%status = LM_INVALID_NUMERICS
                 cycle
             endif
-            ! Gain ratio compares the recomputed reduction with the local model.
+            ! Compare the measured reduction with the quadratic prediction.
+            ! Accept a trustworthy improvement; otherwise increase damping and
+            ! retry from the last accepted pose.
             actual = objective-trial_objective
             ratio = actual/predicted
             accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
@@ -900,6 +916,8 @@ contains
                 if( present(diagnostics) ) diagnostics%naccepted = naccepted
                 if( ratio > 0.75_dp ) mu = max(mu/2._dp,epsilon(1._dp))
                 result%status = LM_ACCEPTED_IMPROVEMENT
+                ! Stop early after an accepted but negligible step or objective
+                ! reduction; otherwise continue from this accepted endpoint.
                 if( max(rotation_norm,shift_norm) < 1.e-8_dp .or. relative_reduction < 1.e-10_dp ) exit
             else
                 mu = 4._dp*mu
