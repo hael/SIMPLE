@@ -241,8 +241,8 @@ subroutine set_ui_params
                                    'in pixels', .false., 0.)
 
     call cls_init%set_param(       'cls_init',        'multi',  'Scheme for initial class generation', &
-                                   'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){rand}','', .false., 'rand', &
-    &choices=ui_choices([character(len=7) :: 'ptcl', 'randcls', 'rand']))
+                                   'Initiate 2D analysis from raw images|random classes|noise images|previous 2D clustering in the project (abinitio2D only)(ptcl|randcls|rand|prev){rand}','', .false., 'rand', &
+    &choices=ui_choices([character(len=7) :: 'ptcl', 'randcls', 'rand', 'prev']))
 
     call clust_crit%set_param(     'clust_crit',      'multi',  'Clustering criterion', &
                                    'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}','', .false., 'hybrid', &

@@ -1078,7 +1078,7 @@ contains
         end select
         if( cline%defined('cls_init') )then
             select case(trim(self%cls_init))
-                case('ptcl','rand','randcls')
+                case('ptcl','rand','randcls','prev')
                 case DEFAULT
                     THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(self%cls_init))
             end select

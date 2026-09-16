@@ -214,6 +214,7 @@ type :: oris
     procedure          :: split_class
     procedure          :: expand_classes
     procedure          :: remap_cls
+    procedure          :: reseed_classes
     procedure          :: merge_classes
     procedure          :: discretize
     procedure          :: extract_subspace
@@ -1463,6 +1464,14 @@ interface
     module subroutine remap_cls( self )
         class(oris), intent(inout) :: self
     end subroutine remap_cls
+
+    module subroutine reseed_classes( self, clsinds, ncls_target, parent_of_seed, seed_pops, ndropped )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: clsinds(:)
+        integer,              intent(in)    :: ncls_target
+        integer, allocatable, intent(inout) :: parent_of_seed(:), seed_pops(:)
+        integer,              intent(out)   :: ndropped
+    end subroutine reseed_classes
 
     module subroutine merge_classes( self, class_merged, class )
         class(oris), intent(inout) :: self

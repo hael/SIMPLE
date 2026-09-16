@@ -20,6 +20,7 @@ contains
         call test_stats_and_ordering()
         call test_rotations_and_errors()
         call test_misc_flags()
+        call test_reseed_classes()
         ! call report_summary()
     end subroutine run_all_oris_tests
 
@@ -492,5 +493,100 @@ contains
         call os%delete_3Dalignment()
         call os%kill
     end subroutine test_misc_flags
+
+    !---------------------------------------------------------------
+    ! 11. reseed_classes (abinitio2D cls_init=prev seed partition)
+    !---------------------------------------------------------------
+    subroutine test_reseed_classes()
+        type(oris) :: os
+        integer, allocatable :: parent_of_seed(:), seed_pops(:)
+        integer :: i, n, ndropped, icls, iseed
+        real    :: corr_mean_a, corr_mean_b
+        write(*,'(A)') 'test_reseed_classes'
+        ! parents: class 1 = 60 ptcls, class 2 = 30, class 3 = 10, class 4 = 4 (rejected),
+        ! plus 6 state=0 particles in class 1 that must be ignored
+        n = 110
+        call os%new(n, .true.)
+        call os%set_all2single('state', 1)
+        do i = 1, n
+            if( i <= 60 )then
+                icls = 1
+            else if( i <= 90 )then
+                icls = 2
+            else if( i <= 100 )then
+                icls = 3
+            else if( i <= 104 )then
+                icls = 4
+            else
+                icls = 1
+                call os%set_state(i, 0)
+            endif
+            call os%set_class(i, icls)
+            call os%set(i, 'corr', real(i) / real(n))
+        end do
+        ! K = M = 3: identity allocation on the accepted parents, class 4 unassigned
+        call os%reseed_classes([1,2,3], 3, parent_of_seed, seed_pops, ndropped)
+        call assert_int(0, ndropped, 'reseed K=M: nothing dropped')
+        call assert_int(3, size(parent_of_seed), 'reseed K=M: size(parent_of_seed)')
+        call assert_int(100, sum(seed_pops), 'reseed K=M: all active accepted particles seeded')
+        call assert_int(60, seed_pops(1), 'reseed K=M: parent 1 population preserved')
+        call assert_int(10, seed_pops(3), 'reseed K=M: parent 3 population preserved')
+        call assert_int(0, os%get_class(101), 'reseed K=M: rejected class -> class 0')
+        call assert_int(0, os%get_class(105), 'reseed K=M: state=0 particle -> class 0')
+        ! K = 10 > M: seeds proportional to population (6,3,1), children balanced
+        do i = 1, n
+            if( i <= 60 )then
+                icls = 1
+            else if( i <= 90 )then
+                icls = 2
+            else if( i <= 100 )then
+                icls = 3
+            else
+                icls = 4
+            endif
+            call os%set_class(i, icls)
+        end do
+        call os%reseed_classes([1,2,3], 10, parent_of_seed, seed_pops, ndropped)
+        call assert_int(0,  ndropped, 'reseed K>M: nothing dropped')
+        call assert_int(10, size(seed_pops), 'reseed K>M: K seed classes')
+        call assert_int(6,  count(parent_of_seed == 1), 'reseed K>M: parent 1 gets 6 seeds')
+        call assert_int(3,  count(parent_of_seed == 2), 'reseed K>M: parent 2 gets 3 seeds')
+        call assert_int(1,  count(parent_of_seed == 3), 'reseed K>M: parent 3 gets 1 seed')
+        call assert_int(100, sum(seed_pops), 'reseed K>M: all active accepted particles seeded')
+        call assert_int(10, minval(seed_pops), 'reseed K>M: balanced children (min)')
+        call assert_int(10, maxval(seed_pops), 'reseed K>M: balanced children (max)')
+        ! rank interleaving: the children of parent 1 have the same corr mean (within one rank step)
+        corr_mean_a = 0.
+        corr_mean_b = 0.
+        do i = 1, 60
+            iseed = os%get_class(i)
+            call assert_true(iseed >= 1 .and. iseed <= 6, 'reseed K>M: parent-1 particle lands in a parent-1 seed')
+            if( iseed == 1 ) corr_mean_a = corr_mean_a + os%get(i, 'corr')
+            if( iseed == 6 ) corr_mean_b = corr_mean_b + os%get(i, 'corr')
+        end do
+        call assert_real(corr_mean_a / 10., corr_mean_b / 10., 6. / real(n), 'reseed K>M: interleaved children share the corr distribution')
+        ! K = 2 < M: the smallest parent is dropped and its particles unassigned
+        do i = 1, n
+            if( i <= 60 )then
+                icls = 1
+            else if( i <= 90 )then
+                icls = 2
+            else if( i <= 100 )then
+                icls = 3
+            else
+                icls = 4
+            endif
+            call os%set_class(i, icls)
+        end do
+        call os%reseed_classes([1,2,3], 2, parent_of_seed, seed_pops, ndropped)
+        call assert_int(1,  ndropped, 'reseed K<M: one parent dropped')
+        call assert_int(2,  size(seed_pops), 'reseed K<M: K seed classes')
+        call assert_int(1,  parent_of_seed(1), 'reseed K<M: largest parent kept first')
+        call assert_int(2,  parent_of_seed(2), 'reseed K<M: second parent kept')
+        call assert_int(90, sum(seed_pops), 'reseed K<M: dropped parent particles unassigned')
+        call assert_int(0,  os%get_class(95), 'reseed K<M: dropped-parent particle -> class 0')
+        deallocate(parent_of_seed, seed_pops)
+        call os%kill
+    end subroutine test_reseed_classes
 
 end module simple_oris_tester

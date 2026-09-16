@@ -145,6 +145,98 @@ contains
         deallocate(clspops)
     end subroutine remap_cls
 
+    !> Re-seed a K-class partition from a previous clustering, metadata only.
+    !! clsinds are the accepted parent classes. Each parent receives a number
+    !! of seed classes proportional to its active population (largest-remainder
+    !! allocation; at least one when ncls_target >= size(clsinds)), so every
+    !! seed class has ~nptcls/ncls_target particles (balanced) and the seed
+    !! set represents the previous view distribution (representative). A
+    !! parent with more than one seed class is split by rank interleaving on
+    !! corr (best-to-worst, dealt round-robin), so the children are equal in
+    !! size and in objective-value distribution. When ncls_target < size(clsinds)
+    !! the least populous parents receive no seed class. Every active particle
+    !! outside the seeded parents (dropped, rejected, or unlabelled) gets
+    !! class=0; e3/shift are left untouched. State=0 particles are ignored.
+    !! parent_of_seed(k) is the parent class of seed class k, seed_pops(k) its
+    !! population, ndropped the number of accepted parents left without a seed.
+    module subroutine reseed_classes( self, clsinds, ncls_target, parent_of_seed, seed_pops, ndropped )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: clsinds(:)
+        integer,              intent(in)    :: ncls_target
+        integer, allocatable, intent(inout) :: parent_of_seed(:), seed_pops(:)
+        integer,              intent(out)   :: ndropped
+        type(class_sample), allocatable :: clssmp(:)
+        integer, allocatable :: nseeds(:)
+        real,    allocatable :: quota(:), remainder(:)
+        integer :: nparents, nptcls_tot, i, j, k, iseed, offset, nalloc, loc(1)
+        nparents = size(clsinds)
+        if( nparents   < 1 ) THROW_HARD('reseed_classes requires at least one accepted parent class')
+        if( ncls_target < 1 ) THROW_HARD('reseed_classes requires ncls_target >= 1')
+        if( .not. self%isthere('class') ) THROW_HARD('reseed_classes requires a previous class assignment')
+        ! parents: active particles sorted best-to-worst by corr
+        call self%get_class_sample_stats(clsinds, clssmp)
+        nptcls_tot = 0
+        do i = 1, nparents
+            if( .not. allocated(clssmp(i)%pinds) ) clssmp(i)%pop = 0
+            nptcls_tot = nptcls_tot + clssmp(i)%pop
+        end do
+        if( nptcls_tot < 1 ) THROW_HARD('reseed_classes: accepted parent classes hold no active particles')
+        ! largest-remainder allocation of seed classes to parents
+        allocate(nseeds(nparents), quota(nparents), remainder(nparents))
+        do i = 1, nparents
+            quota(i)  = real(ncls_target) * real(clssmp(i)%pop) / real(nptcls_tot)
+            nseeds(i) = floor(quota(i))
+            if( ncls_target >= nparents .and. clssmp(i)%pop > 0 ) nseeds(i) = max(1, nseeds(i))
+        end do
+        nalloc = sum(nseeds)
+        do while( nalloc < ncls_target )
+            ! largest remainder first, ties by larger population
+            remainder = quota - real(nseeds)
+            where( clssmp(:)%pop <= nseeds(:) ) remainder = -huge(1.0)  ! cannot seed more classes than particles
+            remainder = remainder + 1.e-6 * real(clssmp(:)%pop) / real(nptcls_tot)
+            loc = maxloc(remainder)
+            if( remainder(loc(1)) <= -huge(1.0)/2. ) exit
+            nseeds(loc(1)) = nseeds(loc(1)) + 1
+            nalloc = nalloc + 1
+        end do
+        do while( nalloc > ncls_target )
+            ! the floor-to-one guarantee overshot: take from the parent that least deserves its last seed
+            remainder = quota - real(nseeds)
+            where( nseeds <= 1 ) remainder = huge(1.0)
+            remainder = remainder + 1.e-6 * real(clssmp(:)%pop) / real(nptcls_tot) ! ties: take from the smaller parent
+            loc = minloc(remainder)
+            if( remainder(loc(1)) >= huge(1.0)/2. ) THROW_HARD('reseed_classes: cannot reduce the seed allocation')
+            nseeds(loc(1)) = nseeds(loc(1)) - 1
+            nalloc = nalloc - 1
+        end do
+        if( nalloc /= ncls_target ) THROW_HARD('reseed_classes: seed allocation does not match ncls_target')
+        ndropped = count(nseeds == 0)
+        ! every particle starts unassigned; seeded parents are relabelled below
+        call self%set_all2single('class', 0)
+        if( allocated(parent_of_seed) ) deallocate(parent_of_seed)
+        if( allocated(seed_pops)      ) deallocate(seed_pops)
+        allocate(parent_of_seed(ncls_target), seed_pops(ncls_target), source=0)
+        offset = 0
+        do i = 1, nparents
+            if( nseeds(i) == 0 ) cycle
+            do k = 1, nseeds(i)
+                parent_of_seed(offset + k) = clsinds(i)
+            end do
+            ! rank interleaving: rank j (best first) -> child mod(j-1,nseeds)+1
+            do j = 1, clssmp(i)%pop
+                iseed = offset + mod(j - 1, nseeds(i)) + 1
+                call self%o(clssmp(i)%pinds(j))%set_class(iseed)
+                seed_pops(iseed) = seed_pops(iseed) + 1
+            end do
+            offset = offset + nseeds(i)
+        end do
+        do i = 1, nparents
+            if( allocated(clssmp(i)%pinds) ) deallocate(clssmp(i)%pinds)
+            if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)
+        end do
+        deallocate(clssmp, nseeds, quota, remainder)
+    end subroutine reseed_classes
+
     module subroutine merge_classes( self, class_merged, class )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class_merged, class

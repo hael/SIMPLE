@@ -5,7 +5,7 @@ use simple_parameters, only: parameters
 implicit none
 
 public :: stage_params, determine_abinitio2D_stages, mskdiam2lplimits_cluster2D, set_cline_cluster2D_stage
-public :: set_abinitio2D_sampling_policy
+public :: set_abinitio2D_sampling_policy, abinitio2D_seed_pass_iter, set_cline_cluster2D_seed_pass
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
 public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
 private
@@ -108,6 +108,63 @@ contains
             stage_parms(1:min(FRAC_UPDATE_STAGE-1,nstages))%l_frac_restore = .false.
         endif
     end subroutine set_abinitio2D_sampling_policy
+
+    !> Iteration index of the seed pass of a cls_init=prev run: the iteration at
+    !! which the last pre-probabilistic stage would have ended, so that the first
+    !! probabilistic stage (PROBREFINE_STAGE) runs exactly the iterations it runs
+    !! on an unseeded run.
+    integer function abinitio2D_seed_pass_iter( maxits, update_frac ) result( it_pass )
+        integer, intent(in) :: maxits
+        real,    intent(in) :: update_frac
+        it_pass = phase1_stage_endit(maxits, PROBREFINE_STAGE - 1, update_frac)
+        it_pass = max(2, it_pass) ! never a fresh start: the seed partition must survive
+    end function abinitio2D_seed_pass_iter
+
+    !> Command line of the seed pass: one dense probabilistic iteration of every
+    !! active particle against the seed references, at the low-pass limit of
+    !! PROBREFINE_STAGE, without extremal neighbourhood, sampling or fill-in.
+    !! Mirrors the terminal all-particle pass of the commander.
+    subroutine set_cline_cluster2D_seed_pass( cline_pass, params, stage_parms, it_pass, refs )
+        use simple_cmdline, only: cmdline
+        class(cmdline),     intent(inout) :: cline_pass
+        class(parameters),  intent(in)    :: params
+        type(stage_params), intent(in)    :: stage_parms(:)
+        integer,            intent(in)    :: it_pass
+        character(len=*),   intent(in)    :: refs
+        integer :: istage
+        istage = min(PROBREFINE_STAGE, size(stage_parms))
+        call cline_pass%delete('which_iter')
+        call cline_pass%delete('endit')
+        call cline_pass%delete('update_frac')
+        call cline_pass%delete('nsample')
+        call cline_pass%delete('fillin')
+        call cline_pass%delete('gaufreq')
+        if( stage_parms(istage)%l_lpset )then
+            call cline_pass%set('lp', stage_parms(istage)%lp)
+        else
+            call cline_pass%delete('lp')
+        endif
+        call cline_pass%set('refs',          trim(refs))
+        call cline_pass%set('startit',       it_pass)
+        call cline_pass%set('minits',        1)
+        call cline_pass%set('maxits',        1)
+        call cline_pass%set('extr_iter',     params%extr_lim + 1)
+        call cline_pass%set('refine',        'prob')
+        if( params%cc_objfun == OBJFUN_CC )then
+            call cline_pass%set('objfun', 'cc')
+        else
+            call cline_pass%set('objfun', 'euclid')
+        endif
+        call cline_pass%set('trs',           stage_parms(istage)%trslim)
+        call cline_pass%set('center',        trim(params%center))
+        call cline_pass%set('ml_reg',        params%ml_reg)
+        call cline_pass%set('filt_mode',     'none')
+        call cline_pass%set('gauref',        'no')
+        call cline_pass%set('restore_cavgs', 'yes')
+        call cline_pass%set('box_crop',      stage_parms(istage)%box_crop)
+        call cline_pass%set('smpd_crop',     stage_parms(istage)%smpd_crop)
+        call cline_pass%set('inpl_cont',     params%inpl_cont)
+    end subroutine set_cline_cluster2D_seed_pass
 
     subroutine build_cluster2D_stage_cfg( cfg, cline_cluster2D, cline, params, stage_parms, maxits, istage )
         use simple_cmdline, only: cmdline

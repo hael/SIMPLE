@@ -555,6 +555,8 @@ contains
                 call cline_make_cavgs%set('refs', params%refs)
                 call execute_make_cavgs(cline_make_cavgs, cline, params)
                 l_scale_inirefs = .false.
+            case('prev')
+                THROW_HARD('CLS_INIT=PREV is an abinitio2D seeded restart; cluster2D does not support it')
             case DEFAULT
                 THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
         end select

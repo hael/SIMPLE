@@ -62,11 +62,12 @@ contains
         type(sp_project)           :: spproj
         type(gui_communicator)     :: gui_comm
         class(oris),       pointer :: spproj_field
+        integer, allocatable :: seed_parent(:), seed_pops(:)
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
-        integer :: start_stage, stop_stage
+        integer :: start_stage, stop_stage, it_pass
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_cluster2D, rt_final_cavgs, rt_tot
-        logical :: l_shmem
+        logical :: l_shmem, l_seeded
         if( L_BENCH_GLOB )then
             rt_setup       = 0.
             rt_calc_pspec  = 0.
@@ -106,6 +107,15 @@ contains
         ! override # stages
         if( cline%defined('nstages') ) nstages = min(params%nstages,NSTAGES_CLS)
         start_stage = start_stage_requested
+        ! seeded restart from the previous 2D clustering: the run is entered at the
+        ! first probabilistic stage, preceded by one all-particle seed pass
+        l_seeded = trim(params%cls_init) == 'prev'
+        if( l_seeded )then
+            if( l_checkpoint ) THROW_HARD('cls_init=prev is not supported with stream checkpointing')
+            if( start_stage_requested /= 1 ) THROW_HARD('cls_init=prev requires a fresh abinitio2D run')
+            if( nstages < PROBREFINE_STAGE ) THROW_HARD('cls_init=prev requires nstages >= 3')
+            start_stage = PROBREFINE_STAGE
+        endif
         if( stop_stage_requested > 0 )then
             stop_stage = stop_stage_requested
         else
@@ -124,12 +134,18 @@ contains
         if( start_stage == 1 ) call inirefs ! deal with initial references only on fresh runs
         call set_lplims(nstages)        ! set resolutions limits
         call prep_command_lines(cline)  ! prepare class command lines
-        if( start_stage > 1 )then
+        if( start_stage > 1 .and. .not. l_seeded )then
             call cline_cluster2D%set('endit', checkpoint_last_iter)
             write(logfhandle,'(A,I0,A,I0)') '>>> ABINITIO2D CHECKPOINT RESUME: start_stage=', start_stage,&
                 &' last_iter=', checkpoint_last_iter
         endif
         call set_sampling               ! sampling
+        if( l_seeded )then
+            ! the seed pass is the iteration at which the last pre-probabilistic
+            ! stage would have ended; the stages from PROBREFINE_STAGE on are unchanged
+            it_pass = abinitio2D_seed_pass_iter(maxits, stage_parms(1)%update_frac)
+            call cline_cluster2D%set('endit', it_pass)
+        endif
         if( L_BENCH_GLOB ) rt_setup = toc(t_phase)
         ! summary
         do istage = 1,nstages
@@ -145,9 +161,14 @@ contains
             if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
             call spproj%write_segment_inside(params%oritype, params%projfile)
         else
+            if( l_seeded ) call ensure_seed_eo ! before the sigma2 state, which is built on the e/o halves
             call ensure_resume_sigma_state
         endif
-        
+        if( l_seeded )then
+            call seed_from_previous_clustering ! partition + seed references (needs the sigma2 state above)
+            call execute_seed_pass
+        endif
+
         ! Frequency marching
         do istage = start_stage,stop_stage
             write(logfhandle,'(A)')'>>>'
@@ -199,6 +220,7 @@ contains
             rt_final_cavgs = toc(t_phase)
             call write_abinitio_benchmark(last_iter + 1, 'final_cavgs', nstages)
         endif
+        if( l_seeded ) call write_seed_lineage(with_final_pops=.true.)
         ! final update GUI
         call spproj%read_segment('cls2D', params%projfile)
         call spproj%read_segment('out',   params%projfile)
@@ -214,6 +236,8 @@ contains
         call cline_cluster2D%kill
         call cline_calc_pspec%kill
         deallocate(stage_parms)
+        if( allocated(seed_parent) ) deallocate(seed_parent)
+        if( allocated(seed_pops)   ) deallocate(seed_pops)
         call spproj%kill
         nullify(spproj_field)
         call qsys_cleanup(params)
@@ -307,6 +331,191 @@ contains
             call refs_even%kill
             call refs_odd%kill
         end subroutine inirefs
+
+        ! cls_init=prev: the previous even/odd partition is input state and is
+        ! kept; one is generated only when the project has none. Note that
+        ! isthere('eo') is false for eo=0 (zero-valued particle parameters count
+        ! as absent), so only the field-level get_nevenodd test is meaningful.
+        subroutine ensure_seed_eo
+            if( spproj_field%get_nevenodd() > 0 ) return
+            write(logfhandle,'(A)') '>>> ABINITIO2D SEED WARNING: no even/odd partition in the project; generating one'
+            call spproj_field%partition_eo
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+        end subroutine ensure_seed_eo
+
+        ! cls_init=prev: seed partition and references from the previous 2D
+        ! clustering, metadata only (class, state, corr; cls2D state). The only
+        ! hard error is the absence of a previous clustering; everything else
+        ! is repaired with a warning. Seed references are made from the labels.
+        subroutine seed_from_previous_clustering
+            type(commander_make_cavgs_distr) :: xmake_cavgs_distr
+            type(commander_make_cavgs)       :: xmake_cavgs
+            type(cmdline)                    :: cline_make_cavgs
+            integer, allocatable :: cls_states(:), pops(:), clsinds(:), tmpinds(:)
+            integer :: nptcls, iptcl, icls, ncls_prev, ncls_sel, nactive, nlabelled, ndropped
+            integer :: nrej, nfloor, nunassigned
+            nptcls    = spproj_field%get_noris()
+            nactive   = 0
+            nlabelled = 0
+            do iptcl = 1, nptcls
+                if( spproj_field%get_state(iptcl) <= 0 ) cycle
+                nactive = nactive + 1
+                if( spproj_field%get_class(iptcl) >= 1 ) nlabelled = nlabelled + 1
+            end do
+            if( nactive   == 0 ) THROW_HARD('cls_init=prev: no active particles in the project')
+            if( nlabelled == 0 ) THROW_HARD('cls_init=prev requires a previous 2D clustering; no active particle carries a class label')
+            if( nlabelled < nactive )then
+                write(logfhandle,'(A,I0,A)') '>>> ABINITIO2D SEED WARNING: ', nactive - nlabelled,&
+                    &' active particles without a class label; they enter the seed pass unassigned'
+            endif
+            ! accepted parents: cls2D state (when present) and the population floor
+            ncls_prev = spproj_field%get_n('class')
+            allocate(cls_states(ncls_prev), source=1)
+            ncls_sel = spproj%os_cls2D%get_noris()
+            if( ncls_sel > 0 .and. spproj%os_cls2D%isthere('state') )then
+                do icls = 1, min(ncls_prev, ncls_sel)
+                    cls_states(icls) = spproj%os_cls2D%get_state(icls)
+                end do
+                if( ncls_sel < ncls_prev )then
+                    write(logfhandle,'(A,I0,A,I0,A)') '>>> ABINITIO2D SEED WARNING: particle labels reach class ',&
+                        &ncls_prev, ' but cls2D holds ', ncls_sel, ' entries; classes beyond it are accepted'
+                endif
+            else
+                write(logfhandle,'(A)') '>>> ABINITIO2D SEED WARNING: no cls2D selection state in the project; every labelled class is accepted'
+            endif
+            call spproj_field%get_pops(pops, 'class', maxn=ncls_prev)
+            nrej   = count(cls_states == 0 .and. pops > 0)
+            nfloor = count(cls_states >  0 .and. pops > 0 .and. pops < MINCLSPOPLIM)
+            tmpinds = (/(icls, icls=1,ncls_prev)/)
+            clsinds = pack(tmpinds, mask=(cls_states > 0 .and. pops >= MINCLSPOPLIM))
+            if( size(clsinds) == 0 ) THROW_HARD('cls_init=prev: no accepted class holds enough active particles (MINCLSPOPLIM)')
+            ! the seed partition
+            call spproj_field%reseed_classes(clsinds, params%ncls, seed_parent, seed_pops, ndropped)
+            call spproj_field%clean_entry('updatecnt', 'sampled')
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            nunassigned = 0
+            do iptcl = 1, nptcls
+                if( spproj_field%get_state(iptcl) <= 0 ) cycle
+                if( spproj_field%get_class(iptcl) < 1 ) nunassigned = nunassigned + 1
+            end do
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> ABINITIO2D SEED: ', size(clsinds), ' accepted parent classes -> ',&
+                &params%ncls, ' seed classes'
+            write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> ABINITIO2D SEED: rejected classes ', nrej,&
+                &', classes below the population floor ', nfloor, ', parents dropped (ncls < parents) ', ndropped
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> ABINITIO2D SEED: unassigned particles ', nunassigned,&
+                &', seed populations min/median/max ', minval(seed_pops), '/', nint(median(real(seed_pops))), '/', maxval(seed_pops)
+            call write_seed_lineage(with_final_pops=.false.)
+            ! seed references from the labels, at the working scale, same names as inirefs
+            params%refs      = 'start2Drefs'//params%ext%to_char()
+            params%refs_even = 'start2Drefs_even'//params%ext%to_char()
+            params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
+            cline_make_cavgs = cline
+            call cline_make_cavgs%delete('ptcl_src')
+            call cline_make_cavgs%delete('autoscale')
+            call cline_make_cavgs%delete('balance')
+            call cline_make_cavgs%set('prg',       'make_cavgs')
+            call cline_make_cavgs%set('refs',      params%refs)
+            call cline_make_cavgs%set('box_crop',  stage_parms(1)%box_crop)
+            call cline_make_cavgs%set('smpd_crop', stage_parms(1)%smpd_crop)
+            call cline_make_cavgs%set('ml_reg',    'yes')
+            if( l_shmem )then
+                call xmake_cavgs%execute(cline_make_cavgs)
+            else
+                call xmake_cavgs_distr%execute(cline_make_cavgs)
+            endif
+            call cline_make_cavgs%kill
+            deallocate(cls_states, pops, clsinds, tmpinds)
+        end subroutine seed_from_previous_clustering
+
+        ! seed_lineage.txt: seed class -> parent class, seed population and,
+        ! after the final class generation, the final population
+        subroutine write_seed_lineage( with_final_pops )
+            logical, intent(in) :: with_final_pops
+            type(sp_project)     :: lineage_proj
+            integer, allocatable :: final_pops(:)
+            integer :: fnr, iseed
+            if( .not. allocated(seed_parent) ) return
+            if( with_final_pops )then
+                call lineage_proj%read_segment(params%oritype, params%projfile)
+                call lineage_proj%os_ptcl2D%get_pops(final_pops, 'class', maxn=params%ncls)
+                call lineage_proj%kill
+            else
+                allocate(final_pops(params%ncls), source=-1)
+            endif
+            call fopen(fnr, FILE=string('seed_lineage.txt'), STATUS='REPLACE', action='WRITE')
+            write(fnr,'(A)') '# seed_class parent_class seed_pop final_pop(-1 = not yet run)'
+            do iseed = 1, params%ncls
+                write(fnr,'(I8,1X,I8,1X,I8,1X,I8)') iseed, seed_parent(iseed), seed_pops(iseed), final_pops(iseed)
+            end do
+            call fclose(fnr)
+            deallocate(final_pops)
+        end subroutine write_seed_lineage
+
+        ! One dense probabilistic iteration of every active particle against the
+        ! seed references at the limit of the first probabilistic stage; the
+        ! stages from PROBREFINE_STAGE on then run exactly as on an unseeded run
+        subroutine execute_seed_pass
+            type(cmdline)    :: cline_pass
+            type(sp_project) :: pass_proj
+            type(oris)       :: os_before, os_after
+            integer, allocatable :: nretained(:)
+            real    :: sh_before(2), sh_after(2)
+            integer :: iptcl, nptcls, n_active, n_class, n_shift, n_seed_ok, cls_b, cls_a
+            write(logfhandle,'(A)') '>>>'
+            if( stage_parms(PROBREFINE_STAGE)%l_lpset )then
+                write(logfhandle,'(A,I0,A,F5.1)') '>>> ABINITIO2D SEED PASS: refine=prob, all particles, iteration ',&
+                    &it_pass, ', lp = ', stage_parms(PROBREFINE_STAGE)%lp
+            else
+                write(logfhandle,'(A,I0)') '>>> ABINITIO2D SEED PASS: refine=prob, all particles, iteration ', it_pass
+            endif
+            call os_before%copy(spproj_field)
+            cline_pass = cline_cluster2D
+            call set_cline_cluster2D_seed_pass(cline_pass, params, stage_parms, it_pass, params%refs%to_char())
+            call del_file(CLUSTER2D_FINISHED)
+            if( L_BENCH_GLOB )then
+                rt_calc_pspec = 0.
+                rt_cluster2D  = 0.
+                t_phase       = tic()
+            endif
+            call xcluster2D%execute(cline_pass)
+            call cline_cluster2D%set('endit', it_pass)
+            if( L_BENCH_GLOB )then
+                rt_cluster2D = toc(t_phase)
+                call write_abinitio_benchmark(it_pass, 'seed_pass', 0)
+            endif
+            call cline_pass%kill
+            ! reassignment diagnostic against the seed partition
+            call pass_proj%read_segment(params%oritype, params%projfile)
+            call os_after%copy(pass_proj%os_ptcl2D)
+            call pass_proj%kill
+            nptcls   = os_after%get_noris()
+            n_active = 0
+            n_class  = 0
+            n_shift  = 0
+            allocate(nretained(params%ncls), source=0)
+            do iptcl = 1, nptcls
+                if( os_after%get_state(iptcl) < 1 ) cycle
+                n_active = n_active + 1
+                cls_b = os_before%get_class(iptcl)
+                cls_a = os_after%get_class(iptcl)
+                if( cls_a /= cls_b ) n_class = n_class + 1
+                if( cls_b >= 1 .and. cls_b <= params%ncls .and. cls_a == cls_b ) nretained(cls_b) = nretained(cls_b) + 1
+                sh_before = os_before%get_2Dshift(iptcl)
+                sh_after  = os_after%get_2Dshift(iptcl)
+                if( sqrt(sum((sh_after - sh_before)**2)) > 1.0 ) n_shift = n_shift + 1
+            end do
+            n_seed_ok = count(seed_pops > 0 .and. 2 * nretained >= seed_pops)
+            if( n_active > 0 )then
+                write(logfhandle,'(A,F6.2,A,F6.2,A,F6.2,A)') '>>> ABINITIO2D SEED PASS REASSIGNED: ',&
+                    &100. * real(n_class) / real(n_active), ' % changed class, ',&
+                    &100. * real(n_shift) / real(n_active), ' % moved shift > 1 px, ',&
+                    &100. * real(n_seed_ok) / real(params%ncls), ' % of seed classes retained >= 50% of their members'
+            endif
+            deallocate(nretained)
+            call os_before%kill
+            call os_after%kill
+        end subroutine execute_seed_pass
 
         ! Set resolution limits
         subroutine set_lplims( local_nstages )

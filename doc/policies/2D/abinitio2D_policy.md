@@ -52,6 +52,54 @@ all-particle coverage pass after sampled staged updates also uses dense
 `refine=greedy`. `abinitio2D_chunks` must preserve this policy when constructing
 child `abinitio2D` command lines.
 
+### Seeded restart (`cls_init=prev`)
+
+`cls_init=prev` re-enters the workflow from a previous 2D clustering held in
+the project instead of a random start. It is an `abinitio2D`-only mode
+(`cluster2D` rejects it; `abinitio2D_chunks` and the stream keep
+`cls_init=rand`). Design record:
+`doc/implementation_notes/abinitio2D_seeded_restart.md`.
+
+- The seed partition is built from metadata only (`ptcl2D` `class`, `state`,
+  `corr`; `cls2D` `state`): no image is read, registered or split before
+  the search. Accepted parents are classes with `cls2D%state > 0` (every
+  labelled class when no selection state exists) and at least
+  `MINCLSPOPLIM` active particles. Seed classes are allocated to parents by
+  largest remainder proportional to population (at least one per parent
+  when `ncls >= nparents`), so every seed class holds about
+  `nptcls/ncls` particles and the seed set represents the previous view
+  distribution; a parent with several seed classes is split by rank
+  interleaving on `corr`. When `ncls < nparents` the least populous parents
+  are dropped. Particles of dropped, rejected, under-populated or
+  unlabelled classes get `class=0` and are assigned in the seed pass
+  (`oris%reseed_classes`).
+- The only hard error is the absence of a previous clustering (virgin
+  `ptcl2D`, or no active particle with a class label). Missing `cls2D`
+  state or labels beyond `cls2D` are repaired with a counted warning; a
+  project with no even/odd partition gets one (`partition_eo`, before the
+  sigma2 state is built). Existing `eo` values are never touched, and no
+  per-particle `eo` check is made: `isthere('eo')` is false for `eo=0`.
+  `delete_2Dclustering` is never called.
+- Seed references are `make_cavgs` from the seed labels at the working
+  `box_crop` (`start2Drefs*`), made after the canonical sigma2 state has
+  been validated or rebuilt (`ensure_resume_sigma_state`).
+- The run is entered at `PROBREFINE_STAGE` through the same path as a
+  stream checkpoint resume, preceded by one seed pass: a single dense
+  `refine=prob` `cluster2D` iteration of every active particle
+  (`update_frac`, `nsample` and `fillin` deleted, `extr_iter=extr_lim+1`)
+  at the low-pass limit of `PROBREFINE_STAGE`. The pass runs as the
+  iteration at which stage `PROBREFINE_STAGE-1` would have ended
+  (`abinitio2D_seed_pass_iter`), so the stages from `PROBREFINE_STAGE` to
+  the terminal greedy pass run exactly as on an unseeded run: same limits,
+  refine policy, iteration counts, sampling and fractional restore. The
+  pass must not be a fresh start (`startit > 1`): a fresh start zeroes the
+  shifts after `prob_tab2D` has built its table against them.
+- Diagnostics: `>>> ABINITIO2D SEED` (parents, seed classes, dropped and
+  unassigned counts, seed populations), `>>> ABINITIO2D SEED PASS
+  REASSIGNED` (% class changes, % shifts moved > 1 px, % seed classes
+  retaining at least half their members) and `seed_lineage.txt` (seed
+  class, parent, seed population, final population).
+
 ## 3. Ownership Policy
 
 `simple_commanders_abinitio2D.f90` owns:
@@ -59,7 +107,10 @@ child `abinitio2D` command lines.
 - the `abinitio2D` entry point
 - top-level defaults
 - run orchestration across stages
-- initial reference handling
+- initial reference handling, including the `cls_init=prev` seed
+  (validation/repair of the previous clustering, seed references, seed
+  pass and its diagnostics); the seed partition itself is an `oris`
+  operation (`reseed_classes`, `simple_oris_reshape.f90`)
 - final fill-in dispatch
 - terminal dense greedy all-particle dispatch after sampled staged updates
 - final class-average generation/ranking
@@ -74,6 +125,8 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - search-mode policy by stage
 - sampled-update policy, including `NSAMPLE_DEFAULT_2D` and `nsample` override handling
 - the rule that stage 1 may sample particles but does not fractionally restore previous class averages
+- the seed-pass iteration index and command line of a `cls_init=prev` run
+  (`abinitio2D_seed_pass_iter`, `set_cline_cluster2D_seed_pass`)
 
 `simple_cluster2D_strategy.f90` owns:
 
@@ -140,6 +193,9 @@ Stage policy:
 
 - stage 1 uses a random sampled subset but disables fractional carry-over of previous class-average sums
 - stages 2 and later use sampled update with fractional class-average restoration when the sample is smaller than the active set
+- a `cls_init=prev` run has no sticky stage: the seed pass updates every
+  active particle (and sets `updatecnt=1` on all of them), then the stages
+  from `PROBREFINE_STAGE` on sample and restore as they do on any run
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
 - abinitio2D uses likelihood-weighted probabilistic assignment: raw objective
   distances are kept and evaluated class/in-plane candidates are sampled with
@@ -263,6 +319,9 @@ For any `abinitio2D` or `cluster2D` change, check:
   authoritative table `inpl` without another global reselection?
 - Do probability artifacts remain rounded while final assignment alone owns
   durable fractional `e3`?
+- Does `cls_init=prev` keep existing `eo` values, never call
+  `delete_2Dclustering`, build its seed from metadata only, and leave the
+  stages from `PROBREFINE_STAGE` on identical to an unseeded run?
 
 ## 8. Rules to Preserve During Refactors
 
