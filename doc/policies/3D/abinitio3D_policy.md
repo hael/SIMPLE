@@ -185,10 +185,11 @@ while the half maps agreed to 4.3 A at FSC=0.5.)
 
 In the NU stages there is no ceiling (July 2026 policy, restored
 2026-09-08): matching runs at the content-extent handoff of the generated ladder,
-whose hard rungs are bounded by the regularized pair's resolution, or by
-`fsc/1.5` of the base pair without one
-(`doc/policies/NU/nonuniform_filtering_policy.md` sections 8 and 12), so a
-ceiling only pins the map. Two ceilings were tried and
+whose regularized member sits at `max(fsc/1.5, 4.5 A)` under the
+merged-reference climb (`nonuniform_lpset`: the ratchet of the former
+static bank, restored 2026-09-16 after the PfCRT regression) and bounds
+the hard rungs (`doc/policies/NU/nonuniform_filtering_policy.md` sections
+8 and 12), so a ceiling only pins the map. Two ceilings were tried and
 retired: the class-FRC final limit `lpfinal` (6.0 A on PfCRT, whose 2D
 classes stop at 6 A while the 3D map reaches 4 A) pinned the NU stages at
 5.97 A on 2026-09-07; the ladder's hard bound of 4.5 A pinned the 2026-09-08

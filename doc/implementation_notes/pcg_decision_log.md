@@ -453,3 +453,27 @@ knob. The diagonal model is adequate for the regularized member's two jobs
 (competing for voxels, setting the band); the residual it leaves lives in
 the beyond-band shells.
 
+**2026-09-16 -- PfCRT abinitio3D regression: the merged-reference climb
+needs the band ahead of FSC=0.143; headroom restored for nonuniform_lpset.**
+`~/for_claude/PfCRT_regression/current_broken` (five restarts): with the
+regularized member handing off its FSC=0.143 resolution (the 2026-09-16
+band rule) the NU stages crept one shell per iteration (stage 6: 9.41 ->
+8.39 A over 30 iterations, bank `4 hard rungs 19.4 -> 10.0 A + regularized
+pair at 9.41 A`), stage 8 was carried only by its explicit 6.0 A limit and
+the final map stalled at 7-8 A. The healthy run (`latest2`, former static
+bank) at the same point: FSC=0.143 8.87 A, bank capped at fsc/1.5 = 5.86
+A, the regularized pair in the 5.97 A slot winning 5.4% and the 8 A rung
+15%, handoff 5.97 A, then 5.0 and 4.5 A as the FSC caught up to 4.5 A.
+The staged climb is a ratchet: both halves align to one merged reference,
+so its FSC=0.143 is not a gold-standard band, and matching 1.5x ahead of
+it is what pulls the FSC up. bgal, Msp1 and streptavidin climb either way
+(high SNR); PfCRT does not. Fix: under `filt_mode=nonuniform_lpset` the
+regularized member sits and hands off at `max(fsc/NU_BANK_FSC_HEADROOM,
+NU_LPSET_BAND_FLOOR=4.5 A)` (the former bank's cap and finest rung), the
+hard rungs run up to that shell; under `nonuniform` (gold-standard
+refine3D_auto) it stays at FSC=0.143 with no headroom (validated on bgal
+today). One implementation, one mode-dependent resolution for the
+regularized member (`nu_aux_effective_resolution`). PfCRT rerun is
+Hans's; expected signature: stage-6 handoff ~5.9 A at FSC 8.9 A and the
+final at 4.5 A as in `latest2`.
+

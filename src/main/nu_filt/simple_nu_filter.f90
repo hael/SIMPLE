@@ -46,7 +46,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
           nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
-          NU_BANK_MAX_MEMBERS, NU_LADDER_FINE_STEP, print_nu_evidence_lowpass_histogram,&
+          NU_BANK_MAX_MEMBERS, NU_LADDER_FINE_STEP, NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR,&
+          print_nu_evidence_lowpass_histogram,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
@@ -77,6 +78,19 @@ integer,          parameter   :: NU_BANK_MAX_MEMBERS = 16
 ! the finest member. Absent both (the standalone nu_filt3D program) the
 ! rungs run to Nyquist within the budget.
 real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
+! Merged-reference climb (filt_mode=nonuniform_lpset, the abinitio3D NU
+! stages): the regularized pair sits, and hands off, at
+! max(fsc/NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR) rather than at its
+! FSC=0.143 resolution, and the hard rungs run up to that shell. This is the
+! resolution ratchet the staged climb depends on (2026-09-16, PfCRT
+! regression `current_broken`: with the band pinned to FSC=0.143 the climb
+! crept one shell per iteration from 9.4 A and never reached 6 A, while the
+! 1.5x headroom of the former static bank took the same stages 8.9 -> 6.0
+! -> 5.0 -> 4.5 A; bgal, Msp1 and streptavidin climb either way). The floor
+! is the former static ladder's finest rung. Gold-standard refinement
+! (filt_mode=nonuniform, independent halves) hands off the FSC=0.143
+! resolution with no headroom.
+real,             parameter   :: NU_LPSET_BAND_FLOOR = 4.5
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
 ! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF

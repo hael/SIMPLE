@@ -302,8 +302,13 @@ coarse rungs `NU_LADDER_COARSE = [20, 15, 12, 10, 8, 6]` A, then hard rungs
 generated from the box at a constant Fourier-shell spacing (nominally
 `NU_LADDER_FINE_STEP = 2` shells) from the 6 A shell up to a fine bound,
 then, with `ml_reg=yes`, the regularized pair as the finest member. The fine
-bound is the last shell strictly coarser than the regularized pair's
-FSC=0.143 resolution when that pair is supplied; `fsc/NU_BANK_FSC_HEADROOM`
+bound is the last shell strictly coarser than the regularized member's
+resolution when that pair is supplied -- its FSC=0.143 resolution under
+gold-standard refinement (`filt_mode=nonuniform`), or
+`max(fsc/NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR=4.5 A)` under the
+merged-reference climb (`nonuniform_lpset`, the abinitio3D NU stages; the
+headroom and floor of the former static bank, see section 12) --;
+`fsc/NU_BANK_FSC_HEADROOM`
 (1.5, 2026-09-08: the unary prices a finer candidate by the noise it admits
 from the other half, which holds for a gridding pair but not beyond the
 FSC) when only the FSC is; Nyquist otherwise (`nu_filt3D`). The coarse
@@ -500,8 +505,24 @@ band is normally the gold-standard FSC=0.143 resolution, the same band the
 FSC-driven non-NU path uses (`lplim_crit=0.143`); regions the competition
 filtered coarser enter the objective only to their own cutoff through the
 reference itself. When the regularized member holds fewer than 1% of the
-signal voxels the band falls back to the finest hard rung. There is no
-headroom beyond the FSC=0.143 extent (2026-09-16).
+signal voxels the band falls back to the finest hard rung. Under
+gold-standard refinement there is no headroom beyond the FSC=0.143 extent
+(2026-09-16).
+
+The merged-reference climb (`filt_mode=nonuniform_lpset`, the abinitio3D
+NU stages) is different: both halves are aligned to one merged reference,
+its FSC=0.143 is not a gold-standard band, and the staged climb depends on
+matching ahead of it -- the ratchet of the former static bank, whose
+regularized member took the slot of the finest retained rung at
+`fsc/1.5` and handed off that rung's cutoff. There the regularized member
+sits and hands off at `max(fsc/NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR)`
+(1.5x finer than FSC=0.143, never finer than the former ladder's 4.5 A
+rung), and the hard rungs run up to that shell so the competition can
+place them between FSC=0.143 and the band (PfCRT regression 2026-09-16:
+pinned to FSC=0.143 the climb crept 9.4 -> 8.4 A over a whole stage and
+never reached 6 A; with the headroom the same stages went 8.9 -> 6.0 ->
+5.0 -> 4.5 A; bgal, Msp1 and streptavidin climb either way). The
+`>>> NU REGULARIZED MEMBER WITH HEADROOM` line reports the mapping.
 
 `incrreslim` retains its classical matcher meaning: on an FSC-driven matching
 path it permits ten shells beyond the selected FSC criterion. The NU-selected

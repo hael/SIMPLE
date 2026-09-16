@@ -25,6 +25,7 @@ use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
+    &NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR, &
     &write_nu_local_resolution_map, write_nu_evidence_envmask, &
     &set_nu_evidence_null_shell, set_nu_solvent_envelope
 implicit none
@@ -188,6 +189,16 @@ contains
 
         real function nu_aux_effective_resolution() result(aux_res)
             aux_res = res0143
+            if( params%l_nonuniform_lpset )then
+                ! merged-reference climb: the regularized pair sits and hands
+                ! off with the 1.5x headroom of the former static bank
+                ! (NU_LPSET_BAND_FLOOR, simple_nu_filter); gold-standard
+                ! refinement hands off the FSC=0.143 resolution itself
+                aux_res = max(res0143 / NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR)
+                if( params%part == 1 ) write(logfhandle,'(A,F7.2,A,F7.2,A)') &
+                    &'>>> NU REGULARIZED MEMBER WITH HEADROOM (nonuniform_lpset): FSC=0.143 ', res0143, &
+                    &' A -> ', aux_res, ' A'
+            endif
             if( params%l_lpset .and. params%lp > TINY )then
                 if( NU_DEV_OUTPUT .and. params%part == 1 .and. aux_res > params%lp + TINY )then
                     write(logfhandle,'(A,F8.3,A,F8.3,A)') &
