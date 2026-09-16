@@ -206,7 +206,7 @@ contains
         type(molecule_data), intent(in) :: molecule_data_in
         integer,             intent(in) :: expected_truth, angstep
         real,                intent(in) :: smpd, threshold
-        real, parameter      :: MAP_PADDING = 12.0, MATCH_RADIUS = 2.0
+        real, parameter      :: MATCH_RADIUS = 2.0
         type(atoms)          :: molecule, candidates
         type(calpha_finder)  :: finder
         type(image_msk)      :: density_mask
@@ -214,9 +214,9 @@ contains
         type(string)         :: source_file, truth_file, vol_file, candidate_file, score_file
         real, allocatable    :: truth_xyz(:,:)
         logical, allocatable :: truth_matched(:)
-        real    :: span(3), delta(3), best_distance_sq, recall, precision
+        real    :: delta(3), best_distance_sq, recall, precision
         real    :: recall_top_n, precision_top_n
-        integer :: ldim(3), iatom, itruth, ipred, ntruth, npred, nmatched, best_truth
+        integer :: ldim(3), iatom, itruth, ipred, ntruth, npred, nmatched, best_truth, nsections
         integer :: top_n_count, nmatched_top_n
 
         source_file    = trim(label)//'.pdb'
@@ -224,10 +224,9 @@ contains
         vol_file       = trim(label)//'_calpha_input.mrc'
         candidate_file = trim(label)//'_calpha_candidates.pdb'
         score_file     = trim(label)//'_calpha_scores.mrc'
-        span           = maxval(molecule_data_in%xyz, dim=1) - minval(molecule_data_in%xyz, dim=1)
-        ldim           = max(round2even((span + 2. * MAP_PADDING) / smpd), 16)
         call molecule%pdb2mrc(pdbfile=source_file, volfile=vol_file, smpd=smpd, &
-            center_pdb=.true., pdb_out=truth_file, vol_dim=ldim, mol=molecule_data_in)
+            center_pdb=.true., pdb_out=truth_file, mol=molecule_data_in)
+        call find_ldim_nptcls(vol_file, ldim, nsections)
 
         ntruth = 0
         do iatom = 1, molecule%get_n()

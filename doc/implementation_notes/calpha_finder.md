@@ -87,8 +87,8 @@ using SIMPLE's hard-coded 6VXX spike-protein and 1JYX beta-galactosidase
 coordinates. The fixtures contain 2,916 and 4,044 protein C-alpha atoms,
 respectively. For each structure the benchmark:
 
-1. creates a tightly padded, even-dimension density map at the requested
-   sampling distance;
+1. creates the standard centered `pdb2mrc` density map at the requested sampling
+   distance: a cubic box whose side is twice the maximum interatomic distance;
 2. runs the same analytic-target search used by `simple_exec`;
 3. performs greedy one-to-one matching of score-ordered predictions to the
    ground truth within 2 Angstrom; and
