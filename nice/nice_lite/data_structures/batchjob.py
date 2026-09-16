@@ -1344,6 +1344,7 @@ class BatchJob(Job):
         self.dirc = str(self.disp) + "_" + self.prog
         workspace_dir = os.path.join(project.dirc, workspacemodel.dirc)
         if not self._create_dir(workspace_dir):
+            logger.error("createClassDeselection: failed to create workspace directory")
             return False
 
         job_dir = os.path.join(workspace_dir, self.dirc)

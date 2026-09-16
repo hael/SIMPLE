@@ -520,13 +520,14 @@ contains
     ! snapshot_cavgs_* (all optional, output) report the jpeg/sprite locations written
     ! for the snapshot's selected class averages by set_cavgs_thumb, so that callers can
     ! broadcast cavg2D metadata for the snapshot without recomputing sprite geometry from
-    ! the (unrelated, continuously changing) pool sprite sheet.
+    ! the (unrelated, continuously changing) pool sprite sheet. NEEDS A TYPE DEFINITION FOR ARGUMENTS !!!!!!!!!!!!!
     subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir, optics_offset, force_snapshot, &
-        snapshot_cavgs_jpeg, snapshot_cavgs_mrc, snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy, snapshot_cavgs_idx, snapshot_cavgs_pop, snapshot_cavgs_res)
+        snapshot_cavgs_jpeg, snapshot_cavgs_mrc, snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy, snapshot_cavgs_idx, snapshot_cavgs_pop, snapshot_cavgs_res, export)
         use, intrinsic :: iso_c_binding, only: c_int64_t, c_double
         class(parameters), intent(inout) :: params
         logical,       optional, intent(in) :: write_star
         logical,       optional, intent(in) :: clspath
+        logical,       optional, intent(in) :: export
         integer,       optional, intent(in) :: force_snapshot
         class(string), optional, intent(in) :: snapshot_projfile, snapshot_starfile_base, optics_dir
         integer,       optional, intent(in) :: optics_offset
@@ -543,16 +544,20 @@ contains
         type(string)       :: projfile, projfname, cavgsfname, frcsfname, mapfileprefix
         type(string)       :: pool_refs, l_frcsname, l_stkname
         real               :: l_smpd
-        integer            :: lastmap, l_ncls, offset_optics
-        logical            :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found
+        integer            :: lastmap, l_ncls, offset_optics, iptcl, jptcl, imic, jmic, istk, jstk
+        integer, allocatable :: exported(:)
+        type(ori)          :: o
+        logical            :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found, l_export
         l_write_star        = .false.
         l_clspath           = .false.
         l_snapshot          = .false.
+        l_export            = .false.
         snapshot_proj_found = .false.
         offset_optics       = 0
         if(present(write_star))    l_write_star  = write_star
         if(present(clspath))       l_clspath     = clspath
         if(present(optics_offset)) offset_optics = optics_offset
+        if(present(export))        l_export      = export
         ! file naming
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
         cavgsfname = get_fbody(refs_glob, MRC_EXT, separator=.false.)
@@ -630,6 +635,83 @@ contains
             snapshot_complete_jobid = snapshot_jobid
             snapshot_jobid = 0
             snapshot_iteration = 0
+        else if ( l_export ) then
+            ! exported project files form a sequence of deltas and must be concatenated in the order they were written
+            if( .not. present(snapshot_projfile) ) THROW_HARD('snapshot_projfile must be present for export')
+            write(logfhandle,'(A,A,A,A)')'>>> EXPORTING PARTICLES TO 3D ', snapshot_projfile%to_char(), ' AT: ',cast_time_char(simple_gettime())
+            cavgsfname  = stemname(snapshot_projfile) // '/' // basename(snapshot_projfile) // '_cavgs' // STK_EXT
+            frcsfname   = stemname(snapshot_projfile) // '/' // basename(snapshot_projfile) // '_' // FRCS_FILE
+            ! copy pool_proj and clear sections that need updating
+            call snapshot_proj%copy(pool_proj)
+            call snapshot_proj%os_mic%kill()
+            call snapshot_proj%os_stk%kill()
+            call snapshot_proj%os_ptcl2D%kill()
+            call snapshot_proj%os_ptcl3D%kill()
+            ! add non-exported mics
+            exported = pool_proj%os_mic%get_all_asint('exported')
+            call snapshot_proj%os_mic%new(count(exported == 0), is_ptcl=.false.)
+            jmic = 0
+            do imic = 1,size(exported)
+                if( exported(imic) /= 0 ) cycle
+                jmic = jmic + 1
+                call pool_proj%os_mic%get_ori(imic, o)
+                call snapshot_proj%os_mic%set_ori(jmic, o)
+            enddo
+            if(allocated(exported)) deallocate(exported)
+            call pool_proj%os_mic%set_all2single('exported', 1)
+            ! add non-exported stks
+            exported = pool_proj%os_stk%get_all_asint('exported')
+            call snapshot_proj%os_stk%new(count(exported == 0), is_ptcl=.false.)
+            jstk = 0
+            do istk = 1,size(exported)
+                if( exported(istk) /= 0 ) cycle
+                jstk = jstk + 1
+                call pool_proj%os_stk%get_ori(istk, o)
+                call snapshot_proj%os_stk%set_ori(jstk, o)
+            enddo
+            if(allocated(exported)) deallocate(exported)
+            call pool_proj%os_stk%set_all2single('exported', 1)
+            ! add non-exported ptcl2D
+            exported = pool_proj%os_ptcl2D%get_all_asint('exported')
+            call snapshot_proj%os_ptcl2D%new(count(exported == 0), is_ptcl=.true.)
+            jptcl = 0
+            do iptcl = 1,size(exported)
+                if( exported(iptcl) /= 0 ) cycle
+                jptcl = jptcl + 1
+                call pool_proj%os_ptcl2D%get_ori(iptcl, o)
+                call snapshot_proj%os_ptcl2D%set_ori(jptcl, o)
+            enddo
+            if(allocated(exported)) deallocate(exported)
+            call pool_proj%os_ptcl2D%set_all2single('exported', 1)
+            write(logfhandle,'(A,I8,A,I8,A,I8,A)')'>>> EXPORTED ',snapshot_proj%os_mic%get_noris(),' MICROGRAPH(S), ',&
+                &snapshot_proj%os_stk%get_noris(),' STACK(S), ',snapshot_proj%os_ptcl2D%count_state_gt_zero(),' PARTICLE(S)'
+            ! copy ptcl2D to ptcl3D
+            snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
+            ! deal with frcs and cavgs
+            if( l_scaling )then
+                call rescale_refs( params, cavgsfname )
+                call snapshot_proj%os_out%kill
+                call snapshot_proj%add_cavgs2os_out(cavgsfname, params%smpd, 'cavg', clspath=l_clspath)
+                ! rescale frcs
+                call frcs%read(string(POOL_DIR)//FRCS_FILE)
+                call frcs%pad(params%smpd, params%box)
+                call frcs%write(frcsfname)
+                call frcs%kill
+                call snapshot_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            else
+                call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd)
+                call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
+                call simple_copy_file(l_stkname, cavgsfname)
+                call simple_copy_file(add2fbody(l_stkname, MRC_EXT,'_even'), add2fbody(cavgsfname, MRC_EXT,'_even'))
+                call simple_copy_file(add2fbody(l_stkname, MRC_EXT,'_odd'),  add2fbody(cavgsfname, MRC_EXT,'_odd'))
+                call simple_copy_file(l_frcsname, frcsfname)
+                call snapshot_proj%os_out%kill
+                call snapshot_proj%add_cavgs2os_out(cavgsfname, params%smpd, 'cavg', clspath=l_clspath)
+                call snapshot_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            endif
+            ! Write project file
+            call snapshot_proj%write(snapshot_projfile)
+
         else
             write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ', projfile%to_char(), ' AT: ',cast_time_char(simple_gettime())
             if(present(optics_dir)) then

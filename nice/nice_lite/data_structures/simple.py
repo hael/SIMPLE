@@ -475,14 +475,19 @@ class SIMPLEBatch:
         self.jobid       = jobid
         self.parent_proj = parent_proj if parent_proj is not None else os.path.join(parent_dir, "workspace.simple")
         if not self.base_dir:
+            print_error("Base directory is not specified")
             return False
         if not os.path.isdir(self.base_dir):
+            print_error("Base directory does not exist")
             return False
         if not os.path.isdir(parent_dir):
+            print_error("Parent directory does not exist")
             return False
         if not os.path.isfile(self.parent_proj):
+            print_error("Parent project file does not exist: " + self.parent_proj)
             return False
         if not self.executable or not self.jobtype:
+            print_error("Executable or job type not specified")
             return False
         return self.dispatch()
 

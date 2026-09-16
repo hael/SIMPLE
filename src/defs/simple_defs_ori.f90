@@ -28,7 +28,7 @@ enum, bind(c)
     enumerator :: I_STATE       = 23
     enumerator :: I_STKIND      = 24
     enumerator :: I_UPDATECNT   = 25
-    enumerator :: I_RETIRED_W   = 26
+    enumerator :: I_EXPORTED    = 26
     enumerator :: I_X           = 27
     enumerator :: I_XINCR       = 28
     enumerator :: I_XPOS        = 29
@@ -115,6 +115,8 @@ contains
                 get_oriparam_ind = I_STKIND
             case('updatecnt')
                 get_oriparam_ind = I_UPDATECNT
+            case('exported')
+                get_oriparam_ind = I_EXPORTED
             case('x')
                 get_oriparam_ind = I_X
             case('xincr')
@@ -218,6 +220,8 @@ contains
                 flag ='stkind'
             case(I_UPDATECNT)
                 flag ='updatecnt'
+            case(I_EXPORTED)
+                flag ='exported'
             case(I_X)
                 flag ='x'
             case(I_XINCR)
@@ -323,8 +327,6 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_CLASS_MATCH)
                 oriparam_isthere = abs(val) > TINY    
-            case(I_RETIRED_W)
-                oriparam_isthere = .false.
             case(I_RES05)
                 oriparam_isthere = abs(val) > TINY
             case DEFAULT

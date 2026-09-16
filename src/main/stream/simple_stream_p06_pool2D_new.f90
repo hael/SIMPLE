@@ -63,7 +63,8 @@ public :: stream_p06_pool2D
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: L_ITERATION_SNAPSHOTS = .false.
+logical, parameter :: L_ITERATION_SNAPSHOTS     = .false.
+integer, parameter :: EXPORT_3D_START_ITERATION = 5
 
 type, extends(commander_base) :: stream_p06_pool2D
   contains
@@ -75,9 +76,9 @@ contains
     ! Manages Global 2D Clustering
     ! //TODO- handling of un-classified particles
     subroutine exec_stream_p06_pool2D( self, cline )
-        class(stream_p06_pool2D), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        integer,                  parameter     :: OPTICS_ID_DELTA = 500
+        class(stream_p06_pool2D),   intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        integer,                    parameter     :: OPTICS_ID_DELTA = 500
         character(len=:),           allocatable   :: meta_buffer
         type(parameters)                          :: params
         type(rec_list)                            :: setslist
@@ -93,18 +94,18 @@ contains
         type(string),               allocatable   :: projects(:)
         character(len=:),           allocatable   :: update_pending
         logical,                    allocatable   :: l_imported(:)
-        type(string)                               :: snapshot_cavgs_jpeg, snapshot_cavgs_mrc
-        integer                                    :: snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy
-        integer,                     allocatable   :: snapshot_cavgs_idx(:), snapshot_cavgs_pop(:)
-        real,                        allocatable   :: snapshot_cavgs_res(:)
+        type(string)                              :: snapshot_cavgs_jpeg, snapshot_cavgs_mrc
+        integer                                   :: snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy
+        integer,                    allocatable   :: snapshot_cavgs_idx(:), snapshot_cavgs_pop(:)
+        real,                       allocatable   :: snapshot_cavgs_res(:)
         type(string)                              :: snapshot_filename, snapshot_dir, iteration_snapshot_filename, iteration_snapshot_dir
         integer(kind=dp)                          :: time_last_import
         integer                                   :: i, nprojects, nimported, nptcls_glob, pool_iter, iter_last_import
         integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
         integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics, last_iteration_snapshot_id
         integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
-        integer                                   :: state_1_particle_rate, optics_id_offset
-        integer                                   :: update_expected_len
+        integer                                   :: state_1_particle_rate, optics_id_offset, last_export_iteration
+        integer                                   :: update_expected_len, last_export_id
         logical                                   :: l_pause, l_terminate, l_once, l_changed, l_sieve_final
         logical                                   :: l_stepwise
         real                                      :: final_mskdiam
@@ -121,6 +122,8 @@ contains
         final_mskdiam              = 0.0
         state_1_particle_rate      = 0
         last_iteration_snapshot_id = 1
+        last_export_iteration      = EXPORT_3D_START_ITERATION
+        last_export_id             = 1
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -159,6 +162,7 @@ contains
         ! master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
         optics_id_offset = max(params%nicedispid - 1, 0) * OPTICS_ID_DELTA
         write(logfhandle,'(A, I8)')'>>> OPTICS ID OFFSET', optics_id_offset
         ! wait if dir_target doesn't exist yet
@@ -358,6 +362,16 @@ contains
                                 snapshot_projfile      = iteration_snapshot_dir // '/' // iteration_snapshot_filename,                           &
                                 snapshot_starfile_base = iteration_snapshot_dir // '/' // swap_suffix(iteration_snapshot_filename, "", ".simple"))
                 last_iteration_snapshot_id  = get_pool_iter()
+            endif
+            ! output particles for 3D
+            if( get_pool_iter() > last_export_iteration ) then
+                ! skip the export if the pool has nothing new to offer
+                if( any(pool_proj%os_ptcl2D%get_all_asint('exported') == 0) ) then
+                    call write_project_stream2D(params, export=.true., &
+                        snapshot_projfile = string(CWD_GLOB) // '/' // DIR_STREAM_COMPLETED // int2str_pad(last_export_id, 5) // METADATA_EXT)
+                endif
+                last_export_id        = last_export_id + 1
+                last_export_iteration = get_pool_iter()
             endif
             ! Wait
             call sleep(WAITTIME)

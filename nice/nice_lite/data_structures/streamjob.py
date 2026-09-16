@@ -5,15 +5,17 @@ import copy
 import json
 import os
 import time
-from time import gmtime, strftime
 
 from django.utils import timezone
 
 # local imports
 from ..helpers import *
 from ..models import JobModel
+from .batchjob import BatchJob
 from .job import Job
+from .project import Project
 from .simple import SIMPLEStream
+from .workspace import Workspace
 
 
 class StreamJob(Job):
@@ -479,36 +481,23 @@ class StreamJob(Job):
         self.jobmodel.save()
         return True
 
-    def selection_classification_2D(self, final_deselection, final_selection_ptcls):
-        """Record the final 2D-classification particle selection and persist it to disk.
+    def selection_classification_2D(self, final_deselection):
+        """Create and launch a cls2D-deselection ('selection') batch job from the final 2D-classification selection.
 
-        Appends a new final-selection entry to particle_sets_stats and writes
-        the deselected particle indices to a per-set text file under self.absdir.
+        Mirrors BatchJob.createClassDeselection, run against this stream's own
+        classification_2D project, rather than recording a particle set.
 
-        final_deselection:     list of particle indices rejected by the user.
-        final_selection_ptcls: count of particles retained in the final selection.
+        final_deselection: list of class indices rejected by the user.
         """
         if self.jobmodel is None:
             print_error("jobmodel is none")
             return False
-        particle_sets_stats = self.jobmodel.particle_sets_stats
-        if "particle_sets" not in particle_sets_stats:
-            particle_sets_stats["particle_sets"] = []
-        setid = len(particle_sets_stats["particle_sets"]) + 1
-        deselfile = "particle_set_" + str(setid) + "_deselected.txt"
-        newset = {
-            "id"       : setid,
-            "name"     : "particle set " + str(setid),
-            "type"     : "final",
-            "filename" : deselfile,
-            "nptcls"   : final_selection_ptcls,
-            "ctime"    : strftime("%Y/%m/%d %H:%M", gmtime())
-        }
-        particle_sets_stats["particle_sets"].insert(0, newset)
-        with open(os.path.join(self.absdir, deselfile), "w") as f:
-            for deselected in final_deselection:
-                f.write(str(deselected) + '\n')
-        self.jobmodel.particle_sets_stats = particle_sets_stats
-        self.jobmodel.save()
-        return True
+        project = Project(id=self.jobmodel.dset.proj.id)
+        workspace = Workspace(self.jobmodel.dset.id)
+        parent_proj = os.path.join(
+            self.absdir, "classification_2D", "classification_2D.simple"
+        )
+        selectionjob = BatchJob()
+        return selectionjob.createClassDeselection(project, workspace, parent_proj, final_deselection)
+
 

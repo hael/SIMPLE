@@ -1338,25 +1338,22 @@ def view_stream_snapshot_classification_2D(request):
 @login_required(login_url="/login")
 @require_POST
 def view_stream_select_classification_2D(request):
-    """Record final 2D-classification particle selection and redirect to stream view."""
+    """Create and launch a cls2D-deselection batch job from the final 2D-classification selection."""
     streamjob, jobmodel = _get_accessible_streamjob(request, log_context="select_stream_classification_2D")
     if streamjob is None:
         return redirect("nice_lite:workspace")
 
     jobid = jobmodel.id
     raw_deselection = request.POST.get("final_deselection", "")
-    final_selection_ptcls = get_integer(request.POST, "final_selection_ptcls")
     if not raw_deselection:
         print_error("select_stream_classification_2D: final_deselection missing")
-        return redirect("nice_lite:view_stream", jobid=jobid)
-    if final_selection_ptcls is None:
-        print_error("select_stream_classification_2D: final_selection_ptcls missing or non-integer")
         return redirect("nice_lite:view_stream", jobid=jobid)
     final_deselection = _parse_int_csv(raw_deselection, "final_deselection", "select_stream_classification_2D")
     if final_deselection is None:
         return redirect("nice_lite:view_stream", jobid=jobid)
-    if not streamjob.selection_classification_2D(final_deselection, final_selection_ptcls):
+    if not streamjob.selection_classification_2D(final_deselection):
         print_error(f"select_stream_classification_2D: failed for job {jobid}")
-    return redirect("nice_lite:view_stream", jobid=jobid)
+        return redirect("nice_lite:view_stream", jobid=jobid)
+    return redirect("nice_lite:workspace")
 
 

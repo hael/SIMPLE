@@ -5,6 +5,7 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('stream', 'Stream Workflows', 10)
 type(ui_program), target :: abinitio2D_stream
+type(ui_program), target :: abinitio3D_stream
 type(ui_program), target :: assign_optics
 type(ui_program), target :: gen_pickrefs
 type(ui_program), target :: master
@@ -17,6 +18,7 @@ contains
     subroutine construct_stream_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D_stream(prgtab)
+        call new_abinitio3D_stream(prgtab)
         call new_assign_optics(prgtab)
         call new_gen_pickrefs(prgtab)
         call new_master(prgtab)
@@ -68,6 +70,38 @@ subroutine new_abinitio2D_stream( prgtab )
         ! add to ui_hash
         call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D_stream
+    
+    subroutine new_abinitio3D_stream( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_stream%new(&
+        &'abinitio3D_stream', &                                                  ! name
+        &'Run streaming 3D analysis as new data arrive',& ! summary
+        &'is a distributed workflow that executes 3D analysis'//&                ! help
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_stream',&                                                       ! executable
+        &.true.,&                                                                ! requires sp_project
+        &visibility=UI_VIS_DEVELOPER)
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call abinitio3D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
+        ! <empty>
+        ! search controls
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! computer controls
+        call abinitio3D_stream%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
+        call abinitio3D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call abinitio3D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_DEVELOPER)
+        ! add to ui_hash
+        call add_ui_program('abinitio3D_stream', abinitio3D_stream, prgtab, UI_CATEGORY)
+    end subroutine new_abinitio3D_stream
 
     subroutine new_assign_optics( prgtab )
         class(ui_hash), intent(inout) :: prgtab
