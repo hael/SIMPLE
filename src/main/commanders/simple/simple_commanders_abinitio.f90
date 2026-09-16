@@ -83,6 +83,7 @@ contains
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart', abinitio_lpstart_ini3D())
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   abinitio_lpstop_ini3D())
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',                     'yes')
+        if( .not. cline%defined('exit_collapse')    ) call cline%set('exit_collapse',               'no')
         ! splitting stage
         split_stage = abinitio_het_docked_stage()
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -140,6 +141,7 @@ contains
             ! overrides resolution limits scheme based on frcs
             if( cline%defined('lpstart_ini3D').and.cline%defined('lpstop_ini3D') )then
                 l_cavgs_mode = .true.
+                if( allocated(lpinfo) ) deallocate(lpinfo)
                 allocate(lpinfo(nstages_ini3D))
                 call lpstages_fast(params%box, nstages_ini3D, params%smpd, params%lpstart_ini3D, params%lpstop_ini3D, lpinfo)
             else
@@ -260,6 +262,22 @@ contains
             ! Symmetrization
             if( istage == abinitio_symsrch_stage() )then
                 call symmetrize(params, istage, work_proj, work_projfile, xrec3D)
+            endif
+            ! Early exit on state collapse
+            if( nstates_target > 1 .and. params%exit_collapse .eq. 'yes' ) then
+                write(logfhandle,'(A,A)')'>>> CHECKING FOR STATE COLLAPSE...', work_projfile%to_char()
+                call work_proj%read_segment('ptcl3D', work_projfile)
+                states = nint(work_proj%os_ptcl3D%get_all('state'))
+                final_nstates = 0
+                do s = 1, nstates_target
+                    pop = count(states == s)
+                    if( pop > 0 ) final_nstates = final_nstates + 1
+                    write(logfhandle, '(A,I0,A,I0)') '>>> FINAL POPULATION STATE ', s, ': ', pop
+                enddo
+                if( final_nstates < 2 )then
+                    write(logfhandle,'(A)')'>>> EARLY EXIT DUE TO STATE COLLAPSE'
+                    exit
+                endif
             endif
         end do
         ! update original cls3D segment
@@ -554,6 +572,8 @@ contains
         do irestart = 1, nrestarts
             cline = cline_backup
             call cline%delete('nrestarts_collapse')
+            call cline%set('exit_collapse', 'yes')
+            if (irestart == nrestarts ) call cline%delete('exit_collapse')
             call xcommander_abinitio3D_cavgs%execute(cline)
             if( l_mkdir ) call chdir('..')
             final_nstates = cline%get_iarg('final_nstates')
@@ -571,6 +591,7 @@ contains
         end do
         ! cleanup
         call cline_backup%kill
+        call simple_touch(TASK_FINISHED)
     end subroutine exec_abinitio3D_cavgs_conditional_restarts
 
     !> for generation of an initial 3d model from particles
@@ -1073,7 +1094,8 @@ contains
         call nice_comm%terminate(export_project=spproj)
         call spproj%kill
         call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****', &
+            verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
 

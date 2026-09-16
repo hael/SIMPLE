@@ -599,20 +599,20 @@ contains
                 CWD_GLOB       = cwd_abinitio2D%to_char()
                 server_address = qenv%get_persistent_worker_server_address()
                 call cline_abinitio2D%kill()
-                call cline_abinitio2D%set('prg',               'abinitio2D')
-                call cline_abinitio2D%set('mkdir',                     'no')
-                call cline_abinitio2D%set('ncls',                  ncls_job)
-                call cline_abinitio2D%set('sigma_est',             'global')
-                call cline_abinitio2D%set('center',                   'yes')
-                call cline_abinitio2D%set('autoscale',                'yes')
-                call cline_abinitio2D%set('nsample',            max( NSAMPLE2D, nsample_job ))
-                call cline_abinitio2D%set('lpstop',                LPSTOP2D)
-                call cline_abinitio2D%set('mskdiam',                   999.)
-                call cline_abinitio2D%set('nthr',                        16)
-                call cline_abinitio2D%set('nparts',                       1)
-                call cline_abinitio2D%set('projfile',      cluster_projfile)
-                call cline_abinitio2D%set('worker_priority',         'high')
-                call cline_abinitio2D%set('cache',                    'yes')
+                call cline_abinitio2D%set('prg',                         'abinitio2D')
+                call cline_abinitio2D%set('mkdir',                               'no')
+                call cline_abinitio2D%set('ncls',                            ncls_job)
+                call cline_abinitio2D%set('sigma_est',                       'global')
+                call cline_abinitio2D%set('center',                             'yes')
+                call cline_abinitio2D%set('autoscale',                          'yes')
+                call cline_abinitio2D%set('nsample',    max( NSAMPLE2D, nsample_job ))
+                call cline_abinitio2D%set('lpstop',                          LPSTOP2D)
+                call cline_abinitio2D%set('mskdiam',                             999.)
+                call cline_abinitio2D%set('nthr',                                  16)
+                call cline_abinitio2D%set('nparts',                                 1)
+                call cline_abinitio2D%set('projfile',                cluster_projfile)
+                call cline_abinitio2D%set('worker_priority',                   'high')
+                call cline_abinitio2D%set('cache',                              'yes')
                 if( server_address%strlen() > 0 ) call cline_abinitio2D%set('worker_server', server_address)
                 call cline_abinitio2D%printline()
                 call qenv%exec_simple_prg_in_queue_async( cline_abinitio2D, string('./distr_abinitio2D'), string('simple_log_abinitio2D'), exec_bin=string('simple_exec') )
@@ -629,6 +629,35 @@ contains
                 call spproj_inout%read(cluster_projfile)
                 call spproj_inout%write(string("test.simple"))
             end subroutine finish_abinitio2D
+
+            ! Locate the highest-numbered restart output directory created under the
+            ! current working directory by mkdir=yes execution of prg=abinitio3D_cavgs
+            ! (e.g. '3_abinitio3D_cavgs'), as produced per-restart by
+            ! commander_abinitio3D_cavgs(_conditional_restarts). Returns an empty
+            ! string when no such directory is present.
+            subroutine find_final_abinitio3D_cavgs_dir( final_dir )
+                type(string), intent(out) :: final_dir
+                character(len=*), parameter   :: SUFFIX = '_abinitio3D_cavgs'
+                type(string),      allocatable :: dirs(:)
+                character(len=:), allocatable :: dname
+                integer :: idir, us, n, best_n, io_stat
+                final_dir = ''
+                dirs = simple_list_dirs('.')
+                if( .not. allocated(dirs) ) return
+                best_n = -1
+                do idir = 1, size(dirs)
+                    dname = trim(dirs(idir)%to_char())
+                    us = index(dname, SUFFIX)
+                    if( us < 2 ) cycle                 ! need >= 1 leading digit before the suffix
+                    if( dname(us:) /= SUFFIX ) cycle    ! suffix must terminate the directory name
+                    n = str2int(dname(1:us-1), io_stat)
+                    if( io_stat /= 0 ) cycle
+                    if( n > best_n )then
+                        best_n    = n
+                        final_dir = dirs(idir)
+                    endif
+                enddo
+            end subroutine find_final_abinitio3D_cavgs_dir
 
             ! Run ab-initio 3D classification on the extracted particles.
             subroutine start_abinitio3D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
@@ -650,7 +679,7 @@ contains
                 call cline_abinitio3D%kill()
 
                 call cline_abinitio3D%set('prg',     'abinitio3D_cavgs')
-                call cline_abinitio3D%set('mkdir',                 'no')
+               ! call cline_abinitio3D%set('mkdir',                 'no')
                 call cline_abinitio3D%set('pgrp',                  'c1')
                 call cline_abinitio3D%set('nstates',          NSTATES3D)
                 call cline_abinitio3D%set('lpstop',                   8)
@@ -661,6 +690,7 @@ contains
                 call cline_abinitio3D%set('prune',                 'no')
                 call cline_abinitio3D%set('nthr',                    16)
                 call cline_abinitio3D%set('nstages',                  3)
+                call cline_abinitio3D%set('nrestarts_collapse',       3)
                 call cline_abinitio3D%set('projfile',  cluster_projfile)
 
                 call cline_abinitio3D%printline()
@@ -679,6 +709,7 @@ contains
                 integer,     allocatable :: cavg_inds_local(:)    ! class-average indices for picking-reference metadata
                 type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
                 type(string)             :: cwd, volpath          ! saved working directory and selected volume path
+                type(string)             :: final_dir             ! most recent abinitio3D_cavgs restart output subdir
                 integer                  :: ldim(3)               ! selected volume box dimensions
                 integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
                 integer                  :: ldim_new(3)           ! reprojection box dimensions after Fourier rescaling
@@ -688,9 +719,20 @@ contains
                 real    :: vol_smpd
                 real    :: smpd_part                              ! particle-stack sampling distance (target)
                 call simple_getcwd(cwd)
+
                 call simple_chdir(outdir)
+                call find_final_abinitio3D_cavgs_dir(final_dir)
                 call spproj_inout%kill()
-                call spproj_inout%read(cluster_projfile) ! read the project with abinitio3D output
+                if( final_dir%strlen() > 0 )then
+                    ! mkdir=yes creates a numbered '<n>_abinitio3D_cavgs' restart directory per
+                    ! attempt; the final restart's output (project copy, recvol_state*.mrc) lives
+                    ! there rather than directly in outdir
+                    write(logfhandle,'(A,A)') '>>> ABINITIO3D_CAVGS RESTART OUTPUT DIRECTORY: ', final_dir%to_char()
+                    call simple_chdir(final_dir)
+                    call spproj_inout%read(basename(cluster_projfile)) ! read the project with abinitio3D output
+                else
+                    call spproj_inout%read(cluster_projfile) ! read the project with abinitio3D output
+                endif
                 if( spproj_inout%os_cls3D%isthere('state') .and. spproj_inout%os_cls3D%isthere('proj') ) then
                     states = spproj_inout%os_cls3D%get_all_asint('state')
                     projs  = spproj_inout%os_cls3D%get_all_asint('proj')
@@ -751,13 +793,18 @@ contains
                 ldim_new(3) = 1
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> RESCALING AND CLIPPING REPROJECTIONS TO ', ldim_new(1), ' PIXEL BOX (', ldim_clip(1), ' A) FOR PICKING REFERENCES'
                 call scale_imgfile( string('reprojs.mrcs'), string('selected_references.mrcs'), vol_smpd, ldim_new, smpd_part)
-                call simple_copy_file(string('selected_references.mrcs'), string('../../')//string('selected_references.mrcs')) ! copy selected references to subdir for partitioning
+                call simple_copy_file(string('selected_references.mrcs'), cwd//'/selected_references.mrcs') ! copy selected references to subdir for partitioning
                 allocate(cavg_inds_local(10))
                 do i=1, size(cavg_inds_local)
                     cavg_inds_local(i) = i
                 enddo
-                call send_selected_pickrefs(cwd//'/'//outdir//'/reprojs'//JPG_EXT, size(cavg_inds_local), &
-                            cavg_inds_local, cwd//'/'//outdir//'/reprojs.mrcs', xtiles_local, ytiles_local)
+                if( final_dir%strlen() > 0 )then
+                    call send_selected_pickrefs(cwd//'/'//outdir//'/'//final_dir//'/reprojs'//JPG_EXT, size(cavg_inds_local), &
+                                cavg_inds_local, cwd//'/'//outdir//'/'//final_dir//'/reprojs.mrcs', xtiles_local, ytiles_local)
+                else
+                    call send_selected_pickrefs(cwd//'/'//outdir//'/reprojs'//JPG_EXT, size(cavg_inds_local), &
+                                cavg_inds_local, cwd//'/'//outdir//'/reprojs.mrcs', xtiles_local, ytiles_local)
+                endif
                 if( allocated(states)          ) deallocate(states)
                 if( allocated(projs)           ) deallocate(projs)
                 if( allocated(cavg_inds_local) ) deallocate(cavg_inds_local)

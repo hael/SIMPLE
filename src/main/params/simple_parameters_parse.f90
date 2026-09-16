@@ -81,6 +81,7 @@ contains
         call reg%add_char('envfsc', self%envfsc)
         call reg%add_char('eo_stage', self%eo_stage)
         call reg%add_char('even', self%even)
+        call reg%add_char('exit_collapse', self%exit_collapse)
         call reg%add_char('extract', self%extract)
         call reg%add_char('extractfrommov', self%extractfrommov)
         call reg%add_char('startype', self%startype)

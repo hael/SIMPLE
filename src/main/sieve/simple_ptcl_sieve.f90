@@ -2002,7 +2002,8 @@ contains
     type(cmdline),    intent(inout) :: cline
     character(len=STDLEN) :: chunk_part_env
     integer               :: envlen
-    call merge_chunk_projfiles(projfiles, outdir, chunk_project, write_proj=.false.)
+    !call merge_chunk_projfiles(projfiles, outdir, chunk_project, write_proj=.false.)
+    call merge_chunk_projfiles_without_sigma2(projfiles, outdir, chunk_project)
     call chunk_project%update_projinfo(cline)
     call chunk_project%update_compenv(cline)
     call chunk_project%os_cls2D%kill()
