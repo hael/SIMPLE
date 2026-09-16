@@ -70,12 +70,27 @@ contains
         use simple_refine3D_strategy, only: strip_refine3D_search_only_args
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)               :: cline_boot
+        type(cmdline)               :: cline_boot, cline_pass
         type(parameters)            :: params
         type(sp_project)            :: spproj
         type(string)                :: init_vol
         type(string)                :: pose_init_refs(1), pose_init_checkpoint(1)
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
+        ! Registration pass (2026-09-16): one global refine=prob iteration of
+        ! ALL particles against the masked startup references, band-limited
+        ! at the FSC=regpass_fsc resolution of the startup pair, before the
+        ! neighbourhood iterations. Previous poses only make the startup
+        ! reference; the particles then see the solvent-mask constraint
+        ! under a global search rather than as a perturbation of the basins
+        ! the previous objective left them in (which prob_neigh cannot leave,
+        ! and which a full-band objective would not let them leave anyway --
+        ! aldolase run 16: 0.998 overlap in iteration 1, no motion after).
+        ! The band is set with lpstop, never lp: an explicit lp flips l_lpset,
+        ! which in every non-NU filt_mode matches both halves against the
+        ! merged reference and would silently break gold standard.
+        integer, parameter :: REGPASS_NSPACE     = 5000
+        integer, parameter :: MAIN_NSPACE        = 20000
+        integer, parameter :: MAIN_NSPACE_SUB    = 500
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO = 4.0
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_AUTO'
@@ -126,10 +141,6 @@ contains
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
-        ! nu_refine=yes: conservative resolution-bank expansion (the NU
-        ! shell walk) on both backends; abinitio3D keeps the discrete static
-        ! ladder via its stage policy.
-        if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! evidence-constrained background filtering
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
@@ -268,8 +279,13 @@ contains
         call cline%set('vol1', refine3D_state_vol_fname(1))
         call cline_boot%kill
         call seed_refine3D_auto_nonuniform_lpset()
-        ! 3D refinement iterations
+        ! global registration pass against the masked startup references
+        call run_registration_pass()
+        ! 3D refinement iterations: neighbourhood search, main direction set
         call cline%set('prg',                   'refine3D')
+        call cline%set('refine',              'prob_neigh')
+        if( .not. cline%defined('nspace')     ) call cline%set('nspace',     MAIN_NSPACE)
+        if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', MAIN_NSPACE_SUB)
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
         ! the shared ending (simple_final_rec): final all-particle
@@ -281,6 +297,128 @@ contains
         call init_vol%kill
 
     contains
+
+        !> One global registration iteration (refine=prob, REGPASS_NSPACE
+        !! directions, no subspace, every particle) at the FSC=regpass_fsc
+        !! resolution of the startup pair, imposed through lpstop so the
+        !! FSC-driven band and the independent even/odd references are kept.
+        !! Logs the fraction of particles whose projection direction moved by
+        !! more than the orientational basin width at that band
+        !! (delta = res_pass / (mskdiam/2)) and by more than twice it, and
+        !! whose shift moved by more than one pixel -- the number that says
+        !! whether re-basining happened at all. The main run then continues
+        !! from the pass output (poses in the project, reference on disk)
+        !! as iteration 2.
+        subroutine run_registration_pass()
+            type(sp_project)  :: pass_proj
+            type(oris)        :: os_before, os_after
+            type(ori)         :: o_before
+            type(string)      :: fsc_fname
+            real, allocatable :: fsc(:), res(:)
+            real    :: res_pass, delta, dist, sh_before(2), sh_after(2), user_lpstop
+            integer :: fsc_box, i, n, n_active, n_moved1, n_moved2, n_shift
+            logical :: l_user_lpstop
+            if( .not. params%l_regpass ) return
+            ! a user lpstop caps the main run; the pass takes the tighter of the two
+            l_user_lpstop = cline%defined('lpstop')
+            user_lpstop   = 0.
+            if( l_user_lpstop ) user_lpstop = cline%get_rarg('lpstop')
+            ! resolution at FSC=regpass_fsc of the startup pair
+            fsc_box = 0
+            call pass_proj%read_segment('out', params%projfile)
+            if( pass_proj%isthere_in_osout('fsc', 1) )then
+                call pass_proj%get_fsc(1, fsc_fname, fsc_box)
+            else
+                fsc_fname = refine3D_fsc_fname(1)
+                fsc_box   = params%box
+            endif
+            call pass_proj%kill
+            if( .not. file_exists(fsc_fname) )then
+                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' REGISTRATION PASS SKIPPED: no startup FSC on disk'
+                call fsc_fname%kill
+                return
+            endif
+            fsc = file2rarr(fsc_fname)
+            call fsc_fname%kill
+            if( fsc_box < 1 ) fsc_box = params%box
+            res = get_resarr(fsc_box, params%smpd)
+            if( size(res) < size(fsc) ) THROW_HARD('startup FSC/box size mismatch; '//WORKFLOW_LABEL//' registration pass')
+            call get_resolution_at_fsc(fsc, res(:size(fsc)), params%regpass_fsc, res_pass)
+            deallocate(fsc, res)
+            if( res_pass <= TINY )then
+                write(logfhandle,'(A,F5.2)') '>>> '//WORKFLOW_LABEL//&
+                    &' REGISTRATION PASS SKIPPED: startup FSC never reaches ', params%regpass_fsc
+                return
+            endif
+            write(logfhandle,'(A,F5.2,A,F7.3,A,I0,A)') '>>> '//WORKFLOW_LABEL//&
+                &' REGISTRATION PASS: refine=prob, all particles, band-limited at FSC=', params%regpass_fsc, &
+                &' -> lpstop=', res_pass, ' A, nspace=', REGPASS_NSPACE, ', no subspace'
+            ! poses before the pass, for the reassignment diagnostic
+            call pass_proj%read_segment(params%oritype, params%projfile)
+            call os_before%copy(pass_proj%os_ptcl3D)
+            call pass_proj%kill
+            ! the pass: one global iteration of every particle
+            cline_pass = cline
+            call cline_pass%set('prg',        'refine3D')
+            call cline_pass%set('refine',     'prob')
+            call cline_pass%set('nspace',     REGPASS_NSPACE)
+            call cline_pass%delete('nspace_sub')
+            if( l_user_lpstop ) res_pass = max(res_pass, user_lpstop)
+            call cline_pass%set('lpstop',     res_pass)
+            call cline_pass%set('maxits',     1)
+            call cline_pass%set('minits',     1)
+            call cline_pass%set('startit',    1)
+            call cline_pass%set('which_iter', 1)
+            call cline_pass%delete('endit')
+            call cline_pass%delete('continue')
+            ! every particle, whatever the sampling policy of the main run
+            call cline_pass%delete('update_frac')
+            call cline_pass%delete('nsample')
+            call xrefine3D%execute(cline_pass)
+            call cline_pass%kill
+            ! reassignment diagnostic: basin width at the pass band
+            call pass_proj%read_segment(params%oritype, params%projfile)
+            call os_after%copy(pass_proj%os_ptcl3D)
+            call pass_proj%kill
+            n        = os_after%get_noris()
+            delta    = res_pass / (0.5 * params%mskdiam)   ! radians
+            n_active = 0
+            n_moved1 = 0
+            n_moved2 = 0
+            n_shift  = 0
+            do i = 1, n
+                if( os_after%get_state(i) < 1 ) cycle
+                n_active = n_active + 1
+                call os_before%get_ori(i, o_before)
+                dist = os_after%euldist(i, o_before)
+                if( dist > delta      ) n_moved1 = n_moved1 + 1
+                if( dist > 2. * delta ) n_moved2 = n_moved2 + 1
+                sh_before = os_before%get_2Dshift(i)
+                sh_after  = os_after%get_2Dshift(i)
+                if( sqrt(sum((sh_after - sh_before)**2)) > 1.0 ) n_shift = n_shift + 1
+            end do
+            call o_before%kill
+            call os_before%kill
+            call os_after%kill
+            if( n_active > 0 )then
+                write(logfhandle,'(A,F6.2,A,F6.2,A,F6.2,A,F6.2,A)') '>>> '//WORKFLOW_LABEL//&
+                    &' REGISTRATION PASS REASSIGNED: ', 100.*real(n_moved1)/real(n_active), &
+                    &' % of directions moved > ', rad2deg(delta), ' deg (basin width at the pass band), ', &
+                    &100.*real(n_moved2)/real(n_active), ' % moved > twice that, ', &
+                    &100.*real(n_shift)/real(n_active), ' % of shifts moved > 1 px'
+            endif
+            ! the main run continues from the pass: its assembled reference
+            ! and the poses it wrote to the project, as iteration 2
+            call cline%set('vol1',       refine3D_state_vol_fname(1))
+            call cline%set('startit',    2)
+            call cline%set('which_iter', 2)
+            call cline%delete('endit')
+            if( l_user_lpstop )then
+                call cline%set('lpstop', user_lpstop)
+            else
+                call cline%delete('lpstop')
+            endif
+        end subroutine run_registration_pass
 
         subroutine seed_refine3D_auto_nonuniform_lpset()
             type(sp_project) :: seed_proj
@@ -615,7 +753,6 @@ contains
         call cline%set('objfun',      'euclid')
         call cline%set('lplim_crit',       0.5)
         call cline%set('incrreslim',      'no')
-        call cline%set('nu_refine',       'no')
         ! overridable defaults
         if( .not. cline%defined('combine_eo')      ) call cline%set('combine_eo',        'no')
         if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',            'no')
@@ -1128,7 +1265,6 @@ contains
             call cline_rec3D%delete('smpd_crop')
             call cline_rec3D%set('objfun', 'cc')
             call cline_rec3D%set('postprocess', 'no')
-            call cline_rec3D%set('nu_refine', 'no')
         end subroutine prepare_startup_reconstruct3D_cline
 
         subroutine reject_input_volumes()
@@ -1424,7 +1560,6 @@ contains
         call cline%set('objfun',          'euclid')
         call cline%set('lplim_crit',      0.5)
         call cline%set('incrreslim',      'no')
-        call cline%set('nu_refine',       'no')
         call cline%set('combine_eo',      'no')
         call cline%set('multivol_mode',   'independent')
         call cline%set('sigma_est',       'global')
@@ -1977,7 +2112,7 @@ contains
         ! against, so it is always a gridding assembly (one particle pass,
         ! the regularized map and the unfiltered pair for a few seconds of
         ! assembly) whatever backend the shipped map uses. It keeps the
-        ! caller's filt_mode/nu_refine/automsk: the residual sigmas depend on
+        ! caller's filt_mode/automsk: the residual sigmas depend on
         ! the regularization of the reference, so it must be regularized
         ! exactly as the refinement's matching references were (2026-09-07).
         cline_rec = cline
@@ -2029,7 +2164,7 @@ contains
 
         !> euclid ML-regularized reconstruct3D on the sigma2 estimate of iter:
         !! the bootstrap map (l_final=.false.) is a gridding assembly without
-        !! postprocessing that keeps the caller's filt_mode/nu_refine/automsk,
+        !! postprocessing that keeps the caller's filt_mode/automsk,
         !! because the residual sigmas depend on the regularization of the
         !! reference they are scored against; the shipped map (l_final=.true.)
         !! keeps the caller's backend, postprocessing and automsk -- so on PCG
@@ -2045,7 +2180,6 @@ contains
             integer :: istate
             if( l_final )then
                 call cline_rec%set('filt_mode', 'none')
-                call cline_rec%set('nu_refine',   'no')
                 if( cline_rec%defined('rec_backend') )then
                     if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
                         &call configure_final_pcg_solve_budget(cline, cline_rec)

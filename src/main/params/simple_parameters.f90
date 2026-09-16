@@ -123,8 +123,8 @@ type :: parameters
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
     character(len=3)          :: nu_msk_rel='no'      !< nu_filt3D only: scale-free NU evidence margin(yes|no){no}
-    character(len=3)          :: nu_refine='no'       !< enable high-resolution shell-walk expansion of the nonuniform resolution bank (same competition on both reconstruction backends)(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
+    character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
     character(len=3)          :: partition='no'
@@ -403,6 +403,7 @@ type :: parameters
     integer :: ldim(3)=0
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_pcg=2        !< maximum # PCG reconstruction iterations{2}
+    integer :: maxits_ml=0         !< coupled PCG iterations of the regularized system from the closed-form start; 0 = closed form only{0}
     integer :: maxits_glob=100     !< maximum # iterations, global
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
@@ -623,6 +624,7 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
+    real    :: regpass_fsc=0.8     !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.8}
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}
@@ -684,7 +686,7 @@ type :: parameters
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
-    logical :: l_nu_refine       = .false.
+    logical :: l_regpass         = .true.
     logical :: l_objfun_den      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.

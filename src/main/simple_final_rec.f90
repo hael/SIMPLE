@@ -175,6 +175,7 @@ contains
             subroutine prep_final_rec_cline( child_cline, prg )
                 class(cmdline), intent(inout) :: child_cline
                 character(len=*), intent(in)  :: prg
+                integer :: istate
                 call child_cline%kill
                 call child_cline%set('prg',      prg)
                 call child_cline%set('mkdir',    'no')
@@ -193,6 +194,16 @@ contains
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
                 if( final_stage_uses_ml_reg() ) call child_cline%set('conical_fsc', params%conical_fsc)
+                ! automsk is inherited on BOTH routes (policy 2026-09-09): the
+                ! shipped PCG map is estimated on the same density-envelope
+                ! support as every refinement iteration, with the same
+                ! estimator-constrained FSC. Until 2026-09-16 only the
+                ! bootstrap_rec3D route forwarded it; the direct route (native
+                ! registration box, committed sigmas reused) shipped a
+                ! spherical-support solve with a post-hoc masked FSC (bgal
+                ! refine3D_auto record).
+                if( cline_refine%defined('automsk') ) &
+                    &call child_cline%set('automsk',   cline_refine%get_carg('automsk'))
                 if( prg.eq.'bootstrap_rec3D' )then
                     ! the residual sigmas depend on the regularization of the
                     ! reference they are scored against: the bootstrap map is
@@ -201,12 +212,20 @@ contains
                     ! bootstrap_rec3D itself (2026-09-07)
                     if( cline_refine%defined('filt_mode') ) &
                         &call child_cline%set('filt_mode', cline_refine%get_carg('filt_mode'))
-                    if( cline_refine%defined('nu_refine') ) &
-                        &call child_cline%set('nu_refine', cline_refine%get_carg('nu_refine'))
-                    if( cline_refine%defined('automsk') ) &
-                        &call child_cline%set('automsk',   cline_refine%get_carg('automsk'))
                     if( cline_refine%defined('nu_msk_sig') ) &
                         &call child_cline%set('nu_msk_sig', cline_refine%get_rarg('nu_msk_sig'))
+                else
+                    ! the direct route ships a classical map (no nonuniform
+                    ! filtering, a matching-reference feature); on PCG the
+                    ! last refinement volume at this box is the lag-one
+                    ! reference the solve support derives from
+                    call child_cline%set('filt_mode', 'none')
+                    if( trim(params%rec_backend) == 'pcg' )then
+                        do istate = 1, params%nstates
+                            if( file_exists(refine3D_state_vol_fname(istate)) ) &
+                                &call child_cline%set('vol'//int2str(istate), refine3D_state_vol_fname(istate))
+                        enddo
+                    endif
                 endif
                 if( .not. l_postprocess )then
                     call child_cline%set('postprocess', 'no')

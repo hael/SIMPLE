@@ -58,7 +58,7 @@ integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, conical_fsc, envfsc
-    type(string) :: balance, partition, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
+    type(string) :: balance, partition, filt_mode, automsk, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -388,7 +388,6 @@ contains
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
         cfg%filt_mode  = 'none'
-        cfg%nu_refine  = 'no'
         if( l_cavgs ) return
         if( l_nonuniform .and. &
             &(istage >= NU_FILTER_STAGE .or. (l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
@@ -616,7 +615,6 @@ contains
             call cline_refine3D%delete('objfun_den')
             call cline_refine3D%delete('objfun_den_w')
         endif
-        call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         ! Non-NU stages: the printed stage limit is the highest resolution
         ! permitted. NU stages: no ceiling unless the user set lpstop.
@@ -726,22 +724,14 @@ contains
         real :: res05, lp_new
         l_promoted = .false.
         if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
+        ! silent: the stage banner reports the limit actually used and its
+        ! provenance (no res05 field = nothing to promote from)
         res05 = project_best_fsc05_resolution(params)
-        if( res05 < TINY )then
-            write(logfhandle,'(A,I0,A)') '>>> ABINITIO3D STAGE ', istage, &
-                &' FSC=0.5 PROMOTION SKIPPED: no res05 field in project '//params%projfile%to_char()
-            return
-        endif
+        if( res05 < TINY ) return
         lp_new = max(min(lp, res05), lp_cap)
         if( lp_new < lp - 1.e-3 )then
-            write(logfhandle,'(A,I0,A,F6.1,A,F6.1,A,F6.1,A,F6.1,A)') &
-                &'>>> ABINITIO3D STAGE ', istage, ' FSC=0.5 PROMOTION OF MATCHING LP: ', &
-                &lp, ' -> ', lp_new, ' A (FSC=0.5 resolution ', res05, ' A, ladder cap ', lp_cap, ' A)'
             lp         = lp_new
             l_promoted = .true.
-        else
-            write(logfhandle,'(A,I0,A,F6.1,A,F6.1,A)') '>>> ABINITIO3D STAGE ', istage, &
-                &' FSC=0.5 PROMOTION NOT NEEDED: plan ', lp, ' A already at or beyond FSC=0.5 resolution ', res05, ' A'
         endif
     end subroutine promote_stage_lp_from_fsc05
 

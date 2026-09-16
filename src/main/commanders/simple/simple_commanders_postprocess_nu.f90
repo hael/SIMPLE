@@ -15,7 +15,7 @@
 ! never feed FSC correction or resolution claims.
 module simple_commanders_postprocess_nu
 use simple_commanders_api
-use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, extend_nu_filter_highres_shells, &
+use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
     &get_nu_filter_bank_finest_lp, build_nu_evidence_state, cleanup_nu_filter, nu_evidence_state, &
     &assert_nu_evidence_replay_ready, print_nu_evidence_summary, nu_evidence_sharpen_vol, NU_EVIDENCE_SOURCE_BASE
 implicit none
@@ -35,29 +35,32 @@ contains
         type(nu_evidence_state) :: evstate
         type(image)             :: even, odd, vol_sharp
         type(string)            :: vol_out
-        integer                 :: nsteps_ext
+        real, allocatable       :: corrs(:), res(:)
+        real                    :: fsc05, fsc0143
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        ! finer evidence granularity is affordable post-hoc (cost paid once
-        ! per map, not once per CG iteration), so the evidence-gated shell
-        ! walk defaults ON here, unlike in abinitio3D
-        if( .not. cline%defined('nu_refine') ) call cline%set('nu_refine', 'yes')
         call params%new(cline)
         call odd%new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
+        ! the same bank as the refinement (2026-09-16, the shell walk
+        ! retired): coarse ladder plus fine rungs generated from the box,
+        ! bounded by the pair's own FSC=0.143 / NU_BANK_FSC_HEADROOM. No
+        ! regularized member: the evidence compaction takes the base pair's
+        ! candidates only (its contract), and this program has no
+        ! regularized pair input
+        allocate(corrs(fdim(params%box)-1), source=0.)
+        call even%fsc(odd, corrs)
+        res = get_resarr(params%box, params%smpd)
+        call get_resolution(corrs, res, fsc05, fsc0143)
+        write(logfhandle,'(A,F8.3,A,F8.3,A)') '>>> POSTPROCESS_NU: HALF-MAP FSC=0.5 ', fsc05, ' A, FSC=0.143 ', fsc0143, ' A'
         ! frozen evidence from the unregularized half pair, the standard
-        ! lifecycle: bank -> optional accepted shell walk -> compact
-        ! immutable state (one evidence identity, no second NU analysis)
-        call setup_nu_dmats(even, odd, params%mskdiam, [real ::], evidence_source=NU_EVIDENCE_SOURCE_BASE)
+        ! lifecycle: bank -> compact immutable state (one evidence identity,
+        ! no second NU analysis)
+        call setup_nu_dmats(even, odd, params%mskdiam, [real ::], evidence_source=NU_EVIDENCE_SOURCE_BASE, &
+            &fsc_res=fsc0143)
         call optimize_nu_cutoff_finds()
-        if( params%l_nu_refine )then
-            call extend_nu_filter_highres_shells(even, odd, nsteps=nsteps_ext)
-            if( nsteps_ext > 0 )then
-                write(logfhandle,'(A,I0,A,F8.3,A)') '>>> POSTPROCESS_NU: EVIDENCE BANK EXTENDED BY ', &
-                    &nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', get_nu_filter_bank_finest_lp(), ' A'
-            endif
-        endif
+        write(logfhandle,'(A,F8.3,A)') '>>> POSTPROCESS_NU: EVIDENCE BANK FINEST MEMBER ', get_nu_filter_bank_finest_lp(), ' A'
         call build_nu_evidence_state(even, odd, evstate)
         call cleanup_nu_filter()
         call assert_nu_evidence_replay_ready(evstate)
@@ -77,6 +80,8 @@ contains
         call odd%kill
         call vol_sharp%kill
         call vol_out%kill
+        if( allocated(corrs) ) deallocate(corrs)
+        if( allocated(res)   ) deallocate(res)
         call simple_end('**** SIMPLE_POSTPROCESS_NU NORMAL STOP ****')
     end subroutine exec_postprocess_nu
 

@@ -229,7 +229,6 @@ contains
         call child_cline%delete('endit')
         call child_cline%delete('automsk')
         call child_cline%delete('filt_mode')
-        call child_cline%delete('nu_refine')
         call child_cline%delete('refs')
         call child_cline%delete('refs_even')
         call child_cline%delete('refs_odd')
@@ -247,6 +246,7 @@ contains
         call child_cline%delete('rec_backend')
         call child_cline%delete('pcgop')
         call child_cline%delete('maxits_pcg')
+        call child_cline%delete('maxits_ml')
         call child_cline%delete('rtol')
     end subroutine strip_pcg_backend_keys
 
@@ -260,6 +260,9 @@ contains
         endif
         if( cline_refine3D%defined('maxits_pcg') )then
             call child_cline%set('maxits_pcg', cline_refine3D%get_iarg('maxits_pcg'))
+        endif
+        if( cline_refine3D%defined('maxits_ml') )then
+            call child_cline%set('maxits_ml', cline_refine3D%get_iarg('maxits_ml'))
         endif
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
@@ -854,6 +857,8 @@ contains
         if( source_cline%defined('maxits_pcg') ) &
             &maxits_final = max(FINAL_PCG_MAXITS_FLOOR, source_cline%get_iarg('maxits_pcg'))
         call final_cline%set('maxits_pcg', maxits_final)
+        if( source_cline%defined('maxits_ml') ) &
+            &call final_cline%set('maxits_ml', source_cline%get_iarg('maxits_ml'))
     end subroutine configure_final_pcg_solve_budget
 
     subroutine write_final_rec_outputs( params, spproj, lp )

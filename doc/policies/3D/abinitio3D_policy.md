@@ -36,7 +36,6 @@ and 3D assembly steps. The default is `projrec=no`.
 - `objfun=euclid`
 - `sigma_est=global`
 - `bfac=0`
-- `nu_refine=no`
 
 When unset, it supplies:
 
@@ -140,7 +139,7 @@ test for this stage (`simple_exec prg=bootstrap_rec3D projfile=... pgrp=...
 mskdiam=... nparts=... nthr=... rec_backend=...`), so failures in the final
 reconstruction can be reproduced in minutes rather than after a full run.
 Its bootstrap map is a gridding assembly that carries the last stage's
-`filt_mode`, `nu_refine` and `automsk` (the residual sigmas depend on the
+`filt_mode` and `automsk` (the residual sigmas depend on the
 regularization of the reference they are scored against, so that reference is
 regularized like the last stage's matching references); the shipped map is
 classical and runs on the workflow's backend with the PCG cold-solve budget
@@ -185,10 +184,11 @@ rule: the best resolved populated state sets the band for all states.
 while the half maps agreed to 4.3 A at FSC=0.5.)
 
 In the NU stages there is no ceiling (July 2026 policy, restored
-2026-09-08): matching runs at the finest-label handoff, which is bounded by
-the FSC-anchored static candidate bank (`nu_refine=no`,
-`doc/policies/NU/nonuniform_filtering_policy.md` section 8), so a ceiling
-only pins the map. Two ceilings were tried and
+2026-09-08): matching runs at the content-extent handoff of the generated ladder,
+whose hard rungs are bounded by the regularized pair's resolution, or by
+`fsc/1.5` of the base pair without one
+(`doc/policies/NU/nonuniform_filtering_policy.md` sections 8 and 12), so a
+ceiling only pins the map. Two ceilings were tried and
 retired: the class-FRC final limit `lpfinal` (6.0 A on PfCRT, whose 2D
 classes stop at 6 A while the 3D map reaches 4 A) pinned the NU stages at
 5.97 A on 2026-09-07; the ladder's hard bound of 4.5 A pinned the 2026-09-08
@@ -392,10 +392,9 @@ After symmetry handling, the selected maps are injected back into the staged
 
 ## 8. Filtering and Automasking
 
-Staged `abinitio3D` uses static discrete-bank nonuniform filtering when
-`filt_mode` is NU-enabled. It always emits `nu_refine=no`; high-resolution NU
-shell extension is reserved for `refine3D_auto` and explicit base
-`refine3D` use. NU always computes its objective over the full spherical
+Staged `abinitio3D` uses the one generated-ladder nonuniform competition
+when `filt_mode` is NU-enabled (2026-09-16; the same competition as
+`refine3D_auto`, the `nu_refine` shell walk is retired). NU always computes its objective over the full spherical
 `mskdiam` support. With the default `automsk=no`, no envelope constrains the
 static local-resolution field; an explicit `automsk=yes` request fixes the
 filter field outside the density envelope to the coarsest candidate, multiplies

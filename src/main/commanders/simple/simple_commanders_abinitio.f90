@@ -72,7 +72,6 @@ contains
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
-        call cline%set('nu_refine',     'no') ! no nonuniform refinement for cavgs route
         call cline%set('objfun', 'euclid') ! noise normalized Euclidean distances from the start
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                      'yes')
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',                     0.95)
@@ -235,7 +234,7 @@ contains
         call rndstart(cline_refine3D)
         do istage = 1, nstages_ini3D
             write(logfhandle,'(A)')'>>>'
-            write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', lpinfo(istage)%lp, ' A'
             ! Splitting stage of docked mode
             if( trim(params%multivol_mode).eq.'docked' )then
                 if( istage == split_stage-1 )then
@@ -611,13 +610,6 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        ! nu_refine stays off: the stage ladder owns frequency marching in
-        ! abinitio3D on both backends; the NU shell walk is reserved for
-        ! refine3D_auto and explicit base refine3D use
-        if( cline%defined('nu_refine') .and. cline%get_carg('nu_refine').eq.'yes' )then
-            THROW_HARD('nu_refine=yes is not supported in abinitio3D; the stage ladder owns frequency marching')
-        endif
-        call cline%set('nu_refine', 'no')
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',                   0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',                10.)
@@ -1020,7 +1012,15 @@ contains
             endif
             write(logfhandle,'(A)')'>>>'
             if( cline_refine3D%defined('lp') )then
-                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', cline_refine3D%get_rarg('lp')
+                if( l_refine3D_lp_override )then
+                    write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
+                        &cline_refine3D%get_rarg('lp'), ' A (command line)'
+                else if( abs(cline_refine3D%get_rarg('lp') - lpinfo(istage)%lp) > 1.e-3 )then
+                    write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
+                        &cline_refine3D%get_rarg('lp'), ' A (planned ', lpinfo(istage)%lp, ' A, promoted by FSC=0.5)'
+                else
+                    write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', cline_refine3D%get_rarg('lp'), ' A'
+                endif
             else
                 write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH NU-SELECTED MATCHING LP'
             endif

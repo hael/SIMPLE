@@ -27,7 +27,6 @@ The route sets:
 - `bfac=0`
 - `filt_mode=none`
 - `automsk=no`
-- `nu_refine=no`
 
 Canonical sigma persistence is used for single-state,
 `multivol_mode=independent`, and `multivol_mode=docked`. At the docked split,

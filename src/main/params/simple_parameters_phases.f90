@@ -642,7 +642,13 @@ contains
             end select
         endif
         self%l_graphene       = self%graphene_filt .ne. 'no'
-        self%l_nu_refine      = trim(self%nu_refine).eq.'yes'
+        select case(trim(self%regpass))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('regpass must be yes or no')
+        end select
+        self%l_regpass        = trim(self%regpass).eq.'yes'
+        if( self%regpass_fsc <= 0. .or. self%regpass_fsc >= 1. ) THROW_HARD('regpass_fsc must be in (0,1)')
         self%l_autoscale      = self%autoscale .eq. 'yes'
         if( .not. cline%defined('newbox') )then
             if( cline%defined('scale') ) self%newbox = find_magic_box(nint(self%scale*real(self%box)))
@@ -810,8 +816,13 @@ contains
         if( self%l_envfsc .and. self%smpd_crop > TINY .and. .not. cline%defined('binwidth') )then
             binwidth_min = max(1, ceiling(ENVMSKWIDTH_A_MIN / self%smpd_crop - 1.e-4))
             if( self%binwidth < binwidth_min )then
-                write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> density envelope dilation raised to ', binwidth_min, &
-                    &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
+                ! reported once, by the workflow driver; every subprocess
+                ! applies the same rule silently
+                select case(trim(self%prg%to_char()))
+                    case('refine3D_auto','abinitio3D','abinitio3D_cavgs','refine3D_states','classify3D_refs')
+                        write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> DENSITY ENVELOPE DILATION: ', binwidth_min, &
+                            &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
+                end select
                 self%binwidth = binwidth_min
             endif
         endif

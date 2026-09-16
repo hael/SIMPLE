@@ -210,8 +210,9 @@ not interchangeable in the FSC or NU-objective paths.
    those live unaries as a diagnostic and fixes the background outside the
    density envelope to the coarsest candidate; `automsk=no` leaves the
    spherical field unconstrained.
-6. The NU filter optimizes the static field and accepts any supported
-   `nu_refine` extensions inside that fixed background.
+6. The NU filter optimizes the field over the generated ladder (hard
+   rungs plus the ML-regularized pair as the finest member when
+   `ml_reg=yes`) inside that fixed background.
 7. `volassemble` multiplies the NU-filtered even and odd references by the
    density envelope before writing them (the merged reference is their
    average); the NU evidence envelope never enters the filter field, FSC

@@ -488,15 +488,15 @@ filter, and this design mirrors that working approach rather than replacing it.
 
 The mechanism, as implemented:
 
-- `refine3D_auto` sets `filt_mode = 'nonuniform'`, `nu_refine = 'yes'`,
-  `lplim_crit = 0.143` and `incrreslim = 'no'`
+- `refine3D_auto` sets `filt_mode = 'nonuniform'` (the `nu_refine` shell
+  walk is retired, 2026-09-16), `lplim_crit = 0.143` and `incrreslim = 'no'`
   (`simple_commanders_refine3D.f90`).
 - The starting limit is seeded from the *starting volume's own FSC* at the
   0.143 criterion, in `seed_refine3D_auto_nonuniform_lpset`, which sets
   `params%lp` and `params%kfromto(2)`.
 - Every subsequent iteration re-derives the limit in `set_bp_range3D`
   (`src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`):
-  `try_nu_refine_project_alignment_lp` returns the NU filter's own matching
+  `try_nu_project_working_lp` returns the NU filter's own matching
   low-pass when available, otherwise `get_find_at_crit(fsc, lplim_crit)` takes
   it from the current FSC; `lpstop` clamps it; it is then clamped to the
   cropped Nyquist and written back to the project with

@@ -1420,9 +1420,9 @@ contains
         peak_rss = get_peak_rss_bytes()
         peak_gib = -1.0_real64
         if( peak_rss >= 0_int64 ) peak_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
-        write(logfhandle,'(A,A,A,F9.1,A,I0,A,F10.1,A,F7.2,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
+        write(logfhandle,'(A,A,A,F6.1,A,I0,A,F8.1,A,F5.2,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
             &trim(params%rec_backend), '): ', secs, ' s on ', nthr, ' threads = ', secs*real(nthr), &
-            &' thread-s; master peak RSS ', peak_gib, ' GiB'
+            &' thread-s, peak RSS ', peak_gib, ' GiB'
     end subroutine report_rec_master_phase
 
 end module simple_refine3D_strategy

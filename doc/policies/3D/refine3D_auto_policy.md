@@ -28,20 +28,25 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `lplim_crit=0.143`
 - `incrreslim=no`
 
-NU volume filtering is independent of `incrreslim`. With `nu_refine=yes`
-the FSC does not cap the NU candidate bank, the shell walk or the matching
-low-pass handoff on either backend (2026-09-11): the full static ladder is
-retained, the walk is bounded by its evidence rules (a significant majority
-of the frontier, 2026-09-13) and the Fourier grid only, and the handoff is
-the finest selected label with at least 1% of the signal voxels at that label
-or finer (`nonuniform_filtering_policy.md` sections 10, 12). The FSC's role is
-resolution reporting and convergence, the ML regularizer `P_tau` and the
-`envfsc` correction; it never gates resolution extension. (The `fsc/1.5`
-bank cap of 2026-09-08 remains in static-bank mode, `nu_refine=no`; with
-the walk bounded by it refine3D_auto stopped extending below the
-resolution the evidence supported.) Bootstrap NU filtering never uses the
-generic parsed startup `lp` as a volume-filter ceiling because it is not
-evidence about the resolution of supplied half maps.
+NU volume filtering is independent of `incrreslim`. Since 2026-09-16 there
+is one NU competition for every workflow (the `nu_refine` shell walk is
+retired): the candidate bank is a generated ladder of hard Butterworth
+rungs -- the coarse rungs 20, 15, 12, 10, 8 and 6 A plus fine rungs every
+`NU_LADDER_FINE_STEP` (2) Fourier shells, widened only when the
+`NU_BANK_MAX_MEMBERS` (16) budget requires it -- bounded one shell coarser
+than the finest member, which is the ML-regularized (closed-form Wiener)
+pair whenever `ml_reg=yes`. Without a regularized pair the ladder is
+bounded at `fsc/1.5` of the base pair (else Nyquist). The regularized pair
+competes for voxels like any other member, so the FSC never gates the
+filter directly; it enters only through the regularizer `P_tau`, the
+bound, resolution reporting, convergence and the `envfsc` correction. The
+matching low-pass handoff is the content extent of the finest selected
+label with at least 1% of the signal voxels at that label or finer: a hard
+rung hands off its cutoff, the regularized member hands off the pair's
+FSC=0.143 resolution, with no headroom (`nonuniform_filtering_policy.md`
+sections 8, 10, 12). Bootstrap NU filtering never uses the generic parsed
+startup `lp` as a volume-filter ceiling because it is not evidence about
+the resolution of supplied half maps.
 
 It also supplies overridable defaults when the user has not provided them:
 
@@ -53,10 +58,10 @@ It also supplies overridable defaults when the user has not provided them:
 - `nsample=25000`
 - `autoscale=yes`
 - `filt_mode=nonuniform`
-- `nu_refine=yes` (the NU shell walk extends the filter bank on both backends)
 - `automsk=yes`
 - `envfsc=yes`
 - `keepvol=no`
+- `regpass=yes`, `regpass_fsc=0.8` (section 5)
 
 The default `envfsc=yes` is guarded, so an explicit user value remains
 authoritative -- except that `automsk=yes` implies `envfsc=yes` (policy
@@ -120,9 +125,9 @@ half maps. If the raw pair is missing or incompatible, the workflow falls back
 to startup reconstruction instead of trusting stale derived NU products.
 
 When the raw pair is compatible, `refine3D_auto` generates fresh same-stem
-`_nu_filt` bootstrap references before the first matcher pass. With
-`nu_refine=yes`, that bootstrap may run the sequential shell challenger from
-the finest populated base-bank label.
+`_nu_filt` bootstrap references before the first matcher pass, from the
+same generated ladder as every later iteration (the regularized member
+requires `ml_reg=yes`).
 
 Under `rec_backend=pcg` the startup reconstruction runs the same NU
 competition inside the PCG master and produces the same `_nu_filt` bootstrap
@@ -152,17 +157,42 @@ explicitly supplied `maxits` (or a larger `minits`). The minimum was ten until
 (cFAR 0.78 to 0.62, FSC=0.5 4.14 to 4.31 A over iterations 1-10). Once the
 overlap criterion (0.99) is met after the third iteration the run stops.
 
-## 5. Refinement and Final Reconstruction
+## 5. Registration Pass, Refinement and Final Reconstruction
 
-After startup, `refine3D_auto` runs base `refine3D` with:
+After startup, with `regpass=yes` (default), `refine3D_auto` runs one
+global registration pass (2026-09-16): a single `refine3D` iteration with
+`refine=prob`, `nspace=5000`, no subspace, every active particle regardless
+of the sampling policy, matched against the masked startup references and
+band-limited at the resolution where the startup pair's FSC falls below
+`regpass_fsc` (default 0.8). The rationale: previous poses are a fixed point
+of the previous objective at the full band; the solvent-mask constraint on
+the references is a new objective, and a neighbourhood search at the full
+band cannot leave the old basins (aldolase run 16: 0.998 orientation overlap
+in iteration 1 and no motion after). Previous poses therefore only produce
+the startup reference; the pass gives every particle a global search under
+the constraint at a band where the reference is trustworthy. The band is
+imposed with `lpstop`, never `lp`: an explicit `lp` sets `l_lpset`, which in
+every non-NU `filt_mode` matches both halves against the merged reference
+and would silently break gold standard. A user `lpstop` caps the pass as
+well (the coarser of the two applies) and is restored for the main run. The
+pass is skipped, logged, when no startup FSC exists or it never reaches
+`regpass_fsc`. It logs `REGISTRATION PASS REASSIGNED`: the fraction of
+directions that moved by more than the orientational basin width at the
+pass band (`res / (mskdiam/2)`), by more than twice it, and the fraction of
+shifts that moved by more than one pixel -- the number that says whether
+re-basining happened. The main run then continues from the pass output as
+iteration 2. `regpass_fsc` is the knob for testing coarser bands.
+
+The main run is base `refine3D` with:
 
 - `prg=refine3D`
+- `refine=prob_neigh`, `nspace=20000`, `nspace_sub=500` unless given
 - trailing reconstruction weighted from realized sampled-update bookkeeping
-- the planned `maxits`
-- the selected starting `vol1`
+- the planned `maxits`, counted from iteration 2 after a registration pass
+- the selected starting `vol1` (the pass output when the pass ran)
 
 After refinement, it runs a final `reconstruct3D` pass from all particle
-images. Final reconstruction sets `postprocess=yes`, sets `nu_refine=no`, and
+images. Final reconstruction sets `postprocess=yes` and
 turns `filt_mode` back to `none` when the refinement used NU filtering.
 `automsk` is inherited (2026-09-09): on PCG the shipped map is estimated on
 the same density-envelope support as every refinement iteration, with the

@@ -190,10 +190,20 @@ is the closed-form optimum of the diagonal model on that operator
 (`shrink_by_ml_prior`, 2026-09-14): the CURRENT same-half base solution's
 Fourier coefficients on the padded lattice scaled voxelwise by
 `(rho+floor)/(rho+floor+P_tau)`, i.e. by the ratio of the regularized and
-base preconditioners. Nothing is solved for the regularized pair; the
-`KIND=ml` summary line reports `ITS=0`, `STOP=closed_form`, and the L2 and
-preconditioned residuals of the closed form against the replay system as a
-diagnostic of the support coupling it leaves out. The former replay solve
+base preconditioners. The closed form is shipped as is (`maxits_ml=0`,
+the default; `ITS=0`, `STOP=closed_form`, `RESID`/`MRES` its residuals
+against the replay system). `maxits_ml>0` runs that many coupled PCG
+iterations of the regularized system FROM the closed form (`rtol=0`, no
+start rejection, an indefinite stop falls back to the closed form) and adds
+a `CF MRES a -> b` line with the FSC between the start and the solved map
+inside the band; the sidecar carries `closed_form_rel_resid_*` and
+`closed_form_vs_solved_*`. Tested 2026-09-16 on bgal at box 256, where the
+closed form's preconditioned residual reads 0.7-1.3 against ~0.1 in the
+cropped stages: two iterations brought it to 0.3-0.7, changed the map
+inside the band by FSC >= 0.965 and left every iteration's FSC0.5/0.143,
+handoff and final map identical to three decimals, so the diagonal model
+is adequate for the regularized member's jobs and the default is 0. The
+former replay solve
 (two CG iterations from a shell-isotropic FSC-shrunk base start, retired
 2026-09-14) was prior-dominated over most of Fourier space, its start was
 rejected on every anisotropically sampled dataset, and its L2 residual above
@@ -222,18 +232,19 @@ went with the warm starts). The NU evidence built from a density-constrained
 pair designates its null on the density envelope's dilation ring
 (`doc/policies/3D/automasking_policy.md`).
 
-With `nu_refine=no`, PCG uses the established eight signal candidates, four
-fixed evidence bands, integer Potts coordinates, unit candidate masses, and
-raw-finest matching handoff. This is the staged-abinitio3D compatibility path.
-With `nu_refine=yes`, accepted high-resolution candidates continue from the
-static bank in Fourier-shell coordinates and use a normalized Voronoi measure
-when their soft evidence is accumulated. Neither the bank nor the shell walk
-nor the matching handoff consults the FSC (2026-09-11): the full static
-ladder is retained, discovery is bounded by the walk's evidence rules (a
-significant majority of the frontier, 2026-09-13) and the Fourier grid only,
-and the handoff is the finest selected label with at least 1% of the signal
-voxels at that label or finer (`nonuniform_filtering_policy.md` sections 10
-and 12).
+PCG runs the one generated-ladder NU competition of 2026-09-16 (the
+`nu_refine` shell walk is retired): coarse hard rungs 20-6 A, fine rungs
+every two Fourier shells (widened to fit the 16-member budget) bounded one
+shell coarser than the regularized pair, which joins as the finest member
+whenever `ml_reg=yes` (without it the ladder is bounded at `fsc/1.5` of the
+base pair). Potts coordinates and the evidence candidate masses come from
+the candidates' positions on the reference ladder 20-4 A, interpolated in
+log(1/resolution), with a normalized Voronoi measure. The four static
+evidence bands are the floor; appended bands are kept only while they earn
+support. The matching handoff is the content extent of the finest selected
+label with at least 1% of the signal voxels at that label or finer: a hard
+rung's cutoff, or the pair's FSC=0.143 resolution for the regularized
+member (`nonuniform_filtering_policy.md` sections 8, 10 and 12).
 
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
 the default in `abinitio3D`, every PCG solve, base and regularized replay, runs
@@ -573,9 +584,9 @@ is meaningful because the two paths share everything but the estimator:
   `1/tau2 = <rho>_shell / (tau * fsc/(1-fsc))`, FSC clamped to [0.001,
   0.999], no prior below `hp`, driven by the current iteration's unfiltered
   pair (`add_invtausq2rho` and `build_ml_prior_from_density`);
-- the NU competition, its static-bank cap (`nu_refine=no` only) and the
+- the NU competition, its ladder bound and the
   handoff run on the unfiltered
-  pair with the regularized pair as auxiliary member through the one
+  pair with the regularized pair as the finest member through the one
   `nonuniform_filter_state` on both backends; both ship deapodized halves
   and merged maps carrying the same soft spherical support at `msk_crop`
   (the PCG solve support; the gridding restoration applies the identical

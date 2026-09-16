@@ -1,5 +1,7 @@
 # NU-Evidence Resolution Mask for C-alpha Detection
 
+> Status 2026-09-16: the `nu_refine` shell walk referred to below is retired; the evidence state is built from the generated ladder (`nonuniform_filtering_policy.md` section 8). The `nu_refine` control no longer exists.
+
 ## Status
 
 Design, revised 2026-09-11 after review (section 11). Not implemented.

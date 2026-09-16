@@ -137,14 +137,16 @@ contains
         &'Maximum kernel PCG iterations; independent of refine3D outer maxits', 'iterations{2}', &
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
+        &.false., 0., group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
         &'Real-space [0,1] mask volume installed as the hard support constraint of every PCG solve (the projected '//&
         &'system P H P; experimental focused/support mode); spherical mskdiam support when absent', &
         &'e.g. focusmask.mrc', .false., '', group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_FILT, nu_refine, group="filter", &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, combine_eo, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
@@ -209,6 +211,16 @@ contains
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'regpass', 'binary', 'Global registration pass', &
+        &'One global (refine=prob) registration pass of all particles against the masked startup references, &
+        &band-limited at the FSC=regpass_fsc resolution of the startup pair, before the neighbourhood iterations(yes|no){yes}', &
+        &'', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'regpass_fsc', 'num', 'Registration-pass FSC criterion', &
+        &'FSC value of the startup pair whose resolution band-limits the registration pass', &
+        &'FSC value in (0,1){0.8}', .false., 0.8, group="search", &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -226,14 +238,14 @@ contains
         &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}','', .false., 'nonuniform', group="filter", &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D_auto%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
-        & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}','', .false., 'yes', group="filter", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations during refinement; the cold original-sampling final reconstruction uses at least 5', &
         &'iterations{2}', &
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D_auto%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
+        &.false., 0., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D_auto%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)

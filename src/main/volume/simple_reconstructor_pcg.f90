@@ -50,6 +50,15 @@ type :: pcg_solver_outcome
     logical           :: start_rejected       = .false.     !< the nonzero start was worse than zero and was discarded before iterating
     real              :: rejected_start_initial = 0.0       !< initial relative residual of the discarded start
     logical           :: converged            = .false.
+    ! the regularized solve starts from the closed-form Wiener shrink of the
+    ! base solution (2026-09-16); its residuals against the coupled system and
+    ! the agreement of the solved map with it are kept for the sidecar
+    real              :: closed_form_rel_residual   = -1.0 !< L2 relative residual of the closed-form start (-1: no closed form)
+    real              :: closed_form_rel_residual_m = -1.0 !< preconditioned relative residual of the closed-form start
+    real              :: closed_form_fsc05_res      = 0.0  !< FSC=0.5 crossing (A) between the closed form and the solved map (0: not measured)
+    real              :: closed_form_fsc0143_res    = 0.0  !< FSC=0.143 crossing (A) between them
+    real              :: closed_form_min_fsc_inband = 0.0  !< minimum FSC between them over the pair's FSC>0.143 band
+    integer           :: closed_form_band_shell     = 0    !< last shell of that band
     real, allocatable  :: rel_residual_history(:)
     real, allocatable  :: rel_update_history(:)
     real, allocatable  :: preconditioned_residual_history(:)

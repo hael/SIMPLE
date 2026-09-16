@@ -69,6 +69,10 @@ contains
         &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{2}', .false., 2., &
         &visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
         &.false., 0.0, visibility=UI_VIS_ADVANCED, &
@@ -97,7 +101,7 @@ contains
         &'bootstrap sigma2 and ML-regularized 3D reconstruction',&       ! summary
         &'complete final-reconstruction sequence for a project with 3D orientations: seeds the sigma2 estimate from particle&
         & power spectra (calc_pspec) as the given iteration, assembles a gridding ML-regularized bootstrap map on it (with the&
-        & given filt_mode/nu_refine/automsk, since the residual sigmas depend on the reference regularization), runs one&
+        & given filt_mode/automsk, since the residual sigmas depend on the reference regularization), runs one&
         & residual sigma2 pass (refine=sigma, no search) against that map, consolidates the residual groups as the next&
         & iteration and reconstructs the shipped ML-regularized map on them with the requested backend (PCG gets the cold-solve&
         & iteration budget); standalone test entry point for the final reconstruction stage of abinitio3D and refine3D_auto',&
@@ -136,6 +140,10 @@ contains
         call bootstrap_rec3D%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{2}', .false., 2., &
         &visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call bootstrap_rec3D%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call bootstrap_rec3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &

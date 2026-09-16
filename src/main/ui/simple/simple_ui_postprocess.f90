@@ -87,8 +87,6 @@ contains
         call postprocess_nu%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
         ! filter controls
-        call postprocess_nu%add_input(UI_FILT, nu_refine, required_override=.false., &
-        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call postprocess_nu%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

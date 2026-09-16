@@ -1,5 +1,7 @@
 # NU-evidence local sharpening: model-free LocScale from cross-half evidence
 
+> Status 2026-09-16: the `nu_refine` shell walk referred to below is retired; `postprocess_nu` builds its evidence from the generated ladder bounded at the pair's FSC0.143/1.5 (`nonuniform_filtering_policy.md` section 8). The walk-related items here are historical.
+
 ## Status
 
 Proposal (2026-08-27), **SCHEDULED as PRESSING (2026-08-29, user

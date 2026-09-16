@@ -111,7 +111,6 @@ contains
         call cline_checkpoint%set('prg',         'reconstruct3D')
         call cline_checkpoint%set('objfun',      'cc')
         call cline_checkpoint%set('postprocess', 'no')
-        call cline_checkpoint%set('nu_refine',   'no')
         call cline_checkpoint%delete('trail_rec')
         call cline_checkpoint%delete('refine')
         call cline_checkpoint%delete('objfun_den')

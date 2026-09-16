@@ -17,7 +17,7 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
     &write_support_provenance, read_support_provenance
 use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: NU_DEV_OUTPUT
-use simple_nu_state_filter,   only: nonuniform_filter_state, nu_static_aux_replacement
+use simple_nu_state_filter,   only: nonuniform_filter_state, nu_aux_member
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
@@ -85,9 +85,22 @@ contains
     ! the replay system is reported (RESID/MRES on the KIND=ml line) as a
     ! diagnostic of the support coupling it leaves out. The support-provenance
     ! solve kind is still written for the trailing bootstrap's lag-one FSC pair.
+    !
+    ! The closed form is the START of the regularized solve (2026-09-16): at
+    ! the native box, where a third of the shells lie beyond the band with
+    ! the prior 1000x the data, its preconditioned residual read 0.9-1.3
+    ! (bgal box 256) against ~0.1 in the cropped stages whose band reached
+    ! Nyquist. maxits_ml (default 2) coupled iterations from the closed form
+    ! (solve_regularized_half) recover the support coupling the diagonal
+    ! model leaves out; INIT on the KIND=ml line is the closed form's L2
+    ! residual, MRES the final one, and the CLOSED-FORM MRES line with the
+    ! FSC between the start and the solved map inside the band says whether
+    ! the iterations changed the map you look at or only the beyond-band
+    ! shells. maxits_ml=0 ships the closed form.
 
     !> Solve with one cold restart: a solve from a NONZERO start (l_nonzero;
-    !! no production solve starts nonzero since 2026-09-14) that loses
+    !! the base solve always starts from zero; the regularized solve starts
+    !! from the closed form through solve_regularized_half, not here) that loses
     !! positive-definiteness is retried once from zero. A nonzero start that is WORSE THAN ZERO
     !! (initial relative residual above PCG_START_MAX_REL_RESID; zero has
     !! exactly 1) is discarded by the solver itself before the first
@@ -128,6 +141,95 @@ contains
         outcome%restart_trigger_curvature = first_failure%failure_curvature
         outcome%restart_trigger_iteration = first_failure%failure_iteration
     end subroutine solve_with_cold_restart
+
+    !> The regularized half (2026-09-16): the closed-form Wiener shrink of the
+    !! base solution (the optimum of the diagonal model, 2026-09-14), then
+    !! maxits_ml coupled PCG iterations of the regularized system FROM that
+    !! start. From a start that already carries the prior's spectral shape CG
+    !! only moves toward the coupled solution; the step-length overshoot of
+    !! the retired from-zero replay does not arise, and no start rejection
+    !! applies (its L2 test is the wrong norm for a prior-dominated system).
+    !! rtol=0: exactly maxits_ml iterations, so runs compare. An indefinite
+    !! stop falls back to the closed form. maxits_ml=0 ships the closed form.
+    !! The closed-form residuals stay on the outcome; x_cf receives the
+    !! closed form when iterations ran, for the agreement diagnostic.
+    subroutine solve_regularized_half( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf )
+        type(reconstructor_pcg),  intent(inout) :: pcgop
+        real,                     intent(inout) :: x(:,:,:)
+        integer,                  intent(in)    :: maxits_ml
+        real, allocatable,        intent(out)   :: rel_res_hist(:)
+        integer,                  intent(out)   :: niters
+        type(pcg_solver_outcome), intent(out)   :: outcome
+        real, allocatable,        intent(out)   :: x_cf(:,:,:)
+        real :: rel_l2, rel_m
+        call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
+        if( maxits_ml < 1 )then
+            niters = 0
+            allocate(rel_res_hist(0))
+            outcome%stop_reason          = 'closed_form'
+            outcome%requested_maxits     = 0
+            outcome%iteration_count      = 0
+            outcome%initial_rel_residual = rel_l2
+            outcome%final_rel_residual   = rel_l2
+            outcome%final_rel_residual_m = rel_m
+            outcome%final_rel_update     = 0.0
+            outcome%converged            = .true.
+        else
+            x_cf = x
+            call pcgop%solve_accum(x, maxits=maxits_ml, rtol=0.0, rel_res_hist=rel_res_hist, &
+                &niters=niters, outcome=outcome)
+            if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE )then
+                x = x_cf
+                niters = 0
+                if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
+                allocate(rel_res_hist(0))
+                outcome%stop_reason          = 'closed_form_fallback'
+                outcome%iteration_count      = 0
+                outcome%final_rel_residual   = rel_l2
+                outcome%final_rel_residual_m = rel_m
+                outcome%final_rel_update     = 0.0
+                outcome%converged            = .true.
+            endif
+        endif
+        outcome%closed_form_rel_residual   = rel_l2
+        outcome%closed_form_rel_residual_m = rel_m
+    end subroutine solve_regularized_half
+
+    !> Agreement of the solved regularized map with its closed-form start:
+    !! FSC between the two, its 0.5/0.143 crossings and its minimum over the
+    !! pair's FSC>0.143 band (band_shell). If the band minimum is ~1 the
+    !! coupled iterations only moved beyond-band content; if it is not, the
+    !! closed form alone was leaving in-band signal on the table. Serial
+    !! (image/FFTW lifecycle).
+    subroutine measure_closed_form_agreement( x_cf, x, box, smpd, band_shell, outcome )
+        real,                     intent(in)    :: x_cf(:,:,:), x(:,:,:)
+        integer,                  intent(in)    :: box, band_shell
+        real,                     intent(in)    :: smpd
+        type(pcg_solver_outcome), intent(inout) :: outcome
+        type(image) :: img_cf, img
+        real, allocatable :: corrs(:), res(:)
+        real    :: fsc05, fsc0143
+        integer :: n
+        n = fdim(box) - 1
+        if( n < 1 ) return
+        call img_cf%new([box,box,box], smpd)
+        call img%new([box,box,box], smpd)
+        call img_cf%set_rmat(x_cf, .false.)
+        call img%set_rmat(x, .false.)
+        call img_cf%fft()
+        call img%fft()
+        allocate(corrs(n), source=0.)
+        call img_cf%fsc(img, corrs)
+        res = get_resarr(box, smpd)
+        call get_resolution(corrs, res, fsc05, fsc0143)
+        outcome%closed_form_fsc05_res      = fsc05
+        outcome%closed_form_fsc0143_res    = fsc0143
+        outcome%closed_form_band_shell     = max(1, min(n, band_shell))
+        outcome%closed_form_min_fsc_inband = minval(corrs(1:outcome%closed_form_band_shell))
+        call img_cf%kill
+        call img%kill
+        deallocate(corrs, res)
+    end subroutine measure_closed_form_agreement
 
     !> Serial reporting/failure boundary for solve_with_cold_restart. Keeping
     !! log I/O and THROW_HARD outside the distributed OpenMP sections preserves
@@ -503,7 +605,7 @@ contains
                 ! an envelope-constrained base pair hands its support over so
                 ! the evidence null is designated on the dilation ring
                 call nonuniform_filter_state(params, state, half_even, half_odd, &
-                    &ml_even, ml_odd, params%l_ml_reg .and. nu_static_aux_replacement(params), &
+                    &ml_even, ml_odd, nu_aux_member(params), &
                     &res0143s(state), fname_vol, eonames, nu_align_lps(state), &
                     &base_support=state_support_msk, l_base_constrained=l_base_support_constrained)
                 time_nu_filter = real(toc(t_state_phase),dp)
@@ -779,12 +881,11 @@ contains
             type(reconstructor_pcg) :: pcgop
             type(pcg_solver_outcome) :: result
             type(string) :: fname
-            real, allocatable :: x(:,:,:), rel_res_hist(:)
+            real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             integer :: nptcls, niters, prior_npositive
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: rel_l2, rel_m
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -813,21 +914,15 @@ contains
                 &prior_to_khat_l1, prior_to_khat_rms)
             x = base_volume%get_rmat()
             t_phase = tic()
-            ! closed form; the residuals are those of the result against the
-            ! replay system, diagnostics of the support coupling left out
-            call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
+            ! closed form, then maxits_ml coupled iterations from it
+            call solve_regularized_half(pcgop, x, params%maxits_ml, rel_res_hist, niters, result, x_cf)
             time_solve = real(toc(t_phase),dp)
-            niters = 0
-            allocate(rel_res_hist(0))
-            result%stop_reason          = 'closed_form'
-            result%requested_maxits     = 0
-            result%iteration_count      = 0
-            result%initial_rel_residual = rel_l2
-            result%final_rel_residual   = rel_l2
-            result%final_rel_residual_m = rel_m
-            result%final_rel_update     = 0.0
-            result%converged            = .true.
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
+            if( allocated(x_cf) )then
+                call measure_closed_form_agreement(x_cf, x, params%box_crop, params%smpd_crop, &
+                    &get_find_at_crit(fsc_here, 0.143), result)
+                deallocate(x_cf)
+            endif
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
@@ -841,6 +936,7 @@ contains
             call report_solve_summary('SHARED', state_here, half, 'ml', nptcls, niters, &
                 &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual, &
                 &residual_m=result%final_rel_residual_m)
+            call report_closed_form_agreement('SHARED', state_here, half, result)
             call pcgop%kill
             call fname%kill
             deallocate(x, rel_res_hist)
@@ -884,6 +980,7 @@ contains
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=', result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',   result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_m=',    result%final_rel_residual_m
+            call write_closed_form_diagnostics(funit, result)
             write(funit,'(A,ES14.6)') 'final_rel_update=',     result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',       data_scale
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=', lambda_eff
@@ -1519,8 +1616,9 @@ contains
         type :: distributed_half_job
             type(reconstructor_pcg) :: pcgop
             type(pcg_solver_outcome) :: result
-            real, allocatable :: x(:,:,:), rel_res_hist(:)
+            real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             integer :: state = 0, eo = 0, nptcls = 0, niters = 0
+            integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
             integer :: prior_npositive = 0
             character(len=8) :: half = '', solve_kind = ''
             real(dp) :: time_reduce = 0.0_dp, time_finalize = 0.0_dp, time_solve = 0.0_dp
@@ -1788,7 +1886,7 @@ contains
                 if( l_bootstrap .and. update_weights(state) < 0.99 ) &
                     &l_nu_base_constrained = l_nu_base_constrained .and. l_fsc_pair_support_constrained
                 call nonuniform_filter_state(params, state, half_even, half_odd, &
-                    &ml_even, ml_odd, params%l_ml_reg .and. nu_static_aux_replacement(params), &
+                    &ml_even, ml_odd, nu_aux_member(params), &
                     &res0143s(state), fname_vol, eonames, align_lps(state), &
                     &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained)
                 time_nu_filter = real(toc(t_state_phase),dp)
@@ -2090,7 +2188,10 @@ contains
             endif
 
             t_phase = tic()
-            if( job%l_ml_solve ) call job%pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+            if( job%l_ml_solve )then
+                call job%pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+                job%band_shell = get_find_at_crit(fsc_prior, 0.143)
+            endif
             call job%pcgop%end_accum(.true.)
             call job%pcgop%set_op_mode(PCG_OP_KERNEL)
             job%time_finalize = real(toc(t_phase),dp)
@@ -2145,23 +2246,12 @@ contains
         subroutine solve_prepared_half_job( job )
             type(distributed_half_job), intent(inout) :: job
             integer(timer_int_kind) :: t_phase, t_end, t_rate
-            real :: rel_l2, rel_m
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
             if( job%l_ml_solve )then
-                ! closed form; the residuals are those of the result against
-                ! the replay system, diagnostics of the support coupling left out
-                call job%pcgop%shrink_by_ml_prior(job%x, rel_l2, rel_m)
-                job%niters = 0
-                allocate(job%rel_res_hist(0))
-                job%result%stop_reason          = 'closed_form'
-                job%result%requested_maxits     = 0
-                job%result%iteration_count      = 0
-                job%result%initial_rel_residual = rel_l2
-                job%result%final_rel_residual   = rel_l2
-                job%result%final_rel_residual_m = rel_m
-                job%result%final_rel_update     = 0.0
-                job%result%converged            = .true.
+                ! closed form, then maxits_ml coupled iterations from it
+                call solve_regularized_half(job%pcgop, job%x, params%maxits_ml, job%rel_res_hist, &
+                    &job%niters, job%result, job%x_cf)
             else
                 call solve_with_cold_restart(job%pcgop, job%x, job%l_nonzero, params%maxits_pcg, params%rtol, &
                     &job%rel_res_hist, job%niters, job%result)
@@ -2179,6 +2269,11 @@ contains
             if( .not. job%ready ) return
             call handle_cold_restart_outcome(job%result, 'distributed', job%half, job%solve_kind)
             call validate_solved_map(job%x, 'distributed', job%state, job%half, job%solve_kind)
+            if( allocated(job%x_cf) )then
+                call measure_closed_form_agreement(job%x_cf, job%x, params%box_crop, params%smpd_crop, &
+                    &job%band_shell, job%result)
+                deallocate(job%x_cf)
+            endif
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(job%x, .false.)
             call report_beyond_band_excess(volume, params, job%state, job%half, job%solve_kind)
@@ -2197,8 +2292,10 @@ contains
             call report_solve_summary('DISTRIBUTED', job%state, job%half, job%solve_kind, job%nptcls, &
                 &job%niters, job%result%final_rel_residual, job%time_solve, job%result%stop_reason, &
                 &job%result%initial_rel_residual, residual_m=job%result%final_rel_residual_m)
+            call report_closed_form_agreement('DISTRIBUTED', job%state, job%half, job%result)
             call job%pcgop%kill
             if( allocated(job%x) ) deallocate(job%x)
+            if( allocated(job%x_cf) ) deallocate(job%x_cf)
             if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
             job%ready = .false.
         end subroutine finish_distributed_half_job
@@ -2242,6 +2339,7 @@ contains
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',    result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_m=',     result%final_rel_residual_m
             write(funit,'(A,ES14.6)') 'final_rel_update=',      result%final_rel_update
+            call write_closed_form_diagnostics(funit, result)
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',        data_scale
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=',  lambda_eff
             if( present(prior_npositive) )then
@@ -2274,6 +2372,20 @@ contains
         end subroutine write_distributed_diagnostics
 
     end subroutine execute_rec3D_pcg_distributed_master
+
+    !> Closed-form start diagnostics of a regularized solve (2026-09-16)
+    subroutine write_closed_form_diagnostics( funit, result )
+        integer,                  intent(in) :: funit
+        type(pcg_solver_outcome), intent(in) :: result
+        if( result%closed_form_rel_residual < 0.0 ) return
+        write(funit,'(A,ES14.6)') 'closed_form_rel_resid_l2=',    result%closed_form_rel_residual
+        write(funit,'(A,ES14.6)') 'closed_form_rel_resid_m=',     result%closed_form_rel_residual_m
+        if( result%closed_form_band_shell < 1 ) return
+        write(funit,'(A,I0)')     'closed_form_vs_solved_band_shell=',  result%closed_form_band_shell
+        write(funit,'(A,ES14.6)') 'closed_form_vs_solved_min_fsc_inband=', result%closed_form_min_fsc_inband
+        write(funit,'(A,F10.3)')  'closed_form_vs_solved_fsc05_A=',   result%closed_form_fsc05_res
+        write(funit,'(A,F10.3)')  'closed_form_vs_solved_fsc0143_A=', result%closed_form_fsc0143_res
+    end subroutine write_closed_form_diagnostics
 
     subroutine validate_solved_map( x, execution_mode, state, half, solve_kind )
         real,             intent(in) :: x(:,:,:)
@@ -2404,6 +2516,24 @@ contains
         call flush(logfhandle)
     end subroutine report_solve_summary
 
+    !> One line per regularized half that ran coupled iterations from the
+    !! closed form: where the start sat in the preconditioned norm, where the
+    !! iterations left it, and how much of the in-band map they changed
+    subroutine report_closed_form_agreement( execution_mode, state, half, result )
+        character(len=*),         intent(in) :: execution_mode, half
+        integer,                  intent(in) :: state
+        type(pcg_solver_outcome), intent(in) :: result
+        character(len=4) :: half_label
+        if( result%closed_form_band_shell < 1 ) return
+        half_label = adjustl(half)
+        write(logfhandle,'(4A,I2,A,A4,A,ES10.3,A,ES10.3,A,F5.3,A,F5.2,A)') &
+            &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
+            &' | KIND=ml   | CF MRES=', result%closed_form_rel_residual_m, ' -> ', &
+            &result%final_rel_residual_m, ' | FSC(cf,solved) in band >= ', result%closed_form_min_fsc_inband, &
+            &', 0.5 at ', result%closed_form_fsc05_res, ' A'
+        call flush(logfhandle)
+    end subroutine report_closed_form_agreement
+
     subroutine write_output_diagnostics( state, execution_mode, map_time, fsc_time, nu_filter_time )
         integer,            intent(in) :: state
         character(len=*),   intent(in) :: execution_mode
@@ -2441,6 +2571,8 @@ contains
         if( l_check_solver )then
             if( params%maxits_pcg < 1 .or. params%maxits_pcg > 100 ) &
                 &THROW_HARD('PCG requires 1<=maxits_pcg<=100')
+            if( params%maxits_ml < 0 .or. params%maxits_ml > 100 ) &
+                &THROW_HARD('PCG requires 0<=maxits_ml<=100 (0: closed-form regularized pair only)')
             if( params%maxits_pcg > 8 )then
                 THROW_WARN('maxits_pcg exceeds the production refinement budget (8); appropriate for offline converged solves only')
             endif

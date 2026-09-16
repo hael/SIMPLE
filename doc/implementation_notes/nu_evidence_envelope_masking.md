@@ -1,5 +1,7 @@
 # NU-Evidence Envelope Masking
 
+> Status 2026-09-16: the `nu_refine` shell walk referred to below is retired; the evidence state is built from the generated ladder (`nonuniform_filtering_policy.md` section 8, 10). The walk-related items here are historical.
+
 > **SUPERSEDED (2026-09-02).** The reference-masking decision below is
 > retired: matching references are NEVER multiplied with an envelope
 > (evidence or density) before reprojection — hard-removing density present

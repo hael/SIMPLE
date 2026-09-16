@@ -44,8 +44,10 @@ Per state and per half, from one particle accumulation:
   shell-diagonal precision `P_tau` from `tau`, `hp`): each Fourier
   coefficient of the base map on the padded lattice scaled by
   `(rho+floor)/(rho+floor+P_tau)`, the ratio of the regularized and base
-  preconditioners, voxelwise (`shrink_by_ml_prior`). Nothing is solved for
-  it. Its pair is the shipped map and the NU auxiliary member. It replaced
+  preconditioners, voxelwise (`shrink_by_ml_prior`); `maxits_ml` (default
+  0) optional coupled PCG iterations from that start
+  (`solve_regularized_half`, 2026-09-16: refinement-invisible on bgal, kept
+  as a knob). Its pair is the shipped map and the finest NU bank member. It replaced
   the two-iteration replay solve, which was prior-dominated over most of
   Fourier space (prior/data 400-600 wherever the FSC reaches zero inside
   Nyquist), started from a shell-isotropic FSC-shrunk base that was
@@ -120,16 +122,16 @@ other consumers (postprocess of non-PCG products, the abinitio final rec).
 ## 5. NU filtering and the evidence envelope
 
 The NU competition is assembly-owned and identical on both backends
-(`simple_nu_state_filter`): the discrete candidate bank is built from the
-base (`_unfil`) pair, the replay pair joins as the finest auxiliary member
-(`ml_reg=yes, nu_refine=no`), the shell walk extends the bank
-(`nu_refine=yes`, refine3D_auto), and the raw finest selected label is the
-matching low-pass handoff. Under `nu_refine=no` the static bank is capped
-at `fsc/1.5` of the base pair; under `nu_refine=yes` the FSC is not
-consulted: the full ladder is retained, the walk is bounded by its
-evidence rules and the grid only, and the handoff carries no support gate
-and no FSC headroom (2026-09-11). The NU objective always runs on the
-spherical `mskdiam` support.
+(`simple_nu_state_filter`, 2026-09-16, the `nu_refine` shell walk
+retired): the generated ladder of hard rungs (coarse 20-6 A, then every
+two Fourier shells, widened to fit `NU_BANK_MAX_MEMBERS`=16) is built from
+the base (`_unfil`) pair and bounded one shell coarser than the
+ML-regularized pair, which joins as the finest member (`ml_reg=yes`;
+without it the ladder is bounded at `fsc/1.5` of the base pair). The
+matching low-pass handoff is the content extent of the finest selected
+label with at least 1% of the signal voxels at it or finer: a hard rung's
+cutoff, the pair's FSC=0.143 resolution for the regularized member, no
+headroom. The NU objective always runs on the spherical `mskdiam` support.
 
 Under `automsk=yes` the NU evidence envelope (`nu_envmask3D_stateNN.mrc`,
 regenerated every competition from the live evidence) is the mask that
@@ -174,10 +176,10 @@ string records which envelope ran.
   (`minits = maxits`).
 - **Final reconstruction** (`bootstrap_rec3D`, both workflows): image-power
   sigma seed, a gridding ML bootstrap map carrying the workflow's
-  `filt_mode`/`nu_refine`/`automsk` (the residual sigmas depend on the
+  `filt_mode`/`automsk` (the residual sigmas depend on the
   regularization of the reference they are scored against), one residual
   sigma pass, then the shipped PCG map at the native box: cold, at least
-  five iterations, `filt_mode=none`, `nu_refine=no`, `automsk` inherited
+  five iterations, `filt_mode=none`, `automsk` inherited
   (so its support matches the refinement's), `postprocess=yes`, with the
   gridding bootstrap map passed as `vol<state>` so the density envelope
   constrains the base pair too and the reported FSC is estimator-constrained
@@ -199,10 +201,12 @@ one CG drives, and the one on which the two kinds are comparable
 (2026-09-14; the L2 residual of a prior-dominated system is mostly noise
 the prior refuses to fit). Healthy base values on PfCRT at box 140-160:
 `1 -> 0.06-0.09` (L2), `MRES` 0.2-0.3 after two iterations. The `KIND=ml`
-line is the closed form: `ITS=0`, `STOP=closed_form`, and its `RESID`/`MRES`
-are the residuals of the closed form against the replay system, a
-diagnostic of the support coupling it leaves out, not a convergence
-measure.
+line is the closed form (`maxits_ml=0`, default): `ITS=0`,
+`STOP=closed_form`, `RESID`/`MRES` its residuals against the replay system,
+a diagnostic of the support coupling it leaves out, not a convergence
+measure. With `maxits_ml>0` `INIT` is the closed form's L2 residual,
+`ITS=maxits_ml`, `MRES` the final one, and a `CF MRES a -> b` line gives the
+FSC between the start and the solved map inside the band (2026-09-16).
 
 Other lines to grep: `PCG SOLVE SUPPORT` (which support, and why),
 `FSC MODE`, `NU ENVELOPE OCCUPANCY`,
@@ -210,7 +214,7 @@ Other lines to grep: `PCG SOLVE SUPPORT` (which support, and why),
 ring the evidence labels signal -- the number to consult before tightening
 `binwidth`), `NU NULL SHELL GEOMETRY` (envelope/support Dice, ring
 retained at full weight), `NU BACKGROUND` (evidence envelope or fallback),
-`NU BANK CAP` (`nu_refine=no`) or `NU BANK UNCAPPED` (`nu_refine=yes`),
+`NU BANK` (the generated ladder, its fine step and its finest member),
 `NU LOW-PASS ASSIGNMENTS`, `NU filter promoted matching
 low-pass`, `PCG BEYOND-BAND EXCESS` (post-band RMS >= 10x the band-edge
 shell; the regression signal for solver defects), `RECONSTRUCTION MASTER

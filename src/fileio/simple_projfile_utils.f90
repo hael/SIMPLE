@@ -355,7 +355,6 @@ contains
         type(class_frcs) :: frcs, frcs_chunk
         type(image)      :: img
         type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
-        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp
         logical, allocatable :: chunks_have2D(:)
         real    :: smpd
         integer :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc

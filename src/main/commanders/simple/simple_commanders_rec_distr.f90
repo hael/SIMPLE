@@ -503,7 +503,7 @@ contains
         end subroutine trail_restored_halves_if_needed
 
         logical function use_static_nu_aux_replacement() result(l_use_aux)
-            l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
+            l_use_aux = params%l_ml_reg
         end function use_static_nu_aux_replacement
 
         subroutine cleanup_restore_state()
@@ -851,7 +851,7 @@ contains
         use simple_reconstructor,    only: reconstructor
         use simple_nu_filter,        only: set_nu_filter_report, NU_DEV_OUTPUT
         use simple_nu_state_filter,  only: nonuniform_filter_state, nu_state_filter_timings, &
-            &nu_static_aux_replacement
+            &nu_aux_member
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters), target      :: params
@@ -1062,7 +1062,7 @@ contains
         end subroutine run_state_nonuniform_filter
 
         logical function use_static_nu_aux_replacement() result(l_use_aux)
-            l_use_aux = nu_static_aux_replacement(params)
+            l_use_aux = nu_aux_member(params)
         end function use_static_nu_aux_replacement
 
         subroutine collect_restore_timings()

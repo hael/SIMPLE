@@ -360,3 +360,96 @@ visually good) and against `fsc2optlp` of the `_unfil` pair, by FSC between
 them and by eye; `MRES` of the closed form tells how far the diagonal optimum
 sits from the coupled one. Compile and runs are Hans's.
 
+**2026-09-16 -- The NU shell walk retired; one generated ladder with the
+regularized pair as its finest member for every workflow.** Trigger: the
+`nu_refine=yes` walk never let the ML-regularized volume compete for voxels
+(it was the finest STATIC member and the walk challenged hard shells beyond
+it), and its acceptance rule -- a full-weight shell helps cross-half
+prediction only where the half-map SNR exceeds 1 -- is local FSC>0.5, which
+is conservative for filtering the map and no better than the FSC-0.143
+extent for setting the matching band; on aldolase it pinned the band while
+the actual ceiling was the data model (no per-particle CTF or polishing).
+Meanwhile every abinitio3D run used the discrete ladder plus auxiliary
+competition and it works. Decision (Hans): delete the walk and densify the
+static ladder instead, one implementation for abinitio3D, refine3D_auto,
+refine3D and postprocess_nu. The bank is generated per box: coarse rungs
+20/15/12/10/8/6 A, then fine rungs every `NU_LADDER_FINE_STEP`=2 Fourier
+shells up to one shell coarser than the closed-form regularized pair
+(`ml_reg=yes`), which is the finest member and competes voxelwise like any
+rung; without a regularized pair the rungs are bounded at `fsc/1.5`
+(postprocess_nu, `ml_reg=no`); the fine spacing widens (never truncates)
+to fit `NU_BANK_MAX_MEMBERS`=16. Potts coordinates and the evidence
+candidate masses are positions on the reference ladder 20-4 A interpolated
+in log(1/res), so the smoothing prior is scale-free across boxes. The
+matching handoff is the content extent of the finest label holding >=1% of
+the signal voxels at it or finer: a rung's cutoff, the pair's FSC=0.143
+resolution for the regularized member, no headroom (abinitio3D keeps its
+own 4.5 A stage limit for the non-NU FSC=0.5 promotion only). Removed:
+`simple_nu_filter_extend.f90`, the `nu_refine` key (parameters, phases, UI,
+every workflow default), `refine_nonuniform_filter_bank`, the highres-step
+sidecars, `nu_static_ladder_count`, the walk statistics and the majority
+test, the `NU BANK CAP/UNCAPPED` log lines (now one `NU BANK` line naming the
+rungs, the fine step and the finest member). Design record:
+`nu_refine_ml_estimator_competition.md` (rewritten). Compile and the
+aldolase/PfCRT A/B reruns are Hans's; the expected signature is the
+regularized label populating the core, hard rungs the periphery, and the
+handoff tracking the FSC=0.143 extent rather than a shell-walk frontier.
+
+**2026-09-16 -- Final reconstruction: automsk and the lag-one reference
+forwarded on the direct route too.** bgal refine3D_auto (native box 256 =
+registration box, committed sigmas reused, so `calc_final_rec` took the
+direct `reconstruct3D` route rather than `bootstrap_rec3D`): the shipped
+PCG map ran on the sphere (`rec_final_state01_pcg_support.txt:
+solve_support=sphere`, FSC mode "density envelope applied post hoc")
+while every refinement iteration had been estimated on the density
+envelope. `prep_final_rec_cline` forwarded `automsk` and `vol<state>` only
+on the bootstrap route. Now `automsk` is inherited on both routes and the
+direct route sets `filt_mode=none` and passes the last refinement volume
+as `vol<state>` on PCG, so `build_pcg_state_support` derives the same
+lag-one envelope and the doc reads "halves estimated on a support
+envelope" like the iterations. The first-run readings of the retired-walk
+bank on this bench: abinitio3D 822 s, stage-6 bank 13 rungs + MLreg (14.6%
+of the mask), refine3D_auto 1040 s, registration pass moved 1.8% of
+directions, FSC0.5 4.30 -> 4.03 A, MLreg ~6.5% at box 256 with the 3.63 A
+rung below it at 0.02%; MRES of the closed form 0.86-1.3 at box 256 versus
+~0.1 in the cropped stages. Open: the gridding regularized pair won 0% in
+the abinitio final's bootstrap bank (PCG wins 6-15% at the same box), to be
+checked on the gridding aux path.
+
+**2026-09-16 -- Regularized solve: maxits_ml coupled iterations from the
+closed form.** bgal refine3D_auto at the native box 256: the closed form's
+preconditioned residual `MRES` read 0.86-1.3 at every iteration and 0.93 in
+the abinitio final, against ~0.1 in the cropped abinitio stages, whose band
+reached Nyquist (box 140 at 2.33 A/px). At the native box a third of the
+shells lie beyond the band with `P_tau` ~1000x the data, and that is where
+the diagonal and coupled answers can differ; whether they differ inside the
+band (the map) or only beyond it (bookkeeping) the number cannot say. The
+regularized member still won 6-7% of the mask, so nothing was blocked.
+Decision (Hans): run 2 coupled iterations of the regularized system FROM
+the closed form (`maxits_ml`, default 2, `rtol=0`, no start rejection,
+indefinite stop falls back to the closed form). Unlike the retired from-zero
+replay, the start already has the prior's spectral shape, so CG can only
+move toward the coupled solution; ~2 s per half per iteration at box 256.
+Diagnostics: `INIT` on the `KIND=ml` line is the closed form's L2 residual,
+`MRES` the final one, and a `CLOSED-FORM MRES a -> b` line reports the FSC
+between the start and the solved map (0.5/0.143 crossings and the minimum
+over the pair's FSC>0.143 band). Reading rule for the rerun: band minimum
+~1 with `MRES` down means the iterations only touched beyond-band content
+and the closed form alone was adequate; band minimum well below 1 means the
+closed form was leaving in-band signal on the table and the iterations
+stay. Same bench rerun (abinitio3D + refine3D_auto, PCG) is Hans's.
+
+**2026-09-16 -- maxits_ml result: refinement-invisible; default 0.** Same
+bench rerun (7_refine3D_auto, box 256, `maxits_ml=2`): `MRES` of the
+regularized half went 1.02 -> 0.29 at the bootstrap, 0.71 -> 0.49 and
+0.81 -> 0.67 in the iterations (two iterations do not reach the coupled
+solution either); the FSC between the closed form and the solved map stayed
+>= 0.965 on every in-band shell and crossed 0.5 only at 2.7-3.1 A, beyond
+the 3.59 A band; the regularized member's share of the mask rose 0.4%; and
+every iteration's FSC0.5/0.143, handoff and the final map were identical to
+run 6 to three decimals. Decision (Hans): default `maxits_ml=0` (closed
+form shipped as before); the parameter and the diagnostics stay as the
+knob. The diagonal model is adequate for the regularized member's two jobs
+(competing for voxels, setting the band); the residual it leaves lives in
+the beyond-band shells.
+

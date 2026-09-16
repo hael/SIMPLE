@@ -206,7 +206,7 @@ contains
         write(logfhandle,'(A)')     '    Source      Bank  Fourier k  LP limit (A)        Voxels    Pct mask'
         do icut = 1, size(cutoff_finds)
             if( nu_label_is_aux_replacement(icut) )then
-                source_tag = 'AuxReplace'
+                source_tag = 'MLreg'
             else
                 source_tag = 'Base'
             endif

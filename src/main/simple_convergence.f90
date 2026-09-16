@@ -349,8 +349,18 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        ! The band this iteration MATCHED at is params%lp/kfromto(2), fixed by
+        ! set_bp_range3D before the search (an explicit lp, or the previous
+        ! handoff). The project 'lp'/'lp_est' fields are rewritten by assembly
+        ! AFTER the search with the NU handoff for the NEXT iteration, so they
+        ! must not be reported as the matching band (2026-09-14: an explicit
+        ! lp=3.6 run reported 4.026 here while matching at 3.6).
+        write(logfhandle,601) '>>> MATCHING  LOW-PASS LIMIT (THIS ITERATION) ', params%lp
+        if( params%l_nonuniform )then
+        write(logfhandle,604) '>>> NU HANDOFF LP (NEXT)     AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        else if( self%lp_est%maxv > TINY )then
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
+        endif
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         allocate(state_mask(n), source=.false.)
         do istate = 1, params%nstates
@@ -524,7 +534,8 @@ contains
         call ostats%set(1,'IN-PLANE_DIST',               self%dist_inpl%avg)
         call ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
         call ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
-        call ostats%set(1,'LP_MATCHING',                 self%lp%avg)
+        call ostats%set(1,'LP_MATCHING',                 params%lp)       ! the band matched this iteration
+        call ostats%set(1,'LP_NU_HANDOFF',               self%lp%avg)     ! the handoff for the next
         call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
         call ostats%set(1,'RESOLUTION',                  self%res%avg)
         call ostats%set(1,'RESOLUTION_FSC05',            self%res05%avg)

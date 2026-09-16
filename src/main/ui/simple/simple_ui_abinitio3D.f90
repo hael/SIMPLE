@@ -43,6 +43,10 @@ contains
         &'Maximum kernel PCG iterations from stage 3 onward; the cold original-sampling final reconstruction uses at least 5', &
         &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call abinitio3D%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
+        &.false., 0., group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)

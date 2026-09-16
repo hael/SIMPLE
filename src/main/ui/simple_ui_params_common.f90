@@ -115,7 +115,6 @@ type(ui_param) :: nu_msk_beta
 type(ui_param) :: nu_msk_dens
 type(ui_param) :: nu_msk_rel
 type(ui_param) :: nu_msk_sig
-type(ui_param) :: nu_refine
 type(ui_param) :: particle_density
 type(ui_param) :: pcontrast
 type(ui_param) :: pdbout
@@ -625,10 +624,6 @@ subroutine set_ui_params
     call nu_msk_sig%set_param(     'nu_msk_sig',      'num',    'NU envelope mask threshold', &
                                    'Evidence threshold in MADs above the solvent null; higher gives a tighter mask{3.0}', &
                                    'in MADs{3.0}', .false., 3.0)
-
-    call nu_refine%set_param(      'nu_refine',       'binary', 'NU resolution expansion refinement', &
-                                   'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call particle_density%set_param('particle_density','multi', 'Particle density in micrographs', &
                                     'Particle density in micrographs(low|optimal|high){optimal}','', .false., 'optimal', &

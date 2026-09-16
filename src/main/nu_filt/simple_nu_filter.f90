@@ -6,32 +6,22 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Iterative high-resolution refinement can challenge one Fourier shell at a
-! time after the static bank has been optimized. Each challenger allocates and
-! evaluates only one extra candidate; callers may loop while the shell is
-! accepted. The challenger starts from the finest populated base-bank label, so
-! empty finer discrete labels do not block shell refinement. Refinement-style
-! callers accept the next shell only when the challenger wins enough absolute
-! support and at least 5% of the tested frontier. Diagnostic callers can pass
-! accept_pct=0. for an explicitly permissive shell walk. Accepted extension
-! shells are challenged at the full Fourier sampling rate, but the retained
-! high-resolution bank is thinned to every second shell plus the current
-! terminal shell. After the shell walk stops, the final accepted label map is
-! cleaned with the ordered-label Potts prior over the expanded retained bank.
-!    call setup_nu_dmats(vol_even, vol_odd, mskdiam, [real ::])
-!    call optimize_nu_cutoff_finds()
-!    do
-!        call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=ext_stats)
-!        if( .not.ext_stats%attempted    ) exit
-!        if( .not.ext_stats%applied      ) exit
-!        if( .not.ext_stats%promote_next ) exit
-!    end do
-!    call nu_filter_vols(vol_even_filt, vol_odd_filt)
-!    call cleanup_nu_filter()
+! The bank (2026-09-16, the shell walk retired): a coarse ladder of hard
+! Butterworth cutoffs (20, 15, 12, 10, 8, 6 A) and, below 6 A, hard rungs at a
+! constant Fourier-shell spacing of the box up to a fine bound, generated per
+! call rather than listed. The fine bound is the auxiliary pair's resolution
+! when one is supplied (the regularized pair, the finest member of the bank),
+! else fsc_res/NU_BANK_FSC_HEADROOM when an FSC is supplied, else Nyquist. The
+! bank never holds more than NU_BANK_MAX_MEMBERS candidates: the fine spacing
+! widens to fit, it never truncates and never fails. The whole bank is
+! evaluated every call; per-voxel selection is coarse to fine, like for like.
 !
-! Auxiliary pairs supplied through setup_nu_dmats are only used when
-! they extend beyond the finest discrete member. In that case the auxiliary pair
-! replaces the finest discrete label instead of appending a sidecar candidate.
+! Auxiliary pair (setup_nu_dmats): the regularized even/odd pair. It is
+! always the FINEST member, appended after the last hard rung coarser than
+! its resolution; its unary is evaluated on the raw pair, its label
+! resolution (smoothing scale, handoff, _nu_locres) is its own resolution,
+! and the synthesis copies its voxels where it is selected. It is dropped,
+! logged, only if fewer than two hard rungs are coarser than it.
 !
 module simple_nu_filter
 use simple_core_module_api
@@ -48,16 +38,15 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           retain_nu_filter_setup, nu_filter_setup_is_retained, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
-          print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
-          refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
-          nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
-          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
+          print_filtmap_lowpass_histogram, analyze_filtmap_neighbor_continuity,&
+          get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
+          write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
           nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
-          NU_HIGHRES_EXTENSION_MAJORITY_Z, print_nu_evidence_lowpass_histogram,&
+          NU_BANK_MAX_MEMBERS, NU_LADDER_FINE_STEP, print_nu_evidence_lowpass_histogram,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
@@ -66,59 +55,28 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
 private
 #include "simple_local_flags.inc"
 
-real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
-! FSC-anchored candidate cap of the STATIC bank (2026-09-08; nu_refine=no
-! only since 2026-09-11). The competition prices a finer candidate by the
-! noise it admits from the other half, which holds for a gridding pair
-! (white noise to Nyquist) but not for a spectrally regularized pair
-! (truncated CG, P_tau), whose damped high-frequency modes make every finer
-! candidate nearly free wherever the halves share content -- on PfCRT the
-! finest bank label was populated at a 6 A FSC and the matching band was
-! pinned there (since addressed at the root by the like-for-like coarse-to-
-! fine selection, 2026-09-08). Given the pair's FSC=0.143 resolution, the
-! static bank keeps only candidates coarser than fsc/NU_BANK_FSC_HEADROOM
-! (1.5x finer than the FSC, about two ladder labels). With nu_refine=yes
-! (refine3D_auto) the caller passes no FSC: the full static ladder is
-! retained and the shell walk is unbounded, so the bank extent and the
-! matching low-pass handoff are decided by the NU evidence alone, as they
-! were before 2026-09-08 -- the cap on the walk pinned refine3D_auto below
-! the resolution the evidence supported. Absent an FSC (the standalone
-! nu_filt3D program) the bank is likewise uncapped.
+! The bank ladder (2026-09-16). NU_LADDER_COARSE are the fixed coarse rungs;
+! below the last of them the rungs are generated at NU_LADDER_FINE_STEP
+! Fourier shells of the box (init_nu_filter), widened to fit the bank budget
+! NU_BANK_MAX_MEMBERS (coarse rungs + fine rungs + the auxiliary member). The
+! former fixed ladder [20,15,12,10,8,6,5,4] ended at 4 A and the retired
+! shell walk supplied the granularity beyond it; NU_LADDER_REF keeps that
+! ladder as the coordinate reference of the ordered-label Potts prior, so
+! the price of a given resolution jump is independent of the spacing.
+real,             parameter   :: NU_LADDER_COARSE(6) = [20.,15.,12.,10.,8.,6.]
+real,             parameter   :: NU_LADDER_REF(8)    = [20.,15.,12.,10.,8.,6.,5.,4.]
+integer,          parameter   :: NU_LADDER_FINE_STEP = 2
+integer,          parameter   :: NU_BANK_MAX_MEMBERS = 16
+! FSC-anchored bound of the hard rungs when no auxiliary pair is supplied
+! (2026-09-08): the competition prices a finer candidate by the noise it
+! admits from the other half, which holds for a gridding pair (white noise
+! to Nyquist) but not for a spectrally regularized pair. Given the pair's
+! FSC=0.143 resolution the hard rungs stop at fsc/NU_BANK_FSC_HEADROOM (1.5x
+! finer than the FSC), never fewer than two. With an auxiliary (regularized)
+! pair the hard rungs stop coarser than its resolution instead, and it is
+! the finest member. Absent both (the standalone nu_filt3D program) the
+! rungs run to Nyquist within the budget.
 real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
-! Minimum finest-frontier fraction of the NU mask required before testing a
-! finer shell. Zero means challenge whenever at least one frontier voxel exists.
-real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
-! Percentage of the tested frontier that must select a challenger before it is
-! accepted into refinement-style NU banks. Diagnostic callers can pass
-! accept_pct=0. to request a permissive one-voxel shell walk.
-real,             parameter   :: NU_HIGHRES_EXTENSION_ACCEPT_PCT     = 5.0
-! Shell-walk acceptance is a MAJORITY test with binomial significance
-! (2026-09-13). The challenge compares two filters one Fourier shell apart
-! voxel by voxel with no margin, so the null win rate is 50%, not 0%: with the
-! 5% threshold alone the walk accepted every shell until the frontier halved
-! below the seed floor (aldolase bootstrap: win rates 53..80..31%, populations
-! 146744 -> 77508 -> ... -> 54, depth = log2(frontier/32) = 12 shells, four
-! of them accepted with the MAJORITY of the frontier preferring the coarser
-! filter). A shell is accepted only if the challenger wins on more than half
-! of the frontier by this many binomial standard deviations:
-!   wins - n/2 >= Z * sqrt(n)/2
-! On the same log: z = +22, +169, +70, +31, +28, then -9 -> five shells, stop
-! at 3.73 A against a 3.62 A FSC=0.143. The seed floor still applies.
-real,             parameter   :: NU_HIGHRES_EXTENSION_MAJORITY_Z     = 3.0
-! Refinement-style shell acceptance also requires enough absolute support so a
-! tiny frontier cannot march indefinitely. Diagnostic callers can pass
-! accept_pct=0. to bypass both the frontier fraction and this seed floor.
-integer,          parameter   :: NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS = 32
-! Hard cap on mask-packed distance-matrix columns retained for NU optimization.
-! When this fills, unselected high-resolution labels are compacted away before
-! another shell is accepted.
-integer,          parameter   :: NU_DMAT_CANDIDATE_CAP                = 24
-! High-resolution extension still challenges every shell, but retained
-! extension candidates are thinned to this stride. With the default stride of
-! two, odd shell steps are kept only as the temporary frontier needed to test
-! the next even shell step.
-integer,          parameter   :: NU_HIGHRES_EXTENSION_RETAIN_STRIDE    = 2
-integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM            = 2
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
 ! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF
@@ -137,16 +95,14 @@ real,             parameter   :: NU_OBJECTIVE_UNARY_CAP           = 1. / epsilon
 ! one-step retained-bank transitions are tolerated, larger jumps are penalized.
 integer,          parameter   :: DISCONT_STEP_THRESH         = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 6
-! Adjacent retained-bank coordinate jumps are tolerated by the ordered-label
-! Potts prior; the quadratic hinge makes larger jumps increasingly expensive.
-! The coordinate is the discrete ladder position for the static labels and
-! the FINEST ladder position for every candidate finer than the ladder
-! (2026-09-13): the walked shells share the finest discrete member's
-! coordinate, so the hinge prices ladder jumps only and never a walk. Before,
-! each accepted shell was one more integer coordinate, so a voxel n shells
-! ahead of a neighbour parked on the finest static label paid (n-1)+(n-1)^2
-! for a filter that is nearly identical to its neighbour's, and the
-! post-extension cleanup pulled the walk's leading edge back label by label.
+! Adjacent-coordinate jumps are tolerated by the ordered-label Potts prior;
+! the quadratic hinge makes larger jumps increasingly expensive. The
+! coordinate of a candidate is its position on the reference ladder
+! NU_LADDER_REF, interpolated in log(1/resolution) (2026-09-16), so a jump
+! between two resolutions costs the same whatever the spacing of the
+! generated rungs; the regularized member sits at the coordinate of its own
+! resolution. (Under the retired shell walk the walked shells shared the
+! finest ladder coordinate, 2026-09-13, for the same reason.)
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
@@ -193,11 +149,10 @@ integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
 real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
 ! Adaptive band granularity (pcg_priors_history.md Stage 6.6, final form): the band
 ! ladder is derived from the ACTUAL candidate bank at evidence-build time --
-! the static four bands when the bank is the discrete ladder (abinitio3D's
-! mode), extended geometrically only over candidates the nu_refine shell walk
-! has ACCEPTED (refine3D_auto with nu_refine=yes, mirroring the gridding
-! path's proven challenger: strict unary win-fraction at the frontier, one
-! shell at a time). No band can exist without a challenger-validated probe.
+! the static four bands, extended geometrically only while the bank holds a
+! candidate at least as fine as the next boundary (with the generated fine
+! rungs of 2026-09-16 that is the fine bound of the bank); the retention
+! rule below prunes unsupported bands.
 integer,          parameter   :: NU_EVIDENCE_MAX_NBANDS      = 8    !< band-count cap (cost: 2 padded FFT pairs per band per Q_NU application)
 real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric step, matching the 20->12->8->5 spacing
 !> Evidence-gated retention (belt-and-braces behind the challenger gate): an
@@ -210,9 +165,7 @@ real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
 !! value for which this percentage of assigned non-null support selected that
 !! cutoff or a finer one. PCG combines it with explicit FSC shell headroom so
 !! sparse evidence cannot deadlock matching, while one extreme voxel cannot
-!! set the global bandwidth. The nu_refine=no PCG compatibility path retains
-!! its historical raw-finest handoff. Strength mirrors the shell walk's
-!! NU_HIGHRES_EXTENSION_ACCEPT_PCT.
+!! set the global bandwidth.
 real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 ! Matching-bandwidth handoff floor relative to the SIGNAL voxels of the NU
 ! mask (mask minus the solvent/background clamp), 2026-09-13: the finest label
@@ -261,7 +214,6 @@ real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
-real,             allocatable :: dmat_finest_cached(:)
 ! Raw, unsmoothed unary costs kept for envelope masking. dmats_mask is smoothed at
 ! candidate-dependent radii (30 A for the coarsest member, 6 A for the finest),
 ! which is right for label selection but wrong for locating a boundary: it blurs
@@ -317,13 +269,14 @@ integer :: n_nu_calib = 0
 integer :: n_nu_null  = 0
 ! Setup retention across two NU consumers of the same base pair (pcg_priors_history.md
 ! dev item 4 dedup; historically the removed Q_NU evidence phase followed by
-! the matching-reference generation): both run on the same base pair with the same optimized, extended,
-! solvent-clamped setup when nu_refine=yes -- the evidence phase may retain
+! the matching-reference generation): both run on the same base pair with the same optimized,
+! solvent-clamped setup -- the evidence phase may retain
 ! its setup for the matching pass instead of tearing it down, and the
 ! matching pass consumes it and cleans up. State-indexed because the module
 ! holds one setup; cleanup_nu_filter always clears the retention.
 integer :: nu_retained_setup_state = 0 !< 0 = nothing retained
-integer :: nu_bank_cap_find = 0 !< FSC-anchored static-bank cap in Fourier shells; 0 = uncapped (always with nu_refine=yes)
+integer :: nu_bank_cap_find = 0 !< FSC-anchored bound of the hard rungs in Fourier shells; 0 = unbounded (no FSC supplied)
+integer :: nu_bank_fine_step = 0 !< Fourier-shell spacing of the fine rungs actually used (widened to fit the budget)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
@@ -345,27 +298,6 @@ logical :: nu_evidence_requested = .false.
 character(len=32) :: nu_evidence_source = ''
 real(kind=8) :: nu_evidence_source_fingerprint(6) = 0.d0
 
-type :: nu_highres_extension_stats
-    logical :: attempted    = .false.
-    logical :: applied      = .false.
-    logical :: promote_next = .false.
-    real    :: old_limit = 0.
-    real    :: new_limit = 0.
-    integer :: old_find  = 0
-    integer :: new_find  = 0
-    integer :: n_mask     = 0
-    integer :: n_tested   = 0
-    integer :: n_unary_wins = 0
-    integer :: n_extended = 0
-    integer :: n_seed_min = 0
-    real    :: pct_tested_mask     = 0.
-    real    :: pct_unary_wins_tested = 0.
-    real    :: pct_unary_wins_mask = 0.
-    real    :: pct_extended_tested = 0.
-    real    :: majority_z           = 0.   ! (wins - n/2) / (sqrt(n)/2) over the tested frontier
-    logical :: accepted_by_frontier = .false.
-    logical :: memory_limited       = .false.
-end type nu_highres_extension_stats
 
 ! Controls for NU-evidence-driven envelope masking. beta regularizes boundary
 ! area only; connectivity and hole filling are the caller's responsibility.
@@ -464,23 +396,16 @@ interface
         integer, intent(in) :: ilabel
     end function nu_label_is_aux_replacement
 
-    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, fsc_res )
+    module subroutine init_nu_filter( vol_even, vol_odd, fsc_res, aux_res, l_aux_slot )
         class(image), intent(in) :: vol_even, vol_odd
-        integer, optional, intent(in) :: n_highres_steps
-        real,    optional, intent(in) :: fsc_res
+        real,    optional, intent(in)  :: fsc_res
+        real,    optional, intent(in)  :: aux_res
+        logical, optional, intent(out) :: l_aux_slot
     end subroutine init_nu_filter
 
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report
     end subroutine set_nu_filter_report
-
-    module logical function keep_nu_highres_extension_step( istep, finest_step )
-        integer, intent(in) :: istep, finest_step
-    end function keep_nu_highres_extension_step
-
-    module integer function count_nu_highres_extension_retained_steps( nsteps )
-        integer, intent(in) :: nsteps
-    end function count_nu_highres_extension_retained_steps
 
     module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
         class(string), intent(in) :: cache_prefix
@@ -605,38 +530,25 @@ interface
 
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, evidence_source, fsc_res )
+            &evidence_source, fsc_res )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        integer,     optional, intent(in) :: n_highres_steps
         character(len=*), optional, intent(in) :: evidence_source
-        real,        optional, intent(in) :: fsc_res !< pair FSC=0.143 resolution in A; caps the bank
+        real,        optional, intent(in) :: fsc_res !< pair FSC=0.143 resolution in A; bounds the hard rungs when no auxiliary pair is supplied
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates )
         integer, intent(in) :: n_candidates
     end subroutine setup_nu_candidate_coords
 
-    module integer function nu_static_ladder_count( n_base )
-        integer, intent(in) :: n_base
-    end function nu_static_ladder_count
-
-    module real function nu_potts_coord_for_label( ilabel, n_base )
-        integer, intent(in) :: ilabel, n_base
-    end function nu_potts_coord_for_label
-
-    module integer function count_nu_walked_label_voxels( candmap, n_base )
-        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        integer, intent(in) :: n_base
-    end function count_nu_walked_label_voxels
+    module real function nu_potts_coord_for_resolution( res )
+        real, intent(in) :: res
+    end function nu_potts_coord_for_resolution
 
     module real function get_nu_filter_bank_finest_lp()
     end function get_nu_filter_bank_finest_lp
-
-    module integer function get_nu_filtmap_highres_shell_depth()
-    end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
     end subroutine optimize_nu_cutoff_finds
@@ -657,10 +569,6 @@ interface
     module real function nu_candidate_coord_for_label( ilabel )
         integer, intent(in) :: ilabel
     end function nu_candidate_coord_for_label
-
-    module integer function nu_effective_base_label_for_candidate( icand, n_base )
-        integer, intent(in) :: icand, n_base
-    end function nu_effective_base_label_for_candidate
 
     ! In submodule: simple_nu_filter_evidence.f90
     module subroutine build_nu_evidence_state( vol_even, vol_odd, state )
@@ -752,53 +660,6 @@ interface
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         real,    intent(in) :: beta
     end function calc_nu_label_smooth_site_energy
-
-    ! In submodule: simple_nu_filter_extend.f90
-    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct, &
-            &l_require_margin )
-        class(image), intent(in) :: vol_even, vol_odd
-        real,         intent(in) :: threshold_pct   ! e.g. 10.0
-        real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
-        type(nu_highres_extension_stats), optional, intent(out) :: stats
-        real, optional, intent(in) :: accept_pct
-        logical, optional, intent(in) :: l_require_margin
-    end subroutine extend_nu_filter_highres
-
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct, max_find, &
-            &l_require_margin )
-        class(image),                               intent(in)  :: vol_even, vol_odd
-        type(nu_highres_extension_stats), optional, intent(out) :: stats
-        real, optional, intent(in) :: accept_pct
-        integer, optional, intent(in) :: max_find
-        logical, optional, intent(in) :: l_require_margin
-    end subroutine extend_nu_filter_highres_shell_next
-
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, max_find, &
-            &l_require_margin )
-        class(image), intent(in) :: vol_even, vol_odd
-        integer, optional, intent(out) :: nsteps
-        real, optional, intent(in) :: accept_pct
-        integer, optional, intent(in) :: max_find
-        logical, optional, intent(in) :: l_require_margin
-    end subroutine extend_nu_filter_highres_shells
-
-    module subroutine refine_nu_extension_filtmap_ordered_labels
-    end subroutine refine_nu_extension_filtmap_ordered_labels
-
-    module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
-            &extend_choice, n_extended, l_require_margin )
-        integer, intent(in)    :: frontier_vox(:)
-        real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
-        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
-        integer, intent(out)   :: n_extended
-        logical, optional, intent(in) :: l_require_margin
-    end subroutine init_nu_highres_extension_selection
-
-    module subroutine apply_nu_highres_extension_selection( frontier_vox, extend_choice, old_label, new_label )
-        integer, intent(in) :: frontier_vox(:)
-        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:)
-        integer, intent(in) :: old_label, new_label
-    end subroutine apply_nu_highres_extension_selection
 
     ! In submodule: simple_nu_filter_apply.f90
     module subroutine nu_filter_vols( vol_even, vol_odd )

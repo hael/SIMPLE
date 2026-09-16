@@ -24,7 +24,7 @@
 !
 ! A global FSC-derived optlp is deliberately NOT applied: the global FSC
 ! averages over the map and contradicts the evidenced local extension in the
-! core (it would erase exactly the detail the walk validated); the Butterworth
+! core (it would erase exactly the detail the evidence supports); the Butterworth
 ! rolloff at the calibrated local cutoff is the local shrinkage surrogate.
 !
 ! Discipline unchanged from v1: one frozen evidence identity; the shipped

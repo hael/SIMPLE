@@ -188,13 +188,13 @@ an empty directory, and every final reconstruction at a new sampling. Since
   and is the test entry point for the final-reconstruction stage. The
   bootstrap map only serves as the residual reference, so it is always a
   gridding assembly with ML regularization (one particle pass, no
-  postprocessing) that keeps the workflow's `filt_mode`, `nu_refine` and
+  postprocessing) that keeps the workflow's `filt_mode` and
   `automsk`: the residual sigmas depend on the regularization of the
   reference they are scored against, so that reference is regularized
   exactly as the refinement's matching references were; the shipped map keeps the
   caller's backend and `automsk` (so on PCG it is estimated on the same
   density-envelope support as the refinement, 2026-09-09; `filt_mode=none`
-  and `nu_refine=no` keep it classical) and, on PCG, starts from nothing at the native box and
+  keeps it classical) and, on PCG, starts from nothing at the native box and
   therefore gets the cold-solve budget of at least `FINAL_PCG_MAXITS_FLOOR`
   (5) iterations whoever the caller is (2026-09-07). The base plus ML solve
   pair of that final PCG reconstruction is inherent to ML regularization:
@@ -474,11 +474,17 @@ the strategy dispatches `volassemble`.
   `res` (state FSC=0.143 resolution) and `res05` (state FSC=0.5 resolution),
   the raw NU matching handoff in `lp` (clipped against `lpstop` by the
   matcher before use) and, when NU filtering is active, the same NU-estimated
-  limit in `lp_est`. The convergence readout reports all four
-  (`RESOLUTION @ FSC=0.143`, `RESOLUTION @ FSC=0.5`, `MATCHING LOW-PASS
-  LIMIT`, `ESTIMATED LOW-PASS LIMIT`), per state when `nstates > 1`, and
-  persists them as `RESOLUTION`, `RESOLUTION_FSC05`, `LP_MATCHING`,
-  `LP_ESTIMATED` (plus `_STATEnn` variants) in the iteration stats. Both
+  limit in `lp_est`. The convergence readout reports `RESOLUTION @ FSC=0.143`,
+  `RESOLUTION @ FSC=0.5`, the band this iteration actually matched at
+  (`MATCHING LOW-PASS LIMIT (THIS ITERATION)`, from `params%lp`/`kfromto(2)`
+  as fixed by `set_bp_range3D` before the search -- an explicit `lp` or the
+  previous handoff) and the handoff for the next iteration (`NU HANDOFF
+  LOW-PASS (NEXT)`, the project `lp` field assembly writes after the search;
+  2026-09-14, after an explicit `lp=3.6` run reported the handoff as the
+  matching band), per state when `nstates > 1`, and
+  persists them as `RESOLUTION`, `RESOLUTION_FSC05`, `LP_MATCHING` (the
+  matched band), `LP_NU_HANDOFF`, `LP_ESTIMATED` (plus `_STATEnn` variants)
+  in the iteration stats. Both
   backends write the same fields (2026-09-06). `res05` occupies fixed
   particle-record slot 50 (`I_RES05`, the former spare `I_EMPTY10`): the
   binary project stores particles as fixed 50-float records, so a key without
