@@ -39,7 +39,7 @@ distributed HPC environments.
 ------------------------------------------------------------------------
 
 ## 🦠  Benchmark Datasets
-
+[![Run & Display SIMPLE Data Sets](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/data_testing.yml/badge.svg)](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/data_testing.yml)
 https://rmeanapa.github.io/SIMPLE_data_testing/
 
 ------------------------------------------------------------------------
