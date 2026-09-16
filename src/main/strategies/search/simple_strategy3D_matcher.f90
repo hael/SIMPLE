@@ -419,12 +419,19 @@ contains
 
         subroutine prepare_refs_sigmas_and_pftc()
             if( ctrl%do_bench ) t_prep_refs = tic()
-            call read_reprojection_model(p_ptr, b_ptr, batchsz_max)
-            ! Real-space artifacts bridge the reference-materialization process
-            ! and every matcher worker; each worker loads them only once here.
-            if( ctrl%do_pose_cont ) &
-                &call pose_cont_refs%new_from_artifacts(p_ptr%nstates,p_ptr%box_crop,p_ptr%smpd_crop)
-            call prep_sigmas_objfun(p_ptr, b_ptr)
+            if( ctrl%do_pose_cont_strategy )then
+                ! The standalone strategy owns only the Cartesian references
+                ! and shell-noise state; it must not initialize PFTC data.
+                call pose_cont_refs%new_from_artifacts(p_ptr%nstates,p_ptr%box_crop,p_ptr%smpd_crop)
+                call prep_sigmas_objfun(p_ptr, b_ptr, cartesian_only=.true.)
+            else
+                call read_reprojection_model(p_ptr, b_ptr, batchsz_max)
+                ! The post-matcher polish shares the ordinary PFTC path and
+                ! additionally loads the Cartesian reference artifacts.
+                if( ctrl%do_pose_cont_polish ) &
+                    &call pose_cont_refs%new_from_artifacts(p_ptr%nstates,p_ptr%box_crop,p_ptr%smpd_crop)
+                call prep_sigmas_objfun(p_ptr, b_ptr)
+            endif
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
             if( ctrl%do_pose_cont_strategy )then
