@@ -75,7 +75,6 @@ contains
     procedure, private :: refine_pose_lm
     procedure, private :: shift_normal_terms
     procedure, private :: pose_normal_terms
-    procedure :: count_stencil_switches
 end type cartesian_pose_refiner
 
 !> Configuration and bounds for one dedicated two-parameter shift solve.
@@ -110,7 +109,6 @@ type :: pose_lm_diagnostics
     integer :: nattempted = 0
     integer :: naccepted = 0
     integer :: nbound_hits = 0
-    integer :: nstencil_switches = 0
     real(dp) :: max_rotation_step = 0._dp
     real(dp) :: max_shift_step = 0._dp
 contains
@@ -125,7 +123,6 @@ contains
         self%nattempted = 0
         self%naccepted = 0
         self%nbound_hits = 0
-        self%nstencil_switches = 0
         self%max_rotation_step = 0._dp
         self%max_shift_step = 0._dp
     end subroutine reset_pose_lm_diagnostics
@@ -620,37 +617,6 @@ contains
             &min_switch_margin,transfer,shell_range)
     end subroutine pose_objective_gradient
 
-    !>  \brief  Counts active Fourier samples whose nearest-grid interpolation
-    !!          stencil changes between two rotation matrices.
-    function count_stencil_switches( self, rotmat, trial_rotmat, shell_range ) result(nswitches)
-        class(cartesian_pose_refiner), intent(in) :: self
-        real(dp), intent(in) :: rotmat(3,3), trial_rotmat(3,3)
-        integer, optional, intent(in) :: shell_range(2)
-        integer :: nswitches
-        real(dp) :: loc(3), trial_loc(3)
-        integer :: active_sqhp, active_sqlp, h, k
-
-        if( .not. self%exists ) error stop 'count_stencil_switches called on an empty Fourier workspace'
-        nswitches = 0
-        active_sqhp = 0
-        active_sqlp = (self%box/2)**2
-        if( present(shell_range) )then
-            if( shell_range(1) < 0 .or. shell_range(2) > self%box/2 .or. &
-                &shell_range(2) < shell_range(1) ) &
-                &error stop 'stencil-switch shell range lies outside the native Fourier disk'
-            active_sqhp = shell_range(1)*shell_range(1)
-            active_sqlp = shell_range(2)*shell_range(2)
-        endif
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h+k*k < active_sqhp .or. h*h+k*k > active_sqlp ) cycle
-                loc = real(self%padf,dp)*matmul(real([h,k,0],dp),rotmat)
-                trial_loc = real(self%padf,dp)*matmul(real([h,k,0],dp),trial_rotmat)
-                if( any(nint(loc) /= nint(trial_loc)) ) nswitches = nswitches+1
-            enddo
-        enddo
-    end function count_stencil_switches
-
     !> Damped two-parameter Gauss-Newton refinement of one prepared particle.
     subroutine refine_shift_lm(self,rotmat,shift,data,config,result,diagnostics)
         class(cartesian_pose_refiner), intent(in) :: self
@@ -784,7 +750,7 @@ contains
         real(dp) :: objective, trial_objective, mu, predicted, actual, ratio, rotation_norm, shift_norm
         real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
         real(dp) :: cumulative_rotation, cumulative_shift, sine_half
-        integer :: iteration, naccepted, trial_switches
+        integer :: iteration, naccepted
         logical :: active(5), bounded_trial, bounded_step, cumulative_guard
         logical :: accept_trial, identifiable, reliable, stationary
 
@@ -885,9 +851,6 @@ contains
                     cycle
                 endif
             endif
-            trial_switches = self%count_stencil_switches(rotmat,trial_rotmat,data%shell_range)
-            if( present(diagnostics) ) &
-                &diagnostics%nstencil_switches = diagnostics%nstencil_switches+trial_switches
             ! Recompute the trial objective, gradient, and normal matrix from
             ! the full active Fourier disk. This repeated O(N^2) interpolation
             ! and accumulation is the dominant cost of each LM iteration.

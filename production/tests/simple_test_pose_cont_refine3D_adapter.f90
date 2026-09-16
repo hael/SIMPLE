@@ -1,7 +1,9 @@
 program simple_test_pose_cont_refine3D_adapter
 use simple_core_module_api, only: CTFFLAG_NO, ctfparams, dp, euler2m
 use simple_image, only: image
+use simple_ori, only: ori
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner
+use simple_strategy3D_pose_cont, only: pose_cont_seed_is_valid
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_limits, pose_cont_config, &
     &pose_cont_transaction_result, &
@@ -41,6 +43,7 @@ contains
         call test_reference_workspace_lifecycle()
         call test_observation_and_coordinate_adapters()
         call test_transaction_contracts()
+        call test_strategy_seed_contract()
         write(*,'(a)') 'POSE_CONT_REFINE3D_ADAPTER: PASS'
     end subroutine run_adapter_contracts
 
@@ -186,9 +189,8 @@ contains
             &'adapter transaction did not complete both LM stages')
         call assert_true(result%attempts == result%shift_stage%attempts+result%joint_stage%attempts .and. &
             &result%accepts == result%shift_stage%accepts+result%joint_stage%accepts .and. &
-            &result%bound_hits == result%shift_stage%bound_hits+result%joint_stage%bound_hits .and. &
-            &result%stencil_switches == result%shift_stage%stencil_switches+ &
-            &result%joint_stage%stencil_switches,'adapter stage accounting does not balance')
+            &result%bound_hits == result%shift_stage%bound_hits+result%joint_stage%bound_hits, &
+            &'adapter stage accounting does not balance')
 
         config%route = POSE_CONT_ROUTE_JOINT
         call workspace%refine_particle(1,.true.,seed,data,config,limits,result)
@@ -239,6 +241,24 @@ contains
         call workspace%kill()
         call remove_pose_cont_reference_artifacts(1)
     end subroutine test_transaction_contracts
+
+    ! Identity is a valid initialized pose; explicit state/half metadata, not
+    ! nonzero Euler coordinates, defines readiness for the standalone class.
+    subroutine test_strategy_seed_contract()
+        type(ori) :: seed
+
+        call seed%set_euler([0.,0.,0.])
+        call seed%set_shift([1.25,-0.75])
+        call seed%set('state',1.)
+        call seed%set('eo',0.)
+        call seed%set('proj',1.)
+        call assert_true(pose_cont_seed_is_valid(seed), &
+            &'standalone pose strategy rejected a valid identity seed')
+        call seed%set('proj',0.)
+        call assert_true(.not. pose_cont_seed_is_valid(seed), &
+            &'standalone pose strategy accepted a missing projection seed')
+        call seed%kill()
+    end subroutine test_strategy_seed_contract
 
     subroutine write_reference(volume,even)
         real, intent(in) :: volume(:,:,:)

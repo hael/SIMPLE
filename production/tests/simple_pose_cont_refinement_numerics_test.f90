@@ -177,7 +177,7 @@ contains
         real(dp) :: rotation(3,3), truth_rotation(3,3), minus_rotation(3,3), plus_rotation(3,3)
         real(dp) :: shift(2), truth_shift(2), minus_shift(2), plus_shift(2)
         real(dp) :: objective, objective_minus, objective_plus, gradient(5), errors(5), basis(3), step
-        integer :: axis, stencil_switches
+        integer :: axis
 
         call build_test_volume(volume)
         call workspace%new_physical_reference(volume)
@@ -199,10 +199,6 @@ contains
                 basis(axis) = 1._dp
                 minus_rotation = right_increment_rotation(rotation,-step*basis)
                 plus_rotation = right_increment_rotation(rotation,step*basis)
-                stencil_switches = workspace%count_stencil_switches(rotation,minus_rotation,[2,4])+ &
-                    &workspace%count_stencil_switches(rotation,plus_rotation,[2,4])
-                call assert_true(stencil_switches == 0, &
-                    &'rotation finite difference crossed an interpolation-stencil boundary')
             else
                 step = 1.e-3_dp
                 minus_shift(axis-3) = minus_shift(axis-3)-step

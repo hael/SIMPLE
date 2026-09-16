@@ -57,13 +57,15 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Experimental five-parameter pose refinement', &
-        &'Run transactional Cartesian LM after the established matcher result(yes|no){no}', '', &
+        &'Run transactional Cartesian LM after the established matcher; mutually exclusive with '// &
+        &'refine=pose_cont(yes|no){no}', '', &
         &.false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont_route', 'multi', &
         &'Continuous pose LM route', &
-        &'Continuous pose LM route(shift_then_joint|joint){shift_then_joint}', '', &
+        &'LM route used by pose_cont=yes or '// &
+        &'refine=pose_cont(shift_then_joint|joint){shift_then_joint}', '', &
         &.false., 'shift_then_joint', group="search", &
         &choices=ui_choices([character(len=16) :: 'shift_then_joint', 'joint']), &
         &visibility=UI_VIS_ADVANCED)
@@ -88,9 +90,11 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, ptcl_src, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}','',&
+        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
+        &'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|pose_cont){shc}','',&
         &.false., 'shc', group="search", &
-        &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', 'prob', 'prob_state', 'prob_neigh']), &
+        &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', &
+        &'prob', 'prob_state', 'prob_neigh', 'pose_cont']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}','', .false., 'state', &

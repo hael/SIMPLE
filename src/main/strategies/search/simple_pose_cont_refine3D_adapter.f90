@@ -66,7 +66,6 @@ type :: pose_cont_stage_result
     integer  :: attempts = 0
     integer  :: accepts = 0
     integer  :: bound_hits = 0
-    integer  :: stencil_switches = 0
     real(dp) :: objective_before = -1._dp
     real(dp) :: objective_after = -1._dp
     real(dp) :: max_rotation_step = 0._dp
@@ -87,7 +86,6 @@ type :: pose_cont_transaction_result
     integer  :: attempts = 0
     integer  :: accepts = 0
     integer  :: bound_hits = 0
-    integer  :: stencil_switches = 0
     real(dp) :: max_rotation_step = 0._dp
     real(dp) :: max_shift_step = 0._dp
 
@@ -118,6 +116,7 @@ contains
     procedure :: is_ready => pose_cont_reference_workspace_is_ready
     procedure :: prepare_particle => prepare_pose_cont_particle
     procedure :: refine_particle => refine_pose_cont_particle
+    procedure :: sigma_contribution => pose_cont_sigma_contribution
 end type pose_cont_reference_workspace
 
 contains
@@ -291,6 +290,27 @@ contains
         end if
     end subroutine refine_pose_cont_particle
 
+    !> Evaluate the terminal Cartesian pose for Euclidean sigma accounting.
+    subroutine pose_cont_sigma_contribution(self, state, even, pose, data, sigma_contrib)
+        class(pose_cont_reference_workspace), intent(in) :: self
+        integer, intent(in) :: state
+        logical, intent(in) :: even
+        type(pose_cont_pose), intent(in) :: pose
+        type(cartesian_pose_data), intent(in) :: data
+        real, allocatable, intent(out) :: sigma_contrib(:)
+        real, allocatable :: ref_pow(:), ptcl_pow(:)
+        real :: objective
+
+        if (.not. self%is_ready(state, even)) THROW_HARD('pose_cont reference slot is not ready')
+        if (even) then
+            call self%even(state)%refiner%prepared_sigma_contribution(pose%rotmat, &
+                &pose%shift, data, sigma_contrib, ref_pow, ptcl_pow, objective)
+        else
+            call self%odd(state)%refiner%prepared_sigma_contribution(pose%rotmat, &
+                &pose%shift, data, sigma_contrib, ref_pow, ptcl_pow, objective)
+        end if
+    end subroutine pose_cont_sigma_contribution
+
     ! ========================================================================
     ! Production pose transaction
     ! ========================================================================
@@ -426,7 +446,6 @@ contains
         stage%attempts = diagnostics%nattempted
         stage%accepts = diagnostics%naccepted
         stage%bound_hits = diagnostics%nbound_hits
-        stage%stencil_switches = diagnostics%nstencil_switches
         stage%objective_before = objective_before
         stage%objective_after = objective_after
         stage%max_rotation_step = diagnostics%max_rotation_step
@@ -439,7 +458,6 @@ contains
         result%accepts = result%accepts + stage%accepts
         result%attempts = result%attempts + stage%attempts
         result%bound_hits = result%bound_hits + stage%bound_hits
-        result%stencil_switches = result%stencil_switches + stage%stencil_switches
         result%max_rotation_step = max(result%max_rotation_step, stage%max_rotation_step)
         result%max_shift_step = max(result%max_shift_step, stage%max_shift_step)
     end subroutine add_stage_accounting

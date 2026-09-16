@@ -127,12 +127,21 @@ contains
         logical, optional, intent(in)    :: cleanup_pftc
         logical :: l_cleanup
         type(string) :: refs_even, refs_odd
-        call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.true.)
-        call remove_ref_section_files
-        refs_even = refine3D_reproj_model_fname('even')
-        refs_odd  = refine3D_reproj_model_fname('odd')
-        call build%pftc%write_ref_pfts(refs_even, .true.)
-        call build%pftc%write_ref_pfts(refs_odd,  .false.)
+        if( trim(params%refine) == 'pose_cont' )then
+            call read_mask_filter_reproject_refvols(params, build, cline, &
+                &map_shift=.true., cartesian_only=.true.)
+        else
+            call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.true.)
+            ! Replace the derived PFTC files only after their in-memory
+            ! successors have been prepared successfully.
+            call remove_ref_section_files
+            refs_even = refine3D_reproj_model_fname('even')
+            refs_odd  = refine3D_reproj_model_fname('odd')
+            call build%pftc%write_ref_pfts(refs_even, .true.)
+            call build%pftc%write_ref_pfts(refs_odd,  .false.)
+            call refs_even%kill
+            call refs_odd%kill
+        endif
         l_cleanup = .false.
         if( present(cleanup_pftc) ) l_cleanup = cleanup_pftc
         if( l_cleanup )then
@@ -141,8 +150,6 @@ contains
             call build%vol_odd%kill
             call build%vol2%kill
         endif
-        call refs_even%kill
-        call refs_odd%kill
     end subroutine materialize_reprojection_model_from_volumes
 
     subroutine read_reprojection_model_header( header )
@@ -514,17 +521,20 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_from_refs
 
-    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift )
+    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift, cartesian_only )
         use simple_polarft_calc, only: vol_pad2ref_pfts_opt
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
         logical, optional, intent(in)    :: map_shift
+        logical, optional, intent(in)    :: cartesian_only
         real      :: xyz(3)
         integer   :: s, nrefs, state
-        logical   :: do_center, l_map_shift
+        logical   :: do_center, l_map_shift, l_cartesian_only
         l_map_shift = .true.
         if( present(map_shift) ) l_map_shift = map_shift
+        l_cartesian_only = .false.
+        if( present(cartesian_only) ) l_cartesian_only = cartesian_only
         if( any_volume_source_defined(cline, params%nstates) &
             &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
             THROW_HARD('incomplete multi-state volume source; provide vol1..volN')
@@ -537,46 +547,52 @@ contains
             &cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
-        if( build%eulspace%get_noris() /= params%nspace )then
-            call build%eulspace%kill
-            call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
+        if( .not. l_cartesian_only )then
+            if( build%eulspace%get_noris() /= params%nspace )then
+                call build%eulspace%kill
+                call build%eulspace%new(params%nspace, is_ptcl=.false.)
+                call build%pgrpsyms%build_refspiral(build%eulspace)
+            endif
+            nrefs = params%nspace * params%nstates
+            call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
         endif
-        nrefs = params%nspace * params%nstates
-        call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
         do s = 1, params%nstates
             call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
                 & do_center, xyz, map_shift=l_map_shift)
             call read_mask_filter_refvols(params, build, s)
             call blend_lowres_eo_for_registration()
-            call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
-                & params%smpd_crop, wthreads=.true.)
             if( do_center )then
                 call build%vol%fft()
                 call build%vol%shift(xyz)
             endif
             call build%vol%ifft()
-            if( trim(params%pose_cont) == 'yes' ) &
+            if( trim(params%pose_cont) == 'yes' .or. trim(params%refine) == 'pose_cont' ) &
                 &call write_pose_cont_reference_artifact(build%vol, s, 'even')
-            call build%vol%pad_fft(build%vol_pad)
-            call build%vol_pad%expand_cmat()
-            call vol_pad2ref_pfts_opt(build%pftc, build%vol_pad, build%eulspace, s, .true.)
-            call build%vol_pad%kill
-            call build%vol_pad%kill_expanded
-            call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
-                & params%smpd_crop, wthreads=.true.)
+            if( .not. l_cartesian_only )then
+                call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                    &params%smpd_crop, wthreads=.true.)
+                call build%vol%pad_fft(build%vol_pad)
+                call build%vol_pad%expand_cmat()
+                call vol_pad2ref_pfts_opt(build%pftc, build%vol_pad, build%eulspace, s, .true.)
+                call build%vol_pad%kill
+                call build%vol_pad%kill_expanded
+            endif
             if( do_center )then
                 call build%vol_odd%fft()
                 call build%vol_odd%shift(xyz)
             endif
             call build%vol_odd%ifft()
-            if( trim(params%pose_cont) == 'yes' ) &
+            if( trim(params%pose_cont) == 'yes' .or. trim(params%refine) == 'pose_cont' ) &
                 &call write_pose_cont_reference_artifact(build%vol_odd, s, 'odd')
-            call build%vol_odd%pad_fft(build%vol_odd_pad)
-            call build%vol_odd_pad%expand_cmat()
-            call vol_pad2ref_pfts_opt(build%pftc, build%vol_odd_pad, build%eulspace, s, .false.)
-            call build%vol_odd_pad%kill
-            call build%vol_odd_pad%kill_expanded
+            if( .not. l_cartesian_only )then
+                call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                    &params%smpd_crop, wthreads=.true.)
+                call build%vol_odd%pad_fft(build%vol_odd_pad)
+                call build%vol_odd_pad%expand_cmat()
+                call vol_pad2ref_pfts_opt(build%pftc, build%vol_odd_pad, build%eulspace, s, .false.)
+                call build%vol_odd_pad%kill
+                call build%vol_odd_pad%kill_expanded
+            endif
         end do
     contains
 

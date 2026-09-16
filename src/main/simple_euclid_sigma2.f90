@@ -9,12 +9,13 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_heade
     &sigma2_state_read_groups, sigma2_state_read_particles, sigma2_state_write_local_range
 use simple_starfile_wrappers
 implicit none
+private
+
+#include "simple_local_flags.inc"
 
 public :: euclid_sigma2, sigma2_group_iter
 ! grouped-STAR I/O for the explicit sigma2_convert boundary only
 public :: write_groups_starfile, read_sigma2_groups_file
-private
-#include "simple_local_flags.inc"
 
 integer, parameter :: LENSTR = 48
 ! euclid scale diagnostics (doc/implementation_notes/drop_legacy_box_division.md, plan step 1):
@@ -41,6 +42,7 @@ type euclid_sigma2
 contains
     ! constructor
     procedure          :: new
+    procedure          :: new_cartesian
     procedure, private :: init_from_group_header
     ! utils
     procedure          :: write_info
@@ -51,6 +53,7 @@ contains
     procedure          :: read_groups
     procedure          :: allocate_ptcls
     procedure          :: calc_sigma2
+    procedure          :: set_particle_contribution
     procedure          :: write_sigma2
     procedure          :: report_euclid_diag
     procedure, private :: read_sigma2_groups
@@ -91,6 +94,29 @@ contains
         endif
         self%exists       =  .true.
     end subroutine new
+
+    !> Initialize Euclidean sigma storage for a Cartesian matcher that does not
+    !! construct a polar-Fourier calculator.
+    subroutine new_cartesian( self, params, binfname, box )
+        class(euclid_sigma2), target, intent(inout) :: self
+        class(parameters),    target, intent(in)    :: params
+        class(string),                intent(in)    :: binfname
+        integer,                      intent(in)    :: box
+
+        call self%kill
+        self%p_ptr => params
+        self%kfromto = [1, fdim(box)-1]
+        allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2), &
+            &self%p_ptr%fromp:self%p_ptr%top), source=0.)
+        self%binfname = binfname
+        self%fromp = self%p_ptr%fromp
+        self%top = self%p_ptr%top
+        if( self%p_ptr%l_euclid_diag )then
+            allocate(self%diag_ratio(NDIAG_BANDS,self%fromp:self%top), &
+                &self%diag_v(self%fromp:self%top), source=-1.)
+        endif
+        self%exists = .true.
+    end subroutine new_cartesian
 
     !>  This is a minimal constructor to allow I/O of groups
     subroutine init_from_group_header( self, fname )
@@ -256,6 +282,23 @@ contains
         if( allocated(ref_pow)  ) deallocate(ref_pow)
         if( allocated(ptcl_pow) ) deallocate(ptcl_pow)
     end subroutine calc_sigma2
+
+    !> Store a Cartesian matcher's per-shell residual contribution.
+    subroutine set_particle_contribution( self, iptcl, sigma_contrib )
+        class(euclid_sigma2), intent(inout) :: self
+        integer,              intent(in)    :: iptcl
+        real,                 intent(in)    :: sigma_contrib(:)
+        integer :: active_range(2)
+
+        if( .not. allocated(self%sigma2_part) ) &
+            &THROW_HARD('particle sigma2 storage is not allocated')
+        if( iptcl < lbound(self%sigma2_part,2) .or. iptcl > ubound(self%sigma2_part,2) ) &
+            &THROW_HARD('particle index is outside sigma2 storage')
+        active_range = self%p_ptr%kfromto
+        if( size(sigma_contrib) /= active_range(2)-active_range(1)+1 ) &
+            &THROW_HARD('Cartesian sigma contribution has incompatible shell bounds')
+        self%sigma2_part(active_range(1):active_range(2),iptcl) = sigma_contrib
+    end subroutine set_particle_contribution
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self

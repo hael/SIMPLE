@@ -22,6 +22,7 @@ use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_inpl,  only: strategy3D_greedy_inpl
 use simple_strategy3D_prob,         only: strategy3D_prob
+use simple_strategy3D_pose_cont,    only: strategy3D_pose_cont, pose_cont_seed_is_valid
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
@@ -49,7 +50,8 @@ type :: refine3D_ctrl
     logical :: do_emit_sigma
     logical :: do_write_oris
     logical :: do_bench
-    logical :: do_pose_cont
+    logical :: do_pose_cont_polish
+    logical :: do_pose_cont_strategy
   contains
     procedure :: print_flags
 end type refine3D_ctrl
@@ -76,7 +78,7 @@ contains
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
-        type(pose_cont_reference_workspace) :: pose_cont_refs
+        type(pose_cont_reference_workspace), target :: pose_cont_refs
         type(pose_cont_config) :: pose_config
         type(pose_cont_limits) :: pose_limits
         real                :: frac_greedy
@@ -106,7 +108,8 @@ contains
         endif
         call ensure_even_odd_partition()
         has_been_searched = .not. b_ptr%spproj%is_virgin_field(p_ptr%oritype)
-        call adopt_reprojection_model_range(p_ptr, b_ptr)
+        if( .not. ctrl%do_pose_cont_strategy ) call adopt_reprojection_model_range(p_ptr, b_ptr)
+        if( ctrl%do_pose_cont_strategy ) call validate_pose_cont_strategy_seeds()
         call sample_particles_for_update( pinds, nptcls2update )
         if( nptcls2update < 1 )then
             if( p_ptr%l_update_missing )then
@@ -116,7 +119,7 @@ contains
                 ! an empty update is a valid transaction rather than a
                 ! missing-file failure.
                 if( ctrl%do_emit_sigma )then
-                    call prep_sigmas_objfun(p_ptr, b_ptr)
+                    call prep_sigmas_objfun(p_ptr, b_ptr, cartesian_only=ctrl%do_pose_cont_strategy)
                     call b_ptr%esig%write_sigma2
                 endif
                 converged = .true.
@@ -141,12 +144,13 @@ contains
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
-        if( .not. ctrl%do_prob_align ) call build%pftc%memoize_refs(eulspace=build%eulspace)
+        if( .not. ctrl%do_prob_align .and. .not. ctrl%do_pose_cont_strategy ) &
+            &call build%pftc%memoize_refs(eulspace=build%eulspace)
         if( ctrl%do_bench )then
             rt_memoize_refs = toc(t_memoize_refs)
             t_prep_orisrch  = tic()
         endif
-        call prep_strategy3D(p_ptr, b_ptr)
+        if( .not. ctrl%do_pose_cont_strategy ) call prep_strategy3D(p_ptr, b_ptr)
         allocate(strategy3Dspecs(batchsz_max), strategy3Dsrch(batchsz_max))
         if( ctrl%do_prob_align )then
             call eulprob_obj_part%new_assignment(p_ptr, b_ptr, pinds)
@@ -181,7 +185,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 if( ctrl%do_prob_align ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
-                if( ctrl%do_emit_sigma )then
+                if( ctrl%do_emit_sigma .and. .not. ctrl%do_pose_cont_strategy )then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
@@ -191,7 +195,8 @@ contains
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
         enddo
         frac_greedy = 0.0
-        if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
+        if( .not. ctrl%do_pose_cont_strategy .and. &
+            &any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
@@ -204,11 +209,15 @@ contains
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         deallocate(cnt_greedy, cnt_all, incr_shifts)
         call eulprob_obj_part%kill
-        call clean_strategy3D
+        if( .not. ctrl%do_pose_cont_strategy ) call clean_strategy3D
         call b_ptr%kill_strategy3D_tbox
         call b_ptr%vol%kill
         call orientation%kill
-        call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad)
+        if( ctrl%do_pose_cont_strategy )then
+            call clean_batch_particles3D(b_ptr, ptcl_match_imgs)
+        else
+            call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad)
+        endif
         ! Registration is complete.  Release the all-state reprojection model,
         ! particle PFTs, memoized correlations, and PFTC thread workspaces
         ! before constructing the first state reconstruction.
@@ -302,21 +311,35 @@ contains
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
             ctrl%do_projrec    = trim(p_ptr%projrec) == 'yes'
             ctrl%do_bench      = L_BENCH_GLOB
-            ctrl%do_pose_cont  = trim(p_ptr%pose_cont) == 'yes'
+            ctrl%do_pose_cont_polish   = trim(p_ptr%pose_cont) == 'yes'
+            ctrl%do_pose_cont_strategy = ctrl%refine_mode == 'pose_cont'
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
             ctrl%do_emit_sigma = p_ptr%cc_objfun == OBJFUN_EUCLID .or. trim(p_ptr%cc_emit_sigma) == 'yes'
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
-            if( ctrl%do_pose_cont )then
+            if( ctrl%do_pose_cont_polish .and. ctrl%do_pose_cont_strategy ) &
+                &THROW_HARD('choose either pose_cont=yes or refine=pose_cont, not both')
+            if( ctrl%do_pose_cont_polish .or. ctrl%do_pose_cont_strategy )then
                 if( p_ptr%cc_objfun /= OBJFUN_EUCLID ) &
                     &THROW_HARD('pose_cont requires objfun=euclid')
-                if( ctrl%do_prob_align .or. ctrl%do_sigma_mode .or. ctrl%refine_mode == 'eval' ) &
+            endif
+            if( ctrl%do_pose_cont_strategy )then
+                if( trim(p_ptr%inpl_cont) /= 'no' ) &
+                    &THROW_HARD('refine=pose_cont cannot execute with inpl_cont=yes')
+                if( trim(p_ptr%oritype) /= 'ptcl3D' ) &
+                    &THROW_HARD('refine=pose_cont requires oritype=ptcl3D')
+                if( ctrl%do_projrec ) &
+                    &THROW_HARD('refine=pose_cont does not support projrec=yes')
+            endif
+            if( ctrl%do_pose_cont_polish )then
+                if( ctrl%do_prob_align .or. ctrl%do_sigma_mode .or. &
+                    &ctrl%refine_mode == 'eval' ) &
                     &THROW_HARD('pose_cont requires an ordinary pose-search refinement mode')
                 select case(trim(p_ptr%pose_cont_route))
                     case('shift_then_joint')
                         pose_config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
                     case('joint')
                         pose_config%route = POSE_CONT_ROUTE_JOINT
-                    case DEFAULT
+                    case default
                         THROW_HARD('unsupported pose_cont_route')
                 end select
                 ! The adapter works in cropped-box pixels; express the one-native-
@@ -340,6 +363,31 @@ contains
                 call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
             endif
         end subroutine ensure_even_odd_partition
+
+        !> Require an explicit state and half-set plus finite stored pose values
+        !! for every active particle in the requested project range.
+        !! Zero Euler angles remain valid and therefore are never used as an
+        !! initialization sentinel.
+        subroutine validate_pose_cont_strategy_seeds()
+            type(ori) :: seed_ori
+            integer :: iptcl_local, nactive
+
+            nactive = 0
+            do iptcl_local = p_ptr%fromp, p_ptr%top
+                call b_ptr%spproj_field%get_ori(iptcl_local, seed_ori)
+                if( seed_ori%get_state() <= 0 )then
+                    call seed_ori%kill
+                    cycle
+                endif
+                nactive = nactive + 1
+                if( .not. pose_cont_seed_is_valid(seed_ori) )then
+                    write(logfhandle,'(a,i0)') 'invalid refine=pose_cont seed particle: ', iptcl_local
+                    THROW_HARD('refine=pose_cont requires finite ptcl3D poses with valid proj indices')
+                endif
+                call seed_ori%kill
+            enddo
+            if( nactive == 0 ) THROW_HARD('refine=pose_cont requires active ptcl3D poses')
+        end subroutine validate_pose_cont_strategy_seeds
 
         subroutine sample_particles_for_update( pinds_local, nptcls )
             integer, allocatable, intent(out) :: pinds_local(:)
@@ -379,7 +427,11 @@ contains
             call prep_sigmas_objfun(p_ptr, b_ptr)
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
-            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            if( ctrl%do_pose_cont_strategy )then
+                call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, batchsz=batchsz_max)
+            else
+                call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            endif
             if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
             call build%vol_odd%kill
@@ -388,8 +440,13 @@ contains
 
         subroutine build_batch_particles_local()
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
-            call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                ptcl_match_imgs, ptcl_match_imgs_pad)
+            if( ctrl%do_pose_cont_strategy )then
+                call build_batch_particles3D_cartesian(p_ptr, b_ptr, batchsz, &
+                    &pinds(batch_start:batch_end))
+            else
+                call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                    ptcl_match_imgs, ptcl_match_imgs_pad)
+            endif
             if( ctrl%do_bench ) rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)
         end subroutine build_batch_particles_local
 
@@ -429,6 +486,8 @@ contains
                     allocate(strategy3D_eval               :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('neigh')
                     allocate(strategy3D_greedy_sub         :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('pose_cont')
+                    allocate(strategy3D_pose_cont          :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('greedy')
                     allocate(strategy3D_greedy             :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('greedy_inpl')
@@ -449,26 +508,37 @@ contains
             end select
             if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                 call strategy3Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy3Dspecs(iptcl_batch), b_ptr)
+                if( ctrl%do_pose_cont_strategy )then
+                    select type(pose_cont_strategy => strategy3Dsrch(iptcl_batch)%ptr)
+                        type is(strategy3D_pose_cont)
+                            call pose_cont_strategy%bind_context(p_ptr,b_ptr,pose_cont_refs, &
+                                &ptcl_match_imgs(ithr),iptcl_batch)
+                        class default
+                            THROW_HARD('pose_cont routing allocated an incompatible strategy')
+                    end select
+                endif
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
-                if( ctrl%do_pose_cont ) call run_pose_cont_after_pftc(iptcl,iptcl_batch,ithr)
+                if( ctrl%do_pose_cont_polish ) call run_pose_cont_after_pftc(iptcl,iptcl_batch,ithr)
                 if( trim(p_ptr%inpl_cont) == 'yes' )then
                     call strategy3Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
                         &attempted, improved, no_improvement, invalid)
                     call b_ptr%spproj_field%set(iptcl, 'cont_inpl_attempted', merge(1., 0., attempted))
                     call b_ptr%spproj_field%set(iptcl, 'cont_inpl_improved',  merge(1., 0., improved))
                 endif
-                incr_shifts(:,iptcl_batch) = b_ptr%spproj_field%get_2Dshift(iptcl) - &
-                    strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
+                if( .not. ctrl%do_pose_cont_strategy )then
+                    incr_shifts(:,iptcl_batch) = b_ptr%spproj_field%get_2Dshift(iptcl) - &
+                        strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
+                endif
                 call strategy3Dsrch(iptcl_batch)%ptr%kill
                 deallocate(strategy3Dsrch(iptcl_batch)%ptr)
                 nullify(strategy3Dsrch(iptcl_batch)%ptr)
             endif
         end subroutine choose_and_run_strategy
 
-        !> Run transactional Cartesian LM from the established matcher winner.
-        !! With inpl_cont=yes this seed includes its accepted polish; otherwise
-        !! it is the ordinary PFTC result. Only an accepted pose_cont result is
-        !! committed, so rejected or invalid transactions preserve that seed.
+        !> Polish the authoritative PFTC/inpl_cont winner transactionally.
+        !! With inpl_cont=yes, the seed includes its accepted in-plane polish.
+        !! Invalid or rejected LM results preserve that seed unchanged.
+        !! This pose_cont=yes route is separate from refine=pose_cont.
         subroutine run_pose_cont_after_pftc(iptcl, iptcl_batch, ithr)
             integer, intent(in) :: iptcl, iptcl_batch, ithr
             type(ori) :: winner
@@ -496,7 +566,7 @@ contains
             end select
 
             ! Stage 2: prepare the cropped Cartesian observation and its
-            ! per-shell noise weights for the local objective.
+            ! per-shell noise weights for the local Euclidean objective.
             ctfparms = b_ptr%spproj%get_ctfparams(p_ptr%oritype,iptcl)
             call prepare_pose_cont_observation(b_ptr%imgbatch(iptcl_batch),b_ptr%lmsk, &
                 &ptcl_match_imgs(ithr),p_ptr%msk_crop,p_ptr%smpd_crop,ctfparms, &
@@ -518,23 +588,22 @@ contains
             seed%shift = real(shift_native_to_crop(winner%get_2Dshift(), &
                 &p_ptr%box,p_ptr%box_crop),dp)
 
-            ! Stage 3: run the selected local LM route transactionally.
+            ! Stage 3: run the configured local LM route transactionally.
             call pose_cont_refs%refine_particle(state,even,seed,data,pose_config,pose_limits,result)
 
-            ! Stage 4: commit only an accepted Cartesian improvement. Rejected
-            ! or invalid transactions leave the established pose unchanged.
+            ! Stage 4: commit only an accepted improvement. Every other status
+            ! leaves the PFTC/inpl_cont winner unchanged for reconstruction.
             if( result%status == LM_ACCEPTED_IMPROVEMENT )then
-                ! Convert the accepted Cartesian pose back to SIMPLE's native
-                ! project coordinates before sigma evaluation/reconstruction.
+                ! Convert the Cartesian result back to SIMPLE's Euler and
+                ! native-pixel shift convention.
                 euler = real(dm2euler(result%pose%rotmat))
                 shift_native = shift_crop_to_native(real(result%pose%shift), &
                     &p_ptr%box,p_ptr%box_crop)
                 call winner%set_euler(euler)
                 call winner%set_shift(shift_native)
 
-                ! Keep the nearest discrete companions consistent for legacy
-                ! PFTC/sigma consumers. All other fields, including corr,
-                ! state, and half-set identity, remain those of the winner.
+                ! Refresh only the nearest discrete companions required by
+                ! legacy consumers; preserve corr, state, and half-set fields.
                 call winner%set('proj',real(b_ptr%eulspace%find_closest_proj(winner)))
                 call winner%set('inpl',real(b_ptr%pftc%get_roind(360.-winner%e3get())))
                 call b_ptr%spproj_field%set_ori(iptcl,winner)
@@ -575,7 +644,8 @@ contains
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
-        write(logfhandle,*) 'do_pose_cont          : ', ctrl%do_pose_cont
+        write(logfhandle,*) 'do_pose_cont_polish   : ', ctrl%do_pose_cont_polish
+        write(logfhandle,*) 'do_pose_cont_strategy : ', ctrl%do_pose_cont_strategy
     end subroutine print_flags
 
 end module simple_strategy3D_matcher

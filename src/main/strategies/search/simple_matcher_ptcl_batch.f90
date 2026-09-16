@@ -8,18 +8,21 @@ use simple_ptcl_cache,      only: ptcl_cache_in_use, ptcl_cache_read_batch
 implicit none
 
 public :: prep_sigmas_objfun, alloc_ptcl_imgs
-public :: build_batch_particles3D, build_batch_particles2D
+public :: build_batch_particles3D, build_batch_particles3D_cartesian, build_batch_particles2D
 public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
 
 contains
 
-    subroutine prep_sigmas_objfun( params, build )
+    subroutine prep_sigmas_objfun( params, build, cartesian_only )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
+        logical, optional, intent(in)    :: cartesian_only
         type(string)      :: fname
-        logical           :: found
+        logical           :: found, l_cartesian_only
+        l_cartesian_only = .false.
+        if( present(cartesian_only) ) l_cartesian_only = cartesian_only
         ! cc_emit_sigma is a CC-only update path. CC does not consume sigma,
         ! while Euclidean scoring requires populated grouped sigma values.
         if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
@@ -31,7 +34,11 @@ contains
             if( trim(params%cc_emit_sigma) == 'yes' .and. .not. file_exists(fname) )then
                 THROW_HARD('CC residual sigma update requires image-bootstrap sigma2')
             endif
-            call build%esig%new(params, build%pftc, fname, params%box)
+            if( l_cartesian_only )then
+                call build%esig%new_cartesian(params, fname, params%box)
+            else
+                call build%esig%new(params, build%pftc, fname, params%box)
+            endif
             call build%esig%read_part(  build%spproj_field)
             call build%esig%read_groups(build%spproj_field)
             call fname%kill
@@ -48,7 +55,7 @@ contains
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
-        type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
+        type(image), allocatable, optional, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
         integer, optional,        intent(in)    :: imgbatch_box
         real,    optional,        intent(in)    :: imgbatch_smpd
@@ -62,11 +69,14 @@ contains
         else
             call prepimgbatch(params, build, batchsz)
         endif
-        allocate(ptcl_imgs(nthr_glob), ptcl_imgs_pad(nthr_glob))
+        allocate(ptcl_imgs(nthr_glob))
+        if( present(ptcl_imgs_pad) ) allocate(ptcl_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
             call ptcl_imgs(ithr)%new(    [params%box_crop,  params%box_crop,  1], params%smpd_crop, wthreads=.false.)
-            call ptcl_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
+            if( present(ptcl_imgs_pad) ) &
+                &call ptcl_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], &
+                    &params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
     end subroutine alloc_ptcl_imgs
@@ -95,6 +105,21 @@ contains
                 tmp_imgs, tmp_imgs_pad)
         endif
     end subroutine build_batch_particles3D
+
+    !> Read one raw 3-D particle batch without constructing polar-Fourier data.
+    subroutine build_batch_particles3D_cartesian( params, build, nptcls_here, pinds_here )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls_here
+        integer,           intent(in)    :: pinds_here(nptcls_here)
+
+        if( params%l_ptcl_src_den )then
+            call discrete_read_imgbatch_source(params, build, 'den', nptcls_here, &
+                &pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
+        else
+            call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
+        endif
+    end subroutine build_batch_particles3D_cartesian
 
     subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad )
         class(parameters),      intent(in)    :: params
@@ -208,10 +233,10 @@ contains
         use simple_imgarr_utils, only: dealloc_imgarr
         class(builder),           intent(inout) :: build
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
-        type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
+        type(image), allocatable, optional, intent(inout) :: ptcl_imgs_pad(:)
         call killimgbatch(build)
         call dealloc_imgarr(ptcl_imgs)
-        call dealloc_imgarr(ptcl_imgs_pad)
+        if( present(ptcl_imgs_pad) ) call dealloc_imgarr(ptcl_imgs_pad)
     end subroutine clean_batch_particles3D
 
 end module simple_matcher_ptcl_batch
