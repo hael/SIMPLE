@@ -12,6 +12,7 @@ type(ui_program), target :: msk_routines
 type(ui_program), target :: nano_mask
 type(ui_program), target :: otsu_test
 type(ui_program), target :: ptcl_center
+type(ui_program), target :: score_volume_shape
 
 contains
 
@@ -25,6 +26,7 @@ contains
         call new_nano_mask(tsttab)
         call new_otsu_test(tsttab)
         call new_ptcl_center(tsttab)
+        call new_score_volume_shape(tsttab)
     end subroutine construct_test_masks_programs
 
 subroutine new_bounds_from_mask3D_test( tsttab )
@@ -251,5 +253,21 @@ subroutine new_bounds_from_mask3D_test( tsttab )
         ! add to ui_hash
         call add_ui_program('ptcl_center', ptcl_center, tsttab, UI_CATEGORY)
     end subroutine new_ptcl_center
+
+    subroutine new_score_volume_shape( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call score_volume_shape%new(&
+        &'score_volume_shape',&
+        &'Score volume shape descriptors',&
+        &'is a test program for evaluating the volume shape descriptors',&
+        &'simple_test_exec',&
+        &.false.)
+        call score_volume_shape%add_input(UI_IMG, 'vol1', 'file', 'Volume', &
+        &'Volume to score', 'input volume e.g. vol.mrc', .true., '')
+        call score_volume_shape%add_input(UI_PARM, smpd, required_override=.false.)
+        call score_volume_shape%add_input(UI_FILT, 'lp', 'num', 'Low-pass limit', &
+        &'Low-pass limit for volume scoring', 'low-pass limit in Angstroms{20.0}', .false., 20.0)
+        call add_ui_program('score_volume_shape', score_volume_shape, tsttab, UI_CATEGORY)
+    end subroutine new_score_volume_shape
 
 end module simple_test_ui_masks
