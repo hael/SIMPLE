@@ -22,56 +22,6 @@
         <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple batch</span>
         <span class="text-streamlabel text-[10px]">/</span>
         <span class="text-[12px] font-medium text-streamtext">{{ displayid }} · batch{% if page_title %} · {{ page_title }}{% endif %}{% if desc %} · {{ desc }}{% endif %}</span>
-        <div class="ml-auto flex items-center gap-3">
-            <span class="job-panel-icon text-streamtext cursor-pointer transition-colors" title="overview" data-panel-target="overview" onclick="showJobPanel(this)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
-                    <rect x="3" y="2" width="10" height="12" rx="1"/>
-                    <line x1="5.5" y1="5.5" x2="10.5" y2="5.5"/>
-                    <line x1="5.5" y1="8" x2="10.5" y2="8"/>
-                    <line x1="5.5" y1="10.5" x2="8.5" y2="10.5"/>
-                </svg>
-            </span>
-            {% if "movies" in jobstats %}
-                <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="movies" data-panel-target="movies" onclick="showJobPanel(this)">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
-                        <rect x="2" y="3" width="12" height="10" rx="1"/>
-                        <line x1="4.5" y1="3" x2="4.5" y2="5"/>
-                        <line x1="4.5" y1="11" x2="4.5" y2="13"/>
-                        <line x1="11.5" y1="3" x2="11.5" y2="5"/>
-                        <line x1="11.5" y1="11" x2="11.5" y2="13"/>
-                    </svg>
-                </span>
-            {% endif %}
-            {% if "micrographs" in jobstats %}
-                <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="micrographs" data-panel-target="micrographs" onclick="showJobPanel(this)">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
-                        <rect x="2" y="3" width="12" height="10" rx="1"/>
-                        <circle cx="6" cy="7" r="1.25" fill="currentColor" stroke="none"/>
-                        <polyline points="2,12 6,9 9,11 14,7"/>
-                    </svg>
-                </span>
-            {% endif %}
-            {% if "particles" in jobstats %}
-                <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="particles" data-panel-target="particles" onclick="showJobPanel(this)">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
-                        <circle cx="5" cy="5" r="1.5"/>
-                        <circle cx="11" cy="4.5" r="1.5"/>
-                        <circle cx="4.5" cy="11" r="1.5"/>
-                        <circle cx="10.5" cy="10.5" r="1.5"/>
-                    </svg>
-                </span>
-            {% endif %}
-            {% if "cls2D" in jobstats %}
-                <span class="job-panel-icon text-streamlabel hover:text-streamtext cursor-pointer transition-colors" title="2D classes" data-panel-target="cls2D" onclick="showJobPanel(this)">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
-                        <rect x="2" y="2" width="5" height="5" rx="0.5"/>
-                        <rect x="9" y="2" width="5" height="5" rx="0.5"/>
-                        <rect x="2" y="9" width="5" height="5" rx="0.5"/>
-                        <rect x="9" y="9" width="5" height="5" rx="0.5"/>
-                    </svg>
-                </span>
-            {% endif %}
-        </div>
     {% else %}
         <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple stream</span>
         <span class="text-streamlabel text-[10px]">/</span>

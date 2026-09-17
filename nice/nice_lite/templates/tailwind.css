@@ -64,6 +64,65 @@
 @theme { --color-streamrejected     : #f59e0b; } /* rejected segment    */
 @theme { --color-streamaction      : #60a5fa; } /* action / info blue  */
 
+/* Fun alt palettes — opt-in only, set data-theme="aurora|sunset|nord" on <html> to preview. */
+[data-theme="aurora"] {
+    --color-streambg      : #0f1222;
+    --color-streambar     : #171b30;
+    --color-streamline    : #2a2f4a;
+    --color-streamaccent  : #a78bfa;
+    --color-streamring    : #22d3ee;
+    --color-streamtext    : #e2e8f0;
+    --color-streamlabel   : #8b90b3;
+    --color-streamsurface : #1c2140;
+    --color-streaminput   : #e2e8f0;
+    --color-streamsubtle  : #9ca3d4;
+    --color-streamdivider : #232852;
+    --color-streamicon    : #6c72a8;
+    --color-streamerror   : #fb7185;
+    --color-streamerrorline    : #4c1d2b;
+    --color-streamerrorsurface : #2a1420;
+    --color-streamrejected     : #fbbf24;
+    --color-streamaction       : #38bdf8;
+}
+[data-theme="sunset"] {
+    --color-streambg      : #fff7ed;
+    --color-streambar     : #ffffff;
+    --color-streamline    : #fed7aa;
+    --color-streamaccent  : #ea580c;
+    --color-streamring    : #f97316;
+    --color-streamtext    : #7c2d12;
+    --color-streamlabel   : #c2703d;
+    --color-streamsurface : #ffedd5;
+    --color-streaminput   : #7c2d12;
+    --color-streamsubtle  : #b45309;
+    --color-streamdivider : #ffedd5;
+    --color-streamicon    : #fdba74;
+    --color-streamerror   : #dc2626;
+    --color-streamerrorline    : #fecaca;
+    --color-streamerrorsurface : #fef2f2;
+    --color-streamrejected     : #d97706;
+    --color-streamaction       : #ec4899;
+}
+[data-theme="nord"] {
+    --color-streambg      : #eceff4;
+    --color-streambar     : #ffffff;
+    --color-streamline    : #d8dee9;
+    --color-streamaccent  : #5e81ac;
+    --color-streamring    : #88c0d0;
+    --color-streamtext    : #2e3440;
+    --color-streamlabel   : #7b88a1;
+    --color-streamsurface : #e5e9f0;
+    --color-streaminput   : #2e3440;
+    --color-streamsubtle  : #4c566a;
+    --color-streamdivider : #e5e9f0;
+    --color-streamicon    : #81a1c1;
+    --color-streamerror   : #bf616a;
+    --color-streamerrorline    : #f2d3d5;
+    --color-streamerrorsurface : #fbeff0;
+    --color-streamrejected     : #d08770;
+    --color-streamaction       : #b48ead;
+}
+
 @layer components {
   .nicebutton {
     @apply rounded-full bg-nicecontrast text-white h-min px-[10px] hover:bg-niceheader hover:text-nicecontrast;
