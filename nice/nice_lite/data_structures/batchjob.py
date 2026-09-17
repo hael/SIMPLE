@@ -117,6 +117,27 @@ class BatchJob(Job):
         self.source = metadata.get("source")
         self.absdir = self.get_absdir()
 
+    # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
+
+    # Override base status accessor to enforce heartbeat timeout handling.
+    def get_status(self):
+        """
+        Return the status string for this job.
+        If the job has been non-terminal for more than 60 seconds without a
+        heartbeat, it is automatically marked as failed.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return None
+        if self.jobmodel.status not in self.TERMINAL_STATUSES and self.jobmodel.master_heartbeat > 0:
+            if self.jobmodel.master_heartbeat < int(time.time()) - 60:
+                print_error("heartbeat from job " + str(self.jobmodel.id) + " not heard for 60 seconds. Failing job")
+                self.jobmodel.status        = "failed"
+                self.jobmodel.master_status = "failed"
+                self.jobmodel.save()
+        return self.jobmodel.status
 
     # ------------------------------------------------------------------
     # Process control
@@ -1429,60 +1450,6 @@ class BatchJob(Job):
             return False
 
         return pid > 1 and not self._local_process_is_running(pid)
-
-    def reconcile_local_completion(self):
-        """Mark a locally dispatched job finished after a verified normal exit.
-
-        This is a conservative fallback for local jobs whose final NICE callback
-        did not reach Django. Scheduler jobs and abnormal local exits are left
-        unchanged for their authoritative status path to handle.
-        """
-        if self.jobmodel is None or self.status not in ("queued", "running"):
-            return False
-
-        job_dir = self.get_absdir()
-        if job_dir is None:
-            return False
-
-        try:
-            with open(os.path.join(job_dir, "job.script"), encoding="utf-8") as script_file:
-                if "# localtemplate" not in script_file.read(4096):
-                    return False
-            with open(os.path.join(job_dir, "nice.pid"), encoding="utf-8") as pid_file:
-                pid = int(pid_file.read(32).strip())
-        except (OSError, ValueError):
-            return False
-
-        if pid <= 1 or self._local_process_is_running(pid):
-            return False
-
-        try:
-            stdout_path = os.path.join(job_dir, "stdout.log")
-            stdout_size = os.path.getsize(stdout_path)
-            with open(stdout_path, "rb") as stdout_file:
-                stdout_file.seek(max(0, stdout_size - 65536))
-                stdout_tail = stdout_file.read().decode("utf-8", errors="replace")
-        except OSError:
-            return False
-
-        normal_stop = any(
-            line.startswith("**** ") and line.endswith(" NORMAL STOP ****")
-            for line in stdout_tail.splitlines()
-        )
-        if not normal_stop:
-            return False
-
-        with transaction.atomic():
-            jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
-            if jobmodel is None or jobmodel.status not in ("queued", "running"):
-                return False
-            jobmodel.status = "finished"
-            jobmodel.master_status = "finished"
-            jobmodel.save(update_fields=("status", "master_status"))
-
-        self.jobmodel = jobmodel
-        self.status = "finished"
-        return True
 
     def _get_local_process_group(self, pid):
         """Return an isolated process group owned by this job, or ``None``."""

@@ -67,19 +67,6 @@ def _is_batch_job(jobmodel):
     return jobmodel.pckg in ("simple", "single")
 
 
-def _reconcile_local_batch_completions(jobs):
-    """Refresh verified local completions before rendering batch controls."""
-    changed = False
-    for jobmodel in jobs:
-        if (
-            _is_batch_job(jobmodel)
-            and jobmodel.status in ("queued", "running")
-            and BatchJob(id=jobmodel.id).reconcile_local_completion()
-        ):
-            changed = True
-    return changed
-
-
 def _remove_missing_job_records(workspace_obj):
     """Remove records for missing job directories and reset the job counter."""
     workspace_dir = workspace_obj.get_absdir()
@@ -181,10 +168,8 @@ def view_workspace(request):
 
     # Include stream statuses in checksum seed so parent iframe updates on state changes.
     jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
-    if _reconcile_local_batch_completions(jobs):
-        jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
     jobstats = "|".join(
-        job.status if _is_batch_job(job) else StreamJob(id=job.id).get_status()
+        BatchJob(id=job.id).get_status() if _is_batch_job(job) else StreamJob(id=job.id).get_status()
         for job in jobs
     )
 
@@ -237,8 +222,6 @@ def view_workspace_jobs(request):
         return render(request, template, {"jobs": []})
 
     jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
-    if _reconcile_local_batch_completions(jobs):
-        jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
     # Include the template name so switching view modes always forces a redraw.

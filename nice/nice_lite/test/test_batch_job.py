@@ -937,65 +937,6 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(jobmodel.status, "failed")
         self.assertEqual(jobmodel.master_status, "failed")
 
-    def test_reconcile_local_completion_marks_normal_exited_job_finished(self):
-        job_dir = os.path.join(self.workspace_dir, "1_new_project")
-        os.mkdir(job_dir)
-        with open(os.path.join(job_dir, "job.script"), "w", encoding="utf-8") as script_file:
-            script_file.write("#!/bin/sh\n# localtemplate\n")
-        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
-            pid_file.write("4321\n")
-        with open(os.path.join(job_dir, "stdout.log"), "w", encoding="utf-8") as stdout_file:
-            stdout_file.write("**** NEW_PROJECT NORMAL STOP ****\n")
-        jobmodel = JobModel.objects.create(
-            dset=self.workspace_model,
-            cdat=timezone.now(),
-            disp=1,
-            dirc="1_new_project",
-            status="queued",
-            master_status="queued",
-            master_stats={},
-            pckg="simple",
-            prog="new_project",
-        )
-        job = BatchJob(id=jobmodel.id)
-
-        with patch.object(job, "_local_process_is_running", return_value=False):
-            changed = job.reconcile_local_completion()
-
-        self.assertTrue(changed)
-        jobmodel.refresh_from_db()
-        self.assertEqual(jobmodel.status, "finished")
-        self.assertEqual(jobmodel.master_status, "finished")
-
-    def test_reconcile_local_completion_keeps_active_job_running(self):
-        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
-        os.mkdir(job_dir)
-        with open(os.path.join(job_dir, "job.script"), "w", encoding="utf-8") as script_file:
-            script_file.write("#!/bin/sh\n# localtemplate\n")
-        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
-            pid_file.write("4321\n")
-        with open(os.path.join(job_dir, "stdout.log"), "w", encoding="utf-8") as stdout_file:
-            stdout_file.write("**** IMPORT_MOVIES NORMAL STOP ****\n")
-        jobmodel = JobModel.objects.create(
-            dset=self.workspace_model,
-            cdat=timezone.now(),
-            disp=1,
-            dirc="1_import_movies",
-            status="running",
-            master_status="running",
-            master_stats={},
-            pckg="simple",
-            prog="import_movies",
-        )
-        job = BatchJob(id=jobmodel.id)
-
-        with patch.object(job, "_local_process_is_running", return_value=True):
-            changed = job.reconcile_local_completion()
-
-        self.assertFalse(changed)
-        jobmodel.refresh_from_db()
-        self.assertEqual(jobmodel.status, "running")
-
     def test_queued_job_can_delete_after_local_process_exits(self):
         job_dir = os.path.join(self.workspace_dir, "1_import_movies")
         os.mkdir(job_dir)
@@ -1511,10 +1452,10 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertIn(f"{executable} prg=demo_commander input='path with spaces' nthr=8", content)
                     self.assertIn(f"cp -v '{parent_proj}' workspace.simple", content)
                     self.assertIn("# CPU 8", content)
-                    self.assertIn("nice_status_callback()", content)
+                    self.assertNotIn("nice_status_callback()", content)
                     submit.assert_called_once()
 
-    def test_status_callbacks_wrap_every_batch_package(self):
+    def test_dispatch_omits_status_callback_wrapper(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "workspace.simple")
             with open(parent_proj, "w", encoding="utf-8"):
@@ -1550,19 +1491,11 @@ class SimpleBatchDispatchTests(TestCase):
                     with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
                         content = script.read()
 
-                    running = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"running"}}'
-                    finished = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"finished","terminate":true}}'
-                    failed = '{"version":1,"jobid":9,"batch_heartbeat":{"status":"failed","terminate":true}}'
-                    command = f"{executable} prg=demo_commander"
-
-                    self.assertIn("nice_status_callback()", content)
-                    self.assertIn("X-Worker-Token: ${NICE_LITE_WORKER_TOKEN}", content)
-                    self.assertIn("2>> nice_status.log", content)
-                    self.assertIn('exit "$nice_job_exit"', content)
-                    self.assertLess(content.index(running), content.index(command))
-                    self.assertLess(content.index(command), content.index("nice_job_exit=$?"))
-                    self.assertLess(content.index("nice_job_exit=$?"), content.index(finished))
-                    self.assertLess(content.index("nice_job_exit=$?"), content.index(failed))
+                    self.assertIn(f"{executable} prg=demo_commander", content)
+                    self.assertIn("niceprocid=9 niceserver='http://localhost:8000/api'", content)
+                    self.assertNotIn("nice_status_callback", content)
+                    self.assertNotIn("batch_heartbeat", content)
+                    self.assertNotIn("nice_status.log", content)
                     submit.assert_called_once()
 
     def test_new_project_dispatch_creates_project_in_job_directory(self):
@@ -1600,8 +1533,7 @@ class SimpleBatchDispatchTests(TestCase):
             self.assertNotIn("cp -v", content)
             self.assertNotIn("prg=update_project", content)
             self.assertNotIn("projfile=workspace.simple", content)
-            self.assertIn("nice_status_callback()", content)
-            self.assertIn('{"jobid":3,"job":{"status":"finished","terminate":true}}', content)
+            self.assertNotIn("nice_status_callback", content)
             submit.assert_called_once()
 
     def test_reproject_dispatch_does_not_inherit_project(self):
