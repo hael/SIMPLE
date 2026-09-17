@@ -5,13 +5,6 @@ use simple_sp_project, only: sp_project
 implicit none
 #include "simple_local_flags.inc"
 
-! 3D refinement programs with the explicit no|yes|nu envelope policy. yes uses
-! the conservative density envelope; nu prefers the lag-one NU-evidence
-! envelope and falls back to density. tight remains a standalone-mask mode.
-character(len=15), parameter :: ENVMASK_REF_PRGS(9) = &
-    &[character(len=15) :: 'refine3D', 'refine3D_auto', 'abinitio3D', 'refine3D_states', 'classify3D_refs', &
-    &'reconstruct3D', 'volassemble', 'rec3D', 'bootstrap_rec3D']
-
 contains
 
     module subroutine new(self, cline, silent)
@@ -879,8 +872,6 @@ contains
                 THROW_HARD('unsupported filt_mode flag')
         end select
         if( trim(self%automsk) == 'nu' )then
-            if( .not. any(ENVMASK_REF_PRGS == self%prg%to_char()) ) &
-                &THROW_HARD('automsk=nu is supported only in 3D refinement workflows')
             if( .not. self%l_nonuniform ) &
                 &THROW_HARD('automsk=nu requires filt_mode=nonuniform or nonuniform_lpset')
         endif
@@ -890,8 +881,8 @@ contains
         ! masker. In 3D refinement yes and nu select explicit envelope policies;
         ! their tightness controls are envmsklp/binwidth and nu_msk_sig.
         if( trim(self%automsk).eq.'tight' )then
-            if( self%l_nonuniform .or. any(ENVMASK_REF_PRGS == self%prg%to_char()) )then
-                THROW_HARD('automsk=tight is not supported in 3D refinement; use automsk=yes (envmsklp/binwidth set the envelope, nu_msk_sig the NU evidence envelope)')
+            if( self%l_nonuniform )then
+                THROW_HARD('automsk=tight is incompatible with nonuniform filtering; use automsk=yes or nu')
             endif
         endif
         if( trim(self%nu_envmsk).eq.'yes' .or. &
