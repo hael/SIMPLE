@@ -223,9 +223,9 @@ subroutine new_export_relion( prgtab )
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_movies%add_input(UI_FILE, 'filetab',    'file', 'List of movie files',    'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_STANDARD)
         call import_movies%add_input(UI_FILE, 'dir_movies', 'dir',  'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .false., 'preprocess/', &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call import_movies%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)

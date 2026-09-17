@@ -220,7 +220,7 @@ subroutine new_assign_optics_groups( prgtab )
         call motion_correct%add_input(UI_PARM, max_dose, group="data", &
         &visibility=UI_VIS_ADVANCED)
         call motion_correct%add_input(UI_PARM, smpd_downscale, group="data", &
-        &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
+        &visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call motion_correct%add_input(UI_PARM, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '', group="data", &
         &visibility=UI_VIS_ADVANCED)
@@ -229,7 +229,7 @@ subroutine new_assign_optics_groups( prgtab )
         call motion_correct%add_input(UI_PARM, eer_fraction, group="data", &
         &visibility=UI_VIS_ADVANCED)
         call motion_correct%add_input(UI_PARM, flipgain, group="motion correction", &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -403,20 +403,20 @@ subroutine new_assign_optics_groups( prgtab )
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD, display_name='Preprocess Micrographs') ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Preprocess Movies') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%add_input(UI_FILE, gainref, &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call preprocess%add_input(UI_PARM, total_dose, &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_STANDARD)
         call preprocess%add_input(UI_PARM, fraction_dose_target, &
         &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_PARM, max_dose, &
         &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_PARM, smpd_downscale, &
-        &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
+        &visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call preprocess%add_input(UI_PARM, eer_fraction, &
         &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_PARM, 'fbody', 'string', 'Template output micrograph name',&
@@ -431,7 +431,7 @@ subroutine new_assign_optics_groups( prgtab )
         call preprocess%add_input(UI_PARM, fit_phshift, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_PARM, flipgain, &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
