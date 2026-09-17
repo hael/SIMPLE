@@ -391,7 +391,7 @@ contains
             state%summary%provenance = trim(state%summary%provenance)//trim(adjustl(value_text))
         enddo
         state%summary%provenance = trim(state%summary%provenance)//&
-            &';geometry=reference_ladder_logres_voronoi_measure'
+            &';geometry=index_coords_logres_voronoi_measure'
         write(value_text,'(ES14.6)') temperature
         state%summary%provenance = trim(state%summary%provenance)//';temperature='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') beta
@@ -452,7 +452,7 @@ contains
     subroutine setup_evidence_candidate_geometry( signal_lps, coords, measure )
         real, intent(in) :: signal_lps(:)
         real, allocatable, intent(out) :: coords(:), measure(:)
-        real, allocatable :: widths(:)
+        real, allocatable :: widths(:), logpos(:)
         real :: left_edge, right_edge, coord_eps
         integer :: n_signal, i
         n_signal = size(signal_lps)
@@ -460,32 +460,39 @@ contains
         if( any(signal_lps <= TINY) ) THROW_HARD('invalid NU evidence candidate low-pass geometry')
         allocate(coords(n_signal + 1), source=0.)
         allocate(measure(n_signal + 1), source=1.)
-        ! candidate coordinates are the ordered-label Potts coordinates:
-        ! positions on the reference ladder in log(1/resolution)
-        ! (2026-09-16), the same geometry the label field was smoothed in
+        ! candidate coordinates are the ordered-label Potts coordinates of
+        ! the filter competition: the label index (2026-09-17, see
+        ! setup_nu_candidate_coords), null at 0
         coord_eps = sqrt(epsilon(1.))
         do i = 1, n_signal
-            coords(i+1) = nu_potts_coord_for_resolution(signal_lps(i))
-            if( i > 1 ) coords(i+1) = max(coords(i+1), coords(i) + coord_eps)
+            coords(i+1) = real(i)
         enddo
         if( n_signal == 1 ) return
-        ! each signal hypothesis receives its Voronoi cell width, normalized
-        ! to the reference ladder's total signal mass
+        ! each signal hypothesis receives as MASS its Voronoi cell width on
+        ! the reference ladder in log(1/resolution), normalized to the
+        ! reference ladder's total signal mass, so a dense fine end of the
+        ! generated ladder does not outweigh the coarse rungs in the prior
         allocate(widths(n_signal), source=0.)
+        allocate(logpos(n_signal), source=0.)
+        do i = 1, n_signal
+            logpos(i) = nu_potts_coord_for_resolution(signal_lps(i))
+            if( i > 1 ) logpos(i) = max(logpos(i), logpos(i-1) + coord_eps)
+        enddo
         do i = 1, n_signal
             if( i == 1 )then
-                left_edge = coords(2) - 0.5 * (coords(3) - coords(2))
+                left_edge = logpos(1) - 0.5 * (logpos(2) - logpos(1))
             else
-                left_edge = 0.5 * (coords(i+1) + coords(i))
+                left_edge = 0.5 * (logpos(i) + logpos(i-1))
             endif
             if( i == n_signal )then
-                right_edge = coords(n_signal+1) + 0.5 * (coords(n_signal+1) - coords(n_signal))
+                right_edge = logpos(n_signal) + 0.5 * (logpos(n_signal) - logpos(n_signal-1))
             else
-                right_edge = 0.5 * (coords(i+1) + coords(i+2))
+                right_edge = 0.5 * (logpos(i) + logpos(i+1))
             endif
             widths(i) = max(coord_eps, right_edge - left_edge)
         enddo
         measure(2:) = widths * real(size(NU_LADDER_REF)) / sum(widths)
+        deallocate(logpos)
         if( any(.not.ieee_is_finite(coords)) .or. any(.not.ieee_is_finite(measure)) .or. &
             &any(measure <= 0.) ) THROW_HARD('invalid NU evidence adaptive candidate geometry')
         deallocate(widths)

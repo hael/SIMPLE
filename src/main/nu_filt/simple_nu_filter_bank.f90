@@ -166,8 +166,17 @@ contains
         if( n_candidates /= n_base ) THROW_HARD('candidate count must match base bank in setup_nu_candidate_coords')
         if( allocated(candidate_coords) ) deallocate(candidate_coords)
         allocate(candidate_coords(n_candidates), source=0.)
+        ! the ordered-label Potts coordinate is the LABEL INDEX (2026-09-17):
+        ! NU_LABEL_SMOOTH_STEP_TOL=1 means a transition between adjacent bank
+        ! members is free and every further member costs. The reference-
+        ! ladder log-resolution coordinate (2026-09-16) put dense fine rungs
+        ! a tenth of a rank apart, so jumps across ten rungs were free and the
+        ! prior was inert at the fine end: salt-and-pepper fine labels in the
+        ! _nu_locres map and in the evidence state (postprocess_nu on PfCRT
+        ! turned into noise). The log-resolution geometry survives only as
+        ! the evidence candidate MASS (setup_evidence_candidate_geometry).
         do i = 1, n_base
-            candidate_coords(i) = nu_potts_coord_for_resolution(nu_label_lowpass_limit(i))
+            candidate_coords(i) = real(i)
         end do
     end subroutine setup_nu_candidate_coords
 

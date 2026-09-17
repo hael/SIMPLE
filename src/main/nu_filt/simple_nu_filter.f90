@@ -61,9 +61,10 @@ private
 ! Fourier shells of the box (init_nu_filter), widened to fit the bank budget
 ! NU_BANK_MAX_MEMBERS (coarse rungs + fine rungs + the auxiliary member). The
 ! former fixed ladder [20,15,12,10,8,6,5,4] ended at 4 A and the retired
-! shell walk supplied the granularity beyond it; NU_LADDER_REF keeps that
-! ladder as the coordinate reference of the ordered-label Potts prior, so
-! the price of a given resolution jump is independent of the spacing.
+! shell walk supplied the granularity beyond it; NU_LADDER_REF is the
+! reference of the evidence candidate MASS (log-resolution Voronoi widths)
+! and of the lpset band floor. The ordered-label Potts prior runs on the
+! label index (adjacent members free), see setup_nu_candidate_coords.
 real,             parameter   :: NU_LADDER_COARSE(6) = [20.,15.,12.,10.,8.,6.]
 real,             parameter   :: NU_LADDER_REF(8)    = [20.,15.,12.,10.,8.,6.,5.,4.]
 integer,          parameter   :: NU_LADDER_FINE_STEP = 2

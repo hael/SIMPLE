@@ -407,13 +407,17 @@ The ordered-label prior:
 
 - uses the 26-neighbor 3D voxel neighborhood
 - updates with an 8-color schedule
-- evaluates penalties on candidate coordinates, not raw label numbers: a
-  candidate's coordinate is its position on the reference ladder
-  `[20, 15, 12, 10, 8, 6, 5, 4]` A interpolated in log(1/resolution)
-  (2026-09-16), so a jump between two resolutions costs the same whatever
-  spacing the generated fine rungs took; the regularized member sits at the
-  coordinate of its own resolution
-- tolerates jumps of up to one reference-ladder step
+- evaluates penalties on the candidate's label index in the retained bank
+  (2026-09-17): a transition between adjacent bank members is free and
+  every further member costs. (For one day, 2026-09-16, the coordinate was
+  the position on the reference ladder `[20, 15, 12, 10, 8, 6, 5, 4]` A in
+  log(1/resolution); with the generated fine rungs a tenth of a step apart
+  that made jumps across ten rungs free and the prior inert at the fine
+  end -- salt-and-pepper fine labels in `_nu_locres` and in the evidence
+  state, PfCRT `postprocess_nu` reduced to noise. The log-resolution
+  geometry survives only as the evidence candidate mass, section 8 of the
+  evidence contract.)
+- tolerates jumps of up to one bank member
 - penalizes larger jumps with a linear-quadratic hinge
 - normalizes neighbor penalties by the number of in-mask neighbors
 - preserves the current label on ties within a small tolerance

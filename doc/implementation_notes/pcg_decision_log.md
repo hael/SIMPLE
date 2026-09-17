@@ -530,3 +530,30 @@ like the direct route; (3) the 2026-09-02 PfCRT collapse rationale, removed
 from the matcher comment and the rewritten automasking policy, is back in
 both: nu is not a default and must not become one.
 
+**2026-09-17 -- Potts coordinate back to the label index; PfCRT map-quality
+gap traced to the abinitio3D poses.** (1) `postprocess_nu` on the Sep-11
+PfCRT halves produced noise with the retired-walk code. Cause found in the
+code, log pending: the 2026-09-16 Potts coordinate (position on the
+reference ladder in log(1/resolution)) puts the generated fine rungs about a
+tenth of a rank apart while `NU_LABEL_SMOOTH_STEP_TOL=1` frees jumps of one
+rank, so the smoothing prior was inert across the whole fine end -- the
+label field could alternate freely between rungs 4.6-4.1 A voxel by voxel.
+In refinement the regularized member wins the core and the FSC hid it; in
+the evidence state, which has no regularized member, the fine cutoffs
+scatter and the per-voxel sharpening passes noise. Coordinates are the
+label index again in both the filter and the evidence competition; the
+log-resolution geometry survives as the evidence candidate mass only.
+(2) refine3D_auto on `latest3` (greedy pass at 4.44 A: 6.2% reassigned,
+no FSC change) plateaus at 4.03/4.50 A from iteration 1 with B -90..-100,
+against the Sep-11 run's 3.93-3.98/4.14-4.25 A with B -73. The gap is
+present in the BOOTSTRAP, before any refinement: gold-standard
+reconstruction of the Sep-17 abinitio poses reads 4.14/4.50 A, of the
+Sep-11 abinitio poses 3.93/4.09 A, from the same particles. The abinitio
+poses are worse although the abinitio's own merged-reference FSC reads the
+same (4.5 A band in both). Candidates, both introduced between the runs:
+the inert Potts prior above (the NU-stage references' hard-rung pattern),
+and the closed-form regularized pair (MRES 1.3 on PfCRT at box 300; the
+Sep-11 references' core came from the two-iteration replay). A/B after the
+recompile: rerun abinitio3D + refine3D_auto with the index coordinate; if
+still short, `maxits_ml=2` isolates the closed form.
+
