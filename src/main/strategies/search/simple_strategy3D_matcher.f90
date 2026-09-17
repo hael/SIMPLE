@@ -31,7 +31,7 @@ use simple_strategy3D,              only: strategy3D
 use simple_ori_utils,               only: dm2euler
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
-    &cartesian_pose_data, prepare_pose_cont_observation, shift_native_to_crop, &
+    &cartesian_pose_data, pose_cont_particle_workspace, shift_native_to_crop, &
     &shift_crop_to_native, LM_ACCEPTED_IMPROVEMENT, &
     &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 implicit none
@@ -79,6 +79,7 @@ contains
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
         type(pose_cont_reference_workspace), target :: pose_cont_refs
+        type(pose_cont_particle_workspace) :: pose_cont_particles
         type(pose_cont_config) :: pose_config
         type(pose_cont_limits) :: pose_limits
         real                :: frac_greedy
@@ -218,6 +219,7 @@ contains
         else
             call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad)
         endif
+        call pose_cont_particles%kill
         ! Registration is complete.  Release the all-state reprojection model,
         ! particle PFTs, memoized correlations, and PFTC thread workspaces
         ! before constructing the first state reconstruction.
@@ -438,6 +440,8 @@ contains
                 call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, batchsz=batchsz_max)
             else
                 call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+                if( ctrl%do_pose_cont_polish ) &
+                    &call pose_cont_particles%new(batchsz_max,p_ptr%box,p_ptr%smpd)
             endif
             if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
@@ -450,6 +454,9 @@ contains
             if( ctrl%do_pose_cont_strategy )then
                 call build_batch_particles3D_cartesian(p_ptr, b_ptr, batchsz, &
                     &pinds(batch_start:batch_end))
+            else if( ctrl%do_pose_cont_polish )then
+                call build_batch_particles3D(p_ptr,b_ptr,batchsz,pinds(batch_start:batch_end), &
+                    &ptcl_match_imgs,ptcl_match_imgs_pad,pose_cont_particles)
             else
                 call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                     ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -575,7 +582,7 @@ contains
             ! Stage 2: prepare the cropped Cartesian observation and its
             ! per-shell noise weights for the local Euclidean objective.
             ctfparms = b_ptr%spproj%get_ctfparams(p_ptr%oritype,iptcl)
-            call prepare_pose_cont_observation(b_ptr%imgbatch(iptcl_batch),b_ptr%lmsk, &
+            call pose_cont_particles%prepare_observation(iptcl_batch,b_ptr%lmsk, &
                 &ptcl_match_imgs(ithr),p_ptr%msk_crop,p_ptr%smpd_crop,ctfparms, &
                 &observed,cropped_ctfparms)
             if( .not. allocated(b_ptr%esig%sigma2_noise) ) &

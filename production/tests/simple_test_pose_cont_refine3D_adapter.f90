@@ -5,6 +5,7 @@ use simple_ori, only: ori
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner
 use simple_strategy3D_pose_cont, only: pose_cont_seed_is_valid
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
+    &pose_cont_particle_workspace, &
     &pose_cont_pose, pose_cont_limits, pose_cont_config, &
     &pose_cont_transaction_result, &
     &cartesian_pose_data, &
@@ -94,10 +95,11 @@ contains
 
     subroutine test_observation_and_coordinate_adapters()
         integer, parameter :: NATIVE_BOX = 32
-        type(image) :: raw, oracle, work, oracle_work
-        type(ctfparams) :: input_ctf, output_ctf
+        type(image) :: raw, oracle, work, oracle_work, preserved_work
+        type(pose_cont_particle_workspace) :: particles
+        type(ctfparams) :: input_ctf, output_ctf, preserved_ctf
         logical, allocatable :: noise_mask(:,:,:)
-        complex, allocatable :: observed(:,:), expected(:,:)
+        complex, allocatable :: observed(:,:), expected(:,:), preserved(:,:)
         real :: native_shift(2), crop_shift(2)
         integer :: i, j
 
@@ -110,13 +112,21 @@ contains
         call oracle%copy(raw)
         call work%new([TEST_BOX,TEST_BOX,1],TEST_SMPD)
         call oracle_work%new([TEST_BOX,TEST_BOX,1],TEST_SMPD)
+        call preserved_work%new([TEST_BOX,TEST_BOX,1],TEST_SMPD)
         call work%memoize_mask_coords()
+        call preserved_work%memoize_mask_coords()
         allocate(noise_mask(NATIVE_BOX,NATIVE_BOX,1),source=.false.)
         input_ctf%smpd = raw%get_smpd()
         input_ctf%ctfflag = CTFFLAG_NO
 
+        ! Preserve the real-space particle before the established preparation
+        ! mutates the caller-owned image for PFTC matching.
+        call particles%new(1,NATIVE_BOX,raw%get_smpd())
+        call particles%capture(1,raw)
         call prepare_pose_cont_observation(raw,noise_mask,work,6.,TEST_SMPD, &
             &input_ctf,observed,output_ctf)
+        call particles%prepare_observation(1,noise_mask,preserved_work,6.,TEST_SMPD, &
+            &input_ctf,preserved,preserved_ctf)
         call oracle%norm_noise_fft_clip_shift(noise_mask,oracle_work,[0.,0.])
         call oracle_work%ifft_mask_fft(6.)
         expected = oracle_work%expand_ft()
@@ -127,6 +137,10 @@ contains
             &'observation adapter did not return the full redundant disk')
         call assert_true(abs(output_ctf%smpd-TEST_SMPD) <= epsilon(TEST_SMPD), &
             &'observation adapter did not update CTF sampling for the cropped box')
+        call assert_true(maxval(abs(preserved-expected)) <= 2.e-5, &
+            &'preserved particle workspace changed the Cartesian observation')
+        call assert_true(abs(preserved_ctf%smpd-TEST_SMPD) <= epsilon(TEST_SMPD), &
+            &'preserved particle workspace did not update cropped CTF sampling')
 
         native_shift = [2.25,-1.75]
         crop_shift = shift_native_to_crop(native_shift,NATIVE_BOX,TEST_BOX)
@@ -138,6 +152,9 @@ contains
         call oracle%kill()
         call work%kill()
         call oracle_work%kill()
+        call preserved_work%kill()
+        call particles%kill()
+        call particles%kill()
     end subroutine test_observation_and_coordinate_adapters
 
     subroutine test_transaction_contracts()

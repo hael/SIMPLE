@@ -5,6 +5,7 @@ use simple_core_module_api, only: CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES, &
     &PI, TINY, ctfparams, del_file, dp, file_exists, find_img_smpd, find_ldim_nptcls, &
     &simple_exception, string
 use simple_image, only: image
+use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, cartesian_pose_data, &
     &shift_lm_config, pose_lm_config, pose_lm_result, pose_lm_diagnostics, &
     &LM_ACCEPTED_IMPROVEMENT, LM_FINITE_NO_IMPROVEMENT, LM_NO_RELIABLE_UPDATE, &
@@ -16,7 +17,7 @@ private
 #include "simple_local_flags.inc"
 
 ! Types
-public :: cartesian_pose_data, pose_cont_reference_workspace
+public :: cartesian_pose_data, pose_cont_reference_workspace, pose_cont_particle_workspace
 public :: pose_cont_pose, pose_cont_limits, pose_cont_config
 public :: pose_cont_stage_result, pose_cont_transaction_result
 
@@ -119,7 +120,75 @@ contains
     procedure :: sigma_contribution => pose_cont_sigma_contribution
 end type pose_cont_reference_workspace
 
+!> Raw particle copies retained across PFTC's in-place preparation.
+!! The adapter owns allocation, capture, observation preparation, and teardown
+!! so the matcher never reaches into the preserved image storage directly.
+type :: pose_cont_particle_workspace
+    private
+    type(image), allocatable :: raw(:)
 contains
+    procedure :: new => new_pose_cont_particle_workspace
+    procedure :: kill => kill_pose_cont_particle_workspace
+    procedure :: capture => capture_pose_cont_particle
+    procedure :: prepare_observation => prepare_preserved_pose_cont_observation
+end type pose_cont_particle_workspace
+
+contains
+
+    ! ========================================================================
+    ! Production particle workspace lifecycle
+    ! ========================================================================
+
+    subroutine new_pose_cont_particle_workspace(self, batch_size, box, smpd)
+        class(pose_cont_particle_workspace), intent(inout) :: self
+        integer, intent(in) :: batch_size, box
+        real, intent(in) :: smpd
+
+        if (batch_size < 1) THROW_HARD('pose_cont particle workspace requires a positive batch size')
+        if (box < 2 .or. mod(box, 2) /= 0) &
+            &THROW_HARD('pose_cont particle workspace requires a positive even box')
+        if (smpd <= TINY .or. .not. ieee_is_finite(smpd)) &
+            &THROW_HARD('pose_cont particle workspace requires positive finite sampling')
+        call self%kill
+        call alloc_imgarr(batch_size, [box, box, 1], smpd, self%raw)
+    end subroutine new_pose_cont_particle_workspace
+
+    subroutine kill_pose_cont_particle_workspace(self)
+        class(pose_cont_particle_workspace), intent(inout) :: self
+        if (allocated(self%raw)) call dealloc_imgarr(self%raw)
+    end subroutine kill_pose_cont_particle_workspace
+
+    subroutine capture_pose_cont_particle(self, batch_index, raw_img)
+        class(pose_cont_particle_workspace), intent(inout) :: self
+        integer, intent(in) :: batch_index
+        class(image), intent(in) :: raw_img
+
+        if (.not. allocated(self%raw)) THROW_HARD('pose_cont particle workspace is not allocated')
+        if (batch_index < 1 .or. batch_index > size(self%raw)) &
+            &THROW_HARD('pose_cont particle workspace index is out of bounds')
+        if (raw_img%is_ft()) THROW_HARD('pose_cont must capture the particle before PFTC preparation')
+        call self%raw(batch_index)%copy_fast(raw_img)
+    end subroutine capture_pose_cont_particle
+
+    subroutine prepare_preserved_pose_cont_observation(self, batch_index, noise_mask, work_img, &
+        &mskrad, smpd_crop, ctfparms_in, observed, ctfparms_out)
+        class(pose_cont_particle_workspace), intent(inout) :: self
+        integer, intent(in) :: batch_index
+        logical, intent(in) :: noise_mask(:, :, :)
+        class(image), intent(inout) :: work_img
+        real, intent(in) :: mskrad, smpd_crop
+        type(ctfparams), intent(in) :: ctfparms_in
+        complex, allocatable, intent(out) :: observed(:, :)
+        type(ctfparams), intent(out) :: ctfparms_out
+
+        if (.not. allocated(self%raw)) THROW_HARD('pose_cont particle workspace is not allocated')
+        if (batch_index < 1 .or. batch_index > size(self%raw)) &
+            &THROW_HARD('pose_cont particle workspace index is out of bounds')
+        if (self%raw(batch_index)%is_ft()) &
+            &THROW_HARD('pose_cont preserved particle is not in real space')
+        call prepare_pose_cont_observation(self%raw(batch_index), noise_mask, work_img, mskrad, &
+            &smpd_crop, ctfparms_in, observed, ctfparms_out)
+    end subroutine prepare_preserved_pose_cont_observation
 
     ! ========================================================================
     ! Production reference-artifact and workspace lifecycle
