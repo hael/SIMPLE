@@ -557,3 +557,17 @@ Sep-11 references' core came from the two-iteration replay). A/B after the
 recompile: rerun abinitio3D + refine3D_auto with the index coordinate; if
 still short, `maxits_ml=2` isolates the closed form.
 
+**2026-09-17 -- postprocess_nu restored on the Sep-11 PfCRT halves with the
+index Potts coordinate.** Even/odd run at box 300: 11 distinct evidenced
+cutoffs with coherent populations (4.33 A 181k, 3.80 A 44k, 3.38/3.05 A
+3-5k voxels), four evidence bands, B -49; "PfCRT back to being gorgeous"
+(Hans). Confirms the 09-16 log-resolution coordinate as the cause of the
+noise (and the prime suspect for the abinitio pose gap; A/B pending). Two
+fixes on the way: postprocess_nu's own half-map FSC was computed on
+real-space volumes (`image%fsc` reads Fourier coefficients) and read 0.000
+A, so the bank ran unbounded to Nyquist -- harmless here (rungs beyond 3 A
+won nothing) but wrong; now transformed before the FSC, so the bank is
+bounded at fsc/1.5 as designed. And identical inputs (vol1 = vol2, an FSC
+of 1 everywhere, the finest cutoff awarded on 1.36M voxels, a sharpened
+noise ball) are refused with a message.
+

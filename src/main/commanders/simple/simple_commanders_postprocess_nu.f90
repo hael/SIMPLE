@@ -50,10 +50,24 @@ contains
         ! candidates only (its contract), and this program has no
         ! regularized pair input
         allocate(corrs(fdim(params%box)-1), source=0.)
+        ! image%fsc reads Fourier coefficients: transform, correlate, and
+        ! return the halves to real space for the evidence setup
+        call even%fft()
+        call odd%fft()
         call even%fsc(odd, corrs)
+        call even%ifft()
+        call odd%ifft()
         res = get_resarr(params%box, params%smpd)
         call get_resolution(corrs, res, fsc05, fsc0143)
         write(logfhandle,'(A,F8.3,A,F8.3,A)') '>>> POSTPROCESS_NU: HALF-MAP FSC=0.5 ', fsc05, ' A, FSC=0.143 ', fsc0143, ' A'
+        ! identical halves (vol1 = vol2, or two copies of one map) give an FSC
+        ! of 1 on every shell: no 0.143 crossing, an unbounded bank to Nyquist
+        ! and degenerate cross-half evidence that awards the finest cutoff
+        ! everywhere; the sharpened product is then noise (2026-09-17)
+        if( params%vols(1) == params%vols(2) ) &
+            &THROW_HARD('vol1 and vol2 are the same file; postprocess_nu needs the two independent half maps')
+        if( fsc0143 <= TINY .or. fsc0143 <= 2.*params%smpd + TINY ) &
+            &THROW_HARD('the half-map FSC never falls below 0.143: are vol1/vol2 independent half maps? postprocess_nu')
         ! frozen evidence from the unregularized half pair, the standard
         ! lifecycle: bank -> compact immutable state (one evidence identity,
         ! no second NU analysis)
