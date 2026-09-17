@@ -390,6 +390,42 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('placeholder="-1.5"', rendered)
         self.assertNotIn('option value=""', rendered)
 
+    def test_batch_visibility_hides_sections_without_visible_fields(self):
+        context = {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{
+                "prg": "demo",
+                "disp": "Demo",
+                "sections": [
+                    {
+                        "name": "standard",
+                        "inputs": [{"key": "visible", "keytype": "str", "label": "visible"}],
+                    },
+                    {
+                        "name": "advanced",
+                        "inputs": [{
+                            "key": "hidden_in_standard",
+                            "keytype": "str",
+                            "label": "hidden in standard",
+                            "visibility": "advanced",
+                        }],
+                    },
+                ],
+            }],
+            "single_programs": [],
+            "single_program_inputs": [],
+        }
+
+        rendered = render_to_string("jobbuilder.html", context)
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertEqual(rendered.count("data-batch-section"), 2)
+        self.assertIn('data-batch-field-visibility="advanced"', rendered)
+        self.assertIn('document.querySelectorAll("[data-batch-section]")', jobbuilder)
+        self.assertIn('section.querySelectorAll("[data-batch-field-visibility]")', jobbuilder)
+        self.assertIn('section.classList.toggle("hidden", !hasVisibleField);', jobbuilder)
+
     def test_batch_required_argument_labels_are_bold(self):
         context = {
             "stream_user_inputs": [],

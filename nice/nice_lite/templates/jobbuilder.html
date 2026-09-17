@@ -351,7 +351,7 @@
                             {% endif %}
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
-                                <div>
+                                <div data-batch-section>
                                     <p class="text-[11px] uppercase tracking-wide text-streamlabel mb-2">{{ section.name|cut:"_" }}</p>
                                     <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
                                         {% for input in section.inputs %}
@@ -574,7 +574,7 @@
                             {% endif %}
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
-                                <div>
+                                <div data-batch-section>
                                     <p class="text-[11px] uppercase tracking-wide text-streamlabel mb-2">{{ section.name|cut:"_" }}</p>
                                     <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
                                         {% for input in section.inputs %}
@@ -972,6 +972,12 @@
             });
             document.querySelectorAll("[data-batch-field-visibility]").forEach((field) => {
                 field.classList.toggle("hidden", !allowedTiers.includes(field.dataset.batchFieldVisibility));
+            });
+            document.querySelectorAll("[data-batch-section]").forEach((section) => {
+                const hasVisibleField = Array.from(
+                    section.querySelectorAll("[data-batch-field-visibility]"),
+                ).some((field) => allowedTiers.includes(field.dataset.batchFieldVisibility));
+                section.classList.toggle("hidden", !hasVisibleField);
             });
             applySimpleProgramVisibility();
             applySingleProgramVisibility();
