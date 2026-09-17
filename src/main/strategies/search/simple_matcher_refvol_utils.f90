@@ -370,27 +370,38 @@ contains
                 THROW_HARD('no nonuniform references and no FSC to filter the raw half maps; supply lp')
             endif
         endif
-        ! ENVELOPE (non-NU filt_mode): the _nu_filt products carry the density
-        ! envelope from assembly; every other filt_mode filters here, so the
-        ! same envelope is applied here, after the filter (2026-09-14)
-        if( trim(params%automsk).ne.'no' .and. .not. l_nonuniform_mode ) call apply_density_envelope_to_refs()
+        ! ENVELOPE: assembled NU products already carry the active envelope.
+        ! Non-NU density mode applies it here after filtering. If NU products
+        ! are not assembled yet, nu mode uses the lagged NU artifact with the
+        ! density artifact as fallback.
+        if( trim(params%automsk) == 'yes' .and. .not. l_nonuniform_mode ) call apply_automatic_envelope_to_refs()
+        if( trim(params%automsk) == 'nu' .and. l_nu_refs_missing ) &
+            &call apply_automatic_envelope_to_refs(prefer_nu=.true.)
 
     contains
 
-        !> automsk=yes in a non-NU filt_mode: multiply the filtered references
-        !! by the conservative density envelope assembly wrote for the FSC
-        !! (automask3D_stateNN.mrc at envmsklp, the same support the PCG solve
-        !! imposes and the _nu_filt references carry). The non-NU filters are
-        !! matcher-owned, so filter-then-envelope, the order of the NU products,
-        !! can only be honoured here. Before the first assembly the artifact
-        !! does not exist yet; the references then carry the spherical mask
-        !! only, logged, exactly like the missing-_nu_filt fallback above.
-        subroutine apply_density_envelope_to_refs()
+        !> Multiply matcher-owned filtered references by the selected lagged
+        !! envelope. automsk=yes selects the conservative density artifact;
+        !! automsk=nu prefers the NU-evidence artifact and falls back to the
+        !! density artifact while the evidence mask is unavailable. Before the
+        !! first assembly neither artifact need exist, so the references retain
+        !! the spherical mask and that bootstrap is logged.
+        subroutine apply_automatic_envelope_to_refs( prefer_nu )
+            logical, optional, intent(in) :: prefer_nu
             type(string) :: fname_envmsk
             type(image)  :: envmsk
-            fname_envmsk = string(AUTOMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+            logical      :: l_prefer_nu
+            l_prefer_nu = .false.
+            if( present(prefer_nu) ) l_prefer_nu = prefer_nu
+            if( l_prefer_nu )then
+                fname_envmsk = string(NU_ENVMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+                if( .not. file_exists(fname_envmsk) ) &
+                    &fname_envmsk = string(AUTOMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+            else
+                fname_envmsk = string(AUTOMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+            endif
             if( .not. file_exists(fname_envmsk) )then
-                write(logfhandle,'(A,I0,A)') '>>> state ', s, ' density envelope '//fname_envmsk%to_char()//&
+                write(logfhandle,'(A,I0,A)') '>>> state ', s, ' envelope '//fname_envmsk%to_char()//&
                     &' not assembled yet; references carry the spherical mask only'
                 call fname_envmsk%kill
                 return
@@ -405,22 +416,22 @@ contains
             call build%vol%fft
             call build%vol_odd%fft
             call envmsk%kill
+            write(logfhandle,'(A,I0,A,A)') '>>> REFERENCES: STATE ', s, ', MULTIPLIED BY ', fname_envmsk%to_char()
             call fname_envmsk%kill
-            write(logfhandle,'(A,I0)') '>>> REFERENCES: MULTIPLIED BY THE DENSITY ENVELOPE, STATE ', s
-        end subroutine apply_density_envelope_to_refs
+        end subroutine apply_automatic_envelope_to_refs
 
-        !> Matching references take the spherical soft mask here. The NU
-        !! evidence envelope is never multiplied into a reference: it cuts out
-        !! detergent density that is present in the particle images, so the
-        !! reference can no longer explain them, and under the euclid objective
-        !! the unexplained density destroys pose discrimination (PfCRT
-        !! collapse, pcg_priors_history.md 2026-09-02). The conservative
-        !! density envelope is different: it retains every density present at
-        !! envmsklp, and under automsk=yes assembly applies it to the _nu_filt
-        !! references (policy 2026-09-13), the same support the PCG solve
-        !! imposes; outside it the filter field takes the coarsest candidate.
-        !! In every other filt_mode apply_density_envelope_to_refs applies the
-        !! same artifact after the matcher-side filter (2026-09-14).
+        !> Matching references first take the spherical soft mask here. The
+        !! selected automatic envelope is applied after filtering: assembly
+        !! applies it to NU products, while the helper above handles the
+        !! matcher-owned fallback path. automsk=yes applies the conservative
+        !! density envelope, which retains every density present at envmsklp.
+        !! automsk=nu (opt-in) applies the NU-evidence envelope when available:
+        !! it cuts out density that is not reproducible between halves at the
+        !! evidence candidates -- a detergent micelle -- which the particle
+        !! images still contain, so the reference can no longer explain them
+        !! and under the euclid objective pose discrimination collapses (PfCRT,
+        !! pcg_priors_history.md 2026-09-02). Never a default; never a PCG
+        !! solve support (automasking_policy.md).
         subroutine mask_matching_reference( refvol )
             class(image), intent(inout) :: refvol
             call refvol%mask3D_soft(params%msk_crop, backgr=0.0)

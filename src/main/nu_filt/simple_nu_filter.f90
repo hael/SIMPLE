@@ -87,10 +87,13 @@ real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
 ! crept one shell per iteration from 9.4 A and never reached 6 A, while the
 ! 1.5x headroom of the former static bank took the same stages 8.9 -> 6.0
 ! -> 5.0 -> 4.5 A; bgal, Msp1 and streptavidin climb either way). The floor
-! is the former static ladder's finest rung. Gold-standard refinement
+! is the reference ladder's finest rung, 4 A (the July 2026 ladder whose
+! PfCRT runs matched at 4.14 A and reached 4.1-4.3 A with side chains; the
+! 4.5 A rung of the September static bank pinned the same runs at 4.50 A,
+! 2026-09-08 and 2026-09-17 records). Gold-standard refinement
 ! (filt_mode=nonuniform, independent halves) hands off the FSC=0.143
 ! resolution with no headroom.
-real,             parameter   :: NU_LPSET_BAND_FLOOR = 4.5
+real,             parameter   :: NU_LPSET_BAND_FLOOR = 4.0
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
 ! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF
@@ -776,10 +779,12 @@ interface
         logical, optional, intent(in) :: l_relative
     end subroutine write_nu_evidence_map
 
-    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, mask_out, l_valid )
         real,              intent(in)  :: nsigma, lp_smooth, smpd
         integer,           intent(in)  :: state
         class(string),     intent(in)  :: fname
+        class(image), optional, intent(inout) :: mask_out
+        logical,      optional, intent(out)   :: l_valid
     end subroutine write_nu_evidence_envmask
 
     module subroutine print_nu_envmask_stats( stats )

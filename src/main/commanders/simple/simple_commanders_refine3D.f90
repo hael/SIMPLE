@@ -350,19 +350,27 @@ contains
                     &' REGISTRATION PASS SKIPPED: startup FSC never reaches ', params%regpass_fsc
                 return
             endif
-            write(logfhandle,'(A,F5.2,A,F7.3,A,I0,A)') '>>> '//WORKFLOW_LABEL//&
-                &' REGISTRATION PASS: refine=prob, all particles, band-limited at FSC=', params%regpass_fsc, &
-                &' -> lpstop=', res_pass, ' A, nspace=', REGPASS_NSPACE, ', no subspace'
+            write(logfhandle,'(A,F5.3,A,F7.3,A,I0,A)') '>>> '//WORKFLOW_LABEL//&
+                &' REGISTRATION PASS: refine=greedy (exhaustive, incumbent included), all particles, band-limited at FSC=', &
+                &params%regpass_fsc, ' -> lpstop=', res_pass, ' A, nspace=', REGPASS_NSPACE
             ! poses before the pass, for the reassignment diagnostic
             call pass_proj%read_segment(params%oritype, params%projfile)
             call os_before%copy(pass_proj%os_ptcl3D)
             call pass_proj%kill
-            ! the pass: one global iteration of every particle
+            ! the pass: one exhaustive iteration of every particle. greedy,
+            ! not prob (2026-09-17): prob SAMPLES the assignment from the
+            ! particle's probability table, so wherever the table is flat --
+            ! a membrane protein at any band the micelle dominates -- it
+            ! re-basins particles at random (PfCRT: 33% of directions at 8.9
+            ! A); greedy takes the argmax over every direction, and since the
+            ! incumbent's direction is among those evaluated a particle only
+            ! moves when a better pose exists under the current objective
             cline_pass = cline
             call cline_pass%set('prg',        'refine3D')
-            call cline_pass%set('refine',     'prob')
+            call cline_pass%set('refine',     'greedy')
             call cline_pass%set('nspace',     REGPASS_NSPACE)
             call cline_pass%delete('nspace_sub')
+            call cline_pass%delete('prob_athres')
             if( l_user_lpstop ) res_pass = max(res_pass, user_lpstop)
             call cline_pass%set('lpstop',     res_pass)
             call cline_pass%set('maxits',     1)
@@ -2178,8 +2186,15 @@ contains
             integer,        intent(in)    :: iter
             logical,        intent(in)    :: l_final
             integer :: istate
+            logical :: l_automsk_nu
+            l_automsk_nu = .false.
+            if( cline_rec%defined('automsk') ) l_automsk_nu = cline_rec%get_carg('automsk') == 'nu'
             if( l_final )then
-                call cline_rec%set('filt_mode', 'none')
+                ! the shipped map is classical (no nonuniform filtering, a
+                ! matching-reference feature) except under automsk=nu, which
+                ! is valid only in an NU filt_mode: there the caller's
+                ! filt_mode is kept, as on the direct route (simple_final_rec)
+                if( .not. l_automsk_nu ) call cline_rec%set('filt_mode', 'none')
                 if( cline_rec%defined('rec_backend') )then
                     if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
                         &call configure_final_pcg_solve_budget(cline, cline_rec)

@@ -18,25 +18,15 @@ integer, parameter :: CFAR_NDIRS               = 256
 real,    parameter :: CFAR_CONE_HALF_ANGLE_DEG = 20.
 real,    parameter :: CFAR_FSC_THRESHOLD       = 0.143
 integer, parameter :: CFAR_MIN_COUNT           = 1
-
-! How the reported FSC was obtained. The mask policy is deliberate and is
-! reported rather than hidden (2026-09-09): a density envelope biases the FSC
-! whether it is applied post hoc or inside the estimator, and only the
-! post-hoc application carries the phase-randomized solvent correction.
-character(len=*), parameter :: FSC_MODE_SPHERICAL    = &
-    &'spherical support at msk_crop from the reconstruction; no envelope, no solvent correction'
-character(len=*), parameter :: FSC_MODE_ENVELOPE     = &
-    &'density envelope applied post hoc to the halves; phase-randomized solvent correction applied'
-character(len=*), parameter :: FSC_MODE_CONSTRAINED  = &
-    &'halves estimated on a support envelope (mask inside the estimator); no post-hoc mask, '//&
-    &'no phase-randomized solvent correction: the envelope contribution to the FSC is NOT removed'
+character(len=*), parameter :: FSC_MODE_UNKNOWN = &
+    &'backend=unknown support=unknown posthoc_mask=none phase_randomization=no'
 
 type :: halfmap_diagnostics_result
     real, allocatable :: fsc(:)
     real              :: res_fsc05   = 0.
     real              :: res_fsc0143 = 0.
     real              :: cfar        = 0.
-    character(len=200):: fsc_mode    = FSC_MODE_SPHERICAL
+    character(len=200):: fsc_mode    = FSC_MODE_UNKNOWN
   contains
     procedure :: kill => kill_halfmap_diagnostics_result
 end type halfmap_diagnostics_result
@@ -44,67 +34,65 @@ end type halfmap_diagnostics_result
 contains
 
     !> Evaluate the half-map FSC, cFAR, and Nyquist-clamped FSC=0.5/0.143
-    !! resolutions for one explicitly prepared real-space pair. The evaluator
-    !! is backend-neutral and applies NO mask of its own (2026-09-09): both
-    !! backends ship halves that already carry the soft spherical support at
-    !! msk_crop (the PCG solve support; the gridding restoration applies the
-    !! identical mask3D_soft after deapodization), and masking them again
-    !! here would square the soft edge. Callers own the input representation,
-    !! refine3D artifact filenames, and every workflow-level write. The only
-    !! files produced here are the fscu/fsct/fscn state arrays phase_rand_fsc
-    !! persists internally on the envfsc path, identically for both backends.
-    !! The caller-owned inputs are never modified; the envelope preprocessing
-    !! and the in-place Fourier transforms operate on copies. With envfsc
-    !! enabled the density-envelope mask is returned through the optional
-    !! envmask so the caller can write the automask artifact; the optional
-    !! cones argument returns the conical FSC result needed for directional
-    !! regularization.
-    subroutine evaluate_halfmap_pair( params, state, even, odd, average, diagnostics, envmask, cones, &
-        &l_pair_support_constrained )
+    !! resolutions for one explicitly prepared real-space pair, with explicit
+    !! backend/support/mask provenance. Gridding may apply the selected density
+    !! or NU envelope post hoc and phase-randomize; PCG never does either
+    !! because its envelope belongs inside the estimator. Caller-owned inputs
+    !! are never modified. Density mode returns the generated mask through the
+    !! optional envmask; NU mode requires the caller to supply envmask. The
+    !! optional cones result supports directional regularization.
+    subroutine evaluate_halfmap_pair( params, state, even, odd, average, diagnostics, backend, envmask, cones, &
+        &l_pair_support_constrained, support_kind, mask_kind )
         class(parameters),                      intent(in)    :: params
         integer,                                intent(in)    :: state
         class(image),                           intent(in)    :: even, odd, average
         type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
+        character(len=*),                       intent(in)    :: backend
         class(image),                 optional, intent(inout) :: envmask
         class(fsc_area_score_result), optional, intent(inout) :: cones
         logical,                      optional, intent(in)    :: l_pair_support_constrained
+        character(len=*),             optional, intent(in)    :: support_kind, mask_kind
         type(image)                 :: work_even, work_odd
         type(image_msk)             :: envmask_work
         type(fsc_area_score_result) :: cones_local
         real, allocatable :: fsc_t(:), fsc_n(:), res(:)
         integer :: nyq
-        logical :: l_envfsc_preproc
+        character(len=16) :: support_kind_here, mask_kind_here, posthoc_kind
+        logical :: l_phase_randomization
         nyq = even%get_filtsz()
-        ! The envelope-masking + phase-randomization preprocessing
-        ! approximates, after the fact, an estimate the solver could not
-        ! constrain. When the caller states that the pair was ALREADY
-        ! density-envelope-constrained in the estimator (the PCG solve
-        ! support), masking it again would double-count and the preproc is
-        ! skipped. The decision follows the support actually installed for
-        ! this pair, never the backend name (code review 2026-09-02 P1):
-        ! a PCG run whose base solves fell back to the spherical support
-        ! (missing/startvol reference, bootstrap) passes .false. and gets
-        ! the ordinary envelope-corrected FSC. The envelope itself is still
-        ! derived and returned, because the automask artifact has other
-        ! consumers (postprocess envfsc, final rec).
-        l_envfsc_preproc = params%l_envfsc
-        diagnostics%fsc_mode = FSC_MODE_SPHERICAL
-        if( l_envfsc_preproc ) diagnostics%fsc_mode = FSC_MODE_ENVELOPE
+        support_kind_here = 'sphere'
+        mask_kind_here    = 'none'
+        if( present(support_kind) ) support_kind_here = trim(support_kind)
+        if( present(mask_kind) )    mask_kind_here    = trim(mask_kind)
         if( present(l_pair_support_constrained) )then
-            if( l_pair_support_constrained )then
-                l_envfsc_preproc     = .false.
-                diagnostics%fsc_mode = FSC_MODE_CONSTRAINED
-            endif
+            if( l_pair_support_constrained .and. .not. present(support_kind) ) support_kind_here = 'envelope'
         endif
+        select case(trim(backend))
+            case('gridding','pcg')
+            case default
+                THROW_HARD('half-map diagnostics backend must be gridding or pcg')
+        end select
+        select case(trim(mask_kind_here))
+            case('none')
+            case('density')
+                call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
+                if( present(envmask) ) call envmask%copy(envmask_work)
+            case('nu')
+                if( .not. present(envmask) ) THROW_HARD('NU FSC mask was selected but not supplied')
+                call envmask_work%copy(envmask)
+            case default
+                THROW_HARD('unsupported half-map FSC mask kind')
+        end select
+        ! Phase-randomized solvent correction is deliberately gridding-only.
+        ! PCG reports the FSC of the estimate formed on its installed support.
+        l_phase_randomization = trim(backend) == 'gridding' .and. trim(mask_kind_here) /= 'none'
+        posthoc_kind = 'none'
+        if( l_phase_randomization ) posthoc_kind = mask_kind_here
+        diagnostics%fsc_mode = 'backend='//trim(backend)//' support='//trim(support_kind_here)//&
+            &' posthoc_mask='//trim(posthoc_kind)//&
+            &' phase_randomization='//merge('yes', 'no ', l_phase_randomization)
         write(logfhandle,'(A,I0,A)') '>>> FSC MODE: STATE ', state, ', '//trim(diagnostics%fsc_mode)
-        if( params%l_envfsc .and. present(envmask) )then
-            call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
-            call envmask%copy(envmask_work)
-        endif
-        if( l_envfsc_preproc )then
-            ! density-envelope masking with phase-randomized FSC correction
-            if( .not. present(envmask) ) &
-                &call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
+        if( l_phase_randomization )then
             call phase_rand_fsc(even, odd, envmask_work, state, nyq, diagnostics%fsc, fsc_t, fsc_n)
             call work_even%copy(even)
             call work_odd%copy(odd)
@@ -134,7 +122,7 @@ contains
             diagnostics%cfar = cones_local%cfar
             call cones_local%kill
         endif
-        if( .not. l_envfsc_preproc ) call work_even%fsc(work_odd, diagnostics%fsc)
+        if( .not. l_phase_randomization ) call work_even%fsc(work_odd, diagnostics%fsc)
         res = get_resarr(params%box_crop, params%smpd_crop)
         call get_resolution(diagnostics%fsc, res, diagnostics%res_fsc05, diagnostics%res_fsc0143)
         diagnostics%res_fsc05   = max(diagnostics%res_fsc05,   2. * params%smpd_crop)
@@ -173,12 +161,9 @@ contains
 
     !> Support-provenance sidecar of a shipped state volume
     !! (<vol>_pcg_support.txt, the historical name kept for compatibility).
-    !! Records whether the shipped half pair was estimated inside the
-    !! conservative density envelope (PCG P H P with the density support) or
-    !! carries the plain soft spherical support at msk_crop, and what kind of
-    !! estimate the primary pair is: a PCG base, regularized or bootstrap-
-    !! mixed solve, or a gridding restoration (2026-09-09; the gridding
-    !! products carry the same spherical support after deapodization).
+    !! Records the shipped half pair's support kind (sphere, density, NU,
+    !! explicit, or mixed) and what kind of estimate the primary pair is: a
+    !! PCG base, regularized or bootstrap-mixed solve, or gridding restoration.
     !! Consumers: the PCG trailing bootstrap reads the support field for its
     !! lag-one FSC pair; postprocess skips its post-hoc mask for any volume
     !! carrying the sidecar. The solve kind is recorded for provenance (the
@@ -190,11 +175,13 @@ contains
         fname = swap_suffix(add2fbody(volname, MRC_EXT, '_pcg_support'), TXT_EXT, MRC_EXT)
     end function support_provenance_fname
 
-    subroutine write_support_provenance( volname, l_constrained, solve_kind )
+    subroutine write_support_provenance( volname, l_constrained, solve_kind, support_kind )
         type(string),     intent(in) :: volname
         logical,          intent(in) :: l_constrained
         character(len=*), intent(in) :: solve_kind
+        character(len=*), optional, intent(in) :: support_kind
         type(string) :: fname
+        character(len=16) :: support_kind_here
         integer :: funit
         select case( trim(solve_kind) )
             case( 'base', 'regularized', 'mixed', 'gridding' )
@@ -202,18 +189,26 @@ contains
                 THROW_HARD('invalid solve kind for the support provenance sidecar')
         end select
         fname = support_provenance_fname(volname)
+        support_kind_here = merge('density', 'sphere ', l_constrained)
+        if( present(support_kind) ) support_kind_here = trim(support_kind)
+        select case(trim(support_kind_here))
+            case('sphere','density','nu','explicit','mixed')
+            case default
+                THROW_HARD('invalid support kind for the support provenance sidecar')
+        end select
         call fopen(funit, file=fname, status='replace', action='write')
-        write(funit,'(A)') 'solve_support='//merge('density', 'sphere ', l_constrained)
+        write(funit,'(A)') 'solve_support='//trim(support_kind_here)
         write(funit,'(A)') 'solve_kind='//trim(solve_kind)
         call fclose(funit)
         call fname%kill
     end subroutine write_support_provenance
 
-    subroutine read_support_provenance( volname, l_constrained, l_found, solve_kind, l_kind_found )
+    subroutine read_support_provenance( volname, l_constrained, l_found, solve_kind, l_kind_found, support_kind )
         type(string),               intent(in)  :: volname
         logical,                    intent(out) :: l_constrained, l_found
         character(len=*), optional, intent(out) :: solve_kind
         logical,          optional, intent(out) :: l_kind_found
+        character(len=*), optional, intent(out) :: support_kind
         type(string) :: fname
         character(len=64) :: line
         integer :: funit, io_stat
@@ -221,6 +216,7 @@ contains
         l_found       = .false.
         if( present(solve_kind) )   solve_kind   = ''
         if( present(l_kind_found) ) l_kind_found = .false.
+        if( present(support_kind) ) support_kind = ''
         fname = support_provenance_fname(volname)
         if( .not. file_exists(fname) )then
             call fname%kill
@@ -232,7 +228,8 @@ contains
             if( io_stat /= 0 ) exit
             if( index(line, 'solve_support=') == 1 )then
                 l_found       = .true.
-                l_constrained = index(line, 'density') > 0
+                if( present(support_kind) ) support_kind = adjustl(line(len('solve_support=')+1:))
+                l_constrained = index(line, 'sphere') == 0
             else if( index(line, 'solve_kind=') == 1 )then
                 if( present(solve_kind) ) solve_kind = adjustl(line(len('solve_kind=')+1:))
                 if( present(l_kind_found) ) l_kind_found = .true.
@@ -288,7 +285,7 @@ contains
         self%res_fsc05   = 0.
         self%res_fsc0143 = 0.
         self%cfar        = 0.
-        self%fsc_mode    = FSC_MODE_SPHERICAL
+        self%fsc_mode    = FSC_MODE_UNKNOWN
     end subroutine kill_halfmap_diagnostics_result
 
 end module simple_halfmap_diagnostics

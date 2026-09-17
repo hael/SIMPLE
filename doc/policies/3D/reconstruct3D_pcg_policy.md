@@ -68,8 +68,8 @@ shifts, state assignments, half assignments, CTF parameters, phase shifts and
 `ctfflag` are read from the project and are never optimized by reconstruction.
 The Euclidean objective uses per-particle `sigma2`; correlation is unweighted.
 `mskdiam` supplies the spherical fallback support and `pgrp` is applied by
-coordinate replication. The conservative density support may replace that
-sphere according to the solve matrix below; the NU-evidence mask never does.
+coordinate replication. `automsk=yes` replaces it with density support;
+`automsk=nu` prefers lagged NU-evidence support and falls back to density.
 
 Shared execution accumulates and solves both halfsets in-process. Distributed
 workers publish raw accumulators and the master reduces, finalizes and solves
@@ -257,6 +257,9 @@ post-hoc mask and no phase-randomized correction are applied to it, and the
 `>>> FSC MODE` line in the log and the resolution text says so. This is a
 deliberate, reported choice, not a claim that a constrained estimate is free
 of masked-FSC bias.
+With `automsk=nu`, the same contract uses the compatible lagged NU-evidence
+artifact and falls back to density; a first solve without either source
+bootstraps on the sphere.
 
 Before any reconstruction-derived density source exists, the base necessarily
 bootstraps on the sphere and its completed pair supplies the conservative

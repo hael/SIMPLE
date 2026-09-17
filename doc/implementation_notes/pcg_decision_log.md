@@ -477,3 +477,56 @@ regularized member (`nu_aux_effective_resolution`). PfCRT rerun is
 Hans's; expected signature: stage-6 handoff ~5.9 A at FSC 8.9 A and the
 final at 4.5 A as in `latest2`.
 
+**2026-09-17 -- PfCRT `latest3` (10/10 abinitio3D restarts converge):
+map quality gap is in refine3D_auto, not abinitio3D; band floor 4 A;
+registration pass gated.** abinitio3D with the restored lpset headroom
+reaches its band floor in stage 8 on every restart (FSC=0.143 4.44-4.50 A
+at the 4.5 A floor; final FSC=0.5 4.70 A) versus `Jul02_very_good`
+(band 4.14 A from the July ladder's 4 A rung, FSC=0.5 4.63 A) -- a small,
+real cost of the 4.5 A rung, so `NU_LPSET_BAND_FLOOR` is the reference
+ladder's 4 A rung (the 2026-09-08 record already noted 4.5 A pinning the
+handoff that asked for 4.14 A). The large gap is refine3D_auto: July's
+started iteration 1 at 4.09 A from the abinitio poses and reached
+3.61/4.03 A by iteration 3; `latest3` ran the registration pass at the
+startup pair's FSC=0.8 band, 8.87 A, which moved 33% of the directions
+beyond the basin width (17% beyond twice it), dropped iteration 1 to
+5.54/7.96 A, and the four-iteration budget ended it at 4.31/6.61 A with
+B-factor -137. At that band a small asymmetric membrane protein's
+orientations are not discriminable; bgal (large, D2) reassigned 1.7%.
+Decision (Hans): keep the pass unconditionally -- the FSC=0.8 band is
+too conservative, not the pass itself -- and set `regpass_fsc=0.5`
+(the PfCRT startup pair's FSC=0.5 was 7.96 A against 8.87 A at 0.8),
+then, agreeing that one shell finer changes nothing for a particle whose
+low-resolution band is the micelle, `regpass_fsc=0.143`: the pass runs
+at the working band, where a global search confirms a good registration
+and re-basins only the misregistered particles (cost: a full-band
+`prob_tab` over 5000 directions, 2-3x the coarse pass). A discard gate on
+the reassigned fraction was drafted and withdrawn; instead (Hans) the pass
+is `refine=greedy`: exhaustive argmax with the incumbent's direction among
+the candidates, so a particle moves only to a better pose, where `prob`
+samples the assignment from the table and re-basins at random wherever it
+is flat. Rerun of `latest3`'s refine3D_auto is Hans's; the numbers to
+read are the reassigned fraction at 4.14 A and iteration 1's FSC against
+July's 4.09 A.
+
+**2026-09-17 -- automsk=nu review (Hans's implementation).** Kept: the
+opt-in mode, the lag-one NU-evidence envelope as the gridding post-hoc FSC
+mask and as the reference mask (assembly `_nu_filt` products, matcher
+fallback), density fallback whenever the artifact is absent, incompatible,
+empty or has an invalid null, `envfsc=yes` derived from any active
+automsk, the `support_kind`/`mask_kind` plumbing and `FSC MODE` reading
+`backend= support= posthoc_mask= phase_randomization=`. Changed at review:
+(1) the NU envelope is never the PCG solve support -- under nu the density
+envelope constrains both solves as under yes, because the evidence null of
+a constrained pair is designated on the density envelope's dilation ring
+at full support weight, outside any evidence envelope, so a NU-supported
+solve empties its own null, invalidates the next envelope and falls back to
+a density envelope derived from a map that is zero outside the NU support:
+an oscillating support with no way back for excluded density; (2) the
+bootstrap final-reconstruction route (box change) kept setting
+`filt_mode=none` for the shipped map while inheriting `automsk=nu`, which
+the new validation rejects -- it now keeps the caller's filt_mode under nu
+like the direct route; (3) the 2026-09-02 PfCRT collapse rationale, removed
+from the matcher comment and the rewritten automasking policy, is back in
+both: nu is not a default and must not become one.
+

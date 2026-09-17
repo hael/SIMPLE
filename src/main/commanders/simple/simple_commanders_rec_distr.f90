@@ -780,30 +780,51 @@ contains
         end subroutine restore_gridding_pair
 
         !> Gridding adapter for the backend-neutral half-map evaluator: builds
-        !! the merged average and writes the automask artifact on the envfsc
-        !! path. The evaluator applies no mask (2026-09-09): the ordinary
-        !! restoration path passes the deapodized halves that already carry
-        !! the soft spherical support at msk_crop (identical to the PCG solve
-        !! support), and the trailing bootstrap passes the previous final half
-        !! maps, which were shipped under the same contract.
+        !! the merged average, selects lagged NU or density fallback in nu mode,
+        !! and writes a newly generated density artifact when density is used.
+        !! Any selected envelope is applied post hoc with phase randomization.
         subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics, cones )
             use simple_fsc, only: fsc_area_score_result
+            use simple_vol_pproc_policy, only: state_mask_is_compatible
             class(parameters),                      intent(in)    :: params
             class(image),                           intent(in)    :: even, odd
             integer,                                intent(in)    :: state
             type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
             class(fsc_area_score_result), optional, intent(inout) :: cones
-            type(image) :: average, envmask
+            type(image)  :: average, envmask
+            type(string) :: nu_envmask_file
+            logical      :: mask_exists, mask_compatible
             call average%copy(even)
             call average%add(odd)
             call average%mul(0.5)
             if( params%l_envfsc )then
-                call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, &
-                    &envmask=envmask, cones=cones)
-                call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
+                if( trim(params%automsk) == 'nu' )then
+                    nu_envmask_file = string(NU_ENVMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
+                    call state_mask_is_compatible(nu_envmask_file, params%box_crop, params%smpd_crop, &
+                        &mask_exists, mask_compatible)
+                    if( mask_compatible )then
+                        call envmask%read(nu_envmask_file)
+                        call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
+                            &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='nu')
+                    else
+                        if( mask_exists ) write(logfhandle,'(A,I0,A)') '>>> FSC MASK: STATE ', state, &
+                            &', lag-one NU mask is incompatible; using density fallback'
+                        if( .not. mask_exists ) write(logfhandle,'(A,I0,A)') '>>> FSC MASK: STATE ', state, &
+                            &', lag-one NU mask is unavailable; using density fallback'
+                        call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
+                            &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='density')
+                        call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
+                    endif
+                    call nu_envmask_file%kill
+                else
+                    call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
+                        &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='density')
+                    call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
+                endif
                 call envmask%kill
             else
-                call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, cones=cones)
+                call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
+                    &cones=cones, support_kind='sphere', mask_kind='none')
             endif
             call average%kill
         end subroutine calc_gridding_pair_diagnostics

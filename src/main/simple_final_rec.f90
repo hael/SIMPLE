@@ -107,7 +107,15 @@ contains
             call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
             call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
             if( params%l_envfsc )then
-                vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
+                if( trim(params%automsk) == 'nu' )then
+                    vol_envmsk = NU_ENVMASK_FBODY//trim(str_state%to_char())//MRC_EXT
+                    call state_mask_is_compatible(vol_envmsk, ldim(1), smpd, l_mask_exists, l_mask_compatible)
+                    if( .not. l_mask_compatible )then
+                        vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
+                    endif
+                else
+                    vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
+                endif
                 call state_mask_is_compatible(vol_envmsk, ldim(1), smpd, l_mask_exists, l_mask_compatible)
                 if( l_mask_compatible )then
                     call spproj%add_vol2os_out(vol_envmsk, smpd, state, 'vol_msk', ldim(1))
@@ -194,9 +202,9 @@ contains
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
                 if( final_stage_uses_ml_reg() ) call child_cline%set('conical_fsc', params%conical_fsc)
-                ! automsk is inherited on BOTH routes (policy 2026-09-09): the
-                ! shipped PCG map is estimated on the same density-envelope
-                ! support as every refinement iteration, with the same
+                ! automsk is inherited on BOTH routes: the shipped PCG map is
+                ! estimated on the same selected density/NU support policy as
+                ! every refinement iteration, with the same
                 ! estimator-constrained FSC. Until 2026-09-16 only the
                 ! bootstrap_rec3D route forwarded it; the direct route (native
                 ! registration box, committed sigmas reused) shipped a
@@ -204,6 +212,15 @@ contains
                 ! refine3D_auto record).
                 if( cline_refine%defined('automsk') ) &
                     &call child_cline%set('automsk',   cline_refine%get_carg('automsk'))
+                if( trim(params%automsk) == 'nu' )then
+                    ! automsk=nu is valid only in an NU filter mode, including
+                    ! internal final reconstruction and assembly commands.
+                    call child_cline%set('filt_mode', params%filt_mode)
+                    if( cline_refine%defined('nu_msk_sig') ) &
+                        &call child_cline%set('nu_msk_sig', cline_refine%get_rarg('nu_msk_sig'))
+                    if( cline_refine%defined('amsklp') ) &
+                        &call child_cline%set('amsklp', cline_refine%get_rarg('amsklp'))
+                endif
                 if( prg.eq.'bootstrap_rec3D' )then
                     ! the residual sigmas depend on the regularization of the
                     ! reference they are scored against: the bootstrap map is
@@ -212,14 +229,14 @@ contains
                     ! bootstrap_rec3D itself (2026-09-07)
                     if( cline_refine%defined('filt_mode') ) &
                         &call child_cline%set('filt_mode', cline_refine%get_carg('filt_mode'))
-                    if( cline_refine%defined('nu_msk_sig') ) &
+                    if( trim(params%automsk) /= 'nu' .and. cline_refine%defined('nu_msk_sig') ) &
                         &call child_cline%set('nu_msk_sig', cline_refine%get_rarg('nu_msk_sig'))
                 else
                     ! the direct route ships a classical map (no nonuniform
                     ! filtering, a matching-reference feature); on PCG the
                     ! last refinement volume at this box is the lag-one
                     ! reference the solve support derives from
-                    call child_cline%set('filt_mode', 'none')
+                    if( trim(params%automsk) /= 'nu' ) call child_cline%set('filt_mode', 'none')
                     if( trim(params%rec_backend) == 'pcg' )then
                         do istate = 1, params%nstates
                             if( file_exists(refine3D_state_vol_fname(istate)) ) &

@@ -428,16 +428,17 @@ contains
     !! evaluation must have run), apply the connected-component/morphology
     !! topology tail, and write the artifact to the explicit filename. The
     !! filename is passed in by the caller, which regenerates the envelope
-    !! every cycle it runs the competition under automsk=yes.
+    !! every cycle it runs the competition under active automasking.
     !! An empty evidence field warns and writes nothing; every envelope
-    !! consumer handles absence. Diagnostic only (policy 2026-09-13): the
-    !! envelope is never armed as the filter-field background; the caller
-    !! arms the conservative density envelope instead.
-    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
+    !! consumer handles absence. The caller decides whether this is a
+    !! diagnostic (automsk=yes) or the active envelope (automsk=nu).
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, mask_out, l_valid )
         use simple_image_msk, only: image_msk
         real,              intent(in)  :: nsigma, lp_smooth, smpd
         integer,           intent(in)  :: state
         class(string),     intent(in)  :: fname
+        class(image), optional, intent(inout) :: mask_out
+        logical,      optional, intent(out)   :: l_valid
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
         type(image_msk)         :: envmask
@@ -454,6 +455,7 @@ contains
         edge_px = max(1, nint(NU_ENVMASK_EDGE_A / smpd))
         call envmask%envmask3D_from_lmask(l_env, smpd, grow_px, edge_px, &
             &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
+        if( present(l_valid) ) l_valid = n_ccs_kept > 0 .and. envstats%l_null_valid
         ! an empty evidence field returns without constructing the mask image;
         ! writing it would abort on invalid MRC dimensions. Skip the write --
         ! every envelope consumer handles absence.
@@ -462,6 +464,7 @@ contains
         else
             call envmask%write(fname, del_if_exists=.true.)
             call wait_for_closure(fname)
+            if( present(mask_out) ) call mask_out%copy(envmask)
             write(logfhandle,'(A,I0,A,1X,A)') &
                 &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', fname%to_char()
             if( .not. envstats%l_null_valid )then
@@ -475,9 +478,7 @@ contains
                         &' % of the support; the median/MAD null is not trustworthy'
                 endif
             endif
-            ! diagnostic only (policy 2026-09-13): the evidence envelope is
-            ! never armed as the filter-field background; the caller arms the
-            ! conservative density envelope instead
+            ! The caller selects density or NU evidence according to automsk.
         endif
         ! One greppable line per state per cycle. The envelope is allowed to
         ! shrink as resolution improves; a monotonically falling occupancy is

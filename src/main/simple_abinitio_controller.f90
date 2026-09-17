@@ -418,9 +418,8 @@ contains
         cfg%envfsc = 'no'
         if( l_cavgs ) return
         if( istage >= ENVFSC_STAGE ) cfg%envfsc = trim(params%envfsc)
-        ! automsk=yes implies envfsc=yes on both backends (PCG: the envelope
-        ! is the solve support of both solves; gridding: the same envelope
-        ! masks the FSC pair post hoc with the phase-randomized correction).
+        ! Active automasking implies envfsc=yes (PCG: the selected envelope is
+        ! solve support; gridding: it masks the FSC pair with phase correction).
         ! The child's parameters derive it anyway; this keeps the stage
         ! config truthful (relies on the automsk policy running first).
         if( cfg%automsk.ne.'no' ) cfg%envfsc = 'yes'

@@ -543,15 +543,13 @@ records only the refine3D-side integration contract:
   (voxelwise, `shrink_by_ml_prior`, 2026-09-14; the replay solve is retired);
   NU filtering is applied afterwards by the shared competition, never inside
   the solve (policy 2026-09-06).
-- **Solve support.** Only the conservative density envelope (or an explicit
-  `pcg_mskfile`) may constrain a PCG solve, and the density envelope only
-  under `automsk=yes` (policy 2026-09-06). With `automsk=no` base and replay
-  run on the sphere. With `automsk=yes` the envelope constrains both base and
-  replay and `envfsc=yes` is implied (policy 2026-09-09); the FSC is then
-  reported on the constrained pair without post-hoc correction, logged as
-  `>>> FSC MODE`. The NU-evidence envelope never becomes solve support.
-  Before any reconstruction exists, the base necessarily bootstraps on the
-  sphere and its current pair provides the replay density support.
+- **Solve support.** `automsk=yes` uses the conservative density envelope;
+  `automsk=nu` prefers the lagged NU-evidence envelope and falls back to
+  density; an explicit `pcg_mskfile` remains an override. The selected mask
+  constrains both base and replay and `envfsc=yes` is implied. PCG reports FSC
+  on the constrained pair without post-hoc masking or phase randomization,
+  logged as `>>> FSC MODE`. Before either mask source exists, the base
+  bootstraps on the sphere and its current pair supplies replay density.
 - **Current exclusions** (hard-errored, not approximated): `projrec=yes`,
   `conical_fsc=yes`, and matrix-free workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.

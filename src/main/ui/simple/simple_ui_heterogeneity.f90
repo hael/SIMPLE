@@ -219,9 +219,10 @@ contains
         call refine3D_states%add_input(UI_FILT, envfsc, group='filter', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_FILT, envmsklp, group='filter', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_MASK, mskdiam, group='mask', visibility=UI_VIS_STANDARD)
-        call refine3D_states%add_input(UI_MASK, 'automsk', 'binary', 'Perform envelope masking', &
-        &'Generate/apply the NU-evidence envelope; requires filt_mode=nonuniform_lpset(yes|no){no}', '', .false., 'no', group='mask', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call refine3D_states%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
+        &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback(yes|nu|no){no}', &
+        &'', .false., 'no', group='mask', choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_MASK, nu_msk_sig, group='mask', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_COMP, nparts, group='compute', visibility=UI_VIS_STANDARD)
         call refine3D_states%add_input(UI_COMP, nthr, group='compute', visibility=UI_VIS_STANDARD)
@@ -268,9 +269,10 @@ contains
         call classify3D_refs%add_input(UI_FILT, envfsc, group='filter', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_FILT, envmsklp, group='filter', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_MASK, mskdiam, group='mask', visibility=UI_VIS_STANDARD)
-        call classify3D_refs%add_input(UI_MASK, 'automsk', 'binary', 'Perform envelope masking', &
-        &'Generate/apply the NU-evidence envelope; requires filt_mode=nonuniform_lpset(yes|no){no}', '', .false., 'no', group='mask', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call classify3D_refs%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
+        &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback(yes|nu|no){no}', &
+        &'', .false., 'no', group='mask', choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_MASK, nu_msk_sig, group='mask', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_COMP, nparts, group='compute', visibility=UI_VIS_STANDARD)
         call classify3D_refs%add_input(UI_COMP, nthr, group='compute', visibility=UI_VIS_STANDARD)
@@ -320,4 +322,3 @@ contains
     end subroutine new_ptcl3D_state_consensus
 
 end module simple_ui_heterogeneity
-

@@ -155,7 +155,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call refine3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
-        call refine3D%add_input(UI_MASK, automsk_binary, group="mask", &
+        call refine3D%add_input(UI_MASK, automsk_refine3D, group="mask", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_MASK, nu_msk_sig, group="mask", &
         &visibility=UI_VIS_ADVANCED)
@@ -223,7 +223,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'regpass_fsc', 'num', 'Registration-pass FSC criterion', &
         &'FSC value of the startup pair whose resolution band-limits the registration pass', &
-        &'FSC value in (0,1){0.8}', .false., 0.8, group="search", &
+        &'FSC value in (0,1){0.143}', .false., 0.143, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
@@ -262,7 +262,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call refine3D_auto%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
-        call refine3D_auto%add_input(UI_MASK, automsk_binary, group="mask", &
+        call refine3D_auto%add_input(UI_MASK, automsk_refine3D, group="mask", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_MASK, nu_msk_sig, group="mask", &
         &visibility=UI_VIS_ADVANCED)

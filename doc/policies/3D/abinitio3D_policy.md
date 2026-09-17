@@ -185,7 +185,7 @@ while the half maps agreed to 4.3 A at FSC=0.5.)
 
 In the NU stages there is no ceiling (July 2026 policy, restored
 2026-09-08): matching runs at the content-extent handoff of the generated ladder,
-whose regularized member sits at `max(fsc/1.5, 4.5 A)` under the
+whose regularized member sits at `max(fsc/1.5, 4 A)` under the
 merged-reference climb (`nonuniform_lpset`: the ratchet of the former
 static bank, restored 2026-09-16 after the PfCRT regression) and bounds
 the hard rungs (`doc/policies/NU/nonuniform_filtering_policy.md` sections
@@ -397,10 +397,10 @@ Staged `abinitio3D` uses the one generated-ladder nonuniform competition
 when `filt_mode` is NU-enabled (2026-09-16; the same competition as
 `refine3D_auto`, the `nu_refine` shell walk is retired). NU always computes its objective over the full spherical
 `mskdiam` support. With the default `automsk=no`, no envelope constrains the
-static local-resolution field; an explicit `automsk=yes` request fixes the
-filter field outside the density envelope to the coarsest candidate, multiplies
-the `_nu_filt` references by that envelope (policy 2026-09-13), and writes the
-NU-evidence envelope as a diagnostic only.
+static local-resolution field. `automsk=yes` fixes the filter field outside the
+density envelope and masks `_nu_filt` references with it. `automsk=nu` uses a
+valid current NU-evidence envelope for those roles and density as fallback;
+early FSC/PCG consumers use the previous iteration's evidence artifact.
 
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
 `GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. `automsk=yes` implies
@@ -429,13 +429,11 @@ resolution metadata in this workflow must be interpreted accordingly.
 Automasking is opt-in at the public interface and defaults to `no`. Even when
 enabled, staged NU-evidence envelope generation starts only once both
 `AUTOMSK_STAGE` and the NU filtering stage are active.
-Selecting `automsk=yes` therefore requires an NU `filt_mode`; `automsk=tight`
-and non-NU filtering with automasking are rejected rather than producing a
-refinement configuration that cannot generate the requested NU envelope.
-Once staged automasking is active, matching references use the lagged state NU
-envelope; there is no separate reference-mask control (the former `envref`
-parameter has been removed), so early stages without automasking simply remain
-spherical.
+Selecting `automsk=nu` therefore requires an NU `filt_mode`; `automsk=tight`
+is rejected. Once staged automasking is active, `yes` uses density and `nu`
+uses current evidence for assembled references plus the lagged evidence
+artifact for early consumers, with density fallback. There is no separate
+reference-mask control, so early stages remain spherical.
 
 The default `multivol_mode=independent` stage limit stops at stage 5, before
 this NU-filtering policy is activated. Users who override `nstages` past that

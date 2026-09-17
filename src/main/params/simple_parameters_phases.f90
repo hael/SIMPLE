@@ -5,16 +5,12 @@ use simple_sp_project, only: sp_project
 implicit none
 #include "simple_local_flags.inc"
 
-! 3D refinement programs in which automsk means "the conservative density
-! envelope multiplies the matching references": under a nonuniform filt_mode
-! assembly applies it to the _nu_filt products after filtering (and fixes the
-! filter-field background outside it), under every other filt_mode the
-! matcher applies the same automask3D artifact after its own filter
-! (2026-09-14). automsk is therefore independent of filt_mode here; the list
-! exists to reject automsk=tight, which only ever meant Otsu tightness in the
-! standalone density masker and has no meaning for the envelope.
-character(len=15), parameter :: ENVMASK_REF_PRGS(5) = &
-    &[character(len=15) :: 'refine3D', 'refine3D_auto', 'abinitio3D', 'refine3D_states', 'classify3D_refs']
+! 3D refinement programs with the explicit no|yes|nu envelope policy. yes uses
+! the conservative density envelope; nu prefers the lag-one NU-evidence
+! envelope and falls back to density. tight remains a standalone-mask mode.
+character(len=15), parameter :: ENVMASK_REF_PRGS(9) = &
+    &[character(len=15) :: 'refine3D', 'refine3D_auto', 'abinitio3D', 'refine3D_states', 'classify3D_refs', &
+    &'reconstruct3D', 'volassemble', 'rec3D', 'bootstrap_rec3D']
 
 contains
 
@@ -760,7 +756,7 @@ contains
             THROW_HARD('mskfile is no longer supported on command line; masks are internal and per-state')
         endif
         select case(trim(self%automsk))
-            case('yes','tight','no')
+            case('yes','nu','tight','no')
             case DEFAULT
                 THROW_HARD('Unsupported automsk mode: '//trim(self%automsk))
         end select
@@ -789,16 +785,11 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
-        ! automsk=yes implies envfsc=yes on both backends (policy 2026-09-09).
-        ! On PCG the density envelope is the solve support of BOTH the base
-        ! and the ML-regularized solve, so the FSC pair is envelope-constrained
-        ! in the estimator; on gridding the same envelope (automask3D at
-        ! envmsklp) is applied post hoc to the FSC pair with the
-        ! phase-randomized correction. envfsc=yes is the closest post-hoc
-        ! counterpart of the constrained estimate and keeps the two backends'
-        ! FSCs, and therefore their ML regularization, on the same footing;
-        ! it is derived here rather than requested separately.
-        if( trim(self%automsk) .ne. 'no' )then
+        ! Active refinement automasking enables the FSC mask-selection path.
+        ! Gridding applies the selected envelope post hoc with phase-randomized
+        ! correction; PCG reports the FSC of its support-constrained estimate
+        ! and never phase-randomizes.
+        if( trim(self%automsk) == 'yes' .or. trim(self%automsk) == 'nu' )then
             if( .not. self%l_envfsc ) write(logfhandle,'(A)') '>>> automsk='//trim(self%automsk)//&
                 &' implies envfsc=yes (rec_backend='//trim(self%rec_backend)//'); envfsc promoted'
             self%envfsc   = 'yes'
@@ -887,13 +878,17 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select
+        if( trim(self%automsk) == 'nu' )then
+            if( .not. any(ENVMASK_REF_PRGS == self%prg%to_char()) ) &
+                &THROW_HARD('automsk=nu is supported only in 3D refinement workflows')
+            if( .not. self%l_nonuniform ) &
+                &THROW_HARD('automsk=nu requires filt_mode=nonuniform or nonuniform_lpset')
+        endif
         if( self%l_envfsc .and. self%envmsklp <= 0. ) &
             &THROW_HARD('envmsklp must be positive when envfsc=yes')
         ! automsk=tight only ever meant Otsu tightness in the standalone density
-        ! masker. In 3D refinement automsk is the density-envelope reference
-        ! policy (yes|no), in every filt_mode (see ENVMASK_REF_PRGS); the
-        ! envelope's tightness is envmsklp/binwidth, the NU evidence envelope's
-        ! is nu_msk_sig.
+        ! masker. In 3D refinement yes and nu select explicit envelope policies;
+        ! their tightness controls are envmsklp/binwidth and nu_msk_sig.
         if( trim(self%automsk).eq.'tight' )then
             if( self%l_nonuniform .or. any(ENVMASK_REF_PRGS == self%prg%to_char()) )then
                 THROW_HARD('automsk=tight is not supported in 3D refinement; use automsk=yes (envmsklp/binwidth set the envelope, nu_msk_sig the NU evidence envelope)')

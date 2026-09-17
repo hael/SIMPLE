@@ -10,7 +10,7 @@ type(ui_param) :: angerr
 type(ui_param) :: astigthreshold
 type(ui_param) :: astigtol
 type(ui_param) :: automsk
-type(ui_param) :: automsk_binary
+type(ui_param) :: automsk_refine3D
 type(ui_param) :: backgr_subtr
 type(ui_param) :: bfac
 type(ui_param) :: blocktree
@@ -204,13 +204,15 @@ subroutine set_ui_params
                                    'expected (tolerated) astigmatism(in microns){0.05}', &
                                    'in microns{0.05}', .false., 0.05)
 
-    call automsk%set_param(        'automsk',         'multi',  'Perform envelope masking', &
-                                   'Generate/apply the NU-evidence envelope; yes|tight requires nonuniform filtering(yes|tight|no){no}','', .false., 'no', &
+    call automsk%set_param(        'automsk',         'multi',  'Density envelope masking', &
+                                   'Density envelope from the low-passed map (amsklp, binwidth, edge): yes = Otsu, '//&
+                                   &'tight = tight Otsu, no = spherical mask(yes|tight|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
 
-    call automsk_binary%set_param( 'automsk',         'binary', 'Perform envelope masking', &
-                                   'Whether to generate/apply the NU-evidence envelope mask; tightness is controlled by nu_msk_sig(yes|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+    call automsk_refine3D%set_param('automsk',        'multi',  'Refinement envelope mode', &
+                                   'Envelope policy: density mask, lag-one NU-evidence mask with density fallback, '//&
+                                   &'or none(yes|nu|no){no}', &
+                                   '', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
 
     call backgr_subtr%set_param(   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', &
                                    'Perform micrograph background subtraction before picking/extraction(yes|no){no}','', .false., 'no', &

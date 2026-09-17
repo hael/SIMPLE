@@ -61,20 +61,20 @@ It also supplies overridable defaults when the user has not provided them:
 - `automsk=yes`
 - `envfsc=yes`
 - `keepvol=no`
-- `regpass=yes`, `regpass_fsc=0.8` (section 5)
+- `regpass=yes`, `regpass_fsc=0.143` (section 5)
 
 The default `envfsc=yes` is guarded, so an explicit user value remains
-authoritative -- except that `automsk=yes` implies `envfsc=yes` (policy
-2026-09-09), so with the default `automsk=yes` envfsc cannot be switched off.
+authoritative -- except that active automasking (`yes` or `nu`) implies
+`envfsc=yes`, so with the default `automsk=yes` envfsc cannot be switched off.
 It generates a density/Otsu envelope from the current merged half maps,
 low-pass filtered at `envmsklp` and dilated by at least `ENVMSKWIDTH_A_MIN`
-(7.5 A), and uses it for phase-randomized FSC correction and cFAR on
-gridding. On PCG it is the conservative support for both the base and
-regularized solves, and the FSC is then reported on the constrained pair
-without post-hoc correction (the `>>> FSC MODE` line says which). `envmsklp`
+(7.5 A). Gridding applies phase-randomized FSC correction with density for
+`automsk=yes`; `automsk=nu` prefers the lagged NU mask and falls back to
+density. On PCG the selected mask supports both the base and regularized
+solves, and FSC is reported without post-hoc correction or phase randomization
+(the `>>> FSC MODE` line says which). `envmsklp`
 defaults to `ENVMSKLP_DEFAULT` (20 A), while `amsklp` remains the separate
-NU-evidence smoothing scale. The NU-evidence envelope never enters FSC
-correction or PCG solve support; on PCG its null is designated on the density
+NU-evidence smoothing scale. On PCG its null is designated on the density
 envelope's dilation ring rather than estimated from the constrained pair.
 
 With `automsk=yes`, the conservative density envelope is the support of the
@@ -83,12 +83,10 @@ unreconstructed under the PCG support projection, solvent on gridding -- so
 the filter field takes the coarsest bank candidate there, fixed before
 adaptive candidates are challenged, and the `_nu_filt` matching references
 are multiplied by the envelope after filtering. The NU evidence envelope
-(`nu_envmask3D_stateNN.mrc`) is still derived from the static candidate bank
-at the start of the same evidence pass, as a diagnostic of the evidence
-field; it is never armed and never multiplied into a reference, because it
-cuts out detergent density that the particle images contain. The matcher
-itself applies the spherical soft mask only. The PCG solve support remains
-the conservative density envelope, never the evidence envelope. There is no
+(`nu_envmask3D_stateNN.mrc`) is derived from the static candidate bank at the
+start of the same evidence pass. Under `automsk=nu` it becomes the current
+filter-field/reference envelope and the next iteration's lagged PCG/FSC mask;
+density is the fallback while it is unavailable or invalid. There is no
 separate `envref` control.
 
 `filt_mode` may be overridden to a non-NU mode with `automsk=yes` kept
@@ -161,10 +159,13 @@ overlap criterion (0.99) is met after the third iteration the run stops.
 
 After startup, with `regpass=yes` (default), `refine3D_auto` runs one
 global registration pass (2026-09-16): a single `refine3D` iteration with
-`refine=prob`, `nspace=5000`, no subspace, every active particle regardless
-of the sampling policy, matched against the masked startup references and
+`refine=greedy` (exhaustive argmax over `nspace=5000` directions with the
+incumbent's direction among them, so a particle moves only when a better
+pose exists under the current objective; `prob` until 2026-09-17, whose
+sampled assignment re-basins particles at random wherever the probability
+table is flat), every active particle regardless of the sampling policy, matched against the masked startup references and
 band-limited at the resolution where the startup pair's FSC falls below
-`regpass_fsc` (default 0.8). The rationale: previous poses are a fixed point
+`regpass_fsc` (default 0.143). The rationale: previous poses are a fixed point
 of the previous objective at the full band; the solvent-mask constraint on
 the references is a new objective, and a neighbourhood search at the full
 band cannot leave the old basins (aldolase run 16: 0.998 orientation overlap
@@ -181,7 +182,21 @@ directions that moved by more than the orientational basin width at the
 pass band (`res / (mskdiam/2)`), by more than twice it, and the fraction of
 shifts that moved by more than one pixel -- the number that says whether
 re-basining happened. The main run then continues from the pass output as
-iteration 2. `regpass_fsc` is the knob for testing coarser bands.
+iteration 2. The pass runs at the WORKING band, the startup pair's
+FSC=0.143 resolution (`regpass_fsc=0.143`, 2026-09-17; 0.8 until then):
+the global search is the point of the pass, and the coarse band was an
+assumption that orientations are discriminable at low resolution. That
+holds for a large soluble particle (bgal, D2: 1.7% of directions
+reassigned at 7.6 A) and fails for a membrane protein, whose
+low-resolution band is dominated by the micelle: on PfCRT the FSC=0.8
+band of the startup pair, 8.9 A, moved 33% of the directions beyond the
+basin width (17% beyond twice it) away from a good abinitio3D
+registration, and the four-iteration budget recovered only to 4.31/6.61 A
+where the July run, which had no pass, reached 3.61/4.03 A from the same
+poses. At the working band the pass confirms a good registration and
+re-basins only the misregistered particles, at the cost of a `prob_tab`
+over 5000 directions at the full band (2-3x the coarse pass). `regpass_fsc`
+is the knob for testing other bands.
 
 The main run is base `refine3D` with:
 

@@ -292,7 +292,7 @@ type :: parameters
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
-    character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
+    character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|nu|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev); prev: abinitio2D seeded restart from the previous 2D clustering
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
@@ -625,7 +625,7 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
-    real    :: regpass_fsc=0.8     !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.8}
+    real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}

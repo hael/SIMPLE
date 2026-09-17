@@ -136,9 +136,11 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call abinitio3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
-        call abinitio3D%add_input(UI_MASK, 'automsk', 'binary', 'Perform envelope masking', &
-            &'Generate/apply the NU-evidence envelope from the staged automasking point; requires NU filtering(yes|no){no}','', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call abinitio3D%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
+            &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback, '//&
+            &'from the staged automasking point(yes|nu|no){no}', &
+            &'', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
         ! computer controls
         call abinitio3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call abinitio3D%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)

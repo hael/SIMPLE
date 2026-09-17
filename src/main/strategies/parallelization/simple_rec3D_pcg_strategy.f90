@@ -35,18 +35,15 @@ real,    parameter :: PCG_LAMBDA = 1.0e-3
 !! by the solver for a zero start (which has exactly 1.0), before iterating
 real,    parameter :: PCG_START_MAX_REL_RESID = 1.0
 integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling
-! Solve-support envelope (pcg_priors_history.md dev item 5): the conservative density
-! envelope (automask3D at envmsklp) replaces the spherical support in the PCG
-! solves, so the mask constrains the ESTIMATOR rather than post-processing.
-! The envelope is an automsk=yes feature (policy 2026-09-06) and, once a
-! prior reconstruction exists, constrains BOTH the base/unfil and the
-! regularized pass (policy 2026-09-09); envfsc=yes is derived from
-! automsk=yes in parameters (both backends), so here the FSC pair is
-! reported as support-constrained and the phase-randomized correction is
-! skipped, while gridding applies the same envelope post hoc with it.
-! A first reconstruction has no density source and necessarily bootstraps
-! the base on the sphere; its current pair then supplies the replay
-! support. With automsk=no every solve runs on the sphere. The envelope
+! The conservative density envelope replaces spherical PCG solve support
+! under automsk=yes AND automsk=nu, so the mask constrains the estimator
+! rather than post-processing; the NU-evidence envelope is never a solve
+! support (see build_pcg_state_support). Without a density source the base
+! bootstraps on the sphere and its current pair supplies density support
+! for the replay. Both the base and regularized pass use the selected support.
+! PCG diagnostics report that support and never phase-randomize; gridding
+! applies its selected envelope post hoc with phase randomization.
+! With automsk=no every solve runs on the sphere. The density fallback
 ! is generous by construction --
 ! protein plus micelle, dilated, soft-edged, and about half the spherical
 ! support on the datasets measured so far -- so it removes the far solvent,
@@ -273,22 +270,23 @@ contains
     !! and distributed paths pass identical scientific policy and differ only
     !! in the context label.
     subroutine calculate_pcg_state_diagnostics( params, state_here, context, even, odd, avg, diagnostics, &
-        &l_pair_support_constrained )
+        &l_pair_support_constrained, support_kind )
         class(parameters),                intent(in)  :: params
         integer,                          intent(in)  :: state_here
         character(len=*),                 intent(in)  :: context
         class(image),                     intent(in)  :: even, odd, avg
         type(halfmap_diagnostics_result), intent(out) :: diagnostics
         logical,                          intent(in)  :: l_pair_support_constrained
+        character(len=*),                 intent(in)  :: support_kind
         type(image) :: envmask
-        if( params%l_envfsc )then
-            call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, envmask=envmask, &
-                &l_pair_support_constrained=l_pair_support_constrained)
+        if( params%l_envfsc .and. trim(params%automsk) /= 'nu' )then
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, 'pcg', envmask=envmask, &
+                &l_pair_support_constrained=l_pair_support_constrained, support_kind=support_kind, mask_kind='density')
             call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state_here,2)//MRC_EXT))
             call envmask%kill
         else
-            call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, &
-                &l_pair_support_constrained=l_pair_support_constrained)
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, 'pcg', &
+                &l_pair_support_constrained=l_pair_support_constrained, support_kind=support_kind, mask_kind='none')
         endif
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
             &' FSC=0.500 RESOLUTION = ', diagnostics%res_fsc05
@@ -362,13 +360,15 @@ contains
     !! references carry). A start volume is a valid density source. With no
     !! usable reconstruction yet, the base solve necessarily bootstraps on the
     !! sphere; its current pair then supplies density support for the replay.
-    subroutine build_pcg_state_support( params, state_here, support, l_have )
+    subroutine build_pcg_state_support( params, state_here, support, l_have, support_kind )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
         type(image_msk),   intent(inout) :: support
         logical,           intent(out)   :: l_have
+        character(len=*),  intent(out)   :: support_kind
         type(image)  :: vol_prev
         l_have = .false.
+        support_kind = 'sphere'
         call support%kill_bimg
         ! An explicit pcg_mskfile (development/focused mode) constrains every
         ! solve regardless of automsk, and is therefore reported as the state
@@ -381,12 +381,13 @@ contains
                 write(logfhandle,'(A,I0,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
                     &', explicit pcg_mskfile '//params%pcg_mskfile%to_char()//' constrains base and replay'
                 l_have = .true.
+                support_kind = 'explicit'
                 return
             endif
         endif
-        ! Density solve support is an automsk feature (policy 2026-09-06,
+        ! Envelope solve support is an automsk feature (policy 2026-09-06,
         ! reversing the 2026-09-02 "independent of automsk" review item): no
-        ! envelope constrains any PCG solve unless automsk=yes. With automsk
+        ! envelope constrains any PCG solve unless automsk is active. With automsk
         ! enabled BOTH the base/unfil and the regularized solve take the
         ! envelope (policy 2026-09-09); envfsc=yes is derived from that in
         ! parameters, never requested separately. Without a lagged reference
@@ -399,7 +400,19 @@ contains
             return
         endif
         if( .not. params%l_envfsc ) &
-            &THROW_HARD('automsk=yes requires envfsc=yes (derived in parameters); the coupling was bypassed')
+            &THROW_HARD('active automsk requires envfsc=yes (derived in parameters); the coupling was bypassed')
+        ! automsk=nu never installs the NU-evidence envelope as the SOLVE
+        ! support (review 2026-09-17): the evidence null of a constrained
+        ! base pair is designated on the density envelope's dilation ring at
+        ! full support weight, which lies outside an evidence envelope, so a
+        ! NU-supported solve empties its own null, invalidates the next
+        ! envelope and falls back to a density envelope derived from a map
+        ! that is zero outside the NU support -- an oscillating support and
+        ! no way back for density the evidence excluded (the micelle: PfCRT
+        ! collapse 2026-09-02). Under nu the density envelope remains the
+        ! support of both solves; the evidence envelope multiplies the
+        ! matching references (assembly, matcher fallback) and masks the
+        ! gridding FSC post hoc, which is where the mode's benefit lies.
         if( state_here < 1 .or. state_here > size(params%vols) ) then
             call handle_missing_reference('no reference volume slot')
             return
@@ -416,20 +429,20 @@ contains
         call build_pcg_density_support(params, state_here, vol_prev, support, 'lag-one reference')
         call vol_prev%kill
         l_have = .true.
+        support_kind = 'density'
 
     contains
 
         subroutine handle_missing_reference( why )
             character(len=*), intent(in) :: why
             write(logfhandle,'(A,I0,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
-                &' has '//trim(why)//'; bootstrap base uses the sphere and replay support derives from that base pair'
+                &' has '//trim(why)//'; bootstrap base uses the sphere and replay support derives from its density fallback'
         end subroutine handle_missing_reference
 
     end subroutine build_pcg_state_support
 
-    !> Density solve support is permitted only under automsk=yes (policy
-    !! 2026-09-06). An explicit pcg_mskfile is the development override and is
-    !! installed by set_pcg_solve_support regardless of this gate.
+    !> Automatic solve support is enabled for yes and nu. An explicit
+    !! pcg_mskfile is the development override and is installed regardless.
     logical function pcg_density_support_enabled( params ) result( l_enabled )
         class(parameters), intent(in) :: params
         l_enabled = trim(params%automsk) .ne. 'no'
@@ -438,8 +451,8 @@ contains
     !> Construct the conservative density support from an explicit volume.
     !! Used for the normal lag-one path and, when no prior reference exists,
     !! for the regularized replay after the spherical base pair is available.
-    !! Both callers are gated on automsk=yes. The NU-evidence envelope never
-    !! enters this routine.
+    !! Called for automsk=yes and as the fallback for automsk=nu. The
+    !! NU-evidence envelope is loaded directly and never enters this builder.
     subroutine build_pcg_density_support( params, state_here, volume, support, source )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
@@ -487,6 +500,7 @@ contains
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         type(image_msk) :: state_support_msk
         logical :: l_state_support, l_base_support_constrained
+        character(len=16) :: state_support_kind, base_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
         real :: align_lp
@@ -520,12 +534,13 @@ contains
             if( n_even + n_odd /= n_state ) THROW_HARD('PCG reconstruct3D found invalid halfset labels')
             if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
 
-            ! One density-envelope support per state, shared with the
-            ! distributed owner, and only under automsk=yes: both the base
-            ! and the regularized replay take it once a prior reconstruction
-            ! exists (envfsc=yes follows). automsk=no: sphere throughout.
-            call build_pcg_state_support(params, state, state_support_msk, l_state_support)
+            ! One selected envelope support per state, shared with the
+            ! distributed owner: density for yes, lagged NU with density
+            ! fallback for nu, and sphere throughout for no.
+            call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
             l_base_support_constrained = l_state_support
+            base_support_kind = 'sphere'
+            if( l_base_support_constrained ) base_support_kind = state_support_kind
             call collect_state_half(state, 0, n_even, half_pinds)
             call solve_state_half(state, 0, 'even', half_pinds, half_even)
             deallocate(half_pinds)
@@ -543,6 +558,7 @@ contains
             if( params%l_ml_reg .and. .not. l_state_support .and. pcg_density_support_enabled(params) )then
                 call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
                 l_state_support = .true.
+                state_support_kind = 'density'
             endif
             time_map_output = 0.0_dp
             time_nu_filter  = 0.0_dp
@@ -557,7 +573,7 @@ contains
 
             t_state_phase = tic()
             call calculate_pcg_state_diagnostics(params, state, 'RECONSTRUCT3D', half_even, half_odd, &
-                &merged, hm_diag, l_base_support_constrained)
+                &merged, hm_diag, l_base_support_constrained, base_support_kind)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             res05s(state)   = hm_diag%res_fsc05
@@ -590,9 +606,9 @@ contains
             call merged%write(fname_vol, del_if_exists=.true.)
             ! the sidecar follows the published map, never precedes it
             if( params%l_ml_reg )then
-                call write_support_provenance(fname_vol, l_state_support, 'regularized')
+                call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind)
             else
-                call write_support_provenance(fname_vol, l_base_support_constrained, 'base')
+                call write_support_provenance(fname_vol, l_base_support_constrained, 'base', base_support_kind)
             endif
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             if( params%l_nonuniform )then
@@ -1651,6 +1667,8 @@ contains
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
         logical :: l_fsc_pair_support_constrained, l_prev_support_constrained, l_prev_provenance_found
         logical :: l_shipped_support_constrained
+        character(len=16) :: state_support_kind, base_support_kind, fsc_support_kind
+        character(len=16) :: previous_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
 
@@ -1724,12 +1742,13 @@ contains
                 l_bootstrap = .not. l_even_chain
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
-            ! Build one conservative support per state, only under automsk=yes.
-            ! It is installed in both solves once a prior reconstruction
-            ! exists (envfsc=yes follows); otherwise the base bootstraps on
-            ! the sphere and the replay uses density. automsk=no: sphere throughout.
-            call build_pcg_state_support(params, state, state_support_msk, l_state_support)
+            ! Build one selected support per state. It is installed in both
+            ! solves when available; otherwise the base bootstraps on the
+            ! sphere and the replay uses the density fallback.
+            call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
             l_base_support_constrained = l_state_support
+            base_support_kind = 'sphere'
+            if( l_base_support_constrained ) base_support_kind = state_support_kind
             call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base')
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
@@ -1756,6 +1775,7 @@ contains
             if( params%l_ml_reg .and. .not. l_state_support .and. pcg_density_support_enabled(params) )then
                 call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
                 l_state_support = .true.
+                state_support_kind = 'density'
             endif
             time_map_output = 0.0_dp
             time_nu_filter  = 0.0_dp
@@ -1784,11 +1804,14 @@ contains
                 ! Current support availability says nothing about how the
                 ! lagged previous pair was reconstructed: read the solve-support
                 ! provenance persisted beside it. An imported pair without a
-                ! sidecar is treated as unconstrained so an envfsc request
-                ! receives the phase-randomized correction.
+                ! sidecar is treated as unconstrained in the reported method;
+                ! PCG diagnostics never apply phase randomization.
+                previous_support_kind = 'sphere'
                 call read_support_provenance(params%vols(state), l_prev_support_constrained, &
-                    &l_prev_provenance_found)
+                    &l_prev_provenance_found, support_kind=previous_support_kind)
                 l_fsc_pair_support_constrained = l_prev_provenance_found .and. l_prev_support_constrained
+                fsc_support_kind = 'sphere'
+                if( l_fsc_pair_support_constrained ) fsc_support_kind = previous_support_kind
                 if( .not. l_prev_provenance_found ) write(logfhandle,'(A,I0,A)') &
                     &'>>> PCG DISTRIBUTED: STATE ', state, &
                     &' previous pair has no solve-support provenance; treated as unconstrained'
@@ -1797,9 +1820,10 @@ contains
                 fsc_pair_odd         => half_odd
                 fsc_pair_merged      => merged
                 l_fsc_pair_support_constrained = l_base_support_constrained
+                fsc_support_kind = base_support_kind
             endif
             call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', fsc_pair_even, &
-                &fsc_pair_odd, fsc_pair_merged, hm_diag, l_fsc_pair_support_constrained)
+                &fsc_pair_odd, fsc_pair_merged, hm_diag, l_fsc_pair_support_constrained, fsc_support_kind)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             res05s(state)   = hm_diag%res_fsc05
@@ -1849,10 +1873,18 @@ contains
             endif
             t_state_phase = tic()
             l_shipped_support_constrained = merge(l_state_support, l_base_support_constrained, params%l_ml_reg)
+            shipped_support_kind = base_support_kind
+            if( params%l_ml_reg ) shipped_support_kind = state_support_kind
             ! a bootstrap blend carries the previous pair's support into the
             ! shipped pair: constrained only if both contributions were
-            if( l_bootstrap .and. update_weights(state) < 0.99 ) &
-                &l_shipped_support_constrained = l_shipped_support_constrained .and. l_fsc_pair_support_constrained
+            if( l_bootstrap .and. update_weights(state) < 0.99 )then
+                l_shipped_support_constrained = l_shipped_support_constrained .and. l_fsc_pair_support_constrained
+                if( l_shipped_support_constrained )then
+                    if( trim(shipped_support_kind) /= trim(fsc_support_kind) ) shipped_support_kind = 'mixed'
+                else
+                    shipped_support_kind = 'sphere'
+                endif
+            endif
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
@@ -1863,11 +1895,11 @@ contains
             call merged%write(fname_vol, del_if_exists=.true.)
             ! the sidecar follows the published map, never precedes it
             if( params%l_ml_reg )then
-                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized')
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind)
             else if( l_bootstrap .and. update_weights(state) < 0.99 )then
-                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed')
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed', shipped_support_kind)
             else
-                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base')
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind)
             endif
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             if( params%l_nonuniform )then
@@ -2123,9 +2155,9 @@ contains
 
             call job%pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA, &
                 &fft_nthreads=pcg_half_nthreads)
-            ! Under automsk=yes both the base and the regularized pass take
-            ! the density envelope once it exists; with automsk=no
-            ! l_state_support is false and both run on the sphere. This call
+            ! With active automasking both passes take the selected envelope
+            ! once it exists; with automsk=no l_state_support is false and
+            ! both run on the sphere. This call
             ! stays outside the parallel region because spherical-mask
             ! construction memoizes coordinates at module scope.
             call set_pcg_solve_support(job%pcgop, params, state_support_msk, l_state_support)
