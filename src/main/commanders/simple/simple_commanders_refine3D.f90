@@ -1224,6 +1224,8 @@ contains
             call cline_flex%set('prg',        'flex_pca')
             call cline_flex%set('mkdir',      'no')
             call cline_flex%set('npreimages', nstates_requested)
+            ! the gridding M-step for the initialization: no PCG kernels and no solvent support needed
+            call cline_flex%set('rec_backend', 'gridding')
             call cline_flex%delete('nstates')
             call xflex%execute(cline_flex)
             ! output parsing
