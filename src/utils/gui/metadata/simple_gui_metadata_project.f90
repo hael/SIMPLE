@@ -45,7 +45,7 @@ module simple_gui_metadata_project
   use simple_motion_gain_helpers,     only: read_movies_and_sum_frames
   use simple_procimgstk,              only: random_selection_from_imgfile, bp_imgfile
   use simple_gui_utils,               only: mrc2jpeg_tiled
-  use simple_syslib,                  only: del_file, simple_abspath
+  use simple_syslib,                  only: del_file, simple_abspath, simple_rename, get_process_id
 
   implicit none
 
@@ -112,10 +112,11 @@ contains
     integer                                        :: i, j, x, y, nmeta_micrographs, ncls_stk, n_valid_micrographs, n_valid_cavgs
     integer                                        :: xtiles, ytiles, xtile, ytile, nrecs, nlines
     integer                                        :: nstage2D, array_idx, out_ind
-    integer                                        :: nptcls_all, nptcls_valid, nptcls_sample, box_ptcls, n_valid_ptcls
+    integer                                        :: nptcls_all, nptcls_valid, nptcls_sample, box_ptcls, n_valid_ptcls, preview_pid
     logical                                        :: l_final, l_selection, l_ctf
     real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs, smpd_ptcls
     type(string)                                   :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
+    type(string)                                   :: ptclsjpg_final, ptclsjpglp_final, preview_id
     integer,                            parameter  :: N_PTCLS_SAMPLE = 100
     integer,                            parameter  :: N_MOV_THUMBS   = 1
     type(image)                                    :: movsum, movthumb
@@ -269,18 +270,27 @@ contains
             if( nptcls_sample > 0 ) then
                 box_ptcls  = nint(spproj%os_stk%get(1, 'box'))
                 smpd_ptcls = spproj%os_stk%get(1, 'smpd')
-                ptclsstk   = 'ptcls_sample' // MRC_EXT
-                ptclsjpg   = 'ptcls_sample' // JPG_EXT
-                ptclslpstk = 'ptcls_sample_lp' // MRC_EXT
-                ptclsjpglp = 'ptcls_sample_lp' // JPG_EXT
+                ! Keep intermediate preview files private to this process. Concurrent
+                ! batch submissions share the execution directory and otherwise can
+                ! delete another process's sample stack before it is filtered.
+                preview_pid      = get_process_id()
+                preview_id       = 'ptcls_sample_' // int2str(preview_pid)
+                ptclsstk         = preview_id // MRC_EXT
+                ptclsjpg         = preview_id // JPG_EXT
+                ptclslpstk       = preview_id // '_lp' // MRC_EXT
+                ptclsjpglp       = preview_id // '_lp' // JPG_EXT
+                ptclsjpg_final   = 'ptcls_sample' // JPG_EXT
+                ptclsjpglp_final = 'ptcls_sample_lp' // JPG_EXT
                 call random_selection_from_imgfile(spproj, ptclsstk, box_ptcls, nptcls_sample, pinds=micrograph_indices)
                 call mrc2jpeg_tiled(ptclsstk, ptclsjpg, ntiles=n_valid_ptcls)
                 call bp_imgfile(ptclsstk, ptclslpstk, smpd_ptcls, 0., 10.)
                 call mrc2jpeg_tiled(ptclslpstk, ptclsjpglp, ntiles=n_valid_ptcls)
+                call simple_rename(ptclsjpg,   ptclsjpg_final,   overwrite=.true.)
+                call simple_rename(ptclsjpglp, ptclsjpglp_final, overwrite=.true.)
                 call del_file(ptclslpstk)
                 call del_file(ptclsstk)
-                ptclsjpg          = simple_abspath(ptclsjpg)
-                ptclsjpglp        = simple_abspath(ptclsjpglp)
+                ptclsjpg          = simple_abspath(ptclsjpg_final)
+                ptclsjpglp        = simple_abspath(ptclsjpglp_final)
                 self%ptcls_jpg    = ptclsjpg%to_char()
                 self%nptcls_shown = n_valid_ptcls
                 allocate(self%meta_ptcls(n_valid_ptcls))
