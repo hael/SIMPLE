@@ -85,7 +85,10 @@ contains
         call work%ifft
         ! deapodize on the native lattice (same correction as production gridding)
         call work%mul(gridcorr_img)
-        if( params%msk_crop > TINY ) call work%mask3D_soft(params%msk_crop, backgr=0.)
+        ! the envelope window when pcg_mskfile is set (the sphere otherwise): the data-free representatives
+        ! must live on the same support as every later basis, or the calibration Gram and the whole
+        ! latent scale differ from the pcg line by the sphere-to-envelope volume ratio
+        call flex_window_apply_rec(work, params)
         if( work%is_ft() ) call work%ifft
         call work%get_rmat_ptr(rmat)
         ldim_work = work%get_ldim()
@@ -112,7 +115,6 @@ contains
         real, pointer :: rmat_i(:,:,:), rmat_j(:,:,:)
         integer :: i, q, nrot, keep, d_budget, d_cap, d_signal, d_samples, nbasis
         real(dp) :: lam_max, nrm
-        logical  :: l_packed
         character(len=9) :: accum_model
         if( nreal < 1 ) THROW_HARD('flex_pca produced no covariance column representatives')
         allocate(gram(nreal,nreal), evec(nreal,nreal), eval(nreal))
@@ -136,8 +138,7 @@ contains
         ! Size it against the model the solve will ACTUALLY use -- sizing d for the dense accumulator and
         ! then solving packed spends a quarter of the budget and caps the column subspace 41 % below what
         ! the data supports (at 8 GB: d 177 instead of 250).
-        l_packed = cov_packed_cgsolve()
-        d_budget = cov_dim_budget(l_packed)
+        d_budget = cov_dim_budget()
         ! data-driven rank, REPORT ONLY: the energy floor and the memory budget never ask how many
         ! directions are real, so log what the data would support and let the discrepancy show
         d_signal = cov_signal_rank(eval, nreal)
@@ -149,28 +150,20 @@ contains
         ! memory budget is a GUARD, not the chooser. SIMPLE_COV_DTILDE replaces both, so a fixed-d A/B
         ! is never silently clamped by the box's RAM.
         d_cap = min(d_budget, COV_DEFAULT_DTILDE)
-        call cov_env_int('SIMPLE_COV_DTILDE', d_cap)
         d_tilde  = max(1, min(keep, COV_MAX_DTILDE, d_cap))
-        if( cov_env_int_on('SIMPLE_COV_DSIGNAL') ) d_tilde = max(1, min(d_tilde, d_signal))
         if( d_samples > 0 )then
             write(logfhandle,'(A,I0,A,I0,A,F4.1,A)') '>>> FLEX_PCA d_samples=',d_samples, &
                 &'  (samples-per-parameter bound from N=',nbasis,' at R=',COV_SAMPLES_PER_PARAM, &
                 &') -- REPORT ONLY'
         endif
-        write(logfhandle,'(A,I0,A,A,A)') '>>> FLEX_PCA d_signal=',d_signal, &
-            &' (spectrum noise-bulk estimate; ', &
-            &trim(merge('BINDING ','reported',cov_env_int_on('SIMPLE_COV_DSIGNAL'))), &
-            &' -- set SIMPLE_COV_DSIGNAL=1 to bind it)'
-        if( l_packed )then
-            accum_model = 'packed+CG'
-        else
-            accum_model = 'dense'
-        endif
+        write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA d_signal=',d_signal, &
+            &' (spectrum noise-bulk estimate; report only)'
+        accum_model = 'packed+CG'
         write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA d_tilde=',d_tilde, &
             &'  (above energy floor=',keep,', memory cap=',d_budget,', rank cap=',COV_MAX_DTILDE, &
             &', default=',COV_DEFAULT_DTILDE,')'
         write(logfhandle,'(A,A,A,F8.3,A,F6.3,A)') '>>> FLEX_PCA reduced-solve accumulator model: ', &
-            &trim(accum_model),', ',cov_accum_bytes(d_tilde, l_packed)/1.d9, &
+            &trim(accum_model),', ',cov_accum_bytes(d_tilde)/1.d9, &
             &' GB at this d_tilde (budget ',COV_ATHR_BUDGET/1.d9,' GB)'
         if( d_tilde == d_budget .and. keep > d_budget )then
             write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the column subspace is limited by the &

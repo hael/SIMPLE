@@ -1,12 +1,11 @@
 !@descr: flex_pca EM: per-particle latent embedding with contrast fitting
 submodule (simple_flex_pca_em) simple_flex_pca_em_embed
-use simple_flex_pca_distr,  only: flex_pca_nparts
-use simple_flex_pca_parts,  only: flex_pca_part_fname, write_embed_stats_part,&
-    &reduce_embed_zhalf_parts, read_embed_stats_part
 use simple_matcher_3Drec,   only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
 use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis
-use simple_flex_projected_latent_model, only: prep_imgs4projected_model
+use simple_flex_pca_planes, only: planes_batch_load
+use simple_flex_pca_plane_cache, only: plane_cache_in_use
+use simple_flex_pca_util, only: cov_env_flag_on
 implicit none
 #include "simple_local_flags.inc"
 
@@ -15,7 +14,8 @@ contains
     !> Contrast-aware MAP embedding (supplement S.E, eqs S.14-S.15).
     module subroutine embed_latents_with_contrast( params, build, mean_rec, basis_recs, ncomp, eigvals, sig2_eff, &
         &pinds, nptcls, z, contrast, precision, resid_energy, resid_mean_energy, rho_out, stats_only, &
-        &from_parts )
+        &from_parts, rounds, zhalf_out)
+        class(flex_pca_rounds), intent(inout) :: rounds
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -34,18 +34,24 @@ contains
         logical,  optional,  intent(in)    :: stats_only
         !> master: skip the image pass entirely, gather the parts, run the coupled phase
         logical,  optional,  intent(in)    :: from_parts
+        !> the even/odd Fourier-half solutions of every particle (nptcls,ncomp,2), for the noise
+        !! calibration of the latent deconvolution; requesting them keeps the sufficient statistics
+        real(dp), optional,  intent(out)   :: zhalf_out(:,:,:)
         real(dp), parameter :: A_LO = 0.1d0, A_HI = 5.0d0
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpl(:), data_fpl(:)
         type(ori), allocatable :: orientations(:)
         real(dp), allocatable :: prior(:), rho(:), Gcache(:,:,:), bcache(:,:), ccache(:,:)
         real(dp), allocatable :: zhalf(:,:,:), Ghf(:,:,:,:), bhf(:,:,:), chf(:,:,:)
+        real(dp), allocatable :: myhf(:,:), emmhf(:,:)   ! per-half <Tmu,y>, <Tmu,Tmu> for the half-solve contrast
+        real(dp) :: ah, aah
+        logical  :: l_halfcontrast
         real(dp), allocatable :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
         integer,  allocatable :: prows(:)
         integer :: ipart, pn_part
         real(dp), parameter   :: RHO_FLOOR = 1.d-3
         real(dp) :: rho_max, rrel
-        logical :: l_relprior, l_stats_only, l_from_parts, l_polar_embed, l_devprep, l_cache_stats
+        logical :: l_relprior, l_stats_only, l_from_parts, l_devprep, l_cache_stats, l_pcache
         integer :: ihf
         integer :: batchlims(2), batchsz, ibatch, i, q, r, ithr, nthr, ia, row
         integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
@@ -57,18 +63,15 @@ contains
         real(dp), allocatable :: Gtilth(:,:,:)   ! per-thread noise-whitened projected Gram
         real(dp), allocatable :: gwork(:,:,:), gvec(:,:,:), gev(:,:), gspec_thr(:,:), gspec(:)
         integer,  allocatable :: gcnt_thr(:)
-        integer :: nrot_t, gcnt, blk_rp
+        integer :: nrot_t, gcnt
         real(dp) :: gsum
-        nthr = nthr_glob
+        nthr = omp_get_max_threads()
         sig2 = max(sig2_eff, DTINY)      ! whitened-noise variance for the MAP shrinkage
         allocate(nzeroG_thr(nthr), nzeroR_thr(nthr), nzeroZ_thr(nthr), source=0)   ! dead-basis counters
-        ! DEFAULT FLIPPED 2026-08-19: the PLAIN prior wins on AMI at n=3 replications
-        ! (+0.024/+0.022/+0.012 across three operating points incl. production nparts=4),
-        ! so the reliability prior is now OPT-IN via SIMPLE_COV_RELPRIOR=1. cov_env_int
-        ! cannot express "off", hence the explicit >0 read (the recurring env-int trap).
-        blk_rp = 0
-        call cov_env_int('SIMPLE_COV_RELPRIOR', blk_rp)
-        l_relprior = blk_rp > 0
+        ! The PLAIN 1/Gamma prior is the prior: it won on AMI at n=3 replications
+        ! (+0.024/+0.022/+0.012 across three operating points incl. production nparts=4), and the
+        ! paired path's axis reliability is already in eigvals as the merge weight 2c/(1+c).
+        l_relprior = .false.
         l_stats_only = .false.
         l_from_parts = .false.
         if( present(stats_only) ) l_stats_only = stats_only
@@ -80,7 +83,23 @@ contains
         ! nparts=1-matched pairs read +0.037/+0.024 and +0.025/+0.022 (ARI/AMI) for the plain
         ! prior on the EM arm -- the rho^2 rescaling over-shrinks the reproducible directions
         ! 5-8 whose rho sits at 0.46-0.55.
-        l_cache_stats = l_relprior .or. l_stats_only .or. l_from_parts
+        l_cache_stats = l_relprior .or. l_stats_only .or. l_from_parts .or. present(zhalf_out)
+        ! Per-half fitted contrast in the split-half solves (SIMPLE_COV_HALF_CONTRAST=0 opts out).
+        ! The delivered z keeps a=1. WHY: the basis is deflated against the mean, so the FULL-plane
+        ! <TU,Tmu> nearly cancels while its two half-plane parts do not (they are +-D_i, pose
+        ! dependent, and Tmu dwarfs TUz). With a fixed a=1 the residual carries (a_i-1)*Tmu, which
+        ! therefore enters the two half solves with OPPOSITE signs and drives the split-half
+        ! correlation negative (measured -0.13..-0.24 on 10028, 2026-09-07). Fitting a per half
+        ! removes that term from the reliability estimate without touching the delivered latents.
+        l_halfcontrast = .true.
+        if( l_relprior )then
+            if( l_halfcontrast )then
+                write(logfhandle,'(A)') '>>> FLEX_PCA split-half solves: per-half fitted contrast'
+            else
+                write(logfhandle,'(A)') '>>> FLEX_PCA split-half solves: contrast fixed to the full-plane value'
+            endif
+            call flush(logfhandle)
+        endif
         allocate(prior(ncomp))
         if( l_cache_stats )then
             ! the reducing master never holds Gcache at nptcls: it reads one part's blocks at a time
@@ -92,6 +111,7 @@ contains
             endif
             allocate(zhalf(nptcls,ncomp,2), source=0.d0)
             allocate(Ghf(ncomp,ncomp,2,nthr), bhf(ncomp,2,nthr), chf(ncomp,2,nthr), source=0.d0)
+            allocate(myhf(2,nthr), emmhf(2,nthr), source=0.d0)
         endif
         do q = 1, ncomp
             prior(q) = 1.d0 / max(eigvals(q), DTINY)
@@ -107,8 +127,14 @@ contains
         do q = 1, ncomp
             call basis_recs(q)%expand_exp
         end do
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
-        call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        ! one read path for every pass of the run: the downscaled cache when it is in use
+        l_pcache = plane_cache_in_use(params, build)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cropped=l_pcache)
+        if( l_pcache )then
+            call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
+        else
+            call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        endif
         z = 0.d0; contrast = 1.d0; precision = 0.d0; resid_energy = 0.d0; resid_mean_energy = 0.d0
         t_phase = tic()
         ! master reducing parts: the workers have already paid the image pass below, so the master
@@ -118,38 +144,23 @@ contains
             ! pass 1 only: zhalf and the per-particle scalars are all rho needs, and rho has to exist
             ! before any particle can be solved. The Gram blocks stay on disk until the re-solve
             ! reads them one part at a time.
-            call reduce_embed_zhalf_parts(params, flex_pca_nparts(), pinds, contrast, resid_energy, &
+            call reduce_embed_zhalf_parts(params, rounds%nparts(), pinds, contrast, resid_energy, &
                 &resid_mean_energy, zhalf, nptcls, ncomp)
             goto 200
         endif
         write(logfhandle,'(A)') '>>> FLEX_PCA CONTRAST-AWARE EMBEDDING'
         call flush(logfhandle)
-        ! POLAR PATH: the shared-direction former replaces the per-particle batch loop below. It
-        ! fills the same sufficient statistics, so the reliability prior, the re-solve, the precision
-        ! matrices and the worker part-write are all untouched. It needs Gcache, which only exists on
-        ! the reliability-prior path -- the same constraint the distributed path already carries.
-        l_polar_embed = cov_polar_embed_enabled()
-        if( l_polar_embed )then
-            if( .not. l_relprior ) THROW_HARD('polar embedding requires the reliability prior; &
-                &unset SIMPLE_COV_RELPRIOR')
-            call embed_accumulate_polar(params, build, mean_rec, basis_recs, ncomp, eigvals, sig2, &
-                &pinds, nptcls, Gcache, bcache, ccache, zhalf, contrast, resid_energy, &
-                &resid_mean_energy, prior, nzeroG_thr(1))
-            nzeroG_thr(1) = 0
-        endif
-        if( .not. l_polar_embed )then
         call cov_dev_prep_start(params, build, l_devprep)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
-            call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=cov_image_mask_radius(params))
+            call planes_batch_load(params, build, nptcls, pinds, batchlims, fpls, &
+                &cov_image_mask_radius(params), l_pcache)
             do i = 1, batchsz
                 call build%spproj_field%get_ori(pinds(batchlims(1)+i-1), orientations(i))
             end do
             !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
-            !$omp& private(i,ithr,q,r,ia,a,a_best,a_keep,a_num,a_den,icm,aa,e_yy,e_mm,best_res,res,row)
+            !$omp& private(i,ithr,q,r,ia,a,a_best,a_keep,a_num,a_den,icm,aa,e_yy,e_mm,best_res,res,row,ah,aah)
             do i = 1, batchsz
                 if( orientations(i)%isstatezero() ) cycle
                 ithr = omp_get_thread_num() + 1
@@ -168,9 +179,13 @@ contains
                         Gth(r,q,ithr) = Gth(q,r,ithr)
                     end do
                 end do
-                ! split-half sufficient statistics, for the reliability-weighted prior below
-                if( l_relprior )then
+                ! split-half sufficient statistics, for the reliability-weighted prior below and for
+                ! the deconvolution's noise calibration (a worker always forms them: its part may be
+                ! reduced by a master that needs either)
+                if( l_cache_stats )then
                     do ihf = 1, 2
+                        myhf(ihf,ithr)  = real(cov_herm_inner(mean_fpl(ithr), fpls(i), ihf), dp)
+                        emmhf(ihf,ithr) = real(cov_herm_inner(mean_fpl(ithr), mean_fpl(ithr), ihf), dp)
                         do q = 1, ncomp
                             bhf(q,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), fpls(i), ihf), dp)
                             chf(q,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), mean_fpl(ithr), ihf), dp)
@@ -240,13 +255,21 @@ contains
                     Gcache(:,:,row) = Gth(:,:,ithr)
                     bcache(:,row)   = bth(:,ithr)
                     ccache(:,row)   = cth(:,ithr)
-                    ! and the two half-data solves at the chosen contrast
+                    ! and the two half-data solves, each at its OWN fitted contrast (see l_halfcontrast)
                     do ihf = 1, 2
-                        Ath(:,:,ithr) = (aa/sig2)*Ghf(:,:,ihf,ithr)
+                        if( l_halfcontrast )then
+                            ah = myhf(ihf,ithr) / max(emmhf(ihf,ithr), DTINY)
+                            ah = max(0.1d0, min(5.d0, ah))
+                        else
+                            ah = contrast(row)
+                        endif
+                        aah = ah*ah
+                        Ath(:,:,ithr) = (aah/sig2)*Ghf(:,:,ihf,ithr)
                         do q = 1, ncomp
                             Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
-                            zth(q,ithr)   = (contrast(row)*bhf(q,ihf,ithr) - aa*chf(q,ihf,ithr))/sig2
+                            zth(q,ithr)   = (ah*bhf(q,ihf,ithr) - aah*chf(q,ihf,ithr))/sig2
                         end do
+                        ! the half solves: their disagreement calibrates the DATA noise
                         call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), ncomp)
                         zhalf(row,:,ihf) = zth(:,ithr)
                     end do
@@ -259,7 +282,6 @@ contains
             endif
         end do
         call cov_dev_prep_stop(l_devprep)
-        endif
         ! the reducing master lands here rather than after the diagnostics, so it still frees the
         ! per-thread Gram workspace; gcnt_thr is all zero when no batch loop ran, so the per-particle
         ! spectrum report below skips itself
@@ -310,10 +332,6 @@ contains
         if( l_cache_stats )then
             if( l_relprior )then
             allocate(rho(ncomp))
-            ! optional export of the half-data solves for calibrating the per-particle error model:
-            ! rho below collapses the pair to one correlation per component, whereas the variance of
-            ! their difference measures the error directly. Off unless SIMPLE_COV_ZHALF is set.
-            call write_zhalf_replicates(zhalf, prior, nptcls, ncomp)
             do q = 1, ncomp
                 rho(q) = corr_dp(zhalf(:,q,1), zhalf(:,q,2), nptcls)
                 rho(q) = max(0.d0, rho(q))
@@ -344,7 +362,7 @@ contains
             ! routes to the same arithmetic: in process the blocks are already in Gcache, while a
             ! reducing master streams them back one part at a time to keep its footprint flat.
             if( l_from_parts )then
-                do ipart = 1, flex_pca_nparts()
+                do ipart = 1, rounds%nparts()
                     call read_embed_stats_part(params, ipart, pinds, prows, Gpart, bpart, cpart, &
                         &pn_part, nptcls, ncomp)
                     !$omp parallel do default(shared) private(i,row,q,aa,ithr) schedule(static) proc_bind(close)
@@ -392,7 +410,8 @@ contains
                 endif
             endif
             if( allocated(rho) ) deallocate(rho)
-            deallocate(Gcache, bcache, ccache, zhalf, Ghf, bhf, chf)
+            if( present(zhalf_out) ) zhalf_out(1:nptcls,1:ncomp,1:2) = zhalf
+            deallocate(Gcache, bcache, ccache, zhalf, Ghf, bhf, chf, myhf, emmhf)
         else
             ! no split-half statistics available; treat every component as equally measured
             if( present(rho_out) ) rho_out = 1.d0
@@ -411,8 +430,166 @@ contains
         deallocate(prior, Gth, Ath, zth, zbest, cth, bth, myth, Gtilth, basis_fpls, mean_fpl, data_fpl, orientations)
         deallocate(nzeroG_thr, nzeroR_thr, nzeroZ_thr)
         if( allocated(Gcache) ) deallocate(Gcache, bcache, ccache, zhalf)
+        if( allocated(myhf) ) deallocate(myhf, emmhf)
         if( allocated(Ghf)    ) deallocate(Ghf, bhf, chf)
         if( allocated(gwork)  ) deallocate(gwork, gvec, gev, gspec_thr, gcnt_thr)
     end subroutine embed_latents_with_contrast
+
+    !> One part's embedding sufficient statistics.
+    !!
+    !! The embedding is not a clean partition, so a part cannot ship finished latents.
+    !! The reliability prior comes from
+    !! rho(q) = corr(zhalf(:,q,1), zhalf(:,q,2)) over every particle, and each particle's final z is
+    !! re-solved against it; per-part rho would solve the parts against different priors.
+    !!
+    !! So a part ships what it can compute independently -- the per-particle sufficient statistics
+    !! from the image pass plus its own rows of the split-half latents -- and the master does the
+    !! coupled arithmetic: reduce zhalf, form rho and the prior once, then re-solve. The re-solve
+    !! touches no images, so the stage that actually costs is the part that distributes.
+    subroutine write_embed_stats_part( fname, pinds, contrast, resid_energy, resid_mean_energy, &
+        &Gcache, bcache, ccache, zhalf, nptcls, ncomp )
+        class(string), intent(in) :: fname
+        integer,       intent(in) :: pinds(:), nptcls, ncomp
+        real(dp),      intent(in) :: contrast(:), resid_energy(:), resid_mean_energy(:)
+        real(dp),      intent(in) :: Gcache(:,:,:), bcache(:,:), ccache(:,:), zhalf(:,:,:)
+        type(string) :: tmp_fname
+        integer :: funit, io_stat, header(4)
+        header = [FLEX_PCA_PART_MAGIC, EMBED_STATS_VERSION, nptcls, ncomp]
+        tmp_fname = fname//'.tmp'
+        call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('write_embed_stats_part; open', io_stat)
+        write(funit, iostat=io_stat) header
+        call fileiochk('write_embed_stats_part; header', io_stat)
+        ! zhalf before Gcache, deliberately: the master forms rho from the split-half latents before
+        ! it can solve anything, and consumes the much larger Gram blocks one part at a time. Small
+        ! arrays first lets pass 1 stop reading at zhalf.
+        write(funit, iostat=io_stat) pinds(1:nptcls)
+        write(funit, iostat=io_stat) contrast(1:nptcls), resid_energy(1:nptcls), resid_mean_energy(1:nptcls)
+        write(funit, iostat=io_stat) zhalf(1:nptcls,1:ncomp,1:2)
+        write(funit, iostat=io_stat) Gcache(1:ncomp,1:ncomp,1:nptcls)
+        write(funit, iostat=io_stat) bcache(1:ncomp,1:nptcls), ccache(1:ncomp,1:nptcls)
+        call fileiochk('write_embed_stats_part; payload', io_stat)
+        call fclose(funit)
+        call simple_rename(tmp_fname, fname)
+        call tmp_fname%kill
+    end subroutine write_embed_stats_part
+
+    !> Pass 1: gather what the master needs before it can solve anything -- the split-half latents
+    !! that form rho, plus the per-particle scalars. Reads no Gram blocks and deletes nothing; the
+    !! files are consumed by read_embed_stats_part below.
+    !!
+    !! Splitting the reduce in two keeps the master's footprint flat in dataset size: holding every
+    !! part's Gcache at once costs ncomp^2 doubles per particle, one part at a time costs that
+    !! divided by nparts.
+    subroutine reduce_embed_zhalf_parts( params, nparts, gpinds, contrast, resid_energy, &
+        &resid_mean_energy, zhalf, nptcls, ncomp )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: nparts, gpinds(:), nptcls, ncomp
+        real(dp),          intent(inout) :: contrast(:), resid_energy(:), resid_mean_energy(:)
+        real(dp),          intent(inout) :: zhalf(:,:,:)
+        integer,  allocatable :: ppinds(:)
+        real(dp), allocatable :: pc(:), pre(:), prme(:), pzh(:,:,:)
+        type(string) :: fname
+        integer :: ipart, funit, io_stat, header(4), pn, i, hit, nfilled
+        integer(timer_int_kind) :: t_red
+        t_red   = tic()
+        nfilled = 0
+        do ipart = 1, nparts
+            fname = flex_pca_part_fname('embedstats', ipart, params%numlen)
+            if( .not. file_exists(fname) ) THROW_HARD('missing embed-stats part: '//fname%to_char())
+            call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+            call fileiochk('reduce_embed_zhalf_parts; open '//fname%to_char(), io_stat)
+            read(funit, iostat=io_stat) header
+            call fileiochk('reduce_embed_zhalf_parts; header', io_stat)
+            if( header(1) /= FLEX_PCA_PART_MAGIC ) THROW_HARD('bad embed-stats part magic')
+            if( header(2) /= EMBED_STATS_VERSION ) THROW_HARD('bad embed-stats part version')
+            if( header(4) /= ncomp               ) THROW_HARD('embed-stats part ncomp mismatch')
+            pn = header(3)
+            allocate(ppinds(pn), pc(pn), pre(pn), prme(pn), pzh(pn,ncomp,2))
+            read(funit, iostat=io_stat) ppinds
+            read(funit, iostat=io_stat) pc, pre, prme
+            read(funit, iostat=io_stat) pzh
+            call fileiochk('reduce_embed_zhalf_parts; payload', io_stat)
+            call fclose(funit)
+            ! match on pinds rather than assuming a contiguous layout, so a part boundary that does
+            ! not line up cannot silently misplace rows
+            do i = 1, pn
+                hit = binsrch_int(gpinds, nptcls, ppinds(i))
+                if( hit < 1 ) THROW_HARD('embed-stats part carries a particle not in the global set')
+                contrast(hit)          = pc(i)
+                resid_energy(hit)      = pre(i)
+                resid_mean_energy(hit) = prme(i)
+                zhalf(hit,:,:)         = pzh(i,:,:)
+                nfilled = nfilled + 1
+            end do
+            deallocate(ppinds, pc, pre, prme, pzh)
+            call fname%kill
+        end do
+        if( nfilled /= nptcls ) THROW_HARD('embed-stats parts did not cover every particle')
+        write(logfhandle,'(A,I0,A,I0,A,F8.1)') '>>> FLEX_PCA reduced embed-stats (zhalf) parts=',nparts, &
+            &'  particles=',nfilled,'  seconds=',toc(t_red)
+        call flush(logfhandle)
+    end subroutine reduce_embed_zhalf_parts
+
+    !> Pass 2: one part's Gram blocks and its global row indices, so the caller can re-solve just
+    !! those particles and free the buffer before reading the next. Deletes the part file.
+    subroutine read_embed_stats_part( params, ipart, gpinds, rows, Gpart, bpart, cpart, pn, nptcls, ncomp )
+        class(parameters),     intent(in)  :: params
+        integer,               intent(in)  :: ipart, gpinds(:), nptcls, ncomp
+        integer,  allocatable, intent(out) :: rows(:)
+        real(dp), allocatable, intent(out) :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
+        integer,               intent(out) :: pn
+        integer,  allocatable :: ppinds(:)
+        real(dp), allocatable :: skip3(:), pzh(:,:,:)
+        type(string) :: fname
+        integer :: funit, io_stat, header(4), i, hit
+        fname = flex_pca_part_fname('embedstats', ipart, params%numlen)
+        if( .not. file_exists(fname) ) THROW_HARD('missing embed-stats part: '//fname%to_char())
+        call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_embed_stats_part; open '//fname%to_char(), io_stat)
+        read(funit, iostat=io_stat) header
+        if( header(1) /= FLEX_PCA_PART_MAGIC ) THROW_HARD('bad embed-stats part magic')
+        if( header(2) /= EMBED_STATS_VERSION ) THROW_HARD('bad embed-stats part version')
+        if( header(4) /= ncomp               ) THROW_HARD('embed-stats part ncomp mismatch')
+        pn = header(3)
+        allocate(ppinds(pn), skip3(3*pn), pzh(pn,ncomp,2))
+        allocate(Gpart(ncomp,ncomp,pn), bpart(ncomp,pn), cpart(ncomp,pn), rows(pn))
+        read(funit, iostat=io_stat) ppinds
+        read(funit, iostat=io_stat) skip3          ! contrast, resid_energy, resid_mean_energy: pass 1
+        read(funit, iostat=io_stat) pzh            ! zhalf: pass 1
+        read(funit, iostat=io_stat) Gpart
+        read(funit, iostat=io_stat) bpart, cpart
+        call fileiochk('read_embed_stats_part; payload', io_stat)
+        call fclose(funit)
+        do i = 1, pn
+            hit = binsrch_int(gpinds, nptcls, ppinds(i))
+            if( hit < 1 ) THROW_HARD('embed-stats part carries a particle not in the global set')
+            rows(i) = hit
+        end do
+        deallocate(ppinds, skip3, pzh)
+        call del_file(fname)
+        call fname%kill
+    end subroutine read_embed_stats_part
+
+    !> Index of key in an ascending array, 0 if absent. pinds arrive in project order, so the scatter
+    !! below can binary search rather than scan linearly, which is O(nptcls) per row.
+    pure integer function binsrch_int( arr, n, key ) result( pos )
+        integer, intent(in) :: n, arr(n), key
+        integer :: lo, hi, mid
+        pos = 0
+        lo  = 1
+        hi  = n
+        do while( lo <= hi )
+            mid = (lo + hi)/2
+            if( arr(mid) == key )then
+                pos = mid
+                return
+            else if( arr(mid) < key )then
+                lo = mid + 1
+            else
+                hi = mid - 1
+            endif
+        end do
+    end function binsrch_int
 
 end submodule simple_flex_pca_em_embed

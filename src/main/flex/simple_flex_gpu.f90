@@ -14,9 +14,10 @@ use simple_image,         only: image
 use simple_reconstructor, only: reconstructor
 use simple_kbinterpol,    only: kbinterpol
 use iso_c_binding
+use simple_flex_reconstructor_latent_ops, only: flex_dev_prep_hook
 implicit none
 
-public :: flex_gpu_available
+public :: flex_gpu_available, flex_gpu_prep_imgs4projected_model
 public :: flex_gpu_insert_begin_f, flex_gpu_insert_batch_f, flex_gpu_insert_batch_res_f
 public :: flex_gpu_insert_end_f
 public :: flex_gpu_coupled_begin_f, flex_gpu_coupled_batch_f, flex_gpu_coupled_batch_raw_f
@@ -1868,6 +1869,7 @@ contains
             &merge(1_c_int, 0_c_int, l_ctf))
         if( ierr /= 0 ) THROW_HARD('flex_gpu_prep_begin failed')
         l_prep_dev_ready = .true.
+        flex_dev_prep_hook => flex_gpu_prep_imgs4projected_model
         deallocate(lm, cs2)
 #else
         THROW_HARD('SIMPLE was built without USE_FLEX_CUDA; flex_gpu_prep_begin_f')
@@ -2047,6 +2049,7 @@ contains
         ierr = c_prep_free()
 #endif
         l_prep_dev_ready = .false.
+        flex_dev_prep_hook => null()
     end subroutine flex_gpu_prep_free_f
 
     !> fused E-step over the device-prepped resident planes
@@ -2503,5 +2506,128 @@ contains
 #endif
         end subroutine
     end subroutine test_flex_gpu_estep
+
+
+    !> device variant of prep_imgs4projected_model (reached through flex_dev_prep_hook): gathers the per-record host scalars (CTF, shift,
+    !! sigma2), runs the taper->norm->pad->FFT->plane chain on the GPU, fetches the packed
+    !! separated observation-model planes and unpacks them into fplane_type. Byte-equivalent
+    !! to the CPU generator: values live on the OSMPL_PAD_FAC-multiple lattice, zeros
+    !! elsewhere; plane reuse across batches skips the re-zero of the never-written gaps.
+    subroutine flex_gpu_prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, &
+        &fplanes, fetch )
+        use simple_builder,    only: builder
+        use simple_parameters, only: parameters
+        use simple_flex_reconstructor_latent_ops, only: projected_model_kfromto, cap_fplane_for_projected_model
+        use simple_ftiter,   only: ftiter
+        use simple_math,     only: ceil_div, floor_div
+        use simple_math_ft,  only: resample_sigma2
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls
+        class(image),      intent(inout) :: ptcl_imgs(nptcls)
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        logical, optional, intent(in)    :: fetch   !< .false. = planes stay resident only
+        type(ctfparams) :: ctfp_arr(nptcls)
+        real            :: shf(2,nptcls)
+        logical         :: vld(nptcls)
+        complex(sp), allocatable :: plcy(:,:,:)
+        real(sp),    allocatable :: plt(:,:,:), plct(:,:,:)
+        real,        allocatable :: sig2_ups(:,:)
+        type(ftiter) :: fit_pd, fit_cr
+        real    :: shconst_pd(3)
+        integer :: kfromto(2), frlims_pd(3,2), i, h, k, hlo, hhi, klo, nyqpd, signyq
+        integer :: hmin, hmax, kmin, iptcl, pf
+        logical :: l_fresh, l_fetch
+        l_fetch = .true.
+        if( present(fetch) ) l_fetch = fetch
+        pf      = OSMPL_PAD_FAC
+        kfromto = projected_model_kfromto(params)
+        call fit_pd%new([params%boxpd, params%boxpd, 1], params%smpd_crop)
+        frlims_pd = fit_pd%loop_lims(3)
+        ! fill to the FULL padded band like the CPU generator; the working-band cap acts
+        ! through fpl%nyq downstream, not through the stored values
+        nyqpd     = fit_pd%get_lfny(1)
+        if( params%l_ml_reg )then
+            if( .not. allocated(build%esig%sigma2_noise) )then
+                THROW_HARD('projected covariance model requested whitening without loaded sigma2 spectra')
+            endif
+            call fit_cr%new([params%box_crop, params%box_crop, 1], params%smpd_crop)
+            signyq = fit_cr%get_lfny(1)
+            allocate(sig2_ups(0:nyqpd, nptcls), source=1.0)
+        endif
+        vld = .true.
+        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            iptcl       = pinds(i)
+            ctfp_arr(i) = build%spproj%get_ctfparams(params%oritype, iptcl)
+            shf(:,i)    = build%spproj_field%get_2Dshift(iptcl)
+            if( params%l_ml_reg )then
+                if( iptcl < lbound(build%esig%sigma2_noise,2) .or. &
+                    &iptcl > ubound(build%esig%sigma2_noise,2) )then
+                    THROW_HARD('projected covariance particle index is outside the sigma2 table')
+                endif
+                call resample_sigma2(kfromto(1), signyq, &
+                    &build%esig%sigma2_noise(kfromto(1):kfromto(2), iptcl), nyqpd, &
+                    &real(signyq)/real(nyqpd), sig2_ups(:,i))
+            endif
+        end do
+        !$omp end parallel do
+        if( params%l_ml_reg )then
+            call flex_gpu_prep_batch_f(ptcl_imgs, ctfp_arr, shf, vld, nptcls, params%box, &
+                &frlims_pd, nyqpd, sig2_ups=sig2_ups)
+        else
+            call flex_gpu_prep_batch_f(ptcl_imgs, ctfp_arr, shf, vld, nptcls, params%box, &
+                &frlims_pd, nyqpd)
+        endif
+        if( .not. l_fetch )then
+            ! consumer is a resident device stage (fused columns); planes stay on device
+            if( allocated(sig2_ups) ) deallocate(sig2_ups)
+            return
+        endif
+        hlo = ceil_div (frlims_pd(1,1), pf); hhi = floor_div(frlims_pd(1,2), pf)
+        klo = ceil_div (frlims_pd(2,1), pf)
+        allocate(plcy(hlo:hhi, klo:0, nptcls), plt(hlo:hhi, klo:0, nptcls), &
+            &plct(hlo:hhi, klo:0, nptcls))
+        call flex_gpu_prep_fetch_sep_f(plcy, plt, plct, nptcls, hlo, hhi, klo)
+        hmin = frlims_pd(1,1); hmax = frlims_pd(1,2); kmin = frlims_pd(2,1)
+        shconst_pd      = 0.
+        shconst_pd(1:2) = PI/real(params%boxpd/2)
+        !$omp parallel do default(shared) private(i,h,k,l_fresh) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            l_fresh = .not. allocated(fplanes(i)%cmplx_plane)
+            if( .not. l_fresh )then
+                if( lbound(fplanes(i)%cmplx_plane,1) /= hmin .or. &
+                    &ubound(fplanes(i)%cmplx_plane,1) /= hmax .or. &
+                    &lbound(fplanes(i)%cmplx_plane,2) /= kmin .or. &
+                    &ubound(fplanes(i)%cmplx_plane,2) /= 0    .or. &
+                    &.not. allocated(fplanes(i)%transfer_plane) )then
+                    if( allocated(fplanes(i)%cmplx_plane) ) deallocate(fplanes(i)%cmplx_plane)
+                    if( allocated(fplanes(i)%ctfsq_plane) ) deallocate(fplanes(i)%ctfsq_plane)
+                    if( allocated(fplanes(i)%transfer_plane) ) deallocate(fplanes(i)%transfer_plane)
+                    l_fresh = .true.
+                endif
+            endif
+            if( l_fresh )then
+                allocate(fplanes(i)%cmplx_plane(hmin:hmax, kmin:0),    source=cmplx(0.,0.))
+                allocate(fplanes(i)%ctfsq_plane(hmin:hmax, kmin:0),    source=0.)
+                allocate(fplanes(i)%transfer_plane(hmin:hmax, kmin:0), source=cmplx(0.,0.))
+            endif
+            do k = klo, 0
+                do h = hlo, hhi
+                    fplanes(i)%cmplx_plane(pf*h, pf*k)    = plcy(h,k,i)
+                    fplanes(i)%transfer_plane(pf*h, pf*k) = cmplx(plt(h,k,i), 0.)
+                    fplanes(i)%ctfsq_plane(pf*h, pf*k)    = plct(h,k,i)
+                end do
+            end do
+            fplanes(i)%frlims  = frlims_pd
+            fplanes(i)%nyq     = nyqpd
+            fplanes(i)%shconst = shconst_pd
+            call cap_fplane_for_projected_model(fplanes(i), kfromto)
+        end do
+        !$omp end parallel do
+        deallocate(plcy, plt, plct)
+        if( allocated(sig2_ups) ) deallocate(sig2_ups)
+    end subroutine flex_gpu_prep_imgs4projected_model
 
 end module simple_flex_gpu

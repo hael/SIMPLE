@@ -1,11 +1,9 @@
 !@descr: flex_pca EM: basis-fit driver, noise-prior calibration, probe-state I/O and band selection
 submodule (simple_flex_pca_em) simple_flex_pca_em_fit
-use simple_flex_pca_distr,  only: flex_pca_is_master, flex_pca_is_worker, PCA_STAGE_PROBE,&
-    &PCA_STAGE_EMBED
 use simple_matcher_3Drec,   only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
 use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis
-use simple_flex_projected_latent_model, only: prep_imgs4projected_model
+use simple_flex_reconstructor_latent_ops, only: prep_imgs4projected_model
 implicit none
 #include "simple_local_flags.inc"
 
@@ -13,7 +11,8 @@ contains
 
     !> Full column-covariance eigenbasis pipeline.
     module subroutine build_covariance_eigenbasis( params, build, mean_rec, pinds, nptcls, &
-        &col_sep, neigs_req, basis_recs, eigvals, ncomp_out, sig2_out, basis_imgs, fprefix )
+        &col_sep, neigs_req, basis_recs, eigvals, ncomp_out, sig2_out, fprefix, rounds)
+        class(flex_pca_rounds), intent(inout) :: rounds
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -24,15 +23,11 @@ contains
         real(dp),            intent(out)   :: sig2_out
         !> optional clean real-space eigenvolumes + output-name prefix, used by the
         !! held-out (cross-halfset) embedding to align two independently fitted bases
-        type(image), allocatable, optional, intent(out) :: basis_imgs(:)
         character(len=*),        optional, intent(in)  :: fprefix
         type(reconstructor) :: work
-        !> probe-worker handoff, read back from the master's flex_pca_probe.txt
-        real(dp),            allocatable :: eig_probe(:)
-        real(dp),            allocatable :: zw(:,:), contrastw(:), precw(:,:,:), rew(:), rmew(:)
-        real(dp) :: sig2_probe
-        integer  :: ncomp_probe
-        integer :: s, lb(3), ub(3), nyq_rec
+        type(reconstructor), allocatable :: utilde(:)
+        integer :: ncol, nreal, s, lb(3), ub(3), nyq_rec, d_tilde, q
+        real(dp), allocatable :: svals(:)
         ! one work reconstructor defines the expanded lattice / Nyquist / grid correction
         call init_basis_reconstructor(params, build, work)
         lb      = lbound(work%cmat_exp)
@@ -50,63 +45,85 @@ contains
         ! the current basis from disk and contributes one EM half-pass over its own particle range.
         ! niters=1 -- the iteration loop lives on the master, one qsys round per iteration, because
         ! the basis the E-step projects against changes every iteration.
-        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_PROBE )then
-            call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
-            call load_probe_basis(params, build, ncomp_probe, basis_recs)
-            call probe_subspace_iteration(params, build, mean_rec, basis_recs, eig_probe, sig2_probe, &
-                &pinds, nptcls, ncomp_probe, 1)
-            do s = 1, size(basis_recs)
-                call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
-            end do
-            deallocate(basis_recs)
-            if( allocated(eig_probe) ) deallocate(eig_probe)
-            if( .not. allocated(eigvals) ) allocate(eigvals(0))
-            allocate(basis_recs(0))
-            ncomp_out = 0
-            sig2_out  = 0._dp
-            call work%dealloc_rho; call work%kill
-            return
-        endif
-        ! embed worker: same handoff as the probe worker (basis on disk as flex_pca_pc*.mrc,
-        ! dimension/prior variances/noise level in flex_pca_probe.txt) but only one round, since the
-        ! basis is final by now and does not change under the workers
-        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_EMBED )then
-            call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
-            call load_probe_basis(params, build, ncomp_probe, basis_recs)
-            allocate(zw(nptcls,ncomp_probe), contrastw(nptcls), precw(ncomp_probe,ncomp_probe,nptcls))
-            allocate(rew(nptcls), rmew(nptcls))
-            call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomp_probe, &
-                &eig_probe, sig2_probe, pinds, nptcls, zw, contrastw, precw, rew, rmew, &
-                &stats_only=.true.)
-            deallocate(zw, contrastw, precw, rew, rmew)
-            do s = 1, size(basis_recs)
-                call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
-            end do
-            deallocate(basis_recs)
-            if( allocated(eig_probe) ) deallocate(eig_probe)
-            if( .not. allocated(eigvals) ) allocate(eigvals(0))
-            allocate(basis_recs(0))
-            ncomp_out = 0
-            sig2_out  = 0._dp
-            call work%dealloc_rho; call work%kill
-            return
-        endif
+        ! Workers never enter this routine: their stage bodies are probe_worker_pass and
+        ! embed_worker_pass, dispatched by the worker strategy.
         ! ---- EM PATH (the only estimator) ----
         ! Hand probe_subspace_iteration a data-free basis. The moment/covariance estimator that used
         ! to live here -- SNR volume, column selection and accumulation, reduced solve -- has been
         ! removed; probe_subspace_iteration is itself a PPCA EM and supersedes it. Only reachable on
         ! the master: a worker in a PROBE or EMBED round has already returned above with the basis it
         ! read off disk, so nothing here runs twice.
-        ! basis_imgs is the PRE-refinement basis for the held-out/bagged arms. Under EM that basis is
-        ! a data-free placeholder and returning it would silently compare initialisers instead of
-        ! fits, so refuse rather than mislead. Two-fit reproducibility is measured by running two
-        ! jobs and comparing their written eigenvolumes.
-        if( present(basis_imgs) ) THROW_HARD('the held-out/bagged basis arms need a pre-refinement &
-            &basis, which the EM initialiser cannot provide; run two jobs and compare flex_pca_pc*.mrc')
         call init_basis_datafree(params, build, mean_rec, pinds, nptcls, col_sep, neigs_req, &
-            &basis_recs, eigvals, ncomp_out, sig2_out)
+            &basis_recs, eigvals, ncomp_out, sig2_out, rounds=rounds)
         call work%dealloc_rho; call work%kill
     end subroutine build_covariance_eigenbasis
+
+    module subroutine probe_worker_pass( params, build, mean_rec, pinds, nptcls , rounds)
+        class(flex_pca_rounds), intent(inout) :: rounds
+        class(parameters),   intent(inout) :: params
+        type(builder),       intent(inout) :: build
+        type(reconstructor), intent(inout) :: mean_rec
+        integer,             intent(in)    :: pinds(:), nptcls
+        type(reconstructor), allocatable :: basis_recs(:)
+        real(dp),            allocatable :: eig_probe(:)
+        real(dp) :: sig2_probe
+        integer  :: ncomp_probe, vpair, s
+        ! the master refreshed the basis volumes and the probe-state file before scheduling this
+        ! round; which_iter keys every iteration schedule inside probe_subspace_iteration off the
+        ! master's true iteration (this worker's own loop runs exactly once per relaunch), maxits
+        ! is the budget, nfits selects the paired pass, the POLISH stage the polished namespace
+        call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
+        if( params%nfits == 2 )then
+            ! paired pass: BOTH fits over this worker's particle list, split by the mod-4 rule
+            ! (the pairing is a pinned environment constant, SIMPLE_COV_MOD4_PAIRING), one v5 part
+            vpair = 1
+            call cov_env_int('SIMPLE_COV_MOD4_PAIRING', vpair)
+            if( allocated(eig_probe) ) deallocate(eig_probe)
+            call run_flex_pca_paired_worker(params, build, pinds, nptcls, params%which_iter, &
+                &params%maxits, vpair, rounds=rounds)
+            return
+        endif
+        if( params%stage == PCA_STAGE_POLISH )then
+            call load_probe_basis(params, build, ncomp_probe, basis_recs, fprefix='flex_pca_polished_pc')
+        else
+            call load_probe_basis(params, build, ncomp_probe, basis_recs)
+        endif
+        call probe_subspace_iteration(params, build, mean_rec, basis_recs, eig_probe, sig2_probe, &
+            &pinds, nptcls, ncomp_probe, 1, it_glob=params%which_iter, niters_glob=params%maxits, &
+            &rounds=rounds)
+        do s = 1, size(basis_recs)
+            call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
+        end do
+        deallocate(basis_recs)
+        if( allocated(eig_probe) ) deallocate(eig_probe)
+    end subroutine probe_worker_pass
+
+    !> Same handoff as the probe worker (basis on disk as flex_pca_pc*.mrc, dimension/prior
+    !! variances/noise level in flex_pca_probe.txt) but one round: the basis is final by now.
+    module subroutine embed_worker_pass( params, build, mean_rec, pinds, nptcls , rounds)
+        class(flex_pca_rounds), intent(inout) :: rounds
+        class(parameters),   intent(inout) :: params
+        type(builder),       intent(inout) :: build
+        type(reconstructor), intent(inout) :: mean_rec
+        integer,             intent(in)    :: pinds(:), nptcls
+        type(reconstructor), allocatable :: basis_recs(:)
+        real(dp), allocatable :: eig_probe(:), zw(:,:), contrastw(:), precw(:,:,:), rew(:), rmew(:)
+        real(dp) :: sig2_probe
+        integer  :: ncomp_probe, s
+        call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
+        call load_probe_basis(params, build, ncomp_probe, basis_recs)
+        allocate(zw(nptcls,ncomp_probe), contrastw(nptcls), precw(ncomp_probe,ncomp_probe,nptcls))
+        allocate(rew(nptcls), rmew(nptcls))
+        call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomp_probe, &
+            &eig_probe, sig2_probe, pinds, nptcls, zw, contrastw, precw, rew, rmew, &
+            &stats_only=.true., rounds=rounds)
+        deallocate(zw, contrastw, precw, rew, rmew)
+        do s = 1, size(basis_recs)
+            call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
+        end do
+        deallocate(basis_recs)
+        if( allocated(eig_probe) ) deallocate(eig_probe)
+    end subroutine embed_worker_pass
 
     !> DATA-FREE EM INITIALISER (SIMPLE_COV_EM=1).
     !!
@@ -124,7 +141,8 @@ contains
     !! pure geometry (greedy smallest-|xi|, col_sep-separated) and the "columns" fed to it are unit
     !! impulses, not estimates. Deterministic, so two arms are comparable run to run.
     module subroutine init_basis_datafree( params, build, mean_rec, pinds, nptcls, col_sep, neigs_req, &
-        &basis_recs, eigvals, ncomp_out, sig2_out )
+        &basis_recs, eigvals, ncomp_out, sig2_out, fprefix , rounds)
+        class(flex_pca_rounds), intent(inout) :: rounds
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -133,6 +151,7 @@ contains
         real(dp),            allocatable, intent(out) :: eigvals(:)
         integer,             intent(out)   :: ncomp_out
         real(dp),            intent(out)   :: sig2_out
+        character(len=*), optional, intent(in) :: fprefix
         type(reconstructor) :: work
         type(reconstructor), allocatable :: utilde(:)
         type(image),         allocatable :: realvols(:), utilde_real(:)
@@ -143,7 +162,7 @@ contains
         integer, allocatable :: cpinds(:)
         integer  :: ncal
         real(dp) :: gam0
-        type(string) :: fname
+        type(string) :: fname, pfx
         call init_basis_reconstructor(params, build, work)
         lb = lbound(work%cmat_exp)
         ub = ubound(work%cmat_exp)
@@ -172,12 +191,19 @@ contains
         ! The eigenvolume MRCs are the master->worker handoff for every distributed probe round; on
         ! the moment path form_eigenbasis_from_reduced writes them, and nothing else does, so the EM
         ! path has to write its own initial basis or the first PROBE round finds no flex_pca_pc001.mrc.
-        if( flex_pca_is_master() .or. .not. flex_pca_is_worker() )then
+        pfx = 'flex_pca_pc'
+        if( present(fprefix) ) pfx = trim(fprefix)
+        if( .not. rounds%is_worker() )then
             do q = 1, ncomp_out
-                fname = string('flex_pca_pc')//int2str_pad(q,3)//MRC_EXT
+                fname = pfx//int2str_pad(q,3)//MRC_EXT
+                call utilde_real(q)%write(fname, del_if_exists=.true.); call fname%kill
+                ! stamp the INIT basis as it000: the merge's init-deflated matched cosines project
+                ! the shared deterministic init out of both half bases before comparing
+                fname = pfx//'it000_'//int2str_pad(q,3)//MRC_EXT
                 call utilde_real(q)%write(fname, del_if_exists=.true.); call fname%kill
             end do
         endif
+        call pfx%kill
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA EM INIT (data-free): impulses=',ncol, &
             &'  representatives=',nreal,'  rank=',ncomp_out
         call flush(logfhandle)
@@ -188,7 +214,7 @@ contains
         ! be shared here but its default of 0 left this pass uncapped). Always master here -- a worker returned
         ! long before this point -- so nparts is 1 and the budget is not divided twice.
         call cov_stage_subsample(build, pinds, nptcls, 1, COV_CALIB_MAX_PTCLS, &
-            &'SIMPLE_COV_CALIB_STRIDE', 'SIMPLE_COV_CALIB_MAX', 'EM CALIBRATION', cpinds, ncal)
+            &'SIMPLE_COV_CALIB_MAX', 'EM CALIBRATION', cpinds, ncal)
         call em_calibrate_noise_prior(params, build, mean_rec, basis_recs, ncomp_out, cpinds, ncal, &
             &sig2_out, gam0)
         deallocate(cpinds)
@@ -227,7 +253,7 @@ contains
         integer  :: nthr, ithr, i, q, ibatch, batchlims(2), batchsz, nyq_rec, nval
         real(dp) :: a, aa, e_mm, e_yy, myv, res, trg, pw, cnt, wcnt
         real(dp) :: res_sum, trg_sum, aa_sum, hfpw, hfcnt
-        nthr    = nthr_glob
+        nthr    = omp_get_max_threads()
         nyq_rec = mean_rec%get_lfny(1)
         call mean_rec%expand_exp
         do q = 1, ncomp
@@ -309,12 +335,22 @@ contains
 
 
 
-    !>  Master -> probe-worker handoff: basis dimension, prior variances, whitened-noise level.
-    module subroutine save_probe_state( ncomp, eigvals, sig2_eff )
+    !>  Master -> probe-worker handoff: basis dimension, prior variances, whitened-noise level,
+    !!  and the global-iteration stamp (current/total probe iterations). The stamp is what lets a
+    !!  relaunched worker key iteration schedules (mixture warm-up gates) off
+    !!  the master's true iteration rather than its own loop counter, which is pinned at 1 --
+    !!  one qsys round per iteration. Trailing line; 0 0 when the caller has no iteration context.
+    !> The probe-state file carries MODEL state only (dimension, noise level, prior variances).
+    !! Round control (iteration, budget, fits, stage) travels in job_descr under registered keys.
+    module subroutine save_probe_state( ncomp, eigvals, sig2_eff, fname )
         integer,  intent(in) :: ncomp
         real(dp), intent(in) :: eigvals(:), sig2_eff
+        character(len=*), optional, intent(in) :: fname
+        type(string) :: fn
         integer :: funit, io_stat, q
-        call fopen(funit, file=string(COV_PROBE_META), action='WRITE', status='REPLACE', iostat=io_stat)
+        fn = COV_PROBE_META
+        if( present(fname) ) fn = trim(fname)
+        call fopen(funit, file=fn, action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk('save_probe_state', io_stat)
         write(funit,*) ncomp
         write(funit,*) sig2_eff
@@ -322,16 +358,21 @@ contains
             write(funit,*) eigvals(q)
         end do
         call fclose(funit)
+        call fn%kill
     end subroutine save_probe_state
 
-    module subroutine load_probe_state( ncomp, eigvals, sig2_eff )
+    module subroutine load_probe_state( ncomp, eigvals, sig2_eff, fname )
         integer,               intent(out) :: ncomp
         real(dp), allocatable, intent(out) :: eigvals(:)
         real(dp),              intent(out) :: sig2_eff
+        character(len=*), optional, intent(in) :: fname
+        type(string) :: fn
         integer :: funit, io_stat, q
-        if( .not. file_exists(string(COV_PROBE_META)) ) &
-            &THROW_HARD('flex_pca probe worker found no '//COV_PROBE_META//' from the master')
-        call fopen(funit, file=string(COV_PROBE_META), action='READ', status='OLD', iostat=io_stat)
+        fn = COV_PROBE_META
+        if( present(fname) ) fn = trim(fname)
+        if( .not. file_exists(fn) ) &
+            &THROW_HARD('flex_pca probe worker found no '//fn%to_char()//' from the master')
+        call fopen(funit, file=fn, action='READ', status='OLD', iostat=io_stat)
         call fileiochk('load_probe_state', io_stat)
         read(funit,*) ncomp
         read(funit,*) sig2_eff
@@ -341,24 +382,28 @@ contains
             read(funit,*) eigvals(q)
         end do
         call fclose(funit)
+        call fn%kill
     end subroutine load_probe_state
 
     !>  Rebuild the projection-ready basis a probe worker needs from the master's flex_pca_pc*.mrc.
     !!  Same idiom as load_utilde_stack and probe_external_basis: set_rmat then fft then expand_exp,
     !!  never add(), which would leave the reconstructor flagged Fourier and propagate an
     !!  untransformed grid.
-    module subroutine load_probe_basis( params, build, ncomp, basis_recs )
+    module subroutine load_probe_basis( params, build, ncomp, basis_recs, fprefix )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         integer,             intent(in)    :: ncomp
         type(reconstructor), allocatable, intent(out) :: basis_recs(:)
+        character(len=*), optional, intent(in) :: fprefix
         type(image)  :: vol
-        type(string) :: fname
+        type(string) :: fname, pfx
         integer      :: q
+        pfx = 'flex_pca_pc'
+        if( present(fprefix) ) pfx = trim(fprefix)
         allocate(basis_recs(ncomp))
         call vol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         do q = 1, ncomp
-            fname = string('flex_pca_pc')//int2str_pad(q,3)//MRC_EXT
+            fname = pfx//int2str_pad(q,3)//MRC_EXT
             if( .not. file_exists(fname) ) &
                 &THROW_HARD('flex_pca probe worker found no '//fname%to_char()//' from the master')
             call vol%read(fname)
@@ -368,6 +413,7 @@ contains
             call basis_recs(q)%expand_exp
             call fname%kill
         end do
+        call pfx%kill
         call vol%kill
     end subroutine load_probe_basis
 
@@ -455,108 +501,11 @@ contains
         endif
     end function covariance_kfromto
 
-
-    !> EXTERNAL-BASIS PROBE: embed the particles in a basis read from disk (the run's own eigenvolumes,
-    !! optionally with extra probe volumes appended) and write the coefficients, so the embedding stage can
-    !! be exercised against a known basis without re-fitting the covariance.
-    module subroutine probe_external_basis( params, build, mean_rec, pinds, nptcls, eigdir, neigs, eigvals, &
-        &sig2_eff, probe_prefix, nprobe )
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        type(reconstructor), intent(inout) :: mean_rec
-        integer,             intent(in)    :: pinds(:), nptcls, neigs, nprobe
-        character(len=*),    intent(in)    :: eigdir, probe_prefix
-        real(dp),            intent(in)    :: eigvals(:), sig2_eff
-        type(reconstructor), allocatable :: basis_recs(:)
-        type(image)  :: vol
-        type(string) :: fname
-        real(dp), allocatable :: ev(:), z(:,:), contrast(:), precision(:,:,:)
-        real(dp), allocatable :: resid_energy(:), resid_mean_energy(:), sorted(:)
-        real     :: dummy
-        integer  :: ncomb, k, u, i, q
-        real(dp) :: evmed
-        ! nprobe = 0 is legitimate: an appended probe volume can dominate the projected Gram spectrum, in
-        ! which case the reported conditioning describes the probe rather than the basis.
-        if( nprobe < 0 ) return
-        ncomb = neigs + nprobe
-        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA EXTERNAL-BASIS PROBE: ', neigs, &
-            &' eigenvolumes + ', nprobe, ' probe volumes in one joint solve'
-        if( ncomb < 2 ) THROW_HARD('probe_external_basis: need at least 2 basis volumes')
-        call flush(logfhandle)
-        allocate(basis_recs(ncomb), ev(ncomb))
-        call vol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-        do k = 1, ncomb
-            if( k <= neigs )then
-                fname = trim(eigdir)//'flex_pca_pc'//int2str_pad(k,3)//MRC_EXT
-            else
-                fname = trim(probe_prefix)//int2str_pad(k-neigs,3)//MRC_EXT
-            endif
-            if( .not. file_exists(fname%to_char()) )then
-                write(logfhandle,'(A,A)') '>>> FLEX_PCA probe basis: missing ', fname%to_char()
-                call fname%kill; call vol%kill
-                do i = 1, k-1
-                    call basis_recs(i)%dealloc_rho; call basis_recs(i)%kill
-                end do
-                deallocate(basis_recs, ev)
-                return
-            endif
-            call vol%read(fname)
-            call fname%kill
-            if( params%msk_crop > TINY ) call vol%mask3D_soft(params%msk_crop, backgr=0.)
-            ! the set_rmat + fft + expand_exp idiom -- NEVER add(), which silently yields a
-            ! zero projected basis when the reconstructor is left flagged as Fourier
-            call init_basis_reconstructor(params, build, basis_recs(k))
-            call basis_recs(k)%set_rmat(vol%get_rmat(), .false.)
-            call basis_recs(k)%fft
-            call basis_recs(k)%expand_exp
-        end do
-        call vol%kill
-        allocate(sorted(neigs), source=eigvals(1:neigs))
-        evmed = sorted(max(1,neigs/2))
-        do k = 1, ncomb
-            if( k <= neigs )then
-                ev(k) = max(eigvals(k), DTINY)
-            else
-                ev(k) = max(evmed, DTINY)
-            endif
-        end do
-        write(logfhandle,'(A,ES12.4)') '>>> FLEX_PCA probe prior variance (median eigenvalue): ', evmed
-        allocate(z(nptcls,ncomb), contrast(nptcls), precision(ncomb,ncomb,nptcls), &
-            &resid_energy(nptcls), resid_mean_energy(nptcls))
-        call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomb, ev, sig2_eff, &
-            &pinds, nptcls, z, contrast, precision, resid_energy, resid_mean_energy)
-        call del_file('flex_pca_probe_coordinates.txt')
-        open(newunit=u, file='flex_pca_probe_coordinates.txt', status='replace', action='write')
-        write(u,'(A)',advance='no') '# particle'
-        do q = 1, neigs
-            write(u,'(A,I0)',advance='no') ' pc', q
-        end do
-        do q = 1, nprobe
-            write(u,'(A,I0)',advance='no') ' probe', q
-        end do
-        write(u,*)
-        do i = 1, nptcls
-            write(u,'(I10)',advance='no') pinds(i)
-            do q = 1, ncomb
-                write(u,'(1X,ES16.8)',advance='no') z(i,q)
-            end do
-            write(u,*)
-        end do
-        close(u)
-        write(logfhandle,'(A)') '>>> FLEX_PCA probe coefficients -> flex_pca_probe_coordinates.txt'
-        call flush(logfhandle)
-        do k = 1, ncomb
-            call basis_recs(k)%dealloc_rho; call basis_recs(k)%kill
-        end do
-        deallocate(basis_recs, ev, z, contrast, precision, resid_energy, resid_mean_energy, sorted)
-        dummy = 0.
-    end subroutine probe_external_basis
-
     module subroutine init_basis_reconstructor( params, build, rec )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(reconstructor), intent(inout) :: rec
-        call rec%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        call rec%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop, wthreads=.true.)
         call rec%alloc_rho(params,build%spproj,expand=.true.)
         call rec%reset
         call rec%reset_exp
@@ -566,32 +515,17 @@ contains
     module function cov_image_mask_radius( params ) result( r )
         class(parameters), intent(in) :: params
         real :: r
-        integer :: vmi
-        ! Runtime override (SIMPLE_COV_MASK_IMAGES=1). The compile-time default is OFF, which is
+        ! The compile-time default (COV_MASK_IMAGES) is OFF, which is
         ! safe ONLY when the solvent is pure noise -- true for synthetic data, FALSE for real data,
         ! where the region outside the envelope carries ice-thickness gradients, neighbouring
         ! particles and carbon edges. Those are low-frequency AND reproducible between halfsets, so
         ! they enter the covariance as apparent signal and can dominate the leading eigenvectors.
         r = 0.
-        vmi = 0
-        call cov_env_int('SIMPLE_COV_MASK_IMAGES', vmi)
-        if( .not. (COV_MASK_IMAGES .or. vmi > 0) ) return
+        if( .not. COV_MASK_IMAGES ) return
         if( params%msk_crop <= 0. .or. params%box_crop <= 0 ) return
         r = COV_MASK_MARGIN * params%msk_crop * real(params%box) / real(params%box_crop)
         r = min(r, 0.5*real(params%box) - COSMSKHALFWIDTH - 1.)
     end function cov_image_mask_radius
 
-    !> SIMPLE_COV_DUMP_ACC=1 dumps the raw stage accumulators (SNR var/dens, column B/H) and the
-    !! column selection to the run dir, for byte-level A/B validation of threading restructures.
-    !! Reuses the distributed part-file writers, so the dumps carry the versioned headers.
-    logical module function cov_dump_acc_on() result( on )
-        character(len=32) :: envval
-        integer :: stat, ln, ival
-        on = .false.
-        call get_environment_variable('SIMPLE_COV_DUMP_ACC', envval, ln, stat)
-        if( stat /= 0 .or. ln < 1 ) return
-        read(envval(:ln), *, iostat=stat) ival
-        if( stat == 0 ) on = ival /= 0
-    end function cov_dump_acc_on
 
 end submodule simple_flex_pca_em_fit

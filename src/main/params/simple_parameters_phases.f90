@@ -606,8 +606,8 @@ contains
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
-        if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
         if( cline%defined('preimage_auto') ) self%l_preimage_auto = (trim(self%preimage_auto).eq.'yes')
+        self%l_rec_states = trim(self%rec_states) .ne. 'no'
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then
@@ -778,10 +778,25 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
-        ! Active refinement automasking enables the FSC mask-selection path.
-        ! Gridding applies the selected envelope post hoc with phase-randomized
-        ! correction; PCG reports the FSC of its support-constrained estimate
-        ! and never phase-randomizes.
+        select case(trim(self%rec_states_backend))
+            case('gridding','pcg')
+            case DEFAULT
+                THROW_HARD('rec_states_backend must be gridding or pcg')
+        end select
+        select case(trim(self%rec_states))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('rec_states must be yes or no')
+        end select
+        ! automsk=yes implies envfsc=yes on both backends (policy 2026-09-09).
+        ! On PCG the density envelope is the solve support of BOTH the base
+        ! and the ML-regularized solve, so the FSC pair is envelope-constrained
+        ! in the estimator; on gridding the same envelope (automask3D at
+        ! envmsklp) is applied post hoc to the FSC pair with the
+        ! phase-randomized correction. envfsc=yes is the closest post-hoc
+        ! counterpart of the constrained estimate and keeps the two backends'
+        ! FSCs, and therefore their ML regularization, on the same footing;
+        ! it is derived here rather than requested separately.
         if( trim(self%automsk) == 'yes' .or. trim(self%automsk) == 'nu' )then
             if( .not. self%l_envfsc ) write(logfhandle,'(A)') '>>> automsk='//trim(self%automsk)//&
                 &' implies envfsc=yes (rec_backend='//trim(self%rec_backend)//'); envfsc promoted'
@@ -901,8 +916,7 @@ contains
         self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
         if( cline%defined('pcg_mskfile') )then
-            if( trim(self%rec_backend) /= 'pcg' ) &
-                &THROW_HARD('pcg_mskfile (PCG support constraint) requires rec_backend=pcg')
+            ! accepted on both backends: the solve support under pcg, the envelope window under gridding
             if( .not. file_exists(self%pcg_mskfile) ) &
                 &THROW_HARD('pcg_mskfile does not exist: '//self%pcg_mskfile%to_char())
         endif
@@ -1040,6 +1054,12 @@ contains
                 THROW_HARD('Unsupported cache='//trim(self%cache)//'; expected yes|no')
         end select
         self%l_cache = trim(self%cache) == 'yes'
+        select case(trim(self%umap))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('Unsupported umap='//trim(self%umap)//'; expected yes|no')
+        end select
+        self%l_umap = trim(self%umap) == 'yes'
         select case(trim(self%objfun_den))
             case('yes','no')
             case DEFAULT

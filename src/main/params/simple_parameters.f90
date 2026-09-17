@@ -58,6 +58,7 @@ type :: parameters
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
+    character(len=3)          :: umap='yes'           !< flex_pca: UMAP plot coordinates and figures of the final embedding(yes|no){yes}
     character(len=3)          :: cache='no'           !< cache Fourier-cropped particles to cut per-iteration I/O(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
@@ -96,8 +97,8 @@ type :: parameters
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: nufilt='no'          !< nonuniform local-resolution filter on flex_pca state maps(yes|no){no}
-    character(len=3)          :: heldout='no'         !< flex_pca cross-halfset (held-out) embedding(yes|no){no}
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
+    character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
@@ -220,6 +221,7 @@ type :: parameters
     type(string)              :: import_dir           !< dir to import .star files from for import_starproject
     type(string)              :: infile               !< file with inputs(.txt)
     type(string)              :: infile2              !< file with inputs(.txt)
+    type(string)              :: pindfile             !< flex_pca worker: this part's particle indices (written by the master)
     type(string)              :: keys
     type(string)              :: last_prev_dir        !< last previous execution directory
     type(string)              :: mic_new_root         !< new root for relocated micrograph data
@@ -325,6 +327,7 @@ type :: parameters
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcgop='kernel'       !< PCG operator; production reconstruct3D requires kernel
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
+    character(len=STDLEN)     :: rec_states_backend='gridding' !< flex_pca final state-map backend; independent of rec_backend, which governs the M-step(gridding|pcg){gridding}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
@@ -493,6 +496,7 @@ type :: parameters
     integer :: osmpl_fac=2         !< class-average oversampling factor for bootstrap_cavgs
     integer :: part=1
     integer :: pcafit=0            !< flex_pca worker-side fit selector, set by the master (0=all|1=halfset A|2=halfset B)
+    integer :: nfits=1             !< flex_pca worker: fits served by this round (1 single, 2 paired halves)
     integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
@@ -661,6 +665,7 @@ type :: parameters
     logical :: l_autoscale       = .false.
     logical :: l_bfac            = .false.
     logical :: l_cache           = .false.
+    logical :: l_umap            = .false.
     logical :: l_corrw           = .false.
     logical :: l_distr_worker    = .false.
     logical :: l_dose_weight     = .false.
@@ -675,8 +680,8 @@ type :: parameters
     logical :: l_gauref          = .false.
     logical :: l_graphene        = .false.
     logical :: l_icm             = .false.
-    logical :: l_heldout         = .false.
     logical :: l_preimage_auto   = .false.
+    logical :: l_rec_states      = .true.
     logical :: l_incrreslim      = .false.
     logical :: l_lam_anneal      = .false.
     logical :: l_lpauto          = .false.

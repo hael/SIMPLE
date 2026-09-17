@@ -7,7 +7,7 @@ module simple_jpg
 use simple_core_module_api
 implicit none
 
-public :: jpg_img, test_jpg_export
+public :: jpg_img, test_jpg_export, write_rgb_jpeg
 private
 #include "simple_local_flags.inc"
 
@@ -251,6 +251,39 @@ contains
             status = self%save_jpeg_r4 (fstr, in_buffer(:,:,slice), quality, colorspec)
         end do
     end function save_jpeg_r4_3D
+
+
+    !> True-colour JPEG from an interleaved RGB raster rgb(3,w,h) with channel values in [0,1]
+    !! (row 1 = top of the image). The jpg_img colorspec=3 path packs ONE scalar into 24 bits, which
+    !! is a false-colour ramp, not RGB; this writes the three channels as the stb writer expects them.
+    subroutine write_rgb_jpeg( fname, rgb, quality )
+        use, intrinsic :: iso_c_binding, only: c_ptr, c_loc, c_null_char
+        character(len=*),  intent(in) :: fname
+        real,              intent(in) :: rgb(:,:,:)
+        integer, optional, intent(in) :: quality
+        integer(1), pointer           :: buf(:) => NULL()
+        character(len=:), allocatable :: fstr
+        type(c_ptr) :: img
+        integer     :: w, h, i, j, c, idx, q, status, v
+        w = size(rgb,2); h = size(rgb,3)
+        if( size(rgb,1) /= 3 .or. w < 1 .or. h < 1 ) THROW_HARD('write_rgb_jpeg: rgb must be (3,w,h)')
+        q = 90; if( present(quality) ) q = quality
+        allocate(buf(3*w*h)); allocate(fstr, source=trim(fname)//c_null_char)
+        do j = 1, h
+            do i = 1, w
+                idx = 3*((j-1)*w + (i-1))
+                do c = 1, 3
+                    v = nint(255.0 * min(1.0, max(0.0, rgb(c,i,j))))
+                    if( v > 127 ) v = v - 256          ! two's complement into integer(1)
+                    buf(idx+c) = int(v, kind=1)
+                end do
+            end do
+        end do
+        img    = c_loc(buf)
+        status = stbi_write_jpg(fstr, w, h, 3, img, q)
+        if( status == 0 ) THROW_HARD('write_rgb_jpeg: stbi_write_jpg failed for '//trim(fname))
+        deallocate(buf, fstr)
+    end subroutine write_rgb_jpeg
 
     function save_jpeg_r4(self, fname, in_buffer, quality, colorspec) result(status)
         class(jpg_img),    intent(inout) :: self

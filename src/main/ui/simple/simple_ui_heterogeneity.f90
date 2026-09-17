@@ -35,8 +35,10 @@ contains
             'e.g. vol1.mrc (consensus mean)', .false., '', &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'neigs', 'num', &
-            'Covariance components (default 16)', 'Number of fitted low-rank covariance factors; capped at 48', &
-            '# components', .false., 16.0, &
+            'Covariance components (default 10)', 'Number of fitted low-rank covariance factors; capped at 48. &
+            &Over-ranking dilutes cross-half reproducibility (cnga1: 9 of 10 reproducible at 10, 3 of 32 at 32; &
+            &TRPM4 kept 10 of 10 at 10 and 2 of 20 at 20) and the fit cost grows as the square of the rank', &
+            '# components', .false., 10.0, &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'npreimages', 'num', &
             'Max state volumes (default 16)', &
@@ -45,20 +47,18 @@ contains
             &indistinct states, so the recovered count is <= this', &
             'max # states 3-32', .false., 16.0, &
         &visibility=UI_VIS_STANDARD)
-        call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
-            'Minimum state population fraction (default 0 = off)', &
-            'Population floor: every delivered state must hold at least this fraction of the embedded &
-            &particles. Under-populated clusters are dropped, the targets re-placed on the retained &
-            &particles with the count raised by the deficit until npreimages states qualify, and the &
-            &dropped or unassigned particles receive a random label among the delivered states, which &
-            &are then reconstructed from their hard labels. Incompatible with preimage_auto and the merge', &
-            'fraction of particles 0-1', .false., 0.0, &
-        &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'preimage_auto', 'binary', &
             'Determine the state count automatically (default no)', &
             'Raises the state ceiling to 32 (unless npreimages is given) and enables the two-gate merge, &
             &so the delivered state count is recovered from the data rather than requested(yes|no){no}', &
             '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_FILT, 'rec_states', 'binary', &
+            'Reconstruct the state volumes (default yes)', &
+            'no delivers the latent embedding, the state labels and the tables in seconds, without &
+            &reconstructing any map -- the maps are the dominant cost of a run(yes|no){yes}', &
+            '', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'niter', 'num', &
@@ -85,6 +85,17 @@ contains
             &components by observed spread over posterior variance and keep those above ~1.5', &
             'leading components, 0=all', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
+        call flex_pca%add_input(UI_FILT, 'rec_states_backend', 'multi', &
+            'Backend for the final state maps (default gridding)', &
+            'Independent of rec_backend, which governs the coupled M-step. The two stages want &
+            &different estimators: the PCG M-step with a support constraint gives a markedly more &
+            &reproducible basis, while PCG state maps have been measured to spread their integrated &
+            &density several-fold across states at identical placement, which makes cross-state &
+            &difference maps mix real change with amplitude change. Gridding is therefore the default &
+            &here even when rec_backend=pcg(gridding|pcg){gridding}', &
+            '', .false., 'gridding', &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
+        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'infile', 'file', &
             'Cached embedding to resume from', &
             'Path to a flex_pca_embedding.bin written by an earlier run. Skips the covariance &
@@ -103,14 +114,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! min_neff is not a flex_pca input: on the default path the GMM replaces the kernel weights and
         ! bandwidth, so it cannot change the maps. Reachable as SIMPLE_COV_MIN_NEFF for the opt-out paths.
-        call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
-            'Cross-halfset (held-out) embedding', &
-            'Fit the covariance basis on one halfset and embed the other, then swap, so no particle is &
-            &projected onto a basis estimated from it; removes in-sample bias and reports the halfset &
-            &subspace principal angles. Costs two covariance estimations', &
-            '(yes|no){no}', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, 'column_separation', 'num', &
             'Minimum grid separation between columns (default 2)', &
             'Selected frequencies closer than this are suppressed; also decorrelates the column noise', &
@@ -127,9 +130,14 @@ contains
         call flex_pca%add_input(UI_FILT, lp, required_override=.false., &
             label_override='Low-pass limit (derived: 2.5*smpd_crop)', &
             group="regularization", visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_PARM, smpd_target, required_override=.false., &
+            label_override='Target sampling distance of the covariance lattice (default 2.2 A)', &
+            group="regularization", visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_PARM, 'box_crop', 'num', &
-            'Working box size (default 64)', 'Even low-resolution box used for covariance fitting and the latent embedding', &
-            'pixels', .false., 64.0, &
+            'Working box size (override; default from smpd_target)', 'Even box used for covariance fitting and &
+            &the latent embedding. Normally derived from smpd_target through the magic-box autoscale (never finer &
+            &than the data, floor 64); set it only to pin a box for tests', &
+            'pixels', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'box_rec', 'num', &
             'State-map reconstruction box (default: native project box)', &
@@ -143,11 +151,55 @@ contains
             'Particle orientation segment', 'Fixed to ptcl3D', 'ptcl3D', .false., 'ptcl3D', &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_SRCH, sigma_est, visibility=UI_VIS_ADVANCED)
+        call flex_pca%add_input(UI_PARM, 'umap', 'binary', &
+            'UMAP plot of the final embedding', &
+            'Write flex_pca_umap.txt: 2-D UMAP coordinates of a bounded subsample of the final all-N latent &
+            &embedding, for plotting. Serial and not part of state placement', &
+            '(yes|no){yes}', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_MASK, mskdiam, required_override=.false., &
             group="mask", visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Backend of the state maps and of the coupled M-step basis solve; PCG solves the same weighted &
+        &least-squares problems with the support constraint inside the solve(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
+        &visibility=UI_VIS_ADVANCED)
+        call flex_pca%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Iteration cap of the flex PCG solves; used only when rec_backend=pcg', 'iterations{20}', .false., 20., &
+        &visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call flex_pca%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
+        &'Stop at this true L2 relative residual (a diminishing-returns stop on the update applies too); &
+        &use <=0 for exactly maxits_pcg iterations', 'tolerance{1e-3}', &
+        &.false., 1.0e-3, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call flex_pca%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
+        &'Real-space [0,1] mask volume at the project box installed as the hard support of every PCG solve &
+        &(state maps and basis); spherical mskdiam support when absent', &
+        &'e.g. automask3D_state01.mrc', .false., '', group="mask", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call flex_pca%add_input(UI_COMP, nparts, required_override=.false., &
             group="compute", visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
+            'Minimum state population fraction (default 0 = off)', &
+            'Population floor: every delivered state must hold at least this fraction of the embedded &
+            &particles. Under-populated clusters are dropped, the targets re-placed on the retained &
+            &particles with the count raised by the deficit until npreimages states qualify, and the &
+            &dropped or unassigned particles receive a random label among the delivered states, which &
+            &are then reconstructed from their hard labels. Incompatible with preimage_auto and the merge', &
+            'fraction of particles 0-1', .false., 0.0, &
+        &visibility=UI_VIS_STANDARD)
+call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
+            'Cross-halfset (held-out) embedding', &
+            'Fit the covariance basis on one halfset and embed the other, then swap, so no particle is &
+            &projected onto a basis estimated from it; removes in-sample bias and reports the halfset &
+            &subspace principal angles. Costs two covariance estimations', &
+            '(yes|no){no}', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call add_ui_program('flex_pca', flex_pca, prgtab, UI_CATEGORY)
     end subroutine new_flex_pca
 

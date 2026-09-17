@@ -25,6 +25,7 @@ use simple_core_module_api
 use simple_image,          only: image
 use simple_parameters,     only: parameters
 use simple_flex_pca_rec3D, only: flex_rec_smpd
+use simple_flex_pca_pcg,   only: flex_env_init, flex_env_active, flex_window_apply
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -407,14 +408,20 @@ contains
         call mskwarm%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         call mskwarm%mask3D_soft(mskrad)
         call mskwarm%kill
+        call flex_env_init(params)
         ! Mask and transform are per-state independent and are where the prologue's time goes:
         ! 2*nstates volume FFTs, which at an over-provisioned ceiling is the bulk of gate 2's setup.
         ! Mask before the transform: solvent reproduces between halves for reasons unrelated to the
         ! state and would enter every spectrum below.
         !$omp parallel do default(shared) private(s) schedule(dynamic) proc_bind(close)
         do s = 1, nstates
-            call evols(s)%mask3D_soft(mskrad)
-            call ovols(s)%mask3D_soft(mskrad)
+            if( flex_env_active() )then
+                call flex_window_apply(evols(s), params)
+                call flex_window_apply(ovols(s), params)
+            else
+                call evols(s)%mask3D_soft(mskrad)
+                call ovols(s)%mask3D_soft(mskrad)
+            endif
         end do
         !$omp end parallel do
         ! ---- DEVIATION FROM THE ENSEMBLE MEAN ----
