@@ -265,8 +265,6 @@ subroutine new_bounds_from_mask3D_test( tsttab )
         call score_volume_shape%add_input(UI_IMG, 'vol1', 'file', 'Volume', &
         &'Volume to score', 'input volume e.g. vol.mrc', .true., '')
         call score_volume_shape%add_input(UI_PARM, smpd, required_override=.false.)
-        call score_volume_shape%add_input(UI_FILT, 'lp', 'num', 'Low-pass limit', &
-        &'Low-pass limit for volume scoring', 'low-pass limit in Angstroms{20.0}', .false., 20.0)
         call add_ui_program('score_volume_shape', score_volume_shape, tsttab, UI_CATEGORY)
     end subroutine new_score_volume_shape
 

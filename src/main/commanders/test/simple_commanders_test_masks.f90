@@ -88,7 +88,7 @@ subroutine exec_volume_shape_descriptors( self, cline )
         stop
     endif
     call cline%parse_oldschool
-    if( .not. cline%defined('lp') ) call cline%set('lp', 20.0)
+    if( .not. cline%defined('lp') ) call cline%set('lp', 15.0)
     if( .not. cline%defined('smpd') )then
         header_smpd = find_img_smpd(cline%get_carg('vol1'))
         if( header_smpd <= 0.0 ) THROW_HARD('Could not determine smpd from volume header')

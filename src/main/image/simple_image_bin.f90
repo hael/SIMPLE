@@ -683,7 +683,7 @@ contains
         call self%new_bimg(vol%get_ldim(), vol%get_smpd())
         call vol_ccs%new_bimg(vol%get_ldim(), vol%get_smpd())
         call self%copy(vol)
-        call self%bp(0., lp)
+        ! call self%bp(0., lp)
         ldim = self%get_ldim()
         call self%get_rmat_ptr(rmat)
         vals = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
