@@ -41,15 +41,34 @@
         <div class="w-full flex flex-col">
             <div class="flex items-center justify-between p-4">
                 <div class="text-[12px] font-medium text-streamlabel uppercase tracking-widest">job builder</div>
-                <div id="batch_argument_label_control" class="hidden">
-                    <label class="inline-flex items-center gap-2 cursor-pointer select-none"
-                           for="batch_argument_label_toggle">
-                        <span class="text-[11px] font-medium text-streamsubtle">command line arguments</span>
-                        <input id="batch_argument_label_toggle" type="checkbox" role="switch"
-                               aria-label="show command-line argument names"
-                               class="peer sr-only">
-                        <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
-                    </label>
+                <div id="batch_visibility_control" class="hidden inline-flex rounded-lg border border-streamline divide-x divide-streamline overflow-hidden">
+                    <button type="button" title="standard" data-batch-visibility-mode="standard" data-active="true"
+                            onclick="selectBatchVisibilityMode('standard')"
+                            class="w-6 h-6 flex items-center justify-center text-streamicon bg-streamsurface hover:text-streamsubtle transition-colors data-[active=true]:bg-streamaccent data-[active=true]:text-white data-[active=true]:hover:text-white">
+                        <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="8" r="5.5"/>
+                        </svg>
+                    </button>
+                    <button type="button" title="advanced" data-batch-visibility-mode="advanced" data-active="false"
+                            onclick="selectBatchVisibilityMode('advanced')"
+                            class="w-6 h-6 flex items-center justify-center text-streamicon bg-streamsurface hover:text-streamsubtle transition-colors data-[active=true]:bg-streamaccent data-[active=true]:text-white data-[active=true]:hover:text-white">
+                        <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="3" x2="3" y2="13"/>
+                            <line x1="8" y1="3" x2="8" y2="13"/>
+                            <line x1="13" y1="3" x2="13" y2="13"/>
+                            <circle cx="3" cy="6" r="1.3" fill="currentColor" stroke="none"/>
+                            <circle cx="8" cy="10" r="1.3" fill="currentColor" stroke="none"/>
+                            <circle cx="13" cy="5" r="1.3" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </button>
+                    <button type="button" title="developer" data-batch-visibility-mode="developer" data-active="false"
+                            onclick="selectBatchVisibilityMode('developer')"
+                            class="w-6 h-6 flex items-center justify-center text-streamicon bg-streamsurface hover:text-streamsubtle transition-colors data-[active=true]:bg-streamaccent data-[active=true]:text-white data-[active=true]:hover:text-white">
+                        <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="5,4 1,8 5,12"/>
+                            <polyline points="11,4 15,8 11,12"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
             <div class="mb-4 flex items-center justify-center gap-2 border-t border-b border-streamline py-4">
@@ -108,35 +127,32 @@
                         {% for input in stream_user_inputs %}
                             {% with keytype=input.keytype %}
 
-                            {# Visible label aligned with its control; developer-visibility fields keep their proper widget but stay hidden until Ctrl+Q. Non-developer fields other than dir_movies stay visible but disabled (label dimmed too) until testStreamPath confirms the movies directory exists, and are also enabled on Ctrl+Q. Fields that already carry a value (e.g. cloning an existing job) are enabled immediately instead of waiting on the path gate. #}
-                            <label class="text-xs font-medium text-streamtext whitespace-nowrap{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} blur-sm cursor-not-allowed{% endif %}"
-                                {% if input.visibility == "developer" %}data-toggle-hidden-label="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-label="true"{% endif %}
+                            {# Visible label aligned with its control; developer-visibility fields keep their proper widget but stay hidden until developer mode is selected. Non-developer fields other than dir_movies stay hidden entirely until testStreamPath confirms the movies directory exists, or until advanced/developer mode is selected. Fields that already carry a value (e.g. cloning an existing job) are shown immediately instead of waiting on the path gate. #}
+                            <label class="text-xs font-medium text-streamtext whitespace-nowrap{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} hidden{% endif %}"
+                                {% if input.visibility == "developer" %}data-stream-dev-label="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-label="true"{% endif %}
                                 for="field_{{ input.key }}">{{ input.label }}</label>
 
-                            <div class="relative flex items-center{% if input.visibility == "developer" %} hidden{% endif %}"
-                                {% if input.visibility == "developer" %}data-toggle-hidden-container="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-container="true"{% endif %}>
+                            <div class="relative flex items-center{% if input.visibility == "developer" %} hidden{% elif input.key != "dir_movies" and "value" not in input %} hidden{% endif %}"
+                                {% if input.visibility == "developer" %}data-stream-dev-container="true"{% elif input.key != "dir_movies" and "value" not in input %}data-toggle-path-container="true"{% endif %}>
  
                                     {% if keytype == "int" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="1"
                                             {% if input.required %}required{% endif %}
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_int }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_int }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
 
                                     {% elif keytype == "float" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="0.0001"
                                             {% if input.required %}required{% endif %}
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_float:4 }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_float:4 }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
  
                                     {% elif keytype == "multi" %}
                                         <select id="field_{{ input.key }}" name="{{ input.key }}"
                                                 {% if input.required %}required{% endif %}
-                                                {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
-                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
+                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
                                             {% for option in input.options %}
                                                 <option value="{{ option }}"
                                                     {% if "value" in input and option == input.value %}selected
@@ -157,9 +173,8 @@
                                                        {% if "value" in input and input.value == "yes" %}checked
                                                        {% elif "has_default" in input and input.has_default and input.default == "yes" %}checked
                                                        {% endif %}
-                                                       {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                                        onchange="document.getElementById('field_{{ input.key }}').value = this.checked ? 'yes' : 'no'; this.nextElementSibling.nextElementSibling.textContent = this.checked ? 'yes' : 'no';">
-                                                <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent peer-disabled:blur-sm peer-disabled:cursor-not-allowed after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                                                <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
                                             </label>
                                         </div>
 
@@ -168,13 +183,11 @@
                                         <input id="field_{{ input.key }}" name="{{ input.key }}" data-path-input
                                             {% if input.required %}required{% endif %}
                                             {% if input.key == "dir_movies" %}onblur="testStreamPath(this);" oninput="this.setCustomValidity('');" data-has-value="{% if "value" in input %}true{% else %}false{% endif %}"{% endif %}
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
                                         <button type="button" title="browse for directory"
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             onclick="openWorkspaceBrowser('dir', 'field_{{ input.key }}')"
-                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors disabled:blur-sm disabled:cursor-not-allowed">
+                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
                                             <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
                                                 <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z"/>
                                             </svg>
@@ -184,13 +197,11 @@
                                         {# File picker: same pattern, file icon, file browser URL #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}" data-path-input
                                             {% if input.required %}required{% endif %}
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
                                         <button type="button" title="browse for file"
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             onclick="openWorkspaceBrowser('file', 'field_{{ input.key }}')"
-                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors disabled:blur-sm disabled:cursor-not-allowed">
+                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
                                             <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
                                             </svg>
@@ -200,9 +211,8 @@
                                         {# Plain text fallback for any unrecognised keytype #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
-                                            {% if input.visibility != "developer" and input.key != "dir_movies" and "value" not in input %}disabled{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default }}"{% endif %}
-                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring disabled:blur-sm disabled:cursor-not-allowed">
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">
                                     {% endif %}
 
                             </div>
@@ -223,16 +233,16 @@
                 </form>
             </div>
 
-            <div id="panel_batch" class="flex-1 w-full flex flex-col hidden">
+            <div id="panel_batch" class="flex-1 min-h-0 w-full flex flex-col hidden">
 
             <!-- Batch Card (simple_exec) -->
-            <div id="card_simple_batch" class="flex-1 w-full flex flex-col">
+            <div id="card_simple_batch" class="flex-1 min-h-0 w-full flex flex-col">
 
                 <h1 class="text-xs font-semibold text-streamtext text-left mb-6 mx-4 uppercase tracking-widest">
                     new SIMPLE batch job
                 </h1>
 
-                <div id="simple_selector_panel" class="flex-1 flex flex-col mx-4">
+                <div id="simple_selector_panel" class="flex-1 min-h-0 flex flex-col mx-4">
                     {% if simple_programs %}
                     <div class="relative mb-3">
                         <input id="simple_program_search"
@@ -257,6 +267,7 @@
                              tabindex="0"
                              data-simple-program-key="{{ program.prg }}"
                              data-simple-program-search="{{ program.prg }} {{ program.disp }} {{ program.desc }}"
+                             data-simple-program-visibility="{{ program.visibility|default:'standard' }}"
                              onclick="showSimpleProgramConfig('{{ program.prg }}')"
                              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSimpleProgramConfig('{{ program.prg }}'); }">
                             <span class="min-w-0">
@@ -353,8 +364,8 @@
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
-                                                <div class="relative flex items-center">
+                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}" data-batch-field-visibility="{{ input.visibility|default:'standard' }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                <div class="relative flex items-center" data-batch-field-visibility="{{ input.visibility|default:'standard' }}">
                                                     {% if input.keytype == "int" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
                                                                {% if input.required %}required{% endif %}
@@ -436,7 +447,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div id="simple_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 fixed bottom-0 left-0 w-full z-10 bg-streambar hidden">
+                <div id="simple_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 bottom-0 left-0 w-full z-10 bg-streambar">
                     <button id="simple_batch_start" type="button" onclick="submitSelectedBatch('simple')"
                             class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                         start
@@ -449,13 +460,13 @@
             </div>
 
             <!-- Batch Card (single_exec) -->
-            <div id="card_single_batch" class="flex-1 w-full flex flex-col">
+            <div id="card_single_batch" class="flex-1 min-h-0 w-full flex flex-col">
 
                 <h1 class="text-xs font-semibold text-streamtext text-left mb-6 mx-4 uppercase tracking-widest">
                     new SINGLE batch job
                 </h1>
 
-                <div id="single_selector_panel" class="flex-1 flex flex-col mx-4">
+                <div id="single_selector_panel" class="flex-1 min-h-0 flex flex-col mx-4">
                     {% if single_programs %}
                     <div class="relative mb-3">
                         <input id="single_program_search"
@@ -480,6 +491,7 @@
                              tabindex="0"
                              data-single-program-key="{{ program.prg }}"
                              data-single-program-search="{{ program.prg }} {{ program.disp }} {{ program.desc }}"
+                             data-single-program-visibility="{{ program.visibility|default:'standard' }}"
                              onclick="showSingleProgramConfig('{{ program.prg }}')"
                              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSingleProgramConfig('{{ program.prg }}'); }">
                             <span class="min-w-0">
@@ -575,8 +587,8 @@
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
-                                                <div class="relative flex items-center">
+                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}" data-batch-field-visibility="{{ input.visibility|default:'standard' }}"><span data-batch-argument-label data-friendly-label="{{ input.label }}" data-argument-key="{{ input.key }}">{{ input.label }}</span>{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                <div class="relative flex items-center" data-batch-field-visibility="{{ input.visibility|default:'standard' }}">
                                                     {% if input.keytype == "int" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
                                                                {% if input.required %}required{% endif %}
@@ -658,7 +670,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div id="single_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 fixed bottom-0 left-0 w-full z-10 bg-streambar hidden">
+                <div id="single_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 bottom-0 left-0 w-full z-10 bg-streambar">
                     <button id="single_batch_start" type="button" onclick="submitSelectedBatch('single')"
                             class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                         start
@@ -754,21 +766,28 @@
             applyDroppedFilePath(input, path);
         });
 
+        let currentVisibilityMode = "standard";
         let pathGateEnabled = false;
 
         function updatePathGatedVisibility() {
-            const enabled = hiddenInputsVisible || pathGateEnabled;
-            const labels = document.querySelectorAll("label[data-toggle-path-label='true']");
-            const containers = document.querySelectorAll("[data-toggle-path-container='true']");
-            labels.forEach((label) => {
-                label.classList.toggle("blur-sm", !enabled);
-                label.classList.toggle("cursor-not-allowed", !enabled);
+            const enabled = currentVisibilityMode !== "standard" || pathGateEnabled;
+            document.querySelectorAll("label[data-toggle-path-label='true']").forEach((label) => {
+                label.classList.toggle("hidden", !enabled);
             });
-            containers.forEach((container) => {
-                container.querySelectorAll("input, select, button").forEach((control) => {
-                    control.disabled = !enabled;
-                });
+            document.querySelectorAll("[data-toggle-path-container='true']").forEach((container) => {
+                container.classList.toggle("hidden", !enabled);
             });
+        }
+
+        function updateStreamVisibility(mode) {
+            const isDeveloper = mode === "developer";
+            document.querySelectorAll("[data-stream-dev-label]").forEach((label) => {
+                label.classList.toggle("hidden", !isDeveloper);
+            });
+            document.querySelectorAll("[data-stream-dev-container]").forEach((container) => {
+                container.classList.toggle("hidden", !isDeveloper);
+            });
+            updatePathGatedVisibility();
         }
 
         const TEST_PATH_RESPONSE_KEYS = [
@@ -921,45 +940,56 @@
         const batchPrefillProgram = "{{ batch_prefill.program|default:''|escapejs }}";
         let selectedSimpleProgramKey = batchPrefillPackage === "simple" ? batchPrefillProgram : null;
         let selectedSingleProgramKey = batchPrefillPackage === "single" ? batchPrefillProgram : null;
-        const BATCH_ARGUMENT_LABEL_STORAGE_KEY = "niceBatchArgumentLabels";
-        const batchArgumentLabelControl = document.getElementById("batch_argument_label_control");
-        const batchArgumentLabelToggle = document.getElementById("batch_argument_label_toggle");
+        let simpleProgramSearchQuery = "";
+        let singleProgramSearchQuery = "";
+        const BATCH_VISIBILITY_MODE_STORAGE_KEY = "niceBatchVisibilityMode";
+        const BATCH_VISIBILITY_TIERS = {
+            standard: ["standard"],
+            advanced: ["standard", "advanced"],
+            developer: ["standard", "advanced", "developer"],
+        };
+        const batchArgumentLabelControl = document.getElementById("batch_visibility_control");
 
-        function loadBatchArgumentLabelMode() {
+        function loadBatchVisibilityMode() {
             try {
-                return window.localStorage.getItem(BATCH_ARGUMENT_LABEL_STORAGE_KEY) === "arguments";
+                const stored = window.localStorage.getItem(BATCH_VISIBILITY_MODE_STORAGE_KEY);
+                return stored in BATCH_VISIBILITY_TIERS ? stored : "standard";
             } catch (error) {
-                return false;
+                return "standard";
             }
         }
 
-        function setBatchArgumentLabelMode(showArgumentNames, persist = false) {
+        function selectBatchVisibilityMode(mode, persist = true) {
+            const allowedTiers = BATCH_VISIBILITY_TIERS[mode] || BATCH_VISIBILITY_TIERS.standard;
+            const showArgumentNames = mode === "developer";
+
+            currentVisibilityMode = mode;
+            updateStreamVisibility(mode);
             document.querySelectorAll("[data-batch-argument-label]").forEach((label) => {
                 label.textContent = showArgumentNames
                     ? label.dataset.argumentKey
                     : label.dataset.friendlyLabel;
             });
-            if (batchArgumentLabelToggle) {
-                batchArgumentLabelToggle.checked = showArgumentNames;
+            document.querySelectorAll("[data-batch-field-visibility]").forEach((field) => {
+                field.classList.toggle("hidden", !allowedTiers.includes(field.dataset.batchFieldVisibility));
+            });
+            applySimpleProgramVisibility();
+            applySingleProgramVisibility();
+            if (batchArgumentLabelControl) {
+                batchArgumentLabelControl.querySelectorAll("[data-batch-visibility-mode]").forEach((button) => {
+                    button.dataset.active = button.dataset.batchVisibilityMode === mode ? "true" : "false";
+                });
             }
             if (persist) {
                 try {
-                    window.localStorage.setItem(
-                        BATCH_ARGUMENT_LABEL_STORAGE_KEY,
-                        showArgumentNames ? "arguments" : "friendly",
-                    );
+                    window.localStorage.setItem(BATCH_VISIBILITY_MODE_STORAGE_KEY, mode);
                 } catch (error) {
                     // Keep the current view even when browser storage is unavailable.
                 }
             }
         }
 
-        setBatchArgumentLabelMode(loadBatchArgumentLabelMode());
-        if (batchArgumentLabelToggle) {
-            batchArgumentLabelToggle.addEventListener("change", function() {
-                setBatchArgumentLabelMode(batchArgumentLabelToggle.checked, true);
-            });
-        }
+        selectBatchVisibilityMode(loadBatchVisibilityMode(), false);
 
         function setBuilderTabStyles(activeTabName) {
             const streamTab = document.getElementById("tab_stream");
@@ -977,7 +1007,7 @@
             const simpleBatchCard = document.getElementById("card_simple_batch");
             const singleBatchCard = document.getElementById("card_single_batch");
             if (batchArgumentLabelControl) {
-                batchArgumentLabelControl.classList.toggle("hidden", tabName === "stream");
+                batchArgumentLabelControl.classList.remove("hidden");
             }
 
             if (tabName === "simple_batch") {
@@ -1015,24 +1045,31 @@
             selectedSimpleProgramKey = null;
             const selectorPanel = document.getElementById("simple_selector_panel");
             const configPanel = document.getElementById("simple_config_panel");
-            const actions = document.getElementById("simple_batch_actions");
+            const startButton = document.getElementById("simple_batch_start");
             const title = document.getElementById("simple_program_title");
             if (selectorPanel) selectorPanel.classList.remove("hidden");
             if (configPanel) configPanel.classList.add("hidden");
-            if (actions) actions.classList.add("hidden");
+            if (startButton) startButton.classList.add("hidden");
             if (title) title.textContent = "";
             const configs = document.querySelectorAll(".simple-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
         }
 
         function filterSimplePrograms(query) {
-            const normalizedQuery = query.trim().toLowerCase();
+            simpleProgramSearchQuery = query.trim().toLowerCase();
+            applySimpleProgramVisibility();
+        }
+
+        function applySimpleProgramVisibility() {
+            const allowedTiers = BATCH_VISIBILITY_TIERS[currentVisibilityMode] || BATCH_VISIBILITY_TIERS.standard;
             const programs = document.querySelectorAll("[data-simple-program-key]");
             let visiblePrograms = 0;
 
             programs.forEach((program) => {
                 const searchableText = (program.dataset.simpleProgramSearch || "").toLowerCase();
-                const matches = !normalizedQuery || searchableText.includes(normalizedQuery);
+                const matchesSearch = !simpleProgramSearchQuery || searchableText.includes(simpleProgramSearchQuery);
+                const matchesTier = allowedTiers.includes(program.dataset.simpleProgramVisibility || "standard");
+                const matches = matchesSearch && matchesTier;
                 program.classList.toggle("hidden", !matches);
                 if (matches) visiblePrograms += 1;
             });
@@ -1046,12 +1083,12 @@
             setBatchFeedback("simple", "");
             const selectorPanel = document.getElementById("simple_selector_panel");
             const configPanel = document.getElementById("simple_config_panel");
-            const actions = document.getElementById("simple_batch_actions");
+            const startButton = document.getElementById("simple_batch_start");
             const title = document.getElementById("simple_program_title");
             const selectedItem = document.querySelector("[data-simple-program-key='" + programKey + "']");
             if (selectorPanel) selectorPanel.classList.add("hidden");
             if (configPanel) configPanel.classList.remove("hidden");
-            if (actions) actions.classList.remove("hidden");
+            if (startButton) startButton.classList.remove("hidden");
             if (title && selectedItem) {
                 const text = selectedItem.querySelector(".text-streamtext");
                 title.textContent = text ? text.textContent : programKey;
@@ -1066,24 +1103,31 @@
             selectedSingleProgramKey = null;
             const selectorPanel = document.getElementById("single_selector_panel");
             const configPanel = document.getElementById("single_config_panel");
-            const actions = document.getElementById("single_batch_actions");
+            const startButton = document.getElementById("single_batch_start");
             const title = document.getElementById("single_program_title");
             if (selectorPanel) selectorPanel.classList.remove("hidden");
             if (configPanel) configPanel.classList.add("hidden");
-            if (actions) actions.classList.add("hidden");
+            if (startButton) startButton.classList.add("hidden");
             if (title) title.textContent = "";
             const configs = document.querySelectorAll(".single-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
         }
 
         function filterSinglePrograms(query) {
-            const normalizedQuery = query.trim().toLowerCase();
+            singleProgramSearchQuery = query.trim().toLowerCase();
+            applySingleProgramVisibility();
+        }
+
+        function applySingleProgramVisibility() {
+            const allowedTiers = BATCH_VISIBILITY_TIERS[currentVisibilityMode] || BATCH_VISIBILITY_TIERS.standard;
             const programs = document.querySelectorAll("[data-single-program-key]");
             let visiblePrograms = 0;
 
             programs.forEach((program) => {
                 const searchableText = (program.dataset.singleProgramSearch || "").toLowerCase();
-                const matches = !normalizedQuery || searchableText.includes(normalizedQuery);
+                const matchesSearch = !singleProgramSearchQuery || searchableText.includes(singleProgramSearchQuery);
+                const matchesTier = allowedTiers.includes(program.dataset.singleProgramVisibility || "standard");
+                const matches = matchesSearch && matchesTier;
                 program.classList.toggle("hidden", !matches);
                 if (matches) visiblePrograms += 1;
             });
@@ -1097,12 +1141,12 @@
             setBatchFeedback("single", "");
             const selectorPanel = document.getElementById("single_selector_panel");
             const configPanel = document.getElementById("single_config_panel");
-            const actions = document.getElementById("single_batch_actions");
+            const startButton = document.getElementById("single_batch_start");
             const title = document.getElementById("single_program_title");
             const selectedItem = document.querySelector("[data-single-program-key='" + programKey + "']");
             if (selectorPanel) selectorPanel.classList.add("hidden");
             if (configPanel) configPanel.classList.remove("hidden");
-            if (actions) actions.classList.remove("hidden");
+            if (startButton) startButton.classList.remove("hidden");
             if (title && selectedItem) {
                 const text = selectedItem.querySelector(".text-streamtext");
                 title.textContent = text ? text.textContent : programKey;
@@ -1261,7 +1305,6 @@
                     container.classList.add("hidden");
                 }
             });
-            updatePathGatedVisibility();
         }
 
         document.addEventListener("keydown", function(event) {

@@ -187,6 +187,7 @@ def _collect_programs(
             "prg": prg,
             "disp": display_name,
             "desc": program_meta.get("summary", ""),
+            "visibility": program_meta.get("visibility") or "standard",
         })
         program_input = {
             "prg": prg,
