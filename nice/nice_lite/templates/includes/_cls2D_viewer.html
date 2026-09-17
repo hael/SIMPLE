@@ -137,17 +137,21 @@
 
     const sortPop = () => {
         if (!currentMenuContainer) return;
-        const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+        const scope = getActiveClsScope();
+        if (!scope) return;
+        const templates = Array.from(scope.querySelectorAll(".cls2dcontainer"));
         templates.sort((a, b) => getNumber(b, "pop") - getNumber(a, "pop"));
-        templates.forEach((item) => currentMenuContainer.appendChild(item));
+        templates.forEach((item) => scope.appendChild(item));
         hideMenu();
     };
 
     const sortRes = () => {
         if (!currentMenuContainer) return;
-        const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+        const scope = getActiveClsScope();
+        if (!scope) return;
+        const templates = Array.from(scope.querySelectorAll(".cls2dcontainer"));
         templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
-        templates.forEach((item) => currentMenuContainer.appendChild(item));
+        templates.forEach((item) => scope.appendChild(item));
         hideMenu();
     };
 

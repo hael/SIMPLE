@@ -174,11 +174,13 @@
 
     const sortMicDefocus = () => {
         currentMicSortKey = "dfx";
-        currentMicSortAsc = false;
+        currentMicSortAsc = true;
         if (!currentMicMenuContainer) return;
-        const tiles = Array.from(currentMicMenuContainer.querySelectorAll(".mictile"));
-        tiles.sort((a, b) => Number(b.querySelector(".mic")?.dataset.defocus) - Number(a.querySelector(".mic")?.dataset.defocus));
-        tiles.forEach((tile) => currentMicMenuContainer.appendChild(tile));
+        // Tiles live in the #mic_tiles wrapper, not directly under #mic_tile_grid; re-append there so pagination's innerHTML reset later clears them.
+        const tilesContainer = document.getElementById("mic_tiles") || currentMicMenuContainer;
+        const tiles = Array.from(tilesContainer.querySelectorAll(".mictile"));
+        tiles.sort((a, b) => Number(a.querySelector(".mic")?.dataset.defocus) - Number(b.querySelector(".mic")?.dataset.defocus));
+        tiles.forEach((tile) => tilesContainer.appendChild(tile));
         hideMicMenu();
     };
 
@@ -186,9 +188,10 @@
         currentMicSortKey = "ctfres";
         currentMicSortAsc = true;
         if (!currentMicMenuContainer) return;
-        const tiles = Array.from(currentMicMenuContainer.querySelectorAll(".mictile"));
+        const tilesContainer = document.getElementById("mic_tiles") || currentMicMenuContainer;
+        const tiles = Array.from(tilesContainer.querySelectorAll(".mictile"));
         tiles.sort((a, b) => Number(a.querySelector(".mic")?.dataset.ctfres) - Number(b.querySelector(".mic")?.dataset.ctfres));
-        tiles.forEach((tile) => currentMicMenuContainer.appendChild(tile));
+        tiles.forEach((tile) => tilesContainer.appendChild(tile));
         hideMicMenu();
     };
 
