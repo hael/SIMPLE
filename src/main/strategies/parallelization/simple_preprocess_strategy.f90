@@ -9,10 +9,11 @@
 !
 module simple_preprocess_strategy
 use simple_commanders_api
-use simple_parameters, only: parameters
-use simple_cmdline,    only: cmdline
-use simple_qsys_env,   only: qsys_env
-use simple_sp_project, only: sp_project
+use simple_parameters,          only: parameters
+use simple_cmdline,             only: cmdline
+use simple_qsys_env,            only: qsys_env
+use simple_sp_project,          only: sp_project
+use simple_motion_gain_helpers, only: gainref_to_jpg
 implicit none
 
 public :: preprocess_strategy, preprocess_inmem_strategy, preprocess_distr_strategy, create_preprocess_strategy
@@ -178,8 +179,22 @@ contains
         type(string) :: moviename_forctf, output_dir_motion_correct
         type(string) :: output_dir_ctf_estimate, output_dir_inipick_preproc, micname_intg
         type(string) :: eputiltgroup, str_meta
+        type(string) :: cwd, gain_thumb_abspath
         integer      :: nmovies, fromto(2), imovie, ntot, frame_counter
         logical      :: l_del_forctf
+        ! gain reference thumbnail
+        if( cline%defined('gainref') )then
+            if(.not.file_exists(params%gainref) )then
+                THROW_HARD('gain reference: '//params%gainref%to_char()//' not found; motion_correct')
+            endif
+            if( .not.file_exists(GAIN_THUMBNAIL) .and. params%fromp == 1 .and. params%top == 1) then ! fromp == 1 and top == 1 ensures were not a part
+                call simple_getcwd(cwd)
+                gain_thumb_abspath = cwd//'/'//GAIN_THUMBNAIL
+                call gainref_to_jpg(params%gainref, gain_thumb_abspath)
+                write(logfhandle, '(A)') '>>> GAIN REFERENCE'
+                write(logfhandle, '(A)') '>>> JPEG '//gain_thumb_abspath%to_char()
+            end if
+        endif
         ! Read in movies/micrographs
         call spproj%read( params%projfile )
         if( spproj%get_nmovies()==0 .and. spproj%get_nintgs()==0 ) THROW_HARD('No movie/micrograph to process!')
@@ -347,12 +362,23 @@ contains
         class(preprocess_distr_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         class(cmdline),                   intent(inout) :: cline
+        type(string)                                    :: cwd, gain_thumb_abspath
         integer :: nmovies
         call set_preprocess_defaults(cline)
         ! Parse parameters
         call params%new(cline)
         ! Set mkdir to no (avoid nested directory structure for workers)
         call cline%set('mkdir', 'no')
+        ! gain reference thumbnail
+        if( cline%defined('gainref') )then
+            if( .not.file_exists(GAIN_THUMBNAIL)) then
+                call simple_getcwd(cwd)
+                gain_thumb_abspath = cwd//'/'//GAIN_THUMBNAIL
+                call gainref_to_jpg(params%gainref, gain_thumb_abspath)
+                write(logfhandle, '(A)') '>>> GAIN REFERENCE'
+                write(logfhandle, '(A)') '>>> JPEG '//gain_thumb_abspath%to_char()
+            end if
+        endif
         ! Read movie segment only (consistent with other strategies; full re-read in distr_execute)
         call self%spproj%read_segment(params%oritype, params%projfile)
         nmovies = self%spproj%get_nmovies()

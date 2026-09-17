@@ -11,6 +11,7 @@ integer, parameter  :: EER_THUMB_UPSAMPLING = 1
 
 public :: read_movies_and_sum_frames
 public :: normalized_inverse_average_intensity
+public :: gainref_to_jpg
 
 contains
 
@@ -126,5 +127,44 @@ contains
         deallocate(rmat)
 
     end subroutine normalized_inverse_average_intensity
+
+    !> Reads a gain reference from disk and writes a normalized jpeg preview
+    !> resized to the standard GUI micrograph thumbnail size.
+    subroutine gainref_to_jpg(gainref_fname, jpg_fname, quality)
+        class(string),     intent(in) :: gainref_fname
+        class(string),     intent(in) :: jpg_fname
+        integer, optional, intent(in) :: quality
+        type(image)                   :: gain_img, thumb_img
+        integer                       :: ldim(3), ldim_thumb(3), ifoo
+        real                          :: smpd, scale
+
+        if( .not. file_exists(gainref_fname) )then
+            THROW_HARD('Gain reference file does not exist: '//gainref_fname%to_char()//'; gainref_to_jpg')
+        endif
+
+        call find_ldim_nptcls(gainref_fname, ldim, ifoo)
+        ldim(3) = 1
+        smpd    = find_img_smpd(gainref_fname)
+        call gain_img%new(ldim, smpd, wthreads=.false.)
+        call gain_img%read(gainref_fname)
+
+        ! .gain/EER-TIFF references are stored bottom-up relative to the .mrc convention
+        if( fname2format(gainref_fname) == 'J' .or. fname2format(gainref_fname) == 'L' )then
+            call gain_img%flip('Y')
+        endif
+
+        ! resize to the standard GUI micrograph thumbnail size
+        scale           = real(GUI_PSPECSZ)/real(maxval(ldim(1:2)))
+        ldim_thumb(1:2) = round2even(real(ldim(1:2))*scale)
+        ldim_thumb(3)   = 1
+        call thumb_img%new(ldim_thumb, smpd)
+        call gain_img%fft()
+        call gain_img%clip(thumb_img)
+        call thumb_img%ifft()
+        call gain_img%kill()
+
+        call thumb_img%write_jpg(jpg_fname, norm=.true., quality=quality)
+        call thumb_img%kill()
+    end subroutine gainref_to_jpg
 
 end module simple_motion_gain_helpers

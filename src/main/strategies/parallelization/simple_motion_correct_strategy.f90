@@ -9,10 +9,11 @@
 !
 module simple_motion_correct_strategy
 use simple_commanders_api
-use simple_parameters, only: parameters
-use simple_cmdline,    only: cmdline
-use simple_qsys_env,   only: qsys_env
-use simple_sp_project, only: sp_project
+use simple_parameters,          only: parameters
+use simple_cmdline,             only: cmdline
+use simple_qsys_env,            only: qsys_env
+use simple_sp_project,          only: sp_project
+use simple_motion_gain_helpers, only: gainref_to_jpg
 implicit none
 
 public :: motion_correct_strategy
@@ -162,7 +163,7 @@ contains
         type(ctfparams)           :: ctfvars
         type(sp_project)          :: spproj
         type(ori)                 :: o
-        type(string)              :: output_dir, moviename, fbody
+        type(string)              :: output_dir, moviename, fbody, cwd, gain_thumb_abspath
         integer                   :: nmovies, fromto(2), imovie, ntot, frame_counter, cnt
         call spproj%read(params%projfile)
         ! sanity check
@@ -173,10 +174,18 @@ contains
         if( params%scale_movies > 1.01 )then
             THROW_HARD('scale_movies cannot be > 1; exec_motion_correct')
         endif
+        ! gain reference thumbnail
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
                 THROW_HARD('gain reference: '//params%gainref%to_char()//' not found; motion_correct')
             endif
+            if( .not.file_exists(GAIN_THUMBNAIL) .and. params%fromp == 1 .and. params%top == 1) then ! fromp == 1 and top == 1 ensures were not a part
+                call simple_getcwd(cwd)
+                gain_thumb_abspath = cwd//'/'//GAIN_THUMBNAIL
+                call gainref_to_jpg(params%gainref, gain_thumb_abspath)
+                write(logfhandle, '(A)') '>>> GAIN REFERENCE'
+                write(logfhandle, '(A)') '>>> JPEG '//gain_thumb_abspath%to_char()
+            end if
         endif
         ! output directory & names
         output_dir = PATH_HERE
@@ -221,6 +230,8 @@ contains
         call output_dir%kill
         call moviename%kill
         call fbody%kill
+        call cwd%kill
+        call gain_thumb_abspath%kill
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, cline)
@@ -252,7 +263,8 @@ contains
         class(motion_correct_distr_strategy), intent(inout) :: self
         type(parameters),                     intent(inout) :: params
         class(cmdline),                       intent(inout) :: cline
-        integer :: nmovies
+        type(string)                                        :: cwd, gain_thumb_abspath
+        integer                                             :: nmovies
         call set_motion_correct_defaults(cline)
         call params%new(cline)
         ! Preserve original behavior: set numlen from params as parsed/derived
@@ -269,6 +281,16 @@ contains
         call self%spproj%kill
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
+        ! gain reference thumbnail
+        if( cline%defined('gainref') )then
+            if( .not.file_exists(GAIN_THUMBNAIL)) then
+                call simple_getcwd(cwd)
+                gain_thumb_abspath = cwd//'/'//GAIN_THUMBNAIL
+                call gainref_to_jpg(params%gainref, gain_thumb_abspath)
+                write(logfhandle, '(A)') '>>> GAIN REFERENCE'
+                write(logfhandle, '(A)') '>>> JPEG '//gain_thumb_abspath%to_char()
+            end if
+        endif
         ! setup distributed environment
         call self%qenv%new(params, params%nparts)
         ! prepare job description

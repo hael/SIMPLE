@@ -89,6 +89,7 @@ character(len=*), parameter :: EXTRACT_STK_FBODY             = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY          = 'extract_params_'
 character(len=*), parameter :: SHAPE_RANKED_CAVGS_MRCNAME    = 'shaped_ranked_cavgs.mrcs'
 character(len=*), parameter :: SHAPE_RANKED_CAVGS_JPGNAME    = 'shaped_ranked_cavgs.jpg'
+character(len=*), parameter :: GAIN_THUMBNAIL                = 'gain_thumb'//trim(JPG_EXT)
 ! OLD DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR                 = 'stderrout/'
 ! NEW DIRECTORIES

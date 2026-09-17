@@ -38,15 +38,19 @@ contains
         use simple_parameters,          only: parameters
         class(commander_preprocess), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        class(preprocess_strategy), allocatable :: strategy
-        type(parameters) :: params
+        class(preprocess_strategy),  allocatable   :: strategy
+        type(gui_communicator)                     :: gui_comm
+        type(parameters)                           :: params
         ! Ensure the distributed scripts see the correct program name.
         call cline%set('prg', 'preprocess')
         strategy = create_preprocess_strategy(cline)
         call strategy%initialize(params, cline)
+        call gui_comm%new(params)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
+        call gui_comm%add_metadata(params%projfile, oritype='mic')
+        call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_preprocess

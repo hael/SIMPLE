@@ -31,6 +31,7 @@ use simple_motion_gain_analysis, only: gain_flip_analyzer
 use simple_motion_gain_helpers,  only: read_movies_and_sum_frames, normalized_inverse_average_intensity
 use simple_image,                only: image
 use simple_histogram,            only: histogram
+use simple_motion_gain_helpers,  only: gainref_to_jpg
 implicit none
 
 public :: stream_p01_preprocess
@@ -57,6 +58,7 @@ contains
         type(starproject_stream)             :: starproj_stream
         type(string),            allocatable :: movies(:), dir_movies(:)
         type(string)                         :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, projfile
+        type(string)                         :: cwd, gain_thumb_abspath
         type(gui_metadata_stream_update)     :: meta_update
         type(gui_metadata_stream_preprocess) :: meta_preprocess
         type(gui_metadata_micrograph)        :: meta_preprocess_micrograph
@@ -221,6 +223,15 @@ contains
             THROW_HARD('Unknown gain processing option: '//trim(params%flipgain))
         endif
         call flip_gain(cline, params%gainref, params%flipgain)
+        if( cline%defined('gainref') )then
+            if( .not.file_exists(GAIN_THUMBNAIL)) then
+                call simple_getcwd(cwd)
+                gain_thumb_abspath = cwd//'/'//GAIN_THUMBNAIL
+                call gainref_to_jpg(params%gainref, gain_thumb_abspath)
+                write(logfhandle, '(A)') '>>> GAIN REFERENCE'
+                write(logfhandle, '(A)') '>>> JPEG '//gain_thumb_abspath%to_char()
+            end if
+        endif
         ! Infinite loop
         last_injection = simple_gettime()
         prev_stacksz   = 0
