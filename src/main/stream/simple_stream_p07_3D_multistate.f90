@@ -53,14 +53,16 @@ contains
         type(qsys_env)            :: qenv
         type(string), allocatable :: projects(:)
         integer                   :: i, nprojects, nimported, nptcls_glob, abinitio_stage, refine_stage
-        integer                   :: envlen, refine_it
+        integer                   :: envlen, refine_it, nptcls_at_last_refine
         character(len=STDLEN)     :: preproc_part_env
-        logical                   :: l_terminate
-        l_terminate    = .false.
-        abinitio_stage = 0
-        refine_stage   = 0
-        nptcls_glob    = 0
-        refine_it      = 0
+        logical                   :: l_terminate, l_pause_ingestion
+        volatile :: l_terminate ! set asynchronously by sigterm_handler
+        l_terminate           = .false.
+        abinitio_stage        = 0
+        refine_stage          = 0
+        nptcls_glob           = 0
+        refine_it             = 0
+        nptcls_at_last_refine = 0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
@@ -94,6 +96,7 @@ contains
         ! Infinite loop
         nprojects = 0 ! # of projects per iteration
         nimported = 0 ! # of sets per iteration
+        l_pause_ingestion = .false.
         do
             if( file_exists(TERM_STREAM) .or. l_terminate ) then
                 ! termination
@@ -111,11 +114,12 @@ contains
                     call setslist%push2chunk_list(projects(i), setslist%size() + 1, .true.)
                 enddo
             endif
-            ! Import new particles, paused while abinitio3D is running
-            if( abinitio_stage /= 1 .and. refine_stage == 0 ) call import_sets_into_pool( nimported )
+            ! Import new particles, paused while abinitio3D or refine3D is running
+            if( .not. l_pause_ingestion ) call import_sets_into_pool( nimported )
             ! abinitio stage
             if( abinitio_stage < 2 .and. spproj_glob%os_ptcl2D%get_noris() /= 0 ) then
                 if( abinitio_stage == 0 ) then
+                    l_pause_ingestion = .true.
                     ! start abinitio 3D
                     call start_abinitio3D(spproj_glob, string('abinitio3D'), 5000)
                     abinitio_stage = 1
@@ -124,25 +128,34 @@ contains
                   if( file_exists(string('abinitio3D')//'/'//TASK_FINISHED) ) then
                       ! stage complete
                       call finish_abinitio3D(spproj_glob, string('abinitio3D'))
-                      abinitio_stage = 2
+                      abinitio_stage    = 2
+                      l_pause_ingestion = .false.
                   end if
                 end if
             end if
             ! refine stage
             if( abinitio_stage == 2 .and. spproj_glob%os_ptcl2D%get_noris() /= 0 ) then
                 if( refine_stage == 0 ) then
-                    refine_it = refine_it + 1
-                    write(logfhandle,'(A,I0)')'>>> ENTERING REFINE STAGE ', refine_it
-                    ! start refine 3D
-                    call start_refine3D(spproj_glob, string('refine3D/it_')//int2str(refine_it), 5000)
-                    refine_stage = 1
+                    ! only enter if the particle count has grown since the last refine stage
+                    if( spproj_glob%os_ptcl2D%get_noris() > nptcls_at_last_refine ) then
+                        refine_it             = refine_it + 1
+                        nptcls_at_last_refine = spproj_glob%os_ptcl2D%get_noris()
+                        write(logfhandle,'(A,I0)')'>>> ENTERING REFINE STAGE ', refine_it
+                        l_pause_ingestion = .true.
+                        ! start refine 3D
+                     !   call start_refine3D(spproj_glob, string('refine3D/it_')//int2str(refine_it), 5000)
+                        call spproj_glob%write(string('refine_') // int2str(refine_it) // METADATA_EXT)
+                        refine_stage = 1
+                    end if
                 else if( refine_stage == 1 ) then
                     ! Test for refine stage completion
-                    if( file_exists(string('refine3D/it_')//int2str(refine_it)//'/'//TASK_FINISHED) ) then
-                        ! stage complete
-                        call finish_refine3D(spproj_glob, string('refine3D')//int2str(refine_it))
-                        refine_stage = 0
-                    end if
+                !    if( file_exists(string('refine3D/it_')//int2str(refine_it)//'/'//TASK_FINISHED) ) then
+                !        ! stage complete
+                !        call finish_refine3D(spproj_glob, string('refine3D')//int2str(refine_it))
+                !        refine_stage = 0
+                !    end if
+                    l_pause_ingestion = .false.
+                    refine_stage = 0 ! for testing purposes
                 end if
             end if
             ! Wait
@@ -314,8 +327,8 @@ contains
                 call cline_abinitio3D%set('mkdir',                    'no')
                 call cline_abinitio3D%set('pgrp',                     'c1')
                 call cline_abinitio3D%set('nstates',             NSTATES3D)
-                call cline_abinitio3D%set('lpstart',                    20)
-                call cline_abinitio3D%set('lpstop',                      6)
+                call cline_abinitio3D%set('lpstart',                    50) ! 20
+                call cline_abinitio3D%set('lpstop',                     10) ! 6
                 call cline_abinitio3D%set('force_lp_range',          'yes')
                 call cline_abinitio3D%set('mskdiam',            mskdiam_in)
                 call cline_abinitio3D%set('nparts',                      4)

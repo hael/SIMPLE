@@ -246,6 +246,7 @@ contains
         real(kind=dp)                              :: r_val
         type(pipe_rx_state)                        :: rx_state(N_STREAM_PIPES)
         type(pipe_tx_state),                target :: tx_state(N_STREAM_PIPES)
+        volatile :: l_terminate_loop ! set asynchronously by sigterm_handler
         ! check cline arguments 
         l_existing_pickrefs   = .false.
         l_existing_box        = .false.

@@ -79,6 +79,7 @@ contains
         integer                              :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         integer                              :: update_expected_len
         logical                              :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found, l_terminate
+        volatile :: l_terminate ! set asynchronously by sigterm_handler
         update_expected_len = -1
         l_terminate=.false.
         call signal(SIGTERM, sigterm_handler)

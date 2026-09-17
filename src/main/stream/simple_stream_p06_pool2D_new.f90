@@ -109,6 +109,7 @@ contains
         logical                                   :: l_pause, l_terminate, l_once, l_changed, l_sieve_final
         logical                                   :: l_stepwise
         real                                      :: final_mskdiam
+        volatile :: l_terminate ! set asynchronously by sigterm_handler
         update_expected_len        = -1
         l_once                     = .true.
         l_terminate                = .false.

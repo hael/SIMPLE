@@ -53,6 +53,7 @@ contains
         integer                                    :: nprojects, iproj, iori, nmics_here, nimported, nimported_cycle
         integer                                    :: i, j, map_count, imap, last_micrograph_imported, i_point, n_points, max_points
         logical                                    :: l_terminate=.false.
+        volatile :: l_terminate ! set asynchronously by sigterm_handler
         call signal(SIGTERM, sigterm_handler)
         call cline%printline()
         call flush(logfhandle)

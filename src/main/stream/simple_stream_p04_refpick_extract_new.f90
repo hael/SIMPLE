@@ -82,6 +82,7 @@ contains
         logical                                :: l_restart, l_terminate
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
+        volatile :: l_terminate ! set asynchronously by sigterm_handler
         l_terminate     = .false.
         n_mics_imported = 0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM

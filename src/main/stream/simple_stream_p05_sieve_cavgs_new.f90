@@ -99,6 +99,7 @@ contains
         integer :: nprojects, n_mics_imported, n_ptcls_imported, i, xtiles, ytiles
         integer :: last_import_time   ! wall-clock timestamp (s) of the most recent successful import
         logical :: l_terminate, l_once
+        volatile :: l_terminate ! set asynchronously by sigterm_handler
         l_once      = .true.
         l_terminate = .false.
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
