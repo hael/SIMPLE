@@ -650,3 +650,34 @@ shell 78, 3.981 A): rung 6.6% of the mask, regularized pair 3.9%, handoff
 `vol1/vol2` file inputs are gone. This is the cheap test of the auxiliary
 competition on any completed run directory.
 
+**2026-09-18 -- solvent prior as an opt-in SOFT real-space ridge on the replay.**
+Decision (Hans): "there is solvent left to flatten, no doubt about that",
+but "the prior needs to be soft". A first cut refined the replay's hard
+support with a Wang-type mask; with the default `maxits_ml=0` that is the
+closed-form shrink multiplied by a solvent mask, i.e. exactly the
+post-solve masking the backend forbids, and with iterations it is still a
+hard cut at a single Otsu boundary. Discarded. What ships:
+`pcg_solvent=yes|no` (default `no`; refine3D/refine3D_auto/abinitio3D/
+reconstruct3D; requires `rec_backend=pcg`; forwarded like the other
+backend keys, stripped for the gridding children) with
+`pcg_solvent_lambda` (default 1.0, relative to `data_scale`). On: the
+regularized operator gains `lambda_s (1 - w(r))` on its diagonal, `w` the
+logistic protein weight built PER HALF from that half's own current base
+map (half-independent prior, regularized pair stays gold standard) at
+`max(8 A, 2 x res0143)` (Otsu inside the production support, width = the
+solvent class's spread); `maxits_ml` defaults to 2 with the prior on
+(parameters class, `PCG_SOLVENT_MAXITS_ML`; explicit 0 refused) because
+the closed form cannot see a real-space term. Weight volumes written per
+half beside the shipped map every iteration, even/odd correlation and
+solvent-fraction gap logged (the half-independence check). abinitio3D:
+the key rides with the PCG stages only. Support, base pair, FSC oracle and NU
+bank inputs untouched on purpose: the resolution claim carries no extra
+mask and the prior's effect is confined to the shipped regularized pair.
+No low-pass guard on `w`: a ridge modulator, unlike a multiplicative
+mask, injects no spectrum, and the statistic is band-limited at 2 x res
+anyway. Runs under `automsk=no` too (sphere as support). Provenance
+`solvent_prior=soft lambda_rel=<x>`. Off: bit-identical.
+Untested; first test is the PfCRT cold-start run with `pcg_solvent=yes`
+against its 3.98 A baseline, judged on the map (cavities, detergent
+belt, skirt) rather than the FSC, then a `pcg_solvent_lambda` sweep
+(0.3, 1, 3).

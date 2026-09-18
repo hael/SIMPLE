@@ -597,6 +597,15 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
+        ! the soft solvent prior is a PCG-backend control: it rides with the
+        ! PCG stages only (a gridding stage would refuse it)
+        if( params%l_pcg_solvent .and. trim(cfg%rec_backend%to_char()) == 'pcg' )then
+            call cline_refine3D%set('pcg_solvent',        'yes')
+            call cline_refine3D%set('pcg_solvent_lambda', params%pcg_solvent_lambda)
+        else
+            call cline_refine3D%delete('pcg_solvent')
+            call cline_refine3D%delete('pcg_solvent_lambda')
+        endif
         if( cfg%refine.eq.'prob_neigh' )then
             call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)
         else

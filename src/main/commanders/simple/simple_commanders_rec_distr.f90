@@ -803,6 +803,11 @@ contains
                     call state_mask_is_compatible(nu_envmask_file, params%box_crop, params%smpd_crop, &
                         &mask_exists, mask_compatible)
                     if( mask_compatible )then
+                        ! the image must be constructed before it can be read
+                        ! (the bootstrap has no lag-one mask, so this branch
+                        ! first runs at iteration 1: refine3D_auto crash
+                        ! 2026-09-18)
+                        call envmask%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                         call envmask%read(nu_envmask_file)
                         call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
                             &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='nu')

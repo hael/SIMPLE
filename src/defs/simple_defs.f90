@@ -91,6 +91,10 @@ real,    parameter    :: ENVMSKLP_DEFAULT          = 20.0      !< envfsc density
 ! minimum density-envelope dilation (in A): 7 layers at 1.075 A/pixel, the
 ! former abinitio3D default, now shared by every envelope route
 real,    parameter    :: ENVMSKWIDTH_A_MIN         = 7.5
+! default coupled iterations of the PCG regularized solve when the soft solvent
+! prior is on (pcg_solvent=yes): the closed-form start is a Fourier diagonal and
+! cannot see a real-space prior, so at least one coupled iteration must run
+integer, parameter    :: PCG_SOLVENT_MAXITS_ML     = 2
 real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
 integer, parameter    :: OSMPL_PAD_FAC             = 2         !< factor by which to pad for oversampled gridding
 real,    parameter    :: KBALPHA                   = real(OSMPL_PAD_FAC) !< interpolation alpha (oversampling constant)

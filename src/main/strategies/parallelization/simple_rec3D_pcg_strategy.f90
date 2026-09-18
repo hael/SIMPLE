@@ -16,6 +16,7 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
     &write_halfmap_diagnostics, &
     &write_support_provenance, read_support_provenance
 use simple_image_msk,         only: image_msk
+use simple_pcg_solvent_sidecar, only: build_solvent_prior_weight, pcg_solvent_stats
 use simple_nu_filter,         only: NU_DEV_OUTPUT
 use simple_nu_state_filter,   only: nonuniform_filter_state, nu_aux_member
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
@@ -150,7 +151,8 @@ contains
     !! stop falls back to the closed form. maxits_ml=0 ships the closed form.
     !! The closed-form residuals stay on the outcome; x_cf receives the
     !! closed form when iterations ran, for the agreement diagnostic.
-    subroutine solve_regularized_half( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf )
+    subroutine solve_regularized_half( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf, &
+            &solvent_weight, solvent_lambda_rel )
         type(reconstructor_pcg),  intent(inout) :: pcgop
         real,                     intent(inout) :: x(:,:,:)
         integer,                  intent(in)    :: maxits_ml
@@ -158,9 +160,22 @@ contains
         integer,                  intent(out)   :: niters
         type(pcg_solver_outcome), intent(out)   :: outcome
         real, allocatable,        intent(out)   :: x_cf(:,:,:)
-        real :: rel_l2, rel_m
+        class(image),   optional, intent(in)    :: solvent_weight     !< pcg_solvent=yes: protein weight w(r)
+        real,           optional, intent(in)    :: solvent_lambda_rel !< ridge coefficient relative to the data scale
+        real    :: rel_l2, rel_m
+        integer :: maxits_here
+        maxits_here = maxits_ml
+        if( present(solvent_weight) )then
+            ! the soft solvent prior (real-space ridge) is installed after
+            ! end_accum so its coefficient is relative to the data scale; the
+            ! closed-form start cannot see it, so the coupled iterations must
+            ! run: the parameters class guarantees maxits_ml >= 1 with the prior on
+            if( .not. present(solvent_lambda_rel) ) THROW_HARD('solvent prior requires its relative coefficient; solve_regularized_half')
+            if( maxits_here < 1 ) THROW_HARD('solvent prior requires maxits_ml>=1; solve_regularized_half')
+            call pcgop%set_solvent_prior(solvent_weight, solvent_lambda_rel)
+        endif
         call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
-        if( maxits_ml < 1 )then
+        if( maxits_here < 1 )then
             niters = 0
             allocate(rel_res_hist(0))
             outcome%stop_reason          = 'closed_form'
@@ -173,13 +188,15 @@ contains
             outcome%converged            = .true.
         else
             x_cf = x
-            call pcgop%solve_accum(x, maxits=maxits_ml, rtol=0.0, rel_res_hist=rel_res_hist, &
+            call pcgop%solve_accum(x, maxits=maxits_here, rtol=0.0, rel_res_hist=rel_res_hist, &
                 &niters=niters, outcome=outcome)
             if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE )then
                 x = x_cf
                 niters = 0
                 if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
                 allocate(rel_res_hist(0))
+                if( present(solvent_weight) ) write(logfhandle,'(A)') &
+                    &'>>> PCG SOLVENT PRIOR: indefinite stop, half shipped as the closed form WITHOUT the solvent prior'
                 outcome%stop_reason          = 'closed_form_fallback'
                 outcome%iteration_count      = 0
                 outcome%final_rel_residual   = rel_l2
@@ -355,6 +372,93 @@ contains
         call pcgop%set_mask(params%msk_crop)
     end subroutine set_pcg_solve_support
 
+    !> Opt-in soft solvent prior (pcg_solvent=yes): the protein weights w(r)
+    !! of the regularized solve's real-space ridge, one per half, each drawn
+    !! from its OWN base half at the working resolution so the prior is
+    !! half-independent and the regularized pair stays gold-standard. The
+    !! production support of the solve (explicit pcg_mskfile, the state
+    !! envelope, or the soft sphere set_mask installs) only selects the voxels
+    !! the threshold is estimated on. Support, base solve, FSC and NU bank
+    !! inputs are untouched. With pcg_solvent=no nothing here runs.
+    subroutine build_pcg_solvent_prior_weight( params, state_here, base_even, base_odd, res0143, state_support, &
+        &l_state_support, weight, l_weight )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        class(image),      intent(in)    :: base_even, base_odd
+        real,              intent(in)    :: res0143
+        class(image),      intent(in)    :: state_support
+        logical,           intent(in)    :: l_state_support
+        type(image),       intent(inout) :: weight(2) !< (1) even, (2) odd
+        logical,           intent(out)   :: l_weight
+        type(image) :: base_support
+        type(pcg_solvent_stats) :: stats_even, stats_odd
+        type(string) :: fname_even, fname_odd, fbody
+        real, allocatable :: ones(:,:,:)
+        real    :: corr
+        logical :: l_explicit
+        l_weight = .false.
+        if( .not. params%l_pcg_solvent ) return
+        if( .not. params%l_ml_reg )then
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+                &', no regularized solve (ml_reg=no); nothing to regularize'
+            return
+        endif
+        if( res0143 <= 0. )then
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+                &', no base-pair resolution available; prior not applied'
+            return
+        endif
+        l_explicit = .false.
+        if( params%pcg_mskfile%is_allocated() ) l_explicit = len_trim(params%pcg_mskfile%to_char()) > 0
+        if( l_explicit )then
+            call base_support%read_and_crop(params%pcg_mskfile, params%smpd, params%box_crop, params%smpd_crop)
+        else if( l_state_support )then
+            call base_support%copy(state_support)
+        else
+            allocate(ones(params%box_crop,params%box_crop,params%box_crop), source=1.0)
+            call base_support%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call base_support%set_rmat(ones, .false.)
+            call base_support%mask3D_soft(params%msk_crop, backgr=0.)
+            deallocate(ones)
+        endif
+        call weight(1)%kill
+        call weight(2)%kill
+        call build_solvent_prior_weight(state_here, 'even', base_even, res0143, base_support, params%pcg_solvent_lambda, &
+            &weight(1), stats_even)
+        call build_solvent_prior_weight(state_here, 'odd',  base_odd,  res0143, base_support, params%pcg_solvent_lambda, &
+            &weight(2), stats_odd)
+        call base_support%kill
+        l_weight = .true.
+        ! validation: the two half-independent weights must agree; their
+        ! correlation and the solvent-fraction gap are printed, and both
+        ! volumes are written beside the shipped map (per iteration under
+        ! refine3D) so the partition can be inspected
+        corr = weight(1)%real_corr(weight(2))
+        write(logfhandle,'(A,I0,A,F6.3,A,F6.2,A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+            &', even/odd weight correlation ', corr, ', solvent fraction gap ', &
+            &100.*abs(stats_even%solvent_frac - stats_odd%solvent_frac), ' %, maxits_ml ', params%maxits_ml, &
+            &' coupled iterations carry the prior'
+        ! named as the weight it is (like automask_stateNN.mrc), never as a
+        ! reconstruction: pcg_solvent_weight_stateNN[_iterNNN]_even|odd.mrc
+        fbody = string(PCG_SOLVENT_WEIGHT_FBODY)//int2str_pad(state_here,2)
+        if( params%which_iter > 0 ) fbody = fbody//'_iter'//int2str_pad(params%which_iter,3)
+        fname_even = fbody//'_even'//MRC_EXT
+        fname_odd  = fbody//'_odd'//MRC_EXT
+        call fbody%kill
+        call weight(1)%write(fname_even, del_if_exists=.true.)
+        call weight(2)%write(fname_odd,  del_if_exists=.true.)
+        write(logfhandle,'(A)') '>>> PCG SOLVENT PRIOR: weights written to '//fname_even%to_char()//' and '//fname_odd%to_char()
+        call fname_even%kill
+        call fname_odd%kill
+    end subroutine build_pcg_solvent_prior_weight
+
+    !> the solvent_prior= line of the support provenance sidecar
+    function solvent_prior_provenance( params ) result( str )
+        class(parameters), intent(in) :: params
+        character(len=64) :: str
+        write(str,'(A,F0.3)') 'soft lambda_rel=', params%pcg_solvent_lambda
+    end function solvent_prior_provenance
+
     !> Build the per-state solve-support envelope from the reference volume
     !! this iteration matched against (lag-one, the same lag the matching
     !! references carry). A start volume is a valid density source. With no
@@ -499,7 +603,8 @@ contains
         type(string) :: eonames(2)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         type(image_msk) :: state_support_msk
-        logical :: l_state_support, l_base_support_constrained
+        type(image)     :: solvent_weight(2)
+        logical :: l_state_support, l_base_support_constrained, l_solvent_weight
         character(len=16) :: state_support_kind, base_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
@@ -538,6 +643,7 @@ contains
             ! distributed owner: density for yes, lagged NU with density
             ! fallback for nu, and sphere throughout for no.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
+            l_solvent_weight = .false.
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
             if( l_base_support_constrained ) base_support_kind = state_support_kind
@@ -584,6 +690,9 @@ contains
             call hm_diag%kill
             time_fsc_output = real(toc(t_state_phase),dp)
 
+            ! opt-in soft solvent prior of the regularized solve (no-op unless pcg_solvent=yes)
+            call build_pcg_solvent_prior_weight(params, state, half_even, half_odd, res0143s(state), state_support_msk, &
+                &l_state_support, solvent_weight, l_solvent_weight)
             if( params%l_ml_reg )then
                 ! the ordinary global-ML replay (P_tau from the current base
                 ! pair); nonuniform filtering is assembly-owned and runs
@@ -606,7 +715,12 @@ contains
             call merged%write(fname_vol, del_if_exists=.true.)
             ! the sidecar follows the published map, never precedes it
             if( params%l_ml_reg )then
-                call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind)
+                if( l_solvent_weight )then
+                    call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind, &
+                        &solvent_prior=solvent_prior_provenance(params))
+                else
+                    call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind)
+                endif
             else
                 call write_support_provenance(fname_vol, l_base_support_constrained, 'base', base_support_kind)
             endif
@@ -647,6 +761,8 @@ contains
                 call raw_fname%kill
             endif
             call merged%kill
+            call solvent_weight(1)%kill
+            call solvent_weight(2)%kill
             call fname_even%kill
             call fname_odd%kill
             call fname_vol%kill
@@ -930,8 +1046,14 @@ contains
                 &prior_to_khat_l1, prior_to_khat_rms)
             x = base_volume%get_rmat()
             t_phase = tic()
-            ! closed form, then maxits_ml coupled iterations from it
-            call solve_regularized_half(pcgop, x, params%maxits_ml, rel_res_hist, niters, result, x_cf)
+            ! closed form, then maxits_ml coupled iterations from it (with the
+            ! soft solvent prior installed when pcg_solvent=yes)
+            if( l_solvent_weight )then
+                call solve_regularized_half(pcgop, x, params%maxits_ml, rel_res_hist, niters, result, x_cf, &
+                    &solvent_weight=solvent_weight(eo_here+1), solvent_lambda_rel=params%pcg_solvent_lambda)
+            else
+                call solve_regularized_half(pcgop, x, params%maxits_ml, rel_res_hist, niters, result, x_cf)
+            endif
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
             if( allocated(x_cf) )then
@@ -1663,10 +1785,11 @@ contains
         integer :: pcg_master_nthreads, pcg_half_nthreads
         type(distributed_half_job) :: even_job, odd_job
         type(image_msk) :: state_support_msk
+        type(image)     :: solvent_weight(2)
         logical :: l_state_support, l_base_support_constrained, l_nu_base_constrained
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
         logical :: l_fsc_pair_support_constrained, l_prev_support_constrained, l_prev_provenance_found
-        logical :: l_shipped_support_constrained
+        logical :: l_shipped_support_constrained, l_solvent_weight
         character(len=16) :: state_support_kind, base_support_kind, fsc_support_kind
         character(len=16) :: previous_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
@@ -1746,6 +1869,7 @@ contains
             ! solves when available; otherwise the base bootstraps on the
             ! sphere and the replay uses the density fallback.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
+            l_solvent_weight = .false.
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
             if( l_base_support_constrained ) base_support_kind = state_support_kind
@@ -1834,6 +1958,11 @@ contains
             call hm_diag%kill
             time_fsc_output = real(toc(t_state_phase),dp)
 
+            ! opt-in soft solvent prior of the regularized solve (no-op unless
+            ! pcg_solvent=yes): one weight per half from the CURRENT base
+            ! halves at the FSC pair's working resolution
+            call build_pcg_solvent_prior_weight(params, state, half_even, half_odd, res0143s(state), state_support_msk, &
+                &l_state_support, solvent_weight, l_solvent_weight)
             if( params%l_ml_reg )then
                 ! the ordinary global-ML replay (P_tau from the FSC pair)
                 call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
@@ -1894,7 +2023,10 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             ! the sidecar follows the published map, never precedes it
-            if( params%l_ml_reg )then
+            if( params%l_ml_reg .and. l_solvent_weight )then
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind, &
+                    &solvent_prior=solvent_prior_provenance(params))
+            else if( params%l_ml_reg )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind)
             else if( l_bootstrap .and. update_weights(state) < 0.99 )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed', shipped_support_kind)
@@ -1943,6 +2075,8 @@ contains
                 call previous_merged%kill
             endif
             call merged%kill
+            call solvent_weight(1)%kill
+            call solvent_weight(2)%kill
             call fname_even%kill
             call fname_odd%kill
             call fname_vol%kill
@@ -2280,7 +2414,12 @@ contains
             integer(timer_int_kind) :: t_phase, t_end, t_rate
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
-            if( job%l_ml_solve )then
+            if( job%l_ml_solve .and. l_solvent_weight )then
+                ! closed form, then coupled iterations with the soft solvent prior
+                call solve_regularized_half(job%pcgop, job%x, params%maxits_ml, job%rel_res_hist, &
+                    &job%niters, job%result, job%x_cf, solvent_weight=solvent_weight(job%eo+1), &
+                    &solvent_lambda_rel=params%pcg_solvent_lambda)
+            else if( job%l_ml_solve )then
                 ! closed form, then maxits_ml coupled iterations from it
                 call solve_regularized_half(job%pcgop, job%x, params%maxits_ml, job%rel_res_hist, &
                     &job%niters, job%result, job%x_cf)

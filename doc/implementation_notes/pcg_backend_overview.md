@@ -99,6 +99,42 @@ and the support-provenance sidecar `<vol>_pcg_support.txt`
 (`solve_support=density|sphere`, `solve_kind=base|regularized|mixed|gridding`)
 records what the shipped pair carries.
 
+**Opt-in soft solvent prior (`pcg_solvent=yes`, default `no`).** None of
+the supports above sees solvent finer than the scale they were drawn at
+(the envelope's dilation ring and skirt, cavities and gaps below ~20 A).
+With `pcg_solvent=yes` the regularized system gains a real-space,
+position-dependent ridge, `(H + P_tau + lambda I + Lambda_s) x = b` with
+`Lambda_s = lambda_s (1 - w(r))` and `lambda_s = pcg_solvent_lambda x
+data_scale` (default 1.0, the same reference the relative ridge uses): a
+Gaussian prior with position-dependent variance, the real-space twin of
+`P_tau`. The protein weight `w(r)` in [0,1] is built per half from that
+half's OWN current base map at the working resolution, so the prior is
+half-independent and the regularized pair keeps its gold-standard status
+(`simple_pcg_solvent_sidecar`):
+smoothed absolute density at `max(8 A, 2 x FSC0.143)`, Otsu threshold
+inside the production support, logistic of the statistic around the
+threshold with the solvent class's spread as width. Nothing is zeroed or
+masked: where the data term is strong the prior is irrelevant, where it
+is weak solvent is pulled toward zero, and a misassigned voxel is
+over-regularized rather than deleted. The support, the base solve, the
+base pair, the FSC and the NU bank inputs are unchanged. The closed-form
+start is a Fourier diagonal and cannot see a real-space prior, so the
+parameters class defaults `maxits_ml` to `PCG_SOLVENT_MAXITS_ML = 2`
+with the prior on (0 otherwise) and refuses an explicit 0. It runs under
+any `automsk` setting: with `automsk=no` the sphere is the support and
+the prior is the only solvent treatment inside it. In abinitio3D the
+key rides with the PCG stages only (`emit_refine3D_stage_cfg`,
+`apply_refine3D_reconstruction_controls`); gridding stages never see it.
+Validation: the log prints one `PCG SOLVENT PRIOR` line per half
+(smoothing scale, threshold, width, solvent fraction, mean weight,
+coefficient) plus the even/odd weight correlation and solvent-fraction
+gap, and both weight volumes are written beside the shipped map
+(`pcg_solvent_weight_state01_even.mrc`, `_odd`; `..._iterNNN_even.mrc`
+under refine3D, one pair per iteration, never deleted) for inspection.
+The provenance sidecar gains `solvent_prior=soft lambda_rel=<x>`. With
+`pcg_solvent=no` no prior code runs and the strategy is bit-identical
+to the version without it.
+
 ## 4. The FSC and the envelope
 
 `automsk=yes` implies `envfsc=yes` on both backends (derived in

@@ -137,6 +137,14 @@ type :: reconstructor_pcg
     real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
     logical           :: l_ml_prior_requested = .false.
     logical           :: l_ml_prior = .false.
+    ! ---- optional real-space solvent prior: position-dependent ridge ----
+    ! (H + P_tau + lambda I + Lambda_s) x = b with Lambda_s = lambda_s (1-w(r)),
+    ! w the protein weight in [0,1] and lambda_s = solvent_lambda_rel * data_scale.
+    ! A Gaussian prior with position-dependent variance, the real-space twin of
+    ! P_tau; nothing is zeroed, the data term wins wherever it is strong
+    real, allocatable :: solvent_pen(:,:,:)            !< 1 - w(r) on the solve box
+    real              :: solvent_lambda_rel = 0.0
+    logical           :: l_solvent_prior = .false.
     ! ---- per-phase profiling over a solve: particle loop vs FFT + lattice traffic ----
     logical  :: l_profile = .false.
     real(dp) :: t_setvol  = 0.0_dp  !< pad + forward FFT of the iterate
@@ -180,6 +188,9 @@ type :: reconstructor_pcg
     procedure :: set_mask_volume
     procedure :: set_lambda_relative
     procedure :: set_ml_prior
+    procedure :: set_solvent_prior
+    procedure :: get_solvent_lambda
+    procedure, private :: add_ridge
     procedure, private :: build_env
     procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
@@ -512,6 +523,58 @@ contains
         self%l_ml_prior = .false.
     end subroutine set_ml_prior
 
+    !> real-space solvent prior from a protein weight volume w in [0,1] (1 =
+    !! protein, 0 = solvent) and a coefficient relative to the data scale.
+    !! Requires the data scale (end of accumulation) so the coefficient is
+    !! portable across datasets. Acts through the coupled iterations only: the
+    !! closed-form start is a Fourier diagonal and cannot see a real-space term
+    subroutine set_solvent_prior( self, weight, lambda_rel )
+        class(reconstructor_pcg), intent(inout) :: self
+        class(image),             intent(in)    :: weight
+        real,                     intent(in)    :: lambda_rel
+        integer :: wdim(3)
+        wdim = weight%get_ldim()
+        if( any(wdim /= self%box) ) THROW_HARD('solvent weight volume dimensions differ from the solve box; set_solvent_prior')
+        if( weight%is_ft() ) THROW_HARD('solvent weight volume must be in real space; set_solvent_prior')
+        if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 ) THROW_HARD('relative solvent lambda must be finite and non-negative')
+        if( self%data_scale <= 0.0 ) THROW_HARD('solvent prior requires the data scale; call after end_accum; set_solvent_prior')
+        if( allocated(self%solvent_pen) ) deallocate(self%solvent_pen)
+        self%solvent_pen = 1.0 - min(1.0, max(0.0, weight%get_rmat()))
+        self%solvent_lambda_rel = lambda_rel
+        self%l_solvent_prior    = lambda_rel > 0.0
+    end subroutine set_solvent_prior
+
+    !> the absolute solvent ridge coefficient (0 when the prior is off)
+    pure real function get_solvent_lambda( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_solvent_lambda = 0.0
+        if( self%l_solvent_prior ) get_solvent_lambda = self%solvent_lambda_rel * self%data_scale
+    end function get_solvent_lambda
+
+    !> the ridge terms of the normal operator: the band precision lambda I and,
+    !! when set, the position-dependent solvent ridge lambda_s (1-w)
+    subroutine add_ridge( self, p, hp )
+        class(reconstructor_pcg), intent(in)    :: self
+        real,                     intent(in)    :: p(self%box,self%box,self%box)
+        real,                     intent(inout) :: hp(self%box,self%box,self%box)
+        real    :: lam_s
+        integer :: i, j, k
+        if( self%l_solvent_prior )then
+            lam_s = self%solvent_lambda_rel * self%data_scale
+            !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static) proc_bind(close)
+            do k = 1, self%box
+                do j = 1, self%box
+                    do i = 1, self%box
+                        hp(i,j,k) = hp(i,j,k) + (self%lambda + lam_s * self%solvent_pen(i,j,k)) * p(i,j,k)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        else
+            hp = hp + self%lambda * p
+        endif
+    end subroutine add_ridge
+
     !> multiplies by E^-1, the inverse KB envelope (deapodization). Real images carry
     !! no envelope, so fitting them with A E returns E^-1 x; applying E^-1 on both
     !! sides of the normal operator and once to the RHS makes the solve target x
@@ -646,6 +709,7 @@ contains
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
         if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
+        if( allocated(self%solvent_pen) ) deallocate(self%solvent_pen)
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -670,6 +734,8 @@ contains
         self%ml_hp       = 100.0
         self%l_ml_prior_requested = .false.
         self%l_ml_prior  = .false.
+        self%solvent_lambda_rel = 0.0
+        self%l_solvent_prior    = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -1043,7 +1109,7 @@ contains
         hp = self%fold_and_ifft(vol_accum)
         call self%deapod_mul(hp)
         if( self%l_ml_prior ) hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
-        hp = hp + self%lambda * p
+        call self%add_ridge(p, hp)
     end function apply_normal_matrixfree
 
     !> kernelized (Toeplitz/Gram) operator H_data p = crop(IFFT(Khat FFT(pad p))),
@@ -1093,8 +1159,9 @@ contains
         if( self%l_ml_prior .and. .not. self%l_deapod )then
             hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
         endif
-        ! band precision on the deapodized domain; attachment mode enforced upstream
-        hp = hp + self%lambda * p
+        ! band precision on the deapodized domain (+ the solvent ridge when set);
+        ! attachment mode enforced upstream
+        call self%add_ridge(p, hp)
     end function apply_normal_kernel
 
     !> C^T F^-1 diag(d) F C on the Khat lattice; the matrix-free oracle and the
@@ -2060,12 +2127,14 @@ contains
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
         integer  :: i, j, k
-        logical  :: l_ml_save
+        logical  :: l_ml_save, l_solv_save
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; measure_kernel_scale')
         lam_save    = self%lambda
         l_ml_save   = self%l_ml_prior
+        l_solv_save = self%l_solvent_prior
         self%lambda = 0.0   ! compare the DATA term only
         self%l_ml_prior = .false.
+        self%l_solvent_prior = .false.
         allocate(probe(self%box,self%box,self%box))
         ctr = real(self%box)/2.0 + 0.5
         sig = 0.15 * real(self%box)
@@ -2085,6 +2154,7 @@ contains
         if( den > 0.0_dp ) scale = real(num/den)
         self%lambda = lam_save
         self%l_ml_prior = l_ml_save
+        self%l_solvent_prior = l_solv_save
     end function measure_kernel_scale
 
     ! PRIVATE HELPERS

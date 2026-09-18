@@ -248,6 +248,8 @@ contains
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('maxits_ml')
         call child_cline%delete('rtol')
+        call child_cline%delete('pcg_solvent')
+        call child_cline%delete('pcg_solvent_lambda')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -255,6 +257,7 @@ contains
     ! and is deliberately not part of this interface.
     subroutine apply_refine3D_reconstruction_controls( child_cline )
         class(cmdline), intent(inout) :: child_cline
+        logical :: l_pcg_stage
         if( cline_refine3D%defined('rec_backend') )then
             call child_cline%set('rec_backend', cline_refine3D%get_carg('rec_backend'))
         endif
@@ -266,6 +269,19 @@ contains
         endif
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
+        endif
+        ! the solvent prior follows the stage's backend: forwarded on a PCG
+        ! stage, removed otherwise (the child cline is a copy of the parent
+        ! command line and may carry the user's pcg_solvent=yes)
+        l_pcg_stage = cline_refine3D%defined('rec_backend')
+        if( l_pcg_stage ) l_pcg_stage = cline_refine3D%get_carg('rec_backend') .eq. 'pcg'
+        if( l_pcg_stage .and. cline_refine3D%defined('pcg_solvent') )then
+            call child_cline%set('pcg_solvent', cline_refine3D%get_carg('pcg_solvent'))
+            if( cline_refine3D%defined('pcg_solvent_lambda') ) &
+                &call child_cline%set('pcg_solvent_lambda', cline_refine3D%get_rarg('pcg_solvent_lambda'))
+        else
+            call child_cline%delete('pcg_solvent')
+            call child_cline%delete('pcg_solvent_lambda')
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))

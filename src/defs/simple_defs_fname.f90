@@ -64,6 +64,7 @@ character(len=*), parameter :: AMSK_OTSU                     = 'automasked_otsu.
 ! AUTOMASK3D
 character(len=*), parameter :: MSKVOL_FILE                   = 'automask3D.mrc'
 character(len=*), parameter :: AUTOMASK_FBODY                = 'automask3D_state'
+character(len=*), parameter :: PCG_SOLVENT_WEIGHT_FBODY      = 'pcg_solvent_weight_state' !< per-half w(r) of the PCG solvent prior (inspection only)
 character(len=*), parameter :: NU_ENVMASK_FBODY              = 'nu_envmask3D_state'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY           = 'refine3Ddoc_'
