@@ -1,0 +1,126 @@
+{% comment %}
+  project.html — selected-project details and workspace cards, included directly
+  in index.html beneath the shared Stream navbar.
+
+  Context variables:
+    project    — selected ProjectModel accessible to the current user
+    workspaces — that user's workspaces for the selected project
+{% endcomment %}
+<div class="flex-1 min-h-0 flex flex-col">
+
+    <div class="flex-1 min-h-0 flex flex-row">
+        <main class="flex-1 min-w-0 overflow-y-auto scrollbar-hidden px-5 py-4"
+              aria-label="workspaces in {{ project.name }}">
+            <div class="flex flex-wrap gap-3 content-start">
+                {% for workspace in workspaces %}
+                    <a href="{% url 'nice_lite:index' %}?selected_project_id={{ project.id }}&amp;selected_workspace_id={{ workspace.id }}"
+                       target="_parent"
+                       title="open workspace {{ workspace.name }}"
+                       class="bg-streambar rounded-xl border border-streamring/20 hover:border-streamring flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor-zoom-in">
+
+                        <!-- Header: workspace title · open indicator · description -->
+                        <div class="flex flex-col border-b border-streamdivider">
+                            <div class="flex items-center gap-2 px-3 pt-2 pb-0 flex-shrink-0">
+                                <span class="text-[10px] font-medium text-streamtext uppercase tracking-widest flex-1 truncate">
+                                    {{ workspace.name }}
+                                </span>
+                                <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
+                                    open
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1 px-3 pb-1 min-w-0">
+                                <span class="w-full text-[10px] text-streamlabel truncate">
+                                    {{ workspace.desc|default:"no description" }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Body: workspace metadata and folder preview -->
+                        <div class="px-3 py-2 flex-1 flex flex-col">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-streambg rounded-lg pl-2 pr-0 py-1 min-w-0">
+                                    <p class="text-[10px] font-medium text-streamlabel mb-1.5">created by</p>
+                                    <p class="text-[10px] font-medium text-streamlabel leading-none truncate">
+                                        {{ workspace.user }}
+                                    </p>
+                                </div>
+                                <div class="bg-streambg rounded-lg pl-2 pr-0 py-1 min-w-0">
+                                    <p class="text-[10px] font-medium text-streamlabel mb-1.5">modified</p>
+                                    <p class="text-[10px] font-medium text-streamlabel leading-none truncate">
+                                        {{ workspace.mdat|date:"M j, Y" }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">workspace folder</div>
+                            <div class="rounded-md overflow-hidden bg-streambg relative w-[180px] h-[180px] m-auto flex flex-col items-center justify-center px-3">
+                                <svg class="w-12 h-12 text-streamicon mb-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z"/>
+                                </svg>
+                                <p class="w-full text-[10px] text-streamsubtle font-mono text-center truncate"
+                                   title="{{ workspace.link|default:workspace.dirc }}">
+                                    {{ workspace.link|default:workspace.dirc }}
+                                </p>
+                            </div>
+
+                        </div>
+
+                        <!-- Footer: open workspace -->
+                        <div class="mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 cursor-default">
+                            <span title="open workspace" class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                    <circle cx="8" cy="8" r="3"/>
+                                    <path d="M1 8c1.5-4 5.5-6 7-6s5.5 2 7 6c-1.5 4-5.5 6-7 6s-5.5-2-7-6z"/>
+                                </svg>
+                            </span>
+                        </div>
+                    </a>
+                {% empty %}
+                    <div class="w-full flex items-center justify-center py-24 text-streamlabel text-sm">
+                        no workspaces yet — click new workspace to create one
+                    </div>
+                {% endfor %}
+            </div>
+        </main>
+
+        <aside class="flex-shrink-0 flex flex-col items-center justify-end pb-4 pr-2">
+            <form method="POST" action="{% url 'nice_lite:create_workspace' %}" target="_parent">
+                {% csrf_token %}
+                <input type="hidden" name="selected_project_id" value="{{ project.id }}">
+                <button type="submit" title="new workspace" aria-label="new workspace"
+                        class="w-12 h-12 rounded-full bg-streamring text-white shadow-lg hover:opacity-90 transition-opacity inline-flex items-center justify-center">
+                    <svg class="w-5 h-5" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                        <path d="M8 3.25v9.5"/>
+                        <path d="M3.25 8h9.5"/>
+                    </svg>
+                </button>
+            </form>
+        </aside>
+    </div>
+
+    <footer class="bg-streambar border-t border-streamline px-6 py-3 flex-shrink-0">
+        <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">Project details</p>
+        <div class="grid grid-cols-4 gap-10">
+            <div class="min-w-0">
+                <p class="text-[10px] text-streamlabel mb-0.5">name</p>
+                <p class="text-xs text-streaminput font-medium truncate">{{ project.name }}</p>
+            </div>
+            <div class="min-w-0">
+                <p class="text-[10px] text-streamlabel mb-0.5">created</p>
+                <p class="text-xs text-streaminput">{{ project.date|date:"M j, Y, P" }}</p>
+            </div>
+            <div class="min-w-0">
+                <p class="text-[10px] text-streamlabel mb-0.5">location</p>
+                <p class="text-xs text-streamsubtle font-mono truncate" title="{{ project.dirc }}">{{ project.dirc }}</p>
+            </div>
+            <div class="min-w-0">
+                <p class="text-[10px] text-streamlabel mb-0.5">description</p>
+                <p class="text-xs text-streamsubtle italic truncate" title="{{ project.desc }}">
+                    {{ project.desc|default:"no description" }}
+                </p>
+            </div>
+        </div>
+    </footer>
+
+</div>

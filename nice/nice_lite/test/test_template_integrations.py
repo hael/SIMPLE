@@ -63,9 +63,36 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('const workspaceId = rememberedWorkspace(select.value);', index)
         self.assertIn('workspaceInput.value = workspaceId || "";', index)
         self.assertIn(
+            "const wantsWorkspaceId = !params.has(PROJECT_KEY) && !params.has(WORKSPACE_KEY)",
+            index,
+        )
+        self.assertIn(
             'sessionStorage.setItem(workspaceStorageKey(currentProjectId), currentWorkspaceId);',
             index,
         )
+
+    def test_projects_page_uses_project_details_and_workspace_cards(self):
+        projects = self._read_template("project.html")
+
+        self.assertIn("Project details", projects)
+        self.assertIn("{% for workspace in workspaces %}", projects)
+        self.assertIn("{{ project.name }}", projects)
+        self.assertIn("selected_project_id={{ project.id }}", projects)
+        self.assertIn("{% url 'nice_lite:create_workspace' %}", projects)
+        self.assertIn("border-streamring/20 hover:border-streamring", projects)
+        self.assertIn("w-[260px] h-[361px]", projects)
+        self.assertIn("border-b border-streamdivider", projects)
+        self.assertIn("border-t border-streamdivider", projects)
+        self.assertIn("workspace folder", projects)
+        self.assertNotIn("<header", projects)
+        self.assertNotIn("<!DOCTYPE html>", projects)
+        self.assertNotIn("<body", projects)
+        self.assertNotIn('aria-label="project and workspace navigation"', projects)
+        self.assertNotIn("workspace_jobs", projects)
+        self.assertNotIn("job_builder_iframe", projects)
+
+        index = self._read_template("index.html")
+        self.assertIn("{% include 'project.html' %}", index)
 
     def test_file_browser_openers_forward_current_input_path(self):
         jobbuilder = self._read_template("jobbuilder.html")

@@ -44,7 +44,6 @@ urlpatterns = [
     path("newproject/<str:mode>",              views.view_new_project,                            name="new_project"),
     path("closeprojectform",                   views.view_close_new_project,                       name="close_new_project"),
     path("createproject",                      views.view_create_project,                          name="create_project"),
-
     # ------------------------------------------------------------------
     # Workspace
     # ------------------------------------------------------------------

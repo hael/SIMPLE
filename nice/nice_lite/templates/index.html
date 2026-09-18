@@ -3,8 +3,8 @@
 
   Structure:
     - Fixed header bar: logo, project/workspace selectors, classic/logout actions.
-    - Full-height iframe: loads the workspace view (stream list and details) at
-      iframeurl, or remains blank until a project and workspace are selected.
+    - Content area: includes project workspace cards directly or loads the
+      selected workspace view in an iframe.
     - messages.html: renders any Django flash messages.
 
   Context variables:
@@ -12,7 +12,8 @@
     workspaces           — queryset of workspaces for the selected project
     current_project_id — id of the currently selected project (0 = none)
     current_workspace_id — id of the currently selected workspace (0 = none)
-    iframeurl          — URL to load inside the content iframe, or None
+    project            — selected ProjectModel, or None
+    iframeurl          — workspace/new-project URL to load inside the content iframe
 
   Selecting a project or workspace submits a GET form, reloading the page with
   the new selection reflected in the URL query string.
@@ -21,7 +22,8 @@
   used workspace are cached in this tab's sessionStorage. On a bare load (no
   selected_*_id in the URL) any id missing from sessionStorage falls back to
   the selected_*_id cookie set server-side, but a value present in
-  sessionStorage always wins over that cookie.
+  sessionStorage always wins over that cookie. An explicit project id without
+  a workspace id opens that project's workspace-card page.
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -104,7 +106,11 @@
 
     <!-- Content -->
     <div class="flex-1 min-h-0 flex flex-row">
-        <iframe id="workspace_iframe" name="workspace_iframe" {% if iframeurl is not None %}src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
+        {% if project and not current_workspace_id %}
+            {% include 'project.html' %}
+        {% else %}
+            <iframe id="workspace_iframe" name="workspace_iframe" {% if iframeurl is not None %}src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
+        {% endif %}
     </div>
 
     {% include 'messages.html' %}
@@ -152,10 +158,10 @@
             const projectId = requestedProjectId === null ? storedProjectId : requestedProjectId;
             const storedWorkspaceId = rememberedWorkspace(projectId);
 
-            // Fill in whichever id the URL is missing from this tab's sessionStorage,
-            // so the tab's project-specific selection wins over the shared cookie.
+            // Fill ids from this tab's sessionStorage only on a bare load. An
+            // explicit project-only URL intentionally opens the project page.
             const wantsProjectId = !params.has(PROJECT_KEY) && storedProjectId !== null;
-            const wantsWorkspaceId = !params.has(WORKSPACE_KEY) && storedWorkspaceId !== null;
+            const wantsWorkspaceId = !params.has(PROJECT_KEY) && !params.has(WORKSPACE_KEY) && storedWorkspaceId !== null;
             if (wantsProjectId || wantsWorkspaceId) {
                 if (wantsProjectId) params.set(PROJECT_KEY, storedProjectId);
                 if (wantsWorkspaceId) params.set(WORKSPACE_KEY, storedWorkspaceId);

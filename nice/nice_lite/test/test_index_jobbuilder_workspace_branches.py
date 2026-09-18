@@ -30,6 +30,15 @@ class _FakeProjectQuery:
     def values_list(self, *_args, **_kwargs):
         return self._ids
 
+    def filter(self, **kwargs):
+        selected_id = kwargs.get("id")
+        return _FakeProjectQuery([project_id for project_id in self._ids if project_id == selected_id])
+
+    def first(self):
+        if not self._ids:
+            return None
+        return SimpleNamespace(id=self._ids[0], name=f"project {self._ids[0]}")
+
     def __len__(self):
         return len(self._ids)
 
@@ -59,6 +68,7 @@ class IndexViewBranchTests(SimpleTestCase):
             {
                 "current_project_id": None,
                 "current_workspace_id": None,
+                "project": None,
                 "projects": [],
                 "workspaces": [],
                 "iframeurl": None,
@@ -89,11 +99,39 @@ class IndexViewBranchTests(SimpleTestCase):
 
         workspace_query = Mock()
         workspace_query.first.return_value = None
-        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=-1), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=workspace_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
+        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=-1), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=workspace_query), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
             response = index_views.view_index(request)
 
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response._ctx["current_workspace_id"])
+        self.assertEqual(response._ctx["project"].id, 1)
+        self.assertIsNone(response._ctx["iframeurl"])
+
+    def test_selected_project_without_workspace_renders_project_page(self):
+        request = self.factory.get("/")
+        request.user = _AuthUser()
+
+        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=None), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=[]), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
+            response = index_views.view_index(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response._ctx["current_project_id"], 1)
+        self.assertIsNone(response._ctx["current_workspace_id"])
+        self.assertEqual(response._ctx["project"].id, 1)
+        self.assertIsNone(response._ctx["iframeurl"])
+
+    def test_explicit_project_url_ignores_remembered_workspace_cookie(self):
+        request = self.factory.get("/", {"selected_project_id": "1"})
+        request.user = _AuthUser()
+        request.COOKIES["selected_workspace_id"] = "8"
+        workspace_id = Mock(return_value=8)
+
+        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", workspace_id), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=[object()]), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
+            response = index_views.view_index(request)
+
+        workspace_id.assert_not_called()
+        self.assertIsNone(response._ctx["current_workspace_id"])
+        self.assertEqual(response._ctx["project"].id, 1)
         self.assertIsNone(response._ctx["iframeurl"])
 
     def test_workspace_create_post_creates_once_and_redirects_to_selection(self):

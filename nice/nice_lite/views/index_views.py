@@ -58,9 +58,15 @@ def view_index(request):
 
     # Resolve current UI selection state from cookies/params.
     projectid = get_project_id(request)
-    workspaceid = get_workspace_id(request)
+    project_only_request = (
+        request.method == "GET"
+        and "selected_project_id" in request.GET
+        and "selected_workspace_id" not in request.GET
+    )
+    workspaceid = None if project_only_request else get_workspace_id(request)
     username = request.user.username
     iframeurl = None
+    projectmodel = None
 
     # Show only projects that have at least one workspace owned by this user.
     projects = ProjectModel.objects.filter(workspacemodel__user=username).distinct()
@@ -81,6 +87,7 @@ def view_index(request):
         else:
             messages.add_message(request, messages.INFO, "please select a project")
     elif projectid > 0:
+        projectmodel = projects.filter(id=projectid).first()
         workspaces = WorkspaceModel.objects.filter(proj=projectid, user=username)
 
     if workspaceid is None:
@@ -107,6 +114,7 @@ def view_index(request):
     context = {
         "current_project_id": projectid,
         "current_workspace_id": workspaceid,
+        "project": projectmodel,
         "projects": projects,
         "workspaces": workspaces,
         "iframeurl": iframeurl,
