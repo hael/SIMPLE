@@ -16,7 +16,7 @@ use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
 use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
 use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
-use simple_stream_p07_3D_multistate,       only: stream_p07_3D_multistate
+use simple_stream_p07_abinitio3D_multistate, only: stream_p07_abinitio3D_multistate
 
 implicit none
 #include "simple_local_flags.inc"
@@ -29,7 +29,7 @@ type(stream_p03_initial_analysis) :: xinitial_analysis
 type(stream_p04_refpick_extract)  :: xpick_extract
 type(stream_p05_sieve_cavgs)      :: xsieve_cavgs 
 type(stream_p06_pool2D)           :: xpool2D
-type(stream_p07_3D_multistate)    :: x3D_multistate
+type(stream_p07_abinitio3D_multistate) :: xabinitio3D_multistate
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)             :: xarg, prg
@@ -75,7 +75,7 @@ select case(trim(prg))
         call cline%set('stepwise', 'yes') ! force stepwise mode for pool2D
         call xpool2D%execute(cline)
     case( 'abinitio3D_stream' )
-        call x3D_multistate%execute(cline)
+        call xabinitio3D_multistate%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

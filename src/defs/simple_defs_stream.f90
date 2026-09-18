@@ -6,6 +6,7 @@ character(len=*), parameter :: CLASS2D_JOB_NAME           = 'classification_2D' 
 character(len=*), parameter :: DIR_STREAM                 = './spprojs/'              ! location for projects to be processed
 character(len=*), parameter :: DIR_STREAM_COMPLETED       = './spprojs_completed/'    ! location for projects processed
 character(len=*), parameter :: MICSPPROJ_FNAME            = './streamdata.simple'
+character(len=*), parameter :: MULTISTATE3D_JOB_NAME      = 'abinitio3D_multistate'   ! name of abinitio3D multistate job. also used for folder name
 character(len=*), parameter :: OPENING2D_JOB_NAME         = 'opening_2D'              ! name of opening 2D job. also used for folder name
 character(len=*), parameter :: OPTICS_JOB_NAME            = 'optics_assignment'       ! name of optics assignment job. also used for folder name
 character(len=*), parameter :: POOL_DIR                   = ''                        ! should be './pool/' for tidyness but difficult with gui

@@ -412,7 +412,7 @@ subroutine exec_test_master( self, cline )
         &'preprocessing', 'assign_optics', 'initial_picking', 'opening2D', &
         &'reference_picking', 'particle_sieving', 'pool2D', 'master']
     type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
-    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D
+    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_multistate3D
     type(gui_assembler)  :: assembler
     type(string)         :: running_heartbeat, finished_heartbeat
     integer              :: rc
@@ -437,7 +437,7 @@ subroutine exec_test_master( self, cline )
     rc = c_usleep(FORK_POLL_TIME * 5)
 
     call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
-        &fork_reference_picking, fork_particle_sieving, fork_pool2D)
+        &fork_reference_picking, fork_particle_sieving, fork_multistate3D, fork_pool2D)
     running_heartbeat = assembler%to_string()
 
     call fork_preprocess%terminate()
@@ -455,7 +455,7 @@ subroutine exec_test_master( self, cline )
 
     call assembler%set_stoptime()
     call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
-        &fork_reference_picking, fork_particle_sieving, fork_pool2D)
+        &fork_reference_picking, fork_particle_sieving, fork_multistate3D, fork_pool2D)
     finished_heartbeat = assembler%to_string()
     call assembler%kill()
 

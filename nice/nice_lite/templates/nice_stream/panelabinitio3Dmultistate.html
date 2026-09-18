@@ -1,0 +1,82 @@
+{% comment %}
+  panelabinitio3Dmultistate.html — multistate abinitio3D panel, loaded inside an iframe by streamview.html.
+
+  Structure:
+    - Loading / waiting / status gauzes.
+    - Header bar: status indicator · "multistate 3D" title · stop/restart.
+    - Particles imported + resolution stat tiles.
+
+  Context variables:
+    jobstats — dict with stage, abinitio3D_stage, refine_iteration, nstates,
+               particles_imported, particles_at_last_refine, last_import_time,
+               user_input, resolution.
+    jobid    — primary key of the job.
+    status   — "running" | "finished" | "failed" | "terminating" | "restarting".
+{% endcomment %}
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="bg-streambar h-screen overflow-hidden font-sans rounded-xl border {% if status == 'running' or status == 'queued' or status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif status == 'failed' or status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} transition-colors cursor cursor-zoom-in"
+    onclick="this.querySelector('form.zoomform')?.submit();" onmouseleave="this.querySelector('.status-menu')?.classList.add('hidden')">
+
+    <!-- Loading gauze -->
+    {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
+
+    <!-- Transient status overlays -->
+    {% include 'nice_stream/includes/_panel_status_overlay.html' %}
+
+    <div class="flex flex-col h-full">
+
+        <!-- Header: status · title · stop/restart -->
+        {% include 'includes/_panel_header.html' with panel_title="multistate 3D" terminate_field="terminate_abinitio3D_multistate" restart_field="restart_abinitio3D_multistate" last_import=jobstats.last_import_time %}
+
+        <!-- Waiting gauze: shown until particles arrive (below header) -->
+        {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+            {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
+        {% else %}
+
+        <!-- Count tiles -->
+        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+            {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles imported" variant="action"%}
+            {% include 'includes/_count_tile.html' with count=jobstats.resolution|floatformat:1 label="resolution" count_unit="Å" %}
+        </div>
+
+    {% endif %}
+    </div>
+
+    <script>
+        let lastinteraction = Date.now();
+
+        window.addEventListener("load", () => {
+            const gauze = document.getElementById("loadinggauze");
+            if (gauze) {
+                gauze.style.opacity = "0";
+                setTimeout(() => {
+                    gauze.classList.add("hidden");
+                }, 600);
+            }
+        }, false);
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
+
+</body>
+</html>
+

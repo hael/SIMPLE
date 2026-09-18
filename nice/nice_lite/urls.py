@@ -135,6 +135,8 @@ urlpatterns = [
     path("viewstreamsieveparticleszoom",       stream_views.view_stream_sieve_particles_zoom,      name="view_stream_sieve_particles_zoom"),
     path("viewstreamclassification2D",         stream_views.view_stream_classification_2D,         name="view_stream_classification_2D"),
     path("viewstreamclassification2Dzoom",     stream_views.view_stream_classification_2D_zoom,    name="view_stream_classification_2D_zoom"),
+    path("viewstreamabinitio3Dmultistate",     stream_views.view_stream_abinitio3D_multistate,     name="view_stream_abinitio3D_multistate"),
+  #  path("viewstreamabinitio3Dmultistatezoom",     stream_views.view_stream_abinitio3D_multistate_zoom,    name="view_stream_abinitio3D_multistate_zoom"),
     path("viewstreamparticlesets",             stream_views.view_stream_particle_sets,             name="view_stream_particle_sets"),
     path("viewstreamparticlesetszoom",         stream_views.view_stream_particle_sets_zoom,        name="view_stream_particle_sets_zoom"),
 

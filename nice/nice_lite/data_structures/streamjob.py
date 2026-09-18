@@ -98,22 +98,24 @@ class StreamJob(Job):
 
         # initialise all stage statuses and heartbeats
         jobmodel = JobModel(dset=workspacemodel, disp=disp, dirc=dirc, cdat=timezone.now(), args=args)
-        jobmodel.master_status               = "queued"
-        jobmodel.preprocessing_status        = "queued"
-        jobmodel.optics_assignment_status    = "queued"
-        jobmodel.initial_picking_status      = "queued"
-        jobmodel.generate_pickrefs_status    = "queued"
-        jobmodel.reference_picking_status    = "queued"
-        jobmodel.particle_sieving_status     = "queued"
-        jobmodel.classification_2D_status    = "queued"
-        jobmodel.master_heartbeat            = 0
-        jobmodel.preprocessing_heartbeat     = 0
-        jobmodel.optics_assignment_heartbeat = 0
-        jobmodel.initial_picking_heartbeat   = 0
-        jobmodel.generate_pickrefs_heartbeat = 0
-        jobmodel.reference_picking_heartbeat = 0
-        jobmodel.particle_sieving_heartbeat  = 0
-        jobmodel.classification_2D_heartbeat = 0
+        jobmodel.master_status                = "queued"
+        jobmodel.preprocessing_status         = "queued"
+        jobmodel.optics_assignment_status     = "queued"
+        jobmodel.initial_picking_status       = "queued"
+        jobmodel.generate_pickrefs_status     = "queued"
+        jobmodel.reference_picking_status     = "queued"
+        jobmodel.particle_sieving_status      = "queued"
+        jobmodel.classification_2D_status     = "queued"
+        jobmodel.abinitio3D_multistate_status = "queued"
+        jobmodel.master_heartbeat                = 0
+        jobmodel.preprocessing_heartbeat         = 0
+        jobmodel.optics_assignment_heartbeat     = 0
+        jobmodel.initial_picking_heartbeat       = 0
+        jobmodel.generate_pickrefs_heartbeat     = 0
+        jobmodel.reference_picking_heartbeat     = 0
+        jobmodel.particle_sieving_heartbeat      = 0
+        jobmodel.classification_2D_heartbeat     = 0
+        jobmodel.abinitio3D_multistate_heartbeat = 0
         jobmodel.desc = simplestream.autoDescription()
         jobmodel.save()
         workspacemodel.save()
@@ -276,6 +278,11 @@ class StreamJob(Job):
                 self.jobmodel.classification_2D_status = status
                 if status == "running":
                     master_update.pop("restart_pool2D", None)
+            if "abinitio3D_multistate" in heartbeat:
+                status, _ = analyse_heartbeat(heartbeat["abinitio3D_multistate"])
+                self.jobmodel.abinitio3D_multistate_status = status
+                if status == "running":
+                    master_update.pop("restart_abinitio3D_multistate", None)
             self.jobmodel.master_update = master_update
 
         if "preprocessing" in stats_json:
@@ -311,6 +318,9 @@ class StreamJob(Job):
                     particle_set["cls2D"]     = snapshot["cls2D"]
             pool2D_stats = {k: v for k, v in stats_json["pool2D"].items() if k != "snapshot"}
             self.jobmodel.classification_2D_stats = pool2D_stats
+        if "abinitio3D_multistate" in stats_json:
+            updated = True
+            self.jobmodel.abinitio3D_multistate_stats = stats_json["abinitio3D_multistate"]
         if updated:
             self.jobmodel.save()
         return True
@@ -360,7 +370,7 @@ class StreamJob(Job):
             return False
         return True
 
-    def terminate_process(self, term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D):
+    def terminate_process(self, term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D, term_abinitio3D_multistate):
         """
         Signal one or more sub-processes to terminate.
         Flags are boolean; only flagged processes are affected.
@@ -381,11 +391,13 @@ class StreamJob(Job):
             master_update["terminate_particle_sieving"] = True
         if term_pool2D:
             master_update["terminate_pool2D"] = True
+        if term_abinitio3D_multistate:
+            master_update["terminate_abinitio3D_multistate"] = True
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
         return True
 
-    def restart_process(self, restart_preprocess, restart_optics_assignment, restart_generate_pickrefs, restart_reference_picking, restart_particle_sieving, restart_pool2D):
+    def restart_process(self, restart_preprocess, restart_optics_assignment, restart_generate_pickrefs, restart_reference_picking, restart_particle_sieving, restart_pool2D, restart_abinitio3D_multistate):
         """
         Signal one or more terminated sub-processes to restart.
         Clears the corresponding terminate flag before setting the restart flag.
@@ -413,6 +425,9 @@ class StreamJob(Job):
         if restart_pool2D:
             master_update.pop("terminate_pool2D", None)
             master_update["restart_pool2D"] = True
+        if restart_abinitio3D_multistate:
+            master_update.pop("terminate_abinitio3D_multistate", None)
+            master_update["restart_abinitio3D_multistate"] = True
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
         return True

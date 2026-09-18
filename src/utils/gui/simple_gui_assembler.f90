@@ -27,6 +27,7 @@
 !     assemble_stream_opening2D()          — write 2D-classification section
 !     assemble_stream_particle_sieving()   — write particle-sieving section
 !     assemble_stream_pool2D()             — write pool-2D section
+!     assemble_stream_abinitio3D_multistate() — write multistate abinitio3D section
 !
 ! DEPENDENCIES:
 !   unix, simple_string, simple_forked_process, simple_gui_metadata_api
@@ -55,6 +56,7 @@ module simple_gui_assembler
                                      gui_metadata_stream_particle_sieving,   &
                                      gui_metadata_stream_pool2D,             &
                                      gui_metadata_stream_pool2D_snapshot,    &
+                                     gui_metadata_stream_abinitio3D_multistate, &
                                      gui_metadata_project
   implicit none
 
@@ -73,6 +75,7 @@ type :: gui_assembler
   type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
   type(string)              :: particle_sieving_hash
   type(string)              :: pool2D_hash             ! FNV-1a hash of last sent pool-2D section
+  type(string)              :: abinitio3D_multistate_hash ! FNV-1a hash of last sent multistate abinitio3D section
   type(string)              :: project_hash            ! FNV-1a hash of last sent project section
   integer                   :: job_id    = 0           ! pipeline job identifier
   integer                   :: starttime = 0           ! Unix timestamp of job start
@@ -96,6 +99,7 @@ contains
   procedure :: assemble_stream_opening2D
   procedure :: assemble_stream_particle_sieving
   procedure :: assemble_stream_pool2D
+  procedure :: assemble_stream_abinitio3D_multistate
 end type gui_assembler
 
 contains
@@ -137,14 +141,16 @@ contains
     call self%opening2D_hash%kill()
     call self%particle_sieving_hash%kill()
     call self%pool2D_hash%kill()
+    call self%abinitio3D_multistate_hash%kill()
     call self%project_hash%kill()
   end subroutine clear_hashes
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
   ! aggregate status derived from the union of all child-process states.
-  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking, fork_particle_sieving, fork_pool2D, n_active_persistent_workers )
+  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, &
+      fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate, n_active_persistent_workers )
     class(gui_assembler),  intent(inout) :: self
-    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving
+    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving, fork_abinitio3D_multistate
     class(forked_process), intent(inout) :: fork_reference_picking, fork_pool2D
     integer, optional,     intent(in)    :: n_active_persistent_workers
     type(json_value),      pointer       :: json_ptr, json_master_ptr
@@ -155,13 +161,14 @@ contains
     n_unknown    = 0
     call self%json%remove_if_present(self%json_root, 'stream_heartbeat')
     call self%json%create_object(json_ptr, 'stream_heartbeat')
-    call forked_process_status(string('preprocessing'),     fork_preprocess)
-    call forked_process_status(string('assign_optics'),     fork_assign_optics)
-    call forked_process_status(string('initial_picking'),   fork_opening2D)
-    call forked_process_status(string('opening2D'),         fork_opening2D)
-    call forked_process_status(string('reference_picking'), fork_reference_picking)
-    call forked_process_status(string('particle_sieving'),  fork_particle_sieving)
-    call forked_process_status(string('pool2D'),            fork_pool2D)
+    call forked_process_status(string('preprocessing'),         fork_preprocess)
+    call forked_process_status(string('assign_optics'),         fork_assign_optics)
+    call forked_process_status(string('initial_picking'),       fork_opening2D)
+    call forked_process_status(string('opening2D'),             fork_opening2D)
+    call forked_process_status(string('reference_picking'),     fork_reference_picking)
+    call forked_process_status(string('particle_sieving'),      fork_particle_sieving)
+    call forked_process_status(string('pool2D'),                fork_pool2D)
+    call forked_process_status(string('abinitio3D_multistate'), fork_abinitio3D_multistate)
     ! global status
     call self%json%create_object(json_master_ptr, 'master')
     call self%json%add(json_master_ptr, 'timestamp', int(c_time(0_c_long)))
@@ -691,6 +698,32 @@ contains
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
   end subroutine assemble_stream_pool2D
+
+  ! Write the multistate abinitio3D section.
+  ! The whole section is suppressed when its hash matches the previously sent hash.
+  subroutine assemble_stream_abinitio3D_multistate( self, meta_abinitio3D_multistate )
+    class(gui_assembler),                            intent(inout) :: self
+    type(gui_metadata_stream_abinitio3D_multistate), intent(inout) :: meta_abinitio3D_multistate
+    character(kind=CK,len=:),                        allocatable   :: buffer
+    type(json_value),                                pointer       :: json_ptr => null()
+    type(string)                                                   :: str, hash
+    call self%json%remove_if_present(self%json_root, 'abinitio3D_multistate')
+    json_ptr => meta_abinitio3D_multistate%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'abinitio3D_multistate')
+    call self%json%print_to_string_fast(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%abinitio3D_multistate_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      call self%abinitio3D_multistate_hash%kill()
+      self%abinitio3D_multistate_hash = hash
+    else
+      call self%json%destroy(json_ptr)
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr)
+  end subroutine assemble_stream_abinitio3D_multistate
 
   ! Record the job stop timestamp (call when the pipeline finishes).
   subroutine set_stoptime( self )

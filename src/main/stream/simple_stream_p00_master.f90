@@ -21,18 +21,19 @@ use unix
 use simple_syslib,                         only: symlink
 use simple_stream_api
 use simple_stream_state             
-use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
-use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
-use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
-use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
-use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
-use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
-use simple_http_post,                      only: http_post, http_response
-use simple_forked_process,                 only: forked_process, FORK_STATUS_RUNNING
+use simple_stream_p01_preprocess_new,        only: stream_p01_preprocess
+use simple_stream_p02_assign_optics_new,     only: stream_p02_assign_optics
+use simple_stream_p03_initial_analysis,      only: stream_p03_initial_analysis
+use simple_stream_p04_refpick_extract_new,   only: stream_p04_refpick_extract
+use simple_stream_p05_sieve_cavgs_new,       only: stream_p05_sieve_cavgs
+use simple_stream_p06_pool2D_new,            only: stream_p06_pool2D
+use simple_stream_p07_abinitio3D_multistate, only: stream_p07_abinitio3D_multistate
+use simple_http_post,                        only: http_post, http_response
+use simple_forked_process,                   only: forked_process, FORK_STATUS_RUNNING
 use simple_gui_metadata_api
-use simple_gui_assembler,                  only: gui_assembler
-use simple_gui_metadata_utils,             only: max_metadata_size
-use simple_memory_monitor,                 only: mem_monitor_init, mem_monitor_finish
+use simple_gui_assembler,                    only: gui_assembler
+use simple_gui_metadata_utils,               only: max_metadata_size
+use simple_memory_monitor,                   only: mem_monitor_init, mem_monitor_finish
 
 implicit none
 
@@ -74,6 +75,11 @@ type, extends(forked_process) :: pool2D_fork
     contains
     procedure :: execute => xpool2D
 end type pool2D_fork
+
+type, extends(forked_process) :: abinitio3D_multistate_fork
+    contains
+    procedure :: execute => xabinitio3D_multistate
+end type abinitio3D_multistate_fork
 
 !================ STATE TYPES =================
 
@@ -150,6 +156,14 @@ contains
         call commander%execute(cline)
     end subroutine xpool2D   
 
+    subroutine xabinitio3D_multistate( self, cline )
+        class(abinitio3D_multistate_fork), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(stream_p07_abinitio3D_multistate)           :: commander
+        call close_child_pipe_fds(ipc_pipe_abinitio3D_multstate_in(2), ipc_pipe_abinitio3D_multstate_out(1))
+        call commander%execute(cline)
+    end subroutine xabinitio3D_multistate
+
     subroutine close_child_pipe_fds( keep_fd, keep_fd2 )
         integer, intent(in)           :: keep_fd
         integer, intent(in), optional :: keep_fd2
@@ -165,6 +179,8 @@ contains
         call close_pipe_except_fd(ipc_pipe_sieve_cavgs_out, keep_fd, keep_fd2)
         call close_pipe_except_fd(ipc_pipe_pool2D_in, keep_fd, keep_fd2)
         call close_pipe_except_fd(ipc_pipe_pool2D_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_abinitio3D_multstate_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_abinitio3D_multstate_out, keep_fd, keep_fd2)
     end subroutine close_child_pipe_fds
 
     subroutine close_pipe_except_fd(pipe, keep_fd, keep_fd2)
@@ -192,11 +208,12 @@ contains
     subroutine exec_stream_p00_master( self, cline )
         class(stream_p00_master), intent(inout)    :: self
         class(cmdline),           intent(inout)    :: cline
-        integer, parameter                         :: N_STREAM_PIPES = 6
+        integer, parameter                         :: N_STREAM_PIPES = 7
         type(parameters)                           :: params
         type(cmdline)                              :: cline_preprocess, cline_assign_optics
         type(cmdline)                              :: cline_opening2D, cline_reference_picking
         type(cmdline)                              :: cline_particle_sieving, cline_pool2D
+        type(cmdline)                              :: cline_abinitio3D_multistate
         type(http_post)                            :: post
         type(http_response)                        :: response
         type(string)                               :: request, cwd
@@ -205,15 +222,16 @@ contains
         type(gui_assembler)                        :: assembler
         type(qsys_env)                             :: qsys
         ! gui metadata
-        type(gui_metadata_stream_update)             :: meta_update
-        type(gui_metadata_stream_preprocess)         :: meta_preprocess
-        type(gui_metadata_stream_optics_assignment)  :: meta_optics_assignment
-        type(gui_metadata_stream_picking)            :: meta_initial_picking
-        type(gui_metadata_stream_opening2D)          :: meta_opening2D
-        type(gui_metadata_stream_picking)            :: meta_reference_picking
-        type(gui_metadata_stream_particle_sieving)   :: meta_particle_sieving
-        type(gui_metadata_stream_pool2D)             :: meta_pool2D
-        type(gui_metadata_stream_pool2D_snapshot)    :: meta_pool2D_snapshot
+        type(gui_metadata_stream_update)                :: meta_update
+        type(gui_metadata_stream_preprocess)            :: meta_preprocess
+        type(gui_metadata_stream_optics_assignment)     :: meta_optics_assignment
+        type(gui_metadata_stream_picking)               :: meta_initial_picking
+        type(gui_metadata_stream_opening2D)             :: meta_opening2D
+        type(gui_metadata_stream_picking)               :: meta_reference_picking
+        type(gui_metadata_stream_particle_sieving)      :: meta_particle_sieving
+        type(gui_metadata_stream_pool2D)                :: meta_pool2D
+        type(gui_metadata_stream_pool2D_snapshot)       :: meta_pool2D_snapshot
+        type(gui_metadata_stream_abinitio3D_multistate) :: meta_abinitio3D_multistate
         type(gui_metadata_micrograph),   allocatable :: meta_preprocess_micrographs(:)
         type(gui_metadata_histogram),    allocatable :: meta_preprocess_histograms(:)
         type(gui_metadata_timeplot),     allocatable :: meta_preprocess_timeplots(:)
@@ -231,6 +249,7 @@ contains
         type(reference_picking_fork)               :: fork_reference_picking
         type(particle_sieving_fork)                :: fork_particle_sieving
         type(pool2D_fork)                          :: fork_pool2D
+        type(abinitio3D_multistate_fork)           :: fork_abinitio3D_multistate
         type(c_pthread_t)                          :: meta_listener_thread
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
@@ -288,6 +307,7 @@ contains
         call init_metadata_reference_picking()
         call init_metadata_particle_sieving()
         call init_metadata_pool2D()
+        call init_metadata_multistate3D()
         ! init cmdlines
         call init_cline_preprocess()
         call init_cline_assign_optics()
@@ -295,6 +315,7 @@ contains
         call init_cline_reference_picking()
         call init_cline_particle_sieving()
         call init_cline_pool2D()
+        call init_cline_multistate3D()
         ! create ipc pipes
         max_msgsize = max_metadata_size()
         write(logfhandle, *)"Max metadata size: ", max_msgsize
@@ -310,6 +331,8 @@ contains
         call init_ipc_pipe(ipc_pipe_sieve_cavgs_out)
         call init_ipc_pipe(ipc_pipe_pool2D_in)
         call init_ipc_pipe(ipc_pipe_pool2D_out)
+        call init_ipc_pipe(ipc_pipe_abinitio3D_multstate_in)
+        call init_ipc_pipe(ipc_pipe_abinitio3D_multstate_out)
         ! spawn metadata listener thread
         stat = c_pthread_create(thread        = meta_listener_thread, &
                                 attr          = c_null_ptr, &
@@ -328,6 +351,7 @@ contains
         call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.false.)
         call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.false.)
         call fork_pool2D%start(           name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D,           restart=.false.)
+        call fork_abinitio3D_multistate%start(    name=string(MULTISTATE3D_JOB_NAME), logfile=string(MULTISTATE3D_JOB_NAME//'.log'), cline=cline_abinitio3D_multistate, restart=.false.)
         if( l_existing_pickrefs ) then
             call fork_initial_analysis%skip()
         else
@@ -341,6 +365,7 @@ contains
         if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
         if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
         if( fork_pool2D%status()            /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork pool2D'           )
+        if( fork_abinitio3D_multistate%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork 3D multistate'    )
         if( .not. l_existing_pickrefs ) then
            if( fork_initial_analysis%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
         endif
@@ -354,8 +379,8 @@ contains
         do while( .true. )
             loop_counter = loop_counter + 1
             ! heartbeat
-            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D, &
-                &n_active_persistent_workers=qsys%get_n_active_persistent_workers())
+            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, &
+                fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate, n_active_persistent_workers=qsys%get_n_active_persistent_workers())
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
@@ -378,7 +403,9 @@ contains
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot, meta_pool2D_snapshot_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
-            ! stringify assembled json
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
+            call assembler%assemble_stream_abinitio3D_multistate(meta_abinitio3D_multistate)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             request = assembler%to_string()
             ! send
             if( post%request(response, request) ) then
@@ -419,6 +446,10 @@ contains
                         call json%get(json_response_ptr, 'terminate_pool2D', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_pool2D%status() == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
+                        endif
+                        call json%get(json_response_ptr, 'terminate_abinitio3D_multistate', l_test, l_found)
+                        if( l_found .and. l_test ) then
+                            if( fork_abinitio3D_multistate%status() == FORK_STATUS_RUNNING ) call fork_abinitio3D_multistate%terminate()
                         endif
                         ! check for forked process restart
                         call json%get(json_response_ptr, 'restart_preprocess', l_test, l_found)
@@ -461,6 +492,13 @@ contains
                             if( fork_pool2D%status() /= FORK_STATUS_RUNNING ) then
                                 call drain_and_reset_pipe_state(6, ipc_pipe_pool2D_in, ipc_pipe_pool2D_out)
                                 call fork_pool2D%start(name=string(CLASS2D_JOB_NAME), logfile=string(CLASS2D_JOB_NAME//'.log'),  cline=cline_pool2D, restart=.true.)
+                            endif
+                        endif
+                        call json%get(json_response_ptr, 'restart_abinitio3D_multistate', l_test, l_found)
+                        if( l_found .and. l_test ) then
+                            if( fork_abinitio3D_multistate%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(7, ipc_pipe_abinitio3D_multstate_in, ipc_pipe_abinitio3D_multstate_out)
+                                call fork_abinitio3D_multistate%start(name=string(MULTISTATE3D_JOB_NAME), logfile=string(MULTISTATE3D_JOB_NAME//'.log'),  cline=cline_abinitio3D_multistate, restart=.true.)
                             endif
                         endif
                         ! gather update payload from HTTP response
@@ -535,6 +573,7 @@ contains
                 if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call fork_reference_picking%terminate()
                 if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call fork_particle_sieving%terminate()
                 if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
+                if( fork_abinitio3D_multistate%status()     == FORK_STATUS_RUNNING ) call fork_abinitio3D_multistate%terminate()
                 l_last_loop = .true.
                 ! if processes are still running set last_loop back to false
                 if( fork_preprocess%status() == FORK_STATUS_RUNNING ) then
@@ -559,6 +598,10 @@ contains
                 endif
                 if( fork_pool2D%status() == FORK_STATUS_RUNNING ) then
                     write(logfhandle, '(A)') "POOL2D STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
+                if( fork_abinitio3D_multistate%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "ABINITIO3D MULTISTATE STILL RUNNING. WAITING FOR TERMINATION"
                     l_last_loop = .false.
                 endif
                 ! set stoptime in assembler
@@ -593,6 +636,8 @@ contains
         call kill_ipc_pipe(ipc_pipe_sieve_cavgs_out)
         call kill_ipc_pipe(ipc_pipe_pool2D_in)
         call kill_ipc_pipe(ipc_pipe_pool2D_out)
+        call kill_ipc_pipe(ipc_pipe_abinitio3D_multstate_in)
+        call kill_ipc_pipe(ipc_pipe_abinitio3D_multstate_out)
         ! destroy mutexes
         if( c_pthread_mutex_destroy(meta_mutex)      /= 0) THROW_WARN('failed to destroy metadata mutex' )
         if( c_pthread_mutex_destroy(terminate_mutex) /= 0) THROW_WARN('failed to destroy terminate mutex')
@@ -734,7 +779,9 @@ contains
                                 case( GUI_METADATA_STREAM_POOL2D_TYPE )
                                     meta_pool2D = transfer(my_buffer, meta_pool2D)  
                                 case( GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE )
-                                    meta_pool2D_snapshot = transfer(my_buffer, meta_pool2D_snapshot)         
+                                    meta_pool2D_snapshot = transfer(my_buffer, meta_pool2D_snapshot)
+                                case( GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE )
+                                    meta_abinitio3D_multistate = transfer(my_buffer, meta_abinitio3D_multistate)         
                                 case( GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
@@ -973,7 +1020,8 @@ contains
                         ipc_pipe_initial_analysis_in(1), &
                         ipc_pipe_refpick_in(1),       &
                         ipc_pipe_sieve_cavgs_in(1),   &
-                        ipc_pipe_pool2D_in(1)]
+                        ipc_pipe_pool2D_in(1),        &
+                        ipc_pipe_abinitio3D_multstate_in(1)]
 
             ! First, emit any fully assembled frame already buffered.
             do ipipe = 1, N_STREAM_PIPES
@@ -1271,6 +1319,23 @@ contains
             if( .not.meta_pool2D_snapshot%initialized() ) THROW_HARD('failed to initialise pool2D snapshot metadata')
         end subroutine init_metadata_pool2D
 
+        subroutine init_metadata_multistate3D()
+            ! multistate 3D
+            call meta_abinitio3D_multistate%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE)
+            if( .not.meta_abinitio3D_multistate%initialized() ) THROW_HARD('failed to initialise multistate 3D metadata')
+        end subroutine init_metadata_multistate3D
+
+        subroutine init_cline_multistate3D()
+            call cline_abinitio3D_multistate%set('prg',                       'abinitio3D_stream')
+            call cline_abinitio3D_multistate%set('projfile',  MULTISTATE3D_JOB_NAME//METADATA_EXT)
+            call cline_abinitio3D_multistate%set('outdir',                  MULTISTATE3D_JOB_NAME)
+            call cline_abinitio3D_multistate%set('dir_target',                   CLASS2D_JOB_NAME)
+            call cline_abinitio3D_multistate%set('nthr',                                        8)
+            call cline_abinitio3D_multistate%set('nparts',                                      1)
+            call cline_abinitio3D_multistate%set('mkdir',                                   'yes')
+            call cline_abinitio3D_multistate%set('nicedispid',                  params%nicedispid)
+        end subroutine init_cline_multistate3D
+
         subroutine init_ipc_pipe( pipe )
             integer, intent(inout) :: pipe(2)
             integer :: rc_pipe, flags
@@ -1312,6 +1377,7 @@ contains
             if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_preprocess_out(2), buffer, 'preprocess', tx_state(1))
             if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_pool2D_out(2), buffer, 'pool2D', tx_state(6))
             ! The following are commented out because they dont currently receive update messages
+            ! if( fork_abinitio3D_multistate%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_abinitio3D_multstate_out(2), buffer, 'abinitio3D_multistate', tx_state(7))
             ! if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_assign_optics_out(2), buffer, 'assign_optics', tx_state(2))
             ! if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer, 'initial_analysis', tx_state(3))
             ! if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_refpick_out(2), buffer, 'reference_picking', tx_state(4))

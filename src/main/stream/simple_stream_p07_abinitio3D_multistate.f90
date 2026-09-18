@@ -1,6 +1,6 @@
 !@descr: stream pipeline stage 7 — multistate 3D reconstruction/refinement of pooled particles
 !==============================================================================
-! MODULE: simple_stream_p07_3D_multistate
+! MODULE: simple_stream_p07_abinitio3D_multistate
 !
 ! PURPOSE:
 !   Drives the continuous multistate 3D reconstruction/refinement loop for the
@@ -11,7 +11,7 @@
 !   3D reconstruction/refinement is performed yet.
 !
 ! ENTRY POINT:
-!   stream_p07_3D_multistate%execute(cline) — called by the stream master
+!   stream_p07_abinitio3D_multistate%execute(cline) — called by the stream master
 !
 ! INTERNAL SUBROUTINES:
 !   import_sets_into_pool — read new exported sets into the pool
@@ -20,7 +20,7 @@
 ! DEPENDENCIES:
 !   simple_stream_api, unix
 !==============================================================================
-module simple_stream_p07_3D_multistate
+module simple_stream_p07_abinitio3D_multistate
 use unix,                    only: SIGTERM
 use simple_commanders_cavgs, only: commander_model_cavgs_rejection
 use simple_gui_utils,        only: mrc2jpeg_tiled
@@ -28,23 +28,23 @@ use simple_qsys_env,         only: qsys_env
 use simple_stream_api
 implicit none
 
-public :: stream_p07_3D_multistate
+public :: stream_p07_abinitio3D_multistate
 private
 #include "simple_local_flags.inc"
 
 integer, parameter       :: NSTATES3D  = 3                 ! number of classes for abinitio3D
 integer, parameter       :: NSTAGES3D  = 5                 ! number of stages for abinitio3D
 
-type, extends(commander_base) :: stream_p07_3D_multistate
+type, extends(commander_base) :: stream_p07_abinitio3D_multistate
   contains
-    procedure :: execute => exec_stream_p07_3D_multistate
-end type stream_p07_3D_multistate
+    procedure :: execute => exec_stream_p07_abinitio3D_multistate
+end type stream_p07_abinitio3D_multistate
 
 contains
 
     ! Manages multistate 3D reconstruction/refinement
-    subroutine exec_stream_p07_3D_multistate( self, cline )
-        class(stream_p07_3D_multistate), intent(inout) :: self
+    subroutine exec_stream_p07_abinitio3D_multistate( self, cline )
+        class(stream_p07_abinitio3D_multistate), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)          :: params
         type(rec_list)            :: setslist
@@ -90,7 +90,7 @@ contains
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
         ! master project file
         call spproj_glob%read( params%projfile )
-        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_3D_multistate must start from an empty project (eg from root project folder)')
+        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_abinitio3D_multistate must start from an empty project (eg from root project folder)')
         ! project watcher
         project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! Infinite loop
@@ -165,7 +165,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup(params)
         ! end gracefully
-        call simple_end('**** SIMPLE_STREAM_3D_MULTISTATE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_ABINITIO3D_MULTISTATE NORMAL STOP ****')
         contains
 
             ! imports new sets of exported particles into the pool
@@ -428,6 +428,6 @@ contains
                 l_terminate = .true.
             end subroutine sigterm_handler
 
-    end subroutine exec_stream_p07_3D_multistate
+    end subroutine exec_stream_p07_abinitio3D_multistate
 
-end module simple_stream_p07_3D_multistate
+end module simple_stream_p07_abinitio3D_multistate
