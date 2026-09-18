@@ -60,6 +60,7 @@ type, extends(flex_pca_rounds) :: flex_pca_master_rounds
     type(chash)              :: job_descr
     type(chash), allocatable :: part_params(:)
     integer                  :: nthr_master = 1
+    integer                  :: nthr_worker = 1   !< the per-worker nthr of the command line (part headers request THIS, never the boosted master budget)
 contains
     procedure :: plan_partitions => master_plan_partitions
     procedure :: run_stage       => master_run_stage
@@ -231,6 +232,7 @@ contains
         ! the cap, params%nthr became nparts*nthr and the part scripts the master generates inherited
         ! it (--cpus-per-task=160 on a 96-core partition: unschedulable, five retries, master dead;
         ! verification 2026-09-16). No environment override: the cap is the whole policy.
+        self%rounds%nthr_worker = params%nthr
         self%rounds%nthr_master = max(params%nthr, self%rounds%nparts_run*params%nthr)
         ncpu_own = omp_get_num_procs()
         vovr = 0
@@ -299,7 +301,9 @@ contains
         nsel = size(pinds)
         if( nsel < 1 ) THROW_HARD('flex_pca plan_partitions: empty particle selection')
         self%nparts_run = min(self%nparts_run, nsel)
-        call self%qenv%new(params, self%nparts_run, numlen=params%numlen, nptcls=nsel)
+        ! qsys_nthr: the boosted params%nthr must NOT become the part scripts' --cpus-per-task
+        ! (2026-09-18: 48-CPU headers for 8-thread workers saturated the per-user QoS cap)
+        call self%qenv%new(params, self%nparts_run, numlen=params%numlen, nptcls=nsel, qsys_nthr=self%nthr_worker)
         numlen = max(params%numlen, len(int2str(self%nparts_run)))
         if( allocated(self%part_params) ) deallocate(self%part_params)
         allocate(self%part_params(self%nparts_run))
