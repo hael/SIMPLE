@@ -48,6 +48,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     # Workspace
     # ------------------------------------------------------------------
+    path("createworkspace",                    views.view_create_workspace,                        name="create_workspace"),
     path("workspace",                          views.view_workspace,                               name="workspace"),
     path("workspacejobs",                      views.view_workspace_jobs,                          name="workspace_jobs"),
     path("refreshworkspacejobs",               views.view_refresh_workspace_jobs,                  name="refresh_workspace_jobs"),

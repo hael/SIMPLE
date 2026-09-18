@@ -3,6 +3,7 @@ from .project_views      import view_close_new_project
 from .project_views      import view_new_project
 from .file_browser_views import view_file_browser
 from .workspace_views    import view_workspace
+from .workspace_views    import view_create_workspace
 from .workspace_views    import view_workspace_jobs
 from .workspace_views    import view_refresh_workspace_jobs
 from .workspace_views    import view_delete_workspace
@@ -33,6 +34,7 @@ __all__ = [
     "view_close_new_project",
     "view_file_browser",
     "view_workspace",
+    "view_create_workspace",
     "view_workspace_jobs",
     "view_refresh_workspace_jobs",
     "view_delete_workspace",

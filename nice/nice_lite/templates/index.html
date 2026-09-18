@@ -75,7 +75,7 @@
             <div class="flex items-center gap-1.5">
                 <span class="text-xs text-streamlabel">workspace</span>
                 <form method="GET">
-                    <select name="selected_workspace_id" onchange="this.form.submit()"
+                    <select name="selected_workspace_id" onchange="selectWorkspace(this)"
                             class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
                         {% if not current_workspace_id %}
                             <option disabled selected value="">select</option>
@@ -85,6 +85,10 @@
                             <option value="{{ workspace.id }}" {% if workspace.id == current_workspace_id %}selected{% endif %}>{{ workspace.name }}</option>
                         {% endfor %}
                     </select>
+                </form>
+                <form id="create-workspace-form" method="POST" action="{% url 'nice_lite:create_workspace' %}" class="hidden">
+                    {% csrf_token %}
+                    <input type="hidden" name="selected_project_id" value="{{ current_project_id }}">
                 </form>
             </div>
 
@@ -132,6 +136,14 @@
                 const workspaceInput = select.form.querySelector("[data-recent-workspace-input]");
                 workspaceInput.disabled = workspaceId === null;
                 workspaceInput.value = workspaceId || "";
+                select.form.submit();
+            };
+
+            window.selectWorkspace = (select) => {
+                if (select.value === "-1") {
+                    document.getElementById("create-workspace-form").requestSubmit();
+                    return;
+                }
                 select.form.submit();
             };
 

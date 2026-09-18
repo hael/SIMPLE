@@ -3,6 +3,7 @@ import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 from django.http import HttpResponse
 from django.template.loader import render_to_string
@@ -82,20 +83,38 @@ class IndexViewBranchTests(SimpleTestCase):
         self.assertNotIn("selected_project_id", response.cookies)
         self.assertNotIn("selected_workspace_id", response.cookies)
 
-    def test_workspace_sentinel_creates_workspace_when_project_accessible(self):
+    def test_workspace_get_sentinel_does_not_create_workspace(self):
         request = self.factory.get("/")
         request.user = _AuthUser()
 
-        workspace_obj = Mock()
-        workspace_obj.new.return_value = True
-        workspace_obj.get_id.return_value = 42
-
-        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=-1), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=["w1"]), patch.object(index_views, "Project", return_value=object()), patch.object(index_views, "Workspace", return_value=workspace_obj), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
+        workspace_query = Mock()
+        workspace_query.first.return_value = None
+        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=-1), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=workspace_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
             response = index_views.view_index(request)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response._ctx["current_workspace_id"], 42)
-        self.assertEqual(response._ctx["iframeurl"], "rev:nice_lite:workspace?selected_workspace_id=42")
+        self.assertIsNone(response._ctx["current_workspace_id"])
+        self.assertIsNone(response._ctx["iframeurl"])
+
+    def test_workspace_create_post_creates_once_and_redirects_to_selection(self):
+        request = self.factory.post("/createworkspace", {"selected_project_id": "1"})
+        request.user = _AuthUser()
+        projectmodel = SimpleNamespace(id=1)
+        project_query = Mock()
+        project_query.distinct.return_value.first.return_value = projectmodel
+        workspace = Mock()
+        workspace.new.return_value = True
+        workspace.get_id.return_value = 42
+
+        with patch.object(workspace_views.ProjectModel.objects, "filter", return_value=project_query), patch.object(workspace_views, "Project", return_value=object()), patch.object(workspace_views, "Workspace", return_value=workspace), patch.object(workspace_views, "clear_checksum_cookies"):
+            response = workspace_views.view_create_workspace(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(parse_qs(urlparse(response["Location"]).query), {
+            "selected_project_id": ["1"],
+            "selected_workspace_id": ["42"],
+        })
+        workspace.new.assert_called_once()
 
 
 class JobBuilderBranchTests(SimpleTestCase):

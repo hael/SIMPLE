@@ -15,8 +15,6 @@ from django.urls                    import reverse
 from django.views.decorators.http   import require_POST
 
 # local imports
-from ..data_structures.project   import Project
-from ..data_structures.workspace import Workspace
 from ..helpers                   import clear_checksum_cookies, get_project_id, get_workspace_id
 from ..models                    import ProjectModel, WorkspaceModel
 
@@ -92,36 +90,17 @@ def view_index(request):
             else:
                 messages.add_message(request, messages.INFO, "please select a workspace")
     else:
-        # Preserve the sentinel workspace id (-1) used to request workspace creation.
-        if workspaceid != -1:
-            workspace_model = WorkspaceModel.objects.filter(id=workspaceid, proj=projectid, user=username).first()
-            # Guard against stale/foreign workspace ids for the selected project/user.
-            if workspace_model is None:
-                workspaceid = None
-                messages.add_message(request, messages.INFO, "please select a workspace")
+        workspace_model = WorkspaceModel.objects.filter(id=workspaceid, proj=projectid, user=username).first()
+        # Guard against stale/foreign workspace ids, including the legacy GET
+        # creation sentinel. Workspace creation is a POST-only action.
+        if workspace_model is None:
+            workspaceid = None
+            messages.add_message(request, messages.INFO, "please select a workspace")
 
     # Sentinel ids from the UI drive special navigation/creation paths.
     if projectid == -1:
         # Project sentinel routes user to the new-project page.
         iframeurl = reverse("nice_lite:new_project", args=["stream"])
-    elif workspaceid == -1 and username is not None:
-        # Workspace sentinel creates a new workspace in the selected project.
-        if projectid not in project_ids:
-            messages.add_message(request, messages.ERROR, "invalid project selection")
-            projectid = None
-            workspaceid = None
-        else:
-            project = Project(projectid)
-            new_workspace = Workspace()
-            if new_workspace.new(project, username):
-                workspaceid = new_workspace.get_id()
-                workspaces = WorkspaceModel.objects.filter(proj=projectid, user=username)
-                iframeurl = reverse("nice_lite:workspace", query={"selected_project_id": projectid, "selected_workspace_id": workspaceid})
-                messages.add_message(request, messages.INFO, "created new workspace")
-            else:
-                workspaceid = None
-                workspaces = WorkspaceModel.objects.filter(proj=projectid, user=username)
-                messages.add_message(request, messages.ERROR, "failed to create new workspace")
     elif workspaceid is not None and workspaceid > 0:
         iframeurl = reverse("nice_lite:workspace", query={"selected_project_id": projectid, "selected_workspace_id": workspaceid})
 
@@ -143,4 +122,3 @@ def view_index(request):
     response.set_cookie(key="mode", value="stream")
     clear_checksum_cookies(request, response)
     return response
-

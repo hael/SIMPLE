@@ -22,8 +22,9 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http   import require_POST
 
 # local imports
-from ..models                    import JobModel
+from ..models                    import JobModel, ProjectModel
 from ..data_structures.batchjob  import BatchJob
+from ..data_structures.project   import Project
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
 from ..helpers                   import (
@@ -152,6 +153,40 @@ def _class_selection_job_builder_url(request, project_id, workspace_id):
 # ------------------------------------------------------------------
 # Views
 # ------------------------------------------------------------------
+
+@login_required(login_url="/login")
+@require_POST
+def view_create_workspace(request):
+    """Create one workspace for an accessible project, then redirect to it."""
+    project_id = get_integer(request.POST, "selected_project_id", silent=True)
+    projectmodel = ProjectModel.objects.filter(
+        id=project_id,
+        workspacemodel__user=request.user.username,
+    ).distinct().first()
+    if projectmodel is None:
+        messages.add_message(request, messages.ERROR, "invalid project selection")
+        return redirect("nice_lite:index")
+
+    workspace = Workspace()
+    if not workspace.new(Project(projectmodel.id), request.user.username):
+        messages.add_message(request, messages.ERROR, "failed to create new workspace")
+        return redirect(reverse("nice_lite:index", query={"selected_project_id": projectmodel.id}))
+
+    workspace_id = workspace.get_id()
+    messages.add_message(request, messages.INFO, "created new workspace")
+    response = redirect(
+        reverse(
+            "nice_lite:index",
+            query={
+                "selected_project_id": projectmodel.id,
+                "selected_workspace_id": workspace_id,
+            },
+        )
+    )
+    response.set_cookie(key="selected_project_id", value=projectmodel.id)
+    response.set_cookie(key="selected_workspace_id", value=workspace_id)
+    clear_checksum_cookies(request, response)
+    return response
 
 @login_required(login_url="/login")
 def view_workspace(request):
