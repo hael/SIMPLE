@@ -407,12 +407,12 @@ subroutine exec_test_master( self, cline )
     class(commander_test_master), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
     integer,          parameter :: TEST_JOB_ID = 42
-    integer,          parameter :: NSTAGES     = 8
+    integer,          parameter :: NSTAGES     = 9
     character(len=24), parameter :: STAGE_NAMES(NSTAGES) = [character(len=24) :: &
         &'preprocessing', 'assign_optics', 'initial_picking', 'opening2D', &
-        &'reference_picking', 'particle_sieving', 'pool2D', 'master']
+        &'reference_picking', 'particle_sieving', 'pool2D', 'abinitio3D_multistate', 'master']
     type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
-    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_multistate3D
+    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate
     type(gui_assembler)  :: assembler
     type(string)         :: running_heartbeat, finished_heartbeat
     integer              :: rc
@@ -423,7 +423,7 @@ subroutine exec_test_master( self, cline )
     write(*,'(a,i0)') '>>> TEST_MASTER JOB ID: ', TEST_JOB_ID
     write(*,'(a,i0)') '>>> TEST_MASTER HEARTBEAT ENTRIES: ', NSTAGES
 
-    ! The production master reports six forked workers as seven GUI stages:
+    ! The production master reports seven forked workers as eight GUI stages:
     ! initial_picking and opening2D deliberately share the opening2D process.
     ! Use the finite default fork worker so the orchestration lifecycle can be
     ! exercised without starting the persistent Stream pipeline or NICE.
@@ -434,10 +434,11 @@ subroutine exec_test_master( self, cline )
     call fork_reference_picking%start(   name=string('TEST_MASTER_REFERENCE_PICKING'))
     call fork_particle_sieving%start(    name=string('TEST_MASTER_PARTICLE_SIEVING'))
     call fork_pool2D%start(               name=string('TEST_MASTER_POOL2D'))
+    call fork_abinitio3D_multistate%start(name=string('TEST_MASTER_ABINITIO3D_MULTISTATE'))
     rc = c_usleep(FORK_POLL_TIME * 5)
 
     call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
-        &fork_reference_picking, fork_particle_sieving, fork_multistate3D, fork_pool2D)
+        &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate)
     running_heartbeat = assembler%to_string()
 
     call fork_preprocess%terminate()
@@ -446,16 +447,18 @@ subroutine exec_test_master( self, cline )
     call fork_reference_picking%terminate()
     call fork_particle_sieving%terminate()
     call fork_pool2D%terminate()
+    call fork_abinitio3D_multistate%terminate()
     call fork_preprocess%await_final_status()
     call fork_assign_optics%await_final_status()
     call fork_opening2D%await_final_status()
     call fork_reference_picking%await_final_status()
     call fork_particle_sieving%await_final_status()
     call fork_pool2D%await_final_status()
+    call fork_abinitio3D_multistate%await_final_status()
 
     call assembler%set_stoptime()
     call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
-        &fork_reference_picking, fork_particle_sieving, fork_multistate3D, fork_pool2D)
+        &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate)
     finished_heartbeat = assembler%to_string()
     call assembler%kill()
 
