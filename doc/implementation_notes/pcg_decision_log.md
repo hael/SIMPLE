@@ -668,8 +668,9 @@ map (half-independent prior, regularized pair stays gold standard) at
 solvent class's spread); `maxits_ml` defaults to 2 with the prior on
 (parameters class, `PCG_SOLVENT_MAXITS_ML`; explicit 0 refused) because
 the closed form cannot see a real-space term. Weight volumes written per
-half beside the shipped map every iteration, even/odd correlation and
-solvent-fraction gap logged (the half-independence check). abinitio3D:
+half (`pcg_solvent_weight_stateNN_even|odd.mrc`, overwritten every
+iteration, never accumulated), even/odd correlation and solvent-fraction
+gap logged (the half-independence check). abinitio3D:
 the key rides with the PCG stages only. Support, base pair, FSC oracle and NU
 bank inputs untouched on purpose: the resolution claim carries no extra
 mask and the prior's effect is confined to the shipped regularized pair.

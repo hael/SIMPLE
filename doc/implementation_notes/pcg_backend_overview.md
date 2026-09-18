@@ -129,8 +129,8 @@ Validation: the log prints one `PCG SOLVENT PRIOR` line per half
 (smoothing scale, threshold, width, solvent fraction, mean weight,
 coefficient) plus the even/odd weight correlation and solvent-fraction
 gap, and both weight volumes are written beside the shipped map
-(`pcg_solvent_weight_state01_even.mrc`, `_odd`; `..._iterNNN_even.mrc`
-under refine3D, one pair per iteration, never deleted) for inspection.
+(`pcg_solvent_weight_state01_even.mrc`, `_odd`, one pair per state,
+overwritten every iteration like the state volumes) for inspection.
 The provenance sidecar gains `solvent_prior=soft lambda_rel=<x>`. With
 `pcg_solvent=no` no prior code runs and the strategy is bit-identical
 to the version without it.

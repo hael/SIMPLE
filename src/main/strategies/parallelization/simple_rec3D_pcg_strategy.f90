@@ -305,6 +305,11 @@ contains
             call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, 'pcg', &
                 &l_pair_support_constrained=l_pair_support_constrained, support_kind=support_kind, mask_kind='none')
         endif
+        ! the resolution document states the solvent prior beside the FSC
+        ! mode so the provenance is complete in one place: the prior acts on
+        ! the shipped regularized pair only, the FSC pair carries none of it
+        if( params%l_pcg_solvent .and. params%l_ml_reg ) diagnostics%fsc_mode = &
+            &trim(diagnostics%fsc_mode)//' solvent_prior=soft(shipped_pair_only)'
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
             &' FSC=0.500 RESOLUTION = ', diagnostics%res_fsc05
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
@@ -438,10 +443,11 @@ contains
             &', even/odd weight correlation ', corr, ', solvent fraction gap ', &
             &100.*abs(stats_even%solvent_frac - stats_odd%solvent_frac), ' %, maxits_ml ', params%maxits_ml, &
             &' coupled iterations carry the prior'
-        ! named as the weight it is (like automask_stateNN.mrc), never as a
-        ! reconstruction: pcg_solvent_weight_stateNN[_iterNNN]_even|odd.mrc
+        ! named as the weight it is (like automask3D_stateNN.mrc), never as a
+        ! reconstruction, and overwritten every iteration like the state
+        ! volumes so the disk carries one pair per state:
+        ! pcg_solvent_weight_stateNN_even|odd.mrc
         fbody = string(PCG_SOLVENT_WEIGHT_FBODY)//int2str_pad(state_here,2)
-        if( params%which_iter > 0 ) fbody = fbody//'_iter'//int2str_pad(params%which_iter,3)
         fname_even = fbody//'_even'//MRC_EXT
         fname_odd  = fbody//'_odd'//MRC_EXT
         call fbody%kill
