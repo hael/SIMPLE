@@ -73,11 +73,13 @@ contains
         endif
 
         n_signal = size(candidate_coords)
-        if( n_signal < 1 .or. n_signal > NU_BANK_MAX_MEMBERS ) &
+        if( n_signal < 1 .or. n_signal > NU_DMAT_CANDIDATE_CAP ) &
             &THROW_HARD('invalid NU evidence signal-candidate count')
         if( size(dmats_mask,1) /= n_nu_mask .or. size(dmats_mask,2) < n_signal ) &
             &THROW_HARD('NU unary bank shape is incompatible with evidence compaction')
-        ! coarse-to-fine ordering is a property of the bank cutoffs
+        ! coarse-to-fine ordering is a property of the bank cutoffs; the Potts
+        ! coordinates are not strictly increasing since the walked shells share
+        ! the finest ladder coordinate (2026-09-13)
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; build_nu_evidence_state')
         if( size(cutoff_finds) < n_signal ) THROW_HARD('NU evidence cutoff geometry is incomplete')
         do icand = 2, n_signal
@@ -238,9 +240,13 @@ contains
         endif
 
         ! Stage 6.6 band ladder from the ACTUAL bank: the static four bands,
-        ! extended geometrically only while the bank holds a candidate at
-        ! least as fine as the next boundary; the retention rule prunes
-        ! bands without support.
+        ! extended geometrically only while an accepted candidate is at least
+        ! as fine as the next boundary. With the static bank (abinitio3D's
+        ! discrete-ladder mode, nu_refine=no) this is exactly the pre-6.6
+        ! four-band behavior; when the nu_refine shell walk has extended the
+        ! bank (refine3D_auto, mirroring the gridding path), the ladder grows
+        ! over the ACCEPTED candidates only, so no band can exist without a
+        ! covering, challenger-validated probe.
         allocate(band_limits_active(NU_EVIDENCE_NBANDS), source=NU_EVIDENCE_BAND_LIMITS)
         do
             nb_active = size(band_limits_active)
@@ -299,8 +305,9 @@ contains
                     ! Adaptive candidates are samples of a continuous
                     ! resolution coordinate. Integrate their posterior with
                     ! the represented frequency-cell measure so adding or
-                    ! thinning rungs cannot manufacture support merely by
-                    ! changing the number of labels.
+                    ! thinning shell probes cannot manufacture support merely
+                    ! by changing the number of labels. The static bank uses
+                    ! unit measure exactly, preserving nu_refine=no bitwise.
                     probs(icand) = candidate_measure(icand) * exp(-e)
                 endif
             enddo
@@ -390,8 +397,8 @@ contains
             if( icand > 1 ) state%summary%provenance = trim(state%summary%provenance)//','
             state%summary%provenance = trim(state%summary%provenance)//trim(adjustl(value_text))
         enddo
-        state%summary%provenance = trim(state%summary%provenance)//&
-            &';geometry=index_coords_logres_voronoi_measure'
+        if( n_signal > size(lowpass_limits) ) state%summary%provenance = trim(state%summary%provenance)//&
+            &';adaptive_geometry=static_anchored_fourier_voronoi_measure'
         write(value_text,'(ES14.6)') temperature
         state%summary%provenance = trim(state%summary%provenance)//';temperature='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') beta
@@ -443,56 +450,55 @@ contains
         deallocate(null_cost, coords, signal_lps, candidate_measure)
     end subroutine build_nu_evidence_state
 
-    !> Geometry and integration measure for the evidence candidate posterior
-    !! (2026-09-16): candidate coordinates are the ordered-label Potts
-    !! coordinates (reference-ladder positions in log(1/resolution)), and each
-    !! signal hypothesis receives its Voronoi cell width normalized to the
-    !! reference ladder's total signal mass, which removes label-count bias
-    !! whatever spacing the generated fine rungs took.
+    !> Geometry and integration measure for the evidence candidate posterior.
+    !! The eight-member static bank deliberately retains its historical
+    !! integer coordinates and unit masses so the heavily used
+    !! nu_refine=no PCG route is numerically unchanged. Once accepted shell
+    !! candidates are present, their coordinates follow Fourier-shell distance
+    !! normalized by the finest static interval while the original coordinates
+    !! remain exactly 1:n_static. Each signal hypothesis receives its Voronoi
+    !! cell width, normalized to the static bank's total signal mass. This
+    !! removes adaptive label-count bias without discontinuously changing the
+    !! established static Potts geometry.
     subroutine setup_evidence_candidate_geometry( signal_lps, coords, measure )
         real, intent(in) :: signal_lps(:)
         real, allocatable, intent(out) :: coords(:), measure(:)
-        real, allocatable :: widths(:), logpos(:)
-        real :: left_edge, right_edge, coord_eps
-        integer :: n_signal, i
+        real, allocatable :: widths(:)
+        real :: shell_scale, left_edge, right_edge, coord_eps
+        integer :: n_signal, n_static, static_find_gap, i
         n_signal = size(signal_lps)
         if( n_signal < 1 ) THROW_HARD('empty NU evidence signal geometry')
-        if( any(signal_lps <= TINY) ) THROW_HARD('invalid NU evidence candidate low-pass geometry')
         allocate(coords(n_signal + 1), source=0.)
         allocate(measure(n_signal + 1), source=1.)
-        ! candidate coordinates are the ordered-label Potts coordinates of
-        ! the filter competition: the label index (2026-09-17, see
-        ! setup_nu_candidate_coords), null at 0
-        coord_eps = sqrt(epsilon(1.))
         do i = 1, n_signal
             coords(i+1) = real(i)
         enddo
-        if( n_signal == 1 ) return
-        ! each signal hypothesis receives as MASS its Voronoi cell width on
-        ! the reference ladder in log(1/resolution), normalized to the
-        ! reference ladder's total signal mass, so a dense fine end of the
-        ! generated ladder does not outweigh the coarse rungs in the prior
-        allocate(widths(n_signal), source=0.)
-        allocate(logpos(n_signal), source=0.)
-        do i = 1, n_signal
-            logpos(i) = nu_potts_coord_for_resolution(signal_lps(i))
-            if( i > 1 ) logpos(i) = max(logpos(i), logpos(i-1) + coord_eps)
+        n_static = min(size(lowpass_limits), n_signal)
+        if( n_signal <= size(lowpass_limits) ) return
+        if( any(signal_lps <= TINY) ) THROW_HARD('invalid NU evidence candidate low-pass geometry')
+        if( size(cutoff_finds) < n_signal ) THROW_HARD('NU evidence cutoff geometry is incomplete')
+        static_find_gap = max(1, cutoff_finds(n_static) - cutoff_finds(max(1, n_static - 1)))
+        shell_scale = 1. / real(static_find_gap)
+        coord_eps = sqrt(epsilon(1.))
+        do i = n_static + 1, n_signal
+            coords(i+1) = real(n_static) + real(cutoff_finds(i) - cutoff_finds(n_static)) * shell_scale
+            coords(i+1) = max(coords(i+1), coords(i) + coord_eps)
         enddo
+        allocate(widths(n_signal), source=0.)
         do i = 1, n_signal
             if( i == 1 )then
-                left_edge = logpos(1) - 0.5 * (logpos(2) - logpos(1))
+                left_edge = coords(2) - 0.5 * (coords(3) - coords(2))
             else
-                left_edge = 0.5 * (logpos(i) + logpos(i-1))
+                left_edge = 0.5 * (coords(i+1) + coords(i))
             endif
             if( i == n_signal )then
-                right_edge = logpos(n_signal) + 0.5 * (logpos(n_signal) - logpos(n_signal-1))
+                right_edge = coords(n_signal+1) + 0.5 * (coords(n_signal+1) - coords(n_signal))
             else
-                right_edge = 0.5 * (logpos(i) + logpos(i+1))
+                right_edge = 0.5 * (coords(i+1) + coords(i+2))
             endif
             widths(i) = max(coord_eps, right_edge - left_edge)
         enddo
-        measure(2:) = widths * real(size(NU_LADDER_REF)) / sum(widths)
-        deallocate(logpos)
+        measure(2:) = widths * real(size(lowpass_limits)) / sum(widths)
         if( any(.not.ieee_is_finite(coords)) .or. any(.not.ieee_is_finite(measure)) .or. &
             &any(measure <= 0.) ) THROW_HARD('invalid NU evidence adaptive candidate geometry')
         deallocate(widths)

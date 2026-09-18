@@ -571,3 +571,78 @@ bounded at fsc/1.5 as designed. And identical inputs (vol1 = vol2, an FSC
 of 1 everywhere, the finest cutoff awarded on 1.36M voxels, a sharpened
 noise ball) are refused with a message.
 
+**2026-09-18 -- Index Potts coordinate reverted for the filter competition
+(PfCRT `latest4`).** With the label index, 3/9 abinitio3D restarts reached
+4.6 A (4.85-8.2 A otherwise) against 10/10 at 4.4-4.5 A with the
+log-resolution coordinate (`latest3`). Mechanism in the logs: at FSC 8.2 A
+the regularized member sits at 5.45 A but the handoff reads `7.96 A (raw
+finest label 5.45 A)` for the rest of the stage -- nothing finer than the
+7.96 A rung holds 1% of the signal voxels, because the dense ladder puts
+four to eight members between 8 A and the regularized pair and on the
+index coordinate the core's jump out of the 8 A surround costs several
+hinge steps instead of the one it cost on the 8-rung ladder; on PfCRT's
+small core (12% envelope occupancy) the prior wins. The log-resolution
+coordinate is the scale-free generalization of the old prices and is
+validated by latest3, bgal, Msp1 and streptavidin; restored for the filter
+competition. The evidence competition keeps the index coordinate
+(separate Potts problem, separate beta; validated by the "gorgeous"
+postprocess_nu on the Sep-11 halves). Correction of the 09-17 entry: the
+first "ball of noise" postprocess_nu run had vol1 = vol2, so the
+log-resolution coordinate was never shown to produce a noisy
+postprocess_nu with correct inputs; the index change was made on a
+misdiagnosis. Reruns are Hans's: abinitio3D (expect latest3 behaviour)
+and postprocess_nu on the Sep-11 halves (expect unchanged).
+
+**2026-09-18 -- NU machinery restored to the ed36eb4c static ladder + aux
+competition, as the only mechanism.** Decision (Hans): the discrete ladder
+`[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` with the ML-regularized pair
+replacing the finest retained label -- abinitio3D's machinery at commit
+ed36eb4c, which produced the best PfCRT maps -- is the NU competition for
+abinitio3D, refine3D_auto and postprocess_nu; nothing else. The
+`src/main/nu_filt` submodules and `simple_nu_state_filter` are restored
+from ed36eb4c verbatim except: the extend submodule and its interfaces,
+the walk statistics type and the walk-only constants are removed (no code
+path can extend the bank), the `nu_refine` control stays removed, the
+auxiliary member is used whenever `ml_reg=yes`, and Hans's `automsk=nu`
+edits (envelope selection, `write_nu_evidence_envmask(mask_out, l_valid)`)
+are kept. Gone with this: the generated dense ladder, `NU_BANK_MAX_MEMBERS`,
+`NU_LADDER_*`, the log-resolution and index Potts coordinates (integer
+ladder coordinates again), the lpset headroom/floor (`NU_LPSET_BAND_FLOOR`;
+the cap provides the headroom as it always did), the content-extent
+handoff. postprocess_nu passes the half-map FSC so its bank is capped like
+the refinement's. Compile and the PfCRT/bgal reruns are Hans's.
+
+**2026-09-18 -- The auxiliary pair competes with the finest rung instead of
+replacing it.** Decision (Hans): with `ml_reg=yes` the ML-regularized pair
+is appended as one more bank member beside the finest retained rung, and
+the two compete voxel by voxel; there must be no prior penalty for
+replacing a finest-rung voxel by the regularized pair -- if it wins the
+unary it is included. Coupling to the ordered-label prior: the auxiliary
+shares the finest rung's Potts coordinate (a boundary between two filter
+shapes of the same terminal resolution is not a resolution discontinuity),
+so every existing price is unchanged and the unary alone decides between
+them. Side effects: the auxiliary is always included when supplied (the
+ed36eb4c rule ignored it unless finer than the finest rung); the handoff
+sorts labels by resolution so it needs no change, and if the auxiliary
+falls below the 1% signal-voxel floor the band now drops to the finest
+rung rather than to the one below it; the auxiliary's own unary margin
+diagnostic now includes the finest rung. `setup_nu_dmats` appends the
+label (own Fourier index, bwfilters column unused, filtered pair never
+cached), `setup_nu_candidate_coords` assigns the shared coordinate.
+Untested; the PfCRT abinitio3D + refine3D_auto pair against July's
+3.61/3.98 A is the test.
+
+**2026-09-18 -- postprocess_nu operates on the project.** Decision (Hans):
+like `postprocess`, `postprocess_nu` takes `projfile` (+ `state`, `mskdiam`,
+`nthr`, optional `outvol`), fetches the state volume from the out segment,
+its `_even_unfil/_odd_unfil` pair (evidence input) and, when present, its
+`_even/_odd` regularized pair, with which it first runs the refinement's
+filter competition -- static ladder capped at fsc/1.5, the regularized pair
+beside the finest rung -- printing the bank, the assignment table and the
+matching handoff and writing the references and local-resolution map;
+then the unchanged evidence sharpening. Every product carries
+`_pproc_nu` (`<vol>_pproc_nu.mrc` sharpened; `<vol>_pproc_nu_filt.mrc`,
+`<vol>_even/_odd_pproc_nu_filt.mrc`, `<vol>_pproc_nu_locres.mrc`). The
+`vol1/vol2` file inputs are gone. This is the cheap test of the auxiliary
+competition on any completed run directory.
+

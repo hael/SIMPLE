@@ -123,15 +123,10 @@ other consumers (postprocess of non-PCG products, the abinitio final rec).
 
 The NU competition is assembly-owned and identical on both backends
 (`simple_nu_state_filter`, 2026-09-16, the `nu_refine` shell walk
-retired): the generated ladder of hard rungs (coarse 20-6 A, then every
-two Fourier shells, widened to fit `NU_BANK_MAX_MEMBERS`=16) is built from
-the base (`_unfil`) pair and bounded one shell coarser than the
-ML-regularized pair, which joins as the finest member (`ml_reg=yes`;
-without it the ladder is bounded at `fsc/1.5` of the base pair). The
-matching low-pass handoff is the content extent of the finest selected
-label with at least 1% of the signal voxels at it or finer: a hard rung's
-cutoff, the pair's FSC=0.143 resolution for the regularized member, no
-headroom. The NU objective always runs on the spherical `mskdiam` support.
+retired; the generated ladder withdrawn 2026-09-18): the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18. The
+matching low-pass handoff is the finest selected label with at least 1% of
+the signal voxels at it or finer. The NU objective always runs on the
+spherical `mskdiam` support.
 
 Under `automsk=yes` the NU evidence envelope (`nu_envmask3D_stateNN.mrc`,
 regenerated every competition from the live evidence) is the mask that
@@ -214,7 +209,7 @@ Other lines to grep: `PCG SOLVE SUPPORT` (which support, and why),
 ring the evidence labels signal -- the number to consult before tightening
 `binwidth`), `NU NULL SHELL GEOMETRY` (envelope/support Dice, ring
 retained at full weight), `NU BACKGROUND` (evidence envelope or fallback),
-`NU BANK` (the generated ladder, its fine step and its finest member),
+`NU BANK CAP` (the static ladder's FSC cap and retained count),
 `NU LOW-PASS ASSIGNMENTS`, `NU filter promoted matching
 low-pass`, `PCG BEYOND-BAND EXCESS` (post-band RMS >= 10x the band-edge
 shell; the regression signal for solver defects), `RECONSTRUCTION MASTER

@@ -1,23 +1,23 @@
 !@descr: assembly-owned nonuniform (NU) filtering of one state's half-map pair
 !
 !  One routine runs the NU competition for a state exactly as the gridding
-!  volassemble always has: a low-pass candidate bank built from the BASE
-!  (unregularized) even/odd pair -- the coarse ladder plus fine rungs
-!  generated from the box up to the regularized pair's resolution
-!  (2026-09-16, the shell walk retired) -- the ML-regularized pair as the
-!  finest member of the competition (ml_reg=yes), the
+!  volassemble always has: the static low-pass ladder built from the BASE
+!  (unregularized) even/odd pair, capped at fsc/1.5 of the pair, the
+!  ML-regularized pair as one more member beside the finest retained rung,
+!  competing with it at zero prior cost (ml_reg=yes) -- the machinery of
+!  commit ed36eb4c's abinitio3D with the auxiliary competing instead of
+!  replacing, the only NU mechanism since 2026-09-18 (the shell walk is
+!  gone) -- the
 !  selected envelope fixing the filter-field background (density for
 !  automsk=yes, valid NU evidence for automsk=nu, with density fallback;
-!  the evidence null is estimated robustly over a spherical base pair, or designated by
-!  Euclidean geometry on the density envelope's dilation ring for an
-!  envelope-constrained base pair, with the density envelope as the
-!  fallback background),
-!  synthesis of the filtered even/odd/merged references, the local-resolution
-!  map, and the content extent of the finest populated selected label (a
-!  hard rung's cutoff, the pair's FSC=0.143 resolution for the regularized
-!  member) as the matching low-pass handoff.
-!  Both reconstruction backends call it (policy 2026-09-06): the PCG path
-!  mirrors gridding and carries no prior of its own beyond the P_tau replay.
+!  the evidence null is estimated robustly over a spherical base pair, or
+!  designated by Euclidean geometry on the density envelope's dilation ring
+!  for an envelope-constrained base pair, with the density envelope as the
+!  fallback background), synthesis of the filtered even/odd/merged
+!  references, the local-resolution map, and the finest populated selected
+!  label as the matching low-pass handoff. Both reconstruction backends call
+!  it (policy 2026-09-06): the PCG path mirrors gridding and carries no
+!  prior of its own beyond the P_tau replay.
 module simple_nu_state_filter
 use simple_core_module_api
 use simple_image,            only: image
@@ -26,7 +26,6 @@ use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
-    &NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR, &
     &write_nu_local_resolution_map, write_nu_evidence_envmask, &
     &set_nu_evidence_null_shell, set_nu_solvent_envelope
 implicit none
@@ -42,8 +41,8 @@ end type nu_state_filter_timings
 
 contains
 
-    !> The ML-regularized pair is the finest member of the competition
-    !! whenever it exists (ml_reg=yes; 2026-09-16, the shell walk retired).
+    !> The ML-regularized pair joins the static ladder beside its finest
+    !! retained rung whenever it exists (ml_reg=yes).
     pure logical function nu_aux_member( params ) result( l_use_aux )
         class(parameters), intent(in) :: params
         l_use_aux = params%l_ml_reg
@@ -54,9 +53,8 @@ contains
     !! vol_aux_even/odd:  the ML-regularized pair when l_use_aux (consumed and
     !!                    killed here), ignored otherwise.
     !! res0143:           FSC=0.143 crossing of the base pair: the auxiliary
-    !!                    member's resolution (clamped by a set lp), which
-    !!                    bounds the hard rungs, or the fsc/1.5 bound of the
-    !!                    rungs when no auxiliary pair is supplied.
+    !!                    member's effective resolution (clamped by a set lp)
+    !!                    and the static-bank cap (fsc/NU_BANK_FSC_HEADROOM).
     !! volname/eonames:   the state's merged and even/odd file names; the
     !!                    _nu_filt and _nu_locres products derive from them.
     !! align_lp:          content extent of the finest populated selected
@@ -109,10 +107,9 @@ contains
             if( trim(params%automsk) == 'nu' ) &
                 &call density_envelope%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT), del_if_exists=.true.)
         endif
-        ! candidate bank from the base pair: the coarse ladder and the fine
-        ! rungs generated up to the regularized pair's resolution, which is
-        ! the finest member (ml_reg=yes); without a regularized pair the
-        ! rungs are bounded by the base pair's FSC=0.143 / NU_BANK_FSC_HEADROOM
+        ! candidate bank from the base pair (the static ladder capped at
+        ! fsc/NU_BANK_FSC_HEADROOM), auxiliary member from the ML pair
+        ! beside the finest retained rung
         bank_cap_res = res0143
         if( l_use_aux )then
             allocate(nu_aux_even(1), nu_aux_odd(1))
@@ -199,16 +196,6 @@ contains
 
         real function nu_aux_effective_resolution() result(aux_res)
             aux_res = res0143
-            if( params%l_nonuniform_lpset )then
-                ! merged-reference climb: the regularized pair sits and hands
-                ! off with the 1.5x headroom of the former static bank
-                ! (NU_LPSET_BAND_FLOOR, simple_nu_filter); gold-standard
-                ! refinement hands off the FSC=0.143 resolution itself
-                aux_res = max(res0143 / NU_BANK_FSC_HEADROOM, NU_LPSET_BAND_FLOOR)
-                if( params%part == 1 ) write(logfhandle,'(A,F7.2,A,F7.2,A)') &
-                    &'>>> NU REGULARIZED MEMBER WITH HEADROOM (nonuniform_lpset): FSC=0.143 ', res0143, &
-                    &' A -> ', aux_res, ' A'
-            endif
             if( params%l_lpset .and. params%lp > TINY )then
                 if( NU_DEV_OUTPUT .and. params%part == 1 .and. aux_res > params%lp + TINY )then
                     write(logfhandle,'(A,F8.3,A,F8.3,A)') &

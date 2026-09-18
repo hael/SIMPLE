@@ -87,12 +87,9 @@ call get_nu_evidence_summary(evstate, evsummary)
 unconstrained_null_fraction = evsummary%null_fraction
 call unpack_nu_evidence_state(evstate, ev_label, ev_cutoff, ev_uncertainty, ev_band_support)
 call print_nu_evidence_summary(evstate)
-! The evidence state built from the generated ladder (2026-09-16: coarse
-! rungs plus fine rungs every NU_LADDER_FINE_STEP shells up to the bound, no
-! regularized member here) is a compatibility boundary: the four static
-! evidence bands are the guaranteed floor and no appended band earns support
-! on a 4 A Nyquist fixture, and the candidate geometry is the fixed
-! reference-ladder log-resolution Voronoi measure, never an adaptive one.
+! The static evidence state (the fixed ladder, no shell walk since
+! 2026-09-18) is a compatibility boundary: eight signal candidates plus the
+! explicit null, four fixed bands, and no adaptive candidate geometry.
 if( evsummary%n_bands /= NU_EVIDENCE_NBANDS ) THROW_HARD('static NU evidence band count changed')
 if( index(evsummary%provenance, 'adaptive_geometry=') > 0 ) &
     &THROW_HARD('static NU evidence unexpectedly enabled adaptive candidate geometry')

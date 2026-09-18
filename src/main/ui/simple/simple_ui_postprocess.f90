@@ -69,23 +69,21 @@ contains
         &'Nonuniform evidence-bounded postprocessing of even/odd half-maps',& ! summary
         &'is a program for NU-evidence local sharpening of a 3D reconstruction: local amplitude restoration in which &
         &both the confidence field and the target spectrum derive from cross-half NU evidence (model-free LocScale &
-        &analogue). Feed the UNREGULARIZED even/odd half pair; outputs carry the _nu_sharp suffix and are &
+        &analogue). Operates on the project like postprocess: the state volume and its unregularized even/odd pair &
+        &are taken from the out segment; when the regularized pair is present the refinement filter competition is run &
+        &first and its references and local-resolution map are written. Outputs carry the _pproc_nu suffix and are &
         &display/interpretation maps only, never inputs to FSC correction or resolution estimation. Isolated from the &
         &standard postprocess program (global B-factor), which is unchanged',& ! help
         &'simple_exec',&                                       ! executable
-        &.false., &
+        &.true., &
         &visibility=UI_VIS_ADVANCED)                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call postprocess_nu%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Unregularized odd half-map',  'vol1.mrc file', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call postprocess_nu%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Unregularized even half-map', 'vol2.mrc file', .true., '', &
-        &visibility=UI_VIS_STANDARD)
         call postprocess_nu%add_input(UI_IMG, outvol, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call postprocess_nu%add_input(UI_PARM, smpd, &
-        &visibility=UI_VIS_STANDARD)
+        call postprocess_nu%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! mask controls
         call postprocess_nu%add_input(UI_MASK, mskdiam, &

@@ -28,24 +28,13 @@ contains
             &allocated(aux_even_bank) .and. allocated(aux_odd_bank)
     end function nu_label_is_aux_replacement
 
-    !> The bank ladder (2026-09-16): the coarse rungs NU_LADDER_COARSE, then
-    !! hard rungs at a constant Fourier-shell spacing from the last coarse
-    !! rung up to a fine bound, then (l_aux_slot) one reserved slot for the
-    !! auxiliary (regularized) pair as the finest member. Fine bound: the
-    !! last shell strictly coarser than aux_res when an auxiliary pair is
-    !! supplied; fsc_res/NU_BANK_FSC_HEADROOM when only an FSC is; Nyquist
-    !! otherwise. The coarse rungs are also bounded (never fewer than two).
-    !! The fine spacing starts at NU_LADDER_FINE_STEP and widens so the whole
-    !! bank fits NU_BANK_MAX_MEMBERS: the budget is met by spacing, never by
-    !! truncating the range and never by failing.
-    module subroutine init_nu_filter( vol_even, vol_odd, fsc_res, aux_res, l_aux_slot )
+    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, fsc_res )
         class(image), intent(in) :: vol_even, vol_odd
-        real,    optional, intent(in)  :: fsc_res
-        real,    optional, intent(in)  :: aux_res
-        logical, optional, intent(out) :: l_aux_slot
-        integer, allocatable :: finds_tmp(:)
-        integer :: i, n_coarse, n_valid, bound_find, k_fine0, nshells, n_fine_slots, step, k, aux_find
-        logical :: l_aux
+        integer, optional, intent(in) :: n_highres_steps
+        real,    optional, intent(in) :: fsc_res
+        integer, allocatable :: cutoff_finds_tmp(:)
+        integer :: i, n_extra, n_extra_requested, n_valid, max_extra, base_find, n_static
+        integer :: istep, n_extra_retained_requested, n_extra_skip, n_kept_seen
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
         box  = ldim(1)
@@ -53,83 +42,65 @@ contains
         if( abs(vol_odd%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; init_nu_filter')
         if( smpd <= TINY ) THROW_HARD('Input volume smpd must be positive; init_nu_filter')
         nu_smooth_norm_radius = -1
-        if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
-        l_aux    = .false.
-        aux_find = 0
-        if( present(aux_res) )then
-            if( aux_res > TINY )then
-                l_aux    = .true.
-                aux_find = min(box/2, max(1, calc_fourier_index(aux_res, box, smpd)))
-            endif
+        if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
+        base_find = calc_fourier_index(lowpass_limits(size(lowpass_limits)), box, smpd)
+        n_extra_requested = 0
+        if( present(n_highres_steps) )then
+            n_extra_requested = min(max(0, n_highres_steps), max(0, box / 2 - base_find))
         endif
-        ! fine bound of the hard rungs
-        nu_bank_cap_find = 0
-        if( l_aux )then
-            bound_find = aux_find - 1
-        else
-            bound_find = box/2
-            if( present(fsc_res) )then
-                if( fsc_res > TINY )then
-                    nu_bank_cap_find = min(box/2, max(1, &
-                        &calc_fourier_index(fsc_res / NU_BANK_FSC_HEADROOM, box, smpd)))
-                    bound_find = nu_bank_cap_find
-                endif
-            endif
-        endif
-        ! coarse rungs within the bound, never fewer than two
-        n_coarse = size(NU_LADDER_COARSE)
-        allocate(finds_tmp(NU_BANK_MAX_MEMBERS), source=0)
-        do i = 1, n_coarse
-            finds_tmp(i) = calc_fourier_index(NU_LADDER_COARSE(i), box, smpd)
+        max_extra = max(0, NU_DMAT_CANDIDATE_CAP - size(lowpass_limits) - NU_DMAT_CANDIDATE_HEADROOM)
+        n_extra_retained_requested = count_nu_highres_extension_retained_steps(n_extra_requested)
+        n_extra = min(n_extra_retained_requested, max_extra)
+        n_extra_skip = max(0, n_extra_retained_requested - n_extra)
+        allocate(cutoff_finds_tmp(size(lowpass_limits) + n_extra))
+        do i = 1, size(lowpass_limits)
+            cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
-        n_valid = max(2, count(finds_tmp(:n_coarse) <= bound_find))
-        n_valid = min(n_valid, n_coarse)
-        if( l_aux .and. count(finds_tmp(:n_coarse) < aux_find) < 2 )then
-            ! the auxiliary pair is coarser than the second coarse rung: no
-            ! meaningful competition below it; drop it and bound by the FSC
-            if( nu_l_report ) write(logfhandle,'(A,F8.3,A)') &
-                &'>>> NU auxiliary pair dropped: its resolution ', aux_res, &
-                &' A leaves fewer than two coarser hard rungs'
-            l_aux = .false.
-            bound_find = box/2
-            if( present(fsc_res) )then
-                if( fsc_res > TINY )then
-                    nu_bank_cap_find = min(box/2, max(1, &
-                        &calc_fourier_index(fsc_res / NU_BANK_FSC_HEADROOM, box, smpd)))
-                    bound_find = nu_bank_cap_find
-                endif
-            endif
-            n_valid = max(2, count(finds_tmp(:n_coarse) <= bound_find))
-            n_valid = min(n_valid, n_coarse)
-        endif
-        ! fine rungs: from the last coarse rung to the bound at a constant
-        ! shell spacing, widened to fit the budget
-        nu_bank_fine_step = 0
-        k_fine0 = finds_tmp(n_coarse)
-        if( n_valid == n_coarse .and. bound_find > k_fine0 )then
-            nshells      = bound_find - k_fine0
-            n_fine_slots = NU_BANK_MAX_MEMBERS - n_coarse
-            if( l_aux ) n_fine_slots = n_fine_slots - 1
-            if( n_fine_slots > 0 )then
-                step = max(NU_LADDER_FINE_STEP, (nshells + n_fine_slots - 1) / n_fine_slots)
-                nu_bank_fine_step = step
-                k = k_fine0 + step
-                do while( k <= bound_find .and. n_valid < NU_BANK_MAX_MEMBERS - merge(1,0,l_aux) )
-                    n_valid = n_valid + 1
-                    finds_tmp(n_valid) = k
-                    k = k + step
-                end do
+        ! FSC-anchored candidate cap of the static bank (absent or zero
+        ! fsc_res = uncapped; the nu_refine=yes caller passes zero): keep the
+        ! static labels coarser than fsc_res/NU_BANK_FSC_HEADROOM (at least
+        ! two, the competition needs a pair). The retained-step loop below
+        ! honours it too, but that loop only seeds a walk that nu_refine=yes
+        ! owns, so in practice the cap and the walk never coexist
+        nu_bank_cap_find = 0
+        n_static = size(lowpass_limits)
+        if( present(fsc_res) )then
+            if( fsc_res > TINY )then
+                nu_bank_cap_find = min(box/2, max(1, &
+                    &calc_fourier_index(fsc_res / NU_BANK_FSC_HEADROOM, box, smpd)))
+                n_static = max(2, count(cutoff_finds_tmp(:size(lowpass_limits)) <= nu_bank_cap_find))
+                n_static = min(n_static, size(lowpass_limits))
             endif
         endif
-        ! the auxiliary slot: the finest member, at its own shell
-        if( l_aux )then
-            n_valid = n_valid + 1
-            finds_tmp(n_valid) = aux_find
+        n_valid = n_static
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. n_extra_retained_requested > n_extra )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
+                &'>>> NU high-resolution depth ', n_extra_requested, &
+                &' exceeds distance-matrix memory window; using finest ', n_extra, &
+                &' retained shell step(s) within cap ', NU_DMAT_CANDIDATE_CAP, ' candidates'
         endif
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. n_extra_requested > 0 .and. &
+            &NU_HIGHRES_EXTENSION_RETAIN_STRIDE > 1 )then
+            write(logfhandle,'(A,I0,A,I0,A)') &
+                &'>>> NU high-resolution extension bank retention: every ', &
+                &NU_HIGHRES_EXTENSION_RETAIN_STRIDE, &
+                &' shell step(s), plus current terminal shell; requested depth ', &
+                &n_extra_requested
+        endif
+        n_kept_seen = 0
+        do istep = 1, n_extra_requested
+            if( .not.keep_nu_highres_extension_step(istep, n_extra_requested) ) cycle
+            n_kept_seen = n_kept_seen + 1
+            if( n_kept_seen <= n_extra_skip ) cycle
+            if( nu_bank_cap_find > 0 .and. base_find + istep > nu_bank_cap_find ) cycle
+            if( .not.any(cutoff_finds_tmp(:n_valid) == base_find + istep) )then
+                n_valid = n_valid + 1
+                cutoff_finds_tmp(n_valid) = base_find + istep
+            endif
+        end do
         allocate(cutoff_finds(n_valid))
-        cutoff_finds = finds_tmp(:n_valid)
-        deallocate(finds_tmp)
-        if( present(l_aux_slot) ) l_aux_slot = l_aux
+        cutoff_finds = cutoff_finds_tmp(:n_valid)
+        deallocate(cutoff_finds_tmp)
         if( allocated(bwfilters) ) deallocate(bwfilters)
         allocate(bwfilters(box,size(cutoff_finds)), source=0.)
         do i = 1, size(cutoff_finds)
@@ -141,6 +112,28 @@ contains
         logical, intent(in) :: l_report
         nu_l_report = l_report
     end subroutine set_nu_filter_report
+
+    module logical function keep_nu_highres_extension_step( istep, finest_step )
+        integer, intent(in) :: istep, finest_step
+        keep_nu_highres_extension_step = .false.
+        if( istep <= 0 .or. finest_step <= 0 ) return
+        if( NU_HIGHRES_EXTENSION_RETAIN_STRIDE <= 1 )then
+            keep_nu_highres_extension_step = .true.
+        else
+            keep_nu_highres_extension_step = &
+                &mod(istep, NU_HIGHRES_EXTENSION_RETAIN_STRIDE) == 0 .or. istep == finest_step
+        endif
+    end function keep_nu_highres_extension_step
+
+    module integer function count_nu_highres_extension_retained_steps( nsteps )
+        integer, intent(in) :: nsteps
+        integer :: istep
+        count_nu_highres_extension_retained_steps = 0
+        do istep = 1, max(0, nsteps)
+            if( keep_nu_highres_extension_step(istep, nsteps) ) &
+                &count_nu_highres_extension_retained_steps = count_nu_highres_extension_retained_steps + 1
+        end do
+    end function count_nu_highres_extension_retained_steps
 
     module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
         class(string), intent(in) :: cache_prefix

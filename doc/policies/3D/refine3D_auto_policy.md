@@ -28,23 +28,12 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `lplim_crit=0.143`
 - `incrreslim=no`
 
-NU volume filtering is independent of `incrreslim`. Since 2026-09-16 there
-is one NU competition for every workflow (the `nu_refine` shell walk is
-retired): the candidate bank is a generated ladder of hard Butterworth
-rungs -- the coarse rungs 20, 15, 12, 10, 8 and 6 A plus fine rungs every
-`NU_LADDER_FINE_STEP` (2) Fourier shells, widened only when the
-`NU_BANK_MAX_MEMBERS` (16) budget requires it -- bounded one shell coarser
-than the finest member, which is the ML-regularized (closed-form Wiener)
-pair whenever `ml_reg=yes`. Without a regularized pair the ladder is
-bounded at `fsc/1.5` of the base pair (else Nyquist). The regularized pair
-competes for voxels like any other member, so the FSC never gates the
-filter directly; it enters only through the regularizer `P_tau`, the
-bound, resolution reporting, convergence and the `envfsc` correction. The
-matching low-pass handoff is the content extent of the finest selected
-label with at least 1% of the signal voxels at that label or finer: a hard
-rung hands off its cutoff, the regularized member hands off the pair's
-FSC=0.143 resolution, with no headroom (`nonuniform_filtering_policy.md`
-sections 8, 10, 12). Bootstrap NU filtering never uses the generic parsed
+NU volume filtering is independent of `incrreslim`. Since 2026-09-18 there
+is one NU competition for every workflow: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18 (`nonuniform_filtering_policy.md` sections 8, 10, 12). The
+`nu_refine=yes` shell walk that refine3D_auto used until 2026-09-16, and
+the generated dense ladder that replaced it until 2026-09-18, are gone.
+The matching low-pass handoff is the finest selected label with at least 1%
+of the signal voxels at that label or finer. Bootstrap NU filtering never uses the generic parsed
 startup `lp` as a volume-filter ceiling because it is not evidence about
 the resolution of supplied half maps.
 
@@ -124,7 +113,7 @@ to startup reconstruction instead of trusting stale derived NU products.
 
 When the raw pair is compatible, `refine3D_auto` generates fresh same-stem
 `_nu_filt` bootstrap references before the first matcher pass, from the
-same generated ladder as every later iteration (the regularized member
+same static ladder as every later iteration (the auxiliary member
 requires `ml_reg=yes`).
 
 Under `rec_backend=pcg` the startup reconstruction runs the same NU

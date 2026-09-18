@@ -232,19 +232,11 @@ went with the warm starts). The NU evidence built from a density-constrained
 pair designates its null on the density envelope's dilation ring
 (`doc/policies/3D/automasking_policy.md`).
 
-PCG runs the one generated-ladder NU competition of 2026-09-16 (the
-`nu_refine` shell walk is retired): coarse hard rungs 20-6 A, fine rungs
-every two Fourier shells (widened to fit the 16-member budget) bounded one
-shell coarser than the regularized pair, which joins as the finest member
-whenever `ml_reg=yes` (without it the ladder is bounded at `fsc/1.5` of the
-base pair). Potts coordinates and the evidence candidate masses come from
-the candidates' positions on the reference ladder 20-4 A, interpolated in
-log(1/resolution), with a normalized Voronoi measure. The four static
-evidence bands are the floor; appended bands are kept only while they earn
-support. The matching handoff is the content extent of the finest selected
-label with at least 1% of the signal voxels at that label or finer: a hard
-rung's cutoff, or the pair's FSC=0.143 resolution for the regularized
-member (`nonuniform_filtering_policy.md` sections 8, 10 and 12).
+PCG runs the one static NU competition (2026-09-18: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18). Integer
+Potts coordinates, unit candidate masses, the four fixed evidence bands.
+The matching handoff is the finest selected label with at least 1% of the
+signal voxels at that label or finer (`nonuniform_filtering_policy.md`
+sections 8 and 12).
 
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
 the default in `abinitio3D`, every PCG solve, base and regularized replay, runs

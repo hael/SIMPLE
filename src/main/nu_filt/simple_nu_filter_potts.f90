@@ -36,8 +36,8 @@ contains
         ! The unaries are smoothed at candidate-specific radii, so a comparison
         ! between labels carries the footprint bias described in
         ! optimize_nu_cutoff_finds. The smoothing therefore never promotes a
-        ! voxel beyond the label it entered with (the like-for-like winner);
-        ! it only removes fine-label speckle.
+        ! voxel beyond the label it entered with (the like-for-like winner, or
+        ! the shell walk's accepted label); it only removes fine-label speckle.
         allocate(cap, source=candmap)
         if( NU_DEV_OUTPUT .and. nu_l_report )then
             site_energy = calc_nu_label_smooth_site_energy(candmap, beta)

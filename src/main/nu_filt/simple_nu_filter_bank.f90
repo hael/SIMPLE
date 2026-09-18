@@ -6,62 +6,28 @@ implicit none
 contains
 
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &evidence_source, fsc_res )
+            &n_highres_steps, evidence_source, fsc_res )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
+        integer,     optional, intent(in) :: n_highres_steps
         character(len=*), optional, intent(in) :: evidence_source
         real,        optional, intent(in) :: fsc_res
         type(image) :: vol_even_filt, vol_odd_filt, vol_support
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
         real, allocatable :: noise_profile(:)
-        real :: noise_rmax, aux_res
-        integer :: i, n_candidates, aux_replacement_idx, n_hard
-        logical :: l_aux_slot
+        real :: noise_rmax, finest_lp
+        integer :: i, n_candidates, aux_replacement_idx, aux_find
         real    :: x
-        ! the auxiliary (regularized) pair: the finest of those supplied is
-        ! the finest member of the bank and bounds the hard rungs
-        aux_replacement_idx = 0
-        aux_res = 0.
-        if( present(aux_even) ) then
-            if( .not. present(aux_odd) ) THROW_HARD('Auxiliary odd bank missing; setup_nu_dmats')
-            if( size(aux_resolutions) /= size(aux_even) ) THROW_HARD('Auxiliary resolutions size mismatch; setup_nu_dmats')
-            do i = 1, size(aux_resolutions)
-                if( aux_resolutions(i) <= TINY ) THROW_HARD('Auxiliary resolution must be positive; setup_nu_dmats')
-                if( aux_replacement_idx == 0 )then
-                    aux_replacement_idx = i
-                else if( aux_resolutions(i) < aux_resolutions(aux_replacement_idx) )then
-                    aux_replacement_idx = i
-                endif
-            end do
-            if( aux_replacement_idx > 0 ) aux_res = aux_resolutions(aux_replacement_idx)
-        else
-            if( present(aux_odd) ) THROW_HARD('Auxiliary odd bank supplied without even bank; setup_nu_dmats')
-            if( size(aux_resolutions) /= 0 ) THROW_HARD('Auxiliary resolutions supplied without auxiliary volumes; setup_nu_dmats')
-        end if
-        call init_nu_filter(vol_even, vol_odd, fsc_res=fsc_res, aux_res=aux_res, l_aux_slot=l_aux_slot)
-        ! the auxiliary pair is validated against the geometry init_nu_filter
-        ! just took from the base pair (never against a previous setup's)
-        if( present(aux_even) ) call validate_aux_volumes(aux_even, aux_odd)
-        if( nu_l_report )then
-            n_hard = size(cutoff_finds)
-            if( l_aux_slot ) n_hard = n_hard - 1
-            if( l_aux_slot )then
-                write(logfhandle,'(A,I0,A,F7.2,A,F7.2,A,I0,A,F7.2,A)') '>>> NU BANK: ', n_hard, &
-                    &' hard rungs ', cutoff_find_to_lowpass_limit(1), ' -> ', cutoff_find_to_lowpass_limit(n_hard), &
-                    &' A (fine step ', nu_bank_fine_step, ' shells) + regularized pair at ', aux_res, ' A as the finest member'
-            else if( nu_bank_cap_find > 0 )then
-                write(logfhandle,'(A,I0,A,F7.2,A,F7.2,A,I0,A,F8.3,A,F7.2,A)') '>>> NU BANK: ', n_hard, &
-                    &' hard rungs ', cutoff_find_to_lowpass_limit(1), ' -> ', cutoff_find_to_lowpass_limit(n_hard), &
-                    &' A (fine step ', nu_bank_fine_step, ' shells), bounded by FSC=0.143 ', fsc_res, ' A / ', &
-                    &NU_BANK_FSC_HEADROOM, ' (no regularized pair)'
-            else
-                write(logfhandle,'(A,I0,A,F7.2,A,F7.2,A,I0,A)') '>>> NU BANK: ', n_hard, &
-                    &' hard rungs ', cutoff_find_to_lowpass_limit(1), ' -> ', cutoff_find_to_lowpass_limit(n_hard), &
-                    &' A (fine step ', nu_bank_fine_step, ' shells), unbounded (no FSC, no regularized pair)'
-            endif
+        real,    allocatable :: bwfilters_tmp(:,:)
+        integer, allocatable :: cutoff_finds_tmp(:)
+        call init_nu_filter(vol_even, vol_odd, n_highres_steps, fsc_res)
+        if( nu_l_report .and. nu_bank_cap_find > 0 )then
+            write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') '>>> NU BANK CAP: FSC=0.143 ', fsc_res, &
+                &' A; candidates finer than ', calc_lowpass_lim(nu_bank_cap_find, box, smpd), &
+                &' A dropped; ', size(cutoff_finds), ' candidates retained of ', size(lowpass_limits), ' static labels'
         endif
         if( mskdiam <= TINY ) THROW_HARD('mskdiam must be positive in setup_nu_dmats')
         nu_support_mskdiam = mskdiam
@@ -80,16 +46,55 @@ contains
             endif
             nu_evidence_source = trim(evidence_source)
         endif
-        if( l_aux_slot )then
-            ! the finest member: its unary is the raw regularized pair, its
-            ! label resolution its own, its slot the last (init_nu_filter)
-            call stash_aux_volumes(aux_even(aux_replacement_idx:aux_replacement_idx), &
-                &aux_odd(aux_replacement_idx:aux_replacement_idx))
-            nu_aux_replacement_label = size(cutoff_finds)
-            nu_aux_replacement_resolution = aux_res
+        aux_replacement_idx = 0
+        if( present(aux_even) ) then
+            if( .not. present(aux_odd) ) THROW_HARD('Auxiliary odd bank missing; setup_nu_dmats')
+            if( size(aux_resolutions) /= size(aux_even) ) THROW_HARD('Auxiliary resolutions size mismatch; setup_nu_dmats')
+            call validate_aux_volumes(aux_even, aux_odd)
+            finest_lp = cutoff_find_to_lowpass_limit(size(cutoff_finds))
+            ! the finest of the supplied auxiliary pairs (one in production)
+            do i = 1, size(aux_resolutions)
+                if( aux_resolutions(i) <= TINY ) THROW_HARD('Auxiliary resolution must be positive; setup_nu_dmats')
+                if( aux_replacement_idx == 0 )then
+                    aux_replacement_idx = i
+                else if( aux_resolutions(i) < aux_resolutions(aux_replacement_idx) )then
+                    aux_replacement_idx = i
+                endif
+            end do
+            if( aux_replacement_idx > 0 )then
+                ! The auxiliary (ML-regularized) pair is APPENDED as one more
+                ! member of the bank beside the finest retained rung, never in
+                ! its place (2026-09-18, Hans): the two compete voxel by voxel
+                ! under the same unary, and the auxiliary shares the finest
+                ! rung's Potts coordinate (setup_nu_candidate_coords), so
+                ! replacing a finest-rung voxel by the regularized pair costs
+                ! the prior nothing -- the unary alone decides. Its slot has
+                ! its own Fourier index so the label reports its resolution;
+                ! its filtered pair is never cached (the unary uses the
+                ! regularized halves directly, apply/stats skip it).
+                call stash_aux_volumes(aux_even(aux_replacement_idx:aux_replacement_idx), &
+                    &aux_odd(aux_replacement_idx:aux_replacement_idx))
+                aux_find = max(1, min(box/2, calc_fourier_index(aux_resolutions(aux_replacement_idx), box, smpd)))
+                cutoff_finds_tmp = [cutoff_finds, aux_find]
+                call move_alloc(cutoff_finds_tmp, cutoff_finds)
+                allocate(bwfilters_tmp(box, size(cutoff_finds)), source=0.)
+                bwfilters_tmp(:, 1:size(cutoff_finds)-1) = bwfilters
+                call move_alloc(bwfilters_tmp, bwfilters)
+                nu_aux_replacement_label = size(cutoff_finds)
+                nu_aux_replacement_resolution = aux_resolutions(aux_replacement_idx)
+                if( nu_l_report )then
+                    write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                        &'>>> NU AUXILIARY MEMBER: ML-regularized pair at ', nu_aux_replacement_resolution, &
+                        &' A competes beside the finest rung at ', finest_lp, ' A'
+                endif
+            else
+                call cleanup_aux_bank
+            endif
         else
+            if( present(aux_odd) ) THROW_HARD('Auxiliary odd bank supplied without even bank; setup_nu_dmats')
+            if( size(aux_resolutions) /= 0 ) THROW_HARD('Auxiliary resolutions supplied without auxiliary volumes; setup_nu_dmats')
             call cleanup_aux_bank
-        endif
+        end if
         if( nu_evidence_requested .and. nu_aux_replacement_label > 0 ) &
             &THROW_HARD('NU replay evidence cannot include an auxiliary replacement pair')
         if( nu_evidence_requested ) &
@@ -103,8 +108,9 @@ contains
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
         call vol_even%nu_objective_noise_profile(vol_odd, nu_lmask, noise_profile, noise_rmax)
-        ! Cached for the evidence state (whitening provenance): the raw E/O
-        ! noise profile is candidate-independent.
+        ! Cache for reuse during high-resolution shell extension; the raw
+        ! E/O noise profile is candidate-independent so it does not need to be
+        ! recomputed per shell challenge.
         if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
         nu_noise_profile_cached = noise_profile
         nu_noise_rmax_cached    = noise_rmax
@@ -115,8 +121,8 @@ contains
             &maxval(noise_profile), ' edge/centre ', noise_profile(size(noise_profile))/max(noise_profile(1),TINY)
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
-        if( n_candidates > NU_BANK_MAX_MEMBERS )then
-            THROW_HARD('NU bank budget exceeded in setup_nu_dmats')
+        if( n_candidates > NU_DMAT_CANDIDATE_CAP )then
+            THROW_HARD('NU distance-matrix candidate cap exceeded in setup_nu_dmats')
         endif
         call setup_nu_candidate_coords(n_candidates)
         if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_objective_smoothing_bank()
@@ -166,57 +172,87 @@ contains
         if( n_candidates /= n_base ) THROW_HARD('candidate count must match base bank in setup_nu_candidate_coords')
         if( allocated(candidate_coords) ) deallocate(candidate_coords)
         allocate(candidate_coords(n_candidates), source=0.)
-        ! the ordered-label Potts coordinate is the LABEL INDEX (2026-09-17):
-        ! NU_LABEL_SMOOTH_STEP_TOL=1 means a transition between adjacent bank
-        ! members is free and every further member costs. The reference-
-        ! ladder log-resolution coordinate (2026-09-16) put dense fine rungs
-        ! a tenth of a rank apart, so jumps across ten rungs were free and the
-        ! prior was inert at the fine end: salt-and-pepper fine labels in the
-        ! _nu_locres map and in the evidence state (postprocess_nu on PfCRT
-        ! turned into noise). The log-resolution geometry survives only as
-        ! the evidence candidate MASS (setup_evidence_candidate_geometry).
         do i = 1, n_base
-            candidate_coords(i) = real(i)
+            candidate_coords(i) = nu_potts_coord_for_label(i, n_base)
         end do
+        ! the auxiliary member shares the finest rung's coordinate: a
+        ! boundary between the two is not a resolution discontinuity
+        ! (2026-09-18), see setup_nu_dmats
+        if( nu_aux_replacement_label > 0 .and. n_base > 1 )then
+            if( nu_aux_replacement_label == n_base ) &
+                &candidate_coords(n_base) = candidate_coords(n_base - 1)
+        endif
     end subroutine setup_nu_candidate_coords
 
-    !> Ordered-label Potts coordinate of a candidate of resolution res:
-    !! its position on the reference ladder NU_LADDER_REF, interpolated in
-    !! log(1/res) between rungs and extrapolated with the last interval
-    !! beyond the finest rung (2026-09-16). A jump between two resolutions
-    !! therefore costs the same whatever spacing the generated fine rungs
-    !! took, and the regularized member sits at the coordinate of its own
-    !! resolution.
-    module real function nu_potts_coord_for_resolution( res )
-        real, intent(in) :: res
-        integer :: n, i
-        real    :: lr, l0, l1
-        n = size(NU_LADDER_REF)
-        if( res <= TINY ) THROW_HARD('non-positive resolution; nu_potts_coord_for_resolution')
-        lr = log(1. / res)
-        if( res >= NU_LADDER_REF(1) )then
-            nu_potts_coord_for_resolution = 1.
+    !> Number of bank labels that belong to the discrete static ladder. The
+    !! ladder always occupies labels 1..n (a capped static bank retains fewer
+    !! than size(lowpass_limits)); every label beyond it is a walked shell
+    !! (a retained step seeded by init_nu_filter or accepted by the shell walk)
+    module integer function nu_static_ladder_count( n_base )
+        integer, intent(in) :: n_base
+        nu_static_ladder_count = max(1, min(size(lowpass_limits), n_base))
+    end function nu_static_ladder_count
+
+    !> Ordered-label Potts coordinate of bank label ilabel in a bank of n_base
+    !! labels: the ladder position for a static label, the finest ladder
+    !! position for every walked shell (2026-09-13). The hinge therefore never
+    !! prices a transition among walked shells, or between a walked shell and
+    !! the finest static label; the walk is selected on unary evidence alone
+    !! (already AWF-smoothed) under the shell-walk acceptance gate
+    module real function nu_potts_coord_for_label( ilabel, n_base )
+        integer, intent(in) :: ilabel, n_base
+        nu_potts_coord_for_label = real(min(ilabel, nu_static_ladder_count(n_base)))
+    end function nu_potts_coord_for_label
+
+    !> Mask voxels currently assigned to a walked (finer-than-ladder) label
+    module integer function count_nu_walked_label_voxels( candmap, n_base )
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer, intent(in) :: n_base
+        integer :: i, j, k, imask, icand, n_ladder, n
+        n = 0
+        if( .not.allocated(nu_mask_vox) ) then
+            count_nu_walked_label_voxels = 0
             return
         endif
-        do i = 1, n - 1
-            if( res <= NU_LADDER_REF(i) .and. res > NU_LADDER_REF(i+1) )then
-                l0 = log(1. / NU_LADDER_REF(i))
-                l1 = log(1. / NU_LADDER_REF(i+1))
-                nu_potts_coord_for_resolution = real(i) + (lr - l0) / (l1 - l0)
-                return
-            endif
+        n_ladder = nu_static_ladder_count(n_base)
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,icand) reduction(+:n) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            icand = int(candmap(i,j,k))
+            if( icand > n_ladder .and. icand <= n_base ) n = n + 1
         end do
-        ! finer than the finest reference rung: extrapolate with the last interval
-        l0 = log(1. / NU_LADDER_REF(n-1))
-        l1 = log(1. / NU_LADDER_REF(n))
-        nu_potts_coord_for_resolution = real(n) + (lr - l1) / (l1 - l0)
-    end function nu_potts_coord_for_resolution
+        !$omp end parallel do
+        count_nu_walked_label_voxels = n
+    end function count_nu_walked_label_voxels
 
     module real function get_nu_filter_bank_finest_lp()
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; get_nu_filter_bank_finest_lp')
         if( size(cutoff_finds) < 1 ) THROW_HARD('empty filter bank; get_nu_filter_bank_finest_lp')
         get_nu_filter_bank_finest_lp = nu_label_lowpass_limit(size(cutoff_finds))
     end function get_nu_filter_bank_finest_lp
+
+    module integer function get_nu_filtmap_highres_shell_depth()
+        integer :: base_n, finest_label, i, j, k, imask
+        get_nu_filtmap_highres_shell_depth = 0
+        if( .not.allocated(cutoff_finds) ) return
+        if( .not.allocated(filtmap)      ) return
+        if( .not.allocated(nu_lmask)     ) return
+        base_n = min(size(lowpass_limits), size(cutoff_finds))
+        if( base_n < 1 ) return
+        finest_label = 0
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            finest_label = max(finest_label, int(filtmap(i,j,k)))
+        end do
+        if( finest_label == 0 ) return
+        if( finest_label <= base_n ) return
+        finest_label = min(finest_label, size(cutoff_finds))
+        get_nu_filtmap_highres_shell_depth = max(0, cutoff_finds(finest_label) - cutoff_finds(base_n))
+    end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
         integer :: nx, ny, nz, i, j, k, icand, n_base, n_candidates, imask, n_clamped, ilevel
@@ -297,6 +333,9 @@ contains
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
         call clamp_nu_filtmap_labels(n_base)
+        ! Keep the mask-packed unary bank. High-resolution extension appends
+        ! accepted challenger unaries and can then run a final ordered-label
+        ! cleanup over the expanded label field.
     end subroutine optimize_nu_cutoff_finds
 
     !> Enforce the solvent-constraint clamp on the module label field:
@@ -377,7 +416,7 @@ contains
             nvox = cand_counts(icand)
             pct = 100. * real(nvox) / real(nmask)
             if( nu_label_is_aux_replacement(icand) )then
-                source_tag = 'MLreg'
+                source_tag = 'AuxReplace'
             else
                 source_tag = 'Base'
             endif
@@ -452,7 +491,7 @@ contains
             lp_angstrom = nu_label_lowpass_limit(i)
             radius_angstrom = nu_objective_smooth_radius_angstrom(lp_angstrom)
             if( nu_label_is_aux_replacement(i) )then
-                source_tag = 'MLreg'
+                source_tag = 'AuxReplace'
             else
                 source_tag = 'Base'
             endif
@@ -472,5 +511,16 @@ contains
         endif
         nu_candidate_coord_for_label = real(ilabel)
     end function nu_candidate_coord_for_label
+
+    !> Base label identity of a candidate: the label itself, clamped to the
+    !! bank. This used to round the Potts coordinate, which was an identity
+    !! map for the base bank; since the walked shells share the finest ladder
+    !! coordinate (2026-09-13) the coordinate is no longer a label and must
+    !! not be used as one (the shell-walk frontier is the finest BANK label)
+    module integer function nu_effective_base_label_for_candidate( icand, n_base )
+        integer, intent(in) :: icand, n_base
+        if( n_base < 1 ) THROW_HARD('empty base bank; nu_effective_base_label_for_candidate')
+        nu_effective_base_label_for_candidate = max(1, min(n_base, icand))
+    end function nu_effective_base_label_for_candidate
 
 end submodule simple_nu_filter_bank

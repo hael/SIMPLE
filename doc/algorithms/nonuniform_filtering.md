@@ -16,18 +16,16 @@ merged map, and a local-resolution map.
 ## Model
 
 Let `E` and `O` be the raw halves and `E_c`, `O_c` their low-pass versions at
-candidate cutoff `c` from the bank, a ladder generated per box
-(2026-09-16): the coarse rungs
+candidate cutoff `c` from the static bank
 
 ```text
-20, 15, 12, 10, 8, 6 A,
+20, 15, 12, 10, 8, 6, 5, 4 A,
 ```
 
-then hard rungs every two Fourier shells up to one shell coarser than the
-ML-regularized half pair, which is the finest member of the bank whenever
-ML regularization is active (without it the rungs stop at FSC0.143/1.5 of
-the raw pair). The fine spacing widens, never truncates, to fit the
-16-member budget.
+capped at FSC0.143/1.5 of the raw pair (only members coarser than that are
+retained, never fewer than two); when ML regularization is active the
+regularized half pair is one more member beside the finest retained one,
+at the same Potts coordinate, so the unary alone decides between them.
 
 If the true local resolution at voxel `v` is `c`, then `E_c(v)` predicts
 `O(v)` up to noise, and vice versa; filtering finer than `c` lets through
@@ -78,11 +76,8 @@ population that later serves as a noise reference.
    E(c) = sum_v C_{c(v)}(v) + sum_{v~w} phi( |rank(c(v)) - rank(c(w))| ) / deg(v),
    ```
 
-   where `rank` is the candidate's position on the reference ladder
-   20, 15, 12, 10, 8, 6, 5, 4 A interpolated in log(1/resolution) (so
-   two fine rungs two shells apart are a fraction of a rank apart and the
-   prior does not depend on the box) and `phi` is zero for jumps up to one
-   rank and a linear-quadratic hinge for larger jumps. The prior is
+   where `rank` is the index in the retained bank and `phi` is zero for
+   adjacent ranks and a linear-quadratic hinge for larger jumps. The prior is
    *ordered*: a 20-to-15 A boundary costs less than a 20-to-4 A jump. Degree
    normalization keeps the regularization strength uniform at the sphere
    boundary. Iterated conditional modes with eight-color sweeps (no two
@@ -104,17 +99,18 @@ A sequential shell walk (`nu_refine=yes`) used to challenge the frontier of
 the finest populated label with the next unrepresented Fourier shell. Its
 acceptance criterion was equivalent to a local FSC above 0.5, conservative
 for the map and no better than the FSC=0.143 extent for the matching band,
-and it never let the regularized pair compete. The dense generated ladder
-above replaces it; there is one competition for every workflow.
+and it never let the regularized pair compete. A generated dense ladder
+replaced it for two days (2026-09-16 to 18) and regressed PfCRT; the static
+ladder with the regularized pair in the finest retained slot is the one
+competition for every workflow.
 
 ## Handoff to matching
 
 The FSC and the NU filter answer different questions: the FSC reports the
 average resolution, the NU field reports where the map is better than
-average. After filtering, the content extent of the finest label holding
-at least 1 percent of the signal voxels at it or finer becomes the matching
-low-pass for the next iteration -- a hard rung hands off its cutoff, the
-regularized member the pair's FSC=0.143 resolution -- bounded by any
+average. After filtering, the finest label holding at least 1 percent of
+the signal voxels at it or finer becomes the matching low-pass for the next
+iteration, bounded by any
 explicit `lp` and by `lpstop`, so that particles are aligned against all
 the signal the reference actually contains. In plain `nonuniform` mode the even and odd NU
 halves stay separate references; in `nonuniform_lpset` the merged NU map is
