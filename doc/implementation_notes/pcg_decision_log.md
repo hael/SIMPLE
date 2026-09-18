@@ -641,8 +641,12 @@ filter competition -- static ladder capped at fsc/1.5, the regularized pair
 beside the finest rung -- printing the bank, the assignment table and the
 matching handoff and writing the references and local-resolution map;
 then the unchanged evidence sharpening. Every product carries
-`_pproc_nu` (`<vol>_pproc_nu.mrc` sharpened; `<vol>_pproc_nu_filt.mrc`,
-`<vol>_even/_odd_pproc_nu_filt.mrc`, `<vol>_pproc_nu_locres.mrc`). The
+`_pproc_nu` (`<vol>_pproc_nu.mrc` sharpened; `<vol>_ref_pproc_nu.mrc`,
+`<vol>_even/_odd_ref_pproc_nu.mrc`, `<vol>_locres_pproc_nu.mrc`). First
+run on the Sep-11 PfCRT abinitio3D project: FSC 6.61/3.98 A, bank capped
+at 2.65 A (all 8 rungs), regularized pair beside the 4 A rung (both on
+shell 78, 3.981 A): rung 6.6% of the mask, regularized pair 3.9%, handoff
+3.98 A; "map looks great" (Hans). The
 `vol1/vol2` file inputs are gone. This is the cheap test of the auxiliary
 competition on any completed run directory.
 

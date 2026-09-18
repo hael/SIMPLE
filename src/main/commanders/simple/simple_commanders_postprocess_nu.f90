@@ -14,9 +14,10 @@
 ! evidence authority is the base pair, regularized maps flatten the evidence
 ! margin) as the evidence input, and its regularized pair (_even/_odd) as the
 ! auxiliary member of the refinement's filter competition, whose products are
-! written first. Every product carries the _pproc_nu suffix (the sharpened
-! map: _pproc_nu; the competition's references and local-resolution map:
-! _pproc_nu_filt, _pproc_nu_locres) and is a display/interpretation map --
+! written first. Every product ends in _pproc_nu (the sharpened map:
+! <vol>_pproc_nu; the competition's references and local-resolution map:
+! <vol>_even/_odd/_ref_pproc_nu, <vol>_locres_pproc_nu) and is a
+! display/interpretation map --
 ! never an input to FSC correction or resolution claims.
 module simple_commanders_postprocess_nu
 use simple_commanders_api
@@ -125,19 +126,22 @@ contains
             write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> NU MATCHING LOW-PASS HANDOFF: ', handoff_lp, &
                 &' A (raw finest label ', raw_lp, ' A)'
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            ! every product of this program carries the PPROC_NU_SUFFIX
-            fname = basename(add2fbody(fname_odd, params%ext, PPROC_NU_SUFFIX//'_filt'))
+            ! every product of this program ends in PPROC_NU_SUFFIX: the
+            ! competition's references <vol>_even/_odd_ref_pproc_nu and
+            ! <vol>_ref_pproc_nu, its local-resolution map
+            ! <vol>_locres_pproc_nu, and the sharpened map <vol>_pproc_nu
+            fname = basename(add2fbody(fname_odd, params%ext, '_ref'//PPROC_NU_SUFFIX))
             call vol_odd_nu%write(fname, del_if_exists=.true.)
-            fname = basename(add2fbody(fname_even, params%ext, PPROC_NU_SUFFIX//'_filt'))
+            fname = basename(add2fbody(fname_even, params%ext, '_ref'//PPROC_NU_SUFFIX))
             call vol_even_nu%write(fname, del_if_exists=.true.)
             call vol_even_nu%add(vol_odd_nu)
             call vol_even_nu%mul(0.5)
-            fname = basename(add2fbody(fname_vol, params%ext, PPROC_NU_SUFFIX//'_filt'))
+            fname = basename(add2fbody(fname_vol, params%ext, '_ref'//PPROC_NU_SUFFIX))
             call vol_even_nu%write(fname, del_if_exists=.true.)
-            fname = basename(add2fbody(fname_vol, params%ext, PPROC_NU_SUFFIX//'_locres'))
+            fname = basename(add2fbody(fname_vol, params%ext, '_locres'//PPROC_NU_SUFFIX))
             call write_nu_local_resolution_map(fname)
-            write(logfhandle,'(A)') '>>> POSTPROCESS_NU: WROTE THE '//PPROC_NU_SUFFIX//'_filt REFERENCES AND THE '//&
-                &PPROC_NU_SUFFIX//'_locres MAP'
+            write(logfhandle,'(A)') '>>> POSTPROCESS_NU: WROTE THE _ref'//PPROC_NU_SUFFIX//' REFERENCES AND THE _locres'//&
+                &PPROC_NU_SUFFIX//' MAP'
             call vol_even_nu%kill
             call vol_odd_nu%kill
             call aux_odd(1)%kill
@@ -160,7 +164,7 @@ contains
         ! classical shrink-then-sharpen localized by the evidence; the shipped
         ! product is the single sharpened merged volume
         call nu_evidence_sharpen_vol(evstate, even, odd, vol_sharp)
-        if( params%outvol .ne. '' )then
+        if( cline%defined('outvol') )then
             vol_out = params%outvol
         else
             vol_out = basename(add2fbody(fname_vol, params%ext, PPROC_NU_SUFFIX))
