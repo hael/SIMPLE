@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>abinitio2D_seeded_restart.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="abinitio2d-seeded-restart-initialize-from-the-previous-2d-clustering">abinitio2D seeded restart: initialize from the previous 2D clustering</h1>
+<p>Implementation note, 2026-09-16. Design for review; nothing here is
+implemented. Written against master <code>6a41a40f0</code>. Companion pages:
+<code>doc/policies/2D/abinitio2D_policy.md</code>,
+<code>doc/policies/importance_sampling_fractional_update_policy.md</code>,
+<code>claude/refine3D_auto_registration_pass.md</code> (the 3D precedent for the
+full-particle <code>refine=prob</code> pass).</p>
+<h2 id="0-observation-and-hypothesis">0. Observation and hypothesis</h2>
+<p>Repeated rounds of <code>abinitio2D</code> → class selection → <code>abinitio2D</code> on the
+cleaned set keep producing junk classes, even when the input set is clean.</p>
+<p>Hypothesis (Hans): the run is initialized randomly, so every round
+re-creates junk classes from scratch regardless of how clean the data are.
+The proposed fix has two coupled parts: (i) seed the references and the
+particle partition from the previous 2D clustering, balanced in population
+and representative of the previous class distribution even when the
+requested <code>ncls</code> differs; (ii) since the seed is already a good solution,
+drop the stochastic exploration stages (Gaussian-reference stage, sticky
+random subset, extremal SNHC) and go straight to a full-particle
+probabilistic pass, the way <code>refine3D_auto</code> now starts with a registration
+pass.</p>
+<h2 id="1-what-the-code-does-today">1. What the code does today</h2>
+<p>Everything below is read from <code>simple_commanders_abinitio2D.f90</code>,
+<code>simple_abinitio2D_controller.f90</code>, <code>simple_cluster2D_strategy.f90</code>,
+<code>simple_strategy2D_matcher.f90</code>, <code>simple_strategy2D_alloc.f90</code>,
+<code>simple_strategy2D_srch.f90</code>, <code>simple_matcher_smpl_and_lplims.f90</code> and
+<code>simple_eul_prob_tab2D.f90</code>.</p>
+<h3 id="11-initialization-is-random-and-the-previous-clustering-is-erased">1.1 Initialization is random, and the previous clustering is erased</h3>
+<ul>
+<li><code>exec_abinitio2D_workflow</code> defaults <code>cls_init=rand</code>. On a fresh run
+(<code>start_stage == 1</code>) it calls <code>spproj_field%delete_2Dclustering</code> and
+<code>clean_entry('updatecnt','sampled')</code> before stage 1: class, in-plane and
+shift of every particle are wiped. Nothing of the previous round survives
+except <code>state</code> (the selection).</li>
+<li>References: <code>init_cluster2D_refs</code> (cluster2D strategy) →
+<code>init_standard_refs</code>: <code>rand</code> = <code>noise_imgfile</code> (pure noise images),
+<code>ptcl</code> = <code>random_selection_from_imgfile</code> (random raw particles),
+<code>randcls</code> = random class labels + <code>make_cavgs</code>. <code>refs=</code> on the command
+line bypasses generation (<code>inirefs</code> rescales the stack to <code>box_crop</code>) but
+does not change the schedule below, and the project partition is still
+erased.</li>
+<li>Iteration 1 of stage 1 runs with <code>extr_iter=1</code>, which forces
+<code>ctrl%l_greedy=.true.</code> (<code>init_ctrl</code>): a greedy assignment of every
+sampled particle against noise references, i.e. an essentially random
+partition. <code>is_fresh_2D_start</code> is true, so <code>prep_strategy2D_glob</code> zeroes
+all shifts and <code>prep4srch</code> draws a random &quot;previous&quot; class per particle.</li>
+</ul>
+<h3 id="12-the-stage-schedule">1.2 The stage schedule</h3>
+<p><code>NSTAGES_CLS=6</code>, <code>PHASES=[4,6]</code>, <code>EXTR_LIM_LOCAL=20</code>, <code>ITS_INCR=5</code>.</p>
+<table>
+<thead>
+<tr>
+<th>stage</th>
+<th>lp</th>
+<th>refine</th>
+<th>extr</th>
+<th>refs / regularization</th>
+<th>sampling (only if <code>nptcls_eff &gt; nsample</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>lpstart</td>
+<td><code>snhc_smpl</code></td>
+<td>extremal, greedy at it 1</td>
+<td>noise/<code>refs=</code>, <code>gauref=yes</code>, <code>ml_reg=no</code>, <code>trs=0</code>, <code>center=no</code></td>
+<td>sticky random subset (<code>sample4update_rnd</code> once, <code>sample4update_reprod</code> after), no carry-over</td>
+</tr>
+<tr>
+<td>2</td>
+<td>march</td>
+<td><code>snhc_smpl</code></td>
+<td>extremal</td>
+<td><code>cavgs_iterNNN</code>, <code>ml_reg</code></td>
+<td><code>sample4update_cnt</code>, fractional restore</td>
+</tr>
+<tr>
+<td>3-4</td>
+<td>march</td>
+<td><code>prob_snhc</code> (sparse) or <code>prob</code></td>
+<td>extremal (<code>extr_iter</code> tracks <code>which_iter</code>)</td>
+<td>same</td>
+<td>same</td>
+</tr>
+<tr>
+<td>5</td>
+<td>lpstop</td>
+<td><code>prob_snhc</code>/<code>prob</code></td>
+<td><code>extr_iter = extr_lim+1</code> (off)</td>
+<td>same</td>
+<td>same, <code>fillin=yes</code> when sampled</td>
+</tr>
+<tr>
+<td>6</td>
+<td>e/o (FRC band)</td>
+<td><code>prob</code></td>
+<td>off</td>
+<td>same</td>
+<td>same, <code>fillin=yes</code> when sampled</td>
+</tr>
+<tr>
+<td>terminal</td>
+<td>–</td>
+<td><code>greedy</code>, all particles, 1 it</td>
+<td>–</td>
+<td>–</td>
+<td>only if any stage sampled</td>
+</tr>
+</tbody>
+</table>
+<p>Phase-1 stage lengths are <code>istage*maxits/PHASES(1)</code> (<code>phase1_stage_endit</code>,
+guarded by <code>sample_coverage_nits</code>); phase-2 stages run <code>nits_per_stage</code>.
+Note that <code>NSAMPLE_DEFAULT_2D=200000</code>: for sets below 200k active
+particles <code>update_frac=1</code>, no sampling happens anywhere and there is no
+terminal pass. &quot;Sticky sampling&quot; therefore only exists on large sets; what
+is always present in stages 1-2 is the noise start, the Gaussian reference
+regularization, <code>trs=0</code>, and the extremal SNHC neighbourhood.</p>
+<h3 id="13-two-mechanisms-that-can-manufacture-or-preserve-junk-classes">1.3 Two mechanisms that can manufacture or preserve junk classes</h3>
+<p>Neither is proven; both are testable with the runs in §6.</p>
+<ol>
+<li>Random start. After the greedy iteration 1, every class average is the
+mean of a random subset: a blurred &quot;everything&quot; image. Differentiation
+relies on the SNHC neighbourhood shrinking over 20 iterations. Classes
+that never acquire a coherent seed (or lock onto a mis-centred subset,
+<code>trs=0</code>) end as sinks for particles nothing else wants. This is the
+mechanism the hypothesis names.</li>
+<li>Dense probabilistic assignment is class-driven, not particle-driven.
+<code>ref_assign_likelihood</code> sorts every class column, then each round every
+class offers its best remaining particle and one class is drawn from the
+top-K softmax of that frontier. <code>class_exists</code> is forced <code>.true.</code> for all
+classes (&quot;classes must be able to recover&quot;), so a junk class keeps being
+fed; it cannot starve. This keeps populations balanced by construction
+but also means that once a junk reference exists, nothing in the
+assignment removes it. If seeding alone does not cure the symptom, this
+is the next suspect (see §6, T1 outcome b).</li>
+</ol>
+<h3 id="14-existing-pieces-the-design-reuses">1.4 Existing pieces the design reuses</h3>
+<ul>
+<li><code>oris%get_class_sample_stats</code> → <code>class_sample</code> (per class: <code>pinds</code> ordered
+best-to-worst by <code>corr</code>, <code>pop</code>), <code>sample_balanced_1/2</code> (Hamilton-style
+&quot;increment every class that still has particles&quot; allocation),
+<code>split_class</code>, <code>expand_classes</code>, <code>remap_cls</code> (<code>simple_oris_reshape.f90</code>,
+<code>simple_oris_sampling.f90</code>).</li>
+<li><code>transform_ptcls</code> (<code>simple_classaverager_restore.f90</code>): reads and aligns
+(rot/shift/CTF) all particles of one class; <code>make_pcavecs</code> + <code>pca_svd</code>.
+<code>cls_split</code> (<code>simple_cls_split_strategy.f90</code>) already splits a parent
+class into a fixed number of sub-classes via diffusion-map/kPCA +
+k-medoids and records lineage in <code>cls2D%cluster</code>.</li>
+<li><code>make_cavgs</code> from labels (the <code>cls_init=randcls</code> path), writing
+merged/even/odd stacks and <code>FRCS_FILE</code>.</li>
+<li><code>class_frcs%estimate_lp_for_align</code> (median of the three best class FRC
+resolutions).</li>
+<li><code>ensure_resume_sigma_state</code> (checkpoint resume): reuse the project's
+canonical sigma2 state if valid, else <code>calc_pspec</code>.</li>
+<li>The <code>refine3D_auto</code> registration pass (<code>run_registration_pass</code>): one
+<code>refine=prob</code> iteration of every particle at a conservative band, with a
+before/after reassignment diagnostic.</li>
+</ul>
+<h2 id="2-contract">2. Contract</h2>
+<p>New value <code>cls_init=prev</code> for <code>abinitio2D</code> (advanced UI). <code>cluster2D</code>
+rejects it in v1 (its own non-virgin branch of <code>init_cluster2D_refs</code>
+already regenerates references from existing labels; not touched).
+<code>abinitio2D_chunks</code> and the stream keep <code>cls_init=rand</code> explicitly and are
+out of scope.</p>
+<p>Inputs required from the project (validated before anything is written,
+hard errors unless stated):</p>
+<ul>
+<li><code>ptcl2D</code> not virgin; every <code>state&gt;0</code> particle has <code>class &gt;= 1</code>, a valid
+<code>e3</code>, shifts, and <code>eo ∈ {0,1}</code>. <code>eo</code> is input state and is never
+regenerated (<code>partition_eo</code> is not called; abinitio2D skill rule).</li>
+<li><code>cls2D</code> present with <code>state</code>. Accepted parents = classes with
+<code>cls2D%state&gt;0</code> whose active population is <code>&gt;= MINCLSPOPLIM</code> (5).
+Particles with <code>state&gt;0</code> whose class is rejected or below the floor are
+counted, warned about, and treated as unassigned (§3.3).</li>
+<li><code>ncls</code> (required UI input) is the target <code>K</code>. <code>M</code> = number of accepted
+parents. <code>K == M</code>, <code>K &gt; M</code> and <code>K &lt; M</code> are all supported.</li>
+<li>No previous class-average stack is needed: seed references are rebuilt
+from the partition at the working <code>box_crop</code>.</li>
+</ul>
+<p>Outputs in addition to the normal ones: <code>seed_lineage.txt</code>
+(<code>new_class parent_class seed_pop</code>), the seed stack <code>cavgs_iter001.mrc</code>
+(+ <code>_even</code>/<code>_odd</code>, <code>FRCS_FILE</code>), and the log lines of §4.3.</p>
+<h2 id="3-seed-partition-balanced-and-representative">3. Seed partition: balanced and representative</h2>
+<p>Let <code>N</code> be the number of active particles, <code>N_i</code> the population of accepted
+parent <code>i</code> (<code>i = 1..M</code>), and <code>n* = N/K</code> the target population per seed
+class.</p>
+<h3 id="31-allocation-of-seed-classes-to-parents">3.1 Allocation of seed classes to parents</h3>
+<p>Each parent receives <code>c_i</code> seed classes with <code>Σ c_i = K</code>, by largest
+remainder (Hamilton) on <code>K·N_i/N</code>:</p>
+<ol>
+<li><code>c_i = floor(K·N_i/N)</code>; if <code>K &gt;= M</code>, raise every <code>c_i</code> to at least 1.</li>
+<li>Distribute the remaining <code>K − Σ c_i</code> one at a time to the parents with
+the largest fractional remainder (ties by larger <code>N_i</code>).</li>
+<li>If <code>K &lt; M</code>, the <code>M − K</code> parents with the smallest <code>N_i</code> (after step 2
+those are the ones with <code>c_i = 0</code>) are dropped from the seed (§3.3).</li>
+</ol>
+<p>Properties: expected seed population is <code>n*</code> for every seed class
+(balanced); the number of seed classes per parent is proportional to its
+population, so the seeded reference set represents the previous view
+distribution rather than the previous class count (representative). A
+parent with <code>N_i &lt; n*/2</code> may still get one class when <code>K &gt;= M</code>; that is
+intentional (no accepted parent is silently lost when the user asked for
+at least as many classes).</p>
+<p>Pure integer logic → its own small module (<code>simple_cls2D_seed_alloc.f90</code>,
+in <code>src/main/</code>), unit-testable without images.</p>
+<h3 id="32-splitting-a-parent-into-ci--1-children">3.2 Splitting a parent into <code>c_i &gt; 1</code> children</h3>
+<p>Recommended v1: recursive balanced bisection along the dominant principal
+component of the aligned in-class particle images.</p>
+<ul>
+<li><code>transform_ptcls(params, build, spproj, 'ptcl2D', icls, imgs, pinds)</code>
+gives the rot/shift/CTF-corrected images of the parent (this is what
+<code>cls_split</code> does first).</li>
+<li>Low-pass at the parent's FRC0.143 (or the previous run's <code>lpstop</code>), mask
+at <code>msk_crop</code>, <code>make_pcavecs</code>, first component by <code>pca_svd</code> (or power
+iteration; only PC1 is needed).</li>
+<li>Split at the median of the PC1 projection → two children of equal size.
+Repeat on the largest current child until the parent has <code>c_i</code> children.</li>
+<li>Children keep their parents' <code>e3</code>/shift: the frame is the parent's, so
+no pose transform is needed.</li>
+</ul>
+<p>Why not the cheaper alternatives:</p>
+<ul>
+<li><code>split_class</code> (random halves) produces twin references. Under <code>prob</code>
+the softmax splits their particles at random, the twins stay twins for
+many iterations, and one of them drifts. Twins are the first-iteration
+equivalent of the random start the seed is meant to remove.</li>
+<li>Best/worst-half by <code>corr</code> produces one sharp and one blurry child; the
+blurry child is a junk class by construction.</li>
+</ul>
+<p>Alternative for review: reuse <code>split_one_parent_class</code> (<code>cls_split</code>) with
+<code>l_fixed_nsubcls</code> and <code>params%ncls = c_i</code> per parent. Richer (nonlinear
+embedding, k-medoids with silhouette) and already validated, but children
+are not size-balanced and the per-class cost (graph, eigensolve) is far
+higher than one PC. <code>collect_split_classes</code> would need a per-parent count
+interface. I recommend PC1 bisection for v1 and keeping <code>cls_split</code> as an
+opt-in later if T3 (§6) shows the bisection children do not separate.</p>
+<h3 id="33-k--m-and-unassigned-particles">3.3 <code>K &lt; M</code> and unassigned particles</h3>
+<p>Particles of dropped parents, of rejected classes and of parents below the
+population floor are set to <code>class=0</code> and keep their <code>e3</code>/shift. They do
+not contribute to the seed references (<code>make_cavgs</code> ignores class 0) and
+are assigned during the pass (§4.1) like any particle whose previous class
+is invalid: <code>fill_tab_range</code> skips the shift seed (<code>cxy=0</code>) and evaluates
+every class; <code>prep4srch</code> draws a random populated &quot;previous&quot; class as the
+fallback. This path exists today; it must be verified, not assumed (§7).</p>
+<p>Rejected alternative: merging the dropped parents into their most similar
+surviving parent by aligned class-average correlation. It needs composing
+each particle's pose with the parent-to-parent in-plane transform, and it
+would put rare views into unrelated classes. Dropping the least populous
+parents when the user asked for fewer classes is the honest reading of
+<code>K &lt; M</code>.</p>
+<h3 id="34-writing-the-seed">3.4 Writing the seed</h3>
+<ol>
+<li>Write <code>class</code> (1..K) for every active particle, <code>class=0</code> for the
+unassigned set; <code>clean_entry('updatecnt','sampled')</code>; write <code>ptcl2D</code>.</li>
+<li><code>make_cavgs</code> on the seed labels at <code>box_crop</code>/<code>smpd_crop</code>, <code>ml_reg=yes</code>,
+<code>refs=cavgs_iter001.mrc</code> → merged/even/odd stacks and <code>FRCS_FILE</code>. The
+seed is iteration 1 of the run, so the existing
+<code>CAVGS_ITER_FBODY//int2str_pad(iter-1,3)</code> reference naming and the
+<code>endit</code> handoff work unchanged.</li>
+<li><code>seed_lineage.txt</code>; <code>cls2D%cluster = parent</code> on the seed for provenance
+(overwritten by the final <code>make_cavgs</code> like everything else in <code>cls2D</code>).</li>
+</ol>
+<h2 id="4-search-schedule-under-clsinitprev">4. Search schedule under <code>cls_init=prev</code></h2>
+<h3 id="41-seed-pass-analogue-of-the-refine3dauto-registration-pass">4.1 Seed pass (analogue of the refine3D_auto registration pass)</h3>
+<p>One <code>cluster2D</code> invocation, <code>refine=prob</code> (dense: every class evaluated for
+every particle; <code>prob_snhc</code> would only evaluate a sparse neighbourhood
+around the seed label, which defeats a global reassignment), every active
+particle (<code>update_frac</code> and <code>nsample</code> deleted from the child command line,
+<code>fillin</code> deleted), <code>maxits=minits=1</code>, <code>startit=which_iter=2</code>,
+<code>refs=cavgs_iter001.mrc</code>, <code>extr_iter=extr_lim+1</code> (<code>neigh_frac=0</code>: no
+extremal class neighbourhood, and <code>fill_tab_range</code> samples in-plane from
+the top-2 peaks only, i.e. the near-greedy regime phase 2 already runs
+in), <code>ml_reg</code> and
+<code>center</code> as in phase 2, <code>trs</code> = stage trslim, <code>l_lpset=.true.</code> with</p>
+<pre><code>lp_pass = clamp( estimate_lp_for_align(seed FRCs, crit0143=.false.), [lpstop, lpstart] )
+</code></pre>
+<p>i.e. the median of the three best seed classes at FRC=0.5, never finer
+than <code>lpstop</code>, never coarser than <code>lpstart</code>. FRC=0.5 rather than 0.143 for
+the same reason <code>regpass_fsc=0.8</code> is coarse in 3D: the class set changed
+(junk removed, parents split), so the particles get a global search with a
+wide basin before resolution is pushed.</p>
+<p><code>startit=2</code> matters: <code>is_fresh_2D_start</code> must be false, otherwise
+<code>prep_strategy2D_glob</code> zeroes the shifts after <code>prob_tab2D</code> built its table
+against the stored ones, and <code>prep4srch</code> discards the seed class. Because
+the cluster2D strategies only <code>clean_entry('updatecnt','sampled')</code> when
+<code>startit==1</code>, abinitio2D does it itself (it already does on fresh runs).</p>
+<p>Sigma2: run <code>ensure_resume_sigma_state</code> before the pass (reuse the
+project's committed canonical state if its identity validates, else
+<code>calc_pspec</code>), exactly as the checkpoint resume does.</p>
+<h3 id="42-stages-after-the-pass">4.2 Stages after the pass</h3>
+<p>All stages are phase-2 style: <code>nits_per_stage</code> iterations, <code>ml_reg</code>,
+<code>center</code>, <code>extr_iter=extr_lim+1</code>, <code>refine</code> by the existing
+<code>set_cluster2D_stage_search_policy</code> (sparse <code>prob_snhc</code> intermediate, dense
+<code>prob</code> final, or <code>prob</code> throughout). Stages 1-2 (Gaussian reference,
+sticky subset, SNHC) are skipped entirely. Of the marching stages
+<code>PROBREFINE_STAGE..nstages-1</code>, only those with <code>lp &lt; lp_pass</code> run, then the
+e/o stage. With the mskdiam defaults (lpstart 15-20 Å, lpstop 6-8 Å) and a
+seed FRC0.5 band around 10 Å this is typically stage 5 (<code>lpstop</code>) and
+stage 6 (e/o).</p>
+<p>Sampling on large sets: the pass is a full pass (same cost as the existing
+terminal greedy pass); stages after it keep <code>sample4update_cnt</code> with
+fractional restore (<code>startit&gt;1</code> path). The pass sets <code>updatecnt=1</code> on all
+particles via <code>sample4update_all(incr_sampled=.true.)</code>, so the later
+count-biased sampling starts uniform. The terminal greedy pass runs as
+today whenever any stage sampled.</p>
+<p>Alternative for review: pass + e/o stage only (no intermediate marching
+stage). Simpler; the risk is that going from <code>lp_pass</code> straight to the FRC
+band skips the resolution ratchet that stage 5 provides.</p>
+<h3 id="43-diagnostics">4.3 Diagnostics</h3>
+<ul>
+<li><code>&gt;&gt;&gt; ABINITIO2D SEED: M accepted parents -&gt; K seed classes; dropped d parents (p particles), unassigned u particles; seed pops min/median/max</code>.</li>
+<li><code>&gt;&gt;&gt; ABINITIO2D SEED PASS: refine=prob, all particles, lp=x A (seed FRC0.5 median-of-top-3, clamped to [lpstop,lpstart])</code>.</li>
+<li><code>&gt;&gt;&gt; ABINITIO2D SEED PASS REASSIGNED: c% changed class, s% moved shift &gt; 1 px, r% of seed classes retained &gt;= 50% of their members</code> — poses read
+from the project before/after the pass, same construction as
+<code>REGISTRATION PASS REASSIGNED</code>.</li>
+<li><code>seed_lineage.txt</code> extended after the final <code>make_cavgs</code> with the final
+population per seed class, so a class's history (parent → seed pop →
+final pop) can be read in one place when judging which classes went bad.</li>
+</ul>
+<h2 id="5-code-touch-points">5. Code touch points</h2>
+<ul>
+<li><code>simple_parameters.f90</code> (<code>cls_init</code> doc string), <code>simple_parameters_phases.f90</code>
+(accept <code>prev</code>), <code>simple_ui_params_common.f90</code> (<code>cls_init</code> choices),
+<code>simple_ui_cluster2D.f90</code> (help text for abinitio2D only).</li>
+<li><code>simple_abinitio2D_controller.f90</code> (stage policy owner): <code>l_seeded</code> in the
+stage policy; <code>set_cluster2D_stage_phase_policy</code> returns phase 2 for every
+stage when seeded; <code>seeded_first_stage(stage_parms, lp_pass)</code> selecting
+the first marching stage; <code>set_abinitio2D_sampling_policy</code> with no sticky
+stage and <code>l_frac_restore</code> from the first seeded stage; a
+<code>set_cline_cluster2D_seed_pass</code> mirroring <code>execute_terminal_pass</code>'s
+cline construction. Constants: <code>SEED_PASS_FRC_CRIT</code> (0.5).</li>
+<li><code>simple_cls2D_seed_alloc.f90</code> (new, <code>src/main/</code>): Hamilton allocation,
+pure integers, with a test in <code>simple_commanders_test_*</code>.</li>
+<li><code>simple_cls2D_seed.f90</code> (new, near class-average assembly per the
+bootstrap policy's ownership rule: explicit offline reads are allowed
+here, the matcher's single-read contract is untouched): validation of the
+input partition, PC1 balanced bisection using <code>transform_ptcls</code> +
+<code>make_pcavecs</code> + <code>pca_svd</code>, label writing, lineage file.</li>
+<li><code>simple_commanders_abinitio2D.f90</code>: <code>seed_from_previous_clustering</code>
+replacing <code>inirefs</code> when seeded (no <code>delete_2Dclustering</code>, no
+<code>partition_eo</code>), <code>execute_seed_pass</code>, <code>ensure_resume_sigma_state</code> reuse,
+stage loop from <code>seeded_first_stage</code>, the reassignment diagnostic.</li>
+<li><code>doc/policies/2D/abinitio2D_policy.md</code>: §2 (seeded schedule), §3
+(ownership of the seed module), §4 (no sticky stage when seeded), §7
+checklist item &quot;does <code>cls_init=prev</code> preserve <code>eo</code> and never call
+<code>delete_2Dclustering</code>?&quot;.</li>
+</ul>
+<p>Nothing in <code>simple_strategy2D_matcher.f90</code>, <code>simple_eul_prob_tab2D.f90</code>,
+<code>simple_cluster2D_strategy.f90</code> or the streaming code changes. The default
+<code>cls_init=rand</code> schedule must be byte-identical in its <code>&gt;&gt;&gt; STAGE</code> summary
+lines before and after.</p>
+<h2 id="6-test-protocol-runs-are-hanss">6. Test protocol (runs are Hans's)</h2>
+<p>T1, the hypothesis. One project where the loop was observed: round r
+output → selection → prune → round r+1. Run round r+1 three ways on the
+identical pruned project with the same <code>ncls</code>: A <code>cls_init=rand</code> (today),
+B <code>cls_init=randcls</code> (random labels → blurred averages, not noise: tests
+whether any non-noise start suffices), C <code>cls_init=prev</code>. Count junk classes
+with the same criterion used for the selection. Outcomes: (a) C ≪ A:
+hypothesis confirmed, ship; B ≈ C says the noise/greedy start is the
+culprit, B ≈ A says the seed content is; (b) C ≈ A: junk is not an
+initialization artefact; next suspect is the class-driven frontier
+assignment (§1.3, item 2), to be tested by logging per-class population
+and mean assignment distance per iteration for the classes that end up
+junk.</p>
+<p>T2, the pass. From <code>SEED PASS REASSIGNED</code>: near-zero reassignment at
+<code>lp_pass</code> means the pass could be dropped (same reading as the 3D
+registration-pass test); a few percent with the final resolution
+responding means the band is doing its job.</p>
+<p>T3, <code>K ≠ M</code>. <code>K = 2M</code> and <code>K = M/2</code> on the same project: seed populations
+(should be ≈ <code>n*</code>), whether bisection children separate into distinct
+averages by the e/o stage or collapse into twins, and the junk count.</p>
+<p>T4, large set (&gt; 200k active particles): sampled stages after the pass,
+fractional restore, terminal pass; compare wall time against the unseeded
+run (expected cheaper: the pass costs one full iteration, stages 1-2 cost
+~10).</p>
+<p>Regression: an unseeded default run before/after the change, <code>&gt;&gt;&gt; STAGE</code>
+lines identical.</p>
+<h2 id="7-things-to-verify-during-implementation-not-design-decisions">7. Things to verify during implementation (not design decisions)</h2>
+<ul>
+<li><code>class=0</code> particles: <code>cavger_transf_oridat</code> already skips
+<code>icls&lt;1 .or. icls&gt;ncls</code> (<code>simple_classaverager_restore.f90</code>), so the
+seed averages are safe; what remains to confirm is the search side below.</li>
+<li>Shift semantics for <code>class=0</code> particles in <code>fill_tab_range</code> (seed <code>cxy=0</code>
+with the stored shift kept) match what an out-of-range <code>icls_prev</code> does
+today; <code>record_sparse_eval</code> shifts are increments in the same frame.</li>
+<li><code>sigma2_group_iter</code>/canonical sigma2 naming with the pass at
+<code>which_iter=2</code> after a reused state.</li>
+<li><code>cleanup_distributed_iteration_artifacts</code> at <code>startit=2</code> without
+<code>update_frac</code> still deletes stale partial sums (it does when
+<code>.not. l_update_frac</code>).</li>
+<li><code>set_bp_range2D</code> with <code>l_lpset</code> for the pass, then <code>l_lpset=.false.</code> on
+the e/o stage picking up <code>FRCS_FILE</code> from the pass, not from the seed.</li>
+</ul>
+<h2 id="8-open-questions-for-hans">8. Open questions for Hans</h2>
+<ol>
+<li>Split engine: PC1 balanced bisection (recommended) or <code>cls_split</code>
+k-medoids with a per-parent count.</li>
+<li><code>K &lt; M</code>: drop the smallest parents and let the pass reassign their
+particles (recommended) or merge by class-average similarity with pose
+composition.</li>
+<li>Pass band: seed FRC=0.5 median-of-top-3 clamped to <code>[lpstop, lpstart]</code>
+(recommended), FRC=0.143, or a fixed stage-3 <code>lp</code>.</li>
+<li>After the pass: remaining marching stages finer than <code>lp_pass</code> + e/o
+(recommended) or e/o only.</li>
+<li>Switch: <code>cls_init=prev</code> (recommended, one knob) or a dedicated
+<code>seed2D=yes</code> that could later also take an external project.</li>
+<li>Should abinitio2D refuse <code>cls_init=prev</code> when the accepted-parent
+population covers less than some fraction of the active particles (a
+selection that rejected most classes), or just warn?</li>
+</ol>
+
+</body>
+</html>
