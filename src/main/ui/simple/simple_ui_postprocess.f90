@@ -34,7 +34,7 @@ contains
         ! parameter input/output
         call postprocess%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind{vol}', &
+        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind; unfil = the unfiltered (base) pair average beside the volume{vol}', &
             &'project output kind: vol or vol_cavg', .false., 'vol', &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
@@ -47,6 +47,10 @@ contains
         call postprocess%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'Binary FSC file for optimal filtering', &
             &'e.g. fsc_state01.bin file', .false., '', &
         &visibility=UI_VIS_ADVANCED)
+        call postprocess%add_input(UI_FILT, 'fsc_filt', 'binary', 'FSC optimal filter', &
+        &'Apply the FSC optimal filter 2FSC/(1+FSC) before the low-pass at FSC=0.143 (yes), or only the low-pass (no); '//&
+        &'a PCG ML-regularized map already carries the Wiener attenuation of its prior(yes|no){yes}', '', .false., 'yes', &
+        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call postprocess%add_input(UI_FILT, bfac, &
         &visibility=UI_VIS_ADVANCED)
         call postprocess%add_input(UI_FILT, mirr, &

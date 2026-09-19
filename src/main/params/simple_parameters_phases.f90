@@ -932,13 +932,6 @@ contains
         if( self%l_pcg_solvent .and. trim(self%rec_backend) /= 'pcg' ) &
             &THROW_HARD('pcg_solvent=yes requires rec_backend=pcg')
         if( self%pcg_solvent_lambda <= 0. ) THROW_HARD('pcg_solvent_lambda must be positive')
-        if( self%l_pcg_solvent )then
-            ! the closed-form start cannot see a real-space prior: maxits_ml
-            ! defaults to PCG_SOLVENT_MAXITS_ML with the prior on (0 otherwise)
-            ! and an explicit 0 is refused rather than silently ignored
-            if( .not. cline%defined('maxits_ml') ) self%maxits_ml = PCG_SOLVENT_MAXITS_ML
-            if( self%maxits_ml < 1 ) THROW_HARD('pcg_solvent=yes requires maxits_ml>=1: the closed-form start cannot see the solvent prior')
-        endif
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
         if( cline%defined('element') )then

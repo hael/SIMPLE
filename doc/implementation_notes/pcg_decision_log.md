@@ -683,3 +683,27 @@ Untested; first test is the PfCRT cold-start run with `pcg_solvent=yes`
 against its 3.98 A baseline, judged on the map (cavities, detergent
 belt, skirt) rather than the FSC, then a `pcg_solvent_lambda` sweep
 (0.3, 1, 3).
+
+**2026-09-19 -- solvent prior moved to the base solve (per-half re-solve).**
+Observation (Hans, several data sets): stage maps under the replay-ridge
+design looked less noise-fitted but the final map looked too low-pass
+filtered. Diagnosis: the on/off comparison was confounded with
+`maxits_ml` 2 vs 0, and the coupled replay's proper P_tau attenuation
+plus the classical postprocess's `2FSC/(1+FSC)` double-attenuates a
+regularized map (the closed form under-attenuates, hiding it; the stage
+maps ship NU-filtered base rungs, hiding it). Decision (Hans): keep runs
+comparable -- a separate cold solve with the prior on the base system,
+its pair fed to the NU machinery, `maxits_ml=0` and the closed-form
+shrink as standard. What ships: prior-free base pair (operators kept)
+-> its FSC sets the smoothing scale, per-half weights from the
+prior-free halves -> ridge installed -> both halves solved again from
+zero with the same budget on the same accumulators -> that pair is the
+base pair everywhere (FSC, NU evidence, replay, B factor). NU caveat
+recorded, not acted on: the NU null (dilation ring / robust bulk) is
+measured on the prior'd pair; watch `NU NULL SHELL GEOMETRY`, the null
+bias median/MAD and the assignment table for collapse. Summary lines
+`KIND=pre` (prior-free) then `KIND=base` (prior'd). `postprocess` gained
+`fsc_filt=no` (skip the optimal filter, low-pass at FSC=0.143 only) and
+`imgkind=unfil` (classical route from the unfiltered pair average) for
+the re-reconstruct/re-postprocess matrix on the completed runs.
+

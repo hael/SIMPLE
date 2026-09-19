@@ -405,11 +405,16 @@ contains
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
         ! low-pass filter
-        if( has_fsc )then
+        if( has_fsc .and. trim(params%fsc_filt) == 'yes' )then
             ! optimal low-pass filter of unfiltered volumes from FSC
             call vol_bfac%apply_filter(optlp)
             call vol_no_bfac%apply_filter(optlp)
         else
+            ! fsc_filt=no: the map keeps its own amplitude weighting (a PCG
+            ! ML-regularized map already carries the Wiener attenuation of
+            ! its prior); only the low-pass at FSC=0.143 (or lp) is applied
+            if( has_fsc ) write(logfhandle,'(A,F6.2,A)') &
+                &'>>> POSTPROCESS: fsc_filt=no, FSC optimal filter skipped; low-pass at ', lplim, ' A only'
             call vol_bfac%bp(0., lplim)
             call vol_no_bfac%bp(0., lplim)
         endif
@@ -471,9 +476,10 @@ contains
     subroutine exec_postprocess( self, cline )
         class(commander_postprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(string)     :: fname_vol, fname_fsc
+        type(string)     :: fname_vol, fname_fsc, fname_even_unfil, fname_odd_unfil
         type(parameters) :: params
         type(sp_project) :: spproj
+        type(image)      :: vol_unfil, vol_unfil_odd
         real    :: smpd
         integer :: state, box, fsc_box
         ! set defaults
@@ -491,7 +497,7 @@ contains
             state = 1
         endif
         ! check volume, get correct smpd & box
-        if( cline%defined('imgkind') )then
+        if( cline%defined('imgkind') .and. trim(params%imgkind) /= 'unfil' )then
             call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
         else
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
@@ -501,6 +507,29 @@ contains
         endif
         ! using the input volume for postprocessing
         if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
+        ! imgkind=unfil: postprocess the average of the unfiltered (base)
+        ! pair beside the project volume, written as <vol>_unfil.mrc; the
+        ! classical route from unregularized halves (FSC optimal filter +
+        ! B-factor), for comparison with the shipped regularized map
+        if( cline%defined('imgkind') )then
+            if( trim(params%imgkind) == 'unfil' )then
+                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
+                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
+                if( .not. file_exists(fname_even_unfil) .or. .not. file_exists(fname_odd_unfil) ) &
+                    &THROW_HARD('imgkind=unfil requires the _even_unfil/_odd_unfil pair beside the project volume')
+                call vol_unfil%new([box,box,box], smpd)
+                call vol_unfil_odd%new([box,box,box], smpd)
+                call vol_unfil%read(fname_even_unfil)
+                call vol_unfil_odd%read(fname_odd_unfil)
+                call vol_unfil%add(vol_unfil_odd)
+                call vol_unfil%mul(0.5)
+                fname_vol = add2fbody(fname_vol, params%ext, '_unfil')
+                call vol_unfil%write(fname_vol, del_if_exists=.true.)
+                call vol_unfil%kill
+                call vol_unfil_odd%kill
+                write(logfhandle,'(A)') '>>> POSTPROCESS: source is the unfiltered pair average '//fname_vol%to_char()
+            endif
+        endif
         if( cline%defined('fsc') )then
             if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
             fname_fsc = params%fsc

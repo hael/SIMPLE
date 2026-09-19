@@ -166,12 +166,13 @@ contains
         integer :: maxits_here
         maxits_here = maxits_ml
         if( present(solvent_weight) )then
-            ! the soft solvent prior (real-space ridge) is installed after
-            ! end_accum so its coefficient is relative to the data scale; the
-            ! closed-form start cannot see it, so the coupled iterations must
-            ! run: the parameters class guarantees maxits_ml >= 1 with the prior on
+            ! the soft solvent prior already shaped the base pair this replay
+            ! starts from (base re-solve, see resolve_base_pair_with_solvent_prior);
+            ! it is installed here too so that coupled replay iterations, when
+            ! requested (maxits_ml > 0), solve the same ridged system. The
+            ! closed form (maxits_ml = 0, the standard) is the Wiener shrink
+            ! of the prior'd base map and needs nothing further
             if( .not. present(solvent_lambda_rel) ) THROW_HARD('solvent prior requires its relative coefficient; solve_regularized_half')
-            if( maxits_here < 1 ) THROW_HARD('solvent prior requires maxits_ml>=1; solve_regularized_half')
             call pcgop%set_solvent_prior(solvent_weight, solvent_lambda_rel)
         endif
         call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
@@ -306,10 +307,11 @@ contains
                 &l_pair_support_constrained=l_pair_support_constrained, support_kind=support_kind, mask_kind='none')
         endif
         ! the resolution document states the solvent prior beside the FSC
-        ! mode so the provenance is complete in one place: the prior acts on
-        ! the shipped regularized pair only, the FSC pair carries none of it
-        if( params%l_pcg_solvent .and. params%l_ml_reg ) diagnostics%fsc_mode = &
-            &trim(diagnostics%fsc_mode)//' solvent_prior=soft(shipped_pair_only)'
+        ! mode so the provenance is complete in one place: the base pair the
+        ! FSC is measured on was solved with the per-half soft solvent prior
+        ! (half-independent, so gold standard, but solvent-flattened)
+        if( params%l_pcg_solvent ) diagnostics%fsc_mode = &
+            &trim(diagnostics%fsc_mode)//' solvent_prior=soft(per_half,base_pair)'
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
             &' FSC=0.500 RESOLUTION = ', diagnostics%res_fsc05
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
@@ -378,13 +380,12 @@ contains
     end subroutine set_pcg_solve_support
 
     !> Opt-in soft solvent prior (pcg_solvent=yes): the protein weights w(r)
-    !! of the regularized solve's real-space ridge, one per half, each drawn
-    !! from its OWN base half at the working resolution so the prior is
-    !! half-independent and the regularized pair stays gold-standard. The
-    !! production support of the solve (explicit pcg_mskfile, the state
-    !! envelope, or the soft sphere set_mask installs) only selects the voxels
-    !! the threshold is estimated on. Support, base solve, FSC and NU bank
-    !! inputs are untouched. With pcg_solvent=no nothing here runs.
+    !! of the real-space ridge, one per half, each drawn from its OWN
+    !! prior-free base half at that pair's working resolution so the prior is
+    !! half-independent and the pair stays gold-standard. The production
+    !! support of the solve (explicit pcg_mskfile, the state envelope, or the
+    !! soft sphere set_mask installs) only selects the voxels the threshold is
+    !! estimated on. With pcg_solvent=no nothing here runs.
     subroutine build_pcg_solvent_prior_weight( params, state_here, base_even, base_odd, res0143, state_support, &
         &l_state_support, weight, l_weight )
         class(parameters), intent(in)    :: params
@@ -403,11 +404,6 @@ contains
         logical :: l_explicit
         l_weight = .false.
         if( .not. params%l_pcg_solvent ) return
-        if( .not. params%l_ml_reg )then
-            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
-                &', no regularized solve (ml_reg=no); nothing to regularize'
-            return
-        endif
         if( res0143 <= 0. )then
             write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
                 &', no base-pair resolution available; prior not applied'
@@ -439,10 +435,9 @@ contains
         ! volumes are written beside the shipped map (per iteration under
         ! refine3D) so the partition can be inspected
         corr = weight(1)%real_corr(weight(2))
-        write(logfhandle,'(A,I0,A,F6.3,A,F6.2,A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+        write(logfhandle,'(A,I0,A,F6.3,A,F6.2,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
             &', even/odd weight correlation ', corr, ', solvent fraction gap ', &
-            &100.*abs(stats_even%solvent_frac - stats_odd%solvent_frac), ' %, maxits_ml ', params%maxits_ml, &
-            &' coupled iterations carry the prior'
+            &100.*abs(stats_even%solvent_frac - stats_odd%solvent_frac), ' %'
         ! named as the weight it is (like automask3D_stateNN.mrc), never as a
         ! reconstruction, and overwritten every iteration like the state
         ! volumes so the disk carries one pair per state:
@@ -458,11 +453,63 @@ contains
         call fname_odd%kill
     end subroutine build_pcg_solvent_prior_weight
 
+    !> pcg_solvent=yes, step between the prior-free base solve and the base
+    !! re-solve: the prior-free pair's FSC=0.143 sets the smoothing scale, the
+    !! per-half weights are built from the prior-free halves, and the ridge is
+    !! installed on both operators (accumulators untouched). The caller then
+    !! solves both halves again, cold, with the same budget: the shipped base
+    !! pair, its FSC, the NU evidence and the closed-form replay all see the
+    !! prior, and the only difference to pcg_solvent=no is the ridge itself
+    subroutine prepare_solvent_prior_on_pair( params, state_here, pcgop_even, pcgop_odd, x_even, x_odd, &
+        &state_support, l_state_support, weight, l_weight, res0143_prior_free )
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: state_here
+        class(reconstructor_pcg), intent(inout) :: pcgop_even, pcgop_odd
+        real,                     intent(in)    :: x_even(:,:,:), x_odd(:,:,:)
+        class(image),             intent(in)    :: state_support
+        logical,                  intent(in)    :: l_state_support
+        type(image),              intent(inout) :: weight(2)
+        logical,                  intent(out)   :: l_weight
+        real,                     intent(out)   :: res0143_prior_free
+        type(image) :: prov_even, prov_odd
+        real, allocatable :: corrs(:), res(:)
+        real    :: fsc05
+        integer :: n
+        l_weight = .false.
+        res0143_prior_free = 0.
+        if( .not. params%l_pcg_solvent ) return
+        n = fdim(params%box_crop) - 1
+        if( n < 1 ) THROW_HARD('solvent prior: box too small for an FSC; prepare_solvent_prior_on_pair')
+        call prov_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call prov_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call prov_even%set_rmat(x_even, .false.)
+        call prov_odd%set_rmat( x_odd,  .false.)
+        allocate(corrs(n), source=0.)
+        call prov_even%fft
+        call prov_odd%fft
+        call prov_even%fsc(prov_odd, corrs)
+        call prov_even%ifft
+        call prov_odd%ifft
+        res = get_resarr(params%box_crop, params%smpd_crop)
+        call get_resolution(corrs, res, fsc05, res0143_prior_free)
+        write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+            &', prior-free base pair FSC=0.143 ', res0143_prior_free, ' A, FSC=0.5 ', fsc05, &
+            &' A (reference for the prior-free/prior comparison and the smoothing scale)'
+        call build_pcg_solvent_prior_weight(params, state_here, prov_even, prov_odd, res0143_prior_free, &
+            &state_support, l_state_support, weight, l_weight)
+        call prov_even%kill
+        call prov_odd%kill
+        deallocate(corrs, res)
+        if( .not. l_weight ) return
+        call pcgop_even%set_solvent_prior(weight(1), params%pcg_solvent_lambda)
+        call pcgop_odd%set_solvent_prior( weight(2), params%pcg_solvent_lambda)
+    end subroutine prepare_solvent_prior_on_pair
+
     !> the solvent_prior= line of the support provenance sidecar
     function solvent_prior_provenance( params ) result( str )
         class(parameters), intent(in) :: params
         character(len=64) :: str
-        write(str,'(A,F0.3)') 'soft lambda_rel=', params%pcg_solvent_lambda
+        write(str,'(A,F0.3)') 'soft per_half base_pair lambda_rel=', params%pcg_solvent_lambda
     end function solvent_prior_provenance
 
     !> Build the per-state solve-support envelope from the reference volume
@@ -610,11 +657,12 @@ contains
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         type(image_msk) :: state_support_msk
         type(image)     :: solvent_weight(2)
+        type(reconstructor_pcg) :: pcgop_even, pcgop_odd  !< kept alive across the pair under pcg_solvent=yes
         logical :: l_state_support, l_base_support_constrained, l_solvent_weight
         character(len=16) :: state_support_kind, base_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
-        real :: align_lp
+        real :: align_lp, res0143_prior_free
         logical :: l_sigma_loaded
 
         call validate_supported_mode()
@@ -653,12 +701,26 @@ contains
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
             if( l_base_support_constrained ) base_support_kind = state_support_kind
-            call collect_state_half(state, 0, n_even, half_pinds)
-            call solve_state_half(state, 0, 'even', half_pinds, half_even)
-            deallocate(half_pinds)
-            call collect_state_half(state, 1, n_odd, half_pinds)
-            call solve_state_half(state, 1, 'odd', half_pinds, half_odd)
-            deallocate(half_pinds)
+            if( params%l_pcg_solvent )then
+                ! prior-free pair first (operators kept), then the same cold
+                ! solve again with the soft solvent prior installed
+                call collect_state_half(state, 0, n_even, half_pinds)
+                call solve_state_half(state, 0, 'even', half_pinds, half_even, pcgop_keep=pcgop_even, summary_kind='pre')
+                deallocate(half_pinds)
+                call collect_state_half(state, 1, n_odd, half_pinds)
+                call solve_state_half(state, 1, 'odd', half_pinds, half_odd, pcgop_keep=pcgop_odd, summary_kind='pre')
+                deallocate(half_pinds)
+                call resolve_base_pair_with_solvent_prior(state, n_even, n_odd)
+                call pcgop_even%kill
+                call pcgop_odd%kill
+            else
+                call collect_state_half(state, 0, n_even, half_pinds)
+                call solve_state_half(state, 0, 'even', half_pinds, half_even)
+                deallocate(half_pinds)
+                call collect_state_half(state, 1, n_odd, half_pinds)
+                call solve_state_half(state, 1, 'odd', half_pinds, half_odd)
+                deallocate(half_pinds)
+            endif
 
             fname_even = refine3D_state_halfvol_fname(state, 'even')
             fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
@@ -696,9 +758,6 @@ contains
             call hm_diag%kill
             time_fsc_output = real(toc(t_state_phase),dp)
 
-            ! opt-in soft solvent prior of the regularized solve (no-op unless pcg_solvent=yes)
-            call build_pcg_solvent_prior_weight(params, state, half_even, half_odd, res0143s(state), state_support_msk, &
-                &l_state_support, solvent_weight, l_solvent_weight)
             if( params%l_ml_reg )then
                 ! the ordinary global-ML replay (P_tau from the current base
                 ! pair); nonuniform filtering is assembly-owned and runs
@@ -720,13 +779,14 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             ! the sidecar follows the published map, never precedes it
-            if( params%l_ml_reg )then
-                if( l_solvent_weight )then
-                    call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind, &
-                        &solvent_prior=solvent_prior_provenance(params))
-                else
-                    call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind)
-                endif
+            if( params%l_ml_reg .and. l_solvent_weight )then
+                call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind, &
+                    &solvent_prior=solvent_prior_provenance(params))
+            else if( params%l_ml_reg )then
+                call write_support_provenance(fname_vol, l_state_support, 'regularized', state_support_kind)
+            else if( l_solvent_weight )then
+                call write_support_provenance(fname_vol, l_base_support_constrained, 'base', base_support_kind, &
+                    &solvent_prior=solvent_prior_provenance(params))
             else
                 call write_support_provenance(fname_vol, l_base_support_constrained, 'base', base_support_kind)
             endif
@@ -875,13 +935,62 @@ contains
             if( cnt /= n ) THROW_HARD('inconsistent PCG state-half particle count')
         end subroutine collect_state_half
 
-        subroutine solve_state_half( state_here, eo_here, half, pinds, volume, outcome )
+        !> pcg_solvent=yes: the prior-free pair just solved sets the weights
+        !! (prepare_solvent_prior_on_pair), then both halves are solved again
+        !! from zero with the same budget on the same accumulators, now with
+        !! the ridge: this pair is the shipped base pair (FSC, NU evidence,
+        !! closed-form replay). Cost: the solve iterations once more, not the
+        !! particle pass
+        subroutine resolve_base_pair_with_solvent_prior( state_here, n_even_here, n_odd_here )
+            integer, intent(in) :: state_here, n_even_here, n_odd_here
+            real, allocatable :: x(:,:,:)
+            call prepare_solvent_prior_on_pair(params, state_here, pcgop_even, pcgop_odd, &
+                &half_even%get_rmat(), half_odd%get_rmat(), state_support_msk, l_state_support, &
+                &solvent_weight, l_solvent_weight, res0143_prior_free)
+            if( .not. l_solvent_weight ) return
+            allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+            call resolve_half_with_prior(pcgop_even, state_here, 'even', n_even_here, x, half_even)
+            x = 0.0
+            call resolve_half_with_prior(pcgop_odd,  state_here, 'odd',  n_odd_here,  x, half_odd)
+            deallocate(x)
+        end subroutine resolve_base_pair_with_solvent_prior
+
+        subroutine resolve_half_with_prior( pcgop, state_here, half, nptcls_here, x, volume )
+            type(reconstructor_pcg), intent(inout) :: pcgop
+            integer,                 intent(in)    :: state_here, nptcls_here
+            character(len=*),        intent(in)    :: half
+            real,                    intent(inout) :: x(:,:,:)
+            type(image),             intent(inout) :: volume
+            type(pcg_solver_outcome) :: result
+            real, allocatable :: rel_res_hist(:)
+            integer :: niters
+            integer(timer_int_kind) :: t_phase
+            real(dp) :: time_solve
+            t_phase = tic()
+            call solve_with_cold_restart(pcgop, x, .false., params%maxits_pcg, params%rtol, &
+                &rel_res_hist, niters, result)
+            time_solve = real(toc(t_phase),dp)
+            call handle_cold_restart_outcome(result, 'shared', half, 'base')
+            call validate_solved_map(x, 'shared', state_here, half, 'base')
+            call volume%set_rmat(x, .false.)
+            call report_beyond_band_excess(volume, params, state_here, half, 'base')
+            call report_solve_summary('SHARED', state_here, half, 'base', nptcls_here, niters, &
+                &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual, &
+                &residual_m=result%final_rel_residual_m)
+            if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
+        end subroutine resolve_half_with_prior
+
+        subroutine solve_state_half( state_here, eo_here, half, pinds, volume, outcome, pcgop_keep, summary_kind )
             integer,          intent(in)    :: state_here, eo_here
             character(len=*), intent(in)    :: half
             integer,          intent(in)    :: pinds(:)
             type(image),      intent(inout) :: volume
-            type(pcg_solver_outcome), optional, intent(out) :: outcome
-            type(reconstructor_pcg) :: pcgop
+            type(pcg_solver_outcome), optional, intent(out)   :: outcome
+            type(reconstructor_pcg),  optional, intent(inout), target :: pcgop_keep   !< accumulated operator handed back alive
+            character(len=*),         optional, intent(in)    :: summary_kind        !< KIND label of the summary line
+            type(reconstructor_pcg), target  :: pcgop_local
+            type(reconstructor_pcg), pointer :: pcgop
+            character(len=8) :: kind_here
             type(pcg_solver_outcome) :: result
             type(oris)      :: selection
             type(ori)       :: orientation
@@ -904,6 +1013,13 @@ contains
             time_accum     = 0.0_dp
             time_finalize  = 0.0_dp
             time_solve     = 0.0_dp
+            kind_here = 'base'
+            if( present(summary_kind) ) kind_here = summary_kind
+            if( present(pcgop_keep) )then
+                pcgop => pcgop_keep
+            else
+                pcgop => pcgop_local
+            endif
             t_phase = tic()
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -994,12 +1110,13 @@ contains
             call write_half_diagnostics(state_here, half, 'base', size(pinds), result, rel_res_hist, &
                 &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
                 &pcgop%get_data_scale(), pcgop%get_effective_lambda(), pcgop=pcgop)
-            call report_solve_summary('SHARED', state_here, half, 'base', size(pinds), niters, &
+            call report_solve_summary('SHARED', state_here, half, trim(kind_here), size(pinds), niters, &
                 &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual, &
                 &residual_m=result%final_rel_residual_m)
             if( present(outcome) ) outcome = result
 
-            call pcgop%kill
+            if( .not. present(pcgop_keep) ) call pcgop%kill
+            nullify(pcgop)
             call selection%kill
             call orientation%kill
             deallocate(y_batch, sig2, x, rel_res_hist)
@@ -1796,6 +1913,7 @@ contains
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
         logical :: l_fsc_pair_support_constrained, l_prev_support_constrained, l_prev_provenance_found
         logical :: l_shipped_support_constrained, l_solvent_weight
+        real    :: res0143_prior_free
         character(len=16) :: state_support_kind, base_support_kind, fsc_support_kind
         character(len=16) :: previous_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
@@ -1964,11 +2082,6 @@ contains
             call hm_diag%kill
             time_fsc_output = real(toc(t_state_phase),dp)
 
-            ! opt-in soft solvent prior of the regularized solve (no-op unless
-            ! pcg_solvent=yes): one weight per half from the CURRENT base
-            ! halves at the FSC pair's working resolution
-            call build_pcg_solvent_prior_weight(params, state, half_even, half_odd, res0143s(state), state_support_msk, &
-                &l_state_support, solvent_weight, l_solvent_weight)
             if( params%l_ml_reg )then
                 ! the ordinary global-ML replay (P_tau from the FSC pair)
                 call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
@@ -2034,8 +2147,14 @@ contains
                     &solvent_prior=solvent_prior_provenance(params))
             else if( params%l_ml_reg )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind)
+            else if( l_bootstrap .and. update_weights(state) < 0.99 .and. l_solvent_weight )then
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed', shipped_support_kind, &
+                    &solvent_prior=solvent_prior_provenance(params))
             else if( l_bootstrap .and. update_weights(state) < 0.99 )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed', shipped_support_kind)
+            else if( l_solvent_weight )then
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind, &
+                    &solvent_prior=solvent_prior_provenance(params))
             else
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind)
             endif
@@ -2253,6 +2372,33 @@ contains
             n_odd_here  = odd_job%nptcls
 
             call solve_distributed_half_pair(even_job, odd_job)
+
+            if( .not. present(fsc_prior) .and. params%l_pcg_solvent )then
+                ! pcg_solvent=yes: the prior-free pair sets the per-half
+                ! weights, the ridge goes on both operators and the same cold
+                ! solve runs again on the same accumulators; that pair is the
+                ! shipped base pair (FSC, NU evidence, closed-form replay)
+                if( even_job%ready .and. odd_job%ready )then
+                    call report_solve_summary('DISTRIBUTED', state_here, 'even', 'pre', even_job%nptcls, &
+                        &even_job%niters, even_job%result%final_rel_residual, even_job%time_solve, &
+                        &even_job%result%stop_reason, even_job%result%initial_rel_residual, &
+                        &residual_m=even_job%result%final_rel_residual_m)
+                    call report_solve_summary('DISTRIBUTED', state_here, 'odd', 'pre', odd_job%nptcls, &
+                        &odd_job%niters, odd_job%result%final_rel_residual, odd_job%time_solve, &
+                        &odd_job%result%stop_reason, odd_job%result%initial_rel_residual, &
+                        &residual_m=odd_job%result%final_rel_residual_m)
+                    call prepare_solvent_prior_on_pair(params, state_here, even_job%pcgop, odd_job%pcgop, &
+                        &even_job%x, odd_job%x, state_support_msk, l_state_support, &
+                        &solvent_weight, l_solvent_weight, res0143_prior_free)
+                    if( l_solvent_weight )then
+                        even_job%x = 0.0
+                        odd_job%x  = 0.0
+                        even_job%l_nonzero = .false.
+                        odd_job%l_nonzero  = .false.
+                        call solve_distributed_half_pair(even_job, odd_job)
+                    endif
+                endif
+            endif
 
             if( present(fsc_prior) )then
                 call finish_distributed_half_job(even_job, even, warm_even)

@@ -1,33 +1,33 @@
-!@descr: opt-in soft solvent prior of the PCG regularized solve (pcg_solvent=yes)
+!@descr: opt-in soft solvent prior of the PCG base solve (pcg_solvent=yes)
 !
-!  What it does. The regularized (shipped) PCG solve is (H + P_tau + lambda I) x = b
-!  on the production support. Neither the spherical support nor the density
-!  envelope (drawn at envmsklp, 20 A) sees solvent finer than the scale it was
-!  drawn at: the dilation ring and skirt, and every cavity, channel and gap
-!  below ~20 A. With pcg_solvent=yes the regularized system gains a real-space,
-!  position-dependent ridge, (H + P_tau + lambda I + Lambda_s) x = b with
-!  Lambda_s = lambda_s (1 - w(r)): a Gaussian prior with position-dependent
-!  variance, the real-space twin of P_tau. The protein weight w(r) in [0,1] is
-!  built here per half from that half's own base map at the working
-!  resolution, so the prior is half-independent (gold standard kept): a
-!  Wang-type solvent statistic (smoothed absolute density, smoothing scale a
-!  multiple of the base pair's FSC=0.143 resolution), an Otsu threshold inside
-!  the production support, and a logistic of the statistic around that
-!  threshold whose width is the spread of the statistic in the solvent class.
-!  Nothing is zeroed and nothing is masked: where the data term is strong the
-!  prior is irrelevant, where it is weak solvent is pulled toward zero. A
-!  misassigned voxel is over-regularized, not deleted, and the partition is
-!  redrawn from the base pair every iteration.
+!  What it does. Neither the spherical support nor the density envelope (drawn
+!  at envmsklp, 20 A) sees solvent finer than the scale it was drawn at: the
+!  dilation ring and skirt, and every cavity, channel and gap below ~20 A.
+!  With pcg_solvent=yes the base system gains a real-space, position-dependent
+!  ridge, (H + lambda I + Lambda_s) x = b with Lambda_s = lambda_s (1 - w(r)):
+!  a Gaussian prior with position-dependent variance, the real-space twin of
+!  the replay's P_tau. Each half is first solved prior-free; that pair's
+!  FSC=0.143 sets the smoothing scale and each half's own prior-free map
+!  yields its protein weight w(r) in [0,1] (this module): a Wang-type solvent
+!  statistic (smoothed absolute density), an Otsu threshold inside the
+!  production support, and a logistic of the statistic around that threshold
+!  whose width is the spread of the statistic in the solvent class. Both
+!  halves are then solved again, cold, with the same budget, ridge installed.
+!  The prior is half-independent, so the pair stays gold standard; the FSC is
+!  solvent-flattened and reported as such. Nothing is zeroed and nothing is
+!  masked: where the data term is strong the prior is irrelevant, where it is
+!  weak solvent is pulled toward zero; a misassigned voxel is over-regularized,
+!  not deleted, and the partition is redrawn from prior-free maps every
+!  iteration. The shipped base pair, its FSC, the NU evidence and the
+!  closed-form replay all see the prior; the only difference to
+!  pcg_solvent=no is the ridge. The solve support is untouched.
 !
-!  What it does not touch. The solve support, the base solve, the base pair,
-!  the FSC/cFAR and the NU candidate bank are unchanged: the FSC oracle carries
-!  no extra mask. With pcg_solvent=no (the default) no code in this module runs.
-!
-!  Reporting. One PCG SOLVENT PRIOR line per state per reconstruction: the
+!  Reporting. One PCG SOLVENT PRIOR line per half per reconstruction (the
 !  smoothing scale, the Otsu threshold and the logistic width, the fraction of
-!  the production support with w < 1/2, the mean weight, and the relative
-!  ridge coefficient. The shipped pair's provenance sidecar records
-!  solvent_prior=soft lambda_rel=<x>.
+!  the production support with w < 1/2, the mean weight, the relative ridge
+!  coefficient), the prior-free pair's FSC, the even/odd weight agreement, and
+!  the weight volumes pcg_solvent_weight_stateNN_even|odd.mrc (overwritten
+!  each iteration). Provenance: solvent_prior=soft per_half base_pair lambda_rel=<x>.
 module simple_pcg_solvent_sidecar
 use simple_core_module_api
 use simple_parameters, only: parameters
@@ -56,10 +56,10 @@ end type pcg_solvent_stats
 
 contains
 
-    !> Protein weight w(r) in [0,1] from ONE base half, so that the prior of
-    !! each regularized half depends on its own data only (gold standard kept).
-    !! base_half: the base (unfil) half map at the crop box, real space.
-    !! res0143: the base pair's FSC=0.143 resolution (A).
+    !> Protein weight w(r) in [0,1] from ONE prior-free base half, so that the
+    !! prior of each half depends on its own data only (gold standard kept).
+    !! base_half: the prior-free base half map at the crop box, real space.
+    !! res0143: the prior-free base pair's FSC=0.143 resolution (A).
     !! base_support: the production support of the solve (density envelope,
     !! explicit pcg_mskfile, or the soft sphere the caller builds); it only
     !! selects the voxels the threshold is estimated on.
@@ -148,7 +148,7 @@ contains
         write(logfhandle,'(A,I0,A,F6.1,A,ES10.3,A,ES10.3,A,F6.2,A,F5.2,A,F6.2,A)') &
             &'>>> PCG SOLVENT PRIOR: STATE ', state, ' '//trim(half)//', smoothing ', lp, ' A, threshold ', thresh, &
             &', width ', width, ', solvent ', 100.*stats%solvent_frac, ' % of the production support, mean weight ', &
-            &stats%weight_mean, ', ridge lambda_rel ', lambda_rel, ' (soft; support, base pair and FSC untouched)'
+            &stats%weight_mean, ', ridge lambda_rel ', lambda_rel, ' (soft; per-half base re-solve)'
     end subroutine build_solvent_prior_weight
 
 end module simple_pcg_solvent_sidecar

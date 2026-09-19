@@ -70,13 +70,13 @@ contains
         &visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
-        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only; defaults to 2 with pcg_solvent=yes', 'iterations{0}', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
-        &'Soft solvent prior on the regularized (shipped) PCG solve: a real-space ridge pulling solvent toward zero, '//&
-        &'solvent identified from the base pair at working resolution (smoothed absolute density, Otsu, logistic weight); '//&
-        &'the support, the base pair and the FSC are untouched(yes|no){no}', '', .false., 'no', &
+        &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
+        &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
+        &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched(yes|no){no}', '', .false., 'no', &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
@@ -152,7 +152,7 @@ contains
         &visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call bootstrap_rec3D%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
-        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only; defaults to 2 with pcg_solvent=yes', 'iterations{0}', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call bootstrap_rec3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &

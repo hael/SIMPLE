@@ -44,14 +44,14 @@ contains
         &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
-        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only; defaults to 2 with pcg_solvent=yes', 'iterations{0}', &
+        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
-        &'Soft solvent prior on the regularized (shipped) PCG solve: a real-space ridge pulling solvent toward zero, '//&
-        &'solvent identified from the base pair at working resolution (smoothed absolute density, Otsu, logistic weight); '//&
-        &'enabled only in abinitio3D stage 8; shortened workflows do not use it; the support, the base pair and '//&
-        &'the FSC are untouched(yes|no){no}', '', .false., 'no', group="search", &
+        &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
+        &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
+        &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched; '//&
+        &'enabled only in abinitio3D stage 8, shortened workflows do not use it(yes|no){no}', '', .false., 'no', group="search", &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &

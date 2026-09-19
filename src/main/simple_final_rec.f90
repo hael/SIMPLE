@@ -259,8 +259,7 @@ contains
                     if( cline_refine%defined('rtol') )&
                         &call child_cline%set('rtol', cline_refine%get_rarg('rtol'))
                     ! the soft solvent prior of the refinement's PCG stage
-                    ! continues into the shipped map (maxits_ml then defaults
-                    ! to PCG_SOLVENT_MAXITS_ML in the child's parameters)
+                    ! continues into the shipped map
                     if( cline_refine%defined('pcg_solvent') )then
                         call child_cline%set('pcg_solvent', cline_refine%get_carg('pcg_solvent'))
                         if( cline_refine%defined('pcg_solvent_lambda') ) &
