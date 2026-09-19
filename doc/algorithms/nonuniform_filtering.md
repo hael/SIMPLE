@@ -87,11 +87,15 @@ population that later serves as a noise reference.
    Angstrom inside the support and zero outside or beyond Nyquist.
 
 When ML regularization is active, the regularized half pair (the
-closed-form voxelwise Wiener shrinkage of the raw pair) is the finest
-member of the bank and competes for every voxel like a hard rung: its cost
-is the cross-half prediction error of the regularized halves. Where it
-wins, the map keeps the estimator's own high-resolution content; where a
-hard rung wins, the estimator over-reached there.
+closed-form voxelwise Wiener shrinkage of the raw pair) joins the bank as
+one more member beside the finest retained rung, at that rung's prior
+coordinate, and competes for every voxel like a hard rung: its cost is the
+cross-half prediction error of the regularized halves. Where it wins, the
+map keeps the estimator's own high-resolution content; where a hard rung
+wins, the estimator over-reached there. Its label resolution is the raw
+pair's FSC=0.143, and it joins the bank the moment that is at or beyond the
+ladder's finest rung; within the ladder the rungs compete alone (the cut at
+`fsc/1.5` always keeps a rung finer than the FSC).
 
 ## High-resolution extension (retired 2026-09-16)
 
@@ -101,21 +105,33 @@ acceptance criterion was equivalent to a local FSC above 0.5, conservative
 for the map and no better than the FSC=0.143 extent for the matching band,
 and it never let the regularized pair compete. A generated dense ladder
 replaced it for two days (2026-09-16 to 18) and regressed PfCRT; the static
-ladder with the regularized pair in the finest retained slot is the one
+ladder with the regularized pair beside the finest retained rung is the one
 competition for every workflow.
 
 ## Handoff to matching
 
 The FSC and the NU filter answer different questions: the FSC reports the
 average resolution, the NU field reports where the map is better than
-average. After filtering, the finest label holding at least 1 percent of
-the signal voxels at it or finer becomes the matching low-pass for the next
-iteration, bounded by any
-explicit `lp` and by `lpstop`, so that particles are aligned against all
-the signal the reference actually contains. In plain `nonuniform` mode the even and odd NU
-halves stay separate references; in `nonuniform_lpset` the merged NU map is
-used with a single band. No further low-pass is applied on top of an NU
-reference.
+average. The matching low-pass for the next iteration is the finest member
+of the bank: the finest rung of the ladder cut at `fsc/1.5`, or the
+regularized pair once its FSC=0.143 is at or beyond the ladder's finest
+rung, bounded by any explicit `lp` and by `lpstop`. The same rule serves
+every workflow, and which labels won voxels decides the filter, never the
+band. In plain `nonuniform` mode the even and odd NU halves stay separate
+references; in `nonuniform_lpset` the merged NU map is used with a single
+band. No further low-pass is applied on top of an NU reference.
+
+The band leads the FSC by 1.25-1.5x within the ladder, which is what
+carries a climb. With the band at the previous FSC=0.143 crossing the
+alignment never sees the shells beyond the crossing where the reference
+still holds signal; the crossing then moves at most about one shell per
+iteration and the orientation assignment crawls or freezes (PfCRT: 0/4 and
+1/9 restarts converged, 2026-09-16/18). That is underfitting: the
+sigma2-weighted objective, the stochastic assignment and the
+evidence-limited NU reference guard against fitting noise, and the runs
+with a 1.5x lead (PfCRT 10/10, +0.47 A of FSC per stage-6 iteration
+against +0.19 A) show no sign of it. The uncapped July 2026 ladder led by
+about 2x and froze 2 of 10 restarts, so the lead is bounded by the cut.
 
 The reproducibility envelope derived from the same candidate costs is a
 separate estimator: [NU-evidence envelope masking](nu_evidence_envelope_mask.md).

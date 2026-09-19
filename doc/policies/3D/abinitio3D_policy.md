@@ -186,11 +186,16 @@ rule: the best resolved populated state sets the band for all states.
 while the half maps agreed to 4.3 A at FSC=0.5.)
 
 In the NU stages there is no ceiling (July 2026 policy, restored
-2026-09-08): matching runs at the finest-label handoff of the static
-ladder capped at `fsc/1.5`, with the ML-regularized pair beside the finest
-retained rung (`doc/policies/NU/nonuniform_filtering_policy.md` sections 8
-and 12; the ed36eb4c machinery, restored 2026-09-18 after the generated
-ladder regressed PfCRT), so a ceiling only pins the map. Two ceilings were tried and
+2026-09-08): matching runs at the finest member of the NU bank, the finest
+rung of the static ladder cut at `fsc/1.5`, or the ML-regularized pair once
+its FSC=0.143 is at or beyond the ladder's 4 A rung (2026-09-19, the same
+rule as every other workflow; `doc/policies/NU/nonuniform_filtering_policy.md`
+sections 8 and 12). The band therefore leads the FSC by 1.25-1.5x, which is
+what carries the climb: with the band at the previous FSC=0.143 crossing the
+alignment was starved of the shells where the merged reference still holds
+signal and PfCRT converged in 0/4 and 1/9 restarts (2026-09-16/18), with a
+1.5x lead in 10/10 (2026-09-16), and a ceiling only pins the map. Two
+ceilings were tried and
 retired: the class-FRC final limit `lpfinal` (6.0 A on PfCRT, whose 2D
 classes stop at 6 A while the 3D map reaches 4 A) pinned the NU stages at
 5.97 A on 2026-09-07; the ladder's hard bound of 4.5 A pinned the 2026-09-08

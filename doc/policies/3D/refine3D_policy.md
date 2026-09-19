@@ -285,7 +285,11 @@ In nonuniform mode, reference loading follows the NU policy:
 - plain `nonuniform` prefers independent `_nu_filt` even/odd references and
   falls back to regular even/odd references before using a merged map
 - `nonuniform_lpset` with active LP-set matching uses the merged reference and
-  prefers the merged `_nu_filt` product when present
+  prefers the merged `_nu_filt` product when present. In both modes the
+  matching band is the finest member of the NU bank, the finest rung of the
+  ladder cut at `fsc/1.5` or the regularized pair once it is at or beyond
+  the ladder's finest rung (`nonuniform_filtering_policy.md` sections 8 and
+  12, 2026-09-19)
 
 The ordinary reference low-pass filter is not applied on top of a NU reference
 path. NU and ML-regularized references are treated as already filtered during

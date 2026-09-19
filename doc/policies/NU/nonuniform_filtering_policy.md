@@ -172,8 +172,10 @@ The NU filter consumes:
 
 When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base NU
 input and passes the ML-regularized even/odd pair as the auxiliary member.
-The auxiliary effective resolution comes from the state FSC(0.143) resolution,
-`res0143s(state)` (clamped by a set `lp` in `lpset` topology).
+The auxiliary resolution is the state FSC(0.143) resolution `res0143s(state)`
+in every workflow; `setup_nu_dmats` admits the pair to the bank only once that
+resolution is at or beyond the ladder's finest rung at the box (section 8,
+2026-09-19).
 
 On `rec_backend=pcg` the base input is the unregularized solve pair.
 
@@ -309,10 +311,17 @@ the two compete voxel by voxel under the same unary, smoothing and prior,
 and the auxiliary shares the finest rung's Potts coordinate, so replacing
 a finest-rung voxel by the regularized pair costs the prior nothing -- the
 unary alone decides, and the regularized pair is included exactly where it
-wins. Its effective resolution is the pair's FSC=0.143 (clamped by a set
-`lp`); its label hands off that resolution. The master logs one `>>> NU
-BANK CAP:` line and one `>>> NU AUXILIARY MEMBER:` line per state. Absent
-an FSC (the standalone `nu_filt3D` program) the bank is uncapped.
+wins. Its resolution is the pair's FSC=0.143, and it joins the bank the
+moment that resolution is at or beyond the ladder's finest rung at the box
+(2026-09-19, one rule for every workflow: with the ladder cut at `fsc/1.5`
+a rung between `fsc/1.5` and `fsc` is always retained, so within the ladder
+the rungs compete alone and the finest retained rung is the finest member;
+beyond the ladder the regularized pair is the finest member and competes
+with the 4 A rung). The finest member of the bank, appended pair or finest
+retained rung, is the matching low-pass handoff (section 12). The master
+logs one `>>> NU BANK CAP:` line and one `>>> NU AUXILIARY MEMBER:` line
+per state (admitted, or "within the ladder ... the rungs compete alone").
+Absent an FSC (the standalone `nu_filt3D` program) the bank is uncapped.
 
 An opt-in replay-evidence API can compact this full unary bank before it is
 released. Callers must tag the setup source as `base_unfil`; the API fingerprints
@@ -359,9 +368,10 @@ shared `simple_nu_state_filter` on both backends. The full post-hoc NU
 filtering path described in this document is production behavior on both
 backends.
 
-Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
-the finest discrete label only when its effective resolution is finer than that
-label. It is not appended as an extra sidecar candidate.
+The auxiliary pair, if supplied and at or beyond the ladder's finest rung,
+is appended as the last member of the bank at that rung's Potts coordinate
+(section 8); it never takes a rung's place, and within the ladder it is left
+out, so the last label is always the finest member of the bank.
 
 Persistent unary costs are mask-packed. Full-volume objective arrays are
 temporary work buffers; values outside the NU mask must not influence in-mask
@@ -479,22 +489,43 @@ FSC estimation and NU filtering have separate bandwidth roles. The FSC
 enters the bank as its cap (`fsc/1.5`, section 8) and as the auxiliary
 member's resolution (its `P_tau` shrinkage and its label resolution). The
 NU filter chooses the candidate applied at each volume voxel from its
-retained bank. After that volume operation the handoff
-(`record_nu_alignment_lowpass_limit`) is the finest selected label whose
-cumulative population, that label or finer, reaches
-`NU_ALIGN_LP_MIN_SIGNAL_PCT` (1%) of the SIGNAL voxels of the NU mask, i.e.
-the mask minus the solvent/background clamp (2026-09-13); the auxiliary
-member hands off its own resolution. No gate relative to the whole mask
-applies (`min_assigned_pct=0`): the 5% whole-mask support gate of
-2026-08-30 capped the PfCRT matching band at 5-6 A against a 4.1 A map
-because the coarsest background clamp is a large share of the mask. The
-raw finest label (2026-09-02 to 2026-09-13) let 54 voxels of 412k set the
-band at 3.37 A against a 3.62 A map. The handoff is logged per state as
-`>>> NU MATCHING LOW-PASS HANDOFF: ...` with the raw finest label beside
-it. The `fsc/1.5` cap of the bank is what lets the abinitio3D
-merged-reference climb (`nonuniform_lpset`) match ahead of its FSC; the
-same cap applies to `refine3D_auto` and `postprocess_nu` since 2026-09-18
-(the uncapped shell walk of `nu_refine=yes` is gone).
+retained bank. The handoff (`record_nu_alignment_lowpass_limit`) is the
+finest member of the bank (2026-09-19, one rule for every workflow): the
+finest rung retained under the `fsc/1.5` cut, or the regularized pair once
+its FSC=0.143 is at or beyond the ladder's finest rung (section 8). Which
+labels won voxels decides the filter, never the band. The line
+`>>> NU MATCHING LOW-PASS HANDOFF: ...` carries two population statistics
+as diagnostics only: the finest label whose cumulative population reaches
+`NU_ALIGN_LP_MIN_SIGNAL_PCT` (1%) of the SIGNAL voxels (the mask minus the
+solvent/background clamp), which was the handoff from 2026-09-13 to
+2026-09-19, and the raw finest label. Record of the retired population
+rules: the 5% whole-mask gate of 2026-08-30 capped the PfCRT band at 5-6 A
+against a 4.1 A map (the background clamp is a large share of the mask);
+the raw finest label (2026-09-02 to 09-13) let 54 voxels of 412k set the
+band at 3.37 A against a 3.62 A map; the 1% floor landed on the regularized
+pair at its own FSC=0.143 and handed the band back to the FSC.
+
+Why the band leads the FSC by a bounded factor, from the PfCRT log sets
+(`claude/pfcrt_abinitio_band_lead_analysis.md`): with the band at the
+previous FSC=0.143 crossing (`current_broken` 2026-09-16, `latest5`
+2026-09-18) the crossing sat at the band in 41-42% of stage-6 iterations,
+advanced at most about one shell per iteration, and the orientation
+assignment froze or crawled: 0/4 and 1/9 restarts converged. The alignment
+is starved of the shells beyond FSC=0.143 where the merged reference still
+carries signal, an underfitting of the data rather than an overfitting
+(the sigma2-weighted objective, the stochastic assignment and the
+evidence-limited NU reference protect against the latter). With the
+regularized pair placed at `fsc/1.5` (2026-09-16, `Sep16_10of10`) the band
+was never pinned, the FSC gained +0.47 A per stage-6 iteration against
++0.19 A, and 10/10 restarts converged; the uncapped July 2026 ladder led by
+1.55x (median, up to 1.9x) and froze 2 of 10. The finest retained rung of
+the ladder cut at `fsc/1.5` leads by 1.25-1.5x, always, with no constant
+floor: the 4.5 A floor of the 2026-09-16 fix held stages 7-8 below their
+crop Nyquist (4.14/3.88 A) and band-limited the finals at 4.44-4.50 A.
+Independent halves (`nonuniform`) use the same rule; the ed36eb4c
+refine3D_auto of 2026-09-11, whose regularized pair was ignored within the
+ladder and whose rungs handed off up to the cap, produced the reference
+PfCRT map.
 
 `incrreslim` retains its classical matcher meaning: on an FSC-driven matching
 path it permits ten shells beyond the selected FSC criterion. The NU-selected
@@ -510,8 +541,8 @@ the per-stage `lpstages` limit, or the FSC=0.5 stage-boundary promotion of it
 (bounded by the ladder's hard fine bound `LPSTOP_BOUNDS(1)`, 4.5 A). In the
 NU stages (`NU_FILTER_STAGE` onwards, `nonuniform_lpset`)
 the controller passes no `lpstop` unless the user set one (2026-09-08, the
-July policy restored): the handoff is already bounded by the bank (section 8:
-the regularized member's FSC=0.143 extent), and a ceiling on top of it only pins the map -- with
+July policy restored): the handoff is the finest member of the bank (section 8:
+the finest rung under the `fsc/1.5` cut), and a ceiling on top of it only pins the map -- with
 the 4.5 A bound in place the PfCRT handoff asked for 4.14/3.98 A, matching
 was clamped to 4.5 A and the FSC sat at exactly 4.50 A for 30 iterations. An
 NU-selected project limit in those stages may therefore promote matching

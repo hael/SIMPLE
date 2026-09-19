@@ -14,8 +14,8 @@
 !  designated by Euclidean geometry on the density envelope's dilation ring
 !  for an envelope-constrained base pair, with the density envelope as the
 !  fallback background), synthesis of the filtered even/odd/merged
-!  references, the local-resolution map, and the finest populated selected
-!  label as the matching low-pass handoff. Both reconstruction backends call
+!  references, the local-resolution map, and the finest member of the bank
+!  as the matching low-pass handoff. Both reconstruction backends call
 !  it (policy 2026-09-06): the PCG path mirrors gridding and carries no
 !  prior of its own beyond the P_tau replay.
 module simple_nu_state_filter
@@ -26,6 +26,7 @@ use simple_parameters,       only: parameters
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
+    &get_nu_filter_bank_finest_lp, &
     &write_nu_local_resolution_map, write_nu_evidence_envmask, &
     &set_nu_evidence_null_shell, set_nu_solvent_envelope
 implicit none
@@ -52,14 +53,16 @@ contains
     !! vol_base_even/odd: the unregularized pair (consumed and killed here).
     !! vol_aux_even/odd:  the ML-regularized pair when l_use_aux (consumed and
     !!                    killed here), ignored otherwise.
-    !! res0143:           FSC=0.143 crossing of the base pair: the auxiliary
-    !!                    member's effective resolution (clamped by a set lp)
-    !!                    and the static-bank cap (fsc/NU_BANK_FSC_HEADROOM).
+    !! res0143:           FSC=0.143 crossing of the base pair, the one input of
+    !!                    the bank rule: the ladder is cut at res0143/1.5 and
+    !!                    the auxiliary member carries res0143 as its
+    !!                    resolution (it joins the bank once that is at or
+    !!                    beyond the ladder's finest rung, setup_nu_dmats).
     !! volname/eonames:   the state's merged and even/odd file names; the
     !!                    _nu_filt and _nu_locres products derive from them.
-    !! align_lp:          content extent of the finest populated selected
-    !!                    label (0 when none), the matching low-pass handoff
-    !!                    for the next iteration.
+    !! align_lp:          the finest member of the bank (0 when none), the
+    !!                    matching low-pass handoff for the next iteration, the
+    !!                    same rule in every workflow.
     subroutine nonuniform_filter_state( params, state, vol_base_even, vol_base_odd, &
             &vol_aux_even, vol_aux_odd, l_use_aux, res0143, volname, eonames, align_lp, timings, &
             &base_support, l_base_constrained )
@@ -107,15 +110,16 @@ contains
             if( trim(params%automsk) == 'nu' ) &
                 &call density_envelope%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT), del_if_exists=.true.)
         endif
-        ! candidate bank from the base pair (the static ladder capped at
-        ! fsc/NU_BANK_FSC_HEADROOM), auxiliary member from the ML pair
-        ! beside the finest retained rung
+        ! candidate bank from the base pair (the static ladder cut at
+        ! fsc/NU_BANK_FSC_HEADROOM); the ML pair carries its FSC=0.143
+        ! resolution and joins beside the finest rung once that is at or
+        ! beyond it (setup_nu_dmats, one rule for every workflow)
         bank_cap_res = res0143
         if( l_use_aux )then
             allocate(nu_aux_even(1), nu_aux_odd(1))
             call nu_aux_even(1)%copy(vol_aux_even)
             call nu_aux_odd(1)%copy(vol_aux_odd)
-            aux_resolution = nu_aux_effective_resolution()
+            aux_resolution = res0143
             call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
                 &nu_aux_even, nu_aux_odd, fsc_res=bank_cap_res)
         else
@@ -194,18 +198,6 @@ contains
 
     contains
 
-        real function nu_aux_effective_resolution() result(aux_res)
-            aux_res = res0143
-            if( params%l_lpset .and. params%lp > TINY )then
-                if( NU_DEV_OUTPUT .and. params%part == 1 .and. aux_res > params%lp + TINY )then
-                    write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                        &'>>> NU auxiliary effective resolution clamped by matching low-pass: FSC ', &
-                        &aux_res, ' A; matching LP ', params%lp, ' A'
-                endif
-                aux_res = min(aux_res, params%lp)
-            endif
-        end function nu_aux_effective_resolution
-
         subroutine write_nonuniform_outputs()
             type(string) :: eonames_nu(2), volname_nu, locres_name
             eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
@@ -227,27 +219,29 @@ contains
         end subroutine write_nonuniform_outputs
 
         subroutine record_nu_alignment_lowpass_limit()
-            real    :: selected_lp, raw_lp
+            real    :: raw_lp, populated_lp
             integer :: n_signal
-            ! No gate relative to the whole mask (min_assigned_pct=0): the 5%
-            ! support gate introduced 2026-08-30 capped the PfCRT matching band
-            ! at 5-6 A against a 4.1 A map because the coarsest background
-            ! clamp is a large share of the mask. The floor is relative to the
-            ! SIGNAL voxels instead (2026-09-13): the finest label whose
-            ! cumulative population reaches NU_ALIGN_LP_MIN_SIGNAL_PCT of the
-            ! voxels not under the solvent clamp. The raw finest label let 54
-            ! voxels of 412k set the band at 3.37 A against a 3.62 A map
-            ! (aldolase), and seeded remnants of 4-36 voxels flipped it from
-            ! iteration 2 on.
-            raw_lp      = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
-            selected_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
+            ! The handoff is the finest member of the bank (2026-09-19, Hans):
+            ! the finest rung retained under the fsc/1.5 cut, or the
+            ! ML-regularized pair once its FSC=0.143 resolution is at or beyond
+            ! the ladder's finest rung. One rule for every workflow, no
+            ! dependence on which labels won voxels. Records: the raw finest
+            ! populated label let 54 voxels of 412k set the band at 3.37 A
+            ! against a 3.62 A map (aldolase, 2026-09-13); the 1% signal-voxel
+            ! floor that replaced it landed on the regularized pair at its own
+            ! FSC=0.143 and handed the band back to the FSC (PfCRT 2026-09-16/
+            ! 18, 0/4 and 1/9 restarts), while a band 1.5x ahead of the FSC
+            ! converged 10/10 (2026-09-16). Both population statistics remain
+            ! as diagnostics on the handoff line.
+            align_lp     = get_nu_filter_bank_finest_lp()
+            raw_lp       = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
+            populated_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
                 &min_signal_pct=NU_ALIGN_LP_MIN_SIGNAL_PCT, n_signal=n_signal)
-            if( selected_lp <= TINY ) return
-            align_lp = selected_lp
             if( params%part == 1 )then
-                write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A)') &
-                    &'>>> NU MATCHING LOW-PASS HANDOFF: STATE ', state, ', ', selected_lp, &
-                    &' A (raw finest label ', raw_lp, ' A)'
+                write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A,F6.2,A)') &
+                    &'>>> NU MATCHING LOW-PASS HANDOFF: STATE ', state, ', ', align_lp, &
+                    &' A (finest bank member; finest label with 1% of signal voxels ', populated_lp, &
+                    &' A, raw finest label ', raw_lp, ' A)'
             endif
         end subroutine record_nu_alignment_lowpass_limit
 

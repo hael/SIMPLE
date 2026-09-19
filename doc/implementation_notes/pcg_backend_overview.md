@@ -162,8 +162,10 @@ other consumers (postprocess of non-PCG products, the abinitio final rec).
 The NU competition is assembly-owned and identical on both backends
 (`simple_nu_state_filter`, 2026-09-16, the `nu_refine` shell walk
 retired; the generated ladder withdrawn 2026-09-18): the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18. The
-matching low-pass handoff is the finest selected label with at least 1% of
-the signal voxels at it or finer. The NU objective always runs on the
+matching low-pass handoff is the finest member of the bank: the finest rung
+under the `fsc/1.5` cut, or the regularized pair once its FSC=0.143 is at or
+beyond the ladder's finest rung (2026-09-19; the pair joins the bank only
+then). The NU objective always runs on the
 spherical `mskdiam` support.
 
 Under `automsk=yes` the NU evidence envelope (`nu_envmask3D_stateNN.mrc`,

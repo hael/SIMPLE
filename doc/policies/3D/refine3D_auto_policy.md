@@ -29,7 +29,7 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `incrreslim=no`
 
 NU volume filtering is independent of `incrreslim`. Since 2026-09-18 there
-is one NU competition for every workflow: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18 (`nonuniform_filtering_policy.md` sections 8, 10, 12). The
+is one NU competition for every workflow: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest rung, competing with it at zero prior cost once its FSC=0.143 is at or beyond that rung (`ml_reg=yes`; 2026-09-19), and the finest member of the bank as the matching handoff -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18 (`nonuniform_filtering_policy.md` sections 8, 10, 12). The
 `nu_refine=yes` shell walk that refine3D_auto used until 2026-09-16, and
 the generated dense ladder that replaced it until 2026-09-18, are gone.
 The matching low-pass handoff is the finest selected label with at least 1%

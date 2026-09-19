@@ -547,10 +547,10 @@ contains
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
         ! Matching-band ceiling. Non-NU stages match at the (possibly
         ! promoted) stage limit, so the ceiling equals it. NU stages match at
-        ! the finest-label handoff with NO ceiling (July 2026 policy restored
-        ! 2026-09-08): the handoff is bounded by the FSC-anchored candidate
-        ! bank (nonuniform_filtering_policy.md section 8), so a ceiling here
-        ! only pins the map. PfCRT record 2026-09-08: with the ladder's 4.5 A
+        ! the NU handoff, the finest member of the FSC-cut candidate bank
+        ! (nonuniform_filtering_policy.md sections 8 and 12), with NO ceiling
+        ! (July 2026 policy restored 2026-09-08): the handoff is bounded by the
+        ! bank's fsc/1.5 cut, so a ceiling here only pins the map. PfCRT record 2026-09-08: with the ladder's 4.5 A
         ! bound the handoff asked for 4.14 A (stage 7) and 3.98 A (stage 8),
         ! matching was clamped to 4.5 A and the FSC sat at exactly 4.50 A for
         ! 30 iterations; the July runs matched at 4.14/3.98 A and reached

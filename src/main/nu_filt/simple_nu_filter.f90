@@ -15,9 +15,14 @@
 ! ed36eb4c's abinitio3D, with the auxiliary competing instead of replacing,
 ! shared by refine3D_auto and postprocess_nu.
 !
-! The finest of the auxiliary pairs supplied through setup_nu_dmats is
-! appended to the bank as its last label, at the finest retained rung's Potts
-! coordinate; it hands off its own resolution when it wins the handoff.
+! One rule for every workflow (2026-09-19), with the base pair's FSC=0.143
+! resolution as the only input: the ladder is cut at fsc/NU_BANK_FSC_HEADROOM
+! (rungs at or coarser than the cut, never fewer than two); the ML-regularized
+! pair, carrying its FSC=0.143 resolution, joins the bank the moment that is
+! at or beyond the ladder's finest rung at the box, appended as the last
+! label at the finest rung's Potts coordinate; and the finest member of the
+! bank (the last label) is the matching low-pass handoff for the next
+! iteration. Which labels win voxels decides the filter, never the band.
 !
 module simple_nu_filter
 use simple_core_module_api
@@ -66,7 +71,11 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 ! standalone nu_filt3D program) the bank is uncapped. The shell walk that
 ! used to extend the bank beyond the ladder (nu_refine=yes) was removed on
 ! 2026-09-18; the static ladder plus the auxiliary pair is the only
-! mechanism, in every workflow.
+! mechanism, in every workflow. The finest retained rung is also the
+! matching band (2026-09-19): the cut bounds the lead of the band over the
+! FSC, 1.25-1.5x with this ladder (the uncapped July 2026 ladder led by up
+! to 2x and froze 2 of 10 PfCRT restarts; a band at the FSC itself starved
+! the alignment and converged 1 of 9).
 real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
 ! Hard cap on mask-packed distance-matrix columns retained for NU optimization.
 integer,          parameter   :: NU_DMAT_CANDIDATE_CAP                = 24
@@ -175,7 +184,10 @@ real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 ! 40% (aldolase: 157k of 412k), which is why it pinned PfCRT at 5-6 A. The raw
 ! finest label (0%) let 54 voxels of 412k set the band at 3.37 A against a
 ! 3.62 A map, and from iteration 2 on 4-36 seeded remnant voxels flipped it
-! between 3.52 and 3.57 A while cFAR decayed 0.70 -> 0.55.
+! between 3.52 and 3.57 A while cFAR decayed 0.70 -> 0.55. Since 2026-09-19
+! the handoff is the finest member of the bank and both population
+! statistics (this floor and the raw finest label) are diagnostics on the
+! handoff line only (the flex_pca report still quotes the floor).
 real,             parameter   :: NU_ALIGN_LP_MIN_SIGNAL_PCT   = 1.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 ! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,

@@ -46,7 +46,7 @@ contains
         type(image), allocatable :: aux_even(:), aux_odd(:)
         type(string)            :: vol_out, fname, fname_vol, fname_even_unfil, fname_odd_unfil, fname_even, fname_odd
         real, allocatable       :: corrs(:), res(:)
-        real                    :: fsc05, fsc0143, handoff_lp, raw_lp, smpd
+        real                    :: fsc05, fsc0143, handoff_lp, populated_lp, raw_lp, smpd
         integer                 :: n_signal, state, box, ldim(3), nptcls
         logical                 :: l_aux
         ! operates on the project like postprocess: the state's volume from
@@ -111,20 +111,24 @@ contains
         if( fsc0143 <= TINY .or. fsc0143 <= 2.*smpd + TINY ) &
             &THROW_HARD('the half-map FSC never falls below 0.143: are the _even_unfil/_odd_unfil halves independent? postprocess_nu')
         if( l_aux )then
-            ! the refinement's filter competition: static ladder capped at
-            ! fsc/1.5 plus the regularized pair beside the finest rung;
-            ! its products (_nu_filt references, _nu_locres), the assignment
-            ! table and the matching handoff are exactly what a refinement
-            ! iteration would use (2026-09-18)
+            ! the refinement's filter competition, the one rule of every
+            ! workflow: static ladder cut at fsc/1.5, the regularized pair
+            ! beside the finest rung once its FSC=0.143 is at or beyond it,
+            ! the finest bank member as the matching handoff; the products
+            ! (_nu_filt references, _nu_locres), the assignment table and the
+            ! handoff are exactly what a refinement iteration would use
+            ! (2026-09-18/19)
             write(logfhandle,'(A)') '>>> POSTPROCESS_NU: FILTER COMPETITION WITH THE ML-REGULARIZED PAIR'
             call setup_nu_dmats(even, odd, params%mskdiam, [fsc0143], aux_even, aux_odd, fsc_res=fsc0143)
             call optimize_nu_cutoff_finds()
             call print_nu_filtmap_lowpass_stats()
-            raw_lp     = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
-            handoff_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
+            handoff_lp   = get_nu_filter_bank_finest_lp()
+            raw_lp       = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
+            populated_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
                 &min_signal_pct=NU_ALIGN_LP_MIN_SIGNAL_PCT, n_signal=n_signal)
-            write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> NU MATCHING LOW-PASS HANDOFF: ', handoff_lp, &
-                &' A (raw finest label ', raw_lp, ' A)'
+            write(logfhandle,'(A,F6.2,A,F6.2,A,F6.2,A)') '>>> NU MATCHING LOW-PASS HANDOFF: ', handoff_lp, &
+                &' A (finest bank member; finest label with 1% of signal voxels ', populated_lp, &
+                &' A, raw finest label ', raw_lp, ' A)'
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             ! every product of this program ends in PPROC_NU_SUFFIX: the
             ! competition's references <vol>_even/_odd_ref_pproc_nu and

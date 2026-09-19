@@ -707,3 +707,45 @@ bias median/MAD and the assignment table for collapse. Summary lines
 `imgkind=unfil` (classical route from the unfiltered pair average) for
 the re-reconstruct/re-postprocess matrix on the completed runs.
 
+**2026-09-19 -- abinitio3D robustness: one bank rule for every workflow;
+the matching band is the finest member of the bank.** Log analysis of every
+PfCRT set (record: `claude/pfcrt_abinitio_band_lead_analysis.md`; note that
+the `MATCHING LOW-PASS LIMIT (THIS ITERATION)` readout is the handoff for
+the NEXT iteration): with the regularized member handing off its FSC=0.143
+(b9cc8e31 `current_broken` 0/4; 4ff3a1f6 `latest5` 1/9, the ed36eb4c
+restoration of 09-18 had dropped the 09-16 headroom placement) the band
+equals the FSC in 41-42% of stage-6 iterations, the crossing advances
+about one shell per iteration and the assignment crawls or freezes; with
+the member at `max(fsc/1.5, 4.5)` (6a41a40f `Sep16_10of10`) the band was
+pinned in 4% of iterations, +0.47 A per iteration, 10/10 converged, and
+the 4.5 A floor held stages 7-8 below their crop Nyquist (4.14/3.88 A).
+July's uncapped rung handoff led by 1.55x median (p90 1.88) and froze 2/10
+in stage 6. `latest4` (281ca643, index Potts coordinate): the member one
+prior step from the finest rung won <= 0.6% of voxels, the handoff fell
+back to the rungs, 3/9. Replacement versus competition is not the
+separator (replacement at FSC=0.143 failed identically, iteration 86 of
+`current_broken`: MLreg 3.9%, band 8.62 = FSC). Stages 1-5 end alike in
+Sep16 and latest5 and better than July's. Hans's reading, adopted: the
+band at the FSC starves the alignment (underfitting); the objective's
+sigma2 weighting, the stochastic assignment and the evidence-limited NU
+reference guard against overfitting, so the 09-16 "inflated FSC" story is
+withdrawn. Rule (Hans): the ladder cut at fsc/1.5; the ML-regularized pair
+carries its FSC=0.143 and joins beside the finest rung the moment that is
+at or beyond the ladder's finest rung at the box (`setup_nu_dmats`; within
+the ladder the rungs compete alone, since the cut always keeps a rung
+between fsc/1.5 and fsc); the finest member of the bank is the handoff
+(`get_nu_filter_bank_finest_lp`, `record_nu_alignment_lowpass_limit` and
+postprocess_nu), the 1% signal-voxel floor and the raw finest label are
+diagnostics on the handoff line. Same code path for abinitio3D,
+refine3D_auto, refine3D_states, classify3D_refs and postprocess_nu; the
+interim lpset-only cap placement of the same morning was superseded before
+any run. Band per FSC on the PfCRT boxes: 10.7 -> 7.96, 8.9 -> 5.97,
+7.6 -> 5.97, 6.9 -> 5.01, 6.0 -> 3.98 (or the crop Nyquist 4.44/4.14),
+5.0 -> 3.98, 4.03 -> 3.98, 3.93 -> 3.93 (pair admitted). Expected signature
+(Hans's rerun): handoff 5.97 A at an 8.9 A FSC in the first stage-6
+iteration, `NU AUXILIARY MEMBER ... within the ladder ... the rungs compete
+alone` throughout the lpset stages on PfCRT, FSC=0.143 at the stage-6
+Nyquist within ~10 iterations, overlap < 0.5 through stage 6, stages 7-8
+climbing to 4.1/3.9 A. refine3D_auto on PfCRT: the pair admitted only once
+the FSC reaches 3.98 A. Not changed, on record: the stage early-stop
+(overlap 0.9/0.95) cannot tell a frozen assignment from convergence.

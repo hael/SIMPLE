@@ -62,30 +62,47 @@ contains
                 endif
             end do
             if( aux_replacement_idx > 0 )then
-                ! The auxiliary (ML-regularized) pair is APPENDED as one more
-                ! member of the bank beside the finest retained rung, never in
-                ! its place (2026-09-18, Hans): the two compete voxel by voxel
-                ! under the same unary, and the auxiliary shares the finest
-                ! rung's Potts coordinate (setup_nu_candidate_coords), so
-                ! replacing a finest-rung voxel by the regularized pair costs
-                ! the prior nothing -- the unary alone decides. Its slot has
-                ! its own Fourier index so the label reports its resolution;
-                ! its filtered pair is never cached (the unary uses the
-                ! regularized halves directly, apply/stats skip it).
-                call stash_aux_volumes(aux_even(aux_replacement_idx:aux_replacement_idx), &
-                    &aux_odd(aux_replacement_idx:aux_replacement_idx))
+                ! One rule for every workflow (2026-09-19, Hans): the
+                ! ML-regularized pair joins the bank the moment its FSC=0.143
+                ! resolution is at or beyond the ladder's finest rung at this
+                ! box, APPENDED as one more member beside that rung, never in
+                ! its place (2026-09-18): the two compete voxel by voxel under
+                ! the same unary, and the auxiliary shares the finest rung's
+                ! Potts coordinate (setup_nu_candidate_coords), so replacing a
+                ! finest-rung voxel by the regularized pair costs the prior
+                ! nothing -- the unary alone decides. Its slot has its own
+                ! Fourier index so the label reports its resolution; its
+                ! filtered pair is never cached (the unary uses the regularized
+                ! halves directly, apply/stats skip it). Within the ladder the
+                ! rungs compete alone: the finest retained rung is then finer
+                ! than the pair (the cap keeps a rung between fsc/1.5 and fsc),
+                ! and the pair would only hand the matching band back to the
+                ! FSC (PfCRT 2026-09-16/18, 0/4 and 1/9 restarts). Appended or
+                ! not, the last label is the finest member of the bank and is
+                ! the matching low-pass handoff.
                 aux_find = max(1, min(box/2, calc_fourier_index(aux_resolutions(aux_replacement_idx), box, smpd)))
-                cutoff_finds_tmp = [cutoff_finds, aux_find]
-                call move_alloc(cutoff_finds_tmp, cutoff_finds)
-                allocate(bwfilters_tmp(box, size(cutoff_finds)), source=0.)
-                bwfilters_tmp(:, 1:size(cutoff_finds)-1) = bwfilters
-                call move_alloc(bwfilters_tmp, bwfilters)
-                nu_aux_replacement_label = size(cutoff_finds)
-                nu_aux_replacement_resolution = aux_resolutions(aux_replacement_idx)
-                if( nu_l_report )then
-                    write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                        &'>>> NU AUXILIARY MEMBER: ML-regularized pair at ', nu_aux_replacement_resolution, &
-                        &' A competes beside the finest rung at ', finest_lp, ' A'
+                if( aux_find >= cutoff_finds(size(cutoff_finds)) )then
+                    call stash_aux_volumes(aux_even(aux_replacement_idx:aux_replacement_idx), &
+                        &aux_odd(aux_replacement_idx:aux_replacement_idx))
+                    cutoff_finds_tmp = [cutoff_finds, aux_find]
+                    call move_alloc(cutoff_finds_tmp, cutoff_finds)
+                    allocate(bwfilters_tmp(box, size(cutoff_finds)), source=0.)
+                    bwfilters_tmp(:, 1:size(cutoff_finds)-1) = bwfilters
+                    call move_alloc(bwfilters_tmp, bwfilters)
+                    nu_aux_replacement_label = size(cutoff_finds)
+                    nu_aux_replacement_resolution = aux_resolutions(aux_replacement_idx)
+                    if( nu_l_report )then
+                        write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                            &'>>> NU AUXILIARY MEMBER: ML-regularized pair at ', nu_aux_replacement_resolution, &
+                            &' A is beyond the ladder; competes beside its finest rung at ', finest_lp, ' A'
+                    endif
+                else
+                    if( nu_l_report )then
+                        write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                            &'>>> NU AUXILIARY MEMBER: ML-regularized pair at ', aux_resolutions(aux_replacement_idx), &
+                            &' A is within the ladder (finest rung ', finest_lp, ' A); the rungs compete alone'
+                    endif
+                    call cleanup_aux_bank
                 endif
             else
                 call cleanup_aux_bank
@@ -266,8 +283,11 @@ contains
         ny = ldim(2)
         nz = ldim(3)
         n_base       = size(cutoff_finds)
-        ! dmats_mask has one column per retained label. If an auxiliary pair is
-        ! eligible, it backs the finest label rather than appending a new one.
+        ! dmats_mask has one column per retained label; the auxiliary pair, if
+        ! admitted, is the appended last label and the finest member by
+        ! construction (setup_nu_dmats admits it only at or beyond the finest
+        ! rung), so the level loop below can walk labels by index as coarse to
+        ! fine.
         n_candidates = size(dmats_mask, 2)
         if( .not.allocated(raw_dmats_mask) ) THROW_HARD('raw_dmats_mask not allocated; run setup_nu_dmats before optimize_nu_cutoff_finds')
         if( allocated(filtmap) ) deallocate(filtmap)
