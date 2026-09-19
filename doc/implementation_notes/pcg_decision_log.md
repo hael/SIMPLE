@@ -670,9 +670,10 @@ solvent class's spread); `maxits_ml` defaults to 2 with the prior on
 the closed form cannot see a real-space term. Weight volumes written per
 half (`pcg_solvent_weight_stateNN_even|odd.mrc`, overwritten every
 iteration, never accumulated), even/odd correlation and solvent-fraction
-gap logged (the half-independence check). abinitio3D:
-the key rides with the PCG stages only. Support, base pair, FSC oracle and NU
-bank inputs untouched on purpose: the resolution claim carries no extra
+gap logged (the half-independence check). In abinitio3D the key is withheld
+through stages 3-7 and passed only to stage 8; shortened workflows never use
+the prior. Support, base pair, FSC oracle and NU bank inputs are untouched on
+purpose: the resolution claim carries no extra
 mask and the prior's effect is confined to the shipped regularized pair.
 No low-pass guard on `w`: a ridge modulator, unlike a multiplicative
 mask, injects no spectrum, and the statistic is band-limited at 2 x res

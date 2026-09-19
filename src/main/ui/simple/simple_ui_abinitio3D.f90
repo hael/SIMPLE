@@ -50,7 +50,8 @@ contains
         call abinitio3D%add_input(UI_PARM, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
         &'Soft solvent prior on the regularized (shipped) PCG solve: a real-space ridge pulling solvent toward zero, '//&
         &'solvent identified from the base pair at working resolution (smoothed absolute density, Otsu, logistic weight); '//&
-        &'the support, the base pair and the FSC are untouched(yes|no){no}', '', .false., 'no', group="search", &
+        &'enabled only in abinitio3D stage 8; shortened workflows do not use it; the support, the base pair and '//&
+        &'the FSC are untouched(yes|no){no}', '', .false., 'no', group="search", &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &

@@ -270,9 +270,9 @@ contains
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
         endif
-        ! the solvent prior follows the stage's backend: forwarded on a PCG
-        ! stage, removed otherwise (the child cline is a copy of the parent
-        ! command line and may carry the user's pcg_solvent=yes)
+        ! The stage controller decides whether the solvent prior is active.
+        ! Forward it only when that stage is PCG; otherwise remove the user's
+        ! top-level pcg_solvent=yes inherited by copied child command lines.
         l_pcg_stage = cline_refine3D%defined('rec_backend')
         if( l_pcg_stage ) l_pcg_stage = cline_refine3D%get_carg('rec_backend') .eq. 'pcg'
         if( l_pcg_stage .and. cline_refine3D%defined('pcg_solvent') )then

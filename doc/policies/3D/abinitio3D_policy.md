@@ -91,6 +91,8 @@ Stage policy includes:
 - optional trailing reconstruction by stage and multivol mode
 - staged NU filtering from `NU_FILTER_STAGE`
 - staged automasking only from `AUTOMSK_STAGE`
+- an explicitly requested PCG solvent prior only in stage 8; shortened
+  workflows never activate it
 
 The downscaled particle cache is a 2D-only feature: `abinitio3D` rejects
 `cache=yes`, and each stage uses its own crop from the low-pass/downscaling
@@ -470,6 +472,9 @@ For the final ML-regularized stage, final reconstruction preserves the
 On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
 replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
 controllers were removed on 2026-09-06.
+When `pcg_solvent=yes`, the staged controller withholds the soft solvent prior
+from stages 3-7 and enables it only in stage 8. A workflow that stops before
+stage 8 does not use the prior.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged
