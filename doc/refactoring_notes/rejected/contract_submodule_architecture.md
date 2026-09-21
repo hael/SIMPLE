@@ -2,7 +2,12 @@
 
 Date: 2026-09-14
 
-Status: proposal, no production refactoring started
+**Status:** Rejected 2026-09-21 after measurement (written 2026-09-14). Kept
+for the record; not a plan. The commander layer was converted on a branch and
+built against master: clean builds were 16% faster, body edits and core
+interface changes not at all, which does not justify the added structure.
+Section 11 has the numbers. The text above it is left as written; read it
+with this header.
 
 Purpose: one set of rules, explainable in five minutes, that gives SIMPLE a
 clean layered architecture and fast clean and incremental builds, without
@@ -270,3 +275,52 @@ directories between layers (only the dependency direction is enforced, the
 present tree already nearly satisfies it), and the domain-model migration in
 `staged_domain_driven_design_refactor.md`, which this proposal makes cheaper
 but does not depend on.
+
+## 11. Evaluation and rejection (2026-09-21)
+
+All 56 modules in `src/main/commanders` were converted by
+`scripts/split_contract.py` on the branch `contract-submodules` (worktree
+`~/src/SIMPLE-contract`, head 72bbc0ac6). Each contract imported only
+`cmdline` and `commander_base`; bodies moved to `<module>_impl.f90`. Master
+and branch were built with `scripts/profile_build.sh` on the reference Mac
+(arm64, GCC 16.2.0, Release, `BUILD_TESTS=ON`, Make generator, `make -j24`).
+The generator was kept as Make by decision; section 7 was not evaluated.
+
+| scenario | master | branch |
+|---|---|---|
+| clean build, wall | 142.0 / 142.9 / 142.3 s | 120.5 / 118.8 s (-16%) |
+| clean build, compile CPU | 1338 s | 1396 s (+4%) |
+| edit a commander body (`touch`) | 1 compile, 24.9 s | 1 compile (same) |
+| interface change in `commanders_refine3D` (`probe`) | 7 files, 34.7 s | same 7 + contract, 24.8 / 25.6 s |
+| interface change in `oris` (`probe`) | 643 files, 124.5 s | same 643 + 56 contracts, 106.3 / 101.4 s |
+| `build/modules` | 265 MB | 237 MB (target was < 40 MB) |
+| largest `.mod` | 685 KB | 556 KB (target was < 100 KB) |
+
+Why the claims in sections 1, 4 and 5 did not hold:
+
+- Body edits were already one compile. CMake's Makefile generator does not
+  recompile users of a byte-identical `.mod`, and a body edit does not change
+  it (section 9 notes this, but section 5's "one file instead of the 68
+  users" contradicts it). About 10 s of the 25 s for such an edit is linking
+  and regenerating `simple_ui_default_values`, not compiling.
+- Rule 3 lets every implementation `use` the umbrella, so a core interface
+  change recompiles every implementation: the same 643 files on both trees.
+  506 of the 699 files recompiled on the branch never mention `ori`/`oris`;
+  they recompile only because `simple_core_module_api` re-exports it.
+- The measured gains are purely scheduling: users compile against a 0.2-0.5 s
+  contract instead of waiting behind a 15 s body. Mean clean-build
+  parallelism rose from 9.5 to 11.9 on 24 cores. A critical-path simulation
+  (module graph weighted by measured compile times) over-predicted the
+  measured gain by about 20% and puts a conversion of all of `src/main`
+  (375 modules) at roughly 95-105 s clean, with body edits and core changes
+  unchanged.
+- The cost was visible immediately: 56 extra files, each commander's API and
+  body in separate files, commander bodies 5% more compile CPU, and
+  `scripts/default_audit.py` silently losing every commander's defaults until
+  it was taught `module procedure`.
+
+Cheaper levers found along the way, none requiring a source restructuring:
+building without tests day to day (test programs compile in the last ~12 s
+of the master build; `profile_build.sh clean --no-tests`, not yet measured);
+the ~10 s link and UI-defaults step that follows every edit; and, if core
+cascades matter, the umbrella re-export itself.
