@@ -15,6 +15,13 @@
 #       touch <file> in an existing profiled build tree, make -jN, and report
 #       exactly which sources recompiled and how long it took.
 #
+#   scripts/profile_build.sh probe  <file> [--label NAME] [-j N]
+#       Interface change: insert a public named constant into the module that
+#       <file> declares (after its first `implicit none`), rebuild, and report
+#       exactly which sources recompiled; then restore <file> and rebuild
+#       quietly so the tree is back in its original state. A plain `touch`
+#       never changes a .mod and so never cascades; this does.
+#
 #   scripts/profile_build.sh report <profile_dir>
 #       Recompute summary.txt from a profile directory's compile.tsv.
 #
@@ -201,6 +208,50 @@ cmd_touch() {
 }
 
 # ------------------------------------------------------------------------------
+# probe (interface change)
+# ------------------------------------------------------------------------------
+cmd_probe() {
+    [ $# -ge 1 ] || die "probe needs a file"
+    local file="$1"; shift
+    local label="" jobs=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --label) label="$2"; shift 2 ;;
+            -j)      jobs="$2"; shift 2 ;;
+            -j*)     jobs="${1#-j}"; shift ;;
+            *) die "unknown option for probe: $1" ;;
+        esac
+    done
+    [ -n "$jobs" ] || jobs=$(ncpu)
+    [ -f "$file" ] || file="$ROOT/$file"
+    [ -f "$file" ] || die "no such file: $1"
+    [ -f "$BUILD/CMakeCache.txt" ] || die "no build tree; run 'clean' first"
+    grep -q "CMAKE_Fortran_COMPILER_LAUNCHER.*profile_build_launcher" "$BUILD/CMakeCache.txt" \
+        || die "build tree was not configured by this script; run 'clean' first"
+    grep -qi '^[[:space:]]*implicit[[:space:]]*none' "$file" || die "no implicit none in $file"
+    [ -n "$label" ] || label="probe_$(basename "$file" | sed 's/\.[fF]90$//')"
+    local prof; prof=$(new_profdir "$label")
+
+    ( cd "$BUILD" && make -j"$jobs" > "$prof/make_pre.log" 2>&1 ) || die "pre-build failed (see $prof/make_pre.log)"
+    cp -p "$file" "$prof/probe_original.f90"
+    perl -i -pe 'if (!$done && /^\s*implicit\s+none/i) { $_ .= "integer, parameter, public :: PROFILE_BUILD_PROBE = 1\n"; $done = 1 }' "$file"
+    : > "$LIVELOG"
+
+    echo "build_profile: probe ${file#$ROOT/} -> $prof (make -j$jobs)"
+    timed_make "$jobs" "$prof" 'Building|Linking|[Ee]rror'
+    cp "$LIVELOG" "$prof/compile.tsv"
+    cp -p "$prof/probe_original.f90" "$file"
+    touch "$file"
+    echo "build_profile: restoring ${file#$ROOT/} and rebuilding"
+    ( cd "$BUILD" && make -j"$jobs" > "$prof/make_restore.log" 2>&1 ) || echo "build_profile: WARNING restore build failed (see $prof/make_restore.log)"
+    write_meta "$prof" "probe" "$WALL" "$jobs" "probed:      ${file#$ROOT/}"
+    write_summary "$prof"
+    echo
+    echo "profile written to: $prof"
+    return "$RC"
+}
+
+# ------------------------------------------------------------------------------
 # compare
 # ------------------------------------------------------------------------------
 cmd_compare() {
@@ -240,7 +291,8 @@ WALL=""; RC=1
 case "${1:-}" in
     clean)   shift; cmd_clean "$@" ;;
     touch)   shift; cmd_touch "$@" ;;
+    probe)   shift; cmd_probe "$@" ;;
     report)  shift; [ $# -eq 1 ] || die "report needs a profile directory"; write_summary "$1" ;;
     compare) shift; cmd_compare "$@" ;;
-    *)  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    *)  awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 1 ;;
 esac
