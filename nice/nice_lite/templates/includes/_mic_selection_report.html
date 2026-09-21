@@ -44,6 +44,29 @@
         for (const img of document.getElementsByClassName(`micimg-${imgtype}`)) {
             img.classList.toggle("hidden", !element.checked);
         }
+
+        for (const container of document.querySelectorAll(".miccontainer")) {
+            const micimg = container.querySelector(".micimg-mic");
+            const pspecimg = container.querySelector(".micimg-pspec");
+            if (!micimg || !pspecimg) continue;
+
+            const micVisible = !micimg.classList.contains("hidden");
+            const pspecVisible = !pspecimg.classList.contains("hidden");
+            const bothVisible = micVisible && pspecVisible;
+
+            const fullWidth = Number(container.dataset.fullwidth);
+            if (fullWidth > 0) {
+                container.style.width = (bothVisible ? fullWidth : fullWidth / 2) + "px";
+            }
+
+            micimg.classList.toggle("w-full", micVisible && !bothVisible);
+            micimg.classList.toggle("w-1/2", bothVisible);
+            micimg.classList.toggle("mr-1", bothVisible);
+
+            pspecimg.classList.toggle("w-full", pspecVisible && !bothVisible);
+            pspecimg.classList.toggle("w-1/2", bothVisible);
+        }
+
         lastinteraction = Date.now();
     };
 
