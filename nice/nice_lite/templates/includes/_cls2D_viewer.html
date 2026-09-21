@@ -13,12 +13,14 @@
 <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
     {% if "cls2D" in jobstats %}
-        <label for="cls2d-stage-select" class="text-[10px] text-streamlabel px-2">stage</label>
-        <select id="cls2d-stage-select" class="text-[10px] text-streamlabel" onchange="selectClsStage(this)">
-            {% for key in jobstats.cls2D.keys %}
-                <option value="{{ key }}"{% if forloop.last %} selected{% endif %}>{{ key }}</option>
-            {% endfor %}
-        </select>
+        <div class="m-auto">
+            <label for="cls2d-stage-select" class="text-[10px] text-streamlabel px-2">stage</label>
+            <select id="cls2d-stage-select" class="text-[10px] text-streamlabel" onchange="selectClsStage(this)">
+                {% for key in jobstats.cls2D.keys %}
+                    <option value="{{ key }}"{% if forloop.last %} selected{% endif %}>{{ key }}</option>
+                {% endfor %}
+            </select>
+        </div>
     {% endif %} 
 </div>
 <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">

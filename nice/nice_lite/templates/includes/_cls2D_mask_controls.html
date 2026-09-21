@@ -11,29 +11,43 @@
 {% endcomment %}
 {% if batch_mode %}
 <div class="flex flex-2 flex-row justify-center">
-    <div class="text-[11px] text-streamlabel m-2">mask diameter</div>
+    <div class="mskdiamctrl text-[11px] text-streamlabel m-2">mask diameter</div>
     <div class="flex flex-row items-center justify-center">
-        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" style="accent-color:var(--color-streamaccent)"></input>
+        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" class="mskdiamctrl" data-boxsize="{{ jobstats.mskscale|floatformat:0 }}" oninput="updateMskdiam(this)" style="accent-color:var(--color-streamaccent)"></input>
         <input type="hidden" id="selected_mskdiam" value=""/>
-        <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[11px]"></div>
+        <input type="number" min=10 max=1000 step=1 id="current_mskdiam" class="mskdiamctrl w-[40px] pl-[5px] text-[11px] bg-transparent text-right" oninput="updateMskdiamText(this)" onchange="updateMskdiamTextSubmit(this)"/>
+        <div class="mskdiamctrl text-[11px]">Å</div>
+        <label class="inline-flex items-center gap-2 cursor-pointer ml-3">
+            <span class="text-[11px] text-streamlabel">show mask</span>
+            <input type="checkbox" checked class="sr-only peer" onchange="toggleMskOverlay(this)">
+            <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+        </label>
     </div>
 </div>
 {% else %}
 <form class="flex flex-2 flex-row justify-center" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' %}>
     {% csrf_token %}
     <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-    <div class="text-[11px] text-streamlabel m-2">update mask diameter</div>
+    <div class="mskdiamctrl text-[11px] text-streamlabel m-2">update mask diameter</div>
     <div class="flex flex-row items-center justify-center">
-        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)" style="accent-color:var(--color-streamaccent)"></input>
+        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" class="mskdiamctrl" data-boxsize="{{ jobstats.mskscale|floatformat:0 }}" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)" style="accent-color:var(--color-streamaccent)"></input>
         <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
-        <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[11px]"></div>
+        <input type="number" min=10 max=1000 step=1 id="current_mskdiam" class="mskdiamctrl w-[40px] pl-[5px] text-[11px] bg-transparent text-right" oninput="updateMskdiamText(this)" onchange="updateMskdiamTextSubmit(this)"/>
+        <div class="mskdiamctrl text-[11px]">Å</div>
+        <label class="inline-flex items-center gap-2 cursor-pointer ml-3">
+            <span class="text-[11px] text-streamlabel">show mask</span>
+            <input type="checkbox" checked class="sr-only peer" onchange="toggleMskOverlay(this)">
+            <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+        </label>
     </div>
 </form>
 {% endif %}
 <script>
+    let mskOverlayVisible = true;
+
     const drawMask = () => {
         const selectedMskdiam = document.getElementById("selected_mskdiam");
-        if (!selectedMskdiam || selectedMskdiam.value === "") return;
+        if (!selectedMskdiam || selectedMskdiam.value === "" || !mskOverlayVisible) return;
 
         for (const cls2D of document.getElementsByClassName("cls2D")) {
             const canvas = cls2D.getElementsByClassName("mskcanvas")[0];
@@ -58,9 +72,46 @@
         const mskdiam = element.value * 2;
         if (!currentMskdiam || !selectedMskdiam) return;
 
-        currentMskdiam.innerHTML = mskdiam + "Å";
+        currentMskdiam.value = mskdiam;
         selectedMskdiam.value = mskdiam;
         drawMask();
+    };
+
+    const toggleMskOverlay = (element) => {
+        mskOverlayVisible = element.checked;
+        for (const canvas of document.getElementsByClassName("mskcanvas")) {
+            canvas.classList.toggle("hidden", !mskOverlayVisible);
+        }
+        for (const control of document.getElementsByClassName("mskdiamctrl")) {
+            control.classList.toggle("hidden", !mskOverlayVisible);
+        }
+        if (mskOverlayVisible) drawMask();
+    };
+
+    const updateMskdiamText = (element) => {
+        const selectedMskdiam = document.getElementById("selected_mskdiam");
+        const mskdiamSelector = document.getElementById("mskdiam_selector");
+        if (!selectedMskdiam || !mskdiamSelector) return;
+
+        const mskdiam = Number(element.value);
+        if (!Number.isFinite(mskdiam) || mskdiam <= 0) return;
+
+        selectedMskdiam.value = mskdiam;
+        mskdiamSelector.value = mskdiam / 2;
+        drawMask();
+    };
+
+    const updateMskdiamTextSubmit = (element) => {
+        const mskdiamSelector = document.getElementById("mskdiam_selector");
+        if (!mskdiamSelector) return;
+
+        let mskdiam = Number(element.value);
+        if (!Number.isFinite(mskdiam)) mskdiam = mskdiamSelector.value * 2;
+        mskdiam = Math.min(Math.max(mskdiam, mskdiamSelector.min * 2), mskdiamSelector.max * 2);
+        element.value = mskdiam;
+        updateMskdiamText(element);
+
+        if (element.form) updateMskdiamSubmit(element);
     };
 
     const updateMskdiamSubmit = (element) => {
@@ -82,11 +133,17 @@
             return;
         }
 
+        const boxSize = getNumber(mskdiamSelector, "boxsize");
+        if (boxSize > 0) {
+            mskdiamSelector.max = Math.floor(boxSize / 2);
+            currentMskdiam.max = Math.floor(boxSize);
+        }
+
         for (const cls2D of document.getElementsByClassName("cls2D")) {
             const canvas = cls2D.getElementsByClassName("mskcanvas")[0];
             if (!canvas) continue;
             const mskdiam = getNumber(canvas, "mskdiam");
-            currentMskdiam.innerHTML = mskdiam + "Å";
+            currentMskdiam.value = mskdiam;
             selectedMskdiam.value = mskdiam;
             mskdiamSelector.value = Math.round(mskdiam / 2);
             break;
