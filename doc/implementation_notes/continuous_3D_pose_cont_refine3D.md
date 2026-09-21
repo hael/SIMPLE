@@ -40,6 +40,10 @@ the affected compact and Server validation has passed.
    native-pixel shifts. Invalid, bounded-out, or non-improving transactions
    preserve the seed. The Cartesian objective never replaces the PFTC `corr`.
 8. Reconstruction remains unchanged and consumes the resulting project pose.
+9. The production Cartesian LM objective is normalized correlation
+   (`POSE_CONT_OBJECTIVE_CART_NCC`). Cartesian Euclidean remains an internal
+   validation option. SIMPLE's surrounding `objfun=euclid|cc` contract is
+   independent and does not select the Cartesian objective.
 
 ## Implemented ownership map
 

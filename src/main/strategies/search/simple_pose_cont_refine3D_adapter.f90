@@ -8,6 +8,7 @@ use simple_image, only: image
 use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, cartesian_pose_data, &
     &shift_lm_config, pose_lm_config, pose_lm_result, pose_lm_diagnostics, &
+    &POSE_CONT_OBJECTIVE_CART_NCC, POSE_CONT_OBJECTIVE_CART_EUCLID, &
     &LM_ACCEPTED_IMPROVEMENT, LM_FINITE_NO_IMPROVEMENT, LM_NO_RELIABLE_UPDATE, &
     &LM_STEP_BOUND_REJECTED, LM_INVALID_NUMERICS, LM_ITERATION_LIMIT
 use simple_refine3D_fnames, only: refine3D_pose_cont_ref_fname
@@ -23,6 +24,7 @@ public :: pose_cont_stage_result, pose_cont_transaction_result
 
 ! Refinement routes
 public :: POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
+public :: POSE_CONT_OBJECTIVE_CART_NCC, POSE_CONT_OBJECTIVE_CART_EUCLID
 
 ! Status codes
 public :: POSE_CONT_NOT_ATTEMPTED, POSE_CONT_INVALID_PREPARATION
@@ -34,7 +36,7 @@ public :: write_pose_cont_reference_artifact, remove_pose_cont_reference_artifac
 public :: prepare_pose_cont_observation
 public :: shift_native_to_crop, shift_crop_to_native
 
-integer, parameter  :: POSE_CONT_NOT_ATTEMPTED       = 0
+integer, parameter  :: POSE_CONT_NOT_ATTEMPTED       =  0
 integer, parameter  :: POSE_CONT_INVALID_PREPARATION = -1
 integer, parameter  :: POSE_CONT_ROUTE_SHIFT_THEN_JOINT = 1
 integer, parameter  :: POSE_CONT_ROUTE_JOINT            = 2
@@ -57,8 +59,9 @@ end type pose_cont_limits
 type :: pose_cont_config
     integer :: route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
     integer :: max_iterations = 40       !< maximum iterations in each enabled LM stage
+    integer :: objective = POSE_CONT_OBJECTIVE_CART_NCC !< independent of SIMPLE objfun
     real(dp) :: rotation_scale = 0.1_dp  !< radians per joint-LM proposal
-    real(dp) :: max_total_rotation = 15._dp*real(PI,dp)/180._dp !< radians from the seed
+    real(dp) :: max_total_rotation = 15._dp*real(PI, dp)/180._dp !< radians from the seed
 end type pose_cont_config
 
 !> Result and accounting shared by the shift-only and joint LM stages.
@@ -420,7 +423,7 @@ contains
 
         ! The seed objective is the single acceptance baseline for the transaction.
         call refiner%prepared_objective_gradient(seed%rotmat, seed%shift, data, &
-            &result%objective_before, gradient)
+            &result%objective_before, gradient, config%objective)
         if (.not. ieee_is_finite(result%objective_before)) then
             result%status = LM_INVALID_NUMERICS
             return
@@ -433,11 +436,11 @@ contains
         case (POSE_CONT_ROUTE_SHIFT_THEN_JOINT)
             ! Stage 1: refine translation only, holding the seed rotation fixed.
             shift_config = shift_lm_config(shift_step_bound=limits%shift_step_bound, &
-                &max_iterations=config%max_iterations)
+                &max_iterations=config%max_iterations, objective=config%objective)
             call refiner%refine_shift_lm(staged_pose%rotmat, staged_pose%shift, data, &
                 &shift_config, lm_result, diagnostics)
             call refiner%prepared_objective_gradient(staged_pose%rotmat, staged_pose%shift, data, &
-                &shift_objective_after, gradient)
+                &shift_objective_after, gradient, config%objective)
             call set_stage_result(result%shift_stage, lm_result, diagnostics, &
                 &result%objective_before, shift_objective_after)
             result%shift_endpoint = staged_pose
@@ -466,7 +469,8 @@ contains
         ! current endpoint (the shift result or the original seed).
         ! Both cumulative guards remain anchored at the original transaction seed.
         joint_config = pose_lm_config(rotation_scale=config%rotation_scale, &
-            &shift_step_bound=limits%shift_step_bound, max_iterations=config%max_iterations)
+            &shift_step_bound=limits%shift_step_bound, max_iterations=config%max_iterations, &
+            &objective=config%objective)
         joint_config%use_cumulative_guard = .true.
         joint_config%anchor_rotmat = seed%rotmat
         joint_config%anchor_shift = seed%shift
@@ -475,7 +479,7 @@ contains
         call refiner%refine_prepared_pose_lm(staged_pose%rotmat, staged_pose%shift, data, &
             &joint_config, lm_result, diagnostics)
         call refiner%prepared_objective_gradient(staged_pose%rotmat, staged_pose%shift, data, &
-            &joint_objective_after, gradient)
+            &joint_objective_after, gradient, config%objective)
         call set_stage_result(result%joint_stage, lm_result, diagnostics, &
             &shift_objective_after, joint_objective_after)
         call add_stage_accounting(result, result%joint_stage)
