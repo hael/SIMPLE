@@ -5,8 +5,9 @@ use simple_string,            only: string
 use simple_syslib,            only: del_file, file_exists
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, &
     &sigma2_state_create_candidate, sigma2_state_write_local_range, sigma2_state_read_header, &
-    &sigma2_state_read_groups, sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
-    &SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
+    &sigma2_state_read_local_range, sigma2_state_read_particles, sigma2_state_read_groups, &
+    &sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, SIGMA2_PROV_PSPEC, &
+    &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
 use simple_sigma2_state,      only: sigma2_state_layout_digest, sigma2_state_merge_local_ranges, &
     &sigma2_state_reduce_groups, sigma2_state_validate_identity, sigma2_state_validate_science, &
     &sigma2_state_candidate_path, sigma2_state_commit, sigma2_state_prepare_update, &
@@ -15,6 +16,7 @@ implicit none
 
 call exercise_policy('global', SIGMA2_GROUP_GLOBAL, 1, 4)
 call exercise_policy('group',  SIGMA2_GROUP_STACK,  2, 8)
+call exercise_checksum_free_particle_io()
 call exercise_recovery_guards()
 call exercise_update_preparation()
 call exercise_invalid_record_skip()
@@ -91,6 +93,91 @@ contains
         call require(.not. file_exists(candidate), 'candidate consumed by publication')
         call cleanup(candidate, committed, ranges(1)%to_char(), ranges(2)%to_char())
     end subroutine exercise_policy
+
+    subroutine exercise_checksum_free_particle_io()
+        type(sigma2_state_header) :: header
+        type(string) :: range_path
+        real(real32), allocatable :: loaded(:,:)
+        real(real32) :: spectra(3,4)
+        logical :: scheduled(4), active(4)
+        integer :: eo(4), groups(4), status
+        integer :: first_row, last_row, kfrom, kto
+        integer(int64), parameter :: DIGEST = 661_int64
+        integer(int64), parameter :: RANGE_HEADER_BYTES = 256_int64
+        integer(int64) :: generation, layout_digest, integrity_offset, expected_bytes, actual_bytes
+        integer(int64) :: reserved(4), sentinels(4)
+        character(len=128) :: message
+        character(len=*), parameter :: CANDIDATE = 'checksum_free_sigma2_state.next'
+        character(len=*), parameter :: COMMITTED = 'checksum_free_sigma2_state.bin'
+        character(len=*), parameter :: RANGE = 'checksum_free_sigma2_range.bin'
+        call del_file(CANDIDATE)
+        call del_file(COMMITTED)
+        call del_file(RANGE)
+        spectra(:,1) = [1.0,2.0,3.0]
+        spectra(:,2) = [2.0,3.0,4.0]
+        spectra(:,3) = [3.0,4.0,5.0]
+        spectra(:,4) = [4.0,5.0,6.0]
+        scheduled = .true.; active = .true.; eo = [0,1,0,1]; groups = 1
+        sentinels = [101_int64, 202_int64, 303_int64, 404_int64]
+        call sigma2_state_init_header(header, 1, 3, 4, 8, 1.5, 1, SIGMA2_GROUP_GLOBAL, &
+            &1_int64, DIGEST, SIGMA2_PROV_PSPEC)
+        call sigma2_state_create_candidate(CANDIDATE, header, status, message)
+        call require_ok(status, message)
+        range_path = RANGE
+        call sigma2_state_write_local_range(RANGE, 1_int64, DIGEST, 1, spectra, 1, 3, status, message)
+        call require_ok(status, message)
+
+        integrity_offset = RANGE_HEADER_BYTES + 1_int64 + int(size(spectra),int64)*4_int64
+        expected_bytes = integrity_offset + int(size(spectra,2),int64)*8_int64 - 1_int64
+        inquire(file=RANGE, size=actual_bytes, iostat=status)
+        call require(status == 0 .and. actual_bytes == expected_bytes, &
+            &'checksum-free local range preserves the version-one file layout')
+        call read_int64_words(RANGE, integrity_offset, reserved)
+        call require(all(reserved == 0_int64), 'local range does not generate particle checksums')
+        call write_int64_words(RANGE, integrity_offset, sentinels)
+        call sigma2_state_read_local_range(RANGE, generation, layout_digest, first_row, last_row, &
+            &kfrom, kto, loaded, status, message)
+        call require_ok(status, message)
+        call require(generation == 1_int64 .and. layout_digest == DIGEST, &
+            &'checksum-free local range retains its transaction identity')
+        call require(first_row == 1 .and. last_row == 4 .and. kfrom == 1 .and. kto == 3, &
+            &'checksum-free local range retains its bounds')
+        call require(all(loaded == spectra), 'local range ignores reserved particle integrity values')
+        deallocate(loaded)
+
+        call sigma2_state_merge_local_ranges(CANDIDATE, [range_path], scheduled, status, message)
+        call require_ok(status, message)
+        call sigma2_state_read_particles(CANDIDATE, 1, 4, loaded, status, message)
+        call require_ok(status, message)
+        call require(all(loaded == spectra), 'bulk particle write preserves every spectrum')
+        deallocate(loaded)
+        call sigma2_state_read_header(CANDIDATE, header, status, message)
+        call require_ok(status, message)
+        call require(header%particle_checksum == 0_int64, 'candidate particle checksum remains disabled')
+        call read_int64_words(CANDIDATE, header%integrity_offset, reserved)
+        call require(all(reserved == 0_int64), 'candidate merge does not write particle checksums')
+        call write_int64_words(CANDIDATE, header%integrity_offset, sentinels)
+
+        call sigma2_state_reduce_groups(CANDIDATE, active, eo, groups, status, message)
+        call require_ok(status, message)
+        call sigma2_state_validate_file(CANDIDATE, status, message, deep=.true.)
+        call require_ok(status, message)
+        call sigma2_state_commit(CANDIDATE, COMMITTED, active, eo, groups, status, message)
+        call require_ok(status, message)
+        call sigma2_state_read_header(COMMITTED, header, status, message)
+        call require_ok(status, message)
+        call require(header%particle_checksum == 0_int64, 'committed particle checksum remains disabled')
+        call read_int64_words(COMMITTED, header%integrity_offset, reserved)
+        call require(all(reserved == sentinels), 'reserved particle integrity values are ignored and preserved')
+        call sigma2_state_read_particles(COMMITTED, 1, 4, loaded, status, message)
+        call require_ok(status, message)
+        call require(all(loaded == spectra), 'committed particle spectra round-trip without checksums')
+        deallocate(loaded)
+        call del_file(CANDIDATE)
+        call del_file(COMMITTED)
+        call del_file(RANGE)
+        call range_path%kill
+    end subroutine exercise_checksum_free_particle_io
 
     subroutine exercise_recovery_guards()
         type(sigma2_state_header) :: header, committed_header
@@ -310,6 +397,33 @@ contains
         close(funit)
         call require(io_stat == 0, 'committed file can be read')
     end subroutine read_file_bytes
+
+    subroutine read_int64_words(path, position, words)
+        character(len=*), intent(in) :: path
+        integer(int64),   intent(in) :: position
+        integer(int64),   intent(out) :: words(:)
+        integer :: funit, io_stat
+        open(newunit=funit, file=path, access='stream', form='unformatted', status='old', &
+            &action='read', iostat=io_stat)
+        call require(io_stat == 0, 'reserved particle integrity section can be opened')
+        read(funit, pos=position, iostat=io_stat) words
+        close(funit)
+        call require(io_stat == 0, 'reserved particle integrity section can be read')
+    end subroutine read_int64_words
+
+    subroutine write_int64_words(path, position, words)
+        character(len=*), intent(in) :: path
+        integer(int64),   intent(in) :: position
+        integer(int64),   intent(in) :: words(:)
+        integer :: funit, io_stat
+        open(newunit=funit, file=path, access='stream', form='unformatted', status='old', &
+            &action='readwrite', iostat=io_stat)
+        call require(io_stat == 0, 'reserved particle integrity section can be opened for writing')
+        write(funit, pos=position, iostat=io_stat) words
+        flush(funit)
+        close(funit)
+        call require(io_stat == 0, 'reserved particle integrity section can be overwritten')
+    end subroutine write_int64_words
 
     subroutine cleanup(path1, path2, path3, path4)
         character(len=*), intent(in) :: path1, path2, path3, path4

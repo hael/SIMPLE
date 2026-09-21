@@ -12,7 +12,7 @@ public :: sigma2_state_init_header, sigma2_state_read_header, sigma2_state_creat
 public :: sigma2_state_write_particles, sigma2_state_read_particles
 public :: sigma2_state_write_groups, sigma2_state_read_groups
 public :: sigma2_state_write_local_range, sigma2_state_read_local_range
-public :: sigma2_state_refresh_integrity, sigma2_state_validate_file, sigma2_state_publish
+public :: sigma2_state_validate_file, sigma2_state_publish
 public :: sigma2_state_digest_begin, sigma2_state_digest_text, sigma2_state_digest_integer
 public :: SIGMA2_STATE_FNAME, SIGMA2_STATE_NEXT_FNAME
 public :: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK
@@ -75,6 +75,7 @@ type :: sigma2_state_header
     integer(int64) :: integrity_offset = 0_int64
     integer(int64) :: file_bytes       = 0_int64
     integer(int64) :: group_checksum    = 0_int64
+    ! Reserved for on-disk compatibility. Particle checksums are no longer generated or validated.
     integer(int64) :: particle_checksum = 0_int64
     real(real64)   :: smpd = 0.0_real64
 end type sigma2_state_header
@@ -313,7 +314,7 @@ contains
                     status = io_stat; message = 'cannot copy committed sigma2 state'; return
                 endif
                 header%group_checksum    = source_header%group_checksum
-                header%particle_checksum = source_header%particle_checksum
+                header%particle_checksum = 0_int64
                 call write_header_unit(dst_unit, header, io_stat)
                 flush(dst_unit)
                 close(dst_unit)
@@ -383,8 +384,8 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer(int64) :: data_pos, checksum_pos, checksum
-        integer :: funit, io_stat, i, row, nshell
+        integer(int64) :: data_pos
+        integer :: funit, io_stat, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( header%state /= SIGMA2_STATE_CANDIDATE )then
@@ -400,15 +401,8 @@ contains
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot open sigma2 candidate for particle write'; return
         endif
-        do i = 1, size(spectra,2)
-            row = first_row + i - 1
-            data_pos = header%particle_offset + int(row-1,int64)*int(nshell*header%real_bytes,int64)
-            checksum_pos = header%integrity_offset + int(row-1,int64)*8_int64
-            checksum = checksum_reals(spectra(:,i))
-            write(funit, pos=data_pos, iostat=io_stat) spectra(:,i)
-            if( io_stat == 0 ) write(funit, pos=checksum_pos, iostat=io_stat) checksum
-            if( io_stat /= 0 ) exit
-        enddo
+        data_pos = header%particle_offset + int(first_row-1,int64)*int(nshell*header%real_bytes,int64)
+        write(funit, pos=data_pos, iostat=io_stat) spectra
         flush(funit)
         close(funit)
         if( io_stat /= 0 )then
@@ -427,8 +421,7 @@ contains
         character(len=*), intent(out) :: message
         integer(int64), allocatable, optional, intent(out) :: checksums(:)
         type(sigma2_state_header) :: header
-        integer(int64) :: data_pos, checksum_pos
-        integer(int64), allocatable :: sums(:)
+        integer(int64) :: data_pos
         integer :: funit, io_stat, nrows, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
@@ -437,21 +430,20 @@ contains
         endif
         nshell = int(header%kto-header%kfrom+1)
         nrows  = last_row-first_row+1
-        allocate(spectra(nshell,nrows), sums(nrows))
+        allocate(spectra(nshell,nrows))
         data_pos = header%particle_offset + int(first_row-1,int64)*int(nshell*header%real_bytes,int64)
-        checksum_pos = header%integrity_offset + int(first_row-1,int64)*8_int64
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='read', iostat=io_stat)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot open sigma2 particle range'; return
         endif
         read(funit, pos=data_pos, iostat=io_stat) spectra
-        if( io_stat == 0 ) read(funit, pos=checksum_pos, iostat=io_stat) sums
         close(funit)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot read sigma2 particle range'; return
         endif
-        if( present(checksums) ) call move_alloc(sums, checksums)
+        ! Preserve the optional legacy result without reading the reserved integrity section.
+        if( present(checksums) ) allocate(checksums(nrows), source=0_int64)
         status = 0
         message = ''
     end subroutine sigma2_state_read_particles
@@ -515,48 +507,14 @@ contains
         message = ''
     end subroutine sigma2_state_read_groups
 
-    subroutine sigma2_state_refresh_integrity(path, status, message)
-        character(len=*), intent(in) :: path
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        type(sigma2_state_header) :: header
-        integer(int64), allocatable :: checksums(:)
-        integer :: funit, io_stat
-        call sigma2_state_read_header(path, header, status, message)
-        if( status /= 0 ) return
-        allocate(checksums(header%nptcls))
-        open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
-            &status='old', action='readwrite', iostat=io_stat)
-        if( io_stat /= 0 )then
-            deallocate(checksums)
-            status = io_stat; message = 'cannot open sigma2 integrity metadata'; return
-        endif
-        read(funit, pos=header%integrity_offset, iostat=io_stat) checksums
-        if( io_stat == 0 )then
-            header%particle_checksum = checksum_words(checksums)
-            call write_header_unit(funit, header, io_stat)
-        endif
-        flush(funit)
-        close(funit)
-        deallocate(checksums)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot refresh sigma2 integrity metadata'; return
-        endif
-        call simple_sync_file(path, io_stat)
-        status = io_stat
-        if( status /= 0 ) message = 'cannot sync sigma2 integrity metadata'
-    end subroutine sigma2_state_refresh_integrity
-
     subroutine sigma2_state_validate_file(path, status, message, deep)
         character(len=*), intent(in) :: path
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         logical, optional, intent(in) :: deep
         type(sigma2_state_header) :: header
-        real(real32), allocatable :: groups(:,:,:), spectra(:,:)
-        integer(int64), allocatable :: checksums(:)
+        real(real32), allocatable :: groups(:,:,:)
         integer(int64) :: file_bytes
-        integer :: i
         logical :: l_deep
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
@@ -574,18 +532,6 @@ contains
         if( status /= 0 ) return
         if( checksum_reals(reshape(groups,[size(groups)])) /= header%group_checksum )then
             status = 1; message = 'sigma2 grouped checksum mismatch'; return
-        endif
-        call sigma2_state_read_particles(path, 1, int(header%nptcls), spectra, status, message, checksums)
-        if( status /= 0 ) return
-        do i = 1, int(header%nptcls)
-            if( checksums(i) /= 0_int64 )then
-                if( checksum_reals(spectra(:,i)) /= checksums(i) )then
-                    status = 1; message = 'sigma2 particle checksum mismatch'; return
-                endif
-            endif
-        enddo
-        if( checksum_words(checksums) /= header%particle_checksum )then
-            status = 1; message = 'sigma2 integrity-section checksum mismatch'; return
         endif
         status = 0
         message = ''
@@ -641,8 +587,8 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         integer(int64) :: words(RANGE_NWORDS), data_offset, integrity_offset, file_bytes
-        integer(int64), allocatable :: checksums(:)
-        integer :: funit, io_stat, i, last_row
+        integer(int8) :: zero
+        integer :: funit, io_stat, last_row
         status = 0
         message = ''
         last_row = first_row + size(spectra,2) - 1
@@ -670,23 +616,19 @@ contains
         words(RW_INTEGRITY_OFFSET) = integrity_offset
         words(RW_FILE_BYTES)       = file_bytes
         words(RW_HEADER_CHECKSUM)  = checksum_words(words(:RW_HEADER_CHECKSUM-1))
-        allocate(checksums(size(spectra,2)))
-        do i = 1, size(spectra,2)
-            checksums(i) = checksum_reals(spectra(:,i))
-        enddo
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='new', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
-            deallocate(checksums)
             status = io_stat; message = 'cannot create local sigma2 range file'; return
         endif
         write(funit, pos=1, iostat=io_stat) RANGE_MAGIC
         if( io_stat == 0 ) write(funit, pos=17, iostat=io_stat) words
         if( io_stat == 0 ) write(funit, pos=data_offset, iostat=io_stat) spectra
-        if( io_stat == 0 ) write(funit, pos=integrity_offset, iostat=io_stat) checksums
+        ! Keep the legacy integrity span in the file layout, but do not populate checksums.
+        zero = 0_int8
+        if( io_stat == 0 ) write(funit, pos=file_bytes, iostat=io_stat) zero
         flush(funit)
         close(funit)
-        deallocate(checksums)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot write local sigma2 range file'; return
         endif
@@ -706,8 +648,7 @@ contains
         character(len=16) :: magic
         integer(int64) :: words(RANGE_NWORDS), actual_bytes
         integer(int64) :: expected_integrity_offset, expected_file_bytes
-        integer(int64), allocatable :: checksums(:)
-        integer :: funit, io_stat, i, nshell, nrows
+        integer :: funit, io_stat, nshell, nrows
         status = 0
         message = ''
         generation = 0_int64; layout_digest = 0_int64
@@ -748,19 +689,12 @@ contains
             &layout_digest == 0_int64 )then
             close(funit); status = 1; message = 'invalid local sigma2 range layout'; return
         endif
-        allocate(spectra(nshell,nrows), checksums(nrows))
+        allocate(spectra(nshell,nrows))
         read(funit, pos=words(RW_DATA_OFFSET), iostat=io_stat) spectra
-        if( io_stat == 0 ) read(funit, pos=words(RW_INTEGRITY_OFFSET), iostat=io_stat) checksums
         close(funit)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot read local sigma2 range data'; return
         endif
-        do i = 1, nrows
-            if( checksum_reals(spectra(:,i)) /= checksums(i) )then
-                status = 1; message = 'local sigma2 range checksum mismatch'; return
-            endif
-        enddo
-        deallocate(checksums)
     end subroutine sigma2_state_read_local_range
 
     pure integer(int64) function checksum_reals(values) result(hash)

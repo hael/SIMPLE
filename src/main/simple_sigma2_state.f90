@@ -10,8 +10,8 @@ use simple_string,            only: string
 use simple_string_utils,      only: int2str, int2str_pad
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
     &sigma2_state_read_particles, sigma2_state_read_groups, sigma2_state_write_particles, &
-    &sigma2_state_write_groups, sigma2_state_read_local_range, sigma2_state_refresh_integrity, &
-    &sigma2_state_validate_file, sigma2_state_publish, sigma2_state_digest_begin, &
+    &sigma2_state_write_groups, sigma2_state_read_local_range, sigma2_state_validate_file, &
+    &sigma2_state_publish, sigma2_state_digest_begin, &
     &sigma2_state_digest_text, sigma2_state_digest_integer, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
     &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_CANDIDATE, &
     &SIGMA2_STATE_COMMITTED, sigma2_state_create_candidate
@@ -224,7 +224,6 @@ contains
         if( any(covered .neqv. scheduled_rows) )then
             status = 1; message = 'local sigma2 ranges do not exactly cover the schedule'; return
         endif
-        call sigma2_state_refresh_integrity(candidate_path, status, message)
     end subroutine sigma2_state_merge_local_ranges
 
     subroutine sigma2_state_reduce_groups(path, active, eo, group_ids, status, message)
@@ -235,7 +234,7 @@ contains
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
         real(real32), allocatable :: spectra(:,:), groups(:,:,:)
-        integer(int64), allocatable :: checksums(:), counts(:,:)
+        integer(int64), allocatable :: counts(:,:)
         real(real64), allocatable :: sums(:,:,:)
         integer(int64) :: ninvalid
         integer :: first_row, last_row, i, row, half, group, nshell
@@ -251,14 +250,11 @@ contains
         ninvalid = 0_int64
         do first_row = 1, int(header%nptcls), REDUCE_BLOCK_ROWS
             last_row = min(int(header%nptcls), first_row+REDUCE_BLOCK_ROWS-1)
-            call sigma2_state_read_particles(path, first_row, last_row, spectra, status, message, checksums)
+            call sigma2_state_read_particles(path, first_row, last_row, spectra, status, message)
             if( status /= 0 ) return
             do i = 1, size(spectra,2)
                 row = first_row+i-1
                 if( .not. active(row) ) cycle
-                if( checksums(i) == 0_int64 )then
-                    status = 1; message = 'active particle has no canonical sigma2 record'; return
-                endif
                 if( .not. record_is_valid(spectra(:,i)) )then
                     ninvalid = ninvalid + 1_int64
                     cycle
@@ -281,7 +277,7 @@ contains
                 sums(:,half,group) = sums(:,half,group) + real(spectra(:,i),real64)
                 counts(half,group) = counts(half,group) + 1_int64
             enddo
-            deallocate(spectra, checksums)
+            deallocate(spectra)
         enddo
         if( ninvalid > 0_int64 ) write(logfhandle,'(A,I0,A)') &
             &'>>> WARNING: canonical sigma2 reduction skipped ', ninvalid, &
@@ -296,7 +292,6 @@ contains
             enddo
         enddo
         call sigma2_state_write_groups(path, groups, status, message)
-        if( status == 0 ) call sigma2_state_refresh_integrity(path, status, message)
     end subroutine sigma2_state_reduce_groups
 
     subroutine sigma2_state_validate_identity(path, box, smpd, kfrom, kto, nptcls, layout_digest, &
@@ -345,7 +340,7 @@ contains
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
         real(real32), allocatable :: stored(:,:,:), spectra(:,:)
-        integer(int64), allocatable :: checksums(:), counts(:,:)
+        integer(int64), allocatable :: counts(:,:)
         real(real64), allocatable :: sums(:,:,:)
         integer :: first_row, last_row, i, row, half, group, nshell
         real(real64) :: expected, tolerance
@@ -364,14 +359,11 @@ contains
         allocate(counts(2,header%ngroups), source=0_int64)
         do first_row = 1, int(header%nptcls), REDUCE_BLOCK_ROWS
             last_row = min(int(header%nptcls), first_row+REDUCE_BLOCK_ROWS-1)
-            call sigma2_state_read_particles(path, first_row, last_row, spectra, status, message, checksums)
+            call sigma2_state_read_particles(path, first_row, last_row, spectra, status, message)
             if( status /= 0 ) return
             do i = 1, size(spectra,2)
                 row = first_row+i-1
                 if( .not. active(row) ) cycle
-                if( checksums(i) == 0_int64 )then
-                    status = 1; message = 'active particle has no canonical sigma2 record'; return
-                endif
                 if( .not. record_is_valid(spectra(:,i)) ) cycle ! the reduction's rule
                 if( eo(row) < 0 .or. eo(row) > 1 )then
                     status = 1; message = 'active particle has invalid even/odd assignment'; return
@@ -388,7 +380,7 @@ contains
                 sums(:,half,group) = sums(:,half,group) + real(spectra(:,i),real64)
                 counts(half,group) = counts(half,group) + 1_int64
             enddo
-            deallocate(spectra, checksums)
+            deallocate(spectra)
         enddo
         if( any(counts == 0_int64) )then
             status = 1; message = 'canonical sigma2 group has an empty even/odd half'; return
