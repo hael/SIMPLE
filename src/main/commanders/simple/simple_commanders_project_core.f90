@@ -1074,16 +1074,20 @@ contains
                 if( count(states /= 0) > 0 )then
                     cls2D_selected_jpg = string('cls2D_selected')//JPG_EXT
                     call spproj%cavgs2jpg(cavg_inds_sel, cls2D_selected_jpg, xtiles_sel, ytiles_sel, ignore_states=.false.)
-                    cls2D_selected_jpg = simple_abspath(cls2D_selected_jpg)
-                    write(logfhandle, '(A)') '>>> SELECTED CLASS AVERAGES'
-                    write(logfhandle, '(A)') '>>> JPEG '//cls2D_selected_jpg%to_char()
+                    if( file_exists(cls2D_selected_jpg) ) then
+                        cls2D_selected_jpg = simple_abspath(cls2D_selected_jpg)
+                        write(logfhandle, '(A)') '>>> SELECTED CLASS AVERAGES'
+                        write(logfhandle, '(A)') '>>> JPEG '//cls2D_selected_jpg%to_char()
+                    endif
                 endif
                 if( count(states == 0) > 0 )then
                     cls2D_deselected_jpg = string('cls2D_deselected')//JPG_EXT
                     call spproj%cavgs2jpg(cavg_inds_desel, cls2D_deselected_jpg, xtiles_desel, ytiles_desel, ignore_states=.false., invert_states=.true.)
-                    cls2D_deselected_jpg = simple_abspath(cls2D_deselected_jpg)
-                    write(logfhandle, '(A)') '>>> DESELECTED CLASS AVERAGES'
-                    write(logfhandle, '(A)') '>>> JPEG '//cls2D_deselected_jpg%to_char()
+                    if( file_exists(cls2D_deselected_jpg) ) then
+                        cls2D_deselected_jpg = simple_abspath(cls2D_deselected_jpg)
+                        write(logfhandle, '(A)') '>>> DESELECTED CLASS AVERAGES'
+                        write(logfhandle, '(A)') '>>> JPEG '//cls2D_deselected_jpg%to_char()
+                    endif
                 endif
             case(CLS3D_SEG)
                 if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
