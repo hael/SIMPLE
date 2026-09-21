@@ -11,9 +11,8 @@ use simple_oris, only: oris
 use simple_parameters, only: parameters
 use simple_pose_cont_refine3D_adapter, only: pose_cont_config, pose_cont_limits, &
     &pose_cont_pose, pose_cont_reference_workspace, pose_cont_transaction_result, &
-    &prepare_pose_cont_observation, pose_cont_seed_from_orientation, &
-    &pose_cont_pose_to_orientation, &
-    &POSE_CONT_ROUTE_JOINT, POSE_CONT_ROUTE_SHIFT_THEN_JOINT
+    &pose_cont_particle_spec, prepare_pose_cont_observation, pose_cont_seed_from_orientation, &
+    &pose_cont_pose_to_orientation
 use simple_strategy3D, only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_type_defs, only: OBJFUN_EUCLID
@@ -78,13 +77,12 @@ contains
             &all(ieee_is_finite(euler)) .and. all(ieee_is_finite(shift))
     end function pose_cont_seed_is_valid
 
-    !> Initialize particle identity and local-LM policy without touching PFTC.
+    !> Initialize particle identity without touching PFTC search state.
     subroutine new_pose_cont(self, params, spec, build)
         class(strategy3D_pose_cont), intent(inout) :: self
         class(parameters), intent(in) :: params
         class(strategy3D_spec), intent(inout) :: spec
         class(builder), intent(in) :: build
-        real(dp) :: crop_scale
 
         call self%kill
         if (trim(params%oritype) /= 'ptcl3D') &
@@ -99,29 +97,22 @@ contains
             &THROW_HARD('strategy3D_pose_cont particle index is outside ptcl3D')
 
         self%spec = spec
-        select case (trim(params%pose_cont_route))
-        case ('shift_then_joint')
-            self%config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
-        case ('joint')
-            self%config%route = POSE_CONT_ROUTE_JOINT
-        case default
-            THROW_HARD('unsupported pose_cont_route in strategy3D_pose_cont')
-        end select
-        crop_scale = real(params%box_crop, dp)/real(params%box, dp)
-        self%limits = pose_cont_limits(shift_step_bound=crop_scale, &
-            &max_total_shift=5._dp*crop_scale)
         self%exists = .true.
     end subroutine new_pose_cont
 
-    !> Supply matcher-owned immutable references and this particle's batch data.
-    !! The image buffer must be unique to the calling OpenMP thread.
-    subroutine bind_pose_cont_context(self, params, build, refs, work_img, iptcl_batch)
+    !> Supply matcher-owned policy, immutable references, and batch data.
+    !! The image buffer must be unique to the calling OpenMP thread. Copying the
+    !! matcher policy guarantees execution and aggregate reporting use one route.
+    subroutine bind_pose_cont_context(self, params, build, refs, work_img, iptcl_batch, &
+        &config, limits)
         class(strategy3D_pose_cont), intent(inout) :: self
         class(parameters), target, intent(in) :: params
         class(builder), target, intent(in) :: build
         class(pose_cont_reference_workspace), target, intent(in) :: refs
         class(image), target, intent(inout) :: work_img
         integer, intent(in) :: iptcl_batch
+        type(pose_cont_config), intent(in) :: config
+        type(pose_cont_limits), intent(in) :: limits
         integer :: ldim(3)
 
         if (.not. self%exists) THROW_HARD('strategy3D_pose_cont must be initialized before binding')
@@ -137,6 +128,8 @@ contains
         self%refs_ptr => refs
         self%work_img_ptr => work_img
         self%iptcl_batch = iptcl_batch
+        self%config = config
+        self%limits = limits
         self%context_bound = .true.
     end subroutine bind_pose_cont_context
 
@@ -149,9 +142,10 @@ contains
         type(cartesian_pose_data) :: data
         type(pose_cont_pose) :: seed
         type(pose_cont_pose) :: terminal_pose
+        type(pose_cont_particle_spec) :: particle_spec
         type(ori) :: input_ori
         complex, allocatable :: observed(:, :)
-        real, allocatable :: sigma2(:), sigma_contrib(:)
+        real, allocatable :: sigma_contrib(:)
         integer :: eo, state
         logical :: even
 
@@ -187,9 +181,10 @@ contains
         call prepare_pose_cont_observation(self%b_ptr%imgbatch(self%iptcl_batch), &
             &self%b_ptr%lmsk, self%work_img_ptr, self%p_ptr%msk_crop, &
             &self%p_ptr%smpd_crop, ctfparms, observed, cropped_ctfparms)
-        call build_particle_sigma(self, sigma2)
-        call self%refs_ptr%prepare_particle(state, even, observed, cropped_ctfparms, &
-            &sigma2, self%p_ptr%kfromto, data)
+        particle_spec = pose_cont_particle_spec(state=state, particle=self%spec%iptcl, &
+            &shell_range=self%p_ptr%kfromto, even=even, ctfparms=cropped_ctfparms)
+        call self%refs_ptr%prepare_particle_from_sigma_noise(observed, &
+            &self%b_ptr%esig%sigma2_noise, particle_spec, data)
 
         ! Stage 3: run only the selected Cartesian LM route from the stored pose.
         call pose_cont_seed_from_orientation(input_ori,self%p_ptr%box, &
@@ -248,27 +243,6 @@ contains
         call symmetry_equivalent_ori%kill
         call input_ori%kill
     end subroutine oris_assign_pose_cont
-
-    !> Copy this particle's active sigma shells into a compact zero-based vector.
-    subroutine build_particle_sigma(self, sigma2)
-        class(strategy3D_pose_cont), intent(in) :: self
-        real, allocatable, intent(out) :: sigma2(:)
-        integer :: shell_from, shell_to
-
-        if (.not. allocated(self%b_ptr%esig%sigma2_noise)) &
-            &THROW_HARD('strategy3D_pose_cont requires allocated sigma2 noise')
-        shell_from = self%p_ptr%kfromto(1)
-        shell_to = self%p_ptr%kfromto(2)
-        if (shell_from < lbound(self%b_ptr%esig%sigma2_noise, 1) .or. &
-            &shell_to > ubound(self%b_ptr%esig%sigma2_noise, 1)) &
-            &THROW_HARD('strategy3D_pose_cont shell range exceeds sigma2 noise')
-        if (self%spec%iptcl < lbound(self%b_ptr%esig%sigma2_noise, 2) .or. &
-            &self%spec%iptcl > ubound(self%b_ptr%esig%sigma2_noise, 2)) &
-            &THROW_HARD('strategy3D_pose_cont particle index exceeds sigma2 noise')
-        allocate (sigma2(0:shell_to), source=1.)
-        sigma2(shell_from:shell_to) = &
-            &self%b_ptr%esig%sigma2_noise(shell_from:shell_to, self%spec%iptcl)
-    end subroutine build_particle_sigma
 
     !> Release local state while leaving matcher-owned shared data untouched.
     subroutine kill_pose_cont(self)

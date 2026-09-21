@@ -31,10 +31,11 @@ use simple_strategy3D,              only: strategy3D
 use simple_pose_cont_run_stats,     only: pose_cont_run_stats
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
-    &cartesian_pose_data, pose_cont_particle_workspace, &
+    &cartesian_pose_data, pose_cont_particle_workspace, pose_cont_particle_spec, &
+    &pose_cont_observation_spec, pose_cont_observation, &
     &pose_cont_seed_from_orientation, pose_cont_pose_to_orientation, &
-    &LM_ACCEPTED_IMPROVEMENT, &
-    &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
+    &pose_cont_config_from_route, pose_cont_limits_from_boxes, &
+    &LM_ACCEPTED_IMPROVEMENT
 implicit none
 
 public :: refine3D_exec
@@ -86,7 +87,6 @@ contains
         type(pose_cont_run_stats), allocatable :: pose_stats(:)
         type(pose_cont_run_stats) :: pose_stats_total
         real                :: frac_greedy
-        real(dp)            :: pose_cont_crop_scale
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: has_been_searched
@@ -339,14 +339,8 @@ contains
             if( ctrl%do_pose_cont_polish .or. ctrl%do_pose_cont_strategy )then
                 if( p_ptr%cc_objfun /= OBJFUN_EUCLID ) &
                     &THROW_HARD('pose_cont requires objfun=euclid')
-                select case(trim(p_ptr%pose_cont_route))
-                    case('shift_then_joint')
-                        pose_config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
-                    case('joint')
-                        pose_config%route = POSE_CONT_ROUTE_JOINT
-                    case default
-                        THROW_HARD('unsupported pose_cont_route')
-                end select
+                pose_config = pose_cont_config_from_route(p_ptr%pose_cont_route)
+                pose_limits = pose_cont_limits_from_boxes(p_ptr%box, p_ptr%box_crop)
             endif
             if( ctrl%do_pose_cont_strategy )then
                 if( trim(p_ptr%inpl_cont) /= 'no' ) &
@@ -362,11 +356,6 @@ contains
                 if( ctrl%refine_mode == 'prob_state' .and. &
                     &trim(p_ptr%multivol_mode) == 'input_oris_fixed' ) &
                     &THROW_HARD('pose_cont cannot rotate a fixed-orientation prob_state assignment')
-                ! The adapter works in cropped-box pixels; express the one-native-
-                ! pixel proposal and five-native-pixel capture bounds on that grid.
-                pose_cont_crop_scale = real(p_ptr%box_crop,dp)/real(p_ptr%box,dp)
-                pose_limits = pose_cont_limits(shift_step_bound=pose_cont_crop_scale, &
-                    &max_total_shift=5._dp*pose_cont_crop_scale)
             endif
             select case(ctrl%refine_mode)
                 case('eval','sigma')
@@ -550,7 +539,7 @@ contains
                     select type(pose_cont_strategy => strategy3Dsrch(iptcl_batch)%ptr)
                         type is(strategy3D_pose_cont)
                             call pose_cont_strategy%bind_context(p_ptr,b_ptr,pose_cont_refs, &
-                                &ptcl_match_imgs(ithr),iptcl_batch)
+                                &ptcl_match_imgs(ithr),iptcl_batch,pose_config,pose_limits)
                         class default
                             THROW_HARD('pose_cont routing allocated an incompatible strategy')
                     end select
@@ -609,11 +598,12 @@ contains
             integer, intent(in) :: iptcl, iptcl_batch, ithr
             type(pose_cont_transaction_result), intent(out) :: result
             type(ori) :: winner
-            type(ctfparams) :: ctfparms, cropped_ctfparms
+            type(ctfparams) :: ctfparms
             type(cartesian_pose_data) :: data
             type(pose_cont_pose) :: seed
-            complex, allocatable :: observed(:,:)
-            real, allocatable :: sigma2(:)
+            type(pose_cont_particle_spec) :: particle_spec
+            type(pose_cont_observation_spec) :: observation_spec
+            type(pose_cont_observation) :: observation
             integer :: state, eo
             logical :: even
 
@@ -630,25 +620,17 @@ contains
                     THROW_HARD('pose_cont requires an even/odd half-set assignment')
             end select
 
-            ! Stage 2: prepare the cropped Cartesian observation and its
-            ! per-shell noise weights for the local Euclidean objective.
+            ! Stage 2: prepare the cropped observation and per-shell noise
+            ! weights for the configured Cartesian objective.
             ctfparms = b_ptr%spproj%get_ctfparams(p_ptr%oritype,iptcl)
-            call pose_cont_particles%prepare_observation(iptcl_batch,b_ptr%lmsk, &
-                &ptcl_match_imgs(ithr),p_ptr%msk_crop,p_ptr%smpd_crop,ctfparms, &
-                &observed,cropped_ctfparms)
-            if( .not. allocated(b_ptr%esig%sigma2_noise) ) &
-                &THROW_HARD('pose_cont requires allocated sigma2 noise')
-            if( p_ptr%kfromto(1) < lbound(b_ptr%esig%sigma2_noise,1) .or. &
-                &p_ptr%kfromto(2) > ubound(b_ptr%esig%sigma2_noise,1) ) &
-                &THROW_HARD('pose_cont shell range exceeds sigma2 noise bounds')
-            if( iptcl < lbound(b_ptr%esig%sigma2_noise,2) .or. &
-                &iptcl > ubound(b_ptr%esig%sigma2_noise,2) ) &
-                &THROW_HARD('pose_cont particle index exceeds sigma2 noise bounds')
-            allocate(sigma2(0:p_ptr%kfromto(2)),source=1.)
-            sigma2(p_ptr%kfromto(1):p_ptr%kfromto(2)) = &
-                &b_ptr%esig%sigma2_noise(p_ptr%kfromto(1):p_ptr%kfromto(2),iptcl)
-            call pose_cont_refs%prepare_particle(state,even,observed,cropped_ctfparms, &
-                &sigma2,p_ptr%kfromto,data)
+            observation_spec = pose_cont_observation_spec(batch_index=iptcl_batch, &
+                &mask_radius=p_ptr%msk_crop, smpd_crop=p_ptr%smpd_crop, ctfparms=ctfparms)
+            call pose_cont_particles%prepare_observation(observation_spec,b_ptr%lmsk, &
+                &ptcl_match_imgs(ithr),observation)
+            particle_spec = pose_cont_particle_spec(state=state, particle=iptcl, &
+                &shell_range=p_ptr%kfromto, even=even, ctfparms=observation%ctfparms)
+            call pose_cont_refs%prepare_particle_from_sigma_noise(observation%samples, &
+                &b_ptr%esig%sigma2_noise, particle_spec, data)
             call pose_cont_seed_from_orientation(winner,p_ptr%box,p_ptr%box_crop,seed)
 
             ! Stage 3: run the configured local LM route transactionally.

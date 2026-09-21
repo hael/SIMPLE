@@ -21,7 +21,8 @@ private
 
 ! Types
 public :: cartesian_pose_data, pose_cont_reference_workspace, pose_cont_particle_workspace
-public :: pose_cont_pose, pose_cont_limits, pose_cont_config
+public :: pose_cont_pose, pose_cont_limits, pose_cont_config, pose_cont_particle_spec
+public :: pose_cont_observation_spec, pose_cont_observation
 public :: pose_cont_stage_result, pose_cont_transaction_result
 
 ! Refinement routes
@@ -38,6 +39,9 @@ public :: write_pose_cont_reference_artifact, remove_pose_cont_reference_artifac
 public :: prepare_pose_cont_observation
 public :: pose_cont_seed_from_orientation, pose_cont_pose_to_orientation
 public :: shift_native_to_crop, shift_crop_to_native
+
+! Shared refine3D policy construction
+public :: pose_cont_config_from_route, pose_cont_limits_from_boxes
 
 integer, parameter  :: POSE_CONT_NOT_ATTEMPTED       =  0
 integer, parameter  :: POSE_CONT_INVALID_PREPARATION = -1
@@ -67,6 +71,29 @@ type :: pose_cont_config
     real(dp) :: max_total_rotation = 15._dp*real(PI, dp)/180._dp !< radians from the seed
 end type pose_cont_config
 
+!> Inputs that identify and prepare one adapter-owned preserved particle.
+type :: pose_cont_observation_spec
+    integer :: batch_index = 0
+    real :: mask_radius = 0.
+    real :: smpd_crop = 0.
+    type(ctfparams) :: ctfparms
+end type pose_cont_observation_spec
+
+!> Prepared Cartesian observation and its cropped-grid CTF metadata.
+type :: pose_cont_observation
+    complex, allocatable :: samples(:, :)
+    type(ctfparams) :: ctfparms
+end type pose_cont_observation
+
+!> Small particle-specific metadata needed for Cartesian preparation.
+type :: pose_cont_particle_spec
+    integer :: state = 0
+    integer :: particle = 0
+    integer :: shell_range(2) = 0
+    logical :: even = .false.
+    type(ctfparams) :: ctfparms
+end type pose_cont_particle_spec
+
 !> Result and accounting shared by the shift-only and joint LM stages.
 type :: pose_cont_stage_result
     integer  :: status = POSE_CONT_NOT_ATTEMPTED
@@ -76,8 +103,6 @@ type :: pose_cont_stage_result
     integer  :: bound_hits = 0
     real(dp) :: objective_before = -1._dp
     real(dp) :: objective_after = -1._dp
-    real(dp) :: max_rotation_step = 0._dp
-    real(dp) :: max_shift_step = 0._dp
 end type pose_cont_stage_result
 
 !> Transactional result for either supported local LM route.
@@ -95,12 +120,9 @@ type :: pose_cont_transaction_result
     integer  :: accepts = 0
     integer  :: bound_hits = 0
     integer  :: iterations = 0
-    real(dp) :: max_rotation_step = 0._dp
-    real(dp) :: max_shift_step = 0._dp
 
-    ! Shift-only stage result and endpoint supplied to the joint stage.
+    ! Shift-only stage result.
     type(pose_cont_stage_result) :: shift_stage
-    type(pose_cont_pose)         :: shift_endpoint
 
     ! Joint five-parameter stage result.
     type(pose_cont_stage_result) :: joint_stage
@@ -124,6 +146,7 @@ contains
     procedure :: kill => kill_pose_cont_reference_workspace
     procedure :: is_ready => pose_cont_reference_workspace_is_ready
     procedure :: prepare_particle => prepare_pose_cont_particle
+    procedure :: prepare_particle_from_sigma_noise => prepare_pose_cont_particle_from_sigma_noise
     procedure :: refine_particle => refine_pose_cont_particle
     procedure :: sigma_contribution => pose_cont_sigma_contribution
 end type pose_cont_reference_workspace
@@ -142,6 +165,39 @@ contains
 end type pose_cont_particle_workspace
 
 contains
+
+    ! ========================================================================
+    ! Shared refine3D policy construction
+    ! ========================================================================
+
+    !> Convert the refine3D route name into the adapter's canonical policy.
+    function pose_cont_config_from_route(route) result(config)
+        character(len=*), intent(in) :: route
+        type(pose_cont_config) :: config
+
+        config = pose_cont_config()
+        select case (trim(route))
+        case ('shift_then_joint')
+            config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
+        case ('joint')
+            config%route = POSE_CONT_ROUTE_JOINT
+        case default
+            THROW_HARD('unsupported pose_cont_route')
+        end select
+    end function pose_cont_config_from_route
+
+    !> Express the native one-pixel step and five-pixel capture bounds on the cropped grid.
+    function pose_cont_limits_from_boxes(box, box_crop) result(limits)
+        integer, intent(in) :: box, box_crop
+        type(pose_cont_limits) :: limits
+        real(dp) :: crop_scale
+
+        if (box < 2 .or. box_crop < 2 .or. mod(box, 2) /= 0 .or. mod(box_crop, 2) /= 0) &
+            &THROW_HARD('pose_cont limits require positive even boxes')
+        crop_scale = real(box_crop, dp)/real(box, dp)
+        limits = pose_cont_limits(shift_step_bound=crop_scale, &
+            &max_total_shift=5._dp*crop_scale)
+    end function pose_cont_limits_from_boxes
 
     ! ========================================================================
     ! Production particle workspace lifecycle
@@ -178,24 +234,21 @@ contains
         call self%raw(batch_index)%copy_fast(raw_img)
     end subroutine capture_pose_cont_particle
 
-    subroutine prepare_preserved_pose_cont_observation(self, batch_index, noise_mask, work_img, &
-        &mskrad, smpd_crop, ctfparms_in, observed, ctfparms_out)
+    subroutine prepare_preserved_pose_cont_observation(self, spec, noise_mask, work_img, observation)
         class(pose_cont_particle_workspace), intent(inout) :: self
-        integer, intent(in) :: batch_index
+        type(pose_cont_observation_spec), intent(in) :: spec
         logical, intent(in) :: noise_mask(:, :, :)
         class(image), intent(inout) :: work_img
-        real, intent(in) :: mskrad, smpd_crop
-        type(ctfparams), intent(in) :: ctfparms_in
-        complex, allocatable, intent(out) :: observed(:, :)
-        type(ctfparams), intent(out) :: ctfparms_out
+        type(pose_cont_observation), intent(out) :: observation
 
         if (.not. allocated(self%raw)) THROW_HARD('pose_cont particle workspace is not allocated')
-        if (batch_index < 1 .or. batch_index > size(self%raw)) &
+        if (spec%batch_index < 1 .or. spec%batch_index > size(self%raw)) &
             &THROW_HARD('pose_cont particle workspace index is out of bounds')
-        if (self%raw(batch_index)%is_ft()) &
+        if (self%raw(spec%batch_index)%is_ft()) &
             &THROW_HARD('pose_cont preserved particle is not in real space')
-        call prepare_pose_cont_observation(self%raw(batch_index), noise_mask, work_img, mskrad, &
-            &smpd_crop, ctfparms_in, observed, ctfparms_out)
+        call prepare_pose_cont_observation(self%raw(spec%batch_index), noise_mask, work_img, &
+            &spec%mask_radius, spec%smpd_crop, spec%ctfparms, observation%samples, &
+            &observation%ctfparms)
     end subroutine prepare_preserved_pose_cont_observation
 
     ! ========================================================================
@@ -349,6 +402,36 @@ contains
         end if
     end subroutine prepare_pose_cont_particle
 
+    !> Build this particle's zero-based sigma vector and prepare its Cartesian data.
+    !! The allocatable dummy preserves the global shell and particle bounds of
+    !! euclid_sigma2%sigma2_noise, including partition-local particle ranges.
+    subroutine prepare_pose_cont_particle_from_sigma_noise(self, observed, sigma2_noise, &
+        &spec, data)
+        class(pose_cont_reference_workspace), intent(in) :: self
+        complex, intent(in) :: observed(-self%box/2:self%box/2, &
+            &-self%box/2:self%box/2)
+        real, allocatable, intent(in) :: sigma2_noise(:, :)
+        type(pose_cont_particle_spec), intent(in) :: spec
+        type(cartesian_pose_data), intent(out) :: data
+        real, allocatable :: sigma2(:)
+        integer :: shell_from, shell_to
+
+        if (.not. allocated(sigma2_noise)) &
+            &THROW_HARD('pose_cont requires allocated sigma2 noise')
+        shell_from = spec%shell_range(1)
+        shell_to = spec%shell_range(2)
+        if (shell_from < lbound(sigma2_noise, 1) .or. &
+            &shell_to > ubound(sigma2_noise, 1)) &
+            &THROW_HARD('pose_cont shell range exceeds sigma2 noise bounds')
+        if (spec%particle < lbound(sigma2_noise, 2) .or. &
+            &spec%particle > ubound(sigma2_noise, 2)) &
+            &THROW_HARD('pose_cont particle index exceeds sigma2 noise bounds')
+        allocate (sigma2(0:shell_to), source=1.)
+        sigma2(shell_from:shell_to) = sigma2_noise(shell_from:shell_to, spec%particle)
+        call self%prepare_particle(spec%state, spec%even, observed, spec%ctfparms, &
+            &sigma2, spec%shell_range, data)
+    end subroutine prepare_pose_cont_particle_from_sigma_noise
+
     subroutine refine_pose_cont_particle(self, state, even, seed, data, config, limits, result)
         class(pose_cont_reference_workspace), intent(in) :: self
         integer, intent(in) :: state
@@ -412,7 +495,6 @@ contains
         ! Initialize every returned pose to the seed so all early exits roll back.
         result = pose_cont_transaction_result()
         result%pose = seed
-        result%shift_endpoint = seed
 
         ! Reject invalid prepared particle data before evaluating either solver.
         if (.not. data%is_valid()) then
@@ -448,7 +530,6 @@ contains
                 &shift_objective_after, gradient, config%objective)
             call set_stage_result(result%shift_stage, lm_result, diagnostics, &
                 &result%objective_before, shift_objective_after)
-            result%shift_endpoint = staged_pose
 
             ! Enforce the caller's cumulative working-grid shift bound explicitly.
             if (sqrt(sum((staged_pose%shift - seed%shift)**2)) > &
@@ -527,8 +608,6 @@ contains
         stage%bound_hits = diagnostics%nbound_hits
         stage%objective_before = objective_before
         stage%objective_after = objective_after
-        stage%max_rotation_step = diagnostics%max_rotation_step
-        stage%max_shift_step = diagnostics%max_shift_step
     end subroutine set_stage_result
 
     pure subroutine add_stage_accounting(result, stage)
@@ -538,8 +617,6 @@ contains
         result%attempts = result%attempts + stage%attempts
         result%bound_hits = result%bound_hits + stage%bound_hits
         result%iterations = result%iterations + stage%iterations
-        result%max_rotation_step = max(result%max_rotation_step, stage%max_rotation_step)
-        result%max_shift_step = max(result%max_shift_step, stage%max_shift_step)
     end subroutine add_stage_accounting
 
     pure logical function aborts_pose_cont_route(status) result(aborts)

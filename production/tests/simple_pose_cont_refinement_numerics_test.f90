@@ -2,14 +2,16 @@ module pose_cont_refinement_numerics_test
 use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
 use pose_cont_refinement_test_helpers, only: assert_true, build_test_volume, &
     &identity_rotation, prepare_unweighted_particle, TEST_BOX
-use simple_defs, only: dp, DPI, KBALPHA, KBWINSZ, OSMPL_PAD_FAC
+use simple_defs, only: dp, sp, DPI, KBALPHA, KBWINSZ, OSMPL_PAD_FAC
 use simple_core_module_api, only: euler2m
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, cartesian_pose_data, &
     &right_increment_rotation, POSE_CONT_OBJECTIVE_CART_NCC, &
     &POSE_CONT_OBJECTIVE_CART_EUCLID
 use simple_ctf, only: ctf
 use simple_gridding, only: kb_stencil_centered_crop_inv_envelope_1d
+use simple_image, only: image
 use simple_kbinterpol, only: kbinterpol
+use simple_projector, only: projector
 use simple_type_defs, only: ctfparams, ctfvars, CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES
 implicit none
 private
@@ -26,6 +28,7 @@ contains
         call test_shift_phase_sign()
         call test_ncc_objective_formula()
         call test_five_parameter_gradient()
+        call test_matched_projector_boundary()
         call test_rotation_increment()
         write (*, '(a)') 'POSE_CONT_REFINEMENT_NUMERICS: PASS'
     end subroutine run_pose_cont_numerics
@@ -283,6 +286,66 @@ contains
         end do
         call workspace%kill
     end subroutine test_five_parameter_gradient
+
+    !> Compare the Cartesian gather with SIMPLE's established projector kernel
+    !! at identical rotated 3-D coordinates from the same physical reference.
+    subroutine test_matched_projector_boundary()
+        type(cartesian_pose_refiner) :: workspace
+        type(image) :: volume_image
+        type(projector) :: pftc_projector
+        real, allocatable :: volume(:, :, :)
+        complex :: cartesian(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        complex :: pftc(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        complex(dp) :: cross_sum
+        real(dp) :: rotation(3, 3), cartesian_power, pftc_power
+        real(dp) :: correlation, gain, relative_l2, residual_power
+        real(sp) :: loc(3)
+        integer :: h, k, radius_squared
+
+        call build_test_volume(volume)
+        call workspace%new_physical_reference(volume)
+        call volume_image%new([TEST_BOX, TEST_BOX, TEST_BOX], 1.)
+        call volume_image%set_rmat(volume, .false.)
+        call pftc_projector%new([OSMPL_PAD_FAC*TEST_BOX, OSMPL_PAD_FAC*TEST_BOX, &
+            &OSMPL_PAD_FAC*TEST_BOX], 1.)
+        call volume_image%pad_fft(pftc_projector)
+        call pftc_projector%expand_cmat()
+
+        rotation = real(euler2m([17., 31., 23.]), dp)
+        call workspace%predict_unweighted(rotation, [0._dp, 0._dp], cartesian)
+        pftc = cmplx(0., 0.)
+        cross_sum = cmplx(0._dp, 0._dp, kind=dp)
+        cartesian_power = 0._dp
+        pftc_power = 0._dp
+        residual_power = 0._dp
+        do k = -TEST_BOX/2, TEST_BOX/2
+            do h = -TEST_BOX/2, TEST_BOX/2
+                radius_squared = h*h + k*k
+                if (radius_squared < 4 .or. radius_squared > (TEST_BOX/2 - 1)**2) cycle
+                loc = real(matmul(real([h, k, 0], dp), rotation), sp)
+                pftc(h, k) = pftc_projector%interp_fcomp_oversamp(loc)
+                cross_sum = cross_sum + conjg(cmplx(pftc(h, k), kind=dp))* &
+                    &cmplx(cartesian(h, k), kind=dp)
+                pftc_power = pftc_power + abs(cmplx(pftc(h, k), kind=dp))**2
+                cartesian_power = cartesian_power + abs(cmplx(cartesian(h, k), kind=dp))**2
+                residual_power = residual_power + &
+                    &abs(cmplx(cartesian(h, k) - pftc(h, k), kind=dp))**2
+            end do
+        end do
+        correlation = real(cross_sum, dp)/sqrt(pftc_power*cartesian_power)
+        gain = real(cross_sum, dp)/pftc_power
+        relative_l2 = sqrt(residual_power/pftc_power)
+        write (*, '(a,3(1x,es12.4))') &
+            &'POSE_CONT_MATCHED_PROJECTOR', correlation, gain, relative_l2
+        call assert_true(correlation >= 1._dp - 1.e-6_dp .and. &
+            &abs(gain - 1._dp) <= 1.e-5_dp .and. relative_l2 <= 2.e-5_dp, &
+            &'PFTC projector kernel and Cartesian gather disagree at a matched boundary')
+
+        call workspace%kill()
+        call pftc_projector%kill_expanded()
+        call pftc_projector%kill()
+        call volume_image%kill()
+    end subroutine test_matched_projector_boundary
 
     subroutine test_rotation_increment()
         real(dp) :: rotation(3, 3), updated(3, 3), identity(3, 3)
