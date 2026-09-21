@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test programs (production/tests) are skipped unless --compile-tests is given.
+# Test code (simple_test_exec and production/tests) is skipped unless --compile-tests is given.
 BUILD_TESTS=OFF
 for arg in "$@"; do
     case "$arg" in

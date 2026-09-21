@@ -14,8 +14,6 @@ set(SIMPLE_WORKER_EXE   simple_persistent_worker)
 
 add_executable(${SIMPLE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec.f90")
-add_executable(${SIMPLE_TEST_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/simple_test_exec.f90")
 add_executable(${SINGLE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/single_exec.f90")
 add_executable(${STREAM_EXE}
@@ -28,12 +26,19 @@ add_executable(${SIMPLE_WORKER_EXE}
 
 set(SIMPLE_EXECUTABLES
     ${SIMPLE_EXE}
-    ${SIMPLE_TEST_EXE}
     ${SINGLE_EXE}
     ${STREAM_EXE}
     ${SIMPLE_PRIVATE_EXE}
     ${SIMPLE_WORKER_EXE}
 )
+
+# simple_test_exec is test code: built only with BUILD_TESTS=ON, like the
+# programs in tests/ (its library sources are filtered out in src/ otherwise).
+if(BUILD_TESTS)
+    add_executable(${SIMPLE_TEST_EXE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/simple_test_exec.f90")
+    list(APPEND SIMPLE_EXECUTABLES ${SIMPLE_TEST_EXE})
+endif()
 
 foreach(exe IN LISTS SIMPLE_EXECUTABLES)
     set_target_properties(${exe} PROPERTIES

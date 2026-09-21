@@ -12,7 +12,7 @@
 #   NVCC=/usr/local/cuda/bin/nvcc CUDA_HOST=/usr/bin/g++ ./compile_flex_gpu.sh
 # CUDA_ARCH defaults to 'native' (whatever card is in this machine); set it to
 # cross-build for another card, e.g. CUDA_ARCH=75.
-# Test programs (production/tests) are skipped unless --compile-tests is given.
+# Test code (simple_test_exec and production/tests) is skipped unless --compile-tests is given.
 BUILD_TESTS=OFF
 for arg in "$@"; do
     case "$arg" in

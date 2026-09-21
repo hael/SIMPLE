@@ -85,7 +85,7 @@ cmake --install .
 - `compile_gui.sh`: NICE-enabled build.
 - `compile_conda.sh`: conda-provisioned GCC/GFortran, FFTW, TIFF, JPEG, Python, and CMake environment.
 - `compile_csbclust.sh`: module-based HPC build.
-- Every `compile_*.sh` skips the test programs in `production/tests` unless given `--compile-tests` (CI passes it).
+- Every `compile_*.sh` skips test code (`simple_test_exec` and the programs in `production/tests`) unless given `--compile-tests` (CI passes it).
 - After install: source `build/add2.bashrc`, or add `build/bin`, `build/scripts`, and `SIMPLE_PATH` manually.
 
 # Wiki, CI, and Team Workflow

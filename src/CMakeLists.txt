@@ -214,6 +214,16 @@ set(SIMPLE_ALL_SOURCES
     ${SIMPLE_src}
 )
 
+# Test-only code: the simple_test_exec front end (its commanders, exec routers
+# and API module) and the *_tester modules. No production executable uses any
+# of it, so it is compiled only with BUILD_TESTS=ON.
+if(NOT BUILD_TESTS)
+    list(FILTER SIMPLE_ALL_SOURCES EXCLUDE REGEX "/main/commanders/test/")
+    list(FILTER SIMPLE_ALL_SOURCES EXCLUDE REGEX "/main/exec/simple_test_exec[^/]*\\.[Ff]90$")
+    list(FILTER SIMPLE_ALL_SOURCES EXCLUDE REGEX "/main/apis/simple_test_exec_api\\.[Ff]90$")
+    list(FILTER SIMPLE_ALL_SOURCES EXCLUDE REGEX "_tester\\.[Ff]90$")
+endif()
+
 # ------------------------------------------------------------------------------
 # Library target
 # ------------------------------------------------------------------------------

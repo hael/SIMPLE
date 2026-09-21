@@ -38,7 +38,9 @@ Do not guess ownership from filenames. Follow the flow:
 ## Structure
 
 - `production/`: thin executable entrypoints (`simple_exec`, `single_exec`,
-  `simple_stream`, `simple_test_exec`, `simple_private_exec`).
+  `simple_stream`, `simple_test_exec`, `simple_private_exec`). `simple_test_exec`
+  and `production/tests` are built only with `BUILD_TESTS=ON`
+  (`compile_*.sh --compile-tests`).
 - `src/`: core static library.
 - `src/main/`: application and domain logic.
 - `src/defs`, `src/fileio`, `src/utils`: shared infrastructure.
