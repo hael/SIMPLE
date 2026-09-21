@@ -46,11 +46,11 @@ jobs:
              
       - name: Build SIMPLE in debug mode (Linux/MacOS)
         run: |
-             ./compile_debug.sh
+             ./compile_debug.sh --compile-tests
 
       - name: Build SIMPLE GUI  (Linux/MacOS)
         run: |
-             ./compile_gui.sh
+             ./compile_gui.sh --compile-tests
 
   Build_coarray:
     name: Build SIMPLE with coarrays
@@ -88,7 +88,7 @@ jobs:
 
       - name: Build SIMPLE with coarrays (Linux/MacOS)
         run: |
-             ./compile_coarrays.sh
+             ./compile_coarrays.sh --compile-tests
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
@@ -134,7 +134,7 @@ jobs:
              
       - name: Install SIMPLE (Linux/MacOS)
         run: |
-             ./compile_clean.sh
+             ./compile_clean.sh --compile-tests
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
