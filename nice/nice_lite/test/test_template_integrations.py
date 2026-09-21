@@ -189,6 +189,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         filebrowser = self._read_template("filebrowser.html")
 
         self.assertIn("const restoreJobsIframe = (iframe) => {", filebrowser)
+        self.assertIn('restoreUrl.searchParams.set("force", "1");', filebrowser)
         self.assertNotIn("parent.toggleJobsIframeLoading(true);", filebrowser)
 
     def test_file_browser_openers_share_last_directory(self):

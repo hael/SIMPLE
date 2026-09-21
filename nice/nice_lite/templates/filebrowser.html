@@ -145,7 +145,9 @@
                 iframe.setAttribute("style", iframe.dataset.originalStyle);
             }
             if (iframe.dataset.originalSrc !== undefined) {
-                iframe.setAttribute("src", iframe.dataset.originalSrc);
+                const restoreUrl = new URL(iframe.dataset.originalSrc, parent.location.href);
+                restoreUrl.searchParams.set("force", "1");
+                iframe.setAttribute("src", restoreUrl.href);
             }
         };
 

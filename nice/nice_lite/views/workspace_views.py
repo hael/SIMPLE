@@ -266,7 +266,8 @@ def view_workspace_jobs(request):
     }
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
-    if old_checksum == "none" or old_checksum != checksum:
+    force_render = request.GET.get("force") == "1"
+    if force_render or old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
         response = render(request, template, {"jobs": jobs})
         response.set_cookie(key="workspace_jobs_checksum", value=checksum)

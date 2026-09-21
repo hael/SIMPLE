@@ -96,6 +96,33 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         mock_render.assert_not_called()
         mock_normalize.assert_not_called()
 
+    def test_workspace_jobs_force_renders_when_checksum_matches(self):
+        payload = [{"id": 1, "status": "running"}]
+        checksum_payload = {
+            "jobs": payload,
+            "template": "jobs_cards.html",
+        }
+        checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
+
+        request = self.factory.get("/workspacejobs", {"force": "1"})
+        request.user = _AuthUser()
+        request.COOKIES["workspace_jobs_checksum"] = checksum
+
+        fake_workspace = SimpleNamespace(id=1)
+        fake_queryset = _FakeQueryset(payload)
+
+        with patch.object(workspace_views, "get_workspace_id", return_value=1), patch.object(workspace_views, "get_project_id", return_value=2), patch.object(workspace_views, "Workspace", return_value=fake_workspace), patch.object(workspace_views, "_is_workspace_accessible", return_value=True), patch.object(workspace_views.JobModel.objects, "filter", return_value=fake_queryset), patch.object(workspace_views, "render", return_value=HttpResponse("jobs")) as mock_render, patch.object(workspace_views, "_normalize_latest_cls2d") as mock_normalize:
+            response = workspace_views.view_workspace_jobs(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("workspace_jobs_checksum", response.cookies)
+        mock_render.assert_called_once_with(
+            request,
+            "jobs_cards.html",
+            {"jobs": fake_queryset},
+        )
+        mock_normalize.assert_called_once_with(fake_queryset)
+
 
 class WorkspaceJobRefreshTests(SimpleTestCase):
     def setUp(self):
