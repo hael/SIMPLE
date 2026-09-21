@@ -70,6 +70,7 @@ end type pose_cont_config
 !> Result and accounting shared by the shift-only and joint LM stages.
 type :: pose_cont_stage_result
     integer  :: status = POSE_CONT_NOT_ATTEMPTED
+    integer  :: iterations = 0
     integer  :: attempts = 0
     integer  :: accepts = 0
     integer  :: bound_hits = 0
@@ -93,6 +94,7 @@ type :: pose_cont_transaction_result
     integer  :: attempts = 0
     integer  :: accepts = 0
     integer  :: bound_hits = 0
+    integer  :: iterations = 0
     real(dp) :: max_rotation_step = 0._dp
     real(dp) :: max_shift_step = 0._dp
 
@@ -519,6 +521,7 @@ contains
         real(dp), intent(in) :: objective_before, objective_after
 
         stage%status = lm_result%status
+        stage%iterations = lm_result%niterations
         stage%attempts = diagnostics%nattempted
         stage%accepts = diagnostics%naccepted
         stage%bound_hits = diagnostics%nbound_hits
@@ -534,6 +537,7 @@ contains
         result%accepts = result%accepts + stage%accepts
         result%attempts = result%attempts + stage%attempts
         result%bound_hits = result%bound_hits + stage%bound_hits
+        result%iterations = result%iterations + stage%iterations
         result%max_rotation_step = max(result%max_rotation_step, stage%max_rotation_step)
         result%max_shift_step = max(result%max_shift_step, stage%max_shift_step)
     end subroutine add_stage_accounting

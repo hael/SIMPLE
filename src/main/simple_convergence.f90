@@ -27,6 +27,8 @@ type convergence
     real    :: frac_greedy            = 0. !< fraction of greedy searches
     real    :: cont_inpl_improved_pct = 0. !< continuous in-plane runs that improved (%)
     integer :: cont_inpl_attempts     = 0  !< continuous in-plane runs attempted
+    real    :: pose_cont_improved_pct = 0. !< continuous pose runs that improved (%)
+    integer :: pose_cont_attempts     = 0  !< continuous pose runs attempted
     real    :: progress               = 0. !< progress estimation
   contains
     procedure :: read
@@ -59,6 +61,10 @@ contains
             if( ostats%isthere('CONT_INPL_IMPROVED_PCT') )then
                 self%cont_inpl_improved_pct = ostats%get(1,'CONT_INPL_IMPROVED_PCT')
                 self%cont_inpl_attempts      = nint(ostats%get(1,'CONT_INPL_ATTEMPTS'))
+            endif
+            if( ostats%isthere('POSE_CONT_IMPROVED_PCT') )then
+                self%pose_cont_improved_pct = ostats%get(1,'POSE_CONT_IMPROVED_PCT')
+                self%pose_cont_attempts = nint(ostats%get(1,'POSE_CONT_ATTEMPTS'))
             endif
         else
             l_err = .true.
@@ -276,7 +282,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
-        logical :: converged, cont_stats_available
+        logical :: converged, cont_stats_available, pose_stats_available
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
@@ -329,6 +335,7 @@ contains
         self%mi_state    = os%get_avg('mi_state',    mask=mask)
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
         call calc_continuous_inplane_stats(self, os, mask, cont_stats_available)
+        call calc_continuous_pose_stats(self, os, mask, pose_stats_available)
         ! overlaps and particle updates
         s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
@@ -343,6 +350,11 @@ contains
             cont_ratio = '('//int2str(self%cont_inpl_attempts)//' attempts)'
             write(logfhandle,602) '>>> % CONTINUOUS IN-PLANE RUNS IMPROVED       ', &
                 &self%cont_inpl_improved_pct, cont_ratio%to_char()
+        endif
+        if( pose_stats_available )then
+            cont_ratio = '('//int2str(self%pose_cont_attempts)//' attempts)'
+            write(logfhandle,602) '>>> % CONTINUOUS POSE RUNS IMPROVED           ', &
+                &self%pose_cont_improved_pct, cont_ratio%to_char()
         endif
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
@@ -556,6 +568,10 @@ contains
             call ostats%set(1,'CONT_INPL_IMPROVED_PCT', self%cont_inpl_improved_pct)
             call ostats%set(1,'CONT_INPL_ATTEMPTS',      self%cont_inpl_attempts)
         endif
+        if( pose_stats_available )then
+            call ostats%set(1,'POSE_CONT_IMPROVED_PCT', self%pose_cont_improved_pct)
+            call ostats%set(1,'POSE_CONT_ATTEMPTS', self%pose_cont_attempts)
+        endif
         if( params%l_ml_reg )then
             call ostats%set(1,'ML_REGULARIZATION',                    1.0)
             call ostats%set(1,'ML_REGULARIZATION_TAU',         params%tau)
@@ -605,6 +621,30 @@ contains
         endif
         deallocate(attempted, improved)
     end subroutine calc_continuous_inplane_stats
+
+    subroutine calc_continuous_pose_stats(self, os, mask, available)
+        class(convergence), intent(inout) :: self
+        class(oris), intent(inout) :: os
+        logical, intent(in) :: mask(:)
+        logical, intent(out) :: available
+        real, allocatable :: attempted(:), improved(:)
+        integer :: nimproved
+
+        self%pose_cont_improved_pct = 0.
+        self%pose_cont_attempts = 0
+        ! A zero-valued improved field is a valid result, but particle fields
+        ! encode zero as absent. Attempts therefore own report availability;
+        ! get_all returns zero for every non-improved particle.
+        available = os%isthere('pose_cont_attempted')
+        if( .not. available ) return
+        attempted = os%get_all('pose_cont_attempted')
+        improved = os%get_all('pose_cont_improved')
+        self%pose_cont_attempts = count(mask .and. attempted > 0.5)
+        nimproved = count(mask .and. attempted > 0.5 .and. improved > 0.5)
+        if( self%pose_cont_attempts > 0 ) &
+            &self%pose_cont_improved_pct = 100.*real(nimproved)/real(self%pose_cont_attempts)
+        deallocate(attempted,improved)
+    end subroutine calc_continuous_pose_stats
 
     subroutine append_stats( self, params, ostats )
         use CPlot2D_wrapper_module, only: plot2D
@@ -795,6 +835,10 @@ contains
                 get = self%cont_inpl_improved_pct
             case('cont_inpl_attempts')
                 get = real(self%cont_inpl_attempts)
+            case('pose_cont_improved_pct')
+                get = self%pose_cont_improved_pct
+            case('pose_cont_attempts')
+                get = real(self%pose_cont_attempts)
             case('progress')
                 get = self%progress
         end select

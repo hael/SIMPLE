@@ -53,9 +53,11 @@ enum, bind(c)
     enumerator :: I_CONT_INPL_ATTEMPTED = 48
     enumerator :: I_CONT_INPL_IMPROVED  = 49
     enumerator :: I_RES05               = 50 ! resolution @ FSC=0.5 (formerly the spare slot I_EMPTY10)
+    enumerator :: I_POSE_CONT_ATTEMPTED = 51
+    enumerator :: I_POSE_CONT_IMPROVED  = 52
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 50
+integer, parameter :: N_PTCL_ORIPARAMS = 52
 
 contains
 
@@ -163,6 +165,10 @@ contains
                 get_oriparam_ind = I_CONT_INPL_ATTEMPTED
             case('cont_inpl_improved')
                 get_oriparam_ind = I_CONT_INPL_IMPROVED
+            case('pose_cont_attempted')
+                get_oriparam_ind = I_POSE_CONT_ATTEMPTED
+            case('pose_cont_improved')
+                get_oriparam_ind = I_POSE_CONT_IMPROVED
         end select
     end function get_oriparam_ind
 
@@ -268,6 +274,10 @@ contains
                 flag = 'cont_inpl_attempted'
             case(I_CONT_INPL_IMPROVED)
                 flag = 'cont_inpl_improved'
+            case(I_POSE_CONT_ATTEMPTED)
+                flag = 'pose_cont_attempted'
+            case(I_POSE_CONT_IMPROVED)
+                flag = 'pose_cont_improved'
             case(I_RES05)
                 flag = 'res05'
             case DEFAULT
@@ -328,6 +338,10 @@ contains
             case(I_CLASS_MATCH)
                 oriparam_isthere = abs(val) > TINY    
             case(I_RES05)
+                oriparam_isthere = abs(val) > TINY
+            case(I_POSE_CONT_ATTEMPTED)
+                oriparam_isthere = abs(val) > TINY
+            case(I_POSE_CONT_IMPROVED)
                 oriparam_isthere = abs(val) > TINY
             case DEFAULT
                 ! default case is defined

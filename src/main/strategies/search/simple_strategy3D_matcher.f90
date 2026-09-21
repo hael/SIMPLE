@@ -32,8 +32,11 @@ use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
     &cartesian_pose_data, pose_cont_particle_workspace, &
     &pose_cont_seed_from_orientation, pose_cont_pose_to_orientation, &
-    &LM_ACCEPTED_IMPROVEMENT, &
-    &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
+    &LM_ACCEPTED_IMPROVEMENT, LM_FINITE_NO_IMPROVEMENT, LM_NO_RELIABLE_UPDATE, &
+    &LM_STEP_BOUND_REJECTED, LM_INVALID_NUMERICS, LM_ITERATION_LIMIT, &
+    &POSE_CONT_INVALID_PREPARATION, &
+    &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT, &
+    &POSE_CONT_OBJECTIVE_CART_EUCLID, POSE_CONT_OBJECTIVE_CART_NCC
 implicit none
 
 public :: refine3D_exec
@@ -55,6 +58,32 @@ type :: refine3D_ctrl
   contains
     procedure :: print_flags
 end type refine3D_ctrl
+
+!> Thread-local pose_cont accounting reduced after the particle OpenMP loop.
+type :: pose_cont_run_stats
+    integer :: attempted = 0
+    integer :: improved = 0
+    integer :: finite_no_improvement = 0
+    integer :: bound_rejected = 0
+    integer :: no_reliable_update = 0
+    integer :: invalid_numerics = 0
+    integer :: iteration_limit = 0
+    integer :: invalid_preparation = 0
+    integer :: unknown_status = 0
+    integer :: iterations = 0
+    integer :: proposals = 0
+    integer :: accepted_proposals = 0
+    integer :: bound_hits = 0
+    integer :: objective_pairs = 0
+    real(dp) :: rotation_motion_sum = 0._dp
+    real(dp) :: shift_motion_sum = 0._dp
+    real(dp) :: rotation_motion_max = 0._dp
+    real(dp) :: shift_motion_max = 0._dp
+    real(dp) :: objective_before_sum = 0._dp
+    real(dp) :: objective_after_sum = 0._dp
+    real(dp) :: runtime_sum = 0._dp
+    real(dp) :: runtime_max = 0._dp
+end type pose_cont_run_stats
 
 contains
 
@@ -82,6 +111,8 @@ contains
         type(pose_cont_particle_workspace) :: pose_cont_particles
         type(pose_cont_config) :: pose_config
         type(pose_cont_limits) :: pose_limits
+        type(pose_cont_run_stats), allocatable :: pose_stats(:)
+        type(pose_cont_run_stats) :: pose_stats_total
         real                :: frac_greedy
         real(dp)            :: pose_cont_crop_scale
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
@@ -163,10 +194,16 @@ contains
             rt_align            = 0.0
         endif
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
+        if( ctrl%do_pose_cont_polish .or. ctrl%do_pose_cont_strategy ) &
+            &allocate(pose_stats(p_ptr%nthr))
         if( trim(p_ptr%inpl_cont) == 'yes' )then
             call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
+        ! Clear stale telemetry even when pose_cont is disabled. Zero-valued
+        ! attempts are absent from the normal convergence report.
+        call b_ptr%spproj_field%set_all2single('pose_cont_attempted', 0.)
+        call b_ptr%spproj_field%set_all2single('pose_cont_improved', 0.)
         allocate(incr_shifts(2,batchsz_max), source=0.0)
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
@@ -201,6 +238,10 @@ contains
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
+        if( allocated(pose_stats) )then
+            call reduce_pose_cont_stats(pose_stats,pose_stats_total)
+            call report_pose_cont_stats(pose_stats_total)
+        endif
         if( ctrl%do_emit_sigma ) call b_ptr%esig%write_sigma2
         if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)
         call maybe_write_orientations()
@@ -209,6 +250,7 @@ contains
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         deallocate(cnt_greedy, cnt_all, incr_shifts)
+        if( allocated(pose_stats) ) deallocate(pose_stats)
         call eulprob_obj_part%kill
         if( .not. ctrl%do_pose_cont_strategy ) call clean_strategy3D
         call b_ptr%kill_strategy3D_tbox
@@ -323,6 +365,14 @@ contains
             if( ctrl%do_pose_cont_polish .or. ctrl%do_pose_cont_strategy )then
                 if( p_ptr%cc_objfun /= OBJFUN_EUCLID ) &
                     &THROW_HARD('pose_cont requires objfun=euclid')
+                select case(trim(p_ptr%pose_cont_route))
+                    case('shift_then_joint')
+                        pose_config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
+                    case('joint')
+                        pose_config%route = POSE_CONT_ROUTE_JOINT
+                    case default
+                        THROW_HARD('unsupported pose_cont_route')
+                end select
             endif
             if( ctrl%do_pose_cont_strategy )then
                 if( trim(p_ptr%inpl_cont) /= 'no' ) &
@@ -336,14 +386,6 @@ contains
                 if( ctrl%do_prob_align .or. ctrl%do_sigma_mode .or. &
                     &ctrl%refine_mode == 'eval' ) &
                     &THROW_HARD('pose_cont requires an ordinary pose-search refinement mode')
-                select case(trim(p_ptr%pose_cont_route))
-                    case('shift_then_joint')
-                        pose_config%route = POSE_CONT_ROUTE_SHIFT_THEN_JOINT
-                    case('joint')
-                        pose_config%route = POSE_CONT_ROUTE_JOINT
-                    case default
-                        THROW_HARD('unsupported pose_cont_route')
-                end select
                 ! The adapter works in cropped-box pixels; express the one-native-
                 ! pixel proposal and five-native-pixel capture bounds on that grid.
                 pose_cont_crop_scale = real(p_ptr%box_crop,dp)/real(p_ptr%box,dp)
@@ -468,7 +510,11 @@ contains
             integer, intent(in) :: iptcl, iptcl_batch, ithr
             logical, intent(in) :: has_been_searched
             type(ori) :: o_sigma ! procedure-local: thread-safe, unlike the host's orientation
+            type(pose_cont_transaction_result) :: pose_result
+            real(dp) :: pose_start, pose_elapsed
             logical :: attempted, improved, no_improvement, invalid
+            pose_result = pose_cont_transaction_result()
+            pose_elapsed = 0._dp
             select case(ctrl%refine_mode)
                 case('shc')
                     if( .not. has_been_searched )then
@@ -530,9 +576,28 @@ contains
                         class default
                             THROW_HARD('pose_cont routing allocated an incompatible strategy')
                     end select
+                    pose_start = wall_time_seconds()
                 endif
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
-                if( ctrl%do_pose_cont_polish ) call run_pose_cont_after_pftc(iptcl,iptcl_batch,ithr)
+                if( ctrl%do_pose_cont_strategy )then
+                    pose_elapsed = wall_time_seconds()-pose_start
+                    select type(pose_cont_strategy => strategy3Dsrch(iptcl_batch)%ptr)
+                        type is(strategy3D_pose_cont)
+                            pose_result = pose_cont_strategy%get_result()
+                        class default
+                            THROW_HARD('pose_cont routing allocated an incompatible strategy')
+                    end select
+                else if( ctrl%do_pose_cont_polish )then
+                    pose_start = wall_time_seconds()
+                    call run_pose_cont_after_pftc(iptcl,iptcl_batch,ithr,pose_result)
+                    pose_elapsed = wall_time_seconds()-pose_start
+                endif
+                if( ctrl%do_pose_cont_strategy .or. ctrl%do_pose_cont_polish )then
+                    call record_pose_cont_stats(pose_stats(ithr),pose_result,pose_elapsed)
+                    call b_ptr%spproj_field%set(iptcl,'pose_cont_attempted',1.)
+                    call b_ptr%spproj_field%set(iptcl,'pose_cont_improved', &
+                        &merge(1.,0.,pose_result%status == LM_ACCEPTED_IMPROVEMENT))
+                endif
                 if( trim(p_ptr%inpl_cont) == 'yes' )then
                     call strategy3Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
                         &attempted, improved, no_improvement, invalid)
@@ -553,13 +618,13 @@ contains
         !! With inpl_cont=yes, the seed includes its accepted in-plane polish.
         !! Invalid or rejected LM results preserve that seed unchanged.
         !! This pose_cont=yes route is separate from refine=pose_cont.
-        subroutine run_pose_cont_after_pftc(iptcl, iptcl_batch, ithr)
+        subroutine run_pose_cont_after_pftc(iptcl, iptcl_batch, ithr, result)
             integer, intent(in) :: iptcl, iptcl_batch, ithr
+            type(pose_cont_transaction_result), intent(out) :: result
             type(ori) :: winner
             type(ctfparams) :: ctfparms, cropped_ctfparms
             type(cartesian_pose_data) :: data
             type(pose_cont_pose) :: seed
-            type(pose_cont_transaction_result) :: result
             complex, allocatable :: observed(:,:)
             real, allocatable :: sigma2(:)
             integer :: state, eo
@@ -616,6 +681,179 @@ contains
             endif
             call winner%kill
         end subroutine run_pose_cont_after_pftc
+
+        !> Add one completed transaction to a thread-private accumulator.
+        subroutine record_pose_cont_stats(stats, result, elapsed_seconds)
+            type(pose_cont_run_stats), intent(inout) :: stats
+            type(pose_cont_transaction_result), intent(in) :: result
+            real(dp), intent(in) :: elapsed_seconds
+
+            stats%attempted = stats%attempted+1
+            select case(result%status)
+            case(LM_ACCEPTED_IMPROVEMENT)
+                stats%improved = stats%improved+1
+            case(LM_FINITE_NO_IMPROVEMENT)
+                stats%finite_no_improvement = stats%finite_no_improvement+1
+            case(LM_STEP_BOUND_REJECTED)
+                stats%bound_rejected = stats%bound_rejected+1
+            case(LM_NO_RELIABLE_UPDATE)
+                stats%no_reliable_update = stats%no_reliable_update+1
+            case(LM_INVALID_NUMERICS)
+                stats%invalid_numerics = stats%invalid_numerics+1
+            case(LM_ITERATION_LIMIT)
+                stats%iteration_limit = stats%iteration_limit+1
+            case(POSE_CONT_INVALID_PREPARATION)
+                stats%invalid_preparation = stats%invalid_preparation+1
+            case default
+                stats%unknown_status = stats%unknown_status+1
+            end select
+            stats%iterations = stats%iterations+result%iterations
+            stats%proposals = stats%proposals+result%attempts
+            stats%accepted_proposals = stats%accepted_proposals+result%accepts
+            stats%bound_hits = stats%bound_hits+result%bound_hits
+            stats%rotation_motion_sum = stats%rotation_motion_sum+result%cumulative_rotation
+            stats%shift_motion_sum = stats%shift_motion_sum+result%cumulative_shift
+            stats%rotation_motion_max = max(stats%rotation_motion_max,result%cumulative_rotation)
+            stats%shift_motion_max = max(stats%shift_motion_max,result%cumulative_shift)
+            if( result%objective_before >= 0._dp .and. result%objective_after >= 0._dp )then
+                stats%objective_pairs = stats%objective_pairs+1
+                stats%objective_before_sum = stats%objective_before_sum+result%objective_before
+                stats%objective_after_sum = stats%objective_after_sum+result%objective_after
+            endif
+            stats%runtime_sum = stats%runtime_sum+elapsed_seconds
+            stats%runtime_max = max(stats%runtime_max,elapsed_seconds)
+        end subroutine record_pose_cont_stats
+
+        !> Reduce thread-private counters after the particle OpenMP region.
+        pure subroutine reduce_pose_cont_stats(thread_stats, total)
+            type(pose_cont_run_stats), intent(in) :: thread_stats(:)
+            type(pose_cont_run_stats), intent(out) :: total
+            integer :: i
+
+            total = pose_cont_run_stats()
+            do i = 1,size(thread_stats)
+                total%attempted = total%attempted+thread_stats(i)%attempted
+                total%improved = total%improved+thread_stats(i)%improved
+                total%finite_no_improvement = total%finite_no_improvement+ &
+                    &thread_stats(i)%finite_no_improvement
+                total%bound_rejected = total%bound_rejected+thread_stats(i)%bound_rejected
+                total%no_reliable_update = total%no_reliable_update+thread_stats(i)%no_reliable_update
+                total%invalid_numerics = total%invalid_numerics+thread_stats(i)%invalid_numerics
+                total%iteration_limit = total%iteration_limit+thread_stats(i)%iteration_limit
+                total%invalid_preparation = total%invalid_preparation+thread_stats(i)%invalid_preparation
+                total%unknown_status = total%unknown_status+thread_stats(i)%unknown_status
+                total%iterations = total%iterations+thread_stats(i)%iterations
+                total%proposals = total%proposals+thread_stats(i)%proposals
+                total%accepted_proposals = total%accepted_proposals+thread_stats(i)%accepted_proposals
+                total%bound_hits = total%bound_hits+thread_stats(i)%bound_hits
+                total%objective_pairs = total%objective_pairs+thread_stats(i)%objective_pairs
+                total%rotation_motion_sum = total%rotation_motion_sum+thread_stats(i)%rotation_motion_sum
+                total%shift_motion_sum = total%shift_motion_sum+thread_stats(i)%shift_motion_sum
+                total%rotation_motion_max = max(total%rotation_motion_max,thread_stats(i)%rotation_motion_max)
+                total%shift_motion_max = max(total%shift_motion_max,thread_stats(i)%shift_motion_max)
+                total%objective_before_sum = total%objective_before_sum+thread_stats(i)%objective_before_sum
+                total%objective_after_sum = total%objective_after_sum+thread_stats(i)%objective_after_sum
+                total%runtime_sum = total%runtime_sum+thread_stats(i)%runtime_sum
+                total%runtime_max = max(total%runtime_max,thread_stats(i)%runtime_max)
+            enddo
+        end subroutine reduce_pose_cont_stats
+
+        !> Print and persist one compact iteration-level pose_cont summary.
+        subroutine report_pose_cont_stats(stats)
+            type(pose_cont_run_stats), intent(in) :: stats
+            character(len=32) :: route, objective_name
+            character(len=64) :: filename
+            real(dp) :: denominator, objective_denominator
+            integer :: unit, terminal_count, invalid_unreliable
+
+            invalid_unreliable = stats%no_reliable_update+stats%invalid_numerics+ &
+                &stats%iteration_limit+stats%invalid_preparation+stats%unknown_status
+            terminal_count = stats%improved+stats%finite_no_improvement+ &
+                &stats%bound_rejected+invalid_unreliable
+            if( terminal_count /= stats%attempted ) &
+                &THROW_HARD('pose_cont terminal accounting does not balance')
+            select case(pose_config%route)
+            case(POSE_CONT_ROUTE_SHIFT_THEN_JOINT)
+                route = 'shift_then_joint'
+            case(POSE_CONT_ROUTE_JOINT)
+                route = 'joint'
+            case default
+                route = 'invalid'
+            end select
+            select case(pose_config%objective)
+            case(POSE_CONT_OBJECTIVE_CART_EUCLID)
+                objective_name = 'cart_euclid'
+            case(POSE_CONT_OBJECTIVE_CART_NCC)
+                objective_name = 'cart_ncc'
+            case default
+                objective_name = 'invalid'
+            end select
+            denominator = real(max(stats%attempted,1),dp)
+            objective_denominator = real(max(stats%objective_pairs,1),dp)
+            write(logfhandle,'(A,1X,A,1X,A,1X,A,I0,A,I0,A,I0,A,I0,A,I0)') '>>> POSE_CONT', &
+                &trim(route),trim(objective_name),'attempted=',stats%attempted, &
+                &' improved=',stats%improved,' finite_no_improvement=', &
+                &stats%finite_no_improvement,' bound_rejected=',stats%bound_rejected, &
+                &' invalid_unreliable=',invalid_unreliable
+            write(logfhandle,'(A,5(A,I0))') '>>> POSE_CONT invalid detail', &
+                &' no_reliable_update=',stats%no_reliable_update, &
+                &' invalid_numerics=',stats%invalid_numerics, &
+                &' iteration_limit=',stats%iteration_limit, &
+                &' invalid_preparation=',stats%invalid_preparation, &
+                &' unknown_status=',stats%unknown_status
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,4(ES12.4,1X))') '>>> POSE_CONT iterations=', &
+                &stats%iterations,' proposals=',stats%proposals, &
+                &' accepted_proposals=',stats%accepted_proposals,' bound_hits=',stats%bound_hits, &
+                &' motion mean/max rotation shift=',stats%rotation_motion_sum/denominator, &
+                &stats%rotation_motion_max,stats%shift_motion_sum/denominator,stats%shift_motion_max
+            write(logfhandle,'(A,2(ES12.4,1X),A,3(ES12.4,1X))') '>>> POSE_CONT objective mean before/after=', &
+                &stats%objective_before_sum/objective_denominator, &
+                &stats%objective_after_sum/objective_denominator, &
+                &'transaction seconds sum/mean/max=',stats%runtime_sum, &
+                &stats%runtime_sum/denominator,stats%runtime_max
+            write(filename,'(A,I3.3,A)') 'POSE_CONT_STATS_ITER',which_iter,'.txt'
+            open(newunit=unit,file=trim(filename),status='replace',action='write')
+            write(unit,'(A)') 'route='//trim(route)
+            write(unit,'(A)') 'objective='//trim(objective_name)
+            write(unit,'(A,I0)') 'attempted=',stats%attempted
+            write(unit,'(A,I0)') 'improved=',stats%improved
+            write(unit,'(A,I0)') 'finite_no_improvement=',stats%finite_no_improvement
+            write(unit,'(A,I0)') 'bound_rejected=',stats%bound_rejected
+            write(unit,'(A,I0)') 'invalid_unreliable=',invalid_unreliable
+            write(unit,'(A,I0)') 'no_reliable_update=',stats%no_reliable_update
+            write(unit,'(A,I0)') 'invalid_numerics=',stats%invalid_numerics
+            write(unit,'(A,I0)') 'iteration_limit=',stats%iteration_limit
+            write(unit,'(A,I0)') 'invalid_preparation=',stats%invalid_preparation
+            write(unit,'(A,I0)') 'unknown_status=',stats%unknown_status
+            write(unit,'(A,I0)') 'iterations=',stats%iterations
+            write(unit,'(A,I0)') 'proposals=',stats%proposals
+            write(unit,'(A,I0)') 'accepted_proposals=',stats%accepted_proposals
+            write(unit,'(A,I0)') 'bound_hits=',stats%bound_hits
+            write(unit,'(A,I0)') 'objective_pairs=',stats%objective_pairs
+            write(unit,'(A,ES16.8)') 'mean_objective_before=', &
+                &stats%objective_before_sum/objective_denominator
+            write(unit,'(A,ES16.8)') 'mean_objective_after=', &
+                &stats%objective_after_sum/objective_denominator
+            write(unit,'(A,ES16.8)') 'mean_rotation_motion=',stats%rotation_motion_sum/denominator
+            write(unit,'(A,ES16.8)') 'max_rotation_motion=',stats%rotation_motion_max
+            write(unit,'(A,ES16.8)') 'mean_shift_motion=',stats%shift_motion_sum/denominator
+            write(unit,'(A,ES16.8)') 'max_shift_motion=',stats%shift_motion_max
+            ! Sum is aggregate worker time, not parallel wall-clock elapsed time.
+            write(unit,'(A,ES16.8)') 'transaction_seconds_sum=',stats%runtime_sum
+            write(unit,'(A,ES16.8)') 'transaction_seconds_mean=',stats%runtime_sum/denominator
+            write(unit,'(A,ES16.8)') 'transaction_seconds_max=',stats%runtime_max
+            close(unit)
+            write(logfhandle,'(A)') '>>> POSE_CONT detailed statistics written to '//trim(filename)
+        end subroutine report_pose_cont_stats
+
+        !> Return a wall-clock timestamp for per-particle transaction timing.
+        real(dp) function wall_time_seconds() result(seconds)
+            integer(int64) :: count, rate
+
+            call system_clock(count,rate)
+            if( rate <= 0_int64 ) THROW_HARD('system clock has an invalid rate')
+            seconds = real(count,dp)/real(rate,dp)
+        end function wall_time_seconds
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return

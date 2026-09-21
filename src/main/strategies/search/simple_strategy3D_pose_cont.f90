@@ -49,10 +49,19 @@ contains
     procedure :: bind_context => bind_pose_cont_context
     procedure :: srch => srch_pose_cont
     procedure :: oris_assign => oris_assign_pose_cont
+    procedure :: get_result => get_pose_cont_result
     procedure :: kill => kill_pose_cont
 end type strategy3D_pose_cont
 
 contains
+
+    !> Return the completed transaction for matcher-level aggregate reporting.
+    pure function get_pose_cont_result(self) result(result)
+        class(strategy3D_pose_cont), intent(in) :: self
+        type(pose_cont_transaction_result) :: result
+
+        result = self%result
+    end function get_pose_cont_result
 
     !> Identify an initialized local-search seed without treating the valid
     !! identity rotation as an uninitialized sentinel.

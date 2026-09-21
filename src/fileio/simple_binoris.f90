@@ -564,7 +564,7 @@ contains
                 ibytes = self%header(isegment)%first_data_byte
                 ibytes = ibytes + (fromto_here(1)-self%header(isegment)%fromto(1))*self%header(isegment)%n_bytes_per_record
                 do i=fromto_here(1),fromto_here(2)
-                    read(unit=self%funit,pos=ibytes) ptcl_record
+                    call read_particle_record(self,isegment,ibytes,ptcl_record)
                     call os%prec2ori(i, ptcl_record)
                     ibytes = ibytes + self%header(isegment)%n_bytes_per_record
                 end do
@@ -650,7 +650,7 @@ contains
         call str%kill
         if( is_particle_seg(isegment) )then ! ptcl2D/3D segment, see simple_sp_project
             call o%new(is_ptcl=.true.)
-            read(unit=self%funit,pos=ibytes) ptcl_record
+            call read_particle_record(self,isegment,ibytes,ptcl_record)
             call o%prec2ori(ptcl_record)
             str = o%ori2str()
         else
@@ -661,6 +661,24 @@ contains
         endif
         ibytes = ibytes + self%header(isegment)%n_bytes_per_record
     end subroutine read_record
+
+    !> Read current or older fixed-width particle records without crossing the
+    !! record boundary. Newly appended fields are zero for legacy projects.
+    subroutine read_particle_record(self,isegment,ibytes,ptcl_record)
+        class(binoris), intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
+        integer(kind=8), intent(in) :: ibytes
+        real, intent(out) :: ptcl_record(N_PTCL_ORIPARAMS)
+        integer :: nvalues
+
+        if( mod(self%header(isegment)%n_bytes_per_record,4_8) /= 0_8 ) &
+            &THROW_HARD('particle record byte count is not a multiple of four')
+        nvalues = int(self%header(isegment)%n_bytes_per_record/4_8)
+        if( nvalues < 1 .or. nvalues > N_PTCL_ORIPARAMS ) &
+            &THROW_HARD('unsupported particle record width')
+        ptcl_record = 0.
+        read(unit=self%funit,pos=ibytes) ptcl_record(1:nvalues)
+    end subroutine read_particle_record
 
     ! getters
 
