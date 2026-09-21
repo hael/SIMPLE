@@ -11,6 +11,7 @@ use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &cartesian_pose_data, &
     &write_pose_cont_reference_artifact, &
     &remove_pose_cont_reference_artifacts, prepare_pose_cont_observation, &
+    &pose_cont_seed_from_orientation, pose_cont_pose_to_orientation, &
     &shift_native_to_crop, shift_crop_to_native, &
     &POSE_CONT_INVALID_PREPARATION, LM_ACCEPTED_IMPROVEMENT, &
     &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED, POSE_CONT_NOT_ATTEMPTED, &
@@ -43,6 +44,7 @@ contains
     subroutine run_adapter_contracts()
         call test_reference_workspace_lifecycle()
         call test_observation_and_coordinate_adapters()
+        call test_inpl_pose_cont_handoff()
         call test_transaction_contracts()
         call test_strategy_seed_contract()
         write(*,'(a)') 'POSE_CONT_REFINE3D_ADAPTER: PASS'
@@ -156,6 +158,59 @@ contains
         call particles%kill()
         call particles%kill()
     end subroutine test_observation_and_coordinate_adapters
+
+    ! The inpl_cont winner is stored as a fractional SIMPLE Euler pose and a
+    ! native-pixel shift. Verify the exact conversion into Cartesian LM
+    ! coordinates and the accepted-pose round trip back to project units.
+    subroutine test_inpl_pose_cont_handoff()
+        integer, parameter :: NATIVE_BOX = 256, CROP_BOX = 144
+        type(ori) :: inpl_winner, recovered
+        type(pose_cont_pose) :: seed
+        real(dp) :: expected_rotation(3,3)
+        real :: eulers(3,2), native_shifts(2,2), expected_crop_shift(2)
+        integer :: icase
+
+        eulers(:,1) = [23.5,67.25,14.375]
+        eulers(:,2) = [201.125,88.75,359.625]
+        native_shifts(:,1) = [2.25,-1.75]
+        native_shifts(:,2) = [-3.5,0.625]
+
+        do icase = 1,2
+            call inpl_winner%set_euler(eulers(:,icase))
+            call inpl_winner%set_shift(native_shifts(:,icase))
+            call inpl_winner%set('state',2.)
+            call inpl_winner%set('eo',1.)
+            call inpl_winner%set('corr',0.42)
+            call inpl_winner%set('proj',7.)
+            call inpl_winner%set('inpl',13.)
+            expected_rotation = real(inpl_winner%get_mat(),dp)
+            expected_crop_shift = shift_native_to_crop(native_shifts(:,icase), &
+                &NATIVE_BOX,CROP_BOX)
+
+            call pose_cont_seed_from_orientation(inpl_winner,NATIVE_BOX,CROP_BOX,seed)
+            call assert_true(maxval(abs(seed%rotmat-expected_rotation)) <= 1.e-12_dp, &
+                &'inpl_cont Euler pose changed while constructing the pose_cont seed')
+            call assert_true(maxval(abs(seed%shift-real(expected_crop_shift,dp))) <= 1.e-12_dp, &
+                &'inpl_cont native shift was not converted to cropped pixels')
+
+            call recovered%set('state',2.)
+            call recovered%set('eo',1.)
+            call recovered%set('corr',0.42)
+            call recovered%set('proj',7.)
+            call recovered%set('inpl',13.)
+            call pose_cont_pose_to_orientation(seed,NATIVE_BOX,CROP_BOX,recovered)
+            call assert_true(maxval(abs(real(recovered%get_mat(),dp)-expected_rotation)) <= 2.e-6_dp, &
+                &'pose_cont rotation did not round-trip to the inpl_cont winner')
+            call assert_true(maxval(abs(recovered%get_2Dshift()-native_shifts(:,icase))) <= 2.e-6, &
+                &'pose_cont shift did not round-trip to native pixels')
+            call assert_true(recovered%get_state() == 2 .and. recovered%get_eo() == 1 .and. &
+                &abs(recovered%get('corr')-0.42) <= epsilon(1.) .and. &
+                &nint(recovered%get('proj')) == 7 .and. nint(recovered%get('inpl')) == 13, &
+                &'pose handoff changed authoritative non-pose metadata')
+        enddo
+        call inpl_winner%kill()
+        call recovered%kill()
+    end subroutine test_inpl_pose_cont_handoff
 
     subroutine test_transaction_contracts()
         type(cartesian_pose_refiner) :: generator

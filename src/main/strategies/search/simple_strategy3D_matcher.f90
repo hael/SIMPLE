@@ -28,11 +28,11 @@ use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_strategy3D,              only: strategy3D
-use simple_ori_utils,               only: dm2euler
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
-    &cartesian_pose_data, pose_cont_particle_workspace, shift_native_to_crop, &
-    &shift_crop_to_native, LM_ACCEPTED_IMPROVEMENT, &
+    &cartesian_pose_data, pose_cont_particle_workspace, &
+    &pose_cont_seed_from_orientation, pose_cont_pose_to_orientation, &
+    &LM_ACCEPTED_IMPROVEMENT, &
     &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 implicit none
 
@@ -562,7 +562,6 @@ contains
             type(pose_cont_transaction_result) :: result
             complex, allocatable :: observed(:,:)
             real, allocatable :: sigma2(:)
-            real :: euler(3), shift_native(2)
             integer :: state, eo
             logical :: even
 
@@ -598,9 +597,7 @@ contains
                 &b_ptr%esig%sigma2_noise(p_ptr%kfromto(1):p_ptr%kfromto(2),iptcl)
             call pose_cont_refs%prepare_particle(state,even,observed,cropped_ctfparms, &
                 &sigma2,p_ptr%kfromto,data)
-            seed%rotmat = real(winner%get_mat(),dp)
-            seed%shift = real(shift_native_to_crop(winner%get_2Dshift(), &
-                &p_ptr%box,p_ptr%box_crop),dp)
+            call pose_cont_seed_from_orientation(winner,p_ptr%box,p_ptr%box_crop,seed)
 
             ! Stage 3: run the configured local LM route transactionally.
             call pose_cont_refs%refine_particle(state,even,seed,data,pose_config,pose_limits,result)
@@ -608,13 +605,8 @@ contains
             ! Stage 4: commit only an accepted improvement. Every other status
             ! leaves the PFTC/inpl_cont winner unchanged for reconstruction.
             if( result%status == LM_ACCEPTED_IMPROVEMENT )then
-                ! Convert the Cartesian result back to SIMPLE's Euler and
-                ! native-pixel shift convention.
-                euler = real(dm2euler(result%pose%rotmat))
-                shift_native = shift_crop_to_native(real(result%pose%shift), &
-                    &p_ptr%box,p_ptr%box_crop)
-                call winner%set_euler(euler)
-                call winner%set_shift(shift_native)
+                call pose_cont_pose_to_orientation(result%pose,p_ptr%box, &
+                    &p_ptr%box_crop,winner)
 
                 ! Refresh only the nearest discrete companions required by
                 ! legacy consumers; preserve corr, state, and half-set fields.

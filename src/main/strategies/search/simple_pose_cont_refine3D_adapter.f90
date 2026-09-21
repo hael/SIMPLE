@@ -6,6 +6,8 @@ use simple_core_module_api, only: CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES, &
     &simple_exception, string
 use simple_image, only: image
 use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+use simple_ori, only: ori
+use simple_ori_utils, only: dm2euler
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, cartesian_pose_data, &
     &shift_lm_config, pose_lm_config, pose_lm_result, pose_lm_diagnostics, &
     &POSE_CONT_OBJECTIVE_CART_NCC, POSE_CONT_OBJECTIVE_CART_EUCLID, &
@@ -34,6 +36,7 @@ public :: LM_STEP_BOUND_REJECTED, LM_INVALID_NUMERICS, LM_ITERATION_LIMIT
 ! Reference and particle adapters
 public :: write_pose_cont_reference_artifact, remove_pose_cont_reference_artifacts
 public :: prepare_pose_cont_observation
+public :: pose_cont_seed_from_orientation, pose_cont_pose_to_orientation
 public :: shift_native_to_crop, shift_crop_to_native
 
 integer, parameter  :: POSE_CONT_NOT_ATTEMPTED       =  0
@@ -604,6 +607,34 @@ contains
     ! ========================================================================
     ! Production coordinate and input-validation helpers
     ! ========================================================================
+
+    !> Convert a SIMPLE orientation into the Cartesian LM coordinate system.
+    !! SIMPLE stores shifts in native-box pixels; pose_cont uses cropped-box
+    !! pixels. Copy the rotation matrix directly to avoid an Euler round trip.
+    subroutine pose_cont_seed_from_orientation(orientation, box, box_crop, seed)
+        class(ori), intent(in) :: orientation
+        integer, intent(in) :: box, box_crop
+        type(pose_cont_pose), intent(out) :: seed
+
+        seed = pose_cont_pose()
+        seed%rotmat = real(orientation%get_mat(), dp)
+        seed%shift = real(shift_native_to_crop(orientation%get_2Dshift(), box, box_crop), dp)
+    end subroutine pose_cont_seed_from_orientation
+
+    !> Store an accepted Cartesian pose in SIMPLE project coordinates.
+    !! Only Euler angles and native-pixel shifts are updated. The caller-owned
+    !! score, state, half-set, and discrete matcher metadata remain unchanged.
+    subroutine pose_cont_pose_to_orientation(pose, box, box_crop, orientation)
+        type(pose_cont_pose), intent(in) :: pose
+        integer, intent(in) :: box, box_crop
+        class(ori), intent(inout) :: orientation
+        real :: euler(3), shift_native(2)
+
+        euler = real(dm2euler(pose%rotmat))
+        shift_native = shift_crop_to_native(real(pose%shift), box, box_crop)
+        call orientation%set_euler(euler)
+        call orientation%set_shift(shift_native)
+    end subroutine pose_cont_pose_to_orientation
 
     pure function shift_native_to_crop(shift_native, box, box_crop) result(shift_crop)
         real, intent(in) :: shift_native(2)

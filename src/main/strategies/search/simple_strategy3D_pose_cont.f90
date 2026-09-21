@@ -7,12 +7,12 @@ use simple_core_module_api, only: ctfparams, dp, simple_exception
 use simple_image, only: image
 use simple_linalg, only: arg
 use simple_ori, only: ori
-use simple_ori_utils, only: dm2euler
 use simple_oris, only: oris
 use simple_parameters, only: parameters
 use simple_pose_cont_refine3D_adapter, only: pose_cont_config, pose_cont_limits, &
     &pose_cont_pose, pose_cont_reference_workspace, pose_cont_transaction_result, &
-    &prepare_pose_cont_observation, shift_crop_to_native, shift_native_to_crop, &
+    &prepare_pose_cont_observation, pose_cont_seed_from_orientation, &
+    &pose_cont_pose_to_orientation, &
     &POSE_CONT_ROUTE_JOINT, POSE_CONT_ROUTE_SHIFT_THEN_JOINT
 use simple_strategy3D, only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
@@ -143,7 +143,6 @@ contains
         type(ori) :: input_ori
         complex, allocatable :: observed(:, :)
         real, allocatable :: sigma2(:), sigma_contrib(:)
-        real :: euler(3), shift_native(2)
         integer :: eo, state
         logical :: even
 
@@ -184,9 +183,8 @@ contains
             &sigma2, self%p_ptr%kfromto, data)
 
         ! Stage 3: run only the selected Cartesian LM route from the stored pose.
-        seed%rotmat = real(input_ori%get_mat(), dp)
-        seed%shift = real(shift_native_to_crop(input_ori%get_2Dshift(), &
-            &self%p_ptr%box, self%p_ptr%box_crop), dp)
+        call pose_cont_seed_from_orientation(input_ori,self%p_ptr%box, &
+            &self%p_ptr%box_crop,seed)
         call self%refs_ptr%refine_particle(state, even, seed, data, self%config, &
             &self%limits, self%result)
         terminal_pose = seed
@@ -194,11 +192,8 @@ contains
         ! Stage 4: stage only an accepted improvement for project assignment.
         if (self%result%status == LM_ACCEPTED_IMPROVEMENT) then
             terminal_pose = self%result%pose
-            euler = real(dm2euler(self%result%pose%rotmat))
-            shift_native = shift_crop_to_native(real(self%result%pose%shift), &
-                &self%p_ptr%box, self%p_ptr%box_crop)
-            call self%output_ori%set_euler(euler)
-            call self%output_ori%set_shift(shift_native)
+            call pose_cont_pose_to_orientation(self%result%pose,self%p_ptr%box, &
+                &self%p_ptr%box_crop,self%output_ori)
         end if
         call self%refs_ptr%sigma_contribution(state, even, terminal_pose, data, sigma_contrib)
         call self%b_ptr%esig%set_particle_contribution(self%spec%iptcl, sigma_contrib)
