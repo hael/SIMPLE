@@ -86,13 +86,6 @@
 
     const toggleCls = (element) => {
         element.classList.toggle("disabledbutton");
-        const mskcanvas = element.querySelector(".mskcanvas");
-
-        if (element.classList.contains("disabledbutton")) {
-            if (mskcanvas) mskcanvas.classList.add("hidden");
-        } else {
-            if (mskcanvas) mskcanvas.classList.remove("hidden");
-        }
         updateSelectionBorder(element);
 
         lastinteraction = Date.now();
@@ -158,17 +151,10 @@
     const selectAbove = (element) => {
         let threshold = true;
         for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
-            const mskcanvas = clscontainer.querySelector(".mskcanvas");
             if (threshold) {
                 clscontainer.classList.remove("disabledbutton");
             } else {
                 clscontainer.classList.add("disabledbutton");
-            }
-
-            if (clscontainer.classList.contains("disabledbutton")) {
-                if (mskcanvas) mskcanvas.classList.add("hidden");
-            } else {
-                if (mskcanvas) mskcanvas.classList.remove("hidden");
             }
             updateSelectionBorder(clscontainer);
 
@@ -183,7 +169,6 @@
     const selectBelow = (element) => {
         let threshold = false;
         for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
-            const mskcanvas = clscontainer.querySelector(".mskcanvas");
             if (clscontainer === element) {
                 threshold = true;
             }
@@ -192,12 +177,6 @@
                 clscontainer.classList.remove("disabledbutton");
             } else {
                 clscontainer.classList.add("disabledbutton");
-            }
-
-            if (clscontainer.classList.contains("disabledbutton")) {
-                if (mskcanvas) mskcanvas.classList.add("hidden");
-            } else {
-                if (mskcanvas) mskcanvas.classList.remove("hidden");
             }
             updateSelectionBorder(clscontainer);
         }

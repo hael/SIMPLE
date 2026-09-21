@@ -59,9 +59,7 @@
         const scope = getActiveClsScope();
         if (!scope) return;
         for (const clscontainer of scope.querySelectorAll(".cls2D")) {
-            const mskcanvas = clscontainer.querySelector(".mskcanvas");
             clscontainer.classList.remove("disabledbutton");
-            if (mskcanvas) mskcanvas.classList.remove("hidden");
             updateSelectionBorder(clscontainer);
         }
         updateCounts();
@@ -71,9 +69,7 @@
         const scope = getActiveClsScope();
         if (!scope) return;
         for (const clscontainer of scope.querySelectorAll(".cls2D")) {
-            const mskcanvas = clscontainer.querySelector(".mskcanvas");
             clscontainer.classList.add("disabledbutton");
-            if (mskcanvas) mskcanvas.classList.add("hidden");
             updateSelectionBorder(clscontainer);
         }
         updateCounts();
@@ -83,13 +79,7 @@
         const scope = getActiveClsScope();
         if (!scope) return;
         for (const clscontainer of scope.querySelectorAll(".cls2D")) {
-            const mskcanvas = clscontainer.querySelector(".mskcanvas");
             clscontainer.classList.toggle("disabledbutton");
-            if (clscontainer.classList.contains("disabledbutton")) {
-                if (mskcanvas) mskcanvas.classList.add("hidden");
-            } else {
-                if (mskcanvas) mskcanvas.classList.remove("hidden");
-            }
             updateSelectionBorder(clscontainer);
         }
         updateCounts();
