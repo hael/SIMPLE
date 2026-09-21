@@ -13,18 +13,18 @@
 ! from the out segment, its UNREGULARIZED even/odd pair (_even_unfil/_odd_unfil;
 ! evidence authority is the base pair, regularized maps flatten the evidence
 ! margin) as the evidence input, and its regularized pair (_even/_odd) as the
-! auxiliary member of the refinement's filter competition, whose products are
-! written first. Every product ends in _pproc_nu (the sharpened map:
-! <vol>_pproc_nu; the competition's references and local-resolution map:
-! <vol>_even/_odd/_ref_pproc_nu, <vol>_locres_pproc_nu) and is a
-! display/interpretation map --
-! never an input to FSC correction or resolution claims.
+! auxiliary member of the refinement's filter competition. Outputs follow
+! standard postprocess with _nu in the suffix (2026-09-21): the sharpened map
+! <vol>_pproc_nu, its mirror <vol>_pproc_nu_mirr (same mirr rule), and the
+! competition's local-resolution map <vol>_locres_nu. They are
+! display/interpretation maps -- never an input to FSC correction or
+! resolution claims.
 module simple_commanders_postprocess_nu
 use simple_commanders_api
 use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
     &get_nu_filter_bank_finest_lp, build_nu_evidence_state, cleanup_nu_filter, nu_evidence_state, &
     &assert_nu_evidence_replay_ready, print_nu_evidence_summary, nu_evidence_sharpen_vol, NU_EVIDENCE_SOURCE_BASE, &
-    &nu_filter_vols, print_nu_filtmap_lowpass_stats, write_nu_local_resolution_map, &
+    &print_nu_filtmap_lowpass_stats, write_nu_local_resolution_map, &
     &get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT
 implicit none
 #include "simple_local_flags.inc"
@@ -42,13 +42,14 @@ contains
         type(parameters)        :: params
         type(sp_project)        :: spproj
         type(nu_evidence_state) :: evstate
-        type(image)             :: even, odd, vol_sharp, vol_even_nu, vol_odd_nu
+        type(image)             :: even, odd, vol_sharp
         type(image), allocatable :: aux_even(:), aux_odd(:)
         type(string)            :: vol_out, fname, fname_vol, fname_even_unfil, fname_odd_unfil, fname_even, fname_odd
+        type(string)            :: fname_even_solvent, fname_odd_solvent
         real, allocatable       :: corrs(:), res(:)
         real                    :: fsc05, fsc0143, handoff_lp, populated_lp, raw_lp, smpd
         integer                 :: n_signal, state, box, ldim(3), nptcls
-        logical                 :: l_aux
+        logical                 :: l_aux, l_solvent
         ! operates on the project like postprocess: the state's volume from
         ! the out segment, its unregularized pair (_even_unfil/_odd_unfil)
         ! as the evidence input and its regularized pair (_even/_odd) as the
@@ -129,25 +130,11 @@ contains
             write(logfhandle,'(A,F6.2,A,F6.2,A,F6.2,A)') '>>> NU MATCHING LOW-PASS HANDOFF: ', handoff_lp, &
                 &' A (finest bank member; finest label with 1% of signal voxels ', populated_lp, &
                 &' A, raw finest label ', raw_lp, ' A)'
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            ! every product of this program ends in PPROC_NU_SUFFIX: the
-            ! competition's references <vol>_even/_odd_ref_pproc_nu and
-            ! <vol>_ref_pproc_nu, its local-resolution map
-            ! <vol>_locres_pproc_nu, and the sharpened map <vol>_pproc_nu
-            fname = basename(add2fbody(fname_odd, params%ext, '_ref'//PPROC_NU_SUFFIX))
-            call vol_odd_nu%write(fname, del_if_exists=.true.)
-            fname = basename(add2fbody(fname_even, params%ext, '_ref'//PPROC_NU_SUFFIX))
-            call vol_even_nu%write(fname, del_if_exists=.true.)
-            call vol_even_nu%add(vol_odd_nu)
-            call vol_even_nu%mul(0.5)
-            fname = basename(add2fbody(fname_vol, params%ext, '_ref'//PPROC_NU_SUFFIX))
-            call vol_even_nu%write(fname, del_if_exists=.true.)
-            fname = basename(add2fbody(fname_vol, params%ext, '_locres'//PPROC_NU_SUFFIX))
+            ! the competition's local-resolution map, named like the
+            ! refinement's _nu_locres product of this volume
+            fname = basename(add2fbody(fname_vol, params%ext, '_locres_nu'))
             call write_nu_local_resolution_map(fname)
-            write(logfhandle,'(A)') '>>> POSTPROCESS_NU: WROTE THE _ref'//PPROC_NU_SUFFIX//' REFERENCES AND THE _locres'//&
-                &PPROC_NU_SUFFIX//' MAP'
-            call vol_even_nu%kill
-            call vol_odd_nu%kill
+            write(logfhandle,'(A)') '>>> POSTPROCESS_NU: WROTE THE LOCAL-RESOLUTION MAP '//fname%to_char()
             call aux_odd(1)%kill
             call aux_even(1)%kill
             deallocate(aux_odd, aux_even)
@@ -166,7 +153,24 @@ contains
         call assert_nu_evidence_replay_ready(evstate)
         call print_nu_evidence_summary(evstate)
         ! classical shrink-then-sharpen localized by the evidence; the shipped
-        ! product is the single sharpened merged volume
+        ! product is the single sharpened merged volume. Estimate on the base
+        ! pair, apply to the prior'd pair (2026-09-21): with a solvent-prior
+        ! pair beside the volume (pcg_solvent=yes, _even_solvent/_odd_solvent)
+        ! the evidence of the unregularized pair sharpens that pair's merged
+        ! map; otherwise the unregularized pair's own
+        fname_even_solvent = add2fbody(fname_vol, params%ext, '_even_solvent')
+        fname_odd_solvent  = add2fbody(fname_vol, params%ext, '_odd_solvent')
+        l_solvent = file_exists(fname_even_solvent) .and. file_exists(fname_odd_solvent)
+        if( l_solvent )then
+            call find_ldim_nptcls(fname_even_solvent, ldim, nptcls)
+            l_solvent = ldim(1) == box
+        endif
+        if( l_solvent )then
+            write(logfhandle,'(A)') '>>> POSTPROCESS_NU: SHARPENING THE SOLVENT-PRIOR PAIR '//&
+                &fname_odd_solvent%to_char()//' '//fname_even_solvent%to_char()//' WITH THE EVIDENCE OF THE UNREGULARIZED PAIR'
+            call even%read(fname_even_solvent)
+            call odd%read(fname_odd_solvent)
+        endif
         call nu_evidence_sharpen_vol(evstate, even, odd, vol_sharp)
         if( cline%defined('outvol') )then
             vol_out = params%outvol
@@ -175,6 +179,12 @@ contains
         endif
         call vol_sharp%write(vol_out, del_if_exists=.true.)
         call wait_for_closure(vol_out)
+        ! mirrored by default, as standard postprocess (unless mirr=no)
+        if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
+            call vol_sharp%mirror('x')
+            fname = basename(add2fbody(vol_out, params%ext, MIRR_SUFFIX))
+            call vol_sharp%write(fname, del_if_exists=.true.)
+        endif
         ! destruct
         call even%kill
         call odd%kill
@@ -185,6 +195,8 @@ contains
         call fname_odd_unfil%kill
         call fname_even%kill
         call fname_odd%kill
+        call fname_even_solvent%kill
+        call fname_odd_solvent%kill
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res)   ) deallocate(res)
         call simple_end('**** SIMPLE_POSTPROCESS_NU NORMAL STOP ****')

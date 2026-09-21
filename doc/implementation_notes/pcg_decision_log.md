@@ -749,3 +749,44 @@ Nyquist within ~10 iterations, overlap < 0.5 through stage 6, stages 7-8
 climbing to 4.1/3.9 A. refine3D_auto on PfCRT: the pair admitted only once
 the FSC reaches 3.98 A. Not changed, on record: the stage early-stop
 (overlap 0.9/0.95) cannot tell a frozen assignment from convergence.
+
+**2026-09-21 -- solvent prior: estimate on the base pair, apply to the
+prior'd pair; isotropic postprocess protocol; postprocess_nu names.**
+`~/for_claude/pcg_solvent=yes` (exp_gate, msp1 at ae97341c; the
+streptavidin logs there are ec5527df, pre-prior, not comparable): the
+`_lp` maps the best yet, the `_pproc` maps noise. Measured: the prior'd
+pair was the `_unfil` pair, its FSC (3.64/3.43 A against 3.88/3.91 A
+prior-free; even/odd weight correlation 0.971/0.996, no randomization,
+stage-8 crossing pinned at the crop Nyquist in every iteration) set the
+optimal filter, which stays open to FSC=0.05, and the B-factor
+(-121/-115, density-windowed on top of the ridge) sharpened the
+closed-form map with nothing closing it. postprocess_nu on that pair
+"looks like madness": its evidence null and the NU whitening (the MAD of
+even minus odd per radial shell over a support that is 80-93% solvent)
+are measured where the prior removed the noise. Decisions (Hans): the
+FSC is never computed from a solvent-prior'd pair; the prior must
+influence every reference voxel, not only the band beyond the ladder, so
+the NU label field is derived on the prior-free base pair and applied to
+the prior'd pair (`nonuniform_filter_state` apply pair -> `nu_filter_vols`
+per-label composition of the apply halves); the prior-free pair is the
+base pair everywhere (FSC, cap, band, competition, evidence, `_unfil`,
+start-volume handoff), the prior'd pair is `_even_solvent/_odd_solvent`,
+the base of the replay and of the references (both PCG paths:
+`reduce_solve_state_pair` solvent outputs, `resolve_base_pair_with_solvent_prior`
+into the solvent pair); `automsk=nu` needs no special case (its null is
+the base pair's). Postprocess (classical): cutoff = FSC=0.143 of the
+reconstruction's FSC file (now always the base pair's curve; the `_unfil`
+pair's own FSC computed there only when no file is given), B
+from the map being sharpened between `HPLIM_GUINIER` and the cutoff,
+sharpen, Butterworth at the cutoff; `fsc_filt` and the density window
+retired; `imgkind=unfil|solvent` postprocess the pair averages with the
+same cutoff (`pair_stem`). postprocess_nu: evidence from `_unfil`,
+sharpening applied to the `_solvent` pair when present; outputs named
+like postprocess with `_nu` in the suffix (`_pproc_nu`, `_pproc_nu_mirr`,
+`_locres_nu`; the `_ref_pproc_nu` references are gone). Also on record:
+the final PCG map is the 5-iteration cold solve; the gridding
+reconstruction before it is bootstrap_rec3D's sigma seed, the only NU
+competition in the final block (its gridding ML pair beyond the ladder
+wins 0% of voxels: open since 09-18, inconsequential for the map). To
+watch on the rerun: the B-factor of a solvent-flattened map, and whether
+the prior'd references keep what made the exp_gate/msp1 `_lp` maps.

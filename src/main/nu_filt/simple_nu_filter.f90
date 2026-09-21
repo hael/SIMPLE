@@ -698,8 +698,15 @@ interface
 
 
     ! In submodule: simple_nu_filter_apply.f90
-    module subroutine nu_filter_vols( vol_even, vol_odd )
-        class(image), intent(out) :: vol_even, vol_odd
+    !> The filtered even/odd references from the current label field. Without
+    !! an apply pair they are composed from the cached filtered candidates of
+    !! the pair the competition ran on; with vol_apply_even/odd (2026-09-21,
+    !! pcg_solvent=yes) the label field derived on that pair is applied to
+    !! the apply pair instead, per label, and the auxiliary label is filled
+    !! from the auxiliary pair as always.
+    module subroutine nu_filter_vols( vol_even, vol_odd, vol_apply_even, vol_apply_odd )
+        class(image),           intent(out) :: vol_even, vol_odd
+        class(image), optional, intent(in)  :: vol_apply_even, vol_apply_odd
     end subroutine nu_filter_vols
 
     module subroutine nu_filter_vol( vol_in, vol_out )

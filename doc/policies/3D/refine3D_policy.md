@@ -629,9 +629,20 @@ The original-sampling final reconstruction is distinct from an ordinary
 refinement iteration. On the PCG backend, both abinitio3D and refine3D_auto
 apply the shared minimum five-iteration budget to this cold solve. An explicit
 positive residual tolerance may still stop convergence earlier. Final
-automatic sharpening estimates its B-factor from a
-conservative-density-windowed copy of the unregularized pair; this is an
-estimation window only and never a post-hoc mask on a PCG output.
+automatic sharpening follows the isotropic postprocess protocol
+(2026-09-21, the postprocess_nu v2 recipe with one cutoff): the cutoff is
+the FSC=0.143 of the reconstruction's FSC file (the base pair's curve,
+envfsc-corrected where that applies), or of the `_even_unfil/_odd_unfil`
+pair beside the map computed by postprocess when no file is given, one
+Guinier B-factor of the map being sharpened between `HPLIM_GUINIER` and
+that cutoff, sharpen, Butterworth low-pass at the cutoff. No FSC optimal
+filter (it stayed open to FSC=0.05 and left the amplified noise uncut:
+exp_gate/msp1, B -121/-115 with the density-windowed estimate on the
+solvent-prior'd pair) and no density-windowed pair estimate. With
+`pcg_solvent=yes` the `_unfil` pair is the prior-free base pair and the
+sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil` and
+`imgkind=solvent` postprocess the respective pair averages with the same
+cutoff.
 
 Grouped sigma files are run-local noise-model state. They may be written and
 consumed inside a running refinement, but they are not registered as `os_out`

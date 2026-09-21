@@ -286,8 +286,11 @@ contains
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
 
-    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state, &
-            &density_window_bfac )
+    !> pair_stem (optional): the project volume the _even_unfil/_odd_unfil
+    !! pair sits beside when fname_vol is a map derived from it (imgkind=unfil
+    !! or solvent), so the cutoff still comes from that pair.
+    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state, pair_stem )
+        use simple_butterworth, only: butterworth_filter
         use simple_vol_pproc_policy,    only: state_mask_is_compatible
         use simple_halfmap_diagnostics, only: read_support_provenance
         class(string),   intent(in)    :: fname_vol, fname_fsc
@@ -296,18 +299,15 @@ contains
         type(parameters),intent(inout) :: params
         class(cmdline),  intent(inout) :: cline
         integer,         intent(in)    :: state
-        logical, optional, intent(in)  :: density_window_bfac
-        real, allocatable :: fsc(:), optlp(:), res(:)
+        class(string), optional, intent(in) :: pair_stem
+        real, allocatable :: fsc(:), res(:), bwfilter(:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(string)     :: fname_even_unfil, fname_odd_unfil
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
-        type(image_msk)  :: bfac_envmsk
         real    :: fsc0143, fsc05, lplim
-        integer :: ldim(3), ldim_unfil(3), nptcls_unfil
-        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_density_window_bfac, l_unfil_pair
+        integer :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
+        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
         logical :: l_support_at_source, l_prov_constrained, l_prov_found
-        l_density_window_bfac = .false.
-        if( present(density_window_bfac) ) l_density_window_bfac = density_window_bfac
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
@@ -319,105 +319,96 @@ contains
         ldim = [box,box,box]
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
-        ! check fsc filter & determine resolution
+        ! Isotropic postprocess protocol (2026-09-21, the postprocess_nu v2
+        ! recipe with one cutoff): the cutoff is the FSC=0.143 of the
+        ! reconstruction's FSC file (the base pair's curve, envfsc-corrected
+        ! where that applies; with the solvent prior it is the prior-free
+        ! pair's), or, when no file is given, of the unfiltered pair beside
+        ! the map computed here; one Guinier B-factor from the map being
+        ! sharpened between HPLIM_GUINIER and that cutoff; sharpen;
+        ! Butterworth low-pass at the cutoff, composed like the NU filter's
+        ! rungs. No FSC optimal filter (it stayed open to FSC=0.05 and left
+        ! the amplified noise uncut: exp_gate/msp1 2026-09-21), no
+        ! density-windowed pair estimate.
         has_fsc   = .false.
         do_envfsc = .false.
+        res = vol_bfac%get_res()
         params%fsc = fname_fsc
         if( trim(params%fsc%to_char()) /= '' .and. file_exists(params%fsc) )then
+            fsc = file2rarr(params%fsc)
+            call get_resolution(fsc, res, fsc05, fsc0143)
             has_fsc = .true.
+            write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: FSC from '//params%fsc%to_char()//&
+                &', 0.5/0.143 at ', fsc05, '/', fsc0143, ' A'
         else
-            THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
-            has_fsc = .false.
-            if( .not. cline%defined('lp') )then
-                THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; postprocess_volume_from_files')
+            if( present(pair_stem) )then
+                fname_even_unfil = add2fbody(pair_stem, params%ext, '_even_unfil')
+                fname_odd_unfil  = add2fbody(pair_stem, params%ext, '_odd_unfil')
+            else
+                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
+                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
+            endif
+            l_unfil_pair = file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil)
+            if( l_unfil_pair )then
+                ! the pair must come from the assembly that produced this map
+                call find_ldim_nptcls(fname_even_unfil, ldim_unfil, nptcls_unfil)
+                l_unfil_pair = all(ldim_unfil == ldim)
+                if( l_unfil_pair )then
+                    call find_ldim_nptcls(fname_odd_unfil, ldim_unfil, nptcls_unfil)
+                    l_unfil_pair = all(ldim_unfil == ldim)
+                endif
+                if( .not. l_unfil_pair ) write(logfhandle,'(A)') &
+                    &'>>> POSTPROCESS: ignoring the unfiltered pair at a different box than the map'
+            endif
+            if( l_unfil_pair )then
+                call vol_unfil%new(ldim, smpd)
+                call vol_unfil_odd%new(ldim, smpd)
+                call vol_unfil%read(fname_even_unfil)
+                call vol_unfil_odd%read(fname_odd_unfil)
+                call vol_unfil%fft()
+                call vol_unfil_odd%fft()
+                call vol_unfil%fsc(vol_unfil_odd, fsc)
+                call vol_unfil%kill
+                call vol_unfil_odd%kill
+                call get_resolution(fsc, res, fsc05, fsc0143)
+                has_fsc = .true.
+                write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: no FSC file; FSC of the unfiltered pair, 0.5/0.143 at ', &
+                    &fsc05, '/', fsc0143, ' A'
+            else
+                THROW_WARN('FSC file: '//params%fsc%to_char()//' not found and no unfiltered pair beside the volume')
+                if( .not. cline%defined('lp') )then
+                    THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; postprocess_volume_from_files')
+                endif
             endif
         endif
         if( has_fsc )then
-            ! resolution & optimal low-pass filter from FSC
-            res   = vol_bfac%get_res()
-            fsc   = file2rarr(params%fsc)
-            optlp = fsc2optlp(fsc)
-            call get_resolution(fsc, res, fsc05, fsc0143)
-            where( fsc < 0.05 ) optlp = 0.
-            where( res < TINY ) optlp = 0.
             lplim     = fsc0143
             do_envfsc = params%l_envfsc
         else
             lplim = params%lp
         endif
-        ! B-factor from the unfiltered pair when available: regularized maps
-        ! carry the prior's amplitude suppression, which steepens the Guinier
-        ! slope and drives the automatic estimate strongly negative
+        ! B-factor: one Guinier slope of the map being sharpened, inside the
+        ! passband the low-pass below will keep
         if( cline%defined('bfac') )then
             ! already in params%bfac
+        else if( lplim < 5. )then
+            params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
+            write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
         else
-            if( lplim < 5. )then
-                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
-                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
-                l_unfil_pair = file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil)
-                if( l_unfil_pair )then
-                    ! the pair must come from the assembly that produced this
-                    ! map; a leftover pair at another box is ignored
-                    call find_ldim_nptcls(fname_even_unfil, ldim_unfil, nptcls_unfil)
-                    l_unfil_pair = all(ldim_unfil == ldim)
-                    if( l_unfil_pair )then
-                        call find_ldim_nptcls(fname_odd_unfil, ldim_unfil, nptcls_unfil)
-                        l_unfil_pair = all(ldim_unfil == ldim)
-                    endif
-                    if( .not. l_unfil_pair ) write(logfhandle,'(A)') &
-                        &'>>> B-FACTOR: ignoring unfiltered pair at a different box than the map'
-                endif
-                if( l_unfil_pair )then
-                    call vol_unfil%new(ldim, smpd)
-                    call vol_unfil_odd%new(ldim, smpd)
-                    call vol_unfil%read(fname_even_unfil)
-                    call vol_unfil_odd%read(fname_odd_unfil)
-                    call vol_unfil%add(vol_unfil_odd)
-                    call vol_unfil%mul(0.5)
-                    if( trim(params%rec_backend) == 'pcg' .and. l_density_window_bfac )then
-                        ! A final cold PCG base pair can only use the broad
-                        ! spherical support. Estimate its Guinier slope over
-                        ! the same conservative density domain used by the
-                        ! regularized solve. This masks only the temporary
-                        ! spectrum-estimation copy; no PCG output is modified.
-                        call bfac_envmsk%automask3D(params, vol_unfil, .false., &
-                            &lp_override=params%envmsklp, l_report=.false.)
-                        call bfac_envmsk%apply_3Dmask(vol_unfil)
-                    endif
-                    params%bfac = vol_unfil%guinier_bfac(HPLIM_GUINIER, lplim)
-                    if( trim(params%rec_backend) == 'pcg' .and. l_density_window_bfac )then
-                        write(logfhandle,'(A,1X,F8.2)') &
-                            &'>>> B-FACTOR (DENSITY-WINDOWED UNFIL PAIR) DETERMINED TO:', params%bfac
-                    else
-                        write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (UNFIL PAIR) DETERMINED TO:', params%bfac
-                    endif
-                    call vol_unfil%kill
-                    call vol_unfil_odd%kill
-                else
-                    params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
-                    write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
-                endif
-            else
-                params%bfac = 0.
-            endif
+            params%bfac = 0.
         endif
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
-        ! low-pass filter
-        if( has_fsc .and. trim(params%fsc_filt) == 'yes' )then
-            ! optimal low-pass filter of unfiltered volumes from FSC
-            call vol_bfac%apply_filter(optlp)
-            call vol_no_bfac%apply_filter(optlp)
-        else
-            ! fsc_filt=no: the map keeps its own amplitude weighting (a PCG
-            ! ML-regularized map already carries the Wiener attenuation of
-            ! its prior); only the low-pass at FSC=0.143 (or lp) is applied
-            if( has_fsc ) write(logfhandle,'(A,F6.2,A)') &
-                &'>>> POSTPROCESS: fsc_filt=no, FSC optimal filter skipped; low-pass at ', lplim, ' A only'
-            call vol_bfac%bp(0., lplim)
-            call vol_no_bfac%bp(0., lplim)
-        endif
+        ! Butterworth low-pass at the cutoff, the same filter as the NU
+        ! filter's rungs, closing the sharpening
+        lp_find = max(1, min(box/2, calc_fourier_index(lplim, box, smpd)))
+        allocate(bwfilter(box), source=0.)
+        call butterworth_filter(lp_find, bwfilter)
+        call vol_bfac%apply_filter(bwfilter)
+        call vol_no_bfac%apply_filter(bwfilter)
+        deallocate(bwfilter)
+        write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)
@@ -464,7 +455,6 @@ contains
         call vol_bfac%kill
         call vol_no_bfac%kill
         call vol_envmsk%kill
-        call bfac_envmsk%kill_bimg
         call fname_mirr%kill
         call fname_pproc%kill
         call fname_lp%kill
@@ -476,7 +466,7 @@ contains
     subroutine exec_postprocess( self, cline )
         class(commander_postprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(string)     :: fname_vol, fname_fsc, fname_even_unfil, fname_odd_unfil
+        type(string)     :: fname_vol, fname_fsc, fname_even_unfil, fname_odd_unfil, pair_stem
         type(parameters) :: params
         type(sp_project) :: spproj
         type(image)      :: vol_unfil, vol_unfil_odd
@@ -497,7 +487,7 @@ contains
             state = 1
         endif
         ! check volume, get correct smpd & box
-        if( cline%defined('imgkind') .and. trim(params%imgkind) /= 'unfil' )then
+        if( cline%defined('imgkind') .and. trim(params%imgkind) /= 'unfil' .and. trim(params%imgkind) /= 'solvent' )then
             call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
         else
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
@@ -507,27 +497,33 @@ contains
         endif
         ! using the input volume for postprocessing
         if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
-        ! imgkind=unfil: postprocess the average of the unfiltered (base)
-        ! pair beside the project volume, written as <vol>_unfil.mrc; the
-        ! classical route from unregularized halves (FSC optimal filter +
-        ! B-factor), for comparison with the shipped regularized map
+        ! imgkind=unfil|solvent: postprocess the average of a half pair
+        ! beside the project volume, written as <vol>_unfil.mrc or
+        ! <vol>_solvent.mrc: the unfiltered (prior-free base) pair, or the
+        ! solvent-prior'd base pair of pcg_solvent=yes (2026-09-21), for
+        ! comparison with the shipped regularized map. The cutoff still comes
+        ! from the _unfil pair beside the project volume (pair_stem).
+        pair_stem = fname_vol
         if( cline%defined('imgkind') )then
-            if( trim(params%imgkind) == 'unfil' )then
-                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
-                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
-                if( .not. file_exists(fname_even_unfil) .or. .not. file_exists(fname_odd_unfil) ) &
-                    &THROW_HARD('imgkind=unfil requires the _even_unfil/_odd_unfil pair beside the project volume')
+            if( trim(params%imgkind) == 'unfil' .or. trim(params%imgkind) == 'solvent' )then
+                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_'//trim(params%imgkind))
+                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_'//trim(params%imgkind))
+                if( .not. file_exists(fname_even_unfil) .or. .not. file_exists(fname_odd_unfil) )then
+                    write(logfhandle,'(A)') '>>> POSTPROCESS: missing '//fname_even_unfil%to_char()//' or '//fname_odd_unfil%to_char()
+                    THROW_HARD('imgkind='//trim(params%imgkind)//' requires that half pair beside the project volume')
+                endif
                 call vol_unfil%new([box,box,box], smpd)
                 call vol_unfil_odd%new([box,box,box], smpd)
                 call vol_unfil%read(fname_even_unfil)
                 call vol_unfil_odd%read(fname_odd_unfil)
                 call vol_unfil%add(vol_unfil_odd)
                 call vol_unfil%mul(0.5)
-                fname_vol = add2fbody(fname_vol, params%ext, '_unfil')
+                fname_vol = add2fbody(fname_vol, params%ext, '_'//trim(params%imgkind))
                 call vol_unfil%write(fname_vol, del_if_exists=.true.)
                 call vol_unfil%kill
                 call vol_unfil_odd%kill
-                write(logfhandle,'(A)') '>>> POSTPROCESS: source is the unfiltered pair average '//fname_vol%to_char()
+                write(logfhandle,'(A)') '>>> POSTPROCESS: source is the '//trim(params%imgkind)//&
+                    &' pair average '//fname_vol%to_char()
             endif
         endif
         if( cline%defined('fsc') )then
@@ -536,7 +532,7 @@ contains
         else
             call spproj%get_fsc(state, fname_fsc, fsc_box)
         endif
-        call postprocess_volume_from_files(fname_vol, fname_fsc, box, smpd, params, cline, state)
+        call postprocess_volume_from_files(fname_vol, fname_fsc, box, smpd, params, cline, state, pair_stem=pair_stem)
         ! destruct
         call spproj%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)

@@ -655,7 +655,7 @@ contains
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
         logical, optional,       intent(in)    :: current_sample_only
-        type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil
+        type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil, vol_even_solvent, vol_odd_solvent
         type(string)      :: tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         integer           :: state, sigma_iter
@@ -752,6 +752,8 @@ contains
                 else
                     call simple_copy_file(vol_even, dest)
                 endif
+                vol_even_solvent = add2fbody(vol_even, MRC_EXT, '_solvent')
+                if( file_exists(vol_even_solvent) ) call simple_rename(vol_even_solvent, tmpl//'_even_solvent'//MRC_EXT)
                 dest = tmpl//'_even'//MRC_EXT
                 call simple_rename(vol_even, dest)
                 dest_even = dest
@@ -766,6 +768,8 @@ contains
                 else
                     call simple_copy_file(vol_odd, dest)
                 endif
+                vol_odd_solvent = add2fbody(vol_odd, MRC_EXT, '_solvent')
+                if( file_exists(vol_odd_solvent) ) call simple_rename(vol_odd_solvent, tmpl//'_odd_solvent'//MRC_EXT)
                 dest = tmpl//'_odd'//MRC_EXT
                 call simple_rename(vol_odd, dest)
                 dest_odd = dest

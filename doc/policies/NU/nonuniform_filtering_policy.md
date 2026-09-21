@@ -293,6 +293,16 @@ The current filter performs these steps:
 9. write the merged `_nu_filt` output as the even/odd average
 10. write the same-grid `_nu_locres` map
 
+With `pcg_solvent=yes` (PCG) the label field is estimated on the
+prior-free base pair and APPLIED to the solvent-prior'd pair when the
+`_nu_filt` references are composed (`nu_filter_vols` apply pair,
+2026-09-21): per-label Butterworth of the prior'd halves scattered by the
+field, the auxiliary label from the ML pair as always. The competition,
+its whitening (a solvent-dominated MAD the prior would collapse), the
+evidence null, the handoff and the `_nu_locres` map never see the prior'd
+pair; the references do, in every voxel. Log: `>>> NU REFERENCES: STATE n,
+LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR`.
+
 The bank is the static ladder `[20, 15, 12, 10, 8, 6, 5, 4]` A (the
 machinery of commit ed36eb4c's abinitio3D, the only NU mechanism since
 2026-09-18; the generated dense ladder of 2026-09-16 and the shell walk of

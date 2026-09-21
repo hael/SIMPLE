@@ -63,9 +63,17 @@ contains
     !! align_lp:          the finest member of the bank (0 when none), the
     !!                    matching low-pass handoff for the next iteration, the
     !!                    same rule in every workflow.
+    !! vol_apply_even/odd: optional pair the label field is APPLIED to instead
+    !!                    of the base pair when composing the _nu_filt
+    !!                    references (2026-09-21, Hans: estimate on the base
+    !!                    pair, apply to the solvent-prior'd pair, so every
+    !!                    reference voxel carries the prior while the
+    !!                    competition, its calibration, the evidence and the
+    !!                    handoff never see a pair whose solvent noise the
+    !!                    prior removed). Not consumed.
     subroutine nonuniform_filter_state( params, state, vol_base_even, vol_base_odd, &
             &vol_aux_even, vol_aux_odd, l_use_aux, res0143, volname, eonames, align_lp, timings, &
-            &base_support, l_base_constrained )
+            &base_support, l_base_constrained, vol_apply_even, vol_apply_odd )
         class(parameters),            intent(in)    :: params
         integer,                      intent(in)    :: state
         type(image),                  intent(inout) :: vol_base_even, vol_base_odd
@@ -77,13 +85,14 @@ contains
         type(nu_state_filter_timings), optional, intent(inout) :: timings
         class(image),     optional, intent(in)    :: base_support       !< the support that constrained the base pair (PCG)
         logical,          optional, intent(in)    :: l_base_constrained !< the base pair was solved on base_support, not the sphere
+        class(image),     optional, intent(in)    :: vol_apply_even, vol_apply_odd !< the pair the label field is applied to
         type(image), allocatable :: nu_aux_even(:), nu_aux_odd(:)
         type(image)              :: vol_even_nu, vol_odd_nu, vol_base_avg, envelope_core, envelope_dilated
         type(image_msk)          :: density_envelope, active_envelope
         type(string)             :: nu_envmask_file
         integer(timer_int_kind)  :: t_filter, t_envmask
         real    :: aux_resolution, bank_cap_res
-        logical :: l_constrained, l_nu_envelope_valid
+        logical :: l_constrained, l_nu_envelope_valid, l_apply
         align_lp = 0.
         if( L_BENCH_GLOB ) t_filter = tic()
         l_constrained = .false.
@@ -175,7 +184,16 @@ contains
         call optimize_nu_cutoff_finds()
         call vol_base_even%kill
         call vol_base_odd%kill
-        call nu_filter_vols(vol_even_nu, vol_odd_nu)
+        l_apply = present(vol_apply_even) .and. present(vol_apply_odd)
+        if( present(vol_apply_even) .neqv. present(vol_apply_odd) ) &
+            &THROW_HARD('an apply pair needs both halves; nonuniform_filter_state')
+        if( l_apply )then
+            call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_apply_even, vol_apply_odd)
+            if( params%part == 1 ) write(logfhandle,'(A,I0,A)') '>>> NU REFERENCES: STATE ', state, &
+                &', LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR'
+        else
+            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+        endif
         if( trim(params%automsk).ne.'no' )then
             ! The _nu_filt matching references carry the active envelope. In
             ! nu mode this is the current evidence mask, with density fallback.

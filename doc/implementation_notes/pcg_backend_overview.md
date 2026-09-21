@@ -117,14 +117,21 @@ logistic of the statistic around the threshold with the solvent class's
 spread as width. Nothing is zeroed or masked: where the data term is
 strong the prior is irrelevant, where it is weak solvent is pulled
 toward zero, and a misassigned voxel is over-regularized rather than
-deleted. The prior is half-independent, so the pair stays gold standard,
-and everything downstream (FSC, NU evidence, closed-form replay, B
-factor) sees the prior'd pair: the only difference to `pcg_solvent=no`
-is the ridge, at the cost of the base solve iterations once more (not
-the particle pass). The FSC is therefore solvent-flattened and the
-resolution document says so (`solvent_prior=soft(per_half,base_pair)`
-on the FSC MODE line); the prior-free pair's FSC is logged beside it
-for reference. `maxits_ml` stays at its default 0: the replay is the
+deleted. Estimate on the base pair, apply to the prior'd pair
+(2026-09-21, Hans): the prior-free pair stays the base pair, i.e. the
+FSC (the cap, the band and the resolution claim), the NU competition
+and its solvent-calibrated whitening and evidence null, the `_unfil`
+pair and everything postprocess reads; the prior'd pair, written beside
+it as `_even_solvent/_odd_solvent`, is the base of the closed-form
+replay (`P_tau` from the base pair's FSC) and the pair the NU label
+field is applied to when the `_nu_filt` references are composed, so
+every reference voxel carries the prior. An FSC of the prior'd pair
+over-estimates (the per-half weights are 97-99.6% correlated, a shared
+soft envelope with no phase randomization; exp_gate 2026-09-21: 3.64
+against 3.88 A prior-free, the stage-8 crossing pinned at the crop
+Nyquist) and is not computed; the whitening of the NU unary is the MAD
+of even minus odd per radial shell over the support, which the prior
+would collapse. `maxits_ml` stays at its default 0: the replay is the
 Wiener shrink of the prior'd base map (coupled replay iterations, when
 requested, carry the same ridge). The support is untouched. It runs
 under any `automsk` setting; in abinitio3D the key rides with the PCG

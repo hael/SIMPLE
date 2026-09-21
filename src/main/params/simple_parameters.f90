@@ -80,7 +80,6 @@ type :: parameters
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: exit_collapse='no'   !< early exit on state collapse(yes|no){no}
     character(len=3)          :: envfsc='no'          !< envelope solvent correction for FSC calculation(yes|no){no}
-    character(len=3)          :: fsc_filt='yes'       !< postprocess: apply the FSC optimal filter 2FSC/(1+FSC) (yes) or only low-pass at FSC=0.143 (no){yes}
     character(len=3)          :: pcg_solvent='no'     !< PCG soft solvent prior on the base solve: per-half real-space ridge in solvent identified from a prior-free solve, then the same cold solve again(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of abinitio2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}

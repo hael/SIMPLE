@@ -81,7 +81,6 @@ contains
         call reg%add_char('element', self%element)
         call reg%add_char('envfsc', self%envfsc)
         call reg%add_char('pcg_solvent', self%pcg_solvent)
-        call reg%add_char('fsc_filt', self%fsc_filt)
         call reg%add_char('eo_stage', self%eo_stage)
         call reg%add_char('even', self%even)
         call reg%add_char('exit_collapse', self%exit_collapse)

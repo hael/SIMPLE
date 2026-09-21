@@ -34,8 +34,9 @@ contains
         ! parameter input/output
         call postprocess%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind; unfil = the unfiltered (base) pair average beside the volume{vol}', &
-            &'project output kind: vol or vol_cavg', .false., 'vol', &
+        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind; unfil = the unfiltered (base) pair average beside the volume, '//&
+            &'solvent = the solvent-prior pair average (pcg_solvent=yes){vol}', &
+            &'project output kind: vol, vol_cavg, unfil or solvent', .false., 'vol', &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
@@ -44,13 +45,10 @@ contains
         ! filter controls
         call postprocess%add_input(UI_FILT, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20., &
         &visibility=UI_VIS_ADVANCED)
-        call postprocess%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'Binary FSC file for optimal filtering', &
+        call postprocess%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'Binary FSC file setting the FSC=0.143 cutoff when no '//&
+            &'_even_unfil/_odd_unfil pair sits beside the volume', &
             &'e.g. fsc_state01.bin file', .false., '', &
         &visibility=UI_VIS_ADVANCED)
-        call postprocess%add_input(UI_FILT, 'fsc_filt', 'binary', 'FSC optimal filter', &
-        &'Apply the FSC optimal filter 2FSC/(1+FSC) before the low-pass at FSC=0.143 (yes), or only the low-pass (no); '//&
-        &'a PCG ML-regularized map already carries the Wiener attenuation of its prior(yes|no){yes}', '', .false., 'yes', &
-        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call postprocess%add_input(UI_FILT, bfac, &
         &visibility=UI_VIS_ADVANCED)
         call postprocess%add_input(UI_FILT, mirr, &
@@ -87,6 +85,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call postprocess_nu%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call postprocess_nu%add_input(UI_FILT, mirr, &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! mask controls

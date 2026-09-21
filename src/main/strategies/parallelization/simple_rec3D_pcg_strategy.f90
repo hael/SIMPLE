@@ -453,13 +453,36 @@ contains
         call fname_odd%kill
     end subroutine build_pcg_solvent_prior_weight
 
+    !> pcg_solvent=yes: the pair re-solved with the solvent prior, written
+    !! beside the base pair as <half>_solvent (2026-09-21). Nothing in the
+    !! iteration reads it back: it is the diagnostic of what the ridge did,
+    !! the pair postprocess can be pointed at (imgkind=solvent), and the pair
+    !! the NU label field of the base pair is applied to.
+    subroutine write_pcg_solvent_pair( params, state_here, solvent_even, solvent_odd )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        class(image),      intent(inout) :: solvent_even, solvent_odd
+        type(string) :: fname
+        fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'even'), MRC_EXT, '_solvent')
+        call solvent_even%write(fname, del_if_exists=.true.)
+        fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'odd'), MRC_EXT, '_solvent')
+        call solvent_odd%write(fname, del_if_exists=.true.)
+        if( params%part == 1 ) write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+            &', prior-free pair written as _unfil (FSC, NU competition, evidence, postprocess), '//&
+            &'prior''d pair as _solvent (replay base, NU references)'
+        call fname%kill
+    end subroutine write_pcg_solvent_pair
+
     !> pcg_solvent=yes, step between the prior-free base solve and the base
     !! re-solve: the prior-free pair's FSC=0.143 sets the smoothing scale, the
     !! per-half weights are built from the prior-free halves, and the ridge is
     !! installed on both operators (accumulators untouched). The caller then
-    !! solves both halves again, cold, with the same budget: the shipped base
-    !! pair, its FSC, the NU evidence and the closed-form replay all see the
-    !! prior, and the only difference to pcg_solvent=no is the ridge itself
+    !! solves both halves again, cold, with the same budget, into the solvent
+    !! pair: the base of the closed-form replay and the pair the NU label
+    !! field is applied to. The prior-free pair stays the base pair (FSC, NU
+    !! competition and calibration, evidence, _unfil): estimate on the base
+    !! pair, apply to the prior'd pair (2026-09-21, Hans); an FSC of the
+    !! prior'd pair over-estimates (shared soft envelope, no randomization)
     subroutine prepare_solvent_prior_on_pair( params, state_here, pcgop_even, pcgop_odd, x_even, x_odd, &
         &state_support, l_state_support, weight, l_weight, res0143_prior_free )
         class(parameters),        intent(in)    :: params
@@ -646,7 +669,7 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        type(image) :: half_even, half_odd, ml_even, ml_odd, merged
+        type(image) :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt
         type(halfmap_diagnostics_result) :: hm_diag
@@ -744,6 +767,7 @@ contains
                 call half_odd%write(fname_odd_unfil, del_if_exists=.true.)
                 time_map_output = real(toc(t_state_phase),dp)
             endif
+            if( l_solvent_weight ) call write_pcg_solvent_pair(params, state, solvent_even, solvent_odd)
 
             t_state_phase = tic()
             call calculate_pcg_state_diagnostics(params, state, 'RECONSTRUCT3D', half_even, half_odd, &
@@ -759,11 +783,17 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                ! the ordinary global-ML replay (P_tau from the current base
-                ! pair); nonuniform filtering is assembly-owned and runs
-                ! post hoc below, exactly as on the gridding backend
-                call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
-                call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
+                ! the ordinary global-ML replay (P_tau from the base pair's
+                ! FSC), of the solvent-prior'd pair when the prior is on;
+                ! nonuniform filtering is assembly-owned and runs post hoc
+                ! below, exactly as on the gridding backend
+                if( l_solvent_weight )then
+                    call regularize_state_half(state, 0, 'even', fsc, solvent_even, ml_even)
+                    call regularize_state_half(state, 1, 'odd',  fsc, solvent_odd,  ml_odd)
+                else
+                    call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
+                    call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
+                endif
                 call merged%kill
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
@@ -800,10 +830,19 @@ contains
                 eonames(2) = fname_odd
                 ! an envelope-constrained base pair hands its support over so
                 ! the evidence null is designated on the dilation ring
-                call nonuniform_filter_state(params, state, half_even, half_odd, &
-                    &ml_even, ml_odd, nu_aux_member(params), &
-                    &res0143s(state), fname_vol, eonames, nu_align_lps(state), &
-                    &base_support=state_support_msk, l_base_constrained=l_base_support_constrained)
+                if( l_solvent_weight )then
+                    ! label field from the base pair, applied to the prior'd pair
+                    call nonuniform_filter_state(params, state, half_even, half_odd, &
+                        &ml_even, ml_odd, nu_aux_member(params), &
+                        &res0143s(state), fname_vol, eonames, nu_align_lps(state), &
+                        &base_support=state_support_msk, l_base_constrained=l_base_support_constrained, &
+                        &vol_apply_even=solvent_even, vol_apply_odd=solvent_odd)
+                else
+                    call nonuniform_filter_state(params, state, half_even, half_odd, &
+                        &ml_even, ml_odd, nu_aux_member(params), &
+                        &res0143s(state), fname_vol, eonames, nu_align_lps(state), &
+                        &base_support=state_support_msk, l_base_constrained=l_base_support_constrained)
+                endif
                 time_nu_filter = real(toc(t_state_phase),dp)
             endif
             call write_output_diagnostics(state, 'shared', time_map_output, time_fsc_output, time_nu_filter)
@@ -815,6 +854,8 @@ contains
             state_written(state) = .true.
             call half_even%kill
             call half_odd%kill
+            call solvent_even%kill
+            call solvent_odd%kill
             if( params%l_ml_reg )then
                 call ml_even%kill
                 call ml_odd%kill
@@ -941,6 +982,8 @@ contains
         !! the ridge: this pair is the shipped base pair (FSC, NU evidence,
         !! closed-form replay). Cost: the solve iterations once more, not the
         !! particle pass
+        !! The prior-free pair (half_even/odd) stays the base pair; the
+        !! re-solve with the ridge goes to the solvent pair (2026-09-21)
         subroutine resolve_base_pair_with_solvent_prior( state_here, n_even_here, n_odd_here )
             integer, intent(in) :: state_here, n_even_here, n_odd_here
             real, allocatable :: x(:,:,:)
@@ -948,10 +991,12 @@ contains
                 &half_even%get_rmat(), half_odd%get_rmat(), state_support_msk, l_state_support, &
                 &solvent_weight, l_solvent_weight, res0143_prior_free)
             if( .not. l_solvent_weight ) return
+            call solvent_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call solvent_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
-            call resolve_half_with_prior(pcgop_even, state_here, 'even', n_even_here, x, half_even)
+            call resolve_half_with_prior(pcgop_even, state_here, 'even', n_even_here, x, solvent_even)
             x = 0.0
-            call resolve_half_with_prior(pcgop_odd,  state_here, 'odd',  n_odd_here,  x, half_odd)
+            call resolve_half_with_prior(pcgop_odd,  state_here, 'odd',  n_odd_here,  x, solvent_odd)
             deallocate(x)
         end subroutine resolve_base_pair_with_solvent_prior
 
@@ -1893,7 +1938,7 @@ contains
         class(cmdline),   intent(inout) :: cline
         logical, optional, intent(out)  :: trail_bootstrap_states(:)
         real,    optional, intent(out)  :: nu_align_lps(:)
-        type(image), target  :: half_even, half_odd, ml_even, ml_odd, merged
+        type(image), target  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd
         type(image), target  :: previous_even, previous_odd, previous_merged
         type(image), pointer :: fsc_pair_even, fsc_pair_odd, fsc_pair_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
@@ -1997,7 +2042,8 @@ contains
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
             if( l_base_support_constrained ) base_support_kind = state_support_kind
-            call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base')
+            call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base', &
+                &solvent_even=solvent_even, solvent_odd=solvent_odd)
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
@@ -2035,6 +2081,7 @@ contains
                 call half_odd%write(fname_odd_unfil, del_if_exists=.true.)
                 time_map_output = real(toc(t_state_phase),dp)
             endif
+            if( l_solvent_weight ) call write_pcg_solvent_pair(params, state, solvent_even, solvent_odd)
             t_state_phase = tic()
             ! the FSC pair is selected once here for the FSC and its summary
             ! only: the current base pair ordinarily (in trailing mode the
@@ -2083,9 +2130,15 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                ! the ordinary global-ML replay (P_tau from the FSC pair)
-                call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
-                    &half_even, half_odd)
+                ! the ordinary global-ML replay (P_tau from the FSC pair), of
+                ! the solvent-prior'd pair when the prior is on
+                if( l_solvent_weight )then
+                    call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
+                        &solvent_even, solvent_odd)
+                else
+                    call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
+                        &half_even, half_odd)
+                endif
                 call merged%kill
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
@@ -2106,6 +2159,10 @@ contains
                 if( params%l_ml_reg )then
                     call blend_bootstrap_half(ml_even, previous_even, update_weights(state))
                     call blend_bootstrap_half(ml_odd,  previous_odd,  update_weights(state))
+                endif
+                if( l_solvent_weight )then
+                    call blend_bootstrap_half(solvent_even, previous_even, update_weights(state))
+                    call blend_bootstrap_half(solvent_odd,  previous_odd,  update_weights(state))
                 endif
                 if( params%l_lpset )then
                     call merged%kill
@@ -2174,10 +2231,19 @@ contains
                 l_nu_base_constrained = l_base_support_constrained
                 if( l_bootstrap .and. update_weights(state) < 0.99 ) &
                     &l_nu_base_constrained = l_nu_base_constrained .and. l_fsc_pair_support_constrained
-                call nonuniform_filter_state(params, state, half_even, half_odd, &
-                    &ml_even, ml_odd, nu_aux_member(params), &
-                    &res0143s(state), fname_vol, eonames, align_lps(state), &
-                    &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained)
+                if( l_solvent_weight )then
+                    ! label field from the base pair, applied to the prior'd pair
+                    call nonuniform_filter_state(params, state, half_even, half_odd, &
+                        &ml_even, ml_odd, nu_aux_member(params), &
+                        &res0143s(state), fname_vol, eonames, align_lps(state), &
+                        &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained, &
+                        &vol_apply_even=solvent_even, vol_apply_odd=solvent_odd)
+                else
+                    call nonuniform_filter_state(params, state, half_even, half_odd, &
+                        &ml_even, ml_odd, nu_aux_member(params), &
+                        &res0143s(state), fname_vol, eonames, align_lps(state), &
+                        &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained)
+                endif
                 time_nu_filter = real(toc(t_state_phase),dp)
             endif
             call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output, time_nu_filter)
@@ -2188,6 +2254,8 @@ contains
             state_written(state) = .true.
             call half_even%kill
             call half_odd%kill
+            call solvent_even%kill
+            call solvent_odd%kill
             if( params%l_ml_reg )then
                 call ml_even%kill
                 call ml_odd%kill
@@ -2344,14 +2412,22 @@ contains
             enddo
         end function count_full_state_half
 
+        !> solvent_even/odd (base solve, pcg_solvent=yes): receive the pair
+        !! re-solved with the solvent prior, while even/odd receive the
+        !! prior-free pair (the base pair: FSC, NU competition, evidence,
+        !! _unfil). Estimate on the base pair, apply to the prior'd pair
+        !! (2026-09-21, Hans).
         subroutine reduce_solve_state_pair( state_here, even, odd, n_even_here, n_odd_here, solve_kind, &
-                &fsc_prior, warm_even, warm_odd )
+                &fsc_prior, warm_even, warm_odd, solvent_even, solvent_odd )
             integer,          intent(in)    :: state_here
             character(len=*), intent(in)    :: solve_kind
             type(image),      intent(inout) :: even, odd
             integer,          intent(out)   :: n_even_here, n_odd_here
             real, optional,   intent(in)    :: fsc_prior(:)
             type(image), optional, intent(in) :: warm_even, warm_odd
+            type(image), optional, intent(inout) :: solvent_even, solvent_odd
+            logical :: l_resolved
+            l_resolved = .false.
 
             if( present(fsc_prior) )then
                 ! regularized pair: closed form of the base pair (warm_even/odd
@@ -2391,11 +2467,22 @@ contains
                         &even_job%x, odd_job%x, state_support_msk, l_state_support, &
                         &solvent_weight, l_solvent_weight, res0143_prior_free)
                     if( l_solvent_weight )then
+                        if( .not.(present(solvent_even) .and. present(solvent_odd)) ) &
+                            &THROW_HARD('the solvent-prior re-solve needs its output pair; reduce_solve_state_pair')
+                        ! the prior-free pair is the base pair; the re-solve
+                        ! with the ridge goes to the solvent pair
+                        call validate_solved_map(even_job%x, 'distributed', state_here, 'even', 'pre')
+                        call validate_solved_map(odd_job%x,  'distributed', state_here, 'odd',  'pre')
+                        call even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                        call odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                        call even%set_rmat(even_job%x, .false.)
+                        call odd%set_rmat( odd_job%x,  .false.)
                         even_job%x = 0.0
                         odd_job%x  = 0.0
                         even_job%l_nonzero = .false.
                         odd_job%l_nonzero  = .false.
                         call solve_distributed_half_pair(even_job, odd_job)
+                        l_resolved = .true.
                     endif
                 endif
             endif
@@ -2403,6 +2490,9 @@ contains
             if( present(fsc_prior) )then
                 call finish_distributed_half_job(even_job, even, warm_even)
                 call finish_distributed_half_job(odd_job, odd, warm_odd)
+            else if( l_resolved )then
+                call finish_distributed_half_job(even_job, solvent_even)
+                call finish_distributed_half_job(odd_job, solvent_odd)
             else
                 call finish_distributed_half_job(even_job, even)
                 call finish_distributed_half_job(odd_job, odd)
