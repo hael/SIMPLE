@@ -40,6 +40,9 @@ integer, parameter :: POSE_CONT_OBJECTIVE_CART_EUCLID = 1
 
 ! Internal numerical constants
 real(dp), parameter :: POSE_NUMERIC_FLOOR = epsilon(1._dp)**2
+real(dp), parameter :: LM_INITIAL_DAMPING = 1.e-3_dp
+real(dp), parameter :: LM_INITIAL_REJECTION_MULTIPLIER = 4._dp
+real(dp), parameter :: LM_MAX_DAMPING = 1._dp/epsilon(1._dp)
 
 !> One shift-free, noise-whitened particle observation for a fixed reference.
 type :: cartesian_pose_data
@@ -736,7 +739,8 @@ contains
         type(pose_lm_diagnostics), optional, intent(out) :: diagnostics
         real(dp) :: gradient(2), hessian(2, 2), trial_gradient(2), trial_hessian(2, 2)
         real(dp) :: solve_matrix(2, 2), diagonal(2), direction(2), trial_shift(2)
-        real(dp) :: objective, trial_objective, mu, det, predicted, actual, ratio, maxdiag
+        real(dp) :: objective, trial_objective, mu, rejection_multiplier
+        real(dp) :: det, predicted, actual, ratio, maxdiag
         real(dp) :: discriminant, lambda_max, lambda_min, step_norm, relative_reduction
         integer :: axis, iteration, naccepted
         logical :: bounded_trial
@@ -761,7 +765,8 @@ contains
             result%status = LM_INVALID_NUMERICS
             return
         end if
-        mu = 1.e-3_dp
+        mu = LM_INITIAL_DAMPING
+        rejection_multiplier = LM_INITIAL_REJECTION_MULTIPLIER
         do iteration = 1, config%max_iterations
             result%niterations = iteration
             maxdiag = max(maxval([(hessian(axis, axis), axis=1, 2)]), 1._dp)
@@ -811,7 +816,7 @@ contains
                 result%status = LM_INVALID_NUMERICS
                 exit
             elseif (predicted <= 0._dp) then
-                mu = 4._dp*mu
+                call increase_lm_damping(mu, rejection_multiplier)
                 cycle
             end if
             trial_shift = shift + direction
@@ -820,14 +825,14 @@ contains
                 &trial_gradient, trial_hessian, config%objective, data%transfer, data%shell_range)
             if (.not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian))) then
-                mu = 4._dp*mu
+                call increase_lm_damping(mu, rejection_multiplier)
                 result%status = LM_INVALID_NUMERICS
                 cycle
             end if
             actual = objective - trial_objective
             ratio = actual/predicted
             if (actual > 0._dp .and. ratio >= 0.25_dp) then
-                relative_reduction = actual/max(abs(objective), 1._dp)
+                relative_reduction = actual/max(abs(objective), POSE_NUMERIC_FLOOR)
                 shift = trial_shift
                 objective = trial_objective
                 gradient = trial_gradient
@@ -835,10 +840,11 @@ contains
                 naccepted = naccepted + 1
                 if (present(diagnostics)) diagnostics%naccepted = naccepted
                 if (ratio > 0.75_dp) mu = max(mu/2._dp, epsilon(1._dp))
+                rejection_multiplier = LM_INITIAL_REJECTION_MULTIPLIER
                 result%status = LM_ACCEPTED_IMPROVEMENT
                 if (step_norm < 1.e-8_dp .or. relative_reduction < 1.e-10_dp) exit
             else
-                mu = 4._dp*mu
+                call increase_lm_damping(mu, rejection_multiplier)
             end if
         end do
         if (result%status == LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial) &
@@ -858,7 +864,8 @@ contains
         real(dp) :: scaled_gradient(5), scaled_hessian(5, 5), solve_matrix(5, 5)
         real(dp) :: diagonal(5), scaled_direction(5), direction(5)
         real(dp) :: trial_rotmat(3, 3), trial_shift(2)
-        real(dp) :: objective, trial_objective, mu, predicted, actual, ratio, rotation_norm, shift_norm
+        real(dp) :: objective, trial_objective, mu, rejection_multiplier
+        real(dp) :: predicted, actual, ratio, rotation_norm, shift_norm
         real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
         real(dp) :: cumulative_rotation, cumulative_shift, sine_half
         integer :: iteration, naccepted
@@ -900,7 +907,8 @@ contains
             return
         end if
 
-        mu = 1.e-3_dp
+        mu = LM_INITIAL_DAMPING
+        rejection_multiplier = LM_INITIAL_REJECTION_MULTIPLIER
         do iteration = 1, config%max_iterations
             result%niterations = iteration
             ! Form and solve the small damped LM system. This 5-by-5 algebra is
@@ -942,7 +950,7 @@ contains
                 result%status = LM_INVALID_NUMERICS
                 exit
             elseif (predicted <= 0._dp) then
-                mu = 4._dp*mu
+                call increase_lm_damping(mu, rejection_multiplier)
                 cycle
             end if
             ! Apply the proposed three-component SO(3) increment and the two
@@ -958,7 +966,7 @@ contains
                 cumulative_shift = sqrt(sum((trial_shift - config%anchor_shift)**2))
                 if (cumulative_rotation > config%max_total_rotation + 10._dp*epsilon(1._dp) .or. &
                     &cumulative_shift > config%max_total_shift + 10._dp*epsilon(1._dp)) then
-                    mu = 4._dp*mu
+                    call increase_lm_damping(mu, rejection_multiplier)
                     if (.not. bounded_step .and. present(diagnostics)) &
                         &diagnostics%nbound_hits = diagnostics%nbound_hits + 1
                     bounded_trial = .true.
@@ -973,7 +981,7 @@ contains
                 &data%transfer, data%shell_range)
             if (.not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian))) then
-                mu = 4._dp*mu
+                call increase_lm_damping(mu, rejection_multiplier)
                 result%status = LM_INVALID_NUMERICS
                 cycle
             end if
@@ -984,7 +992,7 @@ contains
             ratio = actual/predicted
             accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
             if (accept_trial) then
-                relative_reduction = actual/max(abs(objective), 1._dp)
+                relative_reduction = actual/max(abs(objective), POSE_NUMERIC_FLOOR)
                 rotmat = trial_rotmat
                 shift = trial_shift
                 objective = trial_objective
@@ -993,17 +1001,27 @@ contains
                 naccepted = naccepted + 1
                 if (present(diagnostics)) diagnostics%naccepted = naccepted
                 if (ratio > 0.75_dp) mu = max(mu/2._dp, epsilon(1._dp))
+                rejection_multiplier = LM_INITIAL_REJECTION_MULTIPLIER
                 result%status = LM_ACCEPTED_IMPROVEMENT
                 ! Stop early after an accepted but negligible step or objective
                 ! reduction; otherwise continue from this accepted endpoint.
                 if (max(rotation_norm, shift_norm) < 1.e-8_dp .or. relative_reduction < 1.e-10_dp) exit
             else
-                mu = 4._dp*mu
+                call increase_lm_damping(mu, rejection_multiplier)
             end if
         end do
         if (result%status == LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial) &
             &result%status = LM_STEP_BOUND_REJECTED
     end subroutine refine_pose_lm
+
+    !> Increase damping aggressively across consecutive rejected proposals.
+    !! The owning solver resets the multiplier after an accepted proposal.
+    pure subroutine increase_lm_damping(mu, rejection_multiplier)
+        real(dp), intent(inout) :: mu, rejection_multiplier
+
+        mu = min(mu*rejection_multiplier, LM_MAX_DAMPING)
+        rejection_multiplier = min(2._dp*rejection_multiplier, LM_MAX_DAMPING)
+    end subroutine increase_lm_damping
 
     !> Construct one scaled, damped, and independently bounded pose proposal.
     pure subroutine build_pose_lm_system(gradient, hessian, rotation_scale, mu, active, &

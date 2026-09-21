@@ -132,10 +132,25 @@ contains
         config%anchor_shift = shift
         config%max_total_rotation = 1.e-12_dp
         config%max_total_shift = 1.e-12_dp
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient)
         call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
-        call assert_true(result%status == LM_STEP_BOUND_REJECTED .and. &
-            &all(rotation == frozen_rotation) .and. all(shift == frozen_shift), &
-            &'cumulative-bound rejection changed the complete input pose')
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
+        call assert_true(diagnostics%nbound_hits > 0, &
+            &'cumulative guard test did not exercise an out-of-bound proposal')
+        select case(result%status)
+            case(LM_ACCEPTED_IMPROVEMENT)
+                call assert_true(objective_after < objective_before .and. &
+                    &rotation_distance(rotation, frozen_rotation) <= &
+                    &config%max_total_rotation + 10._dp*epsilon(1._dp) .and. &
+                    &sqrt(sum((shift - frozen_shift)**2)) <= &
+                    &config%max_total_shift + 10._dp*epsilon(1._dp), &
+                    &'cumulative guard accepted a pose outside its bounds')
+            case(LM_STEP_BOUND_REJECTED)
+                call assert_true(all(rotation == frozen_rotation) .and. all(shift == frozen_shift), &
+                    &'cumulative-bound rejection changed the complete input pose')
+            case default
+                call assert_true(.false., 'cumulative guard returned an unexpected LM status')
+        end select
         call workspace%kill
     end subroutine test_joint_solver
 
