@@ -14,11 +14,13 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_prob
+    logical :: assignment_valid = .false.
 contains
     procedure :: new         => new_prob
     procedure :: srch        => srch_prob
     procedure :: kill        => kill_prob
     procedure :: oris_assign => oris_assign_prob
+    procedure :: has_valid_assignment
 end type strategy3D_prob
 
 contains
@@ -31,6 +33,7 @@ contains
         class(builder),         intent(in)    :: build
         call self%s%new(params, spec, build)
         self%spec = spec
+        self%assignment_valid = .false.
     end subroutine new_prob
 
     subroutine srch_prob( self, os, ithr )
@@ -41,6 +44,7 @@ contains
         integer :: iproj, iptcl_map, irot, istate, iref
         real    :: corr, frac, sh(2), inpl_coord, fixed_euler(3), assigned_euler(3)
         logical :: inpl_valid, l_fixed_projection
+        self%assignment_valid = .false.
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -83,10 +87,19 @@ contains
                 call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'mi_proj', 1.)
             endif
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
+            self%assignment_valid = .true.
         else
             call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
+
+    !> True only when this search committed a valid probabilistic assignment.
+    !! A missing assignment must not seed a later local pose refinement from
+    !! the particle's stale incoming orientation.
+    pure logical function has_valid_assignment(self) result(valid)
+        class(strategy3D_prob), intent(in) :: self
+        valid = self%assignment_valid
+    end function has_valid_assignment
 
     subroutine oris_assign_prob( self )
         class(strategy3D_prob), intent(inout) :: self
@@ -95,6 +108,7 @@ contains
     subroutine kill_prob( self )
         class(strategy3D_prob), intent(inout) :: self
         call self%s%kill
+        self%assignment_valid = .false.
     end subroutine kill_prob
 
 end module simple_strategy3D_prob

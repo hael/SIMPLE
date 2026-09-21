@@ -357,9 +357,11 @@ contains
                     &THROW_HARD('refine=pose_cont does not support projrec=yes')
             endif
             if( ctrl%do_pose_cont_polish )then
-                if( ctrl%do_prob_align .or. ctrl%do_sigma_mode .or. &
-                    &ctrl%refine_mode == 'eval' ) &
+                if( ctrl%do_sigma_mode .or. ctrl%refine_mode == 'eval' ) &
                     &THROW_HARD('pose_cont requires an ordinary pose-search refinement mode')
+                if( ctrl%refine_mode == 'prob_state' .and. &
+                    &trim(p_ptr%multivol_mode) == 'input_oris_fixed' ) &
+                    &THROW_HARD('pose_cont cannot rotate a fixed-orientation prob_state assignment')
                 ! The adapter works in cropped-box pixels; express the one-native-
                 ! pixel proposal and five-native-pixel capture bounds on that grid.
                 pose_cont_crop_scale = real(p_ptr%box_crop,dp)/real(p_ptr%box,dp)
@@ -487,8 +489,10 @@ contains
             type(pose_cont_transaction_result) :: pose_result
             real(dp) :: pose_start, pose_elapsed
             logical :: attempted, improved, no_improvement, invalid
+            logical :: pose_cont_seed_available
             pose_result = pose_cont_transaction_result()
             pose_elapsed = 0._dp
+            pose_cont_seed_available = .true.
             select case(ctrl%refine_mode)
                 case('shc')
                     if( .not. has_been_searched )then
@@ -553,6 +557,14 @@ contains
                     pose_start = wall_time_seconds()
                 endif
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
+                if( ctrl%do_pose_cont_polish .and. ctrl%do_prob_align )then
+                    select type(prob_strategy => strategy3Dsrch(iptcl_batch)%ptr)
+                        type is(strategy3D_prob)
+                            pose_cont_seed_available = prob_strategy%has_valid_assignment()
+                        class default
+                            THROW_HARD('probabilistic pose_cont routing allocated an incompatible strategy')
+                    end select
+                endif
                 if( ctrl%do_pose_cont_strategy )then
                     pose_elapsed = wall_time_seconds()-pose_start
                     select type(pose_cont_strategy => strategy3Dsrch(iptcl_batch)%ptr)
@@ -561,12 +573,13 @@ contains
                         class default
                             THROW_HARD('pose_cont routing allocated an incompatible strategy')
                     end select
-                else if( ctrl%do_pose_cont_polish )then
+                else if( ctrl%do_pose_cont_polish .and. pose_cont_seed_available )then
                     pose_start = wall_time_seconds()
                     call run_pose_cont_after_pftc(iptcl,iptcl_batch,ithr,pose_result)
                     pose_elapsed = wall_time_seconds()-pose_start
                 endif
-                if( ctrl%do_pose_cont_strategy .or. ctrl%do_pose_cont_polish )then
+                if( ctrl%do_pose_cont_strategy .or. &
+                    &(ctrl%do_pose_cont_polish .and. pose_cont_seed_available) )then
                     call pose_stats(ithr)%record(pose_result,pose_elapsed)
                     call b_ptr%spproj_field%set(iptcl,'pose_cont_attempted',1.)
                     call b_ptr%spproj_field%set(iptcl,'pose_cont_improved', &
