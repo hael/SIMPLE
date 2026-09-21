@@ -33,6 +33,8 @@ use simple_flex_pca_merge,             only: flex_pca_merge_enabled, two_gate_st
 use simple_flex_pca_util,  only: cov_env_flag_on, cov_env_flag_off, cov_env_dp
 use simple_flex_pca_weights, only: build_covariance_state_weights, cv_select_bandwidths
 use simple_flex_pca_targets, only: component_reliability_proxy
+use simple_flex_weights_state, only: flex_weights_deliver, flex_weights_state_fname, FLEX_WEIGHTS_STALE_SCAN
+use simple_flex_weights_file,  only: FLEX_WEIGHTS_PROV_FLEX_PCA, FLEX_WEIGHTS_PROV_MERGED
 implicit none
 private
 character(len=*), parameter :: SIGMA_STATE_FNAME= 'flex_pca_sigma_state.txt'
@@ -94,6 +96,7 @@ contains
         integer,  allocatable :: deconv_labels(:)
         logical  :: l_deconv_applied, l_deconv_adopted, l_state_rec
         logical  :: l_pop_floor
+        logical  :: l_merged          ! the two-gate merge collapsed states: the delivered table is a merged one
         logical  :: l_paired_states   ! paired merge delivered the basis+embedding; fall through to the state stage
         real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
         real, allocatable :: state_weights(:,:), half_weights(:,:), targets(:,:), bandwidths(:), neff(:)
@@ -119,6 +122,7 @@ contains
         call validate_covariance_inputs(params, build, cline, pinds, nptcls, rounds=rounds)
         l_paired_states = .false.
         l_pop_floor     = .false.
+        l_merged        = .false.
         cov_box_crop_glob  = params%box_crop
         cov_smpd_crop_glob = params%smpd_crop
         ! distributed master: one particle-index list per part, shipped as pindfile= (no-op otherwise)
@@ -565,7 +569,8 @@ contains
                     call del_file('flex_pca_even_state_'//int2str_pad(s,3)//MRC_EXT)
                     call del_file('flex_pca_odd_state_' //int2str_pad(s,3)//MRC_EXT)
                 end do
-                nstates = nstates_merged
+                nstates  = nstates_merged
+                l_merged = .true.
                 call reconstruct_flex_weighted_states(params, build, pinds, state_weights, nstates, &
                     &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
                     &outvol_odd=string('flex_pca_odd_state_001.mrc'), rounds=rounds)
@@ -576,10 +581,14 @@ contains
         endif   ! l_state_rec
         call write_covariance_tables(build, pinds, z, eigvals, prior_precision, state_weights, labels, &
             &targets, bandwidths, neff, resid_energy, resid_mean_energy, contrast)
-        ! Hard labels into the project itself, so the assignment can be judged by an INDEPENDENT
-        ! reconstructor. Every non-worker delivers (shared memory, nparts=1 and the distributed
-        ! master alike); a worker shares the master's projfile and must not write it.
+        ! The delivered weight table into the project-registered store, then the hard labels into
+        ! the project itself, so the assignment can be judged by an INDEPENDENT reconstructor. Every
+        ! non-worker delivers (shared memory, nparts=1 and the distributed master alike); a worker
+        ! shares the master's projfile and must not write it. The store goes first: it validates
+        ! against the field's activity as the run saw it, before the labels overwrite `state`.
         if( .not. rounds%is_worker() )then
+            call write_flex_weights_store(params, build, pinds, state_weights, labels, targets, bandwidths, &
+                &l_merged)
             call write_discrete_state_project(build%spproj, pinds, labels, nstates, params%projfile)
         endif
         allocate(half_weights(nptcls,nstates), source=state_weights)
@@ -1428,6 +1437,38 @@ contains
         end do
         close(u)
     end subroutine write_covariance_tables
+
+    !>  The delivered weight table into one file per state (flex_weights_state_NNN.bin: every physical
+    !!  row, rows outside the selection zero, that state's scalars alongside), each registered in the
+    !!  out segment of the run's own project copy as imgkind flex_weights, state NNN, beside vol_flex
+    !!  state NNN. The files validate their rows against the field's `state` as the run saw it, so
+    !!  this runs BEFORE write_discrete_state_project overwrites those labels.
+    subroutine write_flex_weights_store( params, build, pinds, weights, labels, targets, bandwidths, l_merged )
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        integer,          intent(in)    :: pinds(:), labels(:)
+        real,             intent(in)    :: weights(:,:), targets(:,:), bandwidths(:)
+        logical,          intent(in)    :: l_merged
+        character(len=STDLEN) :: message
+        integer :: status, s, nstates
+        nstates = size(weights,2)
+        call flex_weights_deliver(build%spproj, build%spproj_field, params%box, params%smpd, &
+            &params%box_crop, params%smpd_crop, pinds, weights, labels, targets, bandwidths, &
+            &merge(FLEX_WEIGHTS_PROV_MERGED, FLEX_WEIGHTS_PROV_FLEX_PCA, l_merged), status, message)
+        if( status /= 0 ) THROW_HARD('flex_pca could not deliver the state weights: '//trim(message))
+        do s = 1, nstates
+            call build%spproj%add_flex_weights2os_out(flex_weights_state_fname(s), s, params%box, params%smpd)
+        end do
+        ! entries of a previous delivery with more states would point at files the delivery removed
+        do s = nstates+1, nstates+FLEX_WEIGHTS_STALE_SCAN
+            if( build%spproj%isthere_in_osout('flex_weights', s) ) call build%spproj%remove_entry_from_osout('flex_weights', s)
+        end do
+        call build%spproj%write_segment_inside('out', params%projfile)
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA STATE WEIGHTS WRITTEN: flex_weights_state_001..'// &
+            &int2str_pad(nstates,3)//'.bin (', size(weights,1), ' particles x ', nstates, &
+            &' states; registered in the out segment as flex_weights per state)'
+        call flush(logfhandle)
+    end subroutine write_flex_weights_store
 
     !>  Write the hard state assignment INTO the run's own project: ptcl3D/state carries each embedded
     !!  particle's label, 0 elsewhere. Judge the clusters independently of the kernel-weighted backend with

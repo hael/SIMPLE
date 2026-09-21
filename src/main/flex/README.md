@@ -68,6 +68,19 @@ part I/O; the commander owns the defaults. The execution contract is
    `em_mean`, the sigma decision in `model`, state-weight rounds in `rec3D`;
    part naming and the format identifiers are part of the contract in
    `simple_flex_pca_rounds.f90`.
+6. `simple_flex_weights_state.f90` is the delivered state-weight store:
+   the state stage publishes one `flex_weights_state_NNN.bin` per delivered
+   state (that state's weight over every physical project row, zero outside
+   the selection, a flag marking its hard-labelled particles, and its
+   mass/neff/population/bandwidth/target scalars) and registers each in the
+   out segment of the run's project copy as imgkind `flex_weights`, state
+   `NNN`, beside `vol_flex` state `NNN`, so per-state selection and removal
+   apply to weights and maps alike. The files follow the canonical sigma2
+   store's rules (layout digest, generation-scoped candidate, atomic
+   publish; bytes in `../../fileio/simple_flex_weights_file.f90`) and share
+   generation, digest and `nstates` across one delivery. Consumers go
+   through `flex_weights_consumable` / `flex_weights_load_state` (one
+   state) or `flex_weights_load_all` (the set, cross-checked).
 6. `simple_flex_pca_polar.f90` (the polar E-step bank), `simple_flex_gpu.f90`
    (device kernels, `USE_FLEX_CUDA`) and
    `simple_flex_reconstructor_latent_ops.f90` (the projection-aware latent

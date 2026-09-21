@@ -102,6 +102,38 @@ contains
         call self%os_out%set(ind, 'box',     box)
     end subroutine add_fsc2os_out
 
+    !> One flex per-state weight file (flex_weights_state_NNN.bin), one entry per state like vol_flex
+    module subroutine add_flex_weights2os_out( self, weights, state, box, smpd )
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: weights
+        integer,           intent(in)    :: state, box
+        real,              intent(in)    :: smpd
+        type(string) :: abspath
+        integer      :: ind, n_os_out
+        ! full path and existence check
+        abspath = simple_abspath(weights)
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 )then
+            n_os_out = 1
+            ind      = 1
+            call self%os_out%new(n_os_out, is_ptcl=.false.)
+        else
+            ind = self%get_os_out_entry_index('flex_weights', state)
+            if( ind == 0 )then
+                n_os_out = n_os_out + 1
+                call self%os_out%reallocate(n_os_out)
+                ind = n_os_out
+            endif
+        endif
+        ! fill-in field
+        call self%os_out%set(ind, 'flex_weights', abspath)
+        call self%os_out%set(ind, 'imgkind',      'flex_weights')
+        call self%os_out%set(ind, 'state',        state)
+        call self%os_out%set(ind, 'box',          box)
+        call self%os_out%set(ind, 'smpd',         smpd)
+    end subroutine add_flex_weights2os_out
+
     module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: vol
@@ -227,14 +259,15 @@ contains
         call self%os_out%delete(ind)
     end subroutine remove_entry_from_osout
 
-    ! removes only the artifacts that are state-associated: vol, vol_cavg, vol_flex & fsc
+    ! removes only the artifacts that are state-associated: vol, vol_cavg, vol_flex, flex_weights & fsc
     module subroutine remove_state_artifacts_from_osout( self, state )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: state
-        call self%remove_entry_from_osout('vol',      state)
-        call self%remove_entry_from_osout('vol_cavg', state)
-        call self%remove_entry_from_osout('vol_flex', state)
-        call self%remove_entry_from_osout('fsc',      state)
+        call self%remove_entry_from_osout('vol',          state)
+        call self%remove_entry_from_osout('vol_cavg',     state)
+        call self%remove_entry_from_osout('vol_flex',     state)
+        call self%remove_entry_from_osout('flex_weights', state)
+        call self%remove_entry_from_osout('fsc',          state)
     end subroutine remove_state_artifacts_from_osout
 
     ! Getters
@@ -369,6 +402,23 @@ contains
         call self%os_out%getter(ind, 'fsc', fsc_fname)
         box = self%os_out%get_int(ind, 'box')
     end subroutine get_fsc
+
+    !> The registered flex weight file of one state; found=.false. when the state has none
+    module subroutine get_flex_weights( self, state, weights_fname, found )
+        class(sp_project), intent(in)    :: self
+        integer,           intent(in)    :: state
+        class(string),     intent(inout) :: weights_fname
+        logical,           intent(out)   :: found
+        integer :: ind
+        call weights_fname%kill
+        found = .false.
+        if( self%os_out%get_noris() == 0 ) return
+        ind = self%get_os_out_entry_index('flex_weights', state)
+        if( ind == 0 ) return
+        if( .not. self%os_out%isthere(ind, 'flex_weights') ) return
+        call self%os_out%getter(ind, 'flex_weights', weights_fname)
+        found = .true.
+    end subroutine get_flex_weights
 
     module subroutine get_all_fscs( self, orisout )
         class(sp_project), intent(in)    :: self

@@ -140,6 +140,7 @@ contains
     procedure          :: add_cavgs2os_out
     procedure          :: add_frcs2os_out
     procedure          :: add_fsc2os_out
+    procedure          :: add_flex_weights2os_out
     procedure          :: add_vol2os_out
     procedure          :: add_entry2os_out
     procedure, private :: get_os_out_entry_index
@@ -151,6 +152,7 @@ contains
     procedure          :: get_all_fscs
     procedure          :: get_vol
     procedure          :: get_fsc
+    procedure          :: get_flex_weights
     procedure          :: get_frcs
     procedure          :: get_mskdiam
     procedure          :: get_imginfo_from_osout
@@ -650,6 +652,13 @@ interface
         integer,           intent(in)    :: state, box
     end subroutine add_fsc2os_out
 
+    module subroutine add_flex_weights2os_out( self, weights, state, box, smpd )
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: weights
+        integer,           intent(in)    :: state, box
+        real,              intent(in)    :: smpd
+    end subroutine add_flex_weights2os_out
+
     module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: vol
@@ -721,6 +730,13 @@ interface
         class(string),     intent(inout) :: fsc_fname
         integer,           intent(out)   :: box
     end subroutine get_fsc
+
+    module subroutine get_flex_weights( self, state, weights_fname, found )
+        class(sp_project), intent(in)    :: self
+        integer,           intent(in)    :: state
+        class(string),     intent(inout) :: weights_fname
+        logical,           intent(out)   :: found
+    end subroutine get_flex_weights
 
     module subroutine get_all_fscs( self, orisout )
         class(sp_project), intent(in)    :: self
