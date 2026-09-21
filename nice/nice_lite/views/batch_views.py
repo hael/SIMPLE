@@ -871,6 +871,7 @@ def _batch_overview_context(batchjob, jobmodel):
     return {
         "jobid"  : jobmodel.id,
         "disp"   : jobmodel.disp,
+        "name"   : jobmodel.name,
         "desc"   : jobmodel.desc,
         "proj"   : jobmodel.dset.proj.name,
         "dset"   : jobmodel.dset.name,

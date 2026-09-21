@@ -9,7 +9,8 @@
     - Job details footer.
 
   Context variables:
-    disp    — human-readable stream number / display name
+    disp    — human-readable display number
+    name    — job-specific batch name
     jobid   — primary key of the job, appended as ?selected_job_id= on all iframes
     desc    — optional user-supplied job description; shown alongside disp when non-empty
     args    — dict of stream launch parameters (smpd, cs, kv, fraca, etc.)
@@ -31,7 +32,7 @@
 
     <!-- Sub-bar: back link + stream title -->
     {% url 'nice_lite:workspace' as back_url %}
-    {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp desc=desc job_type='batch' %}
+    {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp name=name desc=desc job_type='batch' %}
     
     <!-- overview panel: logs (main column) with arguments and a reserved column of smaller panels -->
      <div data-panel="overview" class="w-full flex flex-row gap-2.5 p-[10px] flex-1 overflow-hidden">

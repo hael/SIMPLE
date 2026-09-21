@@ -1,9 +1,10 @@
 {% comment %}
   _job_nav_header.html — back link + job-title bar for stream/batch job views.
-  Expects: jobid, displayid, optional desc, optional page_title (omitted
-  segment when not given), optional job_type ("stream" default, or "batch"),
-  optional back_url (overrides the default view_stream/view_batch target,
-  e.g. for top-level views that go back to the workspace).
+  Expects: jobid, displayid, optional name (batch only), optional desc,
+  optional page_title (omitted segment when not given), optional job_type
+  ("stream" default, or "batch"), optional back_url (overrides the default
+  view_stream/view_batch target, e.g. for top-level views that go back to the
+  workspace).
 {% endcomment %}
 
 <div class="bg-streambar border-b border-streamline px-4 h-10 flex items-center gap-3">
@@ -21,7 +22,7 @@
     {% if job_type == "batch" %}
         <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple batch</span>
         <span class="text-streamlabel text-[10px]">/</span>
-        <span class="text-[12px] font-medium text-streamtext">{{ displayid }} · batch{% if page_title %} · {{ page_title }}{% endif %}{% if desc %} · {{ desc }}{% endif %}</span>
+        <span class="text-[12px] font-medium text-streamtext">{{ displayid }} {{ name|upper }}{% if page_title %} · {{ page_title }}{% endif %}{% if desc %} · {{ desc }}{% endif %}</span>
     {% else %}
         <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple stream</span>
         <span class="text-streamlabel text-[10px]">/</span>
