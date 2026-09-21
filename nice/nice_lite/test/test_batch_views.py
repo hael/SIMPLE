@@ -487,6 +487,48 @@ class BatchViewTests(SimpleTestCase):
         )
         self.assertNotIn("path", open_context["batch_volume_viewer"][0])
 
+    def test_active_batch_volume_placeholder_is_explicit_and_abinitio3d_only(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=9,
+            name="Initial 3D Reconstruction",
+            desc="",
+            status="finished",
+            cdat="created",
+            args={},
+            pckg="simple",
+            prog="abinitio3D",
+            master_stats={},
+            dset=SimpleNamespace(
+                name="workspace",
+                proj=SimpleNamespace(name="project"),
+            ),
+        )
+        batch_job = Mock()
+        batch_job.get_log_tails.return_value = []
+        batch_job.get_absdir.return_value = "/workspace/9_abinitio3D"
+
+        with patch.object(batch_views, "_argument_rows", return_value=[]):
+            closed_context = batch_views._batch_overview_context(
+                batch_job,
+                jobmodel,
+            )
+            open_context = batch_views._batch_overview_context(
+                batch_job,
+                jobmodel,
+                volume_viewer_requested=True,
+            )
+            jobmodel.prog = "abinitio2D"
+            wrong_program_context = batch_views._batch_overview_context(
+                batch_job,
+                jobmodel,
+                volume_viewer_requested=True,
+            )
+
+        self.assertFalse(closed_context["volume_viewer_requested"])
+        self.assertTrue(open_context["volume_viewer_requested"])
+        self.assertFalse(wrong_program_context["volume_viewer_requested"])
+
     def test_batch_volume_data_streams_the_owned_mrc_file(self):
         temporary_job_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temporary_job_dir.cleanup)

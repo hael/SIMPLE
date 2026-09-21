@@ -860,7 +860,11 @@ def view_batch_dj(request, jobid):
     clear_checksum_cookies(request, response)
     return response
 
-def _batch_overview_context(batchjob, jobmodel):
+def _batch_overview_context(
+    batchjob,
+    jobmodel,
+    volume_viewer_requested=False,
+):
     """Shared overview/logs/arguments context for the batch and manual-picker detail views."""
     log_by_name = {entry["name"]: entry for entry in batchjob.get_log_tails()}
     stdout_entry = log_by_name.get("stdout.log", {})
@@ -883,6 +887,11 @@ def _batch_overview_context(batchjob, jobmodel):
         "error"  : stderr_entry.get("text") if stderr_entry.get("exists") else None,
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
+        "volume_viewer_requested": (
+            volume_viewer_requested
+            and jobmodel.status == "finished"
+            and jobmodel.prog == "abinitio3D"
+        ),
     }
 
 def _manualpick_overview_context(batchjob, jobmodel):
@@ -920,7 +929,15 @@ def view_batch(request, jobid):
         messages.add_message(request, messages.ERROR, "invalid batch job selection")
         return redirect("nice_lite:workspace")
 
-    response = render(request, template, _batch_overview_context(batchjob, jobmodel))
+    response = render(
+        request,
+        template,
+        _batch_overview_context(
+            batchjob,
+            jobmodel,
+            volume_viewer_requested=_volume_viewer_requested(request),
+        ),
+    )
 
     response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
     response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)

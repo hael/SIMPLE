@@ -788,6 +788,34 @@ class TemplateIntegrationTests(SimpleTestCase):
             volume_rendered,
         )
 
+    def test_active_abinitio3d_batch_card_opens_volume_output(self):
+        job = {
+            "id": 7,
+            "disp": 9,
+            "name": "Initial 3D Reconstruction",
+            "dirc": "9_abinitio3D",
+            "args": {},
+            "pckg": "simple",
+            "prog": "abinitio3D",
+            "master_stats": {},
+            "status": "finished",
+        }
+
+        rendered = render_to_string(
+            "nice_batch/includes/_batch_card.html",
+            {"job": job},
+        )
+
+        self.assertIn('action="/viewbatch/7"', rendered)
+        self.assertIn('name="volume_viewer" value="1"', rendered)
+
+        job["prog"] = "abinitio2D"
+        other_output = render_to_string(
+            "nice_batch/includes/_batch_card.html",
+            {"job": job},
+        )
+        self.assertNotIn('name="volume_viewer"', other_output)
+
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")
 
@@ -892,3 +920,40 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("standard output", rendered)
         self.assertIn("standard error", rendered)
         self.assertIn("NICE status callbacks", rendered)
+
+    def test_active_batch_detail_has_opt_in_volume_viewer_placeholder(self):
+        batch_view = self._read_template("nice_batch/batchview.html")
+        volume_viewer = self._read_template("includes/_volume_viewer.html")
+        context = {
+            "jobid": 7,
+            "disp": 9,
+            "name": "Initial 3D Reconstruction",
+            "desc": "",
+            "proj": "project",
+            "dset": "workspace",
+            "args": {},
+            "created": "today",
+            "folder": "/workspace/9_abinitio3D",
+            "jobstats": {},
+            "log": [],
+            "error": None,
+            "arguments": [],
+            "submitted_argument_count": 0,
+            "volume_viewer_requested": True,
+        }
+
+        rendered = render_to_string("nice_batch/batchview.html", context)
+
+        self.assertIn("{% include 'includes/_volume_viewer.html'", batch_view)
+        self.assertIn('data-panel-target="volume3D"', rendered)
+        self.assertIn("<span>3D volume</span>", rendered)
+        self.assertIn('data-panel="volume3D"', rendered)
+        self.assertIn('id="batch_volume_viewer"', rendered)
+        self.assertIn("data-volume-viewer-placeholder", volume_viewer)
+        self.assertIn("volume viewer placeholder", rendered)
+
+        context["volume_viewer_requested"] = False
+        default_off = render_to_string("nice_batch/batchview.html", context)
+
+        self.assertNotIn('data-panel-target="volume3D"', default_off)
+        self.assertNotIn('id="batch_volume_viewer"', default_off)

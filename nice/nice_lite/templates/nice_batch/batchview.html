@@ -4,7 +4,7 @@
   Structure:
     - Sub-bar : back link and batch title (via _nav_header.html).
     - Left nav : vertical icon+text tabs for overview, and conditionally
-      movies/micrographs/particles/2D classes; clicking a tab shows the
+      movies/micrographs/particles/2D classes/3D volume; clicking a tab shows the
       matching [data-panel] section on the right via showJobPanel().
     - Overview panel (shown by default): logs viewer in the main column,
       with the arguments viewer and a reserved (currently empty) panel
@@ -12,6 +12,7 @@
     - 2D classes panel (only when "cls2D" is in jobstats) is a selectable
       tile grid of class averages, shared with the stream classification2D
       views.
+    - 3D volume panel is an opt-in placeholder for finished abinitio3D jobs.
     - Job details footer.
 
   Context variables:
@@ -27,6 +28,7 @@
     error   — optional error text for the logs panel (stderr.log tail)
     arguments — list of {key, label, value, origin, submitted} for the arguments panel
     submitted_argument_count — count of user-submitted arguments
+    volume_viewer_requested — whether to show the abinitio3D viewer placeholder
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -98,6 +100,15 @@
                     <span>2D classes</span>
                 </button>
             {% endif %}
+            {% if volume_viewer_requested %}
+                <button type="button" class="job-panel-tab flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg text-[11px] font-medium transition-colors text-streamlabel hover:text-streamring hover:bg-streamring/10" data-panel-target="volume3D" onclick="showJobPanel(this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 flex-shrink-0">
+                        <path d="M8 1.5 14 4.75v6.5L8 14.5l-6-3.25v-6.5L8 1.5Z"/>
+                        <path d="M2 4.75 8 8l6-3.25M8 8v6.5"/>
+                    </svg>
+                    <span>3D volume</span>
+                </button>
+            {% endif %}
         </div>
 
         <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -150,7 +161,7 @@
             </div>
 
             <!-- 2D classes panel -->
-             <div data-panel="cls2D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+            <div data-panel="cls2D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
                 <div class="flex flex-col h-full gap-2.5 w-full">
                     <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
                         {% if "cls2D" in jobstats and jobstats.cls2D|length > 0 %}
@@ -159,6 +170,17 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 3D volume panel -->
+            {% if volume_viewer_requested %}
+                <div data-panel="volume3D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+                    <div class="flex flex-col h-full gap-2.5 w-full">
+                        <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+                            {% include 'includes/_volume_viewer.html' with panel_title='3D volume' %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -180,7 +202,7 @@
             });
         };
 
-        // default to the last available tab (e.g. 2D classes over overview) on load
+        // default to the last available output tab on load
         const jobPanelTabs = document.querySelectorAll(".job-panel-tab");
         if( jobPanelTabs.length > 0 ) showJobPanel(jobPanelTabs[jobPanelTabs.length - 1]);
     </script>
