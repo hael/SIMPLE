@@ -1,0 +1,48 @@
+{% comment %}
+  _3D_viewer.html — basic Mol* viewport for an owned Batch volume.
+  Expects `jobid` and non-empty `volume_outputs`. The hidden controls satisfy
+  the shared Mol* controller while keeping this first version viewport-only.
+{% endcomment %}
+<style>
+    [data-basic-3d-viewer] > .msp-plugin {
+        position: absolute;
+        inset: 0;
+    }
+</style>
+
+<select data-volume-source hidden aria-label="volume source">
+    {% for volume in volume_outputs %}
+        <option value="{% url 'nice_lite:batch_volume_data' jobid volume.name %}"
+                data-volume-name="{{ volume.name }}"
+                data-volume-width="{{ volume.width }}"
+                data-volume-height="{{ volume.height }}"
+                data-volume-depth="{{ volume.depth }}"
+                data-volume-voxel-x="{{ volume.voxel_size.0 }}"
+                data-volume-voxel-y="{{ volume.voxel_size.1 }}"
+                data-volume-voxel-z="{{ volume.voxel_size.2 }}"
+                data-volume-minimum="{{ volume.minimum }}"
+                data-volume-maximum="{{ volume.maximum }}">
+            {{ volume.name }}
+        </option>
+    {% endfor %}
+</select>
+<select data-volume-background hidden aria-label="viewer background">
+    <option value="white" selected>white</option>
+</select>
+<input data-volume-isovalue type="range" min="0" max="1" step="0.001" value="0.3" hidden disabled>
+<output data-volume-isovalue-output hidden></output>
+<button data-volume-reset type="button" hidden>reset view</button>
+<p data-volume-metadata hidden></p>
+
+<div data-volume-viewport
+     class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-streamdivider bg-white"
+     style="min-height:22rem">
+    <div data-volume-molstar data-basic-3d-viewer role="region"
+         class="absolute inset-0"
+         aria-label="Interactive Mol* 3D volume viewer; drag to rotate and scroll to zoom"></div>
+    <p class="pointer-events-none absolute bottom-2 right-3 rounded bg-black/60 px-2 py-1 text-[9px] text-gray-300">
+        Mol* · drag to rotate · scroll to zoom
+    </p>
+</div>
+<p data-volume-status role="status" aria-live="polite"
+   class="mt-2 flex-shrink-0 text-[10px] text-streamsubtle">loading Mol*…</p>

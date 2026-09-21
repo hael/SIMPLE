@@ -1,11 +1,16 @@
 {% comment %}
-  _volume_viewer.html — placeholder panel for abinitio3D volume output.
-  Params: panel_title (str).
+  _volume_viewer.html — panel shell for abinitio3D volume output.
+  Expects `jobid`, `volume_outputs`, and panel_title (str).
 {% endcomment %}
 <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
 </div>
-<div id="batch_volume_viewer" data-volume-viewer-placeholder
-     class="flex min-h-0 flex-1 items-center justify-center p-3">
-    <p class="text-[10px] text-streamlabel">volume viewer placeholder</p>
-</div>
+{% if volume_outputs %}
+    <div id="batch_volume_viewer" data-volume-viewer class="flex min-h-0 flex-1 flex-col p-3">
+        {% include 'includes/_3D_viewer.html' %}
+    </div>
+{% else %}
+    <div id="batch_volume_viewer" class="flex min-h-0 flex-1 items-center justify-center p-3">
+        <p class="text-[10px] text-streamlabel">no volume output is available</p>
+    </div>
+{% endif %}

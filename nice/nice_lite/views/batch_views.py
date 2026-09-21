@@ -423,6 +423,20 @@ def _has_positive_dimensions(item, width_key="width", height_key="height"):
     )
 
 
+def _public_volume_outputs(batch_job, jobmodel):
+    """Return browser-safe volume metadata for a finished ab initio 3D job."""
+    if jobmodel.status != "finished" or jobmodel.prog != "abinitio3D":
+        return []
+    return [
+        {
+            key: value
+            for key, value in volume.items()
+            if key != "path"
+        }
+        for volume in batch_job.get_volume_outputs()
+    ]
+
+
 def _movie_thumbnail_token(job_id, movie_path):
     """Sign an imported movie path so it cannot be replaced in the URL."""
     return signing.Signer(salt=_BATCH_MOVIE_THUMBNAIL_SALT).sign_object(
@@ -579,17 +593,7 @@ def _batch_detail_context(
         jobmodel.prog == "abinitio2D"
         and batch_class_selector is not None
     )
-    volume_outputs = []
-    if jobmodel.status == "finished" and jobmodel.prog == "abinitio3D":
-        volume_outputs = batch_job.get_volume_outputs()
-    public_volume_outputs = [
-        {
-            key: value
-            for key, value in volume.items()
-            if key != "path"
-        }
-        for volume in volume_outputs
-    ]
+    public_volume_outputs = _public_volume_outputs(batch_job, jobmodel)
     particle_stack_page = {}
     if jobmodel.prog in BatchJob.MRC_STACK_PREVIEW_PROGRAMS:
         particle_stack_page = batch_job.get_particle_stack_page(
@@ -871,6 +875,11 @@ def _batch_overview_context(
     stderr_entry = log_by_name.get("stderr.log", {})
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     arguments = _argument_rows(jobmodel)
+    show_volume_viewer = (
+        volume_viewer_requested
+        and jobmodel.status == "finished"
+        and jobmodel.prog == "abinitio3D"
+    )
 
     return {
         "jobid"  : jobmodel.id,
@@ -887,10 +896,11 @@ def _batch_overview_context(
         "error"  : stderr_entry.get("text") if stderr_entry.get("exists") else None,
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
-        "volume_viewer_requested": (
-            volume_viewer_requested
-            and jobmodel.status == "finished"
-            and jobmodel.prog == "abinitio3D"
+        "volume_viewer_requested": show_volume_viewer,
+        "volume_outputs": (
+            _public_volume_outputs(batchjob, jobmodel)
+            if show_volume_viewer
+            else []
         ),
     }
 

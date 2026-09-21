@@ -487,7 +487,7 @@ class BatchViewTests(SimpleTestCase):
         )
         self.assertNotIn("path", open_context["batch_volume_viewer"][0])
 
-    def test_active_batch_volume_placeholder_is_explicit_and_abinitio3d_only(self):
+    def test_active_batch_volume_viewer_is_explicit_and_abinitio3d_only(self):
         jobmodel = SimpleNamespace(
             id=7,
             disp=9,
@@ -507,6 +507,17 @@ class BatchViewTests(SimpleTestCase):
         batch_job = Mock()
         batch_job.get_log_tails.return_value = []
         batch_job.get_absdir.return_value = "/workspace/9_abinitio3D"
+        batch_job.get_volume_outputs.return_value = [{
+            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "name": "recvol_state01.mrc",
+            "state": 1,
+            "width": 256,
+            "height": 256,
+            "depth": 256,
+            "voxel_size": (1.3, 1.3, 1.3),
+            "minimum": -2.0,
+            "maximum": 8.0,
+        }]
 
         with patch.object(batch_views, "_argument_rows", return_value=[]):
             closed_context = batch_views._batch_overview_context(
@@ -526,8 +537,15 @@ class BatchViewTests(SimpleTestCase):
             )
 
         self.assertFalse(closed_context["volume_viewer_requested"])
+        self.assertEqual(closed_context["volume_outputs"], [])
         self.assertTrue(open_context["volume_viewer_requested"])
+        self.assertEqual(
+            open_context["volume_outputs"][0]["name"],
+            "recvol_state01.mrc",
+        )
+        self.assertNotIn("path", open_context["volume_outputs"][0])
         self.assertFalse(wrong_program_context["volume_viewer_requested"])
+        self.assertEqual(wrong_program_context["volume_outputs"], [])
 
     def test_batch_volume_data_streams_the_owned_mrc_file(self):
         temporary_job_dir = tempfile.TemporaryDirectory()

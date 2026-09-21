@@ -921,9 +921,10 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("standard error", rendered)
         self.assertIn("NICE status callbacks", rendered)
 
-    def test_active_batch_detail_has_opt_in_volume_viewer_placeholder(self):
+    def test_active_batch_detail_has_opt_in_molstar_volume_viewer(self):
         batch_view = self._read_template("nice_batch/batchview.html")
         volume_viewer = self._read_template("includes/_volume_viewer.html")
+        viewer_3d = self._read_template("includes/_3D_viewer.html")
         context = {
             "jobid": 7,
             "disp": 9,
@@ -940,6 +941,16 @@ class TemplateIntegrationTests(SimpleTestCase):
             "arguments": [],
             "submitted_argument_count": 0,
             "volume_viewer_requested": True,
+            "volume_outputs": [{
+                "name": "recvol_state01.mrc",
+                "state": 1,
+                "width": 256,
+                "height": 256,
+                "depth": 256,
+                "voxel_size": (1.3, 1.3, 1.3),
+                "minimum": -2.0,
+                "maximum": 8.0,
+            }],
         }
 
         rendered = render_to_string("nice_batch/batchview.html", context)
@@ -949,11 +960,18 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("<span>3D volume</span>", rendered)
         self.assertIn('data-panel="volume3D"', rendered)
         self.assertIn('id="batch_volume_viewer"', rendered)
-        self.assertIn("data-volume-viewer-placeholder", volume_viewer)
-        self.assertIn("volume viewer placeholder", rendered)
+        self.assertIn("{% include 'includes/_3D_viewer.html' %}", volume_viewer)
+        self.assertIn("data-basic-3d-viewer", viewer_3d)
+        self.assertIn("data-volume-molstar", rendered)
+        self.assertIn('value="/batchvolume/7/recvol_state01.mrc"', rendered)
+        self.assertIn("molstar@5.11.0/build/viewer/molstar.css", rendered)
+        self.assertIn("molstar@5.11.0/build/viewer/molstar.js", rendered)
+        self.assertIn("nice_lite/molstar_volume_viewer.js?v=2", rendered)
 
         context["volume_viewer_requested"] = False
+        context["volume_outputs"] = []
         default_off = render_to_string("nice_batch/batchview.html", context)
 
         self.assertNotIn('data-panel-target="volume3D"', default_off)
         self.assertNotIn('id="batch_volume_viewer"', default_off)
+        self.assertNotIn("molstar@5.11.0", default_off)
