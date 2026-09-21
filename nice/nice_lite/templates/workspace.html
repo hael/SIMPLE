@@ -34,6 +34,10 @@
     </div>
 
 {% else %}
+    <!-- Sub-bar: return to this project's workspace cards + workspace title. -->
+    {% url 'nice_lite:index' as back_url %}
+    {% include 'includes/_nav_header.html' with header_type='workspace' workspace_title=current_workspace_name back_url=back_url back_project_id=current_project_id back_target='_parent' back_aria_label='back to project' %}
+
     <!-- Scrollable stream grid (flex-1 so it fills space between sub-bar and footer) -->
     <div class="flex-1 min-h-0 flex flex-row">
         <div class="relative flex-1 min-h-0">

@@ -23,7 +23,8 @@
   selected_*_id in the URL) any id missing from sessionStorage falls back to
   the selected_*_id cookie set server-side, but a value present in
   sessionStorage always wins over that cookie. An explicit project id without
-  a workspace id opens that project's workspace-card page.
+  a workspace id opens that project's workspace-card page. The previously
+  selected accessible project is retained to drive that page's back control.
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -118,9 +119,14 @@
     <script>
         (() => {
             const PROJECT_KEY = "selected_project_id";
+            const PREVIOUS_PROJECT_KEY = "previous_project_id";
             const WORKSPACE_KEY = "selected_workspace_id";
             const workspaceStorageKey = (projectId) => `${WORKSPACE_KEY}:${projectId}`;
             const isProjectId = (value) => /^\d+$/.test(value || "") && value !== "0";
+            const isAvailableProjectId = (value) => {
+                if (!isProjectId(value)) return false;
+                return document.querySelector(`select[name="${PROJECT_KEY}"] option[value="${value}"]`) !== null;
+            };
             const rememberedWorkspace = (projectId) => {
                 if (!isProjectId(projectId)) return null;
                 return sessionStorage.getItem(workspaceStorageKey(projectId));
@@ -175,6 +181,12 @@
             const currentProjectId = body.dataset.currentProjectId;
             const currentWorkspaceId = body.dataset.currentWorkspaceId;
             if (currentProjectId) {
+                if (
+                    isAvailableProjectId(storedProjectId)
+                    && storedProjectId !== currentProjectId
+                ) {
+                    sessionStorage.setItem(PREVIOUS_PROJECT_KEY, storedProjectId);
+                }
                 sessionStorage.setItem(PROJECT_KEY, currentProjectId);
                 if (currentWorkspaceId) {
                     sessionStorage.setItem(WORKSPACE_KEY, currentWorkspaceId);
@@ -183,6 +195,24 @@
                     sessionStorage.removeItem(WORKSPACE_KEY);
                     sessionStorage.removeItem(workspaceStorageKey(currentProjectId));
                 }
+            }
+
+            const projectBackButton = document.querySelector("[data-project-back]");
+            const previousProjectId = sessionStorage.getItem(PREVIOUS_PROJECT_KEY);
+            if (
+                projectBackButton
+                && isAvailableProjectId(previousProjectId)
+                && previousProjectId !== currentProjectId
+            ) {
+                projectBackButton.disabled = false;
+                projectBackButton.setAttribute("aria-disabled", "false");
+                projectBackButton.title = "back to previous project";
+                projectBackButton.addEventListener("click", () => {
+                    const params = new URLSearchParams({
+                        [PROJECT_KEY]: previousProjectId,
+                    });
+                    window.location.assign(`${window.location.pathname}?${params.toString()}`);
+                });
             }
         })();
     </script>

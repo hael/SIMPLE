@@ -2,7 +2,7 @@
   batchview.html — per-batch detail view, loaded inside the workspace iframe.
 
   Structure:
-    - Sub-bar : back link and batch title (via _job_nav_header.html).
+    - Sub-bar : back link and batch title (via _nav_header.html).
     - Left nav : vertical icon+text tabs for overview, and conditionally
       movies/micrographs/particles/2D classes; clicking a tab shows the
       matching [data-panel] section on the right via showJobPanel().
@@ -40,7 +40,7 @@
 
     <!-- Sub-bar: back link + stream title -->
     {% url 'nice_lite:workspace' as back_url %}
-    {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp name=name desc=desc job_type='batch' %}
+    {% include 'includes/_nav_header.html' with back_url=back_url displayid=disp name=name desc=desc job_type='batch' %}
 
     <div class="flex flex-row flex-1 overflow-hidden">
         <!-- left nav: switch between overview and conditionally available data panels -->

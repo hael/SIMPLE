@@ -7,6 +7,7 @@
     workspaces — that user's workspaces for the selected project
 {% endcomment %}
 <div class="flex-1 min-h-0 flex flex-col">
+    {% include 'includes/_nav_header.html' with header_type='project' project_title=project.name %}
 
     <div class="flex-1 min-h-0 flex flex-row">
         <main class="flex-1 min-w-0 overflow-y-auto scrollbar-hidden px-5 py-4"

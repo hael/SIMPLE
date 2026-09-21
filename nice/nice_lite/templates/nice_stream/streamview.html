@@ -28,7 +28,7 @@
 <body class="bg-streambg h-screen flex flex-col font-sans">
     <!-- Sub-bar: back link + stream title -->
     {% url 'nice_lite:workspace' as back_url %}
-    {% include 'includes/_job_nav_header.html' with back_url=back_url displayid=disp desc=desc %}
+    {% include 'includes/_nav_header.html' with back_url=back_url displayid=disp desc=desc %}
     
     <!-- Scrollable stage-card grid -->
     <div class="flex-1 min-h-0 overflow-y-auto">

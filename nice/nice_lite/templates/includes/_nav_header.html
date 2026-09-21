@@ -1,0 +1,54 @@
+{% comment %}
+  _nav_header.html — shared back control + title bar for project, workspace,
+  and job views.
+  Expects: jobid, displayid, optional name (batch only), optional desc,
+  optional page_title (omitted segment when not given), optional job_type
+  ("stream" default, or "batch"), optional back_url (overrides the default
+  view_stream/view_batch target, e.g. for top-level views that go back to the
+  workspace), optional back_project_id (appended to back_url), optional
+  back_target/back_aria_label, header_type="workspace" with workspace_title,
+  or header_type="project" with project_title. Project back navigation is
+  enabled client-side only when a previous project exists in this tab.
+{% endcomment %}
+
+<div class="bg-streambar border-b border-streamline px-4 h-10 flex items-center gap-3 flex-shrink-0">
+    {% if header_type == "project" %}
+        <button type="button" data-project-back disabled aria-disabled="true"
+                title="no previous project" aria-label="back to previous project"
+                class="text-streamlabel hover:text-streamtext cursor-pointer transition-colors disabled:text-streamicon disabled:opacity-40 disabled:cursor-default">
+    {% elif back_url %}
+        <a class="text-streamlabel hover:text-streamtext cursor-pointer transition-colors"
+           href="{{ back_url }}{% if back_project_id %}?selected_project_id={{ back_project_id }}{% endif %}"
+           {% if back_target %}target="{{ back_target }}"{% endif %}
+           title="back"{% if back_aria_label %} aria-label="{{ back_aria_label }}"{% endif %}>
+    {% elif job_type == "batch" %}
+        <a class="text-streamlabel hover:text-streamtext cursor-pointer transition-colors" href={% url 'nice_lite:view_batch' jobid %} title="back">
+    {% else %}
+        <a class="text-streamlabel hover:text-streamtext cursor-pointer transition-colors" href={% url 'nice_lite:view_stream' jobid %} title="back">
+    {% endif %}
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3">
+            <polyline points="7,2 3,6 7,10"/>
+        </svg>
+    {% if header_type == "project" %}
+        </button>
+    {% else %}
+        </a>
+    {% endif %}
+    {% if header_type == "project" %}
+        <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple stream</span>
+        <span class="text-streamlabel text-[10px]">/</span>
+        <span class="text-[12px] font-medium text-streamtext">{{ project_title }}</span>
+    {% elif header_type == "workspace" %}
+        <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple stream</span>
+        <span class="text-streamlabel text-[10px]">/</span>
+        <span class="text-[12px] font-medium text-streamtext">{{ workspace_title }}</span>
+    {% elif job_type == "batch" %}
+        <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple batch</span>
+        <span class="text-streamlabel text-[10px]">/</span>
+        <span class="text-[12px] font-medium text-streamtext">{{ displayid }} {{ name|upper }}{% if page_title %} · {{ page_title }}{% endif %}{% if desc %} · {{ desc }}{% endif %}</span>
+    {% else %}
+        <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple stream</span>
+        <span class="text-streamlabel text-[10px]">/</span>
+        <span class="text-[12px] font-medium text-streamtext">{{ displayid }} · stream{% if page_title %} · {{ page_title }}{% endif %}{% if desc %} · {{ desc }}{% endif %}</span>
+    {% endif %}
+</div>

@@ -41,6 +41,43 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('title="refresh job cards"', content)
         self.assertIn("{% csrf_token %}", content)
 
+    def test_workspace_has_job_style_title_bar_with_parent_project_back_link(self):
+        workspace = self._read_template("workspace.html")
+        nav_header = self._read_template("includes/_nav_header.html")
+
+        self.assertIn(
+            "{% include 'includes/_nav_header.html' with ",
+            workspace,
+        )
+        self.assertIn("header_type='workspace'", workspace)
+        self.assertIn("back_project_id=current_project_id", workspace)
+        self.assertIn("back_target='_parent'", workspace)
+        self.assertIn("back_aria_label='back to project'", workspace)
+        self.assertIn("workspace_title=current_workspace_name", workspace)
+        self.assertNotIn('<header class="bg-streambar', workspace)
+        self.assertNotIn('viewBox="0 0 12 12"', workspace)
+        self.assertIn("bg-streambar border-b border-streamline px-4 h-10", nav_header)
+        self.assertIn("?selected_project_id={{ back_project_id }}", nav_header)
+        self.assertIn('target="{{ back_target }}"', nav_header)
+        self.assertIn('{% if header_type == "workspace" %}', nav_header)
+        self.assertIn("{{ workspace_title }}</span>", nav_header)
+
+        rendered_header = render_to_string(
+            "includes/_nav_header.html",
+            {
+                "header_type": "workspace",
+                "workspace_title": "workspace 2",
+                "back_url": "/",
+                "back_project_id": 7,
+                "back_target": "_parent",
+                "back_aria_label": "back to project",
+            },
+        )
+        self.assertIn('href="/?selected_project_id=7"', rendered_header)
+        self.assertIn('target="_parent"', rendered_header)
+        self.assertIn('aria-label="back to project"', rendered_header)
+        self.assertIn(">workspace 2</span>", rendered_header)
+
     def test_browser_messages_remain_visible(self):
         content = self._read_template("messages.html")
 
@@ -71,6 +108,38 @@ class TemplateIntegrationTests(SimpleTestCase):
             index,
         )
 
+    def test_project_page_reuses_nav_header_with_previous_project_back_control(self):
+        project = self._read_template("project.html")
+        nav_header = self._read_template("includes/_nav_header.html")
+        index = self._read_template("index.html")
+
+        self.assertIn(
+            "{% include 'includes/_nav_header.html' with "
+            "header_type='project' project_title=project.name %}",
+            project,
+        )
+        self.assertIn('data-project-back disabled aria-disabled="true"', nav_header)
+        self.assertIn('title="no previous project"', nav_header)
+        self.assertIn('{% if header_type == "project" %}', nav_header)
+        self.assertIn("{{ project_title }}</span>", nav_header)
+        self.assertIn('const PREVIOUS_PROJECT_KEY = "previous_project_id";', index)
+        self.assertIn("sessionStorage.setItem(PREVIOUS_PROJECT_KEY, storedProjectId);", index)
+        self.assertIn('document.querySelector("[data-project-back]")', index)
+        self.assertIn("projectBackButton.disabled = false;", index)
+        self.assertIn("previousProjectId !== currentProjectId", index)
+
+        rendered_header = render_to_string(
+            "includes/_nav_header.html",
+            {
+                "header_type": "project",
+                "project_title": "project 2",
+            },
+        )
+        self.assertIn("data-project-back", rendered_header)
+        self.assertIn(" disabled", rendered_header)
+        self.assertIn('aria-disabled="true"', rendered_header)
+        self.assertIn(">project 2</span>", rendered_header)
+
     def test_projects_page_uses_project_details_and_workspace_cards(self):
         projects = self._read_template("project.html")
 
@@ -84,7 +153,8 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("border-b border-streamdivider", projects)
         self.assertIn("border-t border-streamdivider", projects)
         self.assertIn("workspace folder", projects)
-        self.assertNotIn("<header", projects)
+        self.assertIn("includes/_nav_header.html", projects)
+        self.assertNotIn('<header class="bg-streambar', projects)
         self.assertNotIn("<!DOCTYPE html>", projects)
         self.assertNotIn("<body", projects)
         self.assertNotIn('aria-label="project and workspace navigation"', projects)
