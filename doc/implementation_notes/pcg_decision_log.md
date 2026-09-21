@@ -777,8 +777,11 @@ into the solvent pair); `automsk=nu` needs no special case (its null is
 the base pair's). Postprocess (classical): cutoff = FSC=0.143 of the
 reconstruction's FSC file (now always the base pair's curve; the `_unfil`
 pair's own FSC computed there only when no file is given), B
-from the map being sharpened between `HPLIM_GUINIER` and the cutoff,
-sharpen, Butterworth at the cutoff; `fsc_filt` and the density window
+from the unfiltered pair average between `HPLIM_GUINIER` and the cutoff
+(a first version fitted the shipped regularized map: -150 on
+streptavidin, a cloud of structured noise; the Wiener suppression
+steepens the slope, which is what the unfil-pair estimate was always
+for), sharpen, Butterworth at the cutoff; `fsc_filt` and the density window
 retired; `imgkind=unfil|solvent` postprocess the pair averages with the
 same cutoff (`pair_stem`). postprocess_nu: evidence from `_unfil`,
 sharpening applied to the `_solvent` pair when present; outputs named

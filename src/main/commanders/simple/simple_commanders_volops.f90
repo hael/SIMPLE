@@ -333,6 +333,33 @@ contains
         has_fsc   = .false.
         do_envfsc = .false.
         res = vol_bfac%get_res()
+        ! the unfiltered (unregularized, unpriored) pair beside the map: the
+        ! B-factor's source, and the cutoff's when no FSC file is given
+        if( present(pair_stem) )then
+            fname_even_unfil = add2fbody(pair_stem, params%ext, '_even_unfil')
+            fname_odd_unfil  = add2fbody(pair_stem, params%ext, '_odd_unfil')
+        else
+            fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
+            fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
+        endif
+        l_unfil_pair = file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil)
+        if( l_unfil_pair )then
+            ! the pair must come from the assembly that produced this map
+            call find_ldim_nptcls(fname_even_unfil, ldim_unfil, nptcls_unfil)
+            l_unfil_pair = all(ldim_unfil == ldim)
+            if( l_unfil_pair )then
+                call find_ldim_nptcls(fname_odd_unfil, ldim_unfil, nptcls_unfil)
+                l_unfil_pair = all(ldim_unfil == ldim)
+            endif
+            if( .not. l_unfil_pair ) write(logfhandle,'(A)') &
+                &'>>> POSTPROCESS: ignoring the unfiltered pair at a different box than the map'
+        endif
+        if( l_unfil_pair )then
+            call vol_unfil%new(ldim, smpd)
+            call vol_unfil_odd%new(ldim, smpd)
+            call vol_unfil%read(fname_even_unfil)
+            call vol_unfil_odd%read(fname_odd_unfil)
+        endif
         params%fsc = fname_fsc
         if( trim(params%fsc%to_char()) /= '' .and. file_exists(params%fsc) )then
             fsc = file2rarr(params%fsc)
@@ -340,45 +367,20 @@ contains
             has_fsc = .true.
             write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: FSC from '//params%fsc%to_char()//&
                 &', 0.5/0.143 at ', fsc05, '/', fsc0143, ' A'
+        else if( l_unfil_pair )then
+            call vol_unfil%fft()
+            call vol_unfil_odd%fft()
+            call vol_unfil%fsc(vol_unfil_odd, fsc)
+            call vol_unfil%ifft()
+            call vol_unfil_odd%ifft()
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            has_fsc = .true.
+            write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: no FSC file; FSC of the unfiltered pair, 0.5/0.143 at ', &
+                &fsc05, '/', fsc0143, ' A'
         else
-            if( present(pair_stem) )then
-                fname_even_unfil = add2fbody(pair_stem, params%ext, '_even_unfil')
-                fname_odd_unfil  = add2fbody(pair_stem, params%ext, '_odd_unfil')
-            else
-                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
-                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
-            endif
-            l_unfil_pair = file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil)
-            if( l_unfil_pair )then
-                ! the pair must come from the assembly that produced this map
-                call find_ldim_nptcls(fname_even_unfil, ldim_unfil, nptcls_unfil)
-                l_unfil_pair = all(ldim_unfil == ldim)
-                if( l_unfil_pair )then
-                    call find_ldim_nptcls(fname_odd_unfil, ldim_unfil, nptcls_unfil)
-                    l_unfil_pair = all(ldim_unfil == ldim)
-                endif
-                if( .not. l_unfil_pair ) write(logfhandle,'(A)') &
-                    &'>>> POSTPROCESS: ignoring the unfiltered pair at a different box than the map'
-            endif
-            if( l_unfil_pair )then
-                call vol_unfil%new(ldim, smpd)
-                call vol_unfil_odd%new(ldim, smpd)
-                call vol_unfil%read(fname_even_unfil)
-                call vol_unfil_odd%read(fname_odd_unfil)
-                call vol_unfil%fft()
-                call vol_unfil_odd%fft()
-                call vol_unfil%fsc(vol_unfil_odd, fsc)
-                call vol_unfil%kill
-                call vol_unfil_odd%kill
-                call get_resolution(fsc, res, fsc05, fsc0143)
-                has_fsc = .true.
-                write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: no FSC file; FSC of the unfiltered pair, 0.5/0.143 at ', &
-                    &fsc05, '/', fsc0143, ' A'
-            else
-                THROW_WARN('FSC file: '//params%fsc%to_char()//' not found and no unfiltered pair beside the volume')
-                if( .not. cline%defined('lp') )then
-                    THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; postprocess_volume_from_files')
-                endif
+            THROW_WARN('FSC file: '//params%fsc%to_char()//' not found and no unfiltered pair beside the volume')
+            if( .not. cline%defined('lp') )then
+                THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; postprocess_volume_from_files')
             endif
         endif
         if( has_fsc )then
@@ -387,15 +389,32 @@ contains
         else
             lplim = params%lp
         endif
-        ! B-factor: one Guinier slope of the map being sharpened, inside the
-        ! passband the low-pass below will keep
+        ! B-factor: one Guinier slope inside the passband the low-pass below
+        ! will keep, estimated on the UNFILTERED pair average whenever it is
+        ! there. A regularized (Wiener/P_tau) map carries its prior's
+        ! amplitude suppression, which steepens the slope and drives the
+        ! estimate far too negative (2026-09-21: -150 on streptavidin from
+        ! the shipped closed-form map, against -77 to -83 from unregularized
+        ! maps); the map is only the fallback, with that caveat
         if( cline%defined('bfac') )then
             ! already in params%bfac
         else if( lplim < 5. )then
-            params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
-            write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+            if( l_unfil_pair )then
+                call vol_unfil%add(vol_unfil_odd)
+                call vol_unfil%mul(0.5)
+                params%bfac = vol_unfil%guinier_bfac(HPLIM_GUINIER, lplim)
+                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (UNFILTERED PAIR) DETERMINED TO:', params%bfac
+            else
+                params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
+                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (THE MAP ITSELF; a regularized map over-estimates) DETERMINED TO:', &
+                    &params%bfac
+            endif
         else
             params%bfac = 0.
+        endif
+        if( l_unfil_pair )then
+            call vol_unfil%kill
+            call vol_unfil_odd%kill
         endif
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)

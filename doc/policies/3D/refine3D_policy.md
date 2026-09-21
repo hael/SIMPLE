@@ -634,8 +634,11 @@ automatic sharpening follows the isotropic postprocess protocol
 the FSC=0.143 of the reconstruction's FSC file (the base pair's curve,
 envfsc-corrected where that applies), or of the `_even_unfil/_odd_unfil`
 pair beside the map computed by postprocess when no file is given, one
-Guinier B-factor of the map being sharpened between `HPLIM_GUINIER` and
-that cutoff, sharpen, Butterworth low-pass at the cutoff. No FSC optimal
+Guinier B-factor of the unfiltered pair average between `HPLIM_GUINIER`
+and that cutoff (never of the shipped regularized map: its prior's
+amplitude suppression steepens the slope, -150 on streptavidin against
+-77 to -83 from unregularized maps), sharpen, Butterworth low-pass at
+the cutoff. No FSC optimal
 filter (it stayed open to FSC=0.05 and left the amplified noise uncut:
 exp_gate/msp1, B -121/-115 with the density-windowed estimate on the
 solvent-prior'd pair) and no density-windowed pair estimate. With
