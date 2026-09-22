@@ -250,6 +250,7 @@ contains
         call child_cline%delete('rtol')
         call child_cline%delete('pcg_solvent')
         call child_cline%delete('pcg_solvent_lambda')
+        call child_cline%delete('pcg_solvent_check')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -279,9 +280,12 @@ contains
             call child_cline%set('pcg_solvent', cline_refine3D%get_carg('pcg_solvent'))
             if( cline_refine3D%defined('pcg_solvent_lambda') ) &
                 &call child_cline%set('pcg_solvent_lambda', cline_refine3D%get_rarg('pcg_solvent_lambda'))
+            if( cline_refine3D%defined('pcg_solvent_check') ) &
+                &call child_cline%set('pcg_solvent_check', cline_refine3D%get_carg('pcg_solvent_check'))
         else
             call child_cline%delete('pcg_solvent')
             call child_cline%delete('pcg_solvent_lambda')
+            call child_cline%delete('pcg_solvent_check')
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))

@@ -672,7 +672,8 @@ half (`pcg_solvent_weight_stateNN_even|odd.mrc`, overwritten every
 iteration, never accumulated), even/odd correlation and solvent-fraction
 gap logged (the half-independence check). In abinitio3D the key is withheld
 through stages 3-7 and passed only to stage 8; shortened workflows never use
-the prior. Support, base pair, FSC oracle and NU bank inputs are untouched on
+the prior (superseded 2026-09-22: from stage 7, one stage after
+`NU_FILTER_STAGE`). Support, base pair, FSC oracle and NU bank inputs are untouched on
 purpose: the resolution claim carries no extra
 mask and the prior's effect is confined to the shipped regularized pair.
 No low-pass guard on `w`: a ridge modulator, unlike a multiplicative
@@ -800,3 +801,71 @@ competition in the final block (its gridding ML pair beyond the ladder
 wins 0% of voxels: open since 09-18, inconsequential for the map). To
 watch on the rerun: the B-factor of a solvent-flattened map, and whether
 the prior'd references keep what made the exp_gate/msp1 `_lp` maps.
+
+**2026-09-22 -- solvent prior strength by cross-validation (`pcg_solvent_lambda`
+auto).** `lambda_rel=1` means the ridge equals the low-band data diagonal,
+which is strong where D(k) falls steeply (msp1, exp_gate) and weak where it
+is flat (PfCRT), and the weight map decides what it can act on at all.
+Decision (Hans): choose the strength per specimen by the NU objective over
+the whole production support, in closed form (post-hoc shrink of the
+prior-free pair against the operator's real-space diagonal) rather than by
+re-solves, so it costs a few volume passes and runs every iteration. Placed
+by layer: `image%nu_objective`/`nu_objective_noise_profile` (core, already
+there), `reconstructor_pcg%get_realspace_diagonal` (operator),
+`estimate_solvent_prior_lambda` + `solvent_prior_cross_half_objective` in
+the sidecar (the prior's estimation module), orchestration and the
+`pcg_solvent_check` re-solve diagnostic in the PCG strategy,
+`l_pcg_solvent_lambda_auto` in params, `{auto}` in the four UIs, provenance
+`lambda_rel=<x> auto|set`. Also on 2026-09-22: postprocess_nu takes the
+stretched `2FSC/(1+FSC)` weighting and the base-pair B-factor as its fixed
+policy (evidence pair + FSC required, apply pair optional). First thing to
+read on the reruns: the `PCG SOLVENT PRIOR LAMBDA` table on exp_gate, msp1
+and PfCRT, and once with the check variable set on exp_gate, whether the
+re-solve argmin agrees with the closed form. Same day, two follow-ups
+(Hans): the prior starts one stage after the first NU stage
+(`PCG_SOLVENT_START_STAGE = NU_FILTER_STAGE + 1`, stage 7) so the label field
+applied to the prior'd pair has settled on a prior-free stage first, instead
+of stage 8 only; and the controller forwards `pcg_solvent_lambda` to the
+stage command lines only when it was given (it used to forward the default,
+which would have defined the key downstream and switched the estimate off).
+The re-solve check runs in both the shared-memory and the distributed path,
+so an ordinary `nparts` run validates the closed form; it is a parameter
+(`pcg_solvent_check=yes`, no environment variables), forwarded like
+`pcg_solvent`, and its table carries the re-solve residuals (RESID/MRES per
+half). First bgal run (2026-09-22): the prior activates in stage 7, the
+closed-form curve has an interior minimum at lambda_rel 1.21-1.24 in every
+stage-7/8 iteration (26-27 % below no prior) and 2.34 in the final
+reconstruction; the prior'd base solve is left at RESID 0.20-0.31 (final:
+0.55, MRES 2.4) against 0.04-0.06 (final: 0.027) for the prior-free solve at
+the same budget. The preconditioner is `1/(rho + floor [+ ml_prior])` and
+carries no counterpart of the real-space ridge; whether that is the cause
+is what the residual columns of the check are for. Second bgal run with
+`pcg_solvent_check=yes` (stages 7-8, six iterations): the re-solve residual
+climbs monotonically with lambda_rel in every iteration (RESID 0.05 at 0.1,
+0.21 at 1, 0.38 at 2, 0.72 at 5, above 1 -- worse than the zero start --
+at 10 and 20; MRES up to 4.9), so the convergence story is established;
+the closed-form and re-solve argmins nevertheless agree (both at 1.0 on the
+grid in all six iterations), and the re-solve objective at the optimum is
+0.77-0.82 against the closed form's 0.73-0.74, i.e. the real prior'd map
+realizes less of the predicted gain, which is what an under-converged
+solve looks like. Fix in the operator: the mean of the ridge over the
+solve domain folded into the preconditioner diagonal
+(`fold_solvent_ridge_into_precond`, idempotent under strength changes,
+re-applied when the preconditioner is rebuilt). The check was not
+forwarded to the final reconstruction (`simple_final_rec` copies the PCG
+keys explicitly); fixed, so the final-reconstruction table (closed form
+chose 2.34-2.39 there) can be read on the next run. Third bgal run, with
+the ridge in the preconditioner: in-stage prior'd base RESID 0.095-0.10
+(was 0.18-0.31), MRES 0.10-0.11 (was 0.4-1.0, now equal to the prior-free
+solve's); final reconstruction RESID 0.048 (was 0.56), MRES 0.032 (was
+2.6); no grid value ends above the zero start any more. Closed-form and
+re-solve argmins agree in-stage (1.0, 6/6) and in the final reconstruction
+(2.0; closed form chose 2.43), so the final-block strength is real and h
+needs no box correction. The re-solve objective at the optimum now reaches
+0.715-0.733 against the closed form's 0.733-0.739 (before the fix it fell
+short by 4-9 points). Remaining deviation: at small lambda the re-solve
+improves more than the closed form predicts (0.88 vs 0.91 at 0.1), the
+known optimism of the scalar shrink about high-frequency solvent noise; it
+does not move the argmin. Replay start residual from the solvent pair in
+the final 0.74 (was 1.55; in-stage 0.12) -- the closed-form replay at box
+256 is the next thing to look at if the final map is questioned.

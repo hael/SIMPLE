@@ -81,6 +81,7 @@ type :: parameters
     character(len=3)          :: exit_collapse='no'   !< early exit on state collapse(yes|no){no}
     character(len=3)          :: envfsc='no'          !< envelope solvent correction for FSC calculation(yes|no){no}
     character(len=3)          :: pcg_solvent='no'     !< PCG soft solvent prior on the base solve: per-half real-space ridge in solvent identified from a prior-free solve, then the same cold solve again(yes|no){no}
+    character(len=3)          :: pcg_solvent_check='no' !< PCG solvent prior: re-solve the strength grid for real and print it beside the closed-form estimate (validation only)(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of abinitio2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
@@ -634,7 +635,7 @@ type :: parameters
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}
-    real    :: pcg_solvent_lambda=1.0 !< PCG solvent prior ridge coefficient relative to the data scale (pcg_solvent=yes){1.0}
+    real    :: pcg_solvent_lambda=1.0 !< PCG solvent prior ridge coefficient relative to the data scale; estimated by cross-validation when not given (pcg_solvent=yes){auto}
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}
@@ -675,6 +676,8 @@ type :: parameters
     logical :: l_eer_fraction    = .false.
     logical :: l_envfsc          = .false.
     logical :: l_pcg_solvent     = .false.
+    logical :: l_pcg_solvent_check = .false.
+    logical :: l_pcg_solvent_lambda_auto = .true. !< pcg_solvent_lambda not given: estimated per state and iteration
     logical :: l_fillin          = .false.
     logical :: l_greedy_smpl     = .true.
     logical :: l_frac_best       = .false.

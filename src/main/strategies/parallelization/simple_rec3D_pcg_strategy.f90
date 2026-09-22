@@ -16,7 +16,9 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
     &write_halfmap_diagnostics, &
     &write_support_provenance, read_support_provenance
 use simple_image_msk,         only: image_msk
-use simple_pcg_solvent_sidecar, only: build_solvent_prior_weight, pcg_solvent_stats
+use simple_pcg_solvent_sidecar, only: build_solvent_prior_weight, pcg_solvent_stats, &
+    &estimate_solvent_prior_lambda, pcg_solvent_lambda_stats, solvent_prior_cross_half_objective, &
+    &PCG_SOLVENT_LAMBDA_GRID
 use simple_nu_filter,         only: NU_DEV_OUTPUT
 use simple_nu_state_filter,   only: nonuniform_filter_state, nu_aux_member
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
@@ -25,6 +27,12 @@ use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
 !$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
+
+!> the solvent prior's relative ridge coefficient in force for the current
+!! state: the command-line value, or the cross-validated estimate of
+!! prepare_solvent_prior_on_pair (pcg_solvent_lambda unset, 2026-09-22);
+!! read by the replay and the provenance line
+real, private :: pcg_solvent_lambda_eff = 0.
 
 public :: execute_rec3D_pcg_shared, execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 public :: validate_rec3D_pcg_fractional_updates, rec3D_master_nthr
@@ -387,7 +395,7 @@ contains
     !! soft sphere set_mask installs) only selects the voxels the threshold is
     !! estimated on. With pcg_solvent=no nothing here runs.
     subroutine build_pcg_solvent_prior_weight( params, state_here, base_even, base_odd, res0143, state_support, &
-        &l_state_support, weight, l_weight )
+        &l_state_support, weight, l_weight, base_support_out )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
         class(image),      intent(in)    :: base_even, base_odd
@@ -396,7 +404,9 @@ contains
         logical,           intent(in)    :: l_state_support
         type(image),       intent(inout) :: weight(2) !< (1) even, (2) odd
         logical,           intent(out)   :: l_weight
+        type(image), optional, intent(inout) :: base_support_out !< the production support the weights were drawn on
         type(image) :: base_support
+        real :: lambda_tag
         type(pcg_solvent_stats) :: stats_even, stats_odd
         type(string) :: fname_even, fname_odd, fbody
         real, allocatable :: ones(:,:,:)
@@ -424,10 +434,15 @@ contains
         endif
         call weight(1)%kill
         call weight(2)%kill
-        call build_solvent_prior_weight(state_here, 'even', base_even, res0143, base_support, params%pcg_solvent_lambda, &
+        lambda_tag = params%pcg_solvent_lambda
+        if( params%l_pcg_solvent_lambda_auto ) lambda_tag = -1. ! reported as auto
+        call build_solvent_prior_weight(state_here, 'even', base_even, res0143, base_support, lambda_tag, &
             &weight(1), stats_even)
-        call build_solvent_prior_weight(state_here, 'odd',  base_odd,  res0143, base_support, params%pcg_solvent_lambda, &
+        call build_solvent_prior_weight(state_here, 'odd',  base_odd,  res0143, base_support, lambda_tag, &
             &weight(2), stats_odd)
+        if( present(base_support_out) )then
+            call base_support_out%copy(base_support)
+        endif
         call base_support%kill
         l_weight = .true.
         ! validation: the two half-independent weights must agree; their
@@ -494,9 +509,10 @@ contains
         type(image),              intent(inout) :: weight(2)
         logical,                  intent(out)   :: l_weight
         real,                     intent(out)   :: res0143_prior_free
-        type(image) :: prov_even, prov_odd
+        type(image) :: prov_even, prov_odd, base_support
+        type(pcg_solvent_lambda_stats) :: lstats
         real, allocatable :: corrs(:), res(:)
-        real    :: fsc05
+        real    :: fsc05, lambda_rel
         integer :: n
         l_weight = .false.
         res0143_prior_free = 0.
@@ -519,20 +535,42 @@ contains
             &', prior-free base pair FSC=0.143 ', res0143_prior_free, ' A, FSC=0.5 ', fsc05, &
             &' A (reference for the prior-free/prior comparison and the smoothing scale)'
         call build_pcg_solvent_prior_weight(params, state_here, prov_even, prov_odd, res0143_prior_free, &
-            &state_support, l_state_support, weight, l_weight)
+            &state_support, l_state_support, weight, l_weight, base_support_out=base_support)
+        deallocate(corrs, res)
+        if( .not. l_weight )then
+            call prov_even%kill
+            call prov_odd%kill
+            call base_support%kill
+            return
+        endif
+        ! the strength: the command-line value, or the cross-validated
+        ! estimate on the prior-free pair (closed-form shrink against the
+        ! operators' real-space diagonal, NU objective over the production
+        ! support; simple_pcg_solvent_sidecar)
+        if( params%l_pcg_solvent_lambda_auto )then
+            call estimate_solvent_prior_lambda(state_here, prov_even, prov_odd, weight(1), weight(2), base_support, &
+                &pcgop_even%get_realspace_diagonal(), pcgop_odd%get_realspace_diagonal(), &
+                &pcgop_even%get_data_scale(), pcgop_odd%get_data_scale(), lambda_rel, lstats)
+        else
+            lambda_rel = params%pcg_solvent_lambda
+        endif
+        pcg_solvent_lambda_eff = lambda_rel
         call prov_even%kill
         call prov_odd%kill
-        deallocate(corrs, res)
-        if( .not. l_weight ) return
-        call pcgop_even%set_solvent_prior(weight(1), params%pcg_solvent_lambda)
-        call pcgop_odd%set_solvent_prior( weight(2), params%pcg_solvent_lambda)
+        call base_support%kill
+        call pcgop_even%set_solvent_prior(weight(1), lambda_rel)
+        call pcgop_odd%set_solvent_prior( weight(2), lambda_rel)
     end subroutine prepare_solvent_prior_on_pair
 
     !> the solvent_prior= line of the support provenance sidecar
     function solvent_prior_provenance( params ) result( str )
         class(parameters), intent(in) :: params
         character(len=64) :: str
-        write(str,'(A,F0.3)') 'soft per_half base_pair lambda_rel=', params%pcg_solvent_lambda
+        if( params%l_pcg_solvent_lambda_auto )then
+            write(str,'(A,F0.3,A)') 'soft per_half base_pair lambda_rel=', pcg_solvent_lambda_eff, ' auto'
+        else
+            write(str,'(A,F0.3,A)') 'soft per_half base_pair lambda_rel=', params%pcg_solvent_lambda, ' set'
+        endif
     end function solvent_prior_provenance
 
     !> Build the per-state solve-support envelope from the reference volume
@@ -664,6 +702,25 @@ contains
             !$ nthr = min(omp_get_num_procs(), nthr)
         endif
     end function rec3D_master_nthr
+
+    !> The production support of the strength estimate: the state
+    !! support when constrained, the soft sphere otherwise.
+    subroutine build_solvent_check_support( params, state_support_msk, l_state_support, support )
+        class(parameters), intent(in)    :: params
+        type(image_msk),   intent(in)    :: state_support_msk
+        logical,           intent(in)    :: l_state_support
+        type(image),       intent(inout) :: support
+        real, allocatable :: ones(:,:,:)
+        if( l_state_support )then
+            call support%copy(state_support_msk)
+        else
+            allocate(ones(params%box_crop,params%box_crop,params%box_crop), source=1.0)
+            call support%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call support%set_rmat(ones, .false.)
+            call support%mask3D_soft(params%msk_crop, backgr=0.)
+            deallocate(ones)
+        endif
+    end subroutine build_solvent_check_support
 
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
@@ -994,18 +1051,62 @@ contains
             call solvent_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call solvent_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+            if( params%l_pcg_solvent_check ) call check_solvent_lambda_by_resolve(state_here, n_even_here, n_odd_here, x)
             call resolve_half_with_prior(pcgop_even, state_here, 'even', n_even_here, x, solvent_even)
             x = 0.0
             call resolve_half_with_prior(pcgop_odd,  state_here, 'odd',  n_odd_here,  x, solvent_odd)
             deallocate(x)
         end subroutine resolve_base_pair_with_solvent_prior
 
-        subroutine resolve_half_with_prior( pcgop, state_here, half, nptcls_here, x, volume )
-            type(reconstructor_pcg), intent(inout) :: pcgop
-            integer,                 intent(in)    :: state_here, nptcls_here
-            character(len=*),        intent(in)    :: half
-            real,                    intent(inout) :: x(:,:,:)
-            type(image),             intent(inout) :: volume
+        !> Validation of the closed-form strength estimate
+        !! (pcg_solvent_check=yes): the same grid solved
+        !! for real, both halves cold at the production budget, and the same
+        !! objective on the re-solved pairs, printed beside the closed-form
+        !! table so the two argmins can be compared. The operators are left
+        !! with the production strength installed afterwards.
+        subroutine check_solvent_lambda_by_resolve( state_here, n_even_here, n_odd_here, x )
+            integer, intent(in)    :: state_here, n_even_here, n_odd_here
+            real,    intent(inout) :: x(:,:,:)
+            type(image) :: cand_even, cand_odd, support
+            type(pcg_solver_outcome) :: res_even, res_odd
+            real    :: j, jref
+            integer :: ig
+            call build_solvent_check_support(params, state_support_msk, l_state_support, support)
+            call cand_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call cand_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            jref = solvent_prior_cross_half_objective(half_even, half_odd, half_even, half_odd, support)
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR LAMBDA CHECK: STATE ', state_here, &
+                &', the same grid by real re-solves (pcg_solvent_check=yes)'
+            write(logfhandle,'(A)') '    lambda_rel     J/J(0) (re-solve)   RESID even/odd   MRES even/odd'
+            do ig = 1, size(PCG_SOLVENT_LAMBDA_GRID)
+                call pcgop_even%set_solvent_prior(solvent_weight(1), PCG_SOLVENT_LAMBDA_GRID(ig))
+                call pcgop_odd%set_solvent_prior( solvent_weight(2), PCG_SOLVENT_LAMBDA_GRID(ig))
+                x = 0.0
+                call resolve_half_with_prior(pcgop_even, state_here, 'even', n_even_here, x, cand_even, res_even)
+                x = 0.0
+                call resolve_half_with_prior(pcgop_odd,  state_here, 'odd',  n_odd_here,  x, cand_odd, res_odd)
+                j = solvent_prior_cross_half_objective(half_even, half_odd, cand_even, cand_odd, support)
+                write(logfhandle,'(A,F8.3,A,F10.4,A,2(1X,ES9.3),A,2(1X,ES9.3))') '     ', PCG_SOLVENT_LAMBDA_GRID(ig), &
+                    &'  ', j / max(TINY, jref), '        ', res_even%final_rel_residual, res_odd%final_rel_residual, &
+                    &'  ', res_even%final_rel_residual_m, res_odd%final_rel_residual_m
+            enddo
+            ! restore the production strength
+            call pcgop_even%set_solvent_prior(solvent_weight(1), pcg_solvent_lambda_eff)
+            call pcgop_odd%set_solvent_prior( solvent_weight(2), pcg_solvent_lambda_eff)
+            x = 0.0
+            call cand_even%kill
+            call cand_odd%kill
+            call support%kill
+        end subroutine check_solvent_lambda_by_resolve
+
+
+        subroutine resolve_half_with_prior( pcgop, state_here, half, nptcls_here, x, volume, outcome )
+            type(reconstructor_pcg),            intent(inout) :: pcgop
+            integer,                            intent(in)    :: state_here, nptcls_here
+            character(len=*),                   intent(in)    :: half
+            real,                               intent(inout) :: x(:,:,:)
+            type(image),                        intent(inout) :: volume
+            type(pcg_solver_outcome), optional, intent(out)   :: outcome
             type(pcg_solver_outcome) :: result
             real, allocatable :: rel_res_hist(:)
             integer :: niters
@@ -1022,6 +1123,7 @@ contains
             call report_solve_summary('SHARED', state_here, half, 'base', nptcls_here, niters, &
                 &result%final_rel_residual, time_solve, result%stop_reason, result%initial_rel_residual, &
                 &residual_m=result%final_rel_residual_m)
+            if( present(outcome) ) outcome = result
             if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
         end subroutine resolve_half_with_prior
 
@@ -1218,7 +1320,7 @@ contains
             ! soft solvent prior installed when pcg_solvent=yes)
             if( l_solvent_weight )then
                 call solve_regularized_half(pcgop, x, params%maxits_ml, rel_res_hist, niters, result, x_cf, &
-                    &solvent_weight=solvent_weight(eo_here+1), solvent_lambda_rel=params%pcg_solvent_lambda)
+                    &solvent_weight=solvent_weight(eo_here+1), solvent_lambda_rel=pcg_solvent_lambda_eff)
             else
                 call solve_regularized_half(pcgop, x, params%maxits_ml, rel_res_hist, niters, result, x_cf)
             endif
@@ -2412,6 +2514,53 @@ contains
             enddo
         end function count_full_state_half
 
+        !> Distributed twin of check_solvent_lambda_by_resolve: the same grid
+        !! re-solved through the prepared half jobs (both halves cold at the
+        !! production budget), the objective against the prior-free base
+        !! pair. The jobs are left zeroed with the production strength
+        !! installed, ready for the real re-solve.
+        subroutine check_solvent_lambda_by_resolve_distributed( state_here, even_job, odd_job, base_even, base_odd )
+            integer,                    intent(in)    :: state_here
+            type(distributed_half_job), intent(inout) :: even_job, odd_job
+            type(image),                intent(in)    :: base_even, base_odd
+            type(image) :: cand_even, cand_odd, support
+            real    :: j, jref
+            integer :: ig
+            call build_solvent_check_support(params, state_support_msk, l_state_support, support)
+            call cand_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call cand_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            jref = solvent_prior_cross_half_objective(base_even, base_odd, base_even, base_odd, support)
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR LAMBDA CHECK: STATE ', state_here, &
+                &', the same grid by real re-solves (pcg_solvent_check=yes)'
+            write(logfhandle,'(A)') '    lambda_rel     J/J(0) (re-solve)   RESID even/odd   MRES even/odd'
+            do ig = 1, size(PCG_SOLVENT_LAMBDA_GRID)
+                call even_job%pcgop%set_solvent_prior(solvent_weight(1), PCG_SOLVENT_LAMBDA_GRID(ig))
+                call odd_job%pcgop%set_solvent_prior( solvent_weight(2), PCG_SOLVENT_LAMBDA_GRID(ig))
+                even_job%x = 0.0
+                odd_job%x  = 0.0
+                even_job%l_nonzero = .false.
+                odd_job%l_nonzero  = .false.
+                call solve_distributed_half_pair(even_job, odd_job)
+                call cand_even%set_rmat(even_job%x, .false.)
+                call cand_odd%set_rmat( odd_job%x,  .false.)
+                j = solvent_prior_cross_half_objective(base_even, base_odd, cand_even, cand_odd, support)
+                write(logfhandle,'(A,F8.3,A,F10.4,A,2(1X,ES9.3),A,2(1X,ES9.3))') '     ', PCG_SOLVENT_LAMBDA_GRID(ig), &
+                    &'  ', j / max(TINY, jref), '        ', even_job%result%final_rel_residual, &
+                    &odd_job%result%final_rel_residual, '  ', even_job%result%final_rel_residual_m, &
+                    &odd_job%result%final_rel_residual_m
+            enddo
+            ! restore the production strength, leave the jobs cold
+            call even_job%pcgop%set_solvent_prior(solvent_weight(1), pcg_solvent_lambda_eff)
+            call odd_job%pcgop%set_solvent_prior( solvent_weight(2), pcg_solvent_lambda_eff)
+            even_job%x = 0.0
+            odd_job%x  = 0.0
+            even_job%l_nonzero = .false.
+            odd_job%l_nonzero  = .false.
+            call cand_even%kill
+            call cand_odd%kill
+            call support%kill
+        end subroutine check_solvent_lambda_by_resolve_distributed
+
         !> solvent_even/odd (base solve, pcg_solvent=yes): receive the pair
         !! re-solved with the solvent prior, while even/odd receive the
         !! prior-free pair (the base pair: FSC, NU competition, evidence,
@@ -2481,6 +2630,8 @@ contains
                         odd_job%x  = 0.0
                         even_job%l_nonzero = .false.
                         odd_job%l_nonzero  = .false.
+                        if( params%l_pcg_solvent_check ) &
+                            &call check_solvent_lambda_by_resolve_distributed(state_here, even_job, odd_job, even, odd)
                         call solve_distributed_half_pair(even_job, odd_job)
                         l_resolved = .true.
                     endif
@@ -2660,7 +2811,7 @@ contains
                 ! closed form, then coupled iterations with the soft solvent prior
                 call solve_regularized_half(job%pcgop, job%x, params%maxits_ml, job%rel_res_hist, &
                     &job%niters, job%result, job%x_cf, solvent_weight=solvent_weight(job%eo+1), &
-                    &solvent_lambda_rel=params%pcg_solvent_lambda)
+                    &solvent_lambda_rel=pcg_solvent_lambda_eff)
             else if( job%l_ml_solve )then
                 ! closed form, then maxits_ml coupled iterations from it
                 call solve_regularized_half(job%pcgop, job%x, params%maxits_ml, job%rel_res_hist, &

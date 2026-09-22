@@ -86,6 +86,7 @@ type :: reconstructor_pcg
     real             :: lambda     = 0.0 !< effective absolute coefficient used by apply_normal
     real             :: lambda_rel = 0.0 !< coefficient relative to the weighted data-operator scale
     real             :: data_scale = 0.0 !< deterministic scale derived from raw data-only D
+    real             :: realspace_diag = 0.0 !< real-space diagonal of the data operator: mean of D over all native shells (x padsc^2)
     logical          :: l_lambda_relative = .false.
     ! ---- per-particle inputs, cached once by prep_particles ----
     integer                       :: nptcls = 0
@@ -145,6 +146,7 @@ type :: reconstructor_pcg
     real, allocatable :: solvent_pen(:,:,:)            !< 1 - w(r) on the solve box
     real              :: solvent_lambda_rel = 0.0
     logical           :: l_solvent_prior = .false.
+    real              :: precond_ridge = 0.0 !< mean solvent ridge folded into the preconditioner (its units), see fold_solvent_ridge_into_precond
     ! ---- per-phase profiling over a solve: particle loop vs FFT + lattice traffic ----
     logical  :: l_profile = .false.
     real(dp) :: t_setvol  = 0.0_dp  !< pad + forward FFT of the iterate
@@ -226,6 +228,7 @@ type :: reconstructor_pcg
     procedure :: get_ml_prior
     procedure :: get_ml_prior_stats
     procedure :: get_data_scale
+    procedure :: get_realspace_diagonal
     procedure :: get_effective_lambda
     ! SOLVER
     procedure :: solve
@@ -247,6 +250,7 @@ type :: reconstructor_pcg
     procedure, private :: update_lambda_from_density
     procedure, private :: build_ml_prior_from_density
     procedure, private :: apply_fourier_diagonal
+    procedure, private :: fold_solvent_ridge_into_precond
 end type reconstructor_pcg
 
 contains
@@ -502,6 +506,7 @@ contains
         endif
         self%lambda_rel = lambda_rel
         self%data_scale = 0.0
+        self%realspace_diag = 0.0
         self%lambda     = 0.0
         self%l_lambda_relative = .true.
     end subroutine set_lambda_relative
@@ -527,7 +532,9 @@ contains
     !! protein, 0 = solvent) and a coefficient relative to the data scale.
     !! Requires the data scale (end of accumulation) so the coefficient is
     !! portable across datasets. Acts through the coupled iterations only: the
-    !! closed-form start is a Fourier diagonal and cannot see a real-space term
+    !! closed-form start is a Fourier diagonal and cannot see a real-space term.
+    !! The ridge's mean over the solve domain goes into the preconditioner
+    !! (fold_solvent_ridge_into_precond) so the ridge system keeps CG's conditioning
     subroutine set_solvent_prior( self, weight, lambda_rel )
         class(reconstructor_pcg), intent(inout) :: self
         class(image),             intent(in)    :: weight
@@ -542,7 +549,53 @@ contains
         self%solvent_pen = 1.0 - min(1.0, max(0.0, weight%get_rmat()))
         self%solvent_lambda_rel = lambda_rel
         self%l_solvent_prior    = lambda_rel > 0.0
+        call self%fold_solvent_ridge_into_precond
     end subroutine set_solvent_prior
+
+    !> Jacobi term of the solvent ridge in the preconditioner. The real-space
+    !! ridge lambda_s (1-w(r)) has no Fourier-diagonal representation, but its
+    !! mean over the solve domain is a constant, and a real-space constant is
+    !! the same constant as a Fourier diagonal in the operator's units (the
+    !! image FFT pair round-trips), so it enters the preconditioner as
+    !! c/padsc^2, exactly like the ML prior. Without it CG runs on the ridge
+    !! system with a preconditioner built for the prior-free operator and is
+    !! left far from solved at the production budget (bgal 2026-09-22: RESID
+    !! 0.2-0.3 at lambda_rel 1.2 against 0.04-0.06 prior-free, above 1 for
+    !! lambda_rel >= 10). Idempotent under strength changes: the constant
+    !! folded last time is removed before the new one is added. Called from
+    !! set_solvent_prior and again when the preconditioner is (re)built
+    subroutine fold_solvent_ridge_into_precond( self )
+        class(reconstructor_pcg), intent(inout) :: self
+        real(dp) :: psum
+        real     :: c, denom
+        integer  :: n, i, j, k
+        if( .not. self%l_precond ) return
+        c = 0.0
+        if( self%l_solvent_prior )then
+            if( self%l_mask )then
+                psum = sum(real(self%solvent_pen,dp), mask=self%mask > 0.0)
+                n    = count(self%mask > 0.0)
+            else
+                psum = sum(real(self%solvent_pen,dp))
+                n    = size(self%solvent_pen)
+            endif
+            if( n > 0 ) c = self%solvent_lambda_rel * self%data_scale * real(psum / real(n,dp)) / self%padsc**2
+        endif
+        if( c == self%precond_ridge ) return
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,denom) schedule(static)
+        do k = 1, size(self%precond,3)
+            do j = 1, size(self%precond,2)
+                do i = 1, size(self%precond,1)
+                    if( self%precond(i,j,k) > 0.0 )then
+                        denom = 1.0 / self%precond(i,j,k) - self%precond_ridge + c
+                        if( denom > 0.0 ) self%precond(i,j,k) = 1.0 / denom
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        self%precond_ridge = c
+    end subroutine fold_solvent_ridge_into_precond
 
     !> the absolute solvent ridge coefficient (0 when the prior is off)
     pure real function get_solvent_lambda( self )
@@ -723,6 +776,7 @@ contains
         self%lambda = 0.0
         self%lambda_rel = 0.0
         self%data_scale = 0.0
+        self%realspace_diag = 0.0
         self%l_lambda_relative = .false.
         self%nptcls = 0
         self%nsym   = 1
@@ -736,6 +790,7 @@ contains
         self%l_ml_prior  = .false.
         self%solvent_lambda_rel = 0.0
         self%l_solvent_prior    = .false.
+        self%precond_ridge      = 0.0
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -1820,7 +1875,6 @@ contains
             dsum   = dsum   + shell_sum(scale_shell)
             nscale = nscale + shell_count(scale_shell)
         end do
-        deallocate(shell_sum, shell_count)
         if( nscale < 1 .or. dsum <= 0.0_dp ) THROW_HARD('cannot derive PCG data scale from empty D')
         if( scale_shell > base_shell )then
             write(logfhandle,'(A,I0)') &
@@ -1830,6 +1884,15 @@ contains
         if( .not. ieee_is_finite(self%data_scale) .or. self%data_scale <= 0.0 )then
             THROW_HARD('invalid PCG data scale derived from D')
         endif
+        ! the real-space diagonal of the circulant data operator is one number,
+        ! the mean of D over ALL native shells (the solvent prior's closed-form
+        ! strength estimate compares its real-space ridge with it, 2026-09-22)
+        if( sum(shell_count) > 0 )then
+            self%realspace_diag = real(sum(shell_sum) / real(sum(shell_count),dp)) * self%padsc**2
+        else
+            self%realspace_diag = self%data_scale
+        endif
+        deallocate(shell_sum, shell_count)
         if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
     end subroutine update_lambda_from_density
 
@@ -2022,6 +2085,9 @@ contains
         if( l_precond )then
             self%l_precond = .true.
             deallocate(shfloor)
+            ! a rebuilt preconditioner carries no ridge term yet
+            self%precond_ridge = 0.0
+            call self%fold_solvent_ridge_into_precond
         endif
     end subroutine finalize_density_accum
 
@@ -2605,6 +2671,14 @@ contains
         class(reconstructor_pcg), intent(in) :: self
         get_data_scale = self%data_scale
     end function get_data_scale
+
+    !> real-space diagonal of the data operator (mean of D over all native
+    !! shells, x padsc^2): h in the solvent prior's closed-form shrink
+    !! h / (h + lambda_s (1-w))
+    pure real function get_realspace_diagonal( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_realspace_diagonal = self%realspace_diag
+    end function get_realspace_diagonal
 
     pure real function get_effective_lambda( self )
         class(reconstructor_pcg), intent(in) :: self

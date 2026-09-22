@@ -69,7 +69,13 @@ A solve from a nonzero start that loses positive-definiteness is retried
 once from zero; a solve from zero that loses it is fatal.
 
 **Preconditioner.** The sampling-density diagonal `1/(rho + floor + P_tau)`
-with a shell-relative floor (`RHO_FLOOR_FRAC`).
+with a shell-relative floor (`RHO_FLOOR_FRAC`). With the solvent prior the
+mean of its real-space ridge over the solve domain is folded in as a
+constant (`fold_solvent_ridge_into_precond`, 2026-09-22): the ridge
+`lambda_s (1-w(r))` has no Fourier-diagonal representation, but its mean
+is one, and without it CG on the ridge system ran with a preconditioner
+built for the prior-free operator and was left at RESID 0.2-0.3 (bgal,
+lambda_rel 1.2, 2 iterations) against 0.04-0.06 prior-free.
 
 ## 3. The support
 
@@ -106,8 +112,9 @@ With `pcg_solvent=yes` the BASE solve is done twice per half on the same
 accumulators: first prior-free, then again from zero with the same
 budget after a real-space, position-dependent ridge has been installed,
 `(H + lambda I + Lambda_s) x = b`, `Lambda_s = lambda_s (1 - w(r))`,
-`lambda_s = pcg_solvent_lambda x data_scale` (default 1.0, the same
-reference the relative ridge uses): a Gaussian prior with
+`lambda_s = pcg_solvent_lambda x data_scale` (the same reference the
+relative ridge uses; not given = estimated per state and iteration, see
+below): a Gaussian prior with
 position-dependent variance, the real-space twin of `P_tau`. The
 prior-free pair's FSC=0.143 sets the smoothing scale and each half's own
 prior-free map yields its protein weight `w(r)` in [0,1]
@@ -131,7 +138,24 @@ soft envelope with no phase randomization; exp_gate 2026-09-21: 3.64
 against 3.88 A prior-free, the stage-8 crossing pinned at the crop
 Nyquist) and is not computed; the whitening of the NU unary is the MAD
 of even minus odd per radial shell over the support, which the prior
-would collapse. `maxits_ml` stays at its default 0: the replay is the
+would collapse. The strength (2026-09-22): when `pcg_solvent_lambda` is
+not given it is chosen by cross-validation with the NU objective over the
+production support, in closed form on the prior-free pair
+(`estimate_solvent_prior_lambda`, `simple_pcg_solvent_sidecar`): each half
+shrunk voxelwise by `h/(h + lambda data_scale (1-w))`, `h` the real-space
+diagonal of the data operator (`get_realspace_diagonal`, the mean of D over
+all native shells), scored by the whitened Huber cross-half prediction
+error against the prior-free other half (`image%nu_objective`), on the grid
+0.1-20 with one parabolic step in log lambda; the table, the chosen value
+and edge/flat flags are logged (`PCG SOLVENT PRIOR LAMBDA`; flat means the
+weight map is the limit), and the one real re-solve runs at that strength.
+`pcg_solvent_check=yes` adds the same grid by real re-solves, with their
+residuals (shared-memory and distributed paths), to validate the closed
+form; the
+approximation to watch is that the real ridge acts more on high
+frequencies of a solvent voxel than the scalar shrink. An explicit
+`pcg_solvent_lambda` bypasses the estimate (provenance `auto|set`).
+`maxits_ml` stays at its default 0: the replay is the
 Wiener shrink of the prior'd base map (coupled replay iterations, when
 requested, carry the same ridge). The support is untouched. It runs
 under any `automsk` setting; in abinitio3D the key rides with the PCG

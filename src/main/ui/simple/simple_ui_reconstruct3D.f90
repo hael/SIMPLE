@@ -80,8 +80,13 @@ contains
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
-        &'Ridge coefficient of the solvent prior relative to the data scale; 1 = as strong as the low-band data term', 'coefficient{1.0}', &
+        &'Ridge coefficient of the solvent prior relative to the data scale (1 = as strong as the low-band data term); '//&
+        &'not given = estimated per state and iteration by cross-validation of the prior-free half pair', 'coefficient{auto}', &
         &.false., 1.0, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+        call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
+        &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', &
+        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
         call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &

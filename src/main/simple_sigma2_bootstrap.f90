@@ -73,6 +73,7 @@ contains
         call cline_pspec%delete('rtol')
         call cline_pspec%delete('pcg_solvent')
         call cline_pspec%delete('pcg_solvent_lambda')
+        call cline_pspec%delete('pcg_solvent_check')
         call cline_pspec%delete('trail_seed')
         call cline_pspec%delete('trail_rec')
         call cline_pspec%delete('outfile')

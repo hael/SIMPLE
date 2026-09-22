@@ -264,6 +264,8 @@ contains
                         call child_cline%set('pcg_solvent', cline_refine%get_carg('pcg_solvent'))
                         if( cline_refine%defined('pcg_solvent_lambda') ) &
                             &call child_cline%set('pcg_solvent_lambda', cline_refine%get_rarg('pcg_solvent_lambda'))
+                        if( cline_refine%defined('pcg_solvent_check') ) &
+                            &call child_cline%set('pcg_solvent_check', cline_refine%get_carg('pcg_solvent_check'))
                     endif
                 endif
             end subroutine prep_final_rec_cline

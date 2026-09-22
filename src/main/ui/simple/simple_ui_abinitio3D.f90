@@ -51,12 +51,17 @@ contains
         &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
         &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
         &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched; '//&
-        &'enabled only in abinitio3D stage 8, shortened workflows do not use it(yes|no){no}', '', .false., 'no', group="search", &
+        &'active in abinitio3D from stage 7 (one stage after NU filtering starts)(yes|no){no}', '', .false., 'no', group="search", &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
-        &'Ridge coefficient of the solvent prior relative to the data scale; 1 = as strong as the low-band data term', 'coefficient{1.0}', &
+        &'Ridge coefficient of the solvent prior relative to the data scale (1 = as strong as the low-band data term); '//&
+        &'not given = estimated per state and iteration by cross-validation of the prior-free half pair', 'coefficient{auto}', &
         &.false., 1.0, group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+        call abinitio3D%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
+        &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', group="search", &
+        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &

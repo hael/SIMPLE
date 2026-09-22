@@ -22,13 +22,13 @@ integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
 integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
-integer,          parameter :: PCG_SOLVENT_STAGE       = NSTAGES     ! only stage allowed to use the requested PCG solvent prior
 integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
+integer,          parameter :: PCG_SOLVENT_START_STAGE = NU_FILTER_STAGE + 1 ! requested PCG solvent prior from the second NU stage
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8
 integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
 integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for abinitio 3D 
@@ -598,15 +598,27 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
-        ! Delay the soft solvent prior until stage 8. Shortened workflows never
-        ! activate it, even in their last active stage.
-        if( params%l_pcg_solvent .and. istage == PCG_SOLVENT_STAGE .and. &
+        ! The soft solvent prior starts one stage after the first NU stage
+        ! (PCG_SOLVENT_START_STAGE), once the NU label field it is applied
+        ! to has settled. The strength is forwarded only when given; an
+        ! unset pcg_solvent_lambda keeps the per-iteration estimate.
+        if( params%l_pcg_solvent .and. istage >= PCG_SOLVENT_START_STAGE .and. &
             &trim(cfg%rec_backend%to_char()) == 'pcg' )then
-            call cline_refine3D%set('pcg_solvent',        'yes')
-            call cline_refine3D%set('pcg_solvent_lambda', params%pcg_solvent_lambda)
+            call cline_refine3D%set('pcg_solvent', 'yes')
+            if( params%l_pcg_solvent_lambda_auto )then
+                call cline_refine3D%delete('pcg_solvent_lambda')
+            else
+                call cline_refine3D%set('pcg_solvent_lambda', params%pcg_solvent_lambda)
+            endif
+            if( params%l_pcg_solvent_check )then
+                call cline_refine3D%set('pcg_solvent_check', 'yes')
+            else
+                call cline_refine3D%delete('pcg_solvent_check')
+            endif
         else
             call cline_refine3D%delete('pcg_solvent')
             call cline_refine3D%delete('pcg_solvent_lambda')
+            call cline_refine3D%delete('pcg_solvent_check')
         endif
         if( cfg%refine.eq.'prob_neigh' )then
             call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)

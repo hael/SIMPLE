@@ -932,6 +932,15 @@ contains
         if( self%l_pcg_solvent .and. trim(self%rec_backend) /= 'pcg' ) &
             &THROW_HARD('pcg_solvent=yes requires rec_backend=pcg')
         if( self%pcg_solvent_lambda <= 0. ) THROW_HARD('pcg_solvent_lambda must be positive')
+        self%l_pcg_solvent_lambda_auto = .not. cline%defined('pcg_solvent_lambda')
+        select case(trim(self%pcg_solvent_check))
+            case('yes')
+                self%l_pcg_solvent_check = self%l_pcg_solvent
+            case('no')
+                self%l_pcg_solvent_check = .false.
+            case DEFAULT
+                THROW_HARD('pcg_solvent_check must be yes or no')
+        end select
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
         if( cline%defined('element') )then
