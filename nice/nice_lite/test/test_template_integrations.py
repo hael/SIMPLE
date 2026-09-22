@@ -961,12 +961,16 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('data-panel="volume3D"', rendered)
         self.assertIn('id="batch_volume_viewer"', rendered)
         self.assertIn("{% include 'includes/_3D_viewer.html' %}", volume_viewer)
+        self.assertIn("{% include 'includes/_slider.html'", viewer_3d)
         self.assertIn("data-basic-3d-viewer", viewer_3d)
         self.assertIn("data-volume-molstar", rendered)
+        self.assertIn("data-volume-isovalue", rendered)
+        self.assertIn("data-volume-isovalue-text", rendered)
         self.assertIn('value="/batchvolume/7/recvol_state01.mrc"', rendered)
         self.assertIn("molstar@5.11.0/build/viewer/molstar.css", rendered)
         self.assertIn("molstar@5.11.0/build/viewer/molstar.js", rendered)
-        self.assertIn("nice_lite/molstar_volume_viewer.js?v=2", rendered)
+        self.assertIn("nice_lite/molstar_volume_viewer.js", rendered)
+        self.assertNotIn("molstar_volume_viewer.js?v=", rendered)
 
         context["volume_viewer_requested"] = False
         context["volume_outputs"] = []

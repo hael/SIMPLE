@@ -44,11 +44,26 @@ function formatDensity(value) {
     return Number(value.toPrecision(5)).toString();
 }
 
-function configureIsovalueControl(option, input, output) {
+function setIsovalueDisplay(control, value) {
+    if (control instanceof HTMLInputElement) {
+        control.value = value;
+    } else {
+        control.textContent = value;
+    }
+}
+
+function setIsovalueDisplayDisabled(control, disabled) {
+    if (control instanceof HTMLInputElement) {
+        control.disabled = disabled;
+    }
+}
+
+function configureIsovalueControl(option, input, display) {
     const isovalue = initialIsovalue(option);
     if (isovalue.type !== "absolute") {
         input.disabled = true;
-        output.textContent = "n/a";
+        setIsovalueDisplay(display, "n/a");
+        setIsovalueDisplayDisabled(display, true);
         return isovalue;
     }
 
@@ -57,7 +72,8 @@ function configureIsovalueControl(option, input, output) {
     input.max = String(range.maximum);
     input.step = String((range.maximum - range.minimum) / 1000);
     input.value = String(isovalue.value);
-    output.textContent = formatDensity(isovalue.value);
+    setIsovalueDisplay(display, formatDensity(isovalue.value));
+    setIsovalueDisplayDisabled(display, false);
     return isovalue;
 }
 
@@ -118,27 +134,26 @@ async function initializeMolstarVolumeViewer(root) {
     const sourceSelect = root.querySelector("[data-volume-source]");
     const backgroundSelect = root.querySelector("[data-volume-background]");
     const isovalueInput = root.querySelector("[data-volume-isovalue]");
+    const isovalueText = root.querySelector("[data-volume-isovalue-text]");
     const isovalueOutput = root.querySelector("[data-volume-isovalue-output]");
+    const isovalueDisplay = isovalueText || isovalueOutput;
     const resetButton = root.querySelector("[data-volume-reset]");
     const viewport = root.querySelector("[data-volume-viewport]");
     const host = root.querySelector("[data-volume-molstar]");
     const metadata = root.querySelector("[data-volume-metadata]");
-    const status = root.querySelector("[data-volume-status]");
     if (
         !sourceSelect
         || !backgroundSelect
         || !isovalueInput
-        || !isovalueOutput
+        || !isovalueDisplay
         || !resetButton
         || !viewport
         || !host
         || !metadata
-        || !status
     ) {
         return;
     }
     if (!window.molstar?.Viewer) {
-        status.textContent = "Mol* could not be loaded.";
         return;
     }
 
@@ -197,12 +212,11 @@ async function initializeMolstarVolumeViewer(root) {
         if (!Number.isFinite(value)) {
             return;
         }
-        isovalueOutput.textContent = formatDensity(value);
+        setIsovalueDisplay(isovalueDisplay, formatDensity(value));
         window.clearTimeout(isovalueUpdateTimer);
         isovalueUpdateTimer = window.setTimeout(() => {
             applyIsovalue(value).catch((error) => {
                 console.error("Unable to update the Mol* iso value.", error);
-                status.textContent = "Mol* could not update the iso value.";
             });
         }, 100);
     };
@@ -210,21 +224,20 @@ async function initializeMolstarVolumeViewer(root) {
     const loadSelectedVolume = async () => {
         const option = selectedVolumeOption(sourceSelect);
         if (!option?.value) {
-            status.textContent = "No volume is available.";
             return;
         }
 
         sourceSelect.disabled = true;
         isovalueInput.disabled = true;
+        setIsovalueDisplayDisabled(isovalueDisplay, true);
         resetButton.disabled = true;
-        status.textContent = `loading ${option.dataset.volumeName || "volume"}…`;
         metadata.textContent = formatVolumeMetadata(option);
         window.clearTimeout(isovalueUpdateTimer);
         await isovalueUpdatePromise.catch(() => {});
         const isovalue = configureIsovalueControl(
             option,
             isovalueInput,
-            isovalueOutput,
+            isovalueDisplay,
         );
         try {
             await viewer.plugin.clear();
@@ -238,11 +251,10 @@ async function initializeMolstarVolumeViewer(root) {
                 durationMs: 0,
                 snapshot: startingCameraSnapshot,
             });
-            status.textContent = "Mol* ready.";
             isovalueInput.disabled = isovalue.type !== "absolute";
+            setIsovalueDisplayDisabled(isovalueDisplay, isovalue.type !== "absolute");
         } catch (error) {
             console.error("Unable to load the Batch volume in Mol*.", error);
-            status.textContent = "Mol* could not load this volume.";
         } finally {
             sourceSelect.disabled = false;
             resetButton.disabled = false;
@@ -251,19 +263,28 @@ async function initializeMolstarVolumeViewer(root) {
 
     backgroundSelect.addEventListener("change", applyBackground);
     isovalueInput.addEventListener("input", scheduleIsovalueUpdate);
+    isovalueText?.addEventListener("input", () => {
+        const value = Number(isovalueText.value);
+        if (!Number.isFinite(value)) {
+            return;
+        }
+        isovalueInput.value = String(value);
+        setIsovalueDisplay(isovalueDisplay, formatDensity(Number(isovalueInput.value)));
+        scheduleIsovalueUpdate();
+    });
     resetButton.addEventListener("click", async () => {
         const isovalue = configureIsovalueControl(
             selectedVolumeOption(sourceSelect),
             isovalueInput,
-            isovalueOutput,
+            isovalueDisplay,
         );
         if (isovalue.type === "absolute") {
             try {
                 await applyIsovalue(isovalue.value);
                 isovalueInput.disabled = false;
+                setIsovalueDisplayDisabled(isovalueDisplay, false);
             } catch (error) {
                 console.error("Unable to reset the Mol* iso value.", error);
-                status.textContent = "Mol* could not reset the iso value.";
             }
         }
         viewer.plugin.canvas3d?.requestCameraReset({
@@ -290,9 +311,5 @@ async function initializeMolstarVolumeViewer(root) {
 for (const root of document.querySelectorAll("[data-volume-viewer]")) {
     initializeMolstarVolumeViewer(root).catch((error) => {
         console.error("Unable to initialize the Batch Mol* viewer.", error);
-        const status = root.querySelector("[data-volume-status]");
-        if (status) {
-            status.textContent = "Mol* could not be initialized.";
-        }
     });
 }

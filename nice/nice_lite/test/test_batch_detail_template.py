@@ -391,7 +391,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
 
         self.assertIn("molstar@5.11.0/build/viewer/molstar.css", rendered)
         self.assertIn("molstar@5.11.0/build/viewer/molstar.js", rendered)
-        self.assertIn("nice_lite/molstar_volume_viewer.js?v=2", rendered)
+        self.assertIn("nice_lite/molstar_volume_viewer.js", rendered)
+        self.assertNotIn("molstar_volume_viewer.js?v=", rendered)
         self.assertIn('id="batch_volume_viewer" data-volume-viewer', rendered)
         self.assertIn('value="/batchvolume/7/recvol_state01.mrc"', rendered)
         self.assertIn('data-volume-width="256"', rendered)
@@ -450,7 +451,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         )
         self.assertNotIn('id="batch_volume_viewer" data-volume-viewer', default_off)
         self.assertNotIn("molstar@5.11.0", default_off)
-        self.assertNotIn("nice_lite/molstar_volume_viewer.js?v=2", default_off)
+        self.assertNotIn("nice_lite/molstar_volume_viewer.js", default_off)
         self.assertIn("view volume", default_off)
 
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):

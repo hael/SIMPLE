@@ -1,0 +1,12 @@
+{% comment %}
+  _slider.html — shared range slider and numeric-text control.
+  Callers provide IDs, bounds, values, labels, and optional event handlers.
+{% endcomment %}
+<div class="flex flex-row items-center justify-center">
+    <input type="range" min="{{ range_min }}" max="{{ range_max }}" step="{{ range_step }}"{% if range_value %} value="{{ range_value }}"{% endif %} id="{{ range_id }}" class="{{ range_class }}"{% if range_boxsize %} data-boxsize="{{ range_boxsize }}"{% endif %}{% if range_data_attribute %} {{ range_data_attribute }}{% endif %}{% if range_oninput %} oninput="{{ range_oninput }}"{% endif %}{% if range_onmouseup %} onmouseup="{{ range_onmouseup }}"{% endif %}{% if range_ontouchend %} ontouchend="{{ range_ontouchend }}"{% endif %}{% if range_aria_label %} aria-label="{{ range_aria_label }}"{% endif %} style="accent-color:var(--color-streamaccent)">
+    {% if hidden_id %}
+        <input type="hidden" id="{{ hidden_id }}"{% if hidden_name %} name="{{ hidden_name }}"{% endif %} value="{{ hidden_value|default:'' }}">
+    {% endif %}
+    <input type="number" min="{{ text_min }}" max="{{ text_max }}" step="{{ text_step }}"{% if text_value %} value="{{ text_value }}"{% endif %} id="{{ text_id }}" class="{{ text_class }}"{% if text_data_attribute %} {{ text_data_attribute }}{% endif %}{% if text_oninput %} oninput="{{ text_oninput }}"{% endif %}{% if text_onchange %} onchange="{{ text_onchange }}"{% endif %}{% if text_aria_label %} aria-label="{{ text_aria_label }}"{% endif %}>
+    {% if unit %}<div class="{{ unit_class|default:'text-[11px]' }}">{{ unit }}</div>{% endif %}
+</div>

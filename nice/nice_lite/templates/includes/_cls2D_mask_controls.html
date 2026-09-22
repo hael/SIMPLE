@@ -12,34 +12,24 @@
 {% if batch_mode %}
 <div class="flex flex-2 flex-row justify-center">
     <div class="mskdiamctrl text-[11px] text-streamlabel m-2">mask diameter</div>
-    <div class="flex flex-row items-center justify-center">
-        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" class="mskdiamctrl" data-boxsize="{{ jobstats.mskscale|floatformat:0 }}" oninput="updateMskdiam(this)" style="accent-color:var(--color-streamaccent)"></input>
-        <input type="hidden" id="selected_mskdiam" value=""/>
-        <input type="number" min=10 max=1000 step=1 id="current_mskdiam" class="mskdiamctrl w-[40px] pl-[5px] text-[11px] bg-transparent text-right" oninput="updateMskdiamText(this)" onchange="updateMskdiamTextSubmit(this)"/>
-        <div class="mskdiamctrl text-[11px]">Å</div>
-        <label class="inline-flex items-center gap-2 cursor-pointer ml-3">
-            <span class="text-[11px] text-streamlabel">show mask</span>
-            <input type="checkbox" checked class="sr-only peer" onchange="toggleMskOverlay(this)">
-            <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
-        </label>
-    </div>
+    {% include 'includes/_slider.html' with range_min=5 range_max=500 range_step=1 range_id='mskdiam_selector' range_class='mskdiamctrl' range_boxsize=jobstats.mskscale|floatformat:0 range_oninput='updateMskdiam(this)' hidden_id='selected_mskdiam' text_min=10 text_max=1000 text_step=1 text_id='current_mskdiam' text_class='mskdiamctrl w-[40px] pl-[5px] text-[11px] bg-transparent text-right' text_oninput='updateMskdiamText(this)' text_onchange='updateMskdiamTextSubmit(this)' unit='Å' unit_class='mskdiamctrl text-[11px]' %}
+    <label class="inline-flex items-center gap-2 cursor-pointer ml-3">
+        <span class="text-[11px] text-streamlabel">show mask</span>
+        <input type="checkbox" checked class="sr-only peer" onchange="toggleMskOverlay(this)">
+        <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+    </label>
 </div>
 {% else %}
 <form class="flex flex-2 flex-row justify-center" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' %}>
     {% csrf_token %}
     <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
     <div class="mskdiamctrl text-[11px] text-streamlabel m-2">update mask diameter</div>
-    <div class="flex flex-row items-center justify-center">
-        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" class="mskdiamctrl" data-boxsize="{{ jobstats.mskscale|floatformat:0 }}" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)" style="accent-color:var(--color-streamaccent)"></input>
-        <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
-        <input type="number" min=10 max=1000 step=1 id="current_mskdiam" class="mskdiamctrl w-[40px] pl-[5px] text-[11px] bg-transparent text-right" oninput="updateMskdiamText(this)" onchange="updateMskdiamTextSubmit(this)"/>
-        <div class="mskdiamctrl text-[11px]">Å</div>
-        <label class="inline-flex items-center gap-2 cursor-pointer ml-3">
-            <span class="text-[11px] text-streamlabel">show mask</span>
-            <input type="checkbox" checked class="sr-only peer" onchange="toggleMskOverlay(this)">
-            <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
-        </label>
-    </div>
+    {% include 'includes/_slider.html' with range_min=5 range_max=500 range_step=1 range_id='mskdiam_selector' range_class='mskdiamctrl' range_boxsize=jobstats.mskscale|floatformat:0 range_oninput='updateMskdiam(this)' range_onmouseup='updateMskdiamSubmit(this)' range_ontouchend='updateMskdiamSubmit(this)' hidden_id='selected_mskdiam' hidden_name='mskdiam' text_min=10 text_max=1000 text_step=1 text_id='current_mskdiam' text_class='mskdiamctrl w-[40px] pl-[5px] text-[11px] bg-transparent text-right' text_oninput='updateMskdiamText(this)' text_onchange='updateMskdiamTextSubmit(this)' unit='Å' unit_class='mskdiamctrl text-[11px]' %}
+    <label class="inline-flex items-center gap-2 cursor-pointer ml-3">
+        <span class="text-[11px] text-streamlabel">show mask</span>
+        <input type="checkbox" checked class="sr-only peer" onchange="toggleMskOverlay(this)">
+        <div class="relative w-8 h-4 bg-streamline rounded-full peer-checked:bg-streamring transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+    </label>
 </form>
 {% endif %}
 <script>

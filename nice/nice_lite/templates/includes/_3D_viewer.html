@@ -1,7 +1,6 @@
 {% comment %}
   _3D_viewer.html — basic Mol* viewport for an owned Batch volume.
-  Expects `jobid` and non-empty `volume_outputs`. The hidden controls satisfy
-  the shared Mol* controller while keeping this first version viewport-only.
+  Expects `jobid` and non-empty `volume_outputs`.
 {% endcomment %}
 <style>
     [data-basic-3d-viewer] > .msp-plugin {
@@ -29,8 +28,6 @@
 <select data-volume-background hidden aria-label="viewer background">
     <option value="white" selected>white</option>
 </select>
-<input data-volume-isovalue type="range" min="0" max="1" step="0.001" value="0.3" hidden disabled>
-<output data-volume-isovalue-output hidden></output>
 <button data-volume-reset type="button" hidden>reset view</button>
 <p data-volume-metadata hidden></p>
 
@@ -44,5 +41,7 @@
         Mol* · drag to rotate · scroll to zoom
     </p>
 </div>
-<p data-volume-status role="status" aria-live="polite"
-   class="mt-2 flex-shrink-0 text-[10px] text-streamsubtle">loading Mol*…</p>
+<div class="mt-2 flex flex-shrink-0 flex-row items-center justify-center">
+    <div class="mr-2 text-[11px] text-streamlabel">iso surface</div>
+    {% include 'includes/_slider.html' with range_min=0 range_max=1 range_step=0.001 range_value=0.3 range_id='volume_isovalue' range_class='w-48' range_data_attribute='data-volume-isovalue' range_aria_label='iso surface' text_min=0 text_max=1 text_step=0.001 text_id='volume_isovalue_text' text_class='w-20 pl-[5px] text-[11px] bg-transparent text-right' text_data_attribute='data-volume-isovalue-text' text_aria_label='iso surface value' %}
+</div>
