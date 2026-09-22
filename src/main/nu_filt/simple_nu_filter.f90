@@ -654,10 +654,12 @@ interface
     end subroutine assert_nu_evidence_replay_ready
 
     ! In submodule: simple_nu_filter_sharpen.f90
-    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, vol_sharp )
+    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp, apply_even, apply_odd )
         type(nu_evidence_state), intent(in)    :: state
         type(image),             intent(in)    :: vol_even, vol_odd
+        real,                    intent(in)    :: fsc(:)
         type(image),             intent(inout) :: vol_sharp
+        type(image), optional,   intent(in)    :: apply_even, apply_odd
     end subroutine nu_evidence_sharpen_vol
 
     ! In submodule: simple_nu_filter_potts.f90

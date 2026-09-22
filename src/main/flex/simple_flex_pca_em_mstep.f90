@@ -45,11 +45,11 @@ contains
         real(dp), allocatable :: sv_eo(:), Mconv(:,:), sconv(:)
         real,     pointer :: rmatp(:,:,:), rm_dfl(:,:,:), rv_dfl(:,:,:)
         real(dp) :: eo_dim, cos_mean, mu_q, sd_q
-        real(dp) :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl, cp_dfl, gpx, gpy, gpz
+        real(dp) :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl
         real(dp) :: fmean_dg(512), fbest_dg
         real     :: fc, res_lo, res_hi, res_dg
-        integer  :: q, i, ithr, sh, filtsz, d_new
-        integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2), ipdfl, ixp, iyp, izp
+        integer  :: q, ithr, sh, filtsz, d_new
+        integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2)
         integer  :: khi_dg, nsig_dg, ntop_dg, sel_dg(4), tq_dg, bq_dg
         logical  :: l_dfl_bg, l_dfl_dil, l_z_local
         logical  :: l_mstep_wiener

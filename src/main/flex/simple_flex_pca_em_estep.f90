@@ -406,8 +406,7 @@ contains
             if( fit%l_mix_active )then
                 block
                     real(dp), allocatable :: rr_sr(:), rr_sm(:,:), rr_smm(:,:,:), rr_sai(:,:)
-                    real(dp) :: g_mx, pi_floor, best_d, dmin, dsq
-                    integer  :: tt, kk3, kkp, ii2, best_i
+                    integer  :: tt, kk3
                     allocate(rr_sr(fit%kmix), rr_sm(fit%ncomp,fit%kmix), &
                         &rr_smm(fit%ncomp,fit%ncomp,fit%kmix), rr_sai(fit%ncomp,fit%ncomp))
                     rr_sr = 0.d0; rr_sm = 0.d0; rr_smm = 0.d0; rr_sai = 0.d0
@@ -532,7 +531,7 @@ contains
                     t_bank = tic()
                     call fit_polar_bank_build(params, build, fits(f), fits(f)%mean_rec, &
                         &fpls(1), nthr, .false.)
-                    fits(f)%sec_bank      = fits(f)%sec_bank + toc(t_bank)
+                    fits(f)%sec_bank      = fits(f)%sec_bank + real(toc(t_bank))
                     fits(f)%l_pol_bank_it = .true.
                     write(logfhandle,'(A,I0,A,A,A,I0,A,I0,A,F7.1)') &
                         &'>>> FLEX_PCA POLAR ESTEP BANK it=', it_eff, '  fit=', &
@@ -596,16 +595,9 @@ contains
         complex, allocatable :: cme1(:,:,:,:), cmo1(:,:,:,:), cme2(:,:,:,:), cmo2(:,:,:,:)
         real,    allocatable :: rhe1(:,:,:,:), rhoo1(:,:,:,:), rhe2(:,:,:,:), rhoo2(:,:,:,:)
         type(string) :: fname
-        integer :: ipart, funit, f, q, nth_red
+        integer :: ipart, funit, f, q
         integer(timer_int_kind) :: t_red
         ! per-thread private accumulators of the concurrent part reads
-        complex,  allocatable :: pcme1(:,:,:,:), pcmo1(:,:,:,:), pcme2(:,:,:,:), pcmo2(:,:,:,:)
-        real,     allocatable :: prhe1(:,:,:,:), prhoo1(:,:,:,:), prhe2(:,:,:,:), prhoo2(:,:,:,:)
-        real,     allocatable :: prce1(:,:,:,:), prco1(:,:,:,:), prce2(:,:,:,:), prco2(:,:,:,:)
-        real(dp), allocatable :: pgam1(:), pgam2(:), psr1(:), psm1(:,:), psmm1(:,:,:), psai1(:,:)
-        real(dp), allocatable :: psr2(:), psm2(:,:), psmm2(:,:,:), psai2(:,:), pz1(:,:), pz2(:,:)
-        real(dp) :: pnll1, pnll2
-        integer  :: pnval1, pnval2, pnz1, pnz2
         t_red = tic()
         associate( fa => fits(1), fb => fits(2) )
         allocate(cme1(fa%es(1),fa%es(2),fa%es(3),fa%ncomp), cmo1(fa%es(1),fa%es(2),fa%es(3),fa%ncomp), source=(0.,0.))

@@ -781,7 +781,14 @@ from the unfiltered pair average between `HPLIM_GUINIER` and the cutoff
 (a first version fitted the shipped regularized map: -150 on
 streptavidin, a cloud of structured noise; the Wiener suppression
 steepens the slope, which is what the unfil-pair estimate was always
-for), sharpen, Butterworth at the cutoff; `fsc_filt` and the density window
+for), sharpen, the FSC weighting `2FSC/(1+FSC)` inside the passband and
+the Butterworth at the cutoff (2026-09-22: with the Butterworth alone,
+exp_gate at B -108 was a cloud of structured noise, bfac=0 normal, -50
+under-sharpened, -75 the cloud beginning; the low-SNR shoulder between
+FSC=0.5 and 0.143 passed at full weight, which the weighting holds at
+0.25-0.67; streptavidin and msp1 survived on a steeper FSC; postprocess_nu
+got the same weighting stretched to each voxel's evidenced cutoff, and its
+B-factor from the unregularized pair when it sharpens the solvent pair); `fsc_filt` and the density window
 retired; `imgkind=unfil|solvent` postprocess the pair averages with the
 same cutoff (`pair_stem`). postprocess_nu: evidence from `_unfil`,
 sharpening applied to the `_solvent` pair when present; outputs named

@@ -48,8 +48,6 @@ contains
     subroutine planes_enable( nrows, cropped )
         integer, intent(in) :: nrows
         logical, intent(in) :: cropped
-        character(len=32) :: envval
-        integer  :: ln, stat, ival, ios
         real(dp) :: gb_avail
         if( l_on ) return
         if( .not. cropped )then

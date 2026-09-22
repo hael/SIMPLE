@@ -25,9 +25,7 @@ contains
         !! held-out (cross-halfset) embedding to align two independently fitted bases
         character(len=*),        optional, intent(in)  :: fprefix
         type(reconstructor) :: work
-        type(reconstructor), allocatable :: utilde(:)
-        integer :: ncol, nreal, s, lb(3), ub(3), nyq_rec, d_tilde, q
-        real(dp), allocatable :: svals(:)
+        integer :: lb(3), ub(3), nyq_rec
         ! one work reconstructor defines the expanded lattice / Nyquist / grid correction
         call init_basis_reconstructor(params, build, work)
         lb      = lbound(work%cmat_exp)

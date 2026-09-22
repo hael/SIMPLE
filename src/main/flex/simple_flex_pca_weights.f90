@@ -49,8 +49,8 @@ contains
         real(dp), allocatable :: pk(:,:,:), cfull(:,:), cblk(:,:), edges(:)
         real(dp), allocatable :: ppath(:), tpath(:)   ! per-particle / per-target coordinate along the path
         integer,  allocatable :: occ(:)
-        real(dp) :: h, d2, u2, sumw, sumw2, best, zspread, bmin, chi2med, wsum_i
-        integer  :: nrenorm, ispace
+        real(dp) :: h, d2, u2, sumw, sumw2, best, zspread, bmin, chi2med
+        integer  :: ispace
         integer  :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
         integer  :: nk, errflg
         logical  :: l_relpath, l_diffuse, l_gmm, l_gmm_auto

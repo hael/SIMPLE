@@ -305,7 +305,7 @@ contains
         real(dp), allocatable :: z(:,:), con(:), prec(:,:,:), re(:), rme(:), zhalf(:,:,:), prior(:), a_comp(:)
         real(dp), allocatable :: R(:,:,:), Nz(:,:,:), mu(:,:), Sig(:,:,:), W(:,:), WWt(:,:), WWti(:,:), Wp(:,:)
         real(dp), allocatable :: VV(:,:), U2(:,:), zc(:,:), evc(:), qcol(:), s2(:), r2(:), nzc(:,:)
-        real(dp) :: pik(1), a, snr_thr, pj, nrm
+        real(dp) :: pik(1), a, snr_thr, pj
         real,     pointer :: rmat(:,:,:) => null()
         integer  :: d, k, i, j, q, n, bc, nvox, errflg, kept
         d    = ncomp

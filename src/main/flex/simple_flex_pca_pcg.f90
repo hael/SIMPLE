@@ -2354,7 +2354,7 @@ contains
                 else
                     fval = conjg(ysmp(s))
                 endif
-                cv(1) = cmplx(real(fval*real(wts(s),dp)), real(aimag(fval)*real(wts(s),dp)))
+                cv(1) = cmplx(real(real(fval)*real(wts(s),dp), sp), real(aimag(fval)*real(wts(s),dp), sp))
                 call op%kbwin%apod_mat_3d_fast(loc2, iwinsz, wdim, w)
                 if( op%win_wraps(i0) )then
                     call scatter_rhs_wrap(op, i0, w, cv, racc)
@@ -2485,7 +2485,7 @@ contains
                     call op%kbwin%apod_mat_3d_fast(loc2, iwinsz, wdim, w)
                     fval = ysmp(s)
                     if( nlev > 0.0 ) fval = fval + real(nlev,dp)*yrms*cmplx(gasdev(), gasdev(), kind=dp)/sqrt(2.0_dp)
-                    cv(1) = cmplx(real(fval), real(aimag(fval)))
+                    cv(1) = cmplx(real(real(fval), sp), real(aimag(fval), sp))
                     if( op%win_wraps(i0) )then
                         call scatter_rhs_wrap(op, i0, w, cv, racc)
                     else

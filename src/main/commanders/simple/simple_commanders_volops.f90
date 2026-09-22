@@ -300,7 +300,7 @@ contains
         class(cmdline),  intent(inout) :: cline
         integer,         intent(in)    :: state
         class(string), optional, intent(in) :: pair_stem
-        real, allocatable :: fsc(:), res(:), bwfilter(:)
+        real, allocatable :: fsc(:), res(:), bwfilter(:), optlp(:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(string)     :: fname_even_unfil, fname_odd_unfil
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
@@ -419,15 +419,33 @@ contains
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
-        ! Butterworth low-pass at the cutoff, the same filter as the NU
-        ! filter's rungs, closing the sharpening
+        ! Close the sharpening with both halves of the classical recipe: the
+        ! FSC weighting 2FSC/(1+FSC) inside the passband, which holds the
+        ! low-SNR shells between FSC=0.5 and 0.143 at 0.25-0.67 (without it a
+        ! B of -108 multiplied exp_gate's shoulder by ~6 at the cutoff and
+        ! the map became a cloud of structured noise, 2026-09-22), and the
+        ! Butterworth at the FSC=0.143 cutoff, the same filter as the NU
+        ! filter's rungs, which the old recipe lacked (its weighting stayed
+        ! open to FSC=0.05).
+        if( has_fsc )then
+            optlp = fsc2optlp(fsc)
+            where( fsc < 0.05 ) optlp = 0.
+            where( res < TINY ) optlp = 0.
+            call vol_bfac%apply_filter(optlp)
+            call vol_no_bfac%apply_filter(optlp)
+        endif
         lp_find = max(1, min(box/2, calc_fourier_index(lplim, box, smpd)))
         allocate(bwfilter(box), source=0.)
         call butterworth_filter(lp_find, bwfilter)
         call vol_bfac%apply_filter(bwfilter)
         call vol_no_bfac%apply_filter(bwfilter)
         deallocate(bwfilter)
-        write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
+        if( has_fsc )then
+            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, FSC-weighted (2FSC/(1+FSC)), Butterworth low-pass at ', &
+                &lplim, ' A'
+        else
+            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
+        endif
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)

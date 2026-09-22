@@ -17,15 +17,21 @@
 !      the frozen state's evidenced local cutoff (selected_cutoff, from the
 !      Potts-smoothed label optimization), composed exactly like the
 !      production NU filter -- so sharpening never extends beyond the local
-!      passband, which is the classical lesson v1 skipped;
+!      passband, which is the classical lesson v1 skipped; and, when the
+!      evidence pair's FSC is supplied, its 2FSC/(1+FSC) weighting inside
+!      each local passband, stretched so that its FSC=0.143 crossing sits at
+!      the voxel's cutoff (2026-09-22): the Butterworth alone let the
+!      low-SNR shoulder pass at full weight under the B-factor, the same
+!      failure as the isotropic postprocess on exp_gate;
 !   3. solvent: voxels the calibrated null claims (cutoff 0) and voxels
 !      outside the spherical evidence support flatten to the half-map mean --
 !      the evidence-derived envelope behavior validated in the v1 run.
 !
-! A global FSC-derived optlp is deliberately NOT applied: the global FSC
-! averages over the map and contradicts the evidenced local extension in the
-! core (it would erase exactly the detail the walk validated); the Butterworth
-! rolloff at the calibrated local cutoff is the local shrinkage surrogate.
+! The global FSC-derived optlp is NOT applied as such: the global FSC
+! averages over the map and would erase the evidenced local extension in the
+! core. It is applied stretched to each local cutoff instead, so the core
+! keeps its extension with the global SNR falloff's shape and the poorly
+! resolved regions get it compressed.
 !
 ! Discipline unchanged from v1: one frozen evidence identity; the shipped
 ! product is the single sharpened MERGED volume (classical-postprocess style)
@@ -37,17 +43,29 @@ implicit none
 
 contains
 
-    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, vol_sharp )
+    !> The policy in one signature: everything is ESTIMATED on the evidence
+    !! pair (vol_even/odd, the unregularized base pair: the evidence state it
+    !! matches, the FSC whose 2FSC/(1+FSC) weighting is applied inside every
+    !! local passband stretched so that its FSC=0.143 crossing sits at the
+    !! voxel's evidenced cutoff, and the Guinier B-factor) and APPLIED to the
+    !! apply pair (apply_even/odd, the solvent-prior'd pair when there is one;
+    !! absent, the evidence pair is sharpened). 2026-09-22: the Butterworth
+    !! alone let the low-SNR shoulder pass at full weight under the B-factor,
+    !! the same failure as the isotropic postprocess on exp_gate.
+    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp, apply_even, apply_odd )
         type(nu_evidence_state), intent(in)    :: state
         type(image),             intent(in)    :: vol_even, vol_odd
+        real,                    intent(in)    :: fsc(:)
         type(image),             intent(inout) :: vol_sharp
+        type(image), optional,   intent(in)    :: apply_even, apply_odd
         type(nu_evidence_summary) :: summ
         type(image) :: vol_merged, vol_work, vol_filt, vol_supp
-        real,    allocatable :: cutoffs(:), cutoff_map(:,:,:), distinct(:), filt(:)
+        real,    allocatable :: cutoffs(:), cutoff_map(:,:,:), distinct(:), filt(:), optlp(:), res(:)
         real,    allocatable :: rtmp(:,:,:), rout(:,:,:)
         logical, allocatable :: supp_lmask(:,:,:)
-        real    :: finest, bfac, mean_half, c_here
-        integer :: ldim(3), i, j, k, imask, nyq, ndist, icut, cutoff_find, nnull
+        real    :: finest, bfac, mean_half, c_here, fsc05, fsc0143, kscaled, frac
+        integer :: ldim(3), i, j, k, imask, nyq, ndist, icut, cutoff_find, nnull, k0143, kk, klo
+        logical :: l_apply
         if( .not.nu_evidence_state_is_valid(state) ) &
             &THROW_HARD('cannot sharpen from an invalid NU evidence state; nu_evidence_sharpen_vol')
         call get_nu_evidence_summary(state, summ)
@@ -55,6 +73,21 @@ contains
         if( any(vol_even%get_ldim() /= ldim) .or. any(vol_odd%get_ldim() /= ldim) ) &
             &THROW_HARD('half-map dimensions do not match the frozen evidence state; nu_evidence_sharpen_vol')
         nyq = vol_even%get_filtsz()
+        l_apply = present(apply_even) .and. present(apply_odd)
+        if( present(apply_even) .neqv. present(apply_odd) ) &
+            &THROW_HARD('the apply pair needs both halves; nu_evidence_sharpen_vol')
+        if( l_apply )then
+            if( any(apply_even%get_ldim() /= ldim) .or. any(apply_odd%get_ldim() /= ldim) ) &
+                &THROW_HARD('apply pair dimensions do not match the frozen evidence state; nu_evidence_sharpen_vol')
+        endif
+        if( size(fsc) < nyq ) THROW_HARD('FSC has fewer shells than the volume; nu_evidence_sharpen_vol')
+        allocate(optlp(nyq), source=0.)
+        where( fsc(1:nyq) > 0. ) optlp = 2. * fsc(1:nyq) / (fsc(1:nyq) + 1.)
+        where( fsc(1:nyq) < 0.05 ) optlp = 0.
+        optlp = min(optlp, 0.99999)
+        res = get_resarr(ldim(1), summ%smpd)
+        call get_resolution(fsc(1:nyq), res, fsc05, fsc0143)
+        k0143 = max(1, min(nyq, calc_fourier_index(fsc0143, ldim(1), summ%smpd)))
         ! expand the mask-packed evidenced local cutoffs to the grid (same
         ! spherical-support recreation and packing order as
         ! expand_nu_evidence_band_weights); 0 = null verdict or outside support
@@ -96,20 +129,31 @@ contains
         enddo
         finest = distinct(ndist)
         nnull  = count(cutoff_map <= TINY .and. supp_lmask)
-        ! classical Guinier B-factor from the merged map, anchored to the
-        ! finest evidenced cutoff, gated exactly like the standard postprocess
-        call vol_merged%copy(vol_even)
-        call vol_merged%add(vol_odd)
-        call vol_merged%mul(0.5)
+        ! classical Guinier B-factor of the evidence (unregularized) pair
+        ! average, anchored to the finest evidenced cutoff, gated exactly like
+        ! the standard postprocess; the merged map that is sharpened is the
+        ! apply pair's when there is one
+        call vol_work%copy(vol_even)
+        call vol_work%add(vol_odd)
+        call vol_work%mul(0.5)
+        if( l_apply )then
+            call vol_merged%copy(apply_even)
+            call vol_merged%add(apply_odd)
+            call vol_merged%mul(0.5)
+        else
+            call vol_merged%copy(vol_work)
+        endif
         bfac = 0.0
         if( finest < NU_SHARP_BFAC_FINEST_A )then
-            bfac = vol_merged%guinier_bfac(HPLIM_GUINIER, finest)
-            write(logfhandle,'(A,1X,F8.2)') '>>> NU SHARPENING B-FACTOR DETERMINED TO:', bfac
+            bfac = vol_work%guinier_bfac(HPLIM_GUINIER, finest)
+            write(logfhandle,'(A,1X,F8.2)') '>>> NU SHARPENING B-FACTOR (UNREGULARIZED PAIR) DETERMINED TO:', bfac
         else
             write(logfhandle,'(A,F6.2,A)') '>>> NU SHARPENING B-FACTOR SKIPPED (finest evidenced cutoff ', &
                 &finest, ' A too coarse)'
         endif
-        write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, then local low-pass'
+        write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, FSC-weighted (2FSC/(1+FSC) '//&
+            &'stretched to each local cutoff), then local low-pass'
+        if( l_apply ) write(logfhandle,'(A)') '    estimated on the unregularized pair, applied to the solvent-prior pair'
         write(logfhandle,'(A,I0,A)')  '    evidenced local cutoffs: ', ndist, ' distinct'
         write(logfhandle,'(A,I0)')    '    null-claimed voxels flattened to the mean: ', nnull
         ! sharpen the MERGED map: every v2 operation is linear, so this is
@@ -128,6 +172,21 @@ contains
         do icut = 1, ndist
             cutoff_find = min(nyq, calc_fourier_index(distinct(icut), ldim(1), summ%smpd))
             call butterworth_filter(cutoff_find, filt)
+            ! the global FSC weighting stretched so that its FSC=0.143
+            ! crossing sits at this cutoff: shell k of the local passband
+            ! takes the global weight at k * k0143 / cutoff_find
+            do kk = 1, nyq
+                kscaled = real(kk) * real(k0143) / real(max(1, cutoff_find))
+                klo     = floor(kscaled)
+                frac    = kscaled - real(klo)
+                if( klo >= nyq )then
+                    filt(kk) = 0.
+                else if( klo < 1 )then
+                    filt(kk) = filt(kk) * optlp(1)
+                else
+                    filt(kk) = filt(kk) * ((1. - frac) * optlp(klo) + frac * optlp(klo + 1))
+                endif
+            enddo
             call vol_filt%copy(vol_work)
             call vol_filt%apply_filter(filt)
             call vol_filt%ifft()
@@ -145,7 +204,7 @@ contains
         ! destruct
         call vol_work%kill
         call vol_filt%kill
-        deallocate(cutoffs, cutoff_map, distinct, filt)
+        deallocate(cutoffs, cutoff_map, distinct, filt, optlp, res)
         if( allocated(rtmp)       ) deallocate(rtmp)
         if( allocated(supp_lmask) ) deallocate(supp_lmask)
     end subroutine nu_evidence_sharpen_vol

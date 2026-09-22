@@ -131,7 +131,7 @@ contains
         real(dp), allocatable, optional, intent(out) :: sub_cos(:), pa_cos(:)
         type(image) :: ivol
         type(string) :: fn
-        real(dp), allocatable :: VA(:,:), VB(:,:), VI(:,:), proj(:)
+        real(dp), allocatable :: VA(:,:), VB(:,:), VI(:,:)
         real(dp), allocatable :: QA(:,:), QB(:,:), G(:,:), C(:,:), ev(:), evec(:,:), u(:)
         real, pointer :: rmat(:,:,:) => null()
         real(dp) :: nrm, pj
@@ -947,9 +947,9 @@ contains
         type(image), allocatable :: dfl_basis(:)
         type(image) :: mvol_dfl
         real, pointer :: rm_dfl(:,:,:), rv_dfl(:,:,:)
-        real(dp) :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl, cp_dfl, gpx, gpy, gpz
+        real(dp) :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl
         real     :: res_lo, res_hi
-        integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2), ipdfl, ixp, iyp, izp, q
+        integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2), q
         logical  :: l_dfl_bg, l_dfl_dil
         if( .not. fit%l_deflate_mean ) return
         ndfl = max(1, fit%vdfl)

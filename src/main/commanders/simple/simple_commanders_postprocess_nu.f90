@@ -42,7 +42,7 @@ contains
         type(parameters)        :: params
         type(sp_project)        :: spproj
         type(nu_evidence_state) :: evstate
-        type(image)             :: even, odd, vol_sharp
+        type(image)             :: even, odd, vol_sharp, sol_even, sol_odd
         type(image), allocatable :: aux_even(:), aux_odd(:)
         type(string)            :: vol_out, fname, fname_vol, fname_even_unfil, fname_odd_unfil, fname_even, fname_odd
         type(string)            :: fname_even_solvent, fname_odd_solvent
@@ -165,13 +165,23 @@ contains
             call find_ldim_nptcls(fname_even_solvent, ldim, nptcls)
             l_solvent = ldim(1) == box
         endif
+        ! the unregularized pair's FSC weights every local passband
+        ! (2FSC/(1+FSC) stretched to the local cutoff) and its average sets
+        ! the B-factor; the sharpened pair is the solvent-prior'd one when
+        ! present, else the unregularized pair itself
         if( l_solvent )then
             write(logfhandle,'(A)') '>>> POSTPROCESS_NU: SHARPENING THE SOLVENT-PRIOR PAIR '//&
                 &fname_odd_solvent%to_char()//' '//fname_even_solvent%to_char()//' WITH THE EVIDENCE OF THE UNREGULARIZED PAIR'
-            call even%read(fname_even_solvent)
-            call odd%read(fname_odd_solvent)
+            call sol_even%new([box,box,box], smpd)
+            call sol_odd%new([box,box,box], smpd)
+            call sol_even%read(fname_even_solvent)
+            call sol_odd%read(fname_odd_solvent)
+            call nu_evidence_sharpen_vol(evstate, even, odd, corrs, vol_sharp, apply_even=sol_even, apply_odd=sol_odd)
+            call sol_even%kill
+            call sol_odd%kill
+        else
+            call nu_evidence_sharpen_vol(evstate, even, odd, corrs, vol_sharp)
         endif
-        call nu_evidence_sharpen_vol(evstate, even, odd, vol_sharp)
         if( cline%defined('outvol') )then
             vol_out = params%outvol
         else

@@ -637,11 +637,15 @@ pair beside the map computed by postprocess when no file is given, one
 Guinier B-factor of the unfiltered pair average between `HPLIM_GUINIER`
 and that cutoff (never of the shipped regularized map: its prior's
 amplitude suppression steepens the slope, -150 on streptavidin against
--77 to -83 from unregularized maps), sharpen, Butterworth low-pass at
-the cutoff. No FSC optimal
-filter (it stayed open to FSC=0.05 and left the amplified noise uncut:
-exp_gate/msp1, B -121/-115 with the density-windowed estimate on the
-solvent-prior'd pair) and no density-windowed pair estimate. With
+-77 to -83 from unregularized maps), sharpen, then the FSC weighting
+`2FSC/(1+FSC)` inside the passband AND the Butterworth low-pass at the
+cutoff. Both halves are needed (2026-09-22): the weighting alone stayed
+open to FSC=0.05 and left amplified noise uncut (exp_gate/msp1, B
+-121/-115 with the density-windowed estimate on the solvent-prior'd
+pair); the Butterworth alone let the low-SNR shells between FSC=0.5 and
+0.143 pass at full weight and a B of -108 turned exp_gate into a cloud
+of structured noise while bfac=0 was normal. No density-windowed pair
+estimate. With
 `pcg_solvent=yes` the `_unfil` pair is the prior-free base pair and the
 sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil` and
 `imgkind=solvent` postprocess the respective pair averages with the same

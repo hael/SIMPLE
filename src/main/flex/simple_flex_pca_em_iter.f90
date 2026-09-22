@@ -48,10 +48,6 @@ contains
         character(len=*), optional, intent(in) :: fprefix, meta_fname
         type(fplane_type), allocatable :: fpls(:)
         type(ori),           allocatable :: orientations(:)
-        type(reconstructor), allocatable :: utilde(:)
-        type(image),         allocatable :: realvols(:), utilde_real(:)
-        type(image) :: img_o, mstep_gridcorr
-        real,                allocatable :: filt(:), corrs(:)
         ! GPU M-step path (SIMPLE_COV_GPU=1): one coupled device accumulation over the combined
         ! [Yeven, Yodd] x [rho_e, rho_o] layout, halfsets routed through the scale slots
         logical  :: l_gpu_probe
@@ -79,9 +75,6 @@ contains
         !! 10076: cos crosses 0.97 at iteration 5 while max var is still falling ~20 % per iteration),
         !! so a pure-EM fit needs a tighter bar. SIMPLE_COV_PROBE_CONV is in PER MILLE (995 = 0.995).
         !> even/odd half-basis agreement: the dataset-agnostic convergence signal
-        type(image), allocatable :: eimgs(:), oimgs(:)
-        real(dp),    allocatable :: sv_eo(:)
-        real(dp) :: eo_dim
         integer, parameter :: MIX_ZSUB_MAX = 2000   ! per-part latent subsample shipped for mcfa_init
         !> POLAR SHARED-DIRECTION E-STEP, SIMPLE_COV_POLAR_ESTEP=1 (stage 1).
         !! IN the batch loop: once per
@@ -96,7 +89,7 @@ contains
         !! refined basis VOLUMES at the end of each M-step, and the bank is rebuilt from those
         !! same basis_recs at the next iteration, so the deflation enters the bank exactly as it
         !! enters the per-particle Cartesian projections.
-        integer  :: id_es, idp_es, ir
+        integer  :: idp_es, ir
         !> HYBRID exact/ring quadrature (accuracy): the shells 0..rhyb_es are accumulated as
         !! EXACT Cartesian lattice statistics per particle (data, CTF and model read exactly as
         !! the Cartesian former reads them -- including the DC sample the rings never had) and
@@ -107,10 +100,6 @@ contains
         !! the DC sample alone do NOT fix; the hybrid at rhyb ~ 0.55*band restores ratio ~1.00
         !! with G err 0.4% and b err ~3%. SIMPLE_COV_POLAR_RHYB overrides (0=off: pure rings,
         !! tonight's baseline); SIMPLE_COV_POLAR_OSAMP multiplies ring angular sampling.
-        integer  :: jx_es, kx_es
-        type(oris)            :: dirs_es
-        type(ori)             :: o_es
-        real,     allocatable :: rmatp_es(:,:,:), nrmp_es(:,:)
         real(dp) :: pw_es, cnt_es
         real     :: taz_es
         integer(timer_int_kind) :: t_bank
@@ -142,22 +131,10 @@ contains
         !! THIS reference, the polar/Cartesian gap is the DC term, not the ring quadrature.
         logical  :: l_probe_distr_pre
         !> mean-shaped (contrast) deflation of the refined basis, SIMPLE_COV_EM_DEFLATE
-        integer       :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2)
-        logical       :: l_dfl_bg
-        logical       :: l_dfl_pose
-        integer       :: ipdfl, ixp, iyp, izp
-        real(dp)      :: gpx, gpy, gpz, cp_dfl
-        type(image)   :: mvol_dfl
-        type(image), allocatable :: dfl_basis(:)
-        real, pointer :: rm_dfl(:,:,:), rv_dfl(:,:,:)
-        real          :: res_lo, res_hi
-        real(dp)      :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl
         logical  :: lok
         integer,             allocatable :: eo(:)
-        real, pointer :: rmatp(:,:,:)
-        real     :: fc
-        real(dp) :: a, aa, e_mm, myv, mu_q, sd_q
-        integer  :: it, q, r, i, ithr, nthr, batchlims(2), batchsz, ibatch, row, d_new, filtsz, sh
+        real(dp) :: a, aa, e_mm, myv
+        integer  :: it, q, r, i, ithr, nthr, batchlims(2), batchsz, ibatch, row
         !> effective (global) iteration numbering -- the ONLY counters iteration-keyed schedules
         !! and iteration logs may use; equal to it/niters except on a distributed probe worker
         integer  :: it_eff, niters_eff
@@ -165,19 +142,12 @@ contains
         logical  :: l_probe_distr
         complex,             allocatable :: cme(:,:,:,:), cmo(:,:,:,:)
         real,                allocatable :: rhe(:,:,:,:), rhoo(:,:,:,:)
-        real(dp),            allocatable :: Mconv(:,:), sconv(:)
-        real(dp) :: cos_mean
-        real,     allocatable :: fscq_dg(:,:)
-        real(dp) :: fmean_dg(512), fbest_dg
-        real     :: res_dg
-        integer  :: khi_dg, nsig_dg, ntop_dg, sel_dg(4), tq_dg, bq_dg
         real(dp) :: qml, nll_mix_add
         ! ---- MCFA state: tied-covariance mixture prior over the latents ----
         integer  :: kk2
         real(dp) :: lwm, wsm
         ! unified-mixture state: frame rotation (Gap B), full-N running average of the
         ! reduced mixture statistics (Gap A), starved-component reseeding, final full pass
-        type(string) :: fname
         integer(timer_int_kind) :: t_it, t_sec
         real(timer_int_kind) :: sec_read, sec_prep, sec_estep, sec_ins
         real(dp) :: twp0, twp1, twp2
@@ -621,7 +591,7 @@ contains
                         if( .not. allocated(vld_pg) ) allocate(vld_pg(MAXIMGBATCHSZ), &
                             &dir_pg(MAXIMGBATCHSZ), ca_pg(MAXIMGBATCHSZ), sa_pg(MAXIMGBATCHSZ))
                     endif
-                    fit%sec_bank      = fit%sec_bank + toc(t_bank)
+                    fit%sec_bank      = fit%sec_bank + real(toc(t_bank))
                     fit%l_pol_bank_it = .true.
                     write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.1)') '>>> FLEX_PCA POLAR ESTEP BANK it=', &
                         &it_eff,'  directions built=',count(fit%dused_es),' of ',fit%ndir_es, &
@@ -1558,7 +1528,7 @@ contains
         logical,           intent(in)    :: l_merge_stash
         !> the mod-4 pairing, stamped into both probe-state files for distributed dispatch
         integer,           intent(in)    :: vpair
-        integer  :: it_eff, niters_eff, f, i, nthr
+        integer  :: it_eff, niters_eff, f, nthr
         integer(timer_int_kind) :: t_it
         !> cross-fit-FSC driver context: the paired master writes honest paired=1 records every
         !! iteration; the ridge/marching/stopping consumers act per their own gates

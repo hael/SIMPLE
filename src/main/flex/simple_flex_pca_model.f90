@@ -101,7 +101,7 @@ contains
         real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
         real, allocatable :: state_weights(:,:), half_weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer :: nptcls, ncomp, nstates, min_neff, state_axis, col_sep, neigs_req, nkern
-        integer :: q, i, r, s, nfinch
+        integer :: q, i, r, s
         integer :: nstates_merged
         integer, allocatable :: merge_label(:)
         real,    allocatable :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
@@ -113,7 +113,7 @@ contains
         real(dp), allocatable :: pviews(:,:)     ! per-particle viewing AXIS, for the GMM orientation term
         character(len=:), allocatable :: cachedir, cachestr
         real(dp) :: sig2_eff
-        logical :: sigma_loaded, l_resume, l_split_eo
+        logical :: sigma_loaded, l_resume
         logical :: l_compose
         character(len=XLONGSTRLEN) :: envc
         integer :: envlen_c, envstat_c
@@ -1954,7 +1954,6 @@ contains
         integer, allocatable :: plab(:)
         character(len=:), allocatable :: sfx
         integer,  allocatable :: hcols(:), uinds(:)
-        real(dp), allocatable :: zh(:,:), umx(:,:), mx(:,:), kur(:), saxis(:)
         real,     allocatable :: Xu(:,:), Yu(:,:)
         real(dp) :: colvar(ncomp), vmax, mu_c
         integer  :: vumap, nhc, q, i, u, nsub
