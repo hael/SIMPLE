@@ -46,7 +46,7 @@
                 <button data-class-selector-tile data-output-grid-tile data-class-id="{{ entry.class_id }}" type="button"
                         aria-pressed="{% if entry.class_id in batch_class_selector.initial_selected_class_ids %}true{% else %}false{% endif %}"
                         title="class {{ entry.class_id }} · population {{ entry.population|default_if_none:'unknown' }} · resolution {{ entry.resolution|default_if_none:'unknown' }} Å{% if batch_class_selector.width and batch_class_selector.height %} · {{ batch_class_selector.width }} × {{ batch_class_selector.height }} px{% endif %}"
-                        class="group flex flex-shrink-0 flex-col rounded-md border p-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring {% if entry.class_id in batch_class_selector.initial_selected_class_ids %}border-streamring bg-streamring/10{% else %}border-streamdivider bg-streambg{% endif %}"
+                        class="group flex flex-shrink-0 flex-col rounded-md border p-1 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring {% if entry.class_id in batch_class_selector.initial_selected_class_ids %}border-streamring bg-streamring/10{% else %}border-streamdivider bg-streambg{% endif %}"
                         style="width:var(--class-tile-size)">
                     <span class="mb-1 flex w-full items-center justify-between gap-1 text-[9px] text-streamlabel">
                         <strong class="text-streamtext">#{{ entry.class_id }}</strong>

@@ -71,7 +71,7 @@
             {% if "data" in mics %}
                 {% for micrograph in mics.data %}
                     {% if "thumb" in micrograph %}
-                        <div class="micrographcontainer snap-center" {% if "boxes" in micrograph %}data-boxes='{{ micrograph.boxes }}' data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }}{% endif %} data-idx={{ micrograph.n }} onclick="toggleMicrograph(this, {{ micrograph.n }})" oncontextmenu="showMenu(this, event)" title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
+                        <div class="micrographcontainer snap-center cursor-pointer" {% if "boxes" in micrograph %}data-boxes='{{ micrograph.boxes }}' data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }}{% endif %} data-idx={{ micrograph.n }} onclick="toggleMicrograph(this, {{ micrograph.n }})" oncontextmenu="showMenu(this, event)" title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
                             <div class="max-w-[600px] m-[5px] rounded bg-nice4bg px-[5px] pb-[5px] border-nice4header border-[1px]">
                                 {% if sortkey is not None and "sortval" in micrograph %}
                                     <div class="flex text-[10px]">

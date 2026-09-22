@@ -55,7 +55,7 @@
         <div class="flex flex-row flex-wrap flex-1 overflow-y-auto snap-y snap-mandatory content-start">
             {% if "data" in cls2ds %}
                 {% for cls in cls2ds.data %}
-                    <div class="cls2dcontainer snap-center" data-pop={{ cls.pop }} data-idx={{ cls.n }} onclick="toggleCls2d(this, {{ cls.n }})" oncontextmenu="showMenu(this, event)" title="particles: {{ cls.pop }}&#013;resolution: {{ cls.res | floatformat:1 }}Å">
+                    <div class="cls2dcontainer snap-center cursor-pointer" data-pop={{ cls.pop }} data-idx={{ cls.n }} onclick="toggleCls2d(this, {{ cls.n }})" oncontextmenu="showMenu(this, event)" title="particles: {{ cls.pop }}&#013;resolution: {{ cls.res | floatformat:1 }}Å">
                         <div class="m-[5px] px-[5px] pb-[5px] rounded bg-nice4bg border-nice4header border-[1px]">
                             {% if sortkey is not None and "sortval" in cls %}
                                 <div class="flex text-[10px]">

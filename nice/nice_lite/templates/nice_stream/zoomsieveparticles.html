@@ -60,7 +60,7 @@
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
                                         </div>
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto cursor-pointer">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mskdiam }}"></canvas>
                                                 <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">
@@ -109,7 +109,7 @@
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
                                         </div>
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto cursor-pointer">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mskdiam }}"></canvas>
                                                 <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">

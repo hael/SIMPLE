@@ -5,7 +5,7 @@
         <span class="text-[10px] text-streamlabel">running</span>
     </div>
 </div>
-<div class="logtext js-expandable-panel flex-1 overflow-auto mx-2 my-2 p-3 bg-streambg border border-streamdivider rounded-lg cursor-zoom-in" title="click to expand">
+<div class="logtext js-expandable-panel flex-1 overflow-auto mx-2 my-2 p-3 bg-streambg border border-streamdivider rounded-lg cursor-pointer" title="click to expand">
     {% for logpart in log %}
         {% if "text" in logpart %}
             <pre class="text-[10px] text-streamsubtle">{{ logpart.text }}</pre>
@@ -38,8 +38,6 @@
             target.style.borderRadius = '0.5rem';
             target.style.zIndex = '9999';
 
-            panel.classList.add('cursor-zoom-out');
-            panel.classList.remove('cursor-zoom-in');
             panel.title = 'click to collapse';
             document.body.style.overflow = 'hidden';
         }
@@ -51,8 +49,6 @@
             panel.dataset.expanded = '0';
             target.setAttribute('style', panel.dataset.expandTargetOriginalStyle || '');
 
-            panel.classList.remove('cursor-zoom-out');
-            panel.classList.add('cursor-zoom-in');
             panel.title = 'click to expand';
             document.body.style.overflow = '';
         }
@@ -84,7 +80,7 @@
         </svg>
         <span class="text-[11px] text-streamsubtle">errors</span>
     </div>
-    <div class="js-expandable-panel h-[75px] overflow-auto mx-2 mb-2 mt-1 p-3 bg-streamerrorsurface border border-streamerrorline rounded-lg cursor-zoom-in" title="click to expand">
+    <div class="js-expandable-panel h-[75px] overflow-auto mx-2 mb-2 mt-1 p-3 bg-streamerrorsurface border border-streamerrorline rounded-lg cursor-pointer" title="click to expand">
         <pre class="text-[10px] text-streamerror">{{error}}</pre>
     </div>
 {% endif %}
