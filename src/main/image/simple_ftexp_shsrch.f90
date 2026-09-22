@@ -202,19 +202,22 @@ contains
 
     ! TEST ROUTINES
 
-    ! Tests correlations/gradients routines & ft_expand interface
+    ! Tests correlations/gradients routines & ft_expand interface.
+    ! Unit-test sized: a 128-pixel box (was 240) exercises the same code paths
+    ! at a fraction of the cost, which matters because this runs in the build's
+    ! fast gate (doc/refactoring_notes/uniform_test_environment_refactoring.md).
+    ! The 4096-pixel correlator profiling that used to follow the test printed
+    ! CPU times and asserted nothing; it was removed (git history, 2026-09-22).
     subroutine test_ftexp_shsrch
         use simple_ft_expanded, only: ftexp_transfmat_init
         use simple_image,       only: image
         ! global constants
-        integer, parameter :: LDIM(3)=[240,240,1], SQRAD=60, NTST=50, NNOISY=20
-        real,    parameter :: SMPD=1.77, TRS=10., HP=100.0, LP=8., SNR=0.2
+        integer, parameter :: LDIM(3)=[128,128,1], SQRAD=32, NTST=50
+        real,    parameter :: SMPD=1.77, TRS=10., HP=100.0, LP=8.
         ! global variables
         type(ft_expanded)        :: ftexp_img
         type(image)              :: img, img_shifted
-        type(image), allocatable :: noisy_imgs(:)
         integer                  :: x, y
-        integer :: i
         ! reference images
         call img%new(LDIM, SMPD)
         call img%square(SQRAD)
@@ -222,14 +225,7 @@ contains
         call img_shifted%new(LDIM, SMPD)
         ! seed the random number generator
         call seed_rnd
-        ! generate noisy images
-        allocate(noisy_imgs(NNOISY))
-        do i=1,NNOISY
-            noisy_imgs(i) = img
-            call noisy_imgs(i)%add_gauran(SNR)
-        end do
         call test_shifted_correlator
-        call profile_corrs
         contains
 
             subroutine test_shifted_correlator
@@ -304,53 +300,6 @@ contains
                     THROW_HARD('****ft_expanded_tester FAILURE 2 :: test_shifted_correlator')
                 endif
             end subroutine test_shifted_correlator
-
-            subroutine profile_corrs
-                integer, parameter   :: NTSTS=1000, NTHR=8
-                integer              :: itst
-                type(image)          :: img_ref, img_ptcl
-                type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
-                type(ftexp_shsrch)   :: ftexp_shsrch1
-                real, allocatable    :: shvecs(:,:)
-                real(4)    :: corr, actual, delta, tarray(2)
-                call img_ref%new([4096,4096,1],SMPD)
-                call img_ref%ran
-                call img_ref%fft()
-                call ftexp_transfmat_init(img_ref, LP)
-                call ftexp_ref%new(img_ref, HP, LP, .true.)
-                call img_ptcl%new([4096,4096,1],SMPD)
-                call img_ptcl%ran
-                call img_ptcl%fft()
-                call ftexp_ptcl%new(img_ptcl, HP, LP, .true.)
-                call ftexp_shsrch1%new(ftexp_ref, ftexp_ptcl, TRS)
-                allocate(shvecs(NTSTS,3))
-                do itst=1,NTSTS
-                    shvecs(itst,1) = ran3()*2*TRS-TRS
-                    shvecs(itst,2) = ran3()*2*TRS-TRS
-                    shvecs(itst,3) = 0.
-                end do
-                actual = etime( tarray )
-                write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
-                delta = dtime( tarray )
-                write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
-
-                write(logfhandle,'(a)') '>>> PROFILING STANDARD CORRELATOR'
-                do itst=1,NTST
-                    corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
-                end do
-                actual = etime( tarray )
-                write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
-                delta = dtime( tarray )
-                write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
-                write(logfhandle,'(a)') '>>> PROFILING FTEXP CORRELATOR'
-                do itst=1,NTST
-                    corr = real(ftexp_shsrch1%corr_shifted_8(dble(shvecs(itst,:))))
-                end do
-                actual = etime( tarray )
-                write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
-                delta = dtime( tarray )
-                write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
-            end subroutine profile_corrs
 
     end subroutine test_ftexp_shsrch
 

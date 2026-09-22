@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>uniform_test_environment_refactoring.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="a-uniform-two-tier-test-environment-for-simple">A uniform, two-tier test environment for SIMPLE</h1>
+<p>Date: 2026-09-22</p>
+<p>Status: proposed architecture; implementation not started. This is a large
+project with four workstreams (section 1.1), delivered in slices that are each
+useful on their own.</p>
+<p>Validation level: static source inspection of SIMPLE, and of X's test system
+(<code>production/CMakeLists.txt</code>, AGENTS.md &quot;Test admission&quot; and &quot;Test tiering&quot;,
+<code>docs/design_notes/completed/test_suite_refactoring.md</code>) as the reference
+design. No SIMPLE source was compiled and no test executable was run while
+preparing this plan; the timing inventory in Phase 0 is the first thing that
+will change that.</p>
+<p>This is the single living design record for the test-environment refactor.
+Update it with inventory decisions, completed migrations and validation
+evidence as work lands instead of creating parallel plans.</p>
+<h2 id="1-objective">1. Objective</h2>
+<p>SIMPLE gets two test gates with one front door.</p>
+<p><strong>The fast gate</strong> runs as part of the build whenever <code>--compile-tests</code> is on:
+<code>compile_*.sh --compile-tests</code> builds, installs, then runs <code>ctest</code> on the
+<code>fast</code> label, and the whole label finishes within <strong>30 s of wall time on the
+reference Mac</strong> (24 cores; CI runners get a timeout multiplier, not a bigger
+budget). Every test in it can fail on its own assertions, runs in-process
+inside a fused per-area suite, needs no network, no download and no external
+data, and pins itself to one OpenMP thread. This is the everyday loop.</p>
+<p>Its content is decided (owner decision, 2026-09-22): the fast gate is the
+unit suites that <code>simple_test_units</code> runs today, 39 sub-suites (the union of
+its two routes) over the <code>*_tester</code> modules and the <code>test_*</code> procedures of
+core types, split into a handful of area suites. Nothing else in the tree is
+a fast-tier candidate.
+Another test joins only by passing the admission rules of section 5.1 through
+a review verdict, never by default.</p>
+<p><strong>The extensive gate</strong> runs overnight on a dedicated machine and has two
+kinds of entries. <strong>Library suites</strong> group the tests of one coherent part of
+the library (Fourier transforms, geometry, masks, numerics, optimisation,
+statistics, I/O, projects, search, ...) into one process each, built from
+the standalone tests that survive the review; they can take minutes, use
+real-sized fixtures, and must fail on their own assertions. <strong>Workflow
+gates</strong> are Ruben's self-contained simulated workflows (<code>simulated_workflow</code>
+on the embedded 6VXX/1JYX systems, <code>single_workflow</code>, <code>mini_stream</code>, the
+stream suite, <code>subproject_distr</code>, <code>pcg_recon</code>, <code>rec3D_backends</code>, ...), which
+generate their own data from known atomic models. Because the truth is known,
+these workflows can be gated on it (section 5.2) without the real-data
+validation registry and blessed baselines that X's <code>validate</code> needs; that
+machinery is too costly for SIMPLE and is a non-goal (section 17).</p>
+<p><strong>One front door</strong> serves both:</p>
+<pre class="hljs"><code><div>simple_test_exec test=&lt;suite-or-test&gt; [arguments]
+</div></code></pre>
+<p>The standalone <code>program simple_test_*</code> sources under <code>production/tests</code> are
+converted into callable procedures in grouped test modules and dispatched
+through area test commanders. The test executable and every test-only source
+stay out of production builds (<code>BUILD_TESTS=OFF</code>, the default of every
+<code>compile_*.sh</code> since 2026-09-21).</p>
+<p>Uniformity alone does not give a build-time gate. Three facts about the
+current tree shape the plan: nothing today bounds what a test run costs;
+every test is its own process, which is the direction X had to reverse after
+reaching 172 CTest processes; and more than half of the existing tests cannot
+fail, because they contain no assertion, no <code>error stop</code>, no <code>THROW_HARD</code> and
+no <code>tests_failed</code> check (section 4.4). The tiering therefore comes first, the
+fast tier has an admission rule, and quality and performance of the fast-tier
+tests is a workstream of its own.</p>
+<h3 id="11-workstreams">1.1 Workstreams</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Workstream</th>
+<th>Depends on</th>
+<th>Value on its own</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>Fast gate scaffolding: <code>ctest</code> in the compile scripts, labels, working directories, thread pinning, timeouts, the budget check, the review dossier script, registration of the tests that already qualify</td>
+<td>nothing</td>
+<td>yes: a build-time gate over today's assertion-bearing tests</td>
+</tr>
+<tr>
+<td>B</td>
+<td>Review and unification: per-area review verdicts (section 9), then standalone programs into grouped modules and fused suites behind <code>simple_test_exec</code>; overlaps merged, dead tests deleted; the glob removed</td>
+<td>A for the registration shape and the dossiers</td>
+<td>yes, per area</td>
+</tr>
+<tr>
+<td>C</td>
+<td>Fast-tier performance and hermeticity: split <code>units</code> into area suites, reconcile its two routes, time each sub-suite, fit the 30 s budget, confine or move the sub-suites that use sockets, HTTP or child processes</td>
+<td>Phase 0 timing of <code>units</code></td>
+<td>yes: the gate gets faster and more local with each step</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Extensive tier: the library suites assembled from the review's survivors, simulation-truth gates on the simulated workflows, the overnight runner, result archiving</td>
+<td>B for each area</td>
+<td>yes, per library suite and per gated workflow</td>
+</tr>
+</tbody>
+</table>
+<p>Phase 0 and A come first. B, C and D proceed by test area and can
+interleave.</p>
+<h2 id="2-what-simple-takes-from-x-and-what-it-does-not">2. What SIMPLE takes from X, and what it does not</h2>
+<p>X's <code>xlms_test</code> is, by its own comment, &quot;SIMPLE's simple_test_exec pattern&quot;:
+every unit test a commander, dispatched by name. On top of that X added, and
+SIMPLE adopts:</p>
+<ul>
+<li><strong>Fused suites.</strong> The fast checks run as about ten in-process
+bounded-context suites (<code>xlms_test unit_io</code>), each accumulating ordinary
+failures and stopping once at the process boundary. Focused selectors stay
+available for debugging. Only genuine process-death contracts, the binary
+smokes and resource-hungry cases keep their own process.</li>
+<li><strong>A ratcheted process budget.</strong> <code>XLMS_CTEST_BUDGET</code> must equal the
+registered count or configuration fails; the number only goes down (172 to
+22). &quot;Checks are free; processes are budgeted.&quot;</li>
+<li><strong>A time rule.</strong> Any entry above 0.5 s in Release says why in its
+registration comment; the regression label stays under 15 s; the everyday
+loop is <code>ctest</code>, run by <code>compile_debug.sh</code> and <code>recompile.sh</code> right after
+the build.</li>
+<li><strong>Hermetic tests.</strong> No outcome depends on free memory, core count, load,
+wall clock, network or another test's files; every entry owns its working
+directory; ordinary work runs on one OpenMP thread.</li>
+<li><strong>Abort tests only where dying is the claim</strong>, accepted on the dedicated
+hard-error status, never on &quot;any non-zero exit&quot;.</li>
+</ul>
+<p>SIMPLE does not adopt X's <code>validate</code> (a registry of real datasets and arms run
+through the production paths, compared against platform-keyed blessed
+baselines with a report directory and gated blessing). The datasets, the
+curation and the blessing discipline are more than SIMPLE can carry. The
+extensive tier uses simulated data with known truth instead (section 5.2).</p>
+<h2 id="3-preservation-contract">3. Preservation contract</h2>
+<p>The refactor must preserve:</p>
+<ol>
+<li>Every supported test assertion, fixture, argument, deterministic seed,
+expected failure, output artifact and success/failure exit status. A test
+that has no failure path has no behaviour to preserve in this sense: it
+either gains assertions (workstream C) or is reclassified as extensive or
+manual; it is not admitted to the fast gate as it stands.</li>
+<li><code>simple_test_exec test=list</code> as the discoverable catalogue of suites and
+tests.</li>
+<li>The ability to execute one named test independently, in its own process,
+for debugging.</li>
+<li>Process isolation where an existing mother suite deliberately launches
+child cases, where a test's contract is that the process dies, or where a
+platform launcher (<code>cafrun</code>, <code>mpirun</code>) requires a separate process.</li>
+<li>Conditional availability for coarray, MPI, OpenMP offload, OpenACC, CUDA,
+network and external-data tests.</li>
+<li>Existing production-library behaviour. This is a test-architecture change,
+not a numerical, scientific or workflow refactor. Adding an assertion to a
+test is in scope; changing what the code under test does is not.</li>
+<li><code>BUILD_TESTS=OFF</code> excluding <code>simple_test_exec</code> and every test-only source
+from production builds (in place since 2026-09-21).</li>
+</ol>
+<p>The migration must establish one authoritative implementation for each test.
+Temporary wrappers may exist within a migration phase, but duplicate program
+and commander bodies must not remain as the completed state.</p>
+<h2 id="4-current-state-audit">4. Current-state audit</h2>
+<p>Four terms are used with fixed meanings throughout:</p>
+<ul>
+<li><strong>Canonical test identity</strong>: one <code>test=&lt;name&gt;</code> value. There are 150. An
+identity may be implemented on one or both routes.</li>
+<li><strong>Route implementation</strong>: one implementation of an identity, either a
+standalone <code>program simple_test_&lt;name&gt;</code> under <code>production/tests</code> or a
+commander procedure reached by <code>simple_test_exec test=&lt;name&gt;</code>. There are
+203 (107 standalone, 96 commander); 53 identities have both.</li>
+<li><strong>Unit sub-suite</strong>: one <code>begin_test_suite</code> / <code>end_test_suite</code> group inside
+<code>units</code> (39 in the union of its two routes). Sub-suites are not identities
+and are not registered individually.</li>
+<li><strong>Registered CTest process</strong>: one <code>add_test</code> entry. This is what the
+process budget counts; it is neither an identity nor a sub-suite.</li>
+</ul>
+<p>All headline counts below are regenerated by <code>scripts/test_review_dossier.py</code>
+from the inventory and are per identity unless stated per route.</p>
+<p>At the 2026-09-22 baseline, static source inspection finds:</p>
+<table>
+<thead>
+<tr>
+<th>Test representation</th>
+<th style="text-align:right">Count</th>
+<th>Current ownership</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Standalone route implementations (<code>production/tests/simple_test_*.f90</code>)</td>
+<td style="text-align:right">107</td>
+<td>Auto-globbed into separate executables and CTest entries by <code>production/CMakeLists.txt</code></td>
+</tr>
+<tr>
+<td>Commander route implementations (<code>simple_test_exec test=</code> dispatch cases)</td>
+<td style="text-align:right">96</td>
+<td>Fourteen topic routers under <code>src/main/exec</code>; 95 <code>exec_test_*</code> procedures plus <code>exec_volume_shape_descriptors</code></td>
+</tr>
+<tr>
+<td>Canonical test identities</td>
+<td style="text-align:right">150</td>
+<td>107 + 96 − 53 on both routes</td>
+</tr>
+<tr>
+<td>Identities with two route implementations</td>
+<td style="text-align:right">53</td>
+<td>Two independently maintained implementations or wrappers</td>
+</tr>
+<tr>
+<td>Reusable <code>*_tester.f90</code> modules</td>
+<td style="text-align:right">24</td>
+<td>Scattered alongside the production domains they test</td>
+</tr>
+</tbody>
+</table>
+<p>The existing <code>simple_test_exec</code> route is:</p>
+<pre class="hljs"><code><div>production/simple_test_exec.f90
+  -&gt; test UI registry
+  -&gt; topic execution router
+  -&gt; test commander type
+  -&gt; test body or reusable tester procedure
+</div></code></pre>
+<p>The standalone route is:</p>
+<pre class="hljs"><code><div>production/tests/simple_test_&lt;name&gt;.f90
+  -&gt; program body
+  -&gt; optional suite-specific helper modules or *_tester modules
+</div></code></pre>
+<p>The standalone programs are discovered with a filename glob. Each is compiled,
+linked, installed and registered separately with CTest, with no <code>TIMEOUT</code>, no
+<code>WORKING_DIRECTORY</code>, no labels and no thread pinning. CI runs 30 of them by
+name plus two <code>simple_test_exec test=...</code> calls, all sequentially.</p>
+<h3 id="41-duplication-and-drift">4.1 Duplication and drift</h3>
+<p>Exact-name overlap does not guarantee equivalent behaviour. The standalone
+<code>simple_test_units</code> and the <code>test=units</code> implementation in
+<code>simple_commanders_test_class</code> maintain separate import lists and suite
+schedules and have already diverged: the standalone program includes suites
+the commander version does not, while the commander version has its own
+additions and terminal message. Several other pairs contain copied program
+bodies. A correction made in only one path leaves the other stale.</p>
+<h3 id="42-registration-overhead">4.2 Registration overhead</h3>
+<p>The 96 <code>simple_test_exec</code> cases are represented in three parallel layers: UI
+program construction under <code>src/main/ui/simple_test</code>, commander types and
+implementations under <code>src/main/commanders/test</code>, and topic-specific
+<code>select case</code> routing under <code>src/main/exec</code>. The UI and execution registration
+remain useful because tests accept typed SIMPLE arguments and are discoverable
+through <code>test=list</code>. The problematic part is treating each small test as its
+own commander object when a coherent area commander could call a test-module
+procedure directly.</p>
+<h3 id="43-tests-are-not-all-the-same-kind">4.3 Tests are not all the same kind</h3>
+<p>The current sources include small deterministic unit tests; numerical and
+file-format regressions; multi-stage workflow tests; mother suites that launch
+isolated child cases; performance and I/O benchmarks; coarray, MPI,
+accelerator, SIMD and OpenMP platform tests; socket client/server roles; tests
+requiring an external reference volume (11 sources read <code>vol1=</code>, <code>stk=</code> or
+<code>projfile=</code>); and tests that download data or need other external services.
+Uniform entry does not mean forcing these into one process or pretending they
+have identical requirements. The tiers in section 5 make the requirements
+explicit.</p>
+<h3 id="44-failure-paths">4.4 Failure paths</h3>
+<p>Only 36 sources use <code>simple_test_utils</code> (<code>assert_*</code>, <code>begin_test_suite</code>,
+<code>report_summary</code>), and only 20 turn <code>tests_failed</code> into a non-zero exit. The
+rest fail by <code>error stop</code> (31 standalone programs) or <code>THROW_HARD</code> (which ends
+in <code>error stop 1</code>), or not at all. Per route, 61 of the 107 standalone
+programs and 57 of the 96 commander procedures contain no assertion, no
+<code>error stop</code>, no <code>THROW_HARD</code> and no <code>tests_failed</code> check; per identity, 84
+of the 150 have no failure path on any route. They print, and they pass
+whenever they do not crash. Examples: <code>angres</code>, <code>corrs2weights</code>, <code>eigh</code>, <code>ft_expanded</code>,
+<code>gencorrs_fft</code>, <code>io</code>, <code>io_parallel</code>, <code>lbfgsb</code>, <code>mask</code>, <code>neigh</code>, <code>otsu</code>,
+<code>pca_all</code>, <code>serialize</code>, <code>sym</code>, <code>uniform_euler</code>, <code>uniform_rot</code>. A build-time
+gate made of these would be green without meaning anything. Workstream C
+exists for them.</p>
+<p><code>simple_end</code> is not a terminator: it prints a banner and optionally touches a
+file, then returns. The terminators that matter for a fused suite are
+<code>error stop</code>, <code>THROW_HARD</code> and the bare <code>stop</code> on the <code>test=list</code> path of
+<code>simple_test_exec</code>.</p>
+<h3 id="45-timing">4.5 Timing</h3>
+<p>Unknown. No per-test run time has been recorded. Phase 0 records it.</p>
+<h3 id="46-units-the-fast-gate-in-embryo">4.6 <code>units</code>, the fast gate in embryo</h3>
+<p><code>simple_test_units</code> (and its commander twin, <code>test=units</code> in
+<code>simple_commanders_test_class</code>) already has the shape the fast gate needs:
+one process, <code>seed_rnd</code>, its own working directory, and its sub-suites (38
+on the standalone route, 36 on the commander route, 39 in the union) each
+run inside <code>begin_test_suite</code> / <code>end_test_suite</code> over the <code>*_tester</code> modules
+(<code>string</code>, <code>syslib</code>, <code>fileio</code>, the hashes, <code>linked list</code>, <code>cmdline</code>, <code>ori</code>,
+<code>oris</code>, <code>rec_list</code>, <code>starfile</code>, <code>project merge</code>, <code>motion gain</code>, ...) and the
+<code>test_*</code> procedures of core types (<code>image</code>, <code>imghead</code>, <code>ftiter</code>,
+<code>ftexp_shsrch</code>, <code>online_var</code>, <code>bspline_smoother</code>, <code>aff_prop</code>, <code>hclust</code>,
+<code>srchspace_map2D_io</code>), plus <code>validate_ui_json</code>, then <code>report_summary</code> and
+<code>error stop 1</code> if anything failed. The two routes have diverged: the
+standalone runs <code>class compatibility</code>, <code>particle sieve</code> and
+<code>2D search-space map I/O</code>, which the commander does not; the commander runs
+<code>atoms</code>, which the standalone does not. Four sub-suites (<code>IPC TCP socket</code>,
+<code>HTTP POST</code>, <code>forked process</code>, <code>persistent worker server</code>) use sockets or
+child processes and need checking against the hermeticity rule. Measured
+2026-09-22 (Debug, one OpenMP thread, reference Mac): 47.0 s for the
+standalone (38 sub-suites, all passing) and 71.0 s through <code>simple_test_exec</code>
+(36 sub-suites, all passing), so the commander route costs about 24 s more
+for two suites fewer, either in <code>atoms</code> or in the front door; per-sub-suite
+times are the first thing Phase 2 needs and <code>simple_test_utils</code> now prints
+them. It is one CTest entry today (<code>units</code>, called by CI as
+<code>simple_test_units</code>), so a failure anywhere fails the whole thing and
+<code>ctest --parallel</code> cannot spread it.</p>
+<h2 id="5-tiers-and-admission-rules">5. Tiers and admission rules</h2>
+<p>Every test identity in the inventory (section 8) gets exactly one tier. The
+tier decides how the test is registered, where it runs and what it may cost.</p>
+<h3 id="51-fast-tier-fast-label-part-of-the-build">5.1 Fast tier (<code>fast</code> label, part of the build)</h3>
+<p>Admission rules, all of them:</p>
+<ol>
+<li><strong>It can fail.</strong> The test makes at least one assertion through
+<code>simple_test_utils</code> (or an equivalent typed check) whose failure reaches the
+process exit status. &quot;Completed without crashing&quot; is admitted only for a
+closed set of binary smokes registered with a <code>PASS_REGULAR_EXPRESSION</code>
+(X has four; SIMPLE should need no more than a handful: one <code>simple_exec</code>
+program with a pass pattern, one <code>simple_private_exec</code>, one
+<code>single_exec</code>, one <code>simple_stream</code> invocation that starts and stops).</li>
+<li><strong>It is hermetic.</strong> No network, no download, no user-supplied file, no
+dependence on core count, load, wall clock or another test's files.
+Fixtures are generated in the test from a fixed seed, or committed to the
+repository and small.</li>
+<li><strong>It runs in-process</strong> inside its area suite (section 6) on one OpenMP
+thread, and returns on success. It does not <code>stop</code>, does not change the
+working directory without restoring it, and does not leave global state
+(random-number generator, module variables, open units) that the next test
+in the suite can see.</li>
+<li><strong>It is cheap.</strong> A suite above 0.5 s in Release says why in its
+registration comment. The whole <code>fast</code> label finishes in 30 s wall on the
+reference Mac with <code>ctest --parallel</code>. The 30 s is a ratchet: it does not
+go up, and additions that would exceed it are paid for by shrinking
+fixtures or moving something out.</li>
+<li><strong>It has a <code>TIMEOUT</code></strong> (default 60 s) and its own <code>WORKING_DIRECTORY</code> under
+<code>build/test_runs/&lt;suite&gt;</code>.</li>
+</ol>
+<p>Members: the sub-suites of <code>units</code> (section 4.6), regrouped into area suites
+along these lines, to be settled by the Phase 0 timing of each sub-suite:</p>
+<table>
+<thead>
+<tr>
+<th>suite</th>
+<th>sub-suites of <code>units</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>unit_core</code></td>
+<td>string, syslib, fileio, character hash, hash, value-reference hash, linked list, record list, command line</td>
+</tr>
+<tr>
+<td><code>unit_ori</code></td>
+<td>orientation, orientation collection, orientation data, Euler shift</td>
+</tr>
+<tr>
+<td><code>unit_image</code></td>
+<td>image, image header, Fourier iterator, Fourier shift search, B-spline smoother 2D and 3D</td>
+</tr>
+<tr>
+<td><code>unit_numerics</code></td>
+<td>online variance, multinomial random draw, straight-line fit, affinity propagation, hierarchical clustering</td>
+</tr>
+<tr>
+<td><code>unit_project</code></td>
+<td>STAR file, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms</td>
+</tr>
+<tr>
+<td><code>unit_ui</code></td>
+<td>UI JSON, GUI metadata, GUI assembler</td>
+</tr>
+<tr>
+<td><code>unit_ipc</code></td>
+<td>IPC TCP socket, HTTP POST, forked process, persistent worker server, persistent worker message — only if they prove hermetic and bounded; otherwise <code>platform</code></td>
+</tr>
+</tbody>
+</table>
+<p>No other test identity in the tree is a fast-tier candidate by default. The
+remaining 149 identities are reviewed for the extensive tier, manual use or
+deletion (section 9); one of them joins the fast gate only through a <code>keep</code>
+or <code>modify</code> verdict that states which admission rules it meets and what it
+measured in Phase 0.</p>
+<h3 id="52-extensive-tier-library-and-workflow-labels-overnight">5.2 Extensive tier (<code>library</code> and <code>workflow</code> labels, overnight)</h3>
+<p>The extensive tier runs nightly on the dedicated machine as
+<code>ctest -L &quot;library|workflow&quot;</code>. It has two kinds of entries.</p>
+<h4 id="521-library-suites-library-label">5.2.1 Library suites (<code>library</code> label)</h4>
+<p>A library suite is the tests of one coherent part of the library, run in one
+process through <code>simple_test_exec test=lib_&lt;area&gt;</code>, one CTest entry per
+suite. It is the extensive-tier counterpart of the fast area suites: the same
+fused shape (each member inside <code>begin_test_suite</code> / <code>end_test_suite</code>,
+<code>report_summary</code> at the end, non-zero exit on any failure, a focused selector
+for one member), without the 30 s budget. Members are the standalone tests
+the review keeps (<code>demote to lib_&lt;area&gt;</code>), so a numerical test that takes a
+minute on a realistic box has a home and runs every night instead of never.</p>
+<p>Admission rules for a library suite member:</p>
+<ol>
+<li>it can fail: at least one assertion whose failure reaches the process
+exit status (a <code>demote</code> of a print-only test carries the assertion it
+must gain, section 9.4);</li>
+<li>it runs unattended: no user-supplied file, no download, fixtures generated
+from a seed or committed; a member may take minutes and use full-sized
+boxes, but it must finish;</li>
+<li>it is deterministic across runs on one machine (declared seed) and
+restores the working directory and any module state it changes, since it
+shares a process with its suite;</li>
+<li>it is registered with a <code>TIMEOUT</code> and the suite's total is recorded in the
+nightly summary, so growth is visible.</li>
+</ol>
+<p>Provisional suites, from the router areas and the standalone programs (to
+be settled by the review):</p>
+<table>
+<thead>
+<tr>
+<th>suite</th>
+<th>drawn from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lib_fft</code></td>
+<td>the <code>fft</code> area: FFT, Fourier-space operations, gencorrs, polar FTCC, rotations, expanded FT</td>
+</tr>
+<tr>
+<td><code>lib_geometry</code></td>
+<td><code>geometry</code>: symmetry, Euler sampling, uniform rotations, angular resolution</td>
+</tr>
+<tr>
+<td><code>lib_masks</code></td>
+<td><code>masks</code>: masking, envelopes, mask bounds, graphene, Otsu</td>
+</tr>
+<tr>
+<td><code>lib_numerics</code></td>
+<td><code>numerics</code>: linear algebra, eigensolvers, PCA, KPCA, clustering, random draws</td>
+</tr>
+<tr>
+<td><code>lib_optimize</code></td>
+<td><code>optimize</code>: L-BFGS-B, low-pass optimisation, shift search, LP limits</td>
+</tr>
+<tr>
+<td><code>lib_stats</code></td>
+<td><code>stats</code>: correlations, weighting, rank statistics, sigma estimation</td>
+</tr>
+<tr>
+<td><code>lib_io</code></td>
+<td><code>io</code>: image and stack I/O, MRC validation, STAR import/export, parallel I/O</td>
+</tr>
+<tr>
+<td><code>lib_project</code></td>
+<td><code>class</code> and <code>utils</code>: project files, orientation documents, binoris, serialization</td>
+</tr>
+<tr>
+<td><code>lib_search</code></td>
+<td>the search-strategy and continuous-refinement suites (<code>continuous_inplane_*</code>, <code>pose_cont_refinement</code>, <code>continuous_3D_pcg_*</code>) once they run on generated data</td>
+</tr>
+<tr>
+<td><code>lib_parallel</code></td>
+<td><code>parallel</code>: OpenMP correctness with an explicit small team</td>
+</tr>
+</tbody>
+</table>
+<p>Registration: one entry per suite, <code>LABELS library</code>, its own working
+directory, <code>OMP_NUM_THREADS</code> set explicitly (a suite may use a team, since
+the library suites run before the serial workflow gates and can be scheduled
+against each other), a <code>TIMEOUT</code> sized to the suite. A library suite is not
+a workflow: it does not start <code>simple_exec</code> or distributed workers; a test
+that needs them is a workflow gate.</p>
+<h4 id="522-workflow-gates-workflow-label">5.2.2 Workflow gates (<code>workflow</code> label)</h4>
+<p>The workflow gates are the simulated workflows, gated on the truth they were
+simulated from. Today <code>simulated_workflow</code>, <code>single_workflow</code>, <code>mini_stream</code>
+and the stream suite check that the pipeline completes: files exist,
+counts match, the heartbeat is well-formed, <code>abinitio2D</code> produced classes.
+They do not compare the result with the model that generated the data. Since
+the data comes from embedded atomic coordinates (6VXX, 1JYX) with known
+orientations, defocus and B-factor, the comparison is available at no data
+cost. Each workflow declares floors such as:</p>
+<ul>
+<li>resolution: FSC=0.143 between the reconstructed map and the ground-truth
+map simulated from the same coordinates, at or better than a declared
+value for that system, box and particle count;</li>
+<li>poses: fraction of particles whose recovered orientation is within a
+declared angular distance of the simulated one, after symmetry and
+hand alignment; shift error likewise;</li>
+<li>workflow structure: particle, class and state counts, heartbeat
+completeness, project-file consistency (the checks that exist today);</li>
+<li>stream: the same, per stage, over the simulated movie set.</li>
+</ul>
+<p>Floors are declared in the test, versioned with it, and loosened only with a
+written justification in the commit. There are no blessed baselines to
+maintain, no platform keys and no report registry; the run archives its
+summary (commit, host, compiler, per-workflow metrics and pass/fail) into a
+directory on the dedicated machine so a regression can be dated.</p>
+<p>Registration: one CTest entry per workflow, <code>LABELS workflow</code>,
+<code>RUN_SERIAL TRUE</code> (each owns the machine's OpenMP team and may start
+distributed workers), a long <code>TIMEOUT</code>, its own working directory. Expected
+members: <code>simulated_workflow</code> (both systems, both pickers),
+<code>single_workflow</code>, <code>mini_stream</code>, the stream suite, <code>subproject_distr</code>,
+<code>ptcls_ppca_subproject_distr</code>, <code>pcg_recon</code>, <code>pcg_frac_update</code>,
+<code>rec3D_backends</code>, <code>reproject</code>, and the nano workflows (<code>atoms_stats</code>,
+<code>detect_atoms</code>, <code>detect_calpha*</code>, <code>simulate_nanoparticle</code>).</p>
+<h4 id="523-the-nightly-run">5.2.3 The nightly run</h4>
+<p><code>ctest -L &quot;library|workflow&quot;</code> after a clean <code>--compile-tests</code> build, started
+by cron or a scheduler on the dedicated machine. The library suites run
+first (in parallel, each pinned), then the workflow gates serially. The
+summary (commit, host, compiler, per-suite and per-workflow times, metrics
+against floors, pass/fail) is archived into a dated directory on that
+machine and mailed or written where the team looks. The whole run must fit
+the night; a suite or workflow that grows past its share is reported by the
+summary, and trimming it is a reviewed change, as for the fast gate.</p>
+<h3 id="53-isolated-and-platform-tests-platform-label">5.3 Isolated and platform tests (<code>platform</code> label)</h3>
+<p>Coarray (<code>cafrun -np 2</code>), MPI, OpenMP offload, OpenACC, CUDA, socket
+client/server pairs and expect-abort tests keep their own process. They are
+registered only when CMake has confirmed the capability and launcher, carry
+the <code>platform</code> label, and are excluded from the fast gate unless a specific
+entry fits the budget on the reference Mac and is hermetic (the coarray test
+currently runs in its own CI job and stays there). Socket tests must be
+bounded and self-terminating or be driven by an orchestrating test that
+starts both roles and checks both exit statuses. Expect-abort tests are
+accepted on the SIMPLE hard-error status (<code>error stop 1</code> from
+<code>simple_exception</code>), never on &quot;any non-zero exit&quot;, and exist only where dying
+is the contract.</p>
+<h3 id="54-not-registered">5.4 Not registered</h3>
+<p>Benchmarks (<code>io_parallel</code>, <code>simd</code>, <code>openmp</code> as timing tools), tests that
+download data, and tests that need a user-supplied volume or stack remain
+runnable by name through <code>simple_test_exec</code> and are documented as manual.
+They are not CTest entries.</p>
+<h2 id="6-target-architecture">6. Target architecture</h2>
+<pre class="hljs"><code><div>simple_test_exec
+  -&gt; test UI metadata and argument parsing
+  -&gt; topic execution router
+  -&gt; area test commander (suite: runs every test of its area in-process,
+     accumulates failures, stops once at the process boundary;
+     focused selector: runs one named test)
+  -&gt; grouped callable test module
+       |-- focused test procedures
+       |-- suite-owned fixtures, built once per process and handed over
+       `-- reusable domain tester modules
+  -&gt; production SIMPLE APIs
+</div></code></pre>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Owns</th>
+<th>Does not own</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>simple_test_exec</code></td>
+<td>Process front door, command parsing, timing, logging, memory monitoring, final process status</td>
+<td>Individual test algorithms</td>
+</tr>
+<tr>
+<td>Test UI</td>
+<td>Suite and test names, arguments, help, required inputs, defaults</td>
+<td>Test execution</td>
+</tr>
+<tr>
+<td>Topic router</td>
+<td>Routing a registered suite or test to one area commander</td>
+<td>Test bodies</td>
+</tr>
+<tr>
+<td>Area test commander</td>
+<td>Running its area's tests in one process, shared fixtures and setup, failure accumulation, workflow orchestration in the extensive tier</td>
+<td>Low-level assertions or copied test algorithms</td>
+</tr>
+<tr>
+<td>Grouped test module</td>
+<td>Callable test bodies and closely related suite helpers</td>
+<td>CLI front-door behaviour or production orchestration policy</td>
+</tr>
+<tr>
+<td>Existing <code>*_tester</code> or domain test APIs</td>
+<td>Reusable focused checks close to the type or subsystem under test</td>
+<td>Executable lifecycle</td>
+</tr>
+<tr>
+<td>CMake/CTest</td>
+<td>Build gating, launcher selection, labels, timeouts, working directories, thread pinning, the budgets</td>
+<td>A second implementation of test behaviour</td>
+</tr>
+</tbody>
+</table>
+<h3 id="61-grouped-callable-modules">6.1 Grouped callable modules</h3>
+<p>Related tests are grouped into modules named for their domain. A provisional
+grouping, to be settled by the Phase 0 inventory:</p>
+<pre class="hljs"><code><div>simple_test_cases_core
+simple_test_cases_fft
+simple_test_cases_geometry
+simple_test_cases_io
+simple_test_cases_masks
+simple_test_cases_numerics
+simple_test_cases_optimization
+simple_test_cases_parallel
+simple_test_cases_project
+simple_test_cases_reconstruction
+simple_test_cases_stream
+simple_test_cases_workflows
+simple_test_cases_utils
+</div></code></pre>
+<p>Large numerical suites that already have a mother module and several focused
+helper modules keep that cohesion rather than being pasted into a monolithic
+topic file. A grouped module is private by default and exports only its
+callable entries:</p>
+<pre class="hljs"><code><div><span class="hljs-keyword">module</span> simple_test_cases_io
+<span class="hljs-keyword">use</span> simple_cmdline, <span class="hljs-keyword">only</span>: cmdline
+<span class="hljs-keyword">implicit</span> <span class="hljs-keyword">none</span>
+<span class="hljs-keyword">private</span>
+
+<span class="hljs-keyword">public</span> :: test_imgfile
+<span class="hljs-keyword">public</span> :: test_mrc_validate
+<span class="hljs-keyword">public</span> :: test_stack_io
+
+<span class="hljs-keyword">contains</span>
+
+<span class="hljs-function"><span class="hljs-keyword">subroutine</span></span> test_stack_io(cline)
+    <span class="hljs-keyword">class</span>(cmdline), <span class="hljs-keyword">intent</span>(inout) :: cline
+    <span class="hljs-comment">! Migrated standalone test behaviour, returning on success.</span>
+<span class="hljs-keyword">end</span> <span class="hljs-function"><span class="hljs-keyword">subroutine</span></span> test_stack_io
+
+<span class="hljs-keyword">end</span> <span class="hljs-keyword">module</span> simple_test_cases_io
+</div></code></pre>
+<p>A common dummy argument is not imposed where it adds nothing: a test with no
+inputs stays a no-argument procedure; tests that need CLI values take
+<code>cmdline</code> at the pre-parse boundary or, preferably, typed <code>parameters</code> after
+their area commander has initialised them; tests that exercise one production
+object may receive it directly.</p>
+<h3 id="62-area-test-commanders-and-suites">6.2 Area test commanders and suites</h3>
+<p>One commander per coherent test area, not one per test:</p>
+<pre class="hljs"><code><div><span class="hljs-keyword">type</span>, <span class="hljs-keyword">extends</span>(commander_base) :: commander_test_io
+<span class="hljs-keyword">contains</span>
+    <span class="hljs-keyword">procedure</span> :: execute =&gt; exec_test_io
+<span class="hljs-keyword">end</span> <span class="hljs-keyword">type</span> commander_test_io
+</div></code></pre>
+<p><code>test=unit_core</code> runs its sub-suites in one process: it builds any shared
+fixture once, calls each callable procedure inside a <code>begin_test_suite</code> /
+<code>end_test_suite</code> pair, and after the last one calls <code>report_summary</code> and exits
+non-zero if anything failed, exactly as <code>units</code> does today for all of them
+at once. The area suites registered with CTest are the authoritative gate.
+<code>test=units</code> remains as a developer convenience that runs every fast suite in
+sequence in one process; it is not authoritative, and a failure it shows that
+the CTest gate does not is a state leak between suites, to be fixed in the
+suite that leaks. A focused selector runs one sub-suite for debugging:
+<code>test=unit_core suite=hash</code>, where <code>suite</code> is an optional string input
+registered once on each area program in the test UI (its choices are that
+area's sub-suite names) and read from <code>cline</code> in the area commander, in the
+way <code>simulated_workflow</code> reads <code>system</code>; no <code>parameters</code> field is needed.
+The area commander is what CTest registers; the focused names are what a
+developer types.</p>
+<p>For the extensive tier the area commanders are the library-suite commanders
+(<code>test=lib_fft</code>, ..., section 5.2.1), one per suite and the same fused shape
+as the fast ones, and the workflow commanders that exist
+(<code>simulated_workflow</code>, <code>single_workflow</code>, <code>mini_stream</code>, the stream suite),
+one CTest entry each.</p>
+<p>Per-test commander types are removed as their bodies migrate. The fourteen
+topic areas are a starting point; the inventory may split, merge or rename
+them by real test ownership.</p>
+<h3 id="63-test-procedure-lifecycle">6.3 Test procedure lifecycle</h3>
+<p>Callable test procedures must:</p>
+<ol>
+<li>return normally on success;</li>
+<li>report checks through <code>simple_test_utils</code> (or an equivalent that reaches
+<code>tests_failed</code>);</li>
+<li>signal failure through the accumulating path, reserving <code>THROW_HARD</code> for
+conditions that make continuing the suite meaningless (a missing fixture);</li>
+<li>leave process-wide timing, Git-version output, log closure and memory
+monitoring to <code>simple_test_exec</code>;</li>
+<li>not parse raw process arguments;</li>
+<li>not call <code>stop</code> or any success-path terminator;</li>
+<li>restore the working directory and release resources they own, including
+on early-failure paths, and reset any module-level state they changed;</li>
+<li>read the fixture handed to them by the suite rather than rebuilding it, and
+build their own only when run alone.</li>
+</ol>
+<p>Contained procedures of a standalone program move into the owning grouped
+module or an existing suite-specific helper module, never into a commander.</p>
+<h3 id="64-process-isolation">6.4 Process isolation</h3>
+<p>Ordinary fast-tier tests share a process by design (section 5.1). Isolation
+is kept for the cases in section 5.3 and for mother suites that already
+launch child cases; those launch the same executable with another selector:</p>
+<pre class="hljs"><code><div>simple_test_exec test=pose_cont_refinement case=&lt;case-name&gt;
+</div></code></pre>
+<p>An eventual <code>test=all</code> convenience runs the suites in-process one after
+another and delegates only the isolated cases to subprocesses.</p>
+<h3 id="65-specialized-launchers">6.5 Specialized launchers</h3>
+<pre class="hljs"><code><div>cafrun -np 2 simple_test_exec test=coarrays
+mpirun -np N simple_test_exec test=&lt;mpi-case&gt;
+simple_test_exec test=&lt;gpu-case&gt;
+</div></code></pre>
+<p>CMake and CI select the launcher and register the test only when the required
+capability is available.</p>
+<h2 id="7-build-and-ctest-design">7. Build and CTest design</h2>
+<ol>
+<li>
+<p><strong>Gating.</strong> <code>BUILD_TESTS</code> (SIMPLE's option, default ON in CMake, OFF in
+every <code>compile_*.sh</code> without <code>--compile-tests</code>) gates <code>simple_test_exec</code>,
+the test-only library sources and every CTest registration. Nothing test-
+related is built otherwise.</p>
+</li>
+<li>
+<p><strong>The fast gate runs from the compile scripts.</strong> With <code>--compile-tests</code>,
+each <code>compile_*.sh</code> runs, after <code>make install</code>:</p>
+<pre class="hljs"><code><div>ctest --test-dir build -L fast --output-on-failure --parallel <span class="hljs-string">&quot;<span class="hljs-variable">$NJOBS</span>&quot;</span> --<span class="hljs-built_in">timeout</span> 120 \
+    2&gt;&amp;1 | <span class="hljs-built_in">tee</span> build/test_runs/ctest_fast.log
+scripts/ctest_budget.py build/test_runs/ctest_fast.log --budget 30
+</div></code></pre>
+<p>Until Phase 2 declares the fast gate, the label expression is
+<code>&quot;fast|provisional&quot;</code> and <code>ctest_budget.py</code> runs with <code>--no-budget</code>, so the
+provisional <code>units</code> entry runs and is timed on every build without a
+budget it cannot yet meet.</p>
+<p><code>NJOBS</code> is the core count divided by two (tests are pinned to one thread
+but do I/O). <code>ctest_budget.py</code> reads the <code>ctest</code> output, prints every
+entry sorted by time, fails if the run's real time exceeded 30 s, if any
+entry failed, or if any entry took more than 0.5 s without being listed
+in <code>scripts/test_time_justified.txt</code> (the file that mirrors the
+justification comments in <code>production/CMakeLists.txt</code>), and writes the
+table beside the log so the numbers are kept. The <code>check</code> target runs
+the same thing by hand.</p>
+</li>
+<li>
+<p><strong>Registration by suite.</strong> One <code>add_test</code> per fast area suite
+(<code>simple_test_exec test=unit_core</code>), per library suite
+(<code>test=lib_fft</code>), per workflow gate, per platform case and per binary
+smoke. Every registration sets <code>LABELS</code> (<code>fast</code>, <code>library</code>, <code>workflow</code>,
+<code>platform</code>), <code>TIMEOUT</code>, <code>WORKING_DIRECTORY</code> under <code>build/test_runs/&lt;name&gt;</code>
+(created at configure time) and an explicit <code>OMP_NUM_THREADS</code> (1 for the
+fast tier). Workflow entries set <code>RUN_SERIAL TRUE</code>.</p>
+</li>
+<li>
+<p><strong>Process budget ratchet.</strong> <code>SIMPLE_CTEST_BUDGET</code> in
+<code>production/CMakeLists.txt</code> must equal the registered count or
+configuration fails, as in X. It is armed at the end of Phase 2, once the
+area suites exist, at the count registered then; before that the count is
+allowed to change (Phase 1 registers one <code>units</code> process, Phase 2 replaces
+it with about seven). From then on it only goes down; raising it is an
+owner decision recorded here.</p>
+</li>
+<li>
+<p><strong>No more standalone executables.</strong> The <code>simple_test_*.f90</code> glob, its
+per-program <code>add_executable</code>, <code>install</code> and <code>add_test</code> are removed at the
+end of workstream B (Phase 7). Until then the glob keeps building the
+programs that have not migrated, but none of them is registered with
+CTest once Phase 1 lands (they are runnable by name and through
+<code>test_timing_run.sh</code>); CI keeps calling the not-yet-migrated ones by
+name until Phase 7 switches it to labels.</p>
+</li>
+<li>
+<p><strong>Registry consistency.</strong> A configure-time or <code>check</code>-time script compares
+the CTest registrations with <code>simple_test_exec test=list</code> and fails on a
+registered selector that is not dispatchable, or on a selector the test UI
+marks as registrable (area suites, library suites, workflow gates,
+platform cases) that is not registered. Manual tools, focused sub-suite
+selectors and platform cases whose capability is absent on this machine
+are dispatchable without being registered, by design. A generated common
+registry is a possible later improvement, not a prerequisite.</p>
+</li>
+<li>
+<p><strong>Install.</strong> A <code>--compile-tests</code> install contains <code>simple_test_exec</code> and
+no standalone test binaries.</p>
+</li>
+</ol>
+<p>NICE's Python tests remain under their Python runner. Python validators, shell
+compatibility checks and external oracle packages are not converted into
+Fortran modules. The uniformity goal applies to SIMPLE's Fortran tests.</p>
+<h2 id="8-test-inventory">8. Test inventory</h2>
+<p>Before moving code, create the migration inventory with one row per current
+test identity (both routes), with at least:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Canonical test ID</td>
+<td>Final <code>test=&lt;name&gt;</code> value</td>
+</tr>
+<tr>
+<td>Current sources</td>
+<td>Standalone program, commander procedure, tester module, helpers</td>
+</tr>
+<tr>
+<td>Authoritative behaviour</td>
+<td>Which implementation or merged behaviour is retained</td>
+</tr>
+<tr>
+<td><strong>Tier</strong></td>
+<td>fast, extensive, platform, or not registered (section 5)</td>
+</tr>
+<tr>
+<td><strong>Wall time / run state</strong></td>
+<td>From Phase 0, Debug and Release, single-threaded: <code>measured &lt;s&gt;</code> (passed or failed on its own), <code>timed out</code>, <code>crashed</code>, <code>missing fixture</code> (refused for lack of arguments or data), <code>unsupported capability</code> (coarray, MPI, GPU or a launcher this machine lacks), <code>manual</code> (persistent server, interactive). A runtime is required only for <code>measured</code> rows; every other state is itself the Phase 0 result for that row</td>
+</tr>
+<tr>
+<td><strong>Failure path</strong></td>
+<td>assertion / error stop / THROW_HARD / none</td>
+</tr>
+<tr>
+<td><strong>Performance action</strong></td>
+<td>none, shrink fixture, share fixture, drop I/O, split, move tier</td>
+</tr>
+<tr>
+<td>Target grouped module and area commander</td>
+<td>Owners after migration</td>
+</tr>
+<tr>
+<td>Arguments</td>
+<td>Existing CLI keys, defaults, parsing path</td>
+</tr>
+<tr>
+<td>Launcher/capability</td>
+<td>Serial, child process, coarray, MPI, GPU, network</td>
+</tr>
+<tr>
+<td>Fixtures</td>
+<td>Generated, committed, downloaded, user-supplied</td>
+</tr>
+<tr>
+<td>Working files</td>
+<td>Products, cleanup, retained evidence</td>
+</tr>
+<tr>
+<td>Baseline result</td>
+<td>Exit status, success marker, assertions, tolerances</td>
+</tr>
+<tr>
+<td><strong>Verdict</strong></td>
+<td>keep, modify, merge into, demote, delete, retire, investigate (section 9.4), with reviewer and date</td>
+</tr>
+<tr>
+<td><strong>Verdict note</strong></td>
+<td>The required note for the verdict</td>
+</tr>
+<tr>
+<td>Migration status</td>
+<td>Unreviewed, baselined, callable, routed, old executable removed, validated</td>
+</tr>
+</tbody>
+</table>
+<p>The inventory is also the review record (section 9): every row carries a
+verdict before its test is touched, and a <strong>retired tests</strong> table at the end
+of the inventory lists every identity removed, with date, reason and
+replacement.</p>
+<p>The inventory lives at <code>doc/refactoring_notes/test_inventory.md</code>, one table
+per area, generated by <code>scripts/test_review_dossier.py</code>; the verdict and note
+columns are the only ones edited by hand and survive regeneration. It is
+updated in the same commit as the verdicts it records, and
+<code>scripts/test_review_dossier.py --coverage-after doc/refactoring_notes/test_inventory.md</code>
+is the coverage accounting of section 9.5.</p>
+<h2 id="9-test-review">9. Test review</h2>
+<p>Unification and tiering move tests; they do not decide whether a test
+deserves to exist. That decision is a review, and it is where most of the
+overlap and dead weight will be found. The review is part of the plan, not a
+side activity: no test is migrated (workstream B), given assertions
+(workstream C) or gated (workstream D) before it has a recorded verdict.</p>
+<h3 id="91-what-the-review-faces">9.1 What the review faces</h3>
+<p>Static inspection of the 150 identities (203 route implementations) gives
+the starting picture:</p>
+<ul>
+<li>
+<p><strong>Two route implementations: 53 identities.</strong> Two implementations claiming
+the same test; the routes of <code>units</code> are the known divergent pair.</p>
+</li>
+<li>
+<p><strong>Overlap by what they exercise: 14 clusters covering 30 identities.</strong>
+Comparing the production calls each identity makes (both routes pooled),
+17 pairs share at least half their footprint or one is a subset of the
+other: <code>ori</code>, <code>oris</code>, <code>eigh</code>, <code>maxnloc</code>, <code>starfile</code>, <code>class_sample</code> and
+<code>bounds_from_mask3D</code> against their <code>_test</code> twins; <code>io</code> inside
+<code>io_parallel</code>; <code>lbfgsb</code> and <code>lbfgsb_cosine</code>; <code>pca_all</code> and <code>pca_imgvar</code>;
+<code>cc_connectivity</code> and <code>image_bin</code>; <code>gen_pickrefs</code> and <code>preproc</code>;
+<code>reproject</code> and <code>simulate_particles</code>; and the <code>continuous_inplane_*</code>
+gradient tests with <code>eval_polarftcc</code>.</p>
+</li>
+<li>
+<p><strong>Too thin to compare: 57 identities</strong> make fewer than three production
+calls. These are the print-only smokes and demos of section 4.4, and the
+prime candidates for deletion or merging.</p>
+</li>
+<li>
+<p><strong>No usable age signal.</strong> Every test source was touched in 2026 (the test
+tree was reorganised this year), so &quot;last modified&quot; says nothing about
+whether a test is still meaningful. Staleness has to be judged from what
+the test exercises and whether that code path still exists.</p>
+</li>
+<li>
+<p><strong>The question is not &quot;fast or extensive&quot;.</strong> With the fast gate fixed as
+the <code>units</code> sub-suites, the review of the other 149 identities asks: which
+library suite does this belong to (it has, or can be given, a verifiable
+claim about a production path and runs unattended), is it a workflow gate,
+is it a manual tool worth keeping under its name, or does it go? The
+proposal column in the inventory is pre-filled on that basis.</p>
+</li>
+</ul>
+<p>The footprint comparison is a screen, not a verdict: it finds candidates,
+and a person decides.</p>
+<h3 id="92-unit-reviewer-order">9.2 Unit, reviewer, order</h3>
+<p>The unit of review is the test identity. Review proceeds by area, in the
+order the areas are migrated, so verdicts are fresh when the migration
+happens. The reviewer is the owner of the production subsystem the area
+tests (by authorship today: Ruben for <code>io</code>, <code>parallel</code>, <code>single</code>, <code>stream</code>,
+<code>utils</code> and the workflow tests; Cyril for <code>masks</code>; Hans for the rest), with
+Hans as the arbiter for disagreements and for every deletion. A reviewer may
+review their own tests; a second person reads the batch summary.</p>
+<h3 id="93-the-dossier">9.3 The dossier</h3>
+<p><code>scripts/test_review_dossier.py</code> generates one dossier per test identity
+from the tree and the Phase 0 timing runs (<code>scripts/test_timing_run.sh</code>), so
+the reviewer does not have to assemble it:</p>
+<ul>
+<li>name, route(s), source file(s), line count, author history;</li>
+<li>production modules imported and type-bound procedures called (the
+footprint), and which of those no other test touches (unique coverage);</li>
+<li>failure path (assertion, <code>error stop</code>, <code>THROW_HARD</code>, none) and what the
+test would report if it ran on wrong results;</li>
+<li>fixtures (generated, committed, downloaded, user-supplied), arguments,
+launcher, working files;</li>
+<li>measured wall time, Debug and Release;</li>
+<li>callers: CI, scripts, documentation, other tests;</li>
+<li>overlap candidates: same-name twin, footprint cluster members, subset
+relations;</li>
+<li>a proposed tier (section 5) from the rules, to be confirmed or overruled.</li>
+</ul>
+<p>The dossiers are regenerated for each batch and are inputs, not records; the
+record is the verdict.</p>
+<h3 id="94-verdicts">9.4 Verdicts</h3>
+<p>Each test identity gets exactly one verdict, recorded in the inventory with
+reviewer and date:</p>
+<table>
+<thead>
+<tr>
+<th>Verdict</th>
+<th>Meaning</th>
+<th>Required note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>keep</code></td>
+<td>Migrate as is; tier assigned</td>
+<td>tier</td>
+</tr>
+<tr>
+<td><code>modify</code></td>
+<td>Migrate with a stated change: add an assertion, shrink or share a fixture, split, pin threads, remove a workflow run</td>
+<td>what changes, and why the test is worth it</td>
+</tr>
+<tr>
+<td><code>merge into &lt;id&gt;</code></td>
+<td>Its unique coverage is folded into the named test; this identity is deleted</td>
+<td>which checks move</td>
+</tr>
+<tr>
+<td><code>demote</code></td>
+<td>Not fast-tier material; goes to a named library suite (<code>lib_&lt;area&gt;</code>), the workflow gates, platform or manual</td>
+<td>destination, the assertion it must gain if it has none, and what it would take to promote it</td>
+</tr>
+<tr>
+<td><code>delete</code></td>
+<td>Removed without replacement</td>
+<td>one of the reasons below</td>
+</tr>
+<tr>
+<td><code>retire</code></td>
+<td>Removed because the production path it tests is itself being removed</td>
+<td>the production change</td>
+</tr>
+<tr>
+<td><code>investigate</code></td>
+<td>Parked: the verdict needs more than the dossier gives</td>
+<td>owner, the open question, and the condition or date on which it is revisited; an <code>investigate</code> older than one migration phase is escalated to Hans</td>
+</tr>
+</tbody>
+</table>
+<p>A test is deleted when at least one of these holds and the note says which:
+it duplicates another test's coverage entirely; it exercises code that no
+longer exists or is deprecated for removal; it is a demo or benchmark with no
+verifiable claim and no plausible assertion; it cannot be made hermetic and
+has no extensive-tier value; or it has been broken with no caller for long
+enough that nobody noticed. A test is kept when it has unique coverage of a
+production path that matters, or when it is an isolation or launcher case
+(section 5.3). &quot;It might be useful someday&quot; is not a reason to keep; the
+history has it.</p>
+<p>Deleted and retired identities go into a <strong>retired tests</strong> table in the
+inventory (name, date, reason, replacement if any), so the same test is not
+rewritten by accident and a reader of an old note or CI log can find out what
+became of it.</p>
+<h3 id="95-coverage-accounting">9.5 Coverage accounting</h3>
+<p>Deleting tests must not silently drop coverage. For each batch the dossier
+script reports the union of production modules and type-bound procedures
+exercised by the area's tests before and after the verdicts are applied, and
+lists every production module that loses all test coverage. That list is
+part of the batch summary; each entry is either accepted with a reason
+(&quot;was only exercised by a print-only smoke&quot;) or answered by a <code>modify</code> or
+<code>merge</code>. This is a call-footprint proxy, not line coverage; if it proves too
+coarse, an instrumented (<code>--coverage</code>) build of the extensive tier is the
+stronger tool and can be added later.</p>
+<p>The review also reads in the other direction: a test that only exercises
+dead production code has found dead production code. Whether that code goes
+too is an owner decision, taken separately from the test's verdict and in
+its own commit.</p>
+<h3 id="96-mechanics-and-pace">9.6 Mechanics and pace</h3>
+<p>The review of an area is one commit series: the verdicts (inventory rows
+and the retired table) first, as reviewable text; then one commit per test
+for the action taken (extract, assert, shrink, merge, delete). A verdict
+takes about ten minutes with the dossier in hand; a test that needs longer is
+marked <code>investigate</code> with a note and parked, not allowed to block the batch.
+At that pace an area of fifteen tests is an afternoon, and the whole tree is
+a few weeks of reviewer time spread across the migration.</p>
+<p>Verdicts are revisited only through the same process: a <code>keep</code> that later
+fails the budget goes back through review with its timing, not straight to
+deletion.</p>
+<h2 id="10-fast-tier-performance">10. Fast-tier performance</h2>
+<p>The 30 s budget will not be met by classification alone; the fast candidates
+have to be made cheap. After the Phase 0 timing run, for every fast candidate
+in descending order of wall time:</p>
+<ul>
+<li><strong>Shrink the fixture.</strong> Box size, particle count, iteration count and
+number of orientations are chosen to exercise the code path, not to be
+realistic. A 64-pixel box and a few dozen particles test an FFT, a CTF or a
+correlation as well as a 256-pixel box with thousands.</li>
+<li><strong>Build once, share.</strong> The suite builds one fixture per process and hands
+it to its tests; a test copies the immutable parts and writes only derived
+files. No fixture is cached in the build tree across runs.</li>
+<li><strong>Stay in memory.</strong> Prefer in-memory images and stacks over writing and
+re-reading MRC files unless file I/O is what the test is about.</li>
+<li><strong>No workflow in a unit test.</strong> A test that runs <code>cluster2D</code> or <code>refine3D</code>
+to check a utility is an extensive-tier test wearing a fast label; replace
+it with a direct check of the utility and let the workflow tests cover the
+integration.</li>
+<li><strong>No sleeps, polls or real timers.</strong> Test scheduling and watchdog policies
+as state machines with injected time.</li>
+<li><strong>One thread.</strong> OpenMP teams inside a <code>ctest --parallel</code> run oversubscribe
+the machine and make timings meaningless; parallel correctness is tested by
+the <code>parallel</code> suite with an explicit small team.</li>
+<li><strong>Measure again.</strong> <code>ctest_budget.py</code> keeps the table; a test that grows
+past 0.5 s without a justification fails the gate.</li>
+</ul>
+<p>The same pass gives the print-only tests their assertions (section 4.4): the
+person who shrinks a fixture is looking at what the test computes and can
+state what the right answer is.</p>
+<h2 id="11-command-and-naming-contract">11. Command and naming contract</h2>
+<p><code>test=</code> is the canonical selector:</p>
+<pre class="hljs"><code><div>simple_test_exec test=list
+simple_test_exec test=unit_core
+simple_test_exec test=unit_core suite=hash
+simple_test_exec test=lib_fft
+simple_test_exec test=simulated_workflow system=6vxx
+</div></code></pre>
+<p>Suites are named <code>unit_&lt;area&gt;</code> for the fast tier; extensive workflows keep
+their descriptive names. Documentation, CTest, CI and child-suite launchers
+use this form. Historical <code>prg=</code> examples are normalized during migration;
+whether a temporary <code>prg=</code> alias is retained is a compatibility decision, and
+it must not remain the documented interface.</p>
+<p>Test identifiers describe the behaviour under test and do not encode the
+former executable shape. Existing stable IDs are retained unless misleading
+or colliding. Renames require a documented alias or a coordinated update of
+CI, scripts, implementation notes and user instructions.</p>
+<h2 id="12-staged-migration">12. Staged migration</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Phase</th>
+<th>Workstream</th>
+<th>Change</th>
+<th>Exit gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">0</td>
+<td>all</td>
+<td><strong>Timing and failure-path inventory.</strong> Build with <code>--compile-tests</code> in Debug and Release; run <code>scripts/test_timing_run.sh</code> in each (every standalone binary and every <code>simple_test_exec</code> case, each in its own directory under a timeout, single-threaded). Run <code>scripts/test_review_dossier.py --timing ...</code> to generate the dossiers and the inventory (section 8): proposed tier, failure path, run state and time, overlap candidates, fixtures, launchers, callers. Propose the grouped-module and commander map and the area review order.</td>
+<td>Every identity has a dossier, a run state (a measured time where it could run; otherwise timed out, crashed, missing fixture, unsupported capability or manual) and a proposed tier.</td>
+</tr>
+<tr>
+<td style="text-align:right">1</td>
+<td>A</td>
+<td><strong>Scaffolding and a provisional gate.</strong> <code>ctest</code> after install in every <code>compile_*.sh --compile-tests</code>; <code>ctest_budget.py</code>; labels, timeouts, working directories, thread pinning. Register <code>units</code> as it is under the label <code>provisional</code>, not <code>fast</code>: it runs on every <code>--compile-tests</code> build and reports its time, but the budget is not enforced and nothing carries the <code>fast</code> label yet, because <code>units</code> still contains the socket, HTTP and child-process sub-suites that the fast admission rules exclude. Register the simulated workflows under <code>workflow</code> with their current checks. <code>SIMPLE_CTEST_BUDGET</code> is not yet set.</td>
+<td><code>compile_debug.sh --compile-tests</code> builds and runs <code>units</code> green; its per-sub-suite times are known; CI still passes.</td>
+</tr>
+<tr>
+<td style="text-align:right">2</td>
+<td>C</td>
+<td><strong>Split <code>units</code> into hermetic area suites, then declare the fast gate.</strong> Reconcile the two routes into one implementation (the union of their sub-suites), move the sub-suite lists into the grouped modules of section 6.1, and decide the <code>unit_ipc</code> sub-suites against the hermeticity rule (hermetic and bounded: they join <code>unit_ipc</code> under <code>fast</code>; otherwise <code>platform</code>). Register one entry per area suite (section 5.1 table); when every registered suite meets the admission rules, relabel them <code>fast</code>, drop the <code>provisional</code> entry, set <code>SIMPLE_CTEST_BUDGET</code> to the registered count, and turn on the 30 s check in <code>ctest_budget.py</code>. Shrink what is over budget. Remove the standalone <code>simple_test_units</code> and its CI call.</td>
+<td>Every area suite runs in one process and meets the admission rules; the <code>fast</code> label is under 30 s with <code>ctest --parallel</code>; the budget ratchet is armed; a failure names its suite.</td>
+</tr>
+<tr>
+<td style="text-align:right">3</td>
+<td>B</td>
+<td><strong>Review everything else.</strong> The other 149 identities, area by area (section 9): <code>demote</code> to a named library suite or the workflow gates, <code>keep</code> as manual, <code>merge</code>, <code>delete</code> or <code>retire</code>; the 53 two-route identities and 14 footprint clusters resolved to one implementation each; deletions applied with their retired-tests rows and coverage accounting.</td>
+<td>Every identity has a verdict naming its destination; no pair or cluster retains two implementations of the same coverage.</td>
+</tr>
+<tr>
+<td style="text-align:right">4</td>
+<td>B + D</td>
+<td><strong>Build the library suites.</strong> Area by area: the survivors move into the grouped module, gain the assertions their verdicts require, and are registered as one <code>lib_&lt;area&gt;</code> entry under <code>library</code>; standalone binaries removed as each suite completes. The first suite (<code>lib_fft</code> or <code>lib_geometry</code>) is the pilot for the fused extensive shape.</td>
+<td>Each library suite runs in one process nightly with a recorded time; its members' binaries are gone.</td>
+</tr>
+<tr>
+<td style="text-align:right">5</td>
+<td>D</td>
+<td><strong>Simulation-truth gates and the nightly runner.</strong> <code>simulated_workflow</code>, <code>single_workflow</code> and <code>mini_stream</code> compare against the generating model (FSC to the truth map, pose agreement) with declared floors; the nightly `ctest -L &quot;library</td>
+<td>workflow&quot;` run and its archive on the dedicated machine.</td>
+</tr>
+<tr>
+<td style="text-align:right">6</td>
+<td>B</td>
+<td><strong>Mother suites, platform and socket cases</strong> with explicit isolation and launcher policy.</td>
+<td>Parent suites launch <code>simple_test_exec</code> children with full accounting; platform cases skip or register predictably and cannot hang the fast gate.</td>
+</tr>
+<tr>
+<td style="text-align:right">7</td>
+<td>B</td>
+<td><strong>Retire the glob.</strong> Remove the standalone executable glob, switch CI to <code>ctest -L fast</code> plus the platform jobs, normalize documentation, delete stranded per-test commander types, routers and UI entries.</td>
+<td>A clean <code>--compile-tests</code> build produces only <code>simple_test_exec</code>; registry consistency passes; CI uses no standalone Fortran test executable.</td>
+</tr>
+</tbody>
+</table>
+<p>Complete a vertical area slice (baseline, extract, assert, shrink, route,
+switch callers, delete duplicate) before starting the next. Do not copy every
+program into a module and leave both systems standing.</p>
+<h2 id="13-migration-rules-for-individual-tests">13. Migration rules for individual tests</h2>
+<p>For each test, in this order:</p>
+<ol start="0">
+<li>Confirm it has a review verdict (section 9). A <code>delete</code> or <code>retire</code> ends
+here: remove the sources, the UI entry, the router case and the callers in
+one commit, and add the retired-tests row. A <code>merge</code> moves its unique
+checks into the target before this identity is removed.</li>
+<li>Record its unchanged baseline and its Phase 0 wall time before editing.</li>
+<li>Identify all source and script callers by test executable name.</li>
+<li>Compare any existing <code>simple_test_exec</code> implementation with the standalone
+program line by line and select or merge the authoritative behaviour.</li>
+<li>If it is kept (fast or extensive) and has no failure path, write the
+assertion it was implicitly making (what would have been wrong if the
+printed numbers were wrong). A manual tool needs none.</li>
+<li>Move the body into its grouped module; keep suite-specific helper modules
+that already express ownership.</li>
+<li>Remove raw <code>get_command_argument</code> or <code>parse_oldschool</code> ownership from the
+body; register required keys in the test UI and consume the parsed command
+state through the established lifecycle.</li>
+<li>Make the procedure return on success and accumulate failures; keep process
+lifecycle in <code>simple_test_exec</code>.</li>
+<li>Apply the performance actions from the inventory row; re-measure.</li>
+<li>Route it through its area suite without adding a one-test commander type.</li>
+<li>Change CTest, CI, scripts and documentation to the suite or <code>test=&lt;id&gt;</code>.</li>
+<li>Compare exit status, assertions, products, tolerances and expected-failure
+behaviour with the baseline.</li>
+<li>Delete the standalone program and any duplicate commander body in the same
+completed slice.</li>
+</ol>
+<p>Mechanical extraction, adding an assertion, and shrinking a fixture are three
+separate commits per test, so each can be reviewed and reverted alone. None
+of them changes what the production code does.</p>
+<h2 id="14-risks-and-mitigations">14. Risks and mitigations</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th style="text-align:right">Level</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The fast gate is green but hollow because print-only tests were admitted.</td>
+<td style="text-align:right">High</td>
+<td>Admission rule 1; the failure-path column in the inventory; Phase 1 registers only assertion-bearing tests.</td>
+</tr>
+<tr>
+<td>The 30 s budget is missed and quietly raised.</td>
+<td style="text-align:right">High</td>
+<td>The budget is a ratchet checked by <code>ctest_budget.py</code> on every <code>--compile-tests</code> build; raising it is an owner decision recorded here.</td>
+</tr>
+<tr>
+<td>Fused suites leak state between tests (RNG, module variables, cwd, open units) and produce order-dependent results.</td>
+<td style="text-align:right">Medium-high</td>
+<td>Lifecycle rule 7; during Phase 2 run each area suite in a few fixed alternate orders (its table order, reversed, and with any I/O or IPC sub-suites first) and require identical results, since the sub-suite procedures have different signatures and are not trivially shuffled; keep the focused selector so a failing test can be reproduced alone.</td>
+</tr>
+<tr>
+<td>Duplicate implementations have diverged; selecting one loses coverage.</td>
+<td style="text-align:right">High</td>
+<td>Review verdicts with the dossier's unique-coverage list; merge missing assertions before deleting either path (<code>units</code> is the known example); coverage accounting per batch.</td>
+</tr>
+<tr>
+<td>The review deletes tests that were the only coverage of something that matters.</td>
+<td style="text-align:right">Medium-high</td>
+<td>Section 9.5: every module that loses all coverage is listed in the batch summary and accepted with a reason or answered by a <code>modify</code>/<code>merge</code>; deletions go through Hans.</td>
+</tr>
+<tr>
+<td>The review stalls on hard cases and blocks migration.</td>
+<td style="text-align:right">Medium</td>
+<td>The <code>investigate</code> verdict parks a test without blocking its batch; ten-minute pace with the dossier.</td>
+</tr>
+<tr>
+<td>Conversion from program to subroutine changes initialisation, working directory, logging or teardown.</td>
+<td style="text-align:right">Medium-high</td>
+<td>Baselines; explicit lifecycle ownership; a file-producing test in the pilot.</td>
+</tr>
+<tr>
+<td>A callable test calls <code>stop</code>, <code>error stop</code> or <code>THROW_HARD</code> on a path that should accumulate, ending the suite early.</td>
+<td style="text-align:right">Medium</td>
+<td>Audit terminal calls in extraction; <code>THROW_HARD</code> only for missing fixtures; expect-abort tests isolated.</td>
+</tr>
+<tr>
+<td>Mother suites lose crash isolation when child programs disappear.</td>
+<td style="text-align:right">High</td>
+<td>Launch the same <code>simple_test_exec</code> binary as a subprocess for each isolated case.</td>
+</tr>
+<tr>
+<td>Coarray/MPI/GPU tests compile but run under the wrong launcher or build.</td>
+<td style="text-align:right">High</td>
+<td>Launcher and capability checks in CMake/CI; compile guards retained.</td>
+</tr>
+<tr>
+<td>Simulation-truth floors are set from one run and become flaky.</td>
+<td style="text-align:right">Medium</td>
+<td>Set floors with margin from several seeded runs; declare the seed; treat a floor change as a reviewed commit.</td>
+</tr>
+<tr>
+<td>The overnight machine drifts (compiler, libraries) and the extensive tier fails for reasons unrelated to SIMPLE.</td>
+<td style="text-align:right">Medium</td>
+<td>The archive records compiler and host; the runner does a clean build each night.</td>
+</tr>
+<tr>
+<td>Grouped modules become dumping grounds.</td>
+<td style="text-align:right">Medium</td>
+<td>Group by domain; keep cohesive suite helpers; split by responsibility when a file becomes hard to review.</td>
+</tr>
+<tr>
+<td>CTest and <code>test=list</code> drift apart.</td>
+<td style="text-align:right">Medium</td>
+<td>The registry-consistency check; stable canonical IDs.</td>
+</tr>
+<tr>
+<td><code>ctest --parallel</code> oversubscribes the machine and the budget is missed for scheduling reasons.</td>
+<td style="text-align:right">Medium</td>
+<td><code>OMP_NUM_THREADS=1</code> on fast entries; <code>NJOBS</code> at half the cores; explicit teams on the library suites and <code>RUN_SERIAL</code> on the workflow gates.</td>
+</tr>
+<tr>
+<td>Removing many executables breaks scripts and historical validation packages.</td>
+<td style="text-align:right">Medium</td>
+<td>Search all callers, update active ones atomically, document the command translation; historical evidence is preserved, not pretended runnable.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="15-validation-plan">15. Validation plan</h2>
+<p>Compilation and runtime validation are user-run unless separately authorised.</p>
+<h3 id="151-static">15.1 Static</h3>
+<ol>
+<li>Every inventory row carries a verdict with reviewer and date, and resolves
+to exactly one final callable implementation or a retired-tests row.</li>
+<li>Every test UI entry has one reachable commander/module path.</li>
+<li>Every CTest registration refers to a valid suite or <code>test=&lt;id&gt;</code>, and every
+registration has a label, a timeout and a working directory.</li>
+<li>Every fast registration is assertion-bearing (grep for <code>assert_</code>,
+<code>tests_failed</code> or an equivalent typed check in its module).</li>
+<li>No active invocation of a removed <code>simple_test_*</code> executable remains.</li>
+<li>Test implementation modules contain no program units and no <code>stop</code>.</li>
+<li>No migrated test has a new dedicated commander type whose only purpose is
+to call one procedure.</li>
+<li><code>BUILD_TESTS=OFF</code> source filtering excludes all test-only modules.</li>
+<li><code>git diff --check</code> and non-compiling syntax diagnostics pass for edited
+files.</li>
+</ol>
+<h3 id="152-per-test-behavioural">15.2 Per-test behavioural</h3>
+<p>For every migrated test compare before and after: process exit status;
+assertion and failure counts; expected normal-stop or failure marker; required
+inputs and defaults; output files and retained artifacts; numerical values at
+the pre-existing tolerance; cleanup and working-directory behaviour; launcher,
+process count, threads and device requirements; skip behaviour when a
+capability or fixture is absent; and wall time against the inventory.</p>
+<h3 id="153-integration">15.3 Integration</h3>
+<ol>
+<li><code>compile_debug.sh --compile-tests</code> and <code>compile_clean.sh --compile-tests</code>
+run the fast gate green in under 30 s on the reference Mac, in Debug and
+Release, and <code>ctest_budget.py</code> reports no violation.</li>
+<li><code>simple_test_exec test=list</code> contains every suite and canonical test ID once.</li>
+<li>Each area suite passes in one process and each of its tests passes alone.</li>
+<li>A deliberately failing assertion in one test fails its suite, fails the
+gate, and is reported by name.</li>
+<li>Mother suites survive an intentionally failing child and return a failing
+aggregate status.</li>
+<li>Coarray and MPI invocations use the required launcher and process count.</li>
+<li>The nightly <code>library|workflow</code> run completes on the dedicated machine and
+its archive holds per-suite times and per-workflow metrics against
+declared floors.</li>
+<li>A <code>BUILD_TESTS=OFF</code> build contains no test executable or test-only object;
+a <code>--compile-tests</code> install contains <code>simple_test_exec</code> and no standalone
+<code>simple_test_*</code> binaries.</li>
+</ol>
+<h2 id="16-acceptance-criteria">16. Acceptance criteria</h2>
+<p>The project is complete when:</p>
+<ol>
+<li><code>compile_*.sh --compile-tests</code> builds and then runs a fast gate that
+finishes under 30 s on the reference Mac, in which every entry can fail.</li>
+<li>The extensive gate runs nightly unattended: the library suites, one
+process per coherent part of the library, and the simulated workflows
+reporting resolution and pose-recovery metrics against declared floors.</li>
+<li><code>simple_test_exec</code> is the sole public Fortran test executable, and all
+supported former standalone programs are callable procedures in grouped
+modules run by area suites.</li>
+<li>Every test has one authoritative implementation and a recorded review
+verdict; every removed test has a retired-tests row.</li>
+<li>CTest, CI, documentation and child suites use suites or <code>test=&lt;id&gt;</code>.</li>
+<li>Process isolation and special launchers are preserved where section 5.3
+requires them, and nowhere else.</li>
+<li>The <code>production/tests/simple_test_*.f90</code> glob is gone.</li>
+<li>Test-only code is absent when <code>BUILD_TESTS=OFF</code>.</li>
+<li>The process budget and the time budget are enforced on every build.</li>
+<li>Compilation and runtime checks not actually observed are listed as
+outstanding rather than claimed as passing.</li>
+</ol>
+<h2 id="17-non-goals">17. Non-goals</h2>
+<ul>
+<li>An X-style <code>validate</code> tier: a registry of real datasets and arms, blessed
+platform-keyed baselines, a report directory and gated blessing. Too costly
+for SIMPLE; the extensive tier gates on simulation truth instead.</li>
+<li>Adding test-specific commander types.</li>
+<li>Rewriting numerical algorithms while moving their tests.</li>
+<li>Forcing all tests to share one procedure signature when their dependencies
+differ.</li>
+<li>Running the extensive tier, or any subprocess-isolated case, inside the
+fast gate.</li>
+<li>Converting NICE/Python tests or external oracle analyzers into Fortran.</li>
+<li>Making network-dependent tests part of any registered tier.</li>
+<li>Replacing CTest, the SIMPLE command-line system or <code>simple_test_utils</code> as a
+prerequisite for consolidation.</li>
+<li>A generated universal test manifest before executable unification shows it
+is needed.</li>
+</ul>
+<h2 id="18-effort-and-delivery-shape">18. Effort and delivery shape</h2>
+<p>This is a large project, because two of the four workstreams are not
+mechanical:</p>
+<ul>
+<li>Phase 0 and workstream A (the timing inventory and the fast-gate
+scaffolding over today's qualifying tests): days, and immediately useful.</li>
+<li>Workstream B (review of 149 identities, then unification of what
+survives; 53 two-route identities and 14 footprint clusters to reconcile): three
+to six weeks of area-by-area work, dominated by the review and by preserving
+the meaning and launch behaviour of what is kept. The review itself is a
+few weeks of owner and reviewer time, an afternoon per area, spread across
+the migration.</li>
+<li>Workstream C (splitting <code>units</code> into area suites, reconciling its routes,
+timing and trimming to 30 s, settling the socket and child-process
+sub-suites): about a week, and it delivers the whole fast gate. Assertions
+for print-only tests are needed only for the ones the review keeps for the
+extensive tier, and are written as those tests are migrated in Phase 4.</li>
+<li>Workstream D (the library suites as their areas are reviewed, the
+simulation-truth gates, the nightly runner): a few days per library suite
+once its review is done, one to two weeks for the first three workflow
+gates; more as workflows are added.</li>
+</ul>
+<p>The order of value is A, then C (the fast gate is complete after it), then
+the review and migration of the rest area by area as those areas are touched
+in ordinary development, so the migration rides on work that is happening
+anyway.</p>
+
+</body>
+</html>

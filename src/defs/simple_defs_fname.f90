@@ -4,7 +4,6 @@ use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT            = 'SIMPLE_SUBPROC_OUTPUT'
 character(len=*), parameter :: JOB_FINISHED_FBODY            = 'JOB_FINISHED_'
-character(len=*), parameter :: SUBPROJECT_JOB_FINISHED_FBODY = 'SUBPROJECT_JOB_FINISHED_'
 character(len=*), parameter :: TASK_FINISHED                 = 'TASK_FINISHED'
 character(len=*), parameter :: TARGET_MET                    = 'TARGET_MET'
 character(len=*), parameter :: USER_SELECTED                 = 'USER_SELECTED'

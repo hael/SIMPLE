@@ -124,7 +124,12 @@ endif()
 include(CTest)
 if(BUILD_TESTS)
     enable_testing()
-    add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
+    # `make check` is the fast gate by hand: the same thing compile_*.sh
+    # --compile-tests runs after install (scripts/run_fast_gate.sh).
+    add_custom_target(check
+        COMMAND "${CMAKE_SOURCE_DIR}/scripts/run_fast_gate.sh" "${CMAKE_BINARY_DIR}"
+        USES_TERMINAL
+    )
 endif()
 
 # ------------------------------------------------------------------------------

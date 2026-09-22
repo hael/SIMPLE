@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Test code (simple_test_exec and production/tests) is skipped unless --compile-tests is given.
 BUILD_TESTS=OFF
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 for arg in "$@"; do
     case "$arg" in
         --compile-tests) BUILD_TESTS=ON ;;
@@ -23,3 +24,7 @@ export LD_LIBRARY_PATH=`pwd`/build/simple-conda/lib:$LD_LIBRARY_PATH
 cd build
 cmake -DBUILD_TESTS=${BUILD_TESTS} -D NICE=ON -D TIFF_INCLUDE_DIR=`pwd`/simple-conda/include -D TIFF_LIBRARY_RELEASE=`pwd`/simple-conda/lib/libtiff.so -D CMAKE_PREFIX_PATH=`pwd`/simple-conda ..
 make -j install
+# With --compile-tests, run the build-time test gate on the installed tree
+# (scripts/run_fast_gate.sh); its status is the script's status.
+if [ "$BUILD_TESTS" = ON ]; then "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?; fi
+exit ${GATE_RC:-0}

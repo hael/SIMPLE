@@ -8,6 +8,7 @@
 # The test code adds ~210 s of compile CPU and one static link per program; it
 # is rarely needed for everyday work, so it is off unless asked for.
 BUILD_TESTS=OFF
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 for arg in "$@"; do
     case "$arg" in
         --compile-tests) BUILD_TESTS=ON ;;
@@ -20,4 +21,7 @@ mkdir build
 cd build
 cmake .. -DBUILD_TESTS=${BUILD_TESTS}
 make -j install
-#exit
+# With --compile-tests, run the build-time test gate on the installed tree
+# (scripts/run_fast_gate.sh); its status is the script's status.
+if [ "$BUILD_TESTS" = ON ]; then "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?; fi
+exit ${GATE_RC:-0}

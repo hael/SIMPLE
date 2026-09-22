@@ -363,6 +363,7 @@ type :: parameters
     character(len=STDLEN)     :: states=''             !< comma-separated list of states
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: system=''            !< embedded molecular system for simulated workflow tests(6vxx|1jxy)
+    character(len=STDLEN)     :: suite=''             !< one sub-suite of a unit-test area to run alone (simple_test_exec test=unit_<area> suite=<name>)
     character(len=STDLEN)     :: tag=''               !< just a tag
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
     ! special integer kinds

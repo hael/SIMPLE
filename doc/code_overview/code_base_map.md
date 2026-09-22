@@ -34,28 +34,9 @@
       - `simple_continuous_inplane_refine3D_policy.f90`
       - `simple_continuous_inplane_refine3D_recovery.f90`
       - `simple_continuous_inplane_refine3D_state.f90`
-      - `simple_pose_cont_refinement_batch_helpers.f90`
-      - `simple_pose_cont_refinement_calibration_helpers.f90`
-      - `simple_pose_cont_refinement_calibration_test.f90`
-      - `simple_pose_cont_refinement_configuration_matrix_test.f90`
-      - `simple_pose_cont_refinement_ctf_sigma_test.f90`
-      - `simple_pose_cont_refinement_fixed_reference_test.f90`
-      - `simple_pose_cont_refinement_forward_hierarchy_test.f90`
-      - `simple_pose_cont_refinement_forward_path_test.f90`
-      - `simple_pose_cont_refinement_lm_transactions_test.f90`
-      - `simple_pose_cont_refinement_matched_window_test.f90`
-      - `simple_pose_cont_refinement_objective_normals_test.f90`
-      - `simple_pose_cont_refinement_operator_contract_support.f90`
-      - `simple_pose_cont_refinement_operator_contract_test.f90`
-      - `simple_pose_cont_refinement_pose_capture_test.f90`
-      - `simple_pose_cont_refinement_pose_contract_test.f90`
-      - `simple_pose_cont_refinement_pose_mechanism_test.f90`
-      - `simple_pose_cont_refinement_recovery_test.f90`
-      - `simple_pose_cont_refinement_reference_bias_test.f90`
-      - `simple_pose_cont_refinement_reference_support.f90`
-      - `simple_pose_cont_refinement_rotation_test.f90`
-      - `simple_pose_cont_refinement_shift_polish_test.f90`
-      - `simple_pose_cont_refinement_shift_test.f90`
+      - `simple_pose_cont_refine3D_adapter_1jyx_test.f90`
+      - `simple_pose_cont_refinement_numerics_test.f90`
+      - `simple_pose_cont_refinement_solver_test.f90`
       - `simple_pose_cont_refinement_test_helpers.f90`
       - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
@@ -91,7 +72,7 @@
       - `simple_test_extr_frac.f90`
       - `simple_test_flex_gpu.f90` — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)
       - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache and the kernel/state-weight contracts
-      - `simple_test_flex_projected_latent_model.f90` — validates flex projection-aware latent-model I/O, Fourier operations, and canonicalization
+      - `simple_test_flex_pcg.f90` — validates the flex_pca PCG M-step operator: the pair Gram kernel on the 2x lattice against the
       - `simple_test_ft_expanded.f90`
       - `simple_test_gencorrs_fft.f90`
       - `simple_test_graphene_mask.f90`
@@ -135,6 +116,7 @@
       - `simple_test_phasecorr.f90`
       - `simple_test_phshift_policy.f90`
       - `simple_test_phshift_star.f90`
+      - `simple_test_pose_cont_refine3D_adapter.f90`
       - `simple_test_pose_cont_refinement.f90`
       - `simple_test_projdir_accumulator.f90`
       - `simple_test_project_merge.f90`
@@ -162,10 +144,7 @@
       - `simple_test_ui_visibility.f90`
       - `simple_test_uniform_euler.f90`
       - `simple_test_uniform_rot.f90` — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
-      - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
-      - **pose_cont_capture/**
-      - **pose_cont_validation/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
     - **ui/**
@@ -193,6 +172,7 @@
       - `simple_error.f90` — exception handling
       - `simple_fileio.f90` — system file handling module
       - `simple_fileio_tester.f90` — unit tests for fileio module
+      - `simple_flex_weights_file.f90` — versioned binary persistence and transaction primitives for the flex per-state weight files
       - `simple_imgfile.f90` — class to deal with image files on disks
       - `simple_imghead.f90` — type and method definitions to deal with image file headers
       - `simple_nrtxtfile.f90` — deals with text files of numbers
@@ -307,7 +287,7 @@
           - `single_commanders_trajectory.f90` — commanders operating on extracted time-trajectories, used in SINGLE for nanoparticle processing
           - `single_commanders_tseries.f90` — commanders operating on the full time-series field of view, used in SINGLE for nanoparticle processing
         - **test/** — home of the test commanders implementing high-level testing code
-          - `simple_commanders_test_class.f90` — for all class tests
+          - `simple_commanders_test_class.f90` — the unit-test suites: the build's fast gate (test=unit_<area>), its umbrella (test=units) and the platform-tier forked-process suite
           - `simple_commanders_test_fft.f90` — for all fft tests
           - `simple_commanders_test_geometry.f90` — for all geometry tests
           - `simple_commanders_test_highlevel.f90` — for all highlevel tests
@@ -348,7 +328,7 @@
         - `simple_exec_sym.f90` — execution of symmetry-related commanders
         - `simple_exec_validate.f90` — execution of validation commanders
         - `simple_exec_volume.f90` — execution of volume manipulation commanders
-        - `simple_test_exec_class.f90` — execution of test class processing commanders
+        - `simple_test_exec_class.f90` — execution of the unit-test suite commanders (the fast gate and its umbrella)
         - `simple_test_exec_fft.f90` — execution of test fft processing commanders
         - `simple_test_exec_geometry.f90` — execution of test geometry processing commanders
         - `simple_test_exec_highlevel.f90` — execution of test highlevel processing commanders
@@ -371,23 +351,40 @@
         - `single_exec_validate.f90`
       - **flex/**
         - `simple_flex_gpu.f90` — CUDA-C GPU path for the flex_pca insertion family (P1 of the polar/GPU plan)
-        - `simple_flex_pca_distr.f90` — distributed-execution context for flex_pca stage fan-out
+        - `simple_flex_pca_crossfsc.f90` — versioned cross-fit-FSC artifact (flex_pca_crossfsc.bin): writer, reader, SSNR conversion, series restart
+        - `simple_flex_pca_deconv.f90` — flex_pca latent deconvolution: calibrated per-particle noise + an empirical-Bayes mixture prior fitted through it
         - `simple_flex_pca_em.f90` — EM estimation of the low-rank flex_pca covariance model: basis fit, latent embedding and mean estimation
         - `simple_flex_pca_em_basis.f90` — flex_pca EM: eigenvolume realization, orthonormalization, alignment and bagging
+        - `simple_flex_pca_em_compose.f90` — flex_pca EM: multi-band basis composition from finished runs (SIMPLE_COV_COMPOSE)
+        - `simple_flex_pca_em_crossfsc.f90` — flex_pca EM: the cross-fit-FSC driver context (artifact + SSNR ridge)
         - `simple_flex_pca_em_embed.f90` — flex_pca EM: per-particle latent embedding with contrast fitting
         - `simple_flex_pca_em_env.f90` — flex_pca EM: environment overrides, memory/dimension budgets and run-stage subsampling
+        - `simple_flex_pca_em_estep.f90` — flex_pca EM: the E-step passes (polar bank, formers, per-particle solve, batch insert, reduce, paired pass and its part reduce)
         - `simple_flex_pca_em_fit.f90` — flex_pca EM: basis-fit driver, noise-prior calibration, probe-state I/O and band selection
         - `simple_flex_pca_em_iter.f90` — flex_pca EM: the subspace EM iteration (E-step accumulation, M-step update)
         - `simple_flex_pca_em_mean.f90` — flex_pca EM: consensus mean estimation, mean scale and Fourier-plane accumulation
-        - `simple_flex_pca_em_pose.f90` — flex_pca EM: polar pose refinement, pose perturbation and banded plane projections
+        - `simple_flex_pca_em_mstep.f90` — flex_pca EM: the M-step (coupled solve, FSC-Wiener merge, re-orthonormalisation, deflation, mixture update) per fit and iteration
+        - `simple_flex_pca_em_pairmerge.f90` — flex_pca paired engine FINAL STAGE -- "merge, don't refit" (proposal 1 par.7)
+        - `simple_flex_pca_em_polar.f90` — flex_pca EM: the polar E-step accumulation and its ring/band helpers
         - `simple_flex_pca_em_solve.f90` — flex_pca EM: dense SPD/ECM/MCFA solvers and subspace-angle diagnostics
+        - `simple_flex_pca_em_state.f90` — flex_pca EM: probe_fit_t lifecycle (the paired-engine per-fit state hoist)
+        - `simple_flex_pca_gmm.f90` — flex_pca state placement: tied-covariance GMM and the hierarchical GMM AUTO weights
         - `simple_flex_pca_merge.f90` — Two-gate agglomerative merge of over-provisioned flex_pca states.
         - `simple_flex_pca_model.f90` — Standalone projection-aware low-rank covariance workflow for heterogeneous SPA data
-        - `simple_flex_pca_parts.f90` — versioned part-file contracts for distributed flex_pca stage reductions
+        - `simple_flex_pca_pcg.f90` — flex_pca coupled M-step on the PCG operator (rec_backend=pcg): pair-weighted Gram kernels and the
+        - `simple_flex_pca_plane_cache.f90` — flex_pca plane cache: the full-box prep's padded transform, restricted to the box_crop grid, kept on disk per particle
+        - `simple_flex_pca_planes.f90` — flex_pca resident planes: prepped particle Fourier planes kept in memory across E-step passes
+        - `simple_flex_pca_plot.f90` — flex_pca latent figures rendered in-engine (no external plotting): a three-panel JPEG with
         - `simple_flex_pca_polar.f90` — polar-Fourier shared-direction basis bank for flex_pca
         - `simple_flex_pca_rec3D.f90` — kernel-weighted state reconstruction for flex_pca
-        - `simple_flex_projected_latent_model.f90` — Projection-aware latent volume model kernels for flex_analysis
-        - `simple_flex_reconstructor_latent_ops.f90` — Latent-volume projection/backprojection helpers for flex_analysis
+        - `simple_flex_pca_rec3D_pcg.f90` — flex_pca state maps on the reconstruct3D PCG backend (rec_backend=pcg): the kernel weight of a
+        - `simple_flex_pca_rounds.f90` — flex_pca distribution contract: the role/round object handed down by the strategy
+        - `simple_flex_pca_targets.f90` — flex_pca latent targets: k-means, diffusion k-centre, FINCH, path and reliability-path placement; basis rotations
+        - `simple_flex_pca_util.f90` — flex_pca shared helpers: environment switches, chi-squared median, unimodality test
+        - `simple_flex_pca_weights.f90` — flex_pca state weights: kernel/equal-mass/on-axis placement, bandwidth selection, half masks
+        - `simple_flex_reconstructor_latent_ops.f90` — flex_pca projection-aware latent model: Fourier projection/backprojection helpers, particle prep, the coupled M-step solve
+        - `simple_flex_weights_state.f90` — flex per-state weight files: identity, science validation, transactions, delivery and loading
+        - `simple_umap.f90` — UMAP projection of a high-dimensional embedding, for plotting it
         - **cuda/**
       - **image/** — home of the submodules of the image class, its extensions, and its variants
         - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
@@ -446,7 +443,6 @@
         - `simple_nu_filter_bank.f90` — simple nu filter bank implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_envmask.f90` — NU-evidence-driven envelope masking for volume-domain nonuniform filtering
         - `simple_nu_filter_evidence.f90` — compact immutable evidence state for the direct NU-conditioned PCG replay
-        - `simple_nu_filter_extend.f90` — simple nu filter extend implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_potts.f90` — simple nu filter potts implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_sharpen.f90` — NU-evidence nonuniform postprocessing, v2 (classical pipeline, local)
         - `simple_nu_filter_state.f90` — simple nu filter state implementation for volume-domain nonuniform filtering
@@ -543,6 +539,7 @@
           - `simple_ctf_estimate_strategy.f90`
           - `simple_denoise_project_strategy.f90`
           - `simple_extract_strategy.f90`
+          - `simple_flex_pca_strategy.f90` — flex_pca execution strategies: shared memory, distributed master, distributed worker
           - `simple_gen_pspecs_and_thumbs_strategy.f90`
           - `simple_make_cavgs_strategy.f90`
           - `simple_motion_correct_strategy.f90`
@@ -560,6 +557,7 @@
           - `simple_matcher_ptcl_io.f90` — particle image batch I/O routines shared by matcher workflows
           - `simple_matcher_refvol_utils.f90` — shared helpers for reading, masking, filtering and reprojecting reference volumes
           - `simple_matcher_smpl_and_lplims.f90` — search-space and particle-selection policy routines for matcher workflows
+          - `simple_pose_cont_refine3D_adapter.f90` — Reference, particle-data, and transaction adapters for refine3D pose_cont
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
@@ -583,6 +581,7 @@
           - `simple_strategy3D_greedy_smpl.f90` — 3D strategy for exhaustive projection matching with probabilistic in-plane search
           - `simple_strategy3D_greedy_sub.f90` — 3D strategy for neighborhood projection matching with exhaustive subspace initialization
           - `simple_strategy3D_matcher.f90` — high-level particle matching and partial-reconstruction orchestration for refine3D workers
+          - `simple_strategy3D_pose_cont.f90` — standalone Cartesian local-pose strategy for already aligned particles
           - `simple_strategy3D_prob.f90` — 3D strategy for probabilistic projection matching
           - `simple_strategy3D_shc.f90` — 3D strategy for projection matching by stochastic hill climbing
           - `simple_strategy3D_shc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
@@ -603,6 +602,7 @@
         - `simple_stream_p04_refpick_extract_new.f90` — task 4 in the stream pipeline: reference-based picking and extraction
         - `simple_stream_p05_sieve_cavgs_new.f90` — stream task 5: continuous particle-sieving with staged chunk generation and class-average rejection
         - `simple_stream_p06_pool2D_new.f90` — stream pipeline stage 6 â global 2D classification of pooled particles from sieving
+        - `simple_stream_p07_abinitio3D_multistate.f90` — stream pipeline stage 7 â multistate 3D reconstruction/refinement of pooled particles
         - `simple_stream_pool2D_utils.f90` — utilities for running the pool 2D refinement
         - `simple_stream_state.f90` — global stream master pipe descriptors for IPC
         - `simple_stream_utils.f90` — various stream utilities
@@ -633,9 +633,9 @@
           - `simple_ui_mask.f90` — module defining the user interfaces for masking programs in the simple_exec suite
           - `simple_ui_ori.f90` — module defining the user interfaces for orientation processing programs in the simple_exec suite
           - `simple_ui_other.f90` — module defining the user interfaces for miscellaneous programs in the simple_exec suite
+          - `simple_ui_postprocess.f90` — module defining the user interfaces for map post-processing programs in the simple_exec suite
           - `simple_ui_preproc.f90` — module defining the user interfaces for pre-processing programs in the simple_exec suite
           - `simple_ui_print.f90` — module defining the user interfaces for printing programs in the simple_exec suite
-          - `simple_ui_postprocess.f90` — module defining the user interfaces for map post-processing programs in the simple_exec suite
           - `simple_ui_project.f90` — module defining the user interfaces for project management programs in the simple_exec suite
           - `simple_ui_reconstruct3D.f90` — module defining the user interfaces for 3D reconstruction programs in the simple_exec suite
           - `simple_ui_refine3D.f90` — module defining the user interfaces for 3D refinement programs in the simple_exec suite
@@ -646,7 +646,7 @@
           - `simple_ui_validation.f90` — module defining the user interfaces for validation programs in the simple_exec suite
           - `simple_ui_volume.f90` — module defining the user interfaces for volume processing programs in the simple_exec suite
         - **simple_test/**
-          - `simple_test_ui_class.f90` — module defining the user interfaces for per class test programs in the simple_test_exec suite
+          - `simple_test_ui_class.f90` — user interfaces of the unit-test suites: the fast gate (unit_<area>), its umbrella (units) and the platform-tier forked-process suite
           - `simple_test_ui_fft.f90` — module defining the user interfaces for fft testprograms in the simple_test_exec suite
           - `simple_test_ui_geometry.f90` — module defining the user interfaces for geometry test programs in the simple_test_exec suite
           - `simple_test_ui_highlevel.f90` — module defining the user interfaces for highlevel test programs in the simple_test_exec suite
@@ -673,6 +673,7 @@
         - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
         - `simple_halfmap_diagnostics.f90` — backend-neutral half-map FSC, cFAR, and resolution diagnostics shared by the gridding and PCG reconstruction paths
         - `simple_nu_state_filter.f90` — assembly-owned nonuniform (NU) filtering of one state's half-map pair
+        - `simple_pcg_solvent_sidecar.f90` — opt-in soft solvent prior of the PCG base solve (pcg_solvent=yes)
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and preconditioned
@@ -757,6 +758,7 @@
           - `simple_gui_metadata_types.f90` — Integer type-tag constants for all GUI metadata kinds.
           - `simple_gui_metadata_utils.f90` — Utility functions for GUI metadata types.
           - **stream/** — stream related metadata structures
+            - `simple_gui_metadata_stream_abinitio3D_multistate.f90` — GUI metadata for the stream multistate abinitio3D stage â pipeline stage, particle/state counts, per-state resolution, and user-input flag
             - `simple_gui_metadata_stream_opening2D.f90` — GUI metadata for the stream opening-2D stage â particle counts, masking parameters, and user-input flag
             - `simple_gui_metadata_stream_optics_assignment.f90` — GUI metadata for the stream optics-assignment stage â micrograph and optics-group assignment counts
             - `simple_gui_metadata_stream_particle_sieving.f90` — GUI metadata for the stream particle-sieving stage â particle counts, masking parameters, and user-input flag

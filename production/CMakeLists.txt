@@ -163,29 +163,39 @@ add_custom_target(audit_ui_defaults
 )
 
 # ------------------------------------------------------------------------------
-# Tests
+# Tests  (doc/refactoring_notes/uniform_test_environment_refactoring.md)
 # ------------------------------------------------------------------------------
+# Two gates behind one front door, simple_test_exec:
+#   fast         runs on every --compile-tests build under a 30 s budget
+#                (Phase 2 declares it; until then `provisional` stands in)
+#   library      nightly, one process per coherent part of the library
+#   workflow     nightly, the simulated workflows gated on simulation truth
+#   platform     coarray/MPI/GPU/socket/child-process cases, own launcher
+# Every registration has a label, a timeout, its own working directory under
+# build/test_runs/<name>, an explicit OMP_NUM_THREADS and the environment the
+# SIMPLE runtime reads (SIMPLE_PATH, SIMPLE_QSYS, SIMPLE_EMAIL, PATH to the
+# installed bin/). A CTest entry is an isolation unit, not an assertion:
+# checks grow inside existing suites, and a new process needs a reason here
+# and a raised SIMPLE_CTEST_BUDGET. The fast label as a whole must stay
+# under 30 s of real time (scripts/run_fast_gate.sh); there is no per-entry
+# time rule.
 if(BUILD_TESTS)
   enable_testing()
-  # Find all test "main" programs
+
+  # The standalone test programs under tests/ keep building and installing
+  # until their areas have migrated behind simple_test_exec (Phase 4-7), but
+  # they are no longer registered with CTest one process each: they are run
+  # by name, and by scripts/test_timing_run.sh for the Phase 0 inventory.
   file(GLOB TEST_MAINS
     RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_*.[fF]90"
   )
-  # Optional filtering (adjust patterns to your actual filenames)
   if(NOT USE_MPI)
     list(FILTER TEST_MAINS EXCLUDE REGEX "mpi")
   endif()
   if(NOT USE_COARRAYS)
     list(FILTER TEST_MAINS EXCLUDE REGEX "coarray|coarrays")
   endif()
-  # Tests whose fixtures require an external reference volume (vol1=)
-  set(VOL1_FIXTURE_TESTS
-    continuous_inplane_rotation2D_stage1_validation
-    continuous_inplane_cc_grad
-    continuous_inplane_hybrid_grad
-    continuous_inplane_refine3D
-  )
   # The offload test declares data for mutually exclusive preprocessor
   # branches; a CPU-only debug build sees the offload branch's data as unused.
   set_source_files_properties(
@@ -199,13 +209,11 @@ if(BUILD_TESTS)
   foreach(main_src IN LISTS TEST_MAINS)
     get_filename_component(main_we "${main_src}" NAME_WE)         # simple_test_ft_expanded
     string(REGEX REPLACE "^simple_test_" "" test_id "${main_we}") # ft_expanded
-    set(test_name "${test_id}")              # ctest name
-    set(test_exe  "simple_test_${test_id}")  # executable name (choose what you like)
+    set(test_exe  "simple_test_${test_id}")
     # Supporting sources for this test (e.g., simple_ft_expanded_tester.f90)
     file(GLOB test_deps
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_${test_id}_*.[fF]90"
     )
-    # Build executable from main + deps
     set(test_sources
       "${CMAKE_CURRENT_SOURCE_DIR}/${main_src}"
       ${test_deps}
@@ -247,20 +255,99 @@ if(BUILD_TESTS)
         DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/${test_id}"
       )
     endif()
-    if(USE_COARRAYS AND test_id STREQUAL "coarrays")
-      add_test(
-        NAME ${test_name}
-        COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${test_exe}>
-      )
-    elseif(test_id IN_LIST VOL1_FIXTURE_TESTS)
-      # These fixtures error stop without a reference volume; register them
-      # only when one is supplied via -DSIMPLE_TEST_VOL1=<path.mrc>
-      if(SIMPLE_TEST_VOL1)
-        add_test(NAME ${test_name} COMMAND ${test_exe} vol1=${SIMPLE_TEST_VOL1})
-      endif()
-    else()
-      add_test(NAME ${test_name} COMMAND ${test_exe})
-    endif()
   endforeach()
+
+  # ---- registration helper -------------------------------------------------
+  # simple_add_test(<name> <label> <timeout> <omp_threads> [RUN_SERIAL] COMMAND <args...>)
+  # registers `simple_test_exec <args...>` (or the given launcher) with the
+  # properties every entry must carry.
+  set(SIMPLE_TEST_RUNS_DIR "${CMAKE_BINARY_DIR}/test_runs")
+  set(SIMPLE_TEST_ENV
+    "SIMPLE_PATH=${CMAKE_INSTALL_PREFIX}"
+    "SIMPLE_QSYS=local"
+    "SIMPLE_EMAIL=test@localhost"
+    "GFORTRAN_UNBUFFERED_ALL=y"
+  )
+  function(simple_add_test name label timeout nthr)
+    cmake_parse_arguments(ARG "RUN_SERIAL" "" "COMMAND" ${ARGN})
+    file(MAKE_DIRECTORY "${SIMPLE_TEST_RUNS_DIR}/${name}")
+    add_test(NAME ${name}
+      COMMAND ${ARG_COMMAND}
+      WORKING_DIRECTORY "${SIMPLE_TEST_RUNS_DIR}/${name}"
+    )
+    set_tests_properties(${name} PROPERTIES
+      LABELS "${label}"
+      TIMEOUT ${timeout}
+      ENVIRONMENT "OMP_NUM_THREADS=${nthr};${SIMPLE_TEST_ENV}"
+      ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR};PATH=path_list_prepend:${CMAKE_INSTALL_PREFIX}/scripts"
+    )
+    if(ARG_RUN_SERIAL)
+      set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
+    endif()
+  endfunction()
+
+  # ---- the fast gate ------------------------------------------------------
+  # Seven area suites over the unit tests, one process each, label `fast`;
+  # every sub-suite asserts through simple_test_utils, is localhost-only and
+  # runs on one thread (plan, section 5.1). `units` runs all of them in one
+  # process as a developer convenience and is not registered: the entries
+  # below are the gate. Measured 2026-09-22 (Debug, 1 thread): the seven
+  # together about 4 s; the longest, unit_image and unit_ori, about 1.3 s.
+  foreach(_area IN ITEMS core ori image numerics project ui ipc)
+    simple_add_test(unit_${_area} fast 120 1
+      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
+  endforeach()
+
+  # ---- workflow gates (nightly) --------------------------------------------
+  # The simulated workflows with their current checks (completion, counts,
+  # heartbeat); simulation-truth floors are Phase 5. Each owns the machine:
+  # RUN_SERIAL, an OpenMP team, and it may start simple_exec /
+  # simple_private_exec workers, hence PATH and SIMPLE_PATH above. Only the
+  # workflows known to run unattended with generated data are registered;
+  # the rest join by review verdict (plan, section 9).
+  simple_add_test(simulated_workflow_6vxx workflow 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow system=6vxx)
+  simple_add_test(simulated_workflow_1jxy workflow 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow system=1jxy)
+  simple_add_test(single_workflow workflow 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow element=Pt)
+  simple_add_test(pcg_recon workflow 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
+  foreach(_stream IN ITEMS preproc assign_optics gen_pickrefs pick_extract sieve_cavgs abinitio2D_stream master)
+    simple_add_test(stream_${_stream} workflow 3600 8 RUN_SERIAL
+      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=${_stream})
+  endforeach()
+
+  # ---- platform cases -------------------------------------------------------
+  # Own process, own launcher; not part of the build gate.
+  # forked process: real child processes polled on a clock (12.9 s of it),
+  # excluded from the fast gate by decision (plan, section 4.6).
+  simple_add_test(forked_process platform 300 1 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
+  # Registered only when CMake has the capability and the launcher.
+  if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE AND TARGET simple_test_coarrays)
+    # the standalone program is the one linked against the coarray library
+    simple_add_test(coarrays platform 1200 1 RUN_SERIAL
+      COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:simple_test_coarrays>)
+  endif()
+
+  # ---- process budget -------------------------------------------------------
+  # A CTest entry is an isolation unit, not an assertion: checks grow inside
+  # existing suites, a new process needs a stated reason, and this number only
+  # goes down. Raising it is an owner decision recorded in the plan. Entries
+  # that depend on a capability (coarrays) are counted only when registered.
+  set(SIMPLE_CTEST_BUDGET 19)   # 7 fast + 1 platform + 11 workflow
+  set(_simple_expected ${SIMPLE_CTEST_BUDGET})
+  if(TEST coarrays)
+    math(EXPR _simple_expected "${_simple_expected} + 1")
+  endif()
+  get_property(_simple_tests DIRECTORY PROPERTY TESTS)
+  list(LENGTH _simple_tests _simple_ntests)
+  if(NOT _simple_ntests EQUAL _simple_expected)
+    message(FATAL_ERROR "${_simple_ntests} CTest entries do not match SIMPLE_CTEST_BUDGET (${_simple_expected}): "
+      "add checks to an existing suite, justify a new process in production/CMakeLists.txt, "
+      "or lower the budget after an intentional consolidation")
+  endif()
+  message(STATUS "CTest entries:        ${_simple_ntests} (budget ${_simple_expected})")
 
 endif()

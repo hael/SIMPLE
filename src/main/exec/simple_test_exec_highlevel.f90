@@ -3,8 +3,7 @@ module simple_test_exec_highlevel
 use simple_cmdline,                   only: cmdline
 use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulate_particles, &
                                             commander_test_reproject, &
-                                            commander_test_simulated_workflow, commander_test_subproject_distr, &
-                                            commander_test_ptcls_ppca_subproject_distr, commander_test_pcg_recon, &
+                                            commander_test_simulated_workflow, commander_test_pcg_recon, &
                                             commander_test_pcg_frac_update, commander_test_rec3D_backends
 implicit none
 
@@ -15,8 +14,6 @@ type(commander_test_mini_stream)                 :: xmini_stream
 type(commander_test_simulated_workflow)          :: xsimulated_workflow
 type(commander_test_simulate_particles)          :: xsimulate_particles
 type(commander_test_reproject)                   :: xreproject
-type(commander_test_subproject_distr)            :: xsubproject_distr
-type(commander_test_ptcls_ppca_subproject_distr) :: xptcls_ppca_subproject_distr
 type(commander_test_pcg_recon)                   :: xpcg_recon
 type(commander_test_pcg_frac_update)             :: xpcg_frac_update
 type(commander_test_rec3D_backends)              :: xrec3D_backends
@@ -40,10 +37,6 @@ contains
                 call xreproject%execute(cline)
             case( 'simulated_workflow' )
                 call xsimulated_workflow%execute(cline)
-            case( 'subproject_distr' )
-                call xsubproject_distr%execute(cline)
-            case( 'ptcls_ppca_subproject_distr' )
-                call xptcls_ppca_subproject_distr%execute(cline)
             case( 'pcg_recon' )
                 call xpcg_recon%execute(cline)
             case( 'pcg_frac_update' )

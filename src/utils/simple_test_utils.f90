@@ -2,7 +2,7 @@
 module simple_test_utils
 use, intrinsic :: iso_fortran_env, only: output_unit
 use simple_string, only: string
-use simple_defs,   only: dp, STDLEN
+use simple_defs,   only: dp, STDLEN, longer
 implicit none
 private
 
@@ -15,6 +15,8 @@ type :: test_suite_result
     integer :: checks   = 0
     integer :: failures = 0
     logical :: completed = .false.
+    integer(longer) :: t_start = 0_longer   ! system_clock count at begin_test_suite
+    real    :: seconds = 0.         ! wall time from begin to end of the suite
 end type test_suite_result
 
 type :: test_failure
@@ -55,25 +57,31 @@ contains
             suites(1) = suite
         endif
         active_suite = size(suites)
+        call system_clock(suites(active_suite)%t_start)
         write(output_unit,'(A)') '---- TEST SUITE: '//trim(suite%name)//' ----'
         call write_report_file
     end subroutine begin_test_suite
 
     subroutine end_test_suite
         character(len=STDLEN) :: name
-        integer :: checks, nfailed
+        character(len=32)     :: tstr
+        integer     :: checks, nfailed
+        integer(longer) :: t_end, rate
         if( active_suite == 0 ) return
+        call system_clock(t_end, rate)
+        if( rate > 0_longer ) suites(active_suite)%seconds = real(t_end - suites(active_suite)%t_start) / real(rate)
+        write(tstr,'(F0.2,A)') suites(active_suite)%seconds, ' s'
         name    = suites(active_suite)%name
         checks  = suites(active_suite)%checks
         nfailed = suites(active_suite)%failures
         if( nfailed == 0 )then
             if( checks == 0 )then
-                write(output_unit,'(A)') 'PASS: '//trim(name)//' completed'
+                write(output_unit,'(A)') 'PASS: '//trim(name)//' completed, '//trim(tstr)
             else
-                write(output_unit,'(A,I0,A)') 'PASS: '//trim(name)//' (', checks, ' checks)'
+                write(output_unit,'(A,I0,A)') 'PASS: '//trim(name)//' (', checks, ' checks, '//trim(tstr)//')'
             endif
         else
-            write(output_unit,'(A,I0,A,I0,A)') 'FAIL: '//trim(name)//' (', nfailed, ' of ', checks, ' checks failed)'
+            write(output_unit,'(A,I0,A,I0,A)') 'FAIL: '//trim(name)//' (', nfailed, ' of ', checks, ' checks failed, '//trim(tstr)//')'
         endif
         suites(active_suite)%completed = .true.
         active_suite = 0
@@ -267,8 +275,8 @@ contains
                 else
                     suite_status = 'PASS'
                 endif
-                write(unit,'(A,I0,A,I0,A)') '  '//trim(suite_status)//': '//trim(suites(i)%name)// &
-                    &' - ', suites(i)%checks, ' assertions; ', suites(i)%failures, ' failed.'
+                write(unit,'(A,I0,A,I0,A,F0.2,A)') '  '//trim(suite_status)//': '//trim(suites(i)%name)// &
+                    &' - ', suites(i)%checks, ' assertions; ', suites(i)%failures, ' failed; ', suites(i)%seconds, ' s.'
             enddo
         endif
         if( allocated(failures) )then

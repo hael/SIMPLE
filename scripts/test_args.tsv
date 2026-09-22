@@ -1,0 +1,5 @@
+simulated_workflow	system=6vxx
+single_workflow	element=Pt
+atoms_stats	element=Pt
+detect_atoms	element=Pt
+simulate_nanoparticle	element=Pt

@@ -209,4 +209,4 @@ jobs:
              echo "-------------------- TEST UNIFORM ROT -------------------------"
              simple_test_uniform_rot
              echo "-------------------- TEST UNITS -------------------------"
-             simple_test_units
+             simple_test_exec test=units

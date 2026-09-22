@@ -1,6 +1,7 @@
 #!/bin/bash
 # Test code (simple_test_exec and production/tests) is skipped unless --compile-tests is given.
 BUILD_TESTS=OFF
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 for arg in "$@"; do
     case "$arg" in
         --compile-tests) BUILD_TESTS=ON ;;
@@ -18,8 +19,10 @@ mkdir build_gcc$gccversion
 cd build_gcc$gccversion
 cmake -DBUILD_TESTS=${BUILD_TESTS} -D USE_ARCHOPT=OFF ..
 make -j install
+# With --compile-tests, run the build-time test gate on the installed tree
+# (scripts/run_fast_gate.sh); its status is the script's status.
+if [ "$BUILD_TESTS" = ON ]; then "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?; fi
 cd ..
 chmod -R 777 build_gcc$gccversion
 module unload gcc/$gccversion
-exit
-
+exit ${GATE_RC:-0}

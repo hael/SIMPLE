@@ -76,7 +76,6 @@ type qsys_ctrl
     procedure          :: clear_stack
     ! JOB PREPARATION AND SCRIPT GENERATORS
     procedure          :: prep_part_jobs
-    procedure          :: generate_scripts_subprojects
     procedure          :: generate_array_script
     procedure, private :: augment_partition_job_descr, clear_partition_job_descr
     procedure, private :: generate_script_1, generate_script_2, generate_script_3, generate_script_4
@@ -91,7 +90,6 @@ type qsys_ctrl
     procedure, private :: update_queue
     ! THE MASTER SCHEDULERS
     procedure          :: schedule_jobs
-    procedure          :: schedule_subproject_jobs
     procedure          :: schedule_array_jobs
     ! STREAMING
     procedure          :: schedule_streaming
@@ -251,90 +249,6 @@ contains
     end subroutine clear_stack
 
     ! SCRIPT GENERATORS
-
-    !> Generate one bash script per subproject for qsys-agnostic parallel execution.
-    !! Each subproject gets its own script indexed by its position in jobs_descr(:).
-    !! After this call, invoke schedule_jobs() to submit them in parallel up to
-    !! ncomputing_units concurrency.  Compatible with local, SLURM, LSF, PBS, SGE.
-    subroutine generate_scripts_subprojects( self, jobs_descr, q_descr, exec_bin, subproj_dirs )
-        class(qsys_ctrl),        intent(inout) :: self
-        type(chash),             intent(inout) :: jobs_descr(:)   !< one job description per subproject
-        class(chash),            intent(in)    :: q_descr         !< queue-system metadata (scheduler directives)
-        class(string), optional, intent(in)    :: exec_bin        !< override default executable
-        class(string), optional, intent(in)    :: subproj_dirs(:) !< per-subproject working directories; defaults to CWD
-        character(len=512) :: io_msg
-        type(string)       :: job_str, execution_binary
-        integer            :: isub, ios, funit, nsub
-        ! nsub is defined by the input array — each element IS a subproject
-        nsub = size(jobs_descr)
-        if( nsub < 1 )then
-            THROW_HARD('need at least 1 subproject; generate_scripts_subprojects')
-        endif
-        if( present(subproj_dirs) )then
-            if( size(subproj_dirs) /= nsub )then
-                THROW_HARD('# subproject directories must match # subprojects; generate_scripts_subprojects')
-            endif
-        endif
-        if( present(exec_bin) )then
-            execution_binary = exec_bin
-        else
-            execution_binary = self%exec_binary
-        endif
-        do isub = 1, nsub
-            if( present(subproj_dirs) )then
-                self%jobs_done_fnames(isub)      = trim(subproj_dirs(isub)%to_char())//'/'//SUBPROJECT_JOB_FINISHED_FBODY//int2str_pad(isub,self%numlen)
-            else
-                self%jobs_done_fnames(isub)      = SUBPROJECT_JOB_FINISHED_FBODY//int2str_pad(isub,self%numlen)
-            endif
-            call fopen(funit, file=self%script_names(isub), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-            call fileiochk('simple_qsys_ctrl :: generate_scripts_subprojects; Error when opening file for writing: '&
-                &//self%script_names(isub)%to_char()//' ; '//trim(io_msg), ios)
-            ! specify shell
-            write(funit,'(a)') '#!/bin/bash'
-            ! write qsys-specific instructions (run-time polymorphic)
-            if( q_descr%get('qsys_name') .ne. 'local' )then
-                call self%myqsys%write_instr(q_descr, fhandle=funit)
-            else
-                call self%myqsys%write_instr(jobs_descr(isub), fhandle=funit)
-            endif
-            ! change to subproject directory if provided, otherwise use global CWD
-            if( present(subproj_dirs) )then
-                write(funit,'(a)') 'cd '//subproj_dirs(isub)%to_char()
-            else
-                write(funit,'(a)') 'cd '//trim(CWD_GLOB)
-            endif
-            write(funit,'(a)') ''
-            write(funit,'(a)') 'set -o pipefail'
-            write(funit,'(a)') ''
-            ! compose the command line from the subproject's job description
-            call jobs_descr(isub)%set('part',   int2str(isub))
-            call jobs_descr(isub)%set('numlen', int2str(self%numlen))
-            job_str = jobs_descr(isub)%chash2str()
-            write(funit,'(a)',advance='no') 'if '//execution_binary%to_char()//' '//job_str%to_char()
-            ! direct output
-            write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
-            write(funit,'(a)') 'then'
-            write(funit,'(a)') '  touch '//self%jobs_done_fnames(isub)%to_char()
-            write(funit,'(a)') '  exit 0'
-            write(funit,'(a)') 'else'
-            write(funit,'(a)') '  exit 1'
-            write(funit,'(a)') 'fi'
-            call fclose(funit)
-            call jobs_descr(isub)%delete('part')
-            call jobs_descr(isub)%delete('numlen')
-            if( q_descr%get('qsys_name') .eq. 'local' )then
-                ios = simple_chmod(self%script_names(isub), '+x')
-                if( ios /= 0 ) THROW_HARD('simple_qsys_ctrl :: generate_scripts_subprojects; Error chmoding submit script '//self%script_names(isub)%to_char())
-            endif
-            ! reset job tracking flags for this subproject
-            self%jobs_done(isub)      = .false.
-            self%jobs_submitted(isub) = .false.
-            call del_file(self%jobs_done_fnames(isub))
-            call wait_for_closure(self%script_names(isub))
-        end do
-        ! reset available computing units
-        if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
-    end subroutine generate_scripts_subprojects
 
     subroutine augment_partition_job_descr( self, job_descr, ipart, outfile_body, part_params )
         class(qsys_ctrl),           intent(in)    :: self
@@ -976,21 +890,6 @@ contains
         end do
         call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_jobs
-
-    !> Block until all subproject jobs have completed, polling at SHORTTIME intervals.
-    subroutine schedule_subproject_jobs( self )
-        class(qsys_ctrl), intent(inout) :: self
-        integer(timer_int_kind) :: t_phase
-        t_phase = tic()
-        do
-            if( all(self%jobs_done) ) exit
-            call self%update_queue
-            call self%submit_scripts
-            call self%service_persistent_worker_warmup()
-            call sleep(SHORTTIME)
-        end do
-        call report_phase_completion(self, real(toc(t_phase)))
-    end subroutine schedule_subproject_jobs
 
     !> Submit the single array-job script and block until all array elements complete.
     subroutine schedule_array_jobs( self )

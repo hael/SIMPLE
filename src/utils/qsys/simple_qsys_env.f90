@@ -42,8 +42,6 @@ type :: qsys_env
     procedure :: exists
     procedure :: gen_script
     procedure :: gen_scripts_and_schedule_jobs
-    procedure :: gen_subproject_scripts_and_schedule
-    procedure :: schedule_subproject_jobs
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
     procedure :: exec_simple_prgs_in_queue_async
@@ -440,26 +438,6 @@ contains
             call self%qscripts%schedule_jobs
         end if
     end subroutine gen_scripts_and_schedule_jobs
-
-    !>  \brief  Generate scripts for subprojects and schedule them for parallel execution.
-    !  Each element of jobs_descr(:) describes one independent subproject.
-    !  The qsys_ctrl machinery generates one script per subproject and
-    !  schedule_jobs() dispatches them in parallel respecting ncunits concurrency.
-    !  Fully qsys-agnostic: works with local, SLURM, LSF, PBS, SGE.
-    subroutine gen_subproject_scripts_and_schedule( self, jobs_descr, exec_bin, subproj_dirs )
-        class(qsys_env)                     :: self
-        type(chash),          intent(inout) :: jobs_descr(:)   !< one job description per subproject
-        class(string), optional, intent(in) :: exec_bin        !< override executable binary
-        class(string), optional, intent(in) :: subproj_dirs(:) !< per-subproject working directories
-        call self%qscripts%generate_scripts_subprojects(jobs_descr, self%qdescr, exec_bin, subproj_dirs)
-        call self%qscripts%schedule_subproject_jobs
-    end subroutine gen_subproject_scripts_and_schedule
-
-    !> Schedule already-generated subproject jobs.
-    subroutine schedule_subproject_jobs( self )
-        class(qsys_env), intent(inout) :: self
-        call self%qscripts%schedule_subproject_jobs
-    end subroutine schedule_subproject_jobs
 
     !> Generate and submit a single script, then block until its finish indicator file appears.
     subroutine exec_simple_prg_in_queue( self, cline, finish_indicator )

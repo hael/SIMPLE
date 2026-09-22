@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fix mechanical gfortran warnings from a build log.
 
-Adapted from SIMPLE's scripts/delete_unused_variables.pl. It handles unused
-locals, genuinely unused private module variables, and stale `use ..., only:`
-names. It runs dry by default and never compiles anything itself -- the owner
-rebuilds to verify, which is also how the result is checked.
+It handles unused locals, genuinely unused private module variables, and stale
+`use ..., only:` names. It runs dry by default and never compiles anything
+itself -- the owner rebuilds to verify, which is also how the result is
+checked.
 
 Files containing conditional-preprocessor branches are deliberately report-only:
 a symbol unused in the current build can be required by another configuration.

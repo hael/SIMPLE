@@ -8,8 +8,6 @@ type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
 type(ui_program), target :: reproject
-type(ui_program), target :: subproject_distr
-type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
@@ -22,8 +20,6 @@ contains
         call new_simulate_particles(tsttab)
         call new_simulated_workflow(tsttab)
         call new_reproject(tsttab)
-        call new_subproject_distr(tsttab)
-        call new_ptcls_ppca_subproject_distr(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
         call new_rec3D_backends(tsttab)
@@ -36,8 +32,6 @@ contains
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') reproject%name%to_char()
-        write(logfhandle,'(A)') subproject_distr%name%to_char()
-        write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
         write(logfhandle,'(A)') rec3D_backends%name%to_char()
@@ -130,36 +124,6 @@ contains
         ! add to ui_hash
         call add_ui_program('simulated_workflow', simulated_workflow, tsttab, UI_CATEGORY)
     end subroutine new_simulated_workflow
-
-    subroutine new_subproject_distr( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call subproject_distr%new(&
-        &'subproject_distr',&                                      ! name
-        &'test subproject split, parallel exec & merge',&          ! descr_short
-        &'Integration test: split project into subprojects, run in parallel via generate_scripts_subprojects, merge back',&
-        &'simple_test_exec',&                                      ! executable
-        &.false.)                                                  ! requires sp_project
-        ! add to ui_hash
-        call add_ui_program('subproject_distr', subproject_distr, tsttab, UI_CATEGORY)
-    end subroutine new_subproject_distr
-
-    subroutine new_ptcls_ppca_subproject_distr( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        call ptcls_ppca_subproject_distr%new(&
-        &'ptcls_ppca_subproject_distr',&                                  ! name
-        &'split particle chunks + ppca denoise in parallel',&                ! descr_short
-        &'Integration test: split filetab particles into equal chunks, build chunk stacks, denoise each chunk with '//&
-        &'ppca_denoise in parallel subprojects, merge outputs',&
-        &'simple_test_exec',&                                             ! executable
-        &.false.)   
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call ptcls_ppca_subproject_distr%add_input(UI_FILE, 'filetab', 'file', 'List of individual particle files', 'List of particle files (*.mrcs) to import', 'e.g. particle_frames.txt', .true., '')
-        call ptcls_ppca_subproject_distr%add_input(UI_PARM, 'smpd', 'real', 'SMPD', 'SMPD parameter', 'e.g. 1.3', .true., '')
-        call ptcls_ppca_subproject_distr%add_input(UI_COMP, 'nparts', 'integer', 'Number of parts', 'Number of parts to split the particle files into', 'e.g. 4', .true., '')
-        call add_ui_program('ptcls_ppca_subproject_distr', ptcls_ppca_subproject_distr, tsttab, UI_CATEGORY)
-    end subroutine new_ptcls_ppca_subproject_distr
 
     subroutine new_pcg_recon( tsttab )
         class(ui_hash), intent(inout) :: tsttab
