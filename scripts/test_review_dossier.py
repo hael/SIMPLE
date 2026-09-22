@@ -112,7 +112,9 @@ class Test:
 def footprint(text):
     t = strip_comments(text)
     uses = {u.lower() for u in RE_USE.findall(t)} - NOT_PRODUCTION
-    uses = {u for u in uses if u.startswith('simple_') or u.startswith('single_')}
+    uses = {u for u in uses if (u.startswith('simple_') or u.startswith('single_')) and not u.endswith('_tester')}
+    # procedures the text defines itself (internal helpers, sub-suite bodies) are not production calls
+    local = {m.lower() for m in re.findall(r'^\s*(?:pure\s+|elemental\s+|recursive\s+|logical\s+|integer\s+|real\s+)*(?:subroutine|function)\s+(\w+)', t, re.I | re.M)}
     calls = set()
     for obj, meth in RE_TBP.findall(t):
         if obj.lower() in NOT_OBJECT:
@@ -126,7 +128,7 @@ def footprint(text):
         if p.startswith(('assert_', 'begin_test', 'end_test', 'report_', 'reset_test', 'run_suite', 'simple_end', 'simple_touch',
                          'exec_cmdline', 'del_file', 'simple_mkdir', 'simple_chdir', 'simple_getcwd', 'simple_exception')):
             continue
-        if p in INTRINSIC_CALLS:
+        if p in INTRINSIC_CALLS or p in local:
             continue
         calls.add(('', p))
     return uses, calls
@@ -156,7 +158,7 @@ def terminators(text):
 def fixtures(text):
     t = strip_comments(text)
     f = set()
-    if DOWNLOAD.search(text): f.add('download')
+    if DOWNLOAD.search(t): f.add('download')
     if USER.search(t): f.add('user-supplied')
     if GENERATED.search(t): f.add('generated')
     if COMMITTED.search(t): f.add('committed')
@@ -225,6 +227,44 @@ def collect_exec(tests):
                 t.routes['exec'] = dict(files=[os.path.relpath(f, ROOT)], text='', lines=0, head='', proc=proc or '?')
             for k in required.get(name, []):
                 t.args.add(k)
+
+
+def attach_unit_suites(tests):
+    """Fold the sub-suites each unit_<area> commander runs into that identity's footprint.
+
+    The unit_* commanders are a few lines each; the coverage sits in the *_tester
+    modules (and local sub-suites) that suites_<area>() registers in
+    simple_commanders_test_class.f90. Without this the coverage accounting would
+    treat everything merged into a tester module as lost."""
+    cls_path = os.path.join(ROOT, 'src', 'main', 'commanders', 'test', 'simple_commanders_test_class.f90')
+    if not os.path.exists(cls_path):
+        return
+    cls = read(cls_path)
+    proc2mod = {m.group(2).lower(): m.group(1).lower()
+                for m in re.finditer(r'^\s*use\s+(\w+)\s*,\s*only\s*:\s*(\w+)', cls, re.I | re.M)}
+    modfiles = {}
+    for dp, _, fs in os.walk(os.path.join(ROOT, 'src')):
+        for f in fs:
+            if f.endswith('_tester.f90'):
+                modfiles[f[:-4].lower()] = os.path.join(dp, f)
+    for m in re.finditer(r'subroutine\s+suites_(\w+)\s*\(.*?end\s+subroutine\s+suites_\1', cls, re.S | re.I):
+        area = m.group(1).lower()
+        procs = re.findall(r"call\s+add_suite\(\s*s\s*,\s*n\s*,\s*'[^']*'\s*,\s*(\w+)\s*\)", m.group(0), re.I)
+        extra, files = '', []
+        for p in procs:
+            mod = proc2mod.get(p.lower(), '')
+            if mod in modfiles:
+                extra += read(modfiles[mod])
+                files.append(os.path.relpath(modfiles[mod], ROOT))
+            else:
+                mm = re.search(r'^\s*subroutine\s+%s\b.*?^\s*end\s+subroutine\s+%s\b' % (p, p), cls, re.S | re.I | re.M)
+                if mm:
+                    extra += mm.group(0)
+        t = tests.get('unit_' + area)
+        if t and 'exec' in t.routes:
+            t.routes['exec']['text'] += extra
+            t.routes['exec']['files'] += files
+            t.routes['exec']['suites'] = procs
 
 
 def collect_callers(tests):
@@ -408,9 +448,23 @@ def inventory(tests, pairs, out):
                    '%s (%s)' % (t.tier, t.tier_why), t.verdict, t.note]
             L.append('| ' + ' | '.join(str(x).replace('|', '\\|') for x in row) + ' |')
         L.append('')
-    L += ['## Retired tests', '', '| test | date | reason | replacement |', '|---|---|---|---|', '']
+    L += ['## Retired tests', '', '| test | date | reason | replacement |', '|---|---|---|---|'] + keep_retired(out) + ['']
     with open(out, 'w') as fh:
         fh.write('\n'.join(L))
+
+
+def keep_retired(path):
+    """Rows of the retired-tests table in an existing inventory (hand-written; kept verbatim)."""
+    if not os.path.exists(path):
+        return []
+    rows, active = [], False
+    for ln in open(path):
+        if ln.startswith('## '):
+            active = ln.startswith('## Retired tests')
+            continue
+        if active and ln.startswith('| ') and not ln.startswith('| test ') and not ln.startswith('|---'):
+            rows.append(ln.rstrip('\n'))
+    return rows
 
 
 def keep_verdicts(tests, path):
@@ -461,6 +515,7 @@ def main():
     tests = {}
     collect_standalone(tests)
     collect_exec(tests)
+    attach_unit_suites(tests)
     collect_callers(tests)
     pairs = analyse(tests)
     load_timing(tests, a.timing)

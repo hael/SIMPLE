@@ -86,7 +86,6 @@ type :: ori
     procedure          :: ori2chash
     procedure          :: chash2ori
     procedure          :: get_ctfvars
-    procedure          :: get_axis_angle
     procedure          :: set_ctfvars
     procedure          :: get_keys
     ! PRINTING & I/O
@@ -1224,19 +1223,17 @@ contains
         self%pparms(I_PHSHIFT) = canonical_phshift(self%pparms(I_PHSHIFT))
     end subroutine prec2ori
 
+    !>  \brief  length of the text ori2str produces: the non-empty parts (chash, pparms, hash)
+    !!          joined by single spaces; binoris sizes its records with the maximum over an oris
     pure integer function ori_strlen_trim( self )
         class(ori), intent(in) :: self
-        integer :: chashlen, pprmslen, hashlen
+        integer :: chashlen, pprmslen, hashlen, nparts
         chashlen = self%chtab%chash_strlen()
         hashlen  = self%htab%hash_strlen()
-        ori_strlen_trim = chashlen + hashlen
-        if( chashlen > 0 .and. hashlen > 0 )then
-            ori_strlen_trim = ori_strlen_trim + 1            ! + 1 for ' ' separator
-        endif
-        if( self%is_ptcl )then
-            pprmslen = self%pparms_strlen()
-            ori_strlen_trim = ori_strlen_trim + pprmslen + 1 ! + 1 for ' ' separator
-        endif
+        pprmslen = 0
+        if( self%is_ptcl ) pprmslen = self%pparms_strlen()
+        nparts = count([chashlen > 0, pprmslen > 0, hashlen > 0])
+        ori_strlen_trim = chashlen + pprmslen + hashlen + max(nparts - 1, 0) ! one ' ' separator between parts
     end function ori_strlen_trim
 
     ! used by qsys_env, pparms omitted deliberatly
@@ -1305,31 +1302,6 @@ contains
         ctfvars%phshift = canonical_phshift(self%get('phshift'))
         call ctfstr%kill
     end function get_ctfvars
-
-    subroutine get_axis_angle( self, vec, angle )
-        class(ori), intent(in)  :: self
-        real,       intent(out) :: vec(3), angle
-        real :: c1, c2, c3, s1, s2, s3, denom, euls(3), c1c2, s1s2
-        euls   = self%get_euler()
-        c1     = cos(euls(2)/2.)
-        c2     = cos(euls(3)/2.)
-        c3     = cos(euls(1)/2.)
-        s1     = sin(euls(2)/2.)
-        s2     = sin(euls(3)/2.)
-        s3     = sin(euls(1)/2.)
-        c1c2   = c1*c2
-        s1s2   = s1*s2
-        vec(1) =  c1c2*s3 +  s1s2*c3
-        vec(2) = s1*c2*c3 + c1*s2*s3
-        vec(3) = c1*s2*c3 - s1*c2*s3
-        angle  = 2 * acos(c1c2*c3 - s1s2*s3)
-        denom  = norm2(vec)
-        if( denom < TINY )then
-            vec = [1., 0., 0.]
-        else
-            vec = vec/denom
-        endif
-    end subroutine get_axis_angle
 
     subroutine set_ctfvars( self, ctfvars )
         class(ori),       intent(inout) :: self

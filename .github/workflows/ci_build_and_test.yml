@@ -145,7 +145,7 @@ jobs:
              echo "-------------------- TEST INSTALL -------------------------"
              simple_test_install 
              echo "-------------------- TEST ANGRES -------------------------"
-             simple_test_angres
+             simple_test_exec test=angres
              echo "-------------------- TEST ANSI COLORS -------------------------"
              simple_test_ansi_colors
              echo "-------------------- TEST BINORIS -------------------------"
@@ -184,8 +184,6 @@ jobs:
              simple_test_openmp
              echo "-------------------- TEST ORDER CORR -------------------------"
              simple_test_order_corr
-             echo "-------------------- TEST ORI -------------------------"
-             simple_test_ori
              echo "-------------------- TEST OTSU -------------------------"
              simple_test_otsu
              echo "-------------------- TEST PHASE CORR -------------------------"
@@ -202,11 +200,5 @@ jobs:
              simple_test_simd
              echo "-------------------- TEST STRINGMATCH -------------------------"
              simple_test_stringmatch
-             echo "-------------------- TEST SYM -------------------------"
-             simple_test_sym
-             echo "-------------------- TEST UNIFORM EULER -------------------------"
-             simple_test_uniform_euler
-             echo "-------------------- TEST UNIFORM ROT -------------------------"
-             simple_test_uniform_rot
              echo "-------------------- TEST UNITS -------------------------"
              simple_test_exec test=units

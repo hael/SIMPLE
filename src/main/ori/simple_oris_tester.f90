@@ -21,6 +21,9 @@ contains
         call test_rotations_and_errors()
         call test_misc_flags()
         call test_reseed_classes()
+        call test_reallocate()
+        call test_write_read_roundtrip()
+        call test_rnd_oris_bounds()
         ! call report_summary()
     end subroutine run_all_oris_tests
 
@@ -588,5 +591,107 @@ contains
         deallocate(parent_of_seed, seed_pops)
         call os%kill
     end subroutine test_reseed_classes
+
+    !---------------------------------------------------------------
+    ! 12. reallocate
+    !---------------------------------------------------------------
+    subroutine test_reallocate()
+        type(oris) :: os
+        integer    :: n, i
+        write(*,'(A)') 'test_reallocate'
+        n = 4
+        call os%new(n, .true.)
+        call os%set_all('state', [(real(i), i=1,n)])
+        call os%set_all('e1',    [(10.0*real(i), i=1,n)])
+        call os%reallocate(10)
+        call assert_int(10, os%get_noris(),         'reallocate grows to the requested size')
+        call assert_true(os%is_particle(),          'reallocate preserves is_ptcl')
+        call assert_int(4, os%get_state(4),         'reallocate preserves existing entries (state)')
+        call assert_real(40.0, os%e1get(4), 1.0e-5, 'reallocate preserves existing entries (e1)')
+        call assert_true(os%exists(10),             'reallocate: new entries exist')
+        call assert_int(0, os%get_state(10),        'reallocate: new entries are blank')
+        call os%kill
+    end subroutine test_reallocate
+
+    !---------------------------------------------------------------
+    ! 13. write / read round-trip through a text orientation file
+    !---------------------------------------------------------------
+    subroutine test_write_read_roundtrip()
+        type(oris)   :: os, os2
+        type(string) :: fname, s
+        real         :: e1(3), e2(3), sh1(2), sh2(2)
+        integer      :: n, i, j, nst
+        write(*,'(A)') 'test_write_read_roundtrip'
+        n     = 5
+        fname = string('oris_tester_roundtrip.txt')
+        call del_file(fname)
+        call os%new(n, .true.)
+        call os%rnd_oris(3.0)
+        call os%set_all('state', [1.0, 2.0, 1.0, 2.0, 1.0])
+        call os%set_all('corr',  [(0.1*real(i), i=1,n)])
+        call os%set(2, 'tag', 'ABC')
+        call os%write(fname)
+        call assert_true(file_exists(fname), 'write creates the orientation file')
+        call assert_int(n, nlines(fname),    'write emits one line per orientation')
+        call os2%new(n, .true.)
+        call os2%read(fname, nst=nst)
+        call assert_int(2, nst,              'read reports the number of states')
+        do i = 1,n
+            e1  = os%get_euler(i)
+            e2  = os2%get_euler(i)
+            sh1 = os%get_2Dshift(i)
+            sh2 = os2%get_2Dshift(i)
+            do j = 1,3
+                call assert_real(e1(j), e2(j), 1.0e-3, 'write/read round-trip Euler angle')
+            end do
+            call assert_real(sh1(1), sh2(1), 1.0e-4, 'write/read round-trip shift x')
+            call assert_real(sh1(2), sh2(2), 1.0e-4, 'write/read round-trip shift y')
+            call assert_int(os%get_state(i), os2%get_state(i), 'write/read round-trip state')
+            call assert_real(os%get(i,'corr'), os2%get(i,'corr'), 1.0e-5, 'write/read round-trip corr')
+        end do
+        s = os2%get_str(2, 'tag')
+        call assert_char('ABC', s%to_char(), 'write/read round-trip char key')
+        call del_file(fname)
+        call os%kill
+        call os2%kill
+    end subroutine test_write_read_roundtrip
+
+    !---------------------------------------------------------------
+    ! 14. rnd_oris stays within the shift and Euler limits
+    !---------------------------------------------------------------
+    subroutine test_rnd_oris_bounds()
+        type(oris) :: os
+        real       :: e(3), sh(2), eullims(3,2)
+        integer    :: n, i
+        logical    :: shifts_ok, eulers_ok, lims_ok
+        write(*,'(A)') 'test_rnd_oris_bounds'
+        n = 50
+        call os%new(n, .false.)
+        call os%rnd_oris(3.0)
+        shifts_ok = .true.
+        eulers_ok = .true.
+        do i = 1,n
+            sh = os%get_2Dshift(i)
+            e  = os%get_euler(i)
+            if( any(abs(sh) > 3.0) ) shifts_ok = .false.
+            if( e(1) < 0.0 .or. e(1) > 360.0 ) eulers_ok = .false.
+            if( e(2) < 0.0 .or. e(2) > 180.0 ) eulers_ok = .false.
+            if( e(3) < 0.0 .or. e(3) > 360.0 ) eulers_ok = .false.
+        end do
+        call assert_true(shifts_ok, 'rnd_oris: shifts within +/- trs')
+        call assert_true(eulers_ok, 'rnd_oris: Euler angles within their canonical ranges')
+        eullims(:,1) = [ 0.0,  0.0,   0.0]
+        eullims(:,2) = [90.0, 45.0, 360.0]
+        call os%rnd_oris(0.0, eullims)
+        lims_ok = .true.
+        do i = 1,n
+            e  = os%get_euler(i)
+            sh = os%get_2Dshift(i)
+            if( e(1) >= 90.0 .or. e(2) >= 45.0 ) lims_ok = .false.
+            if( any(abs(sh) > 0.0) )             lims_ok = .false.
+        end do
+        call assert_true(lims_ok, 'rnd_oris: Euler limits honoured and trs=0 gives zero shifts')
+        call os%kill
+    end subroutine test_rnd_oris_bounds
 
 end module simple_oris_tester

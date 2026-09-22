@@ -5,6 +5,10 @@ use simple_defs       ! dp, STDLEN, etc.
 use simple_ori,       only: ori
 use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev
 use simple_string,    only: string
+use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
+use simple_chash,     only: chash
+use json_kinds
+use json_module
 implicit none
 private
 public :: run_all_ori_tests
@@ -37,6 +41,15 @@ contains
         call test_geodesic_metrics()
         call test_euler_compose_vs_compeuler()
         call test_ori2str_and_str2ori_roundtrip()
+        call test_ori_from_rotmat()
+        call test_reject()
+        call test_append_ori()
+        call test_delete_entry()
+        call test_get_keys()
+        call test_ori_strlen_trim()
+        call test_ori2chash_chash2ori_roundtrip()
+        call test_ori2json()
+        call test_ctfvars_roundtrip()
         ! call report_summary()
     end subroutine run_all_ori_tests
 
@@ -548,5 +561,314 @@ contains
         s = o2%get_str('tag')
         call assert_char('ABC', s%to_char(), 'ori2str/str2ori tag')
     end subroutine test_ori2str_and_str2ori_roundtrip
+
+    !---------------- ori_from_rotmat ----------------
+
+    subroutine test_ori_from_rotmat()
+        type(ori) :: o
+        real :: e_in(3), e_out(3), R_in(3,3), R_out(3,3)
+        integer :: i, j
+        write(*,'(A)') 'test_ori_from_rotmat'
+        e_in = [20.0, 40.0, 60.0]
+        R_in = euler2m(e_in)
+        call o%ori_from_rotmat(R_in, is_ptcl=.false.)
+        call assert_true(o%exists(),            'ori_from_rotmat constructs the object')
+        call assert_true(.not. o%is_particle(), 'ori_from_rotmat honours is_ptcl=.false.')
+        e_out = o%get_euler()
+        do i = 1,3
+            call assert_real(e_in(i), e_out(i), 1.0e-2, 'ori_from_rotmat recovers the Euler triplet')
+        end do
+        R_out = o%get_mat()
+        do j = 1,3
+            do i = 1,3
+                call assert_real(R_in(i,j), R_out(i,j), 1.0e-3, 'ori_from_rotmat: get_mat matches the input matrix')
+            end do
+        end do
+        call o%kill()
+        call o%ori_from_rotmat(R_in, is_ptcl=.true.)
+        call assert_true(o%is_particle(), 'ori_from_rotmat honours is_ptcl=.true.')
+        call o%kill()
+    end subroutine test_ori_from_rotmat
+
+    !---------------- reject ----------------
+
+    subroutine test_reject()
+        type(ori) :: op, on
+        real :: e(3), sh(2)
+        write(*,'(A)') 'test_reject'
+        ! particle: pparms slots
+        call op%new_ori(.true.)
+        call op%set_euler([10.0, 20.0, 30.0])
+        call op%set_shift([1.0, -2.0])
+        call op%set_state(2)
+        call op%set('corr', 0.8)
+        call op%set('eo', 1)
+        call op%reject()
+        e  = op%get_euler()
+        sh = op%get_2Dshift()
+        call assert_real(0.0, e(1),  EPS, 'reject (ptcl) zeroes e1')
+        call assert_real(0.0, e(2),  EPS, 'reject (ptcl) zeroes e2')
+        call assert_real(0.0, e(3),  EPS, 'reject (ptcl) zeroes e3')
+        call assert_real(0.0, sh(1), EPS, 'reject (ptcl) zeroes x')
+        call assert_real(0.0, sh(2), EPS, 'reject (ptcl) zeroes y')
+        call assert_int(0, op%get_state(),           'reject (ptcl) sets state=0')
+        call assert_real(-1.0, op%get('corr'), EPS,  'reject (ptcl) sets corr=-1')
+        call assert_int(-1, op%get_eo(),             'reject (ptcl) sets eo=-1')
+        ! non-particle: hash entries
+        call on%new_ori(.false.)
+        call on%set_euler([10.0, 20.0, 30.0])
+        call on%set_shift([1.0, -2.0])
+        call on%set('state', 3)
+        call on%set('corr', 0.5)
+        call on%set('eo', 1)
+        call on%reject()
+        e  = on%get_euler()
+        sh = on%get_2Dshift()
+        call assert_real(0.0, e(2),  EPS, 'reject (non-ptcl) zeroes e2')
+        call assert_real(0.0, sh(1), EPS, 'reject (non-ptcl) zeroes x')
+        call assert_int(0, on%get_state(),           'reject (non-ptcl) sets state=0')
+        call assert_real(-1.0, on%get('corr'), EPS,  'reject (non-ptcl) sets corr=-1')
+        call assert_int(-1, on%get_eo(),             'reject (non-ptcl) sets eo=-1')
+        call op%kill()
+        call on%kill()
+    end subroutine test_reject
+
+    !---------------- append_ori ----------------
+
+    subroutine test_append_ori()
+        type(ori)    :: a, b, p
+        type(string) :: s
+        write(*,'(A)') 'test_append_ori'
+        call a%new_ori(.false.)
+        call a%set('corr', 0.5)
+        call a%set('tag',  'A')
+        call b%new_ori(.false.)
+        call b%set('kv',   300.0)
+        call b%set('corr', 0.9)
+        call b%set('name', 'B')
+        call a%append_ori(b)
+        call assert_true(a%isthere('kv'),            'append_ori adds numeric keys from the source')
+        call assert_real(300.0, a%get('kv'),   EPS,  'append_ori copies the numeric value')
+        call assert_real(0.9,   a%get('corr'), EPS,  'append_ori overwrites a shared numeric key')
+        call assert_true(a%isthere('name'),          'append_ori adds char keys from the source')
+        s = a%get_str('name')
+        call assert_char('B', s%to_char(),           'append_ori copies the char value')
+        s = a%get_str('tag')
+        call assert_char('A', s%to_char(),           'append_ori keeps existing char keys')
+        ! append is a no-op when either side is a particle
+        call p%new_ori(.true.)
+        call p%append_ori(b)
+        call assert_true(.not. p%isthere('kv'),      'append_ori is a no-op for particle targets')
+        call a%kill()
+        call b%kill()
+        call p%kill()
+    end subroutine test_append_ori
+
+    !---------------- delete_entry ----------------
+
+    subroutine test_delete_entry()
+        type(ori) :: on, op
+        write(*,'(A)') 'test_delete_entry'
+        call on%new_ori(.false.)
+        call on%set('corr', 0.5)
+        call on%set('tag',  'X')
+        call on%set('kv',   300.0)
+        call on%delete_entry('corr')
+        call assert_true(.not. on%isthere('corr'),  'delete_entry removes a numeric key')
+        call assert_true(on%isthere('kv'),          'delete_entry leaves other numeric keys')
+        call on%delete_entry('tag')
+        call assert_true(.not. on%isthere('tag'),   'delete_entry removes a char key')
+        call on%delete_entry('absent')
+        call assert_true(on%isthere('kv'),          'delete_entry of an absent key is harmless')
+        ! particle: the pparms slot is reset to its default (0)
+        call op%new_ori(.true.)
+        call op%set_class(7)
+        call op%set('corr', 0.8)
+        call op%delete_entry('class')
+        call assert_int(0, op%get_class(),          'delete_entry resets the pparms slot to 0')
+        call assert_true(.not. op%isthere('class'), 'delete_entry: the reset pparms slot reads as absent')
+        call assert_real(0.8, op%get('corr'), EPS,  'delete_entry leaves other pparms slots')
+        call on%kill()
+        call op%kill()
+    end subroutine test_delete_entry
+
+    !---------------- get_keys ----------------
+
+    subroutine test_get_keys()
+        type(ori) :: on, op
+        type(string), allocatable :: keys(:)
+        write(*,'(A)') 'test_get_keys'
+        call on%new_ori(.false.)
+        call on%set('tag',  'X')
+        call on%set('corr', 0.5)
+        call on%set('kv',   300.0)
+        keys = on%get_keys()
+        call assert_int(3, size(keys),          'get_keys (non-ptcl) counts chash + hash keys')
+        call assert_true(has_key(keys, 'tag'),  'get_keys (non-ptcl) includes the char key')
+        call assert_true(has_key(keys, 'corr'), 'get_keys (non-ptcl) includes numeric key corr')
+        call assert_true(has_key(keys, 'kv'),   'get_keys (non-ptcl) includes numeric key kv')
+        call keys%kill
+        deallocate(keys)
+        ! particle: chash keys + every pparms slot that reads as present
+        ! (slots that may legitimately be zero, e.g. e1/state, always count as present)
+        call op%new_ori(.true.)
+        call op%set('tag', 'Y')
+        call op%set_class(4)
+        call op%set('corr', 0.5)
+        keys = op%get_keys()
+        call assert_true(size(keys) > 3,          'get_keys (ptcl) includes always-present pparms slots')
+        call assert_true(has_key(keys, 'tag'),    'get_keys (ptcl) includes the char key')
+        call assert_true(has_key(keys, 'class'),  'get_keys (ptcl) includes populated pparms slot class')
+        call assert_true(has_key(keys, 'corr'),   'get_keys (ptcl) includes populated pparms slot corr')
+        call assert_true(has_key(keys, 'e1'),     'get_keys (ptcl) includes always-present slot e1')
+        call assert_true(.not. has_key(keys, 'dfx'), 'get_keys (ptcl) omits unpopulated slot dfx')
+        call keys%kill
+        deallocate(keys)
+        call on%kill()
+        call op%kill()
+    end subroutine test_get_keys
+
+    logical function has_key( keys, key )
+        type(string),     intent(in) :: keys(:)
+        character(len=*), intent(in) :: key
+        integer :: i
+        has_key = .false.
+        do i = 1,size(keys)
+            if( keys(i)%to_char() == key ) has_key = .true.
+        end do
+    end function has_key
+
+    !---------------- ori_strlen_trim ----------------
+
+    ! binoris sizes its records with max_ori_strlen_trim, so the count must equal the
+    ! length of the text ori2str produces in every combination of parts
+    subroutine test_ori_strlen_trim()
+        type(ori)    :: o
+        type(string) :: s
+        write(*,'(A)') 'test_ori_strlen_trim'
+        call o%new_ori(.false.)
+        call assert_int(0, o%ori_strlen_trim(), 'ori_strlen_trim is 0 for an empty non-ptcl ori')
+        call o%set('corr', 0.5)
+        s = o%ori2str()
+        call assert_int(s%strlen_trim(), o%ori_strlen_trim(), 'ori_strlen_trim matches ori2str (hash only)')
+        call o%set('tag', 'ABC')
+        s = o%ori2str()
+        call assert_int(s%strlen_trim(), o%ori_strlen_trim(), 'ori_strlen_trim matches ori2str (chash + hash)')
+        call o%kill()
+        call o%new_ori(.true.)
+        call o%set_euler([12.0, 34.0, 56.0])
+        call o%set_state(1)
+        s = o%ori2str()
+        call assert_int(s%strlen_trim(), o%ori_strlen_trim(), 'ori_strlen_trim matches ori2str (pparms only)')
+        call o%set('tag', 'ABC')
+        s = o%ori2str()
+        call assert_int(s%strlen_trim(), o%ori_strlen_trim(), 'ori_strlen_trim matches ori2str (chash + pparms)')
+        call o%set('kv', 300.0)
+        s = o%ori2str()
+        call assert_int(s%strlen_trim(), o%ori_strlen_trim(), 'ori_strlen_trim matches ori2str (chash + pparms + hash)')
+        call o%kill()
+        call o%new_ori(.true.)
+        call o%set_state(1)
+        call o%set('kv', 300.0)
+        s = o%ori2str()
+        call assert_int(s%strlen_trim(), o%ori_strlen_trim(), 'ori_strlen_trim matches ori2str (pparms + hash)')
+        call o%kill()
+    end subroutine test_ori_strlen_trim
+
+    !---------------- ori2chash / chash2ori ----------------
+
+    ! this is the job-description path used by qsys_env and sp_project
+    subroutine test_ori2chash_chash2ori_roundtrip()
+        type(ori)    :: o, o2
+        type(chash)  :: ch
+        type(string) :: s
+        write(*,'(A)') 'test_ori2chash_chash2ori_roundtrip'
+        call o%new_ori(.false.)
+        call o%set('prg',      'refine3D')
+        call o%set('projname', 'apoferritin')
+        call o%set('nthr',     8)
+        call o%set('kv',       300.0)
+        ch = o%ori2chash()
+        call assert_int(4, ch%size_of(),              'ori2chash carries chash and hash keys')
+        call assert_true(ch%isthere('prg'),           'ori2chash keeps the char key')
+        call assert_true(ch%isthere('nthr'),          'ori2chash converts the numeric key')
+        s = ch%get('prg')
+        call assert_char('refine3D', s%to_char(),     'ori2chash char value')
+        s = ch%get('nthr')
+        call assert_char('8', s%to_char(),            'ori2chash numeric value rendered as an integer string')
+        call o2%chash2ori(ch)
+        call assert_true(.not. o2%is_particle(),      'chash2ori builds a non-ptcl ori')
+        call assert_true(o2%ischar('prg'),            'chash2ori restores the char key')
+        s = o2%get_str('projname')
+        call assert_char('apoferritin', s%to_char(),  'chash2ori restores the char value')
+        call assert_true(.not. o2%ischar('nthr'),     'chash2ori parses the numeric value back into the hash')
+        call assert_int(8,   o2%get_int('nthr'),      'chash2ori numeric value nthr')
+        call assert_int(300, o2%get_int('kv'),        'chash2ori numeric value kv')
+        call ch%kill
+        call o%kill()
+        call o2%kill()
+    end subroutine test_ori2chash_chash2ori_roundtrip
+
+    !---------------- ori2json ----------------
+
+    subroutine test_ori2json()
+        type(ori)                 :: o
+        type(json_core)           :: json
+        type(json_value), pointer :: json_ori
+        real(dp)                  :: dval
+        character(kind=CK,len=:), allocatable :: cval
+        logical :: found
+        write(*,'(A)') 'test_ori2json'
+        call o%new_ori(.false.)
+        call o%set('kv',  300.0)
+        call o%set('prg', 'refine3D')
+        json_ori => null()
+        call o%ori2json(json_ori)
+        call assert_true(associated(json_ori),        'ori2json creates a json object')
+        call assert_int(2, json%count(json_ori),      'ori2json emits one member per key')
+        call json%get(json_ori, 'kv', dval, found)
+        call assert_true(found,                       'ori2json numeric key present')
+        call assert_double(300.0_dp, dval,            'ori2json numeric value')
+        call json%get(json_ori, 'prg', cval, found)
+        call assert_true(found,                       'ori2json char key present')
+        call assert_char('refine3D', cval,            'ori2json char value')
+        call json%destroy(json_ori)
+        call o%kill()
+    end subroutine test_ori2json
+
+    !---------------- get_ctfvars / set_ctfvars ----------------
+
+    subroutine test_ctfvars_roundtrip()
+        type(ori)       :: o
+        type(ctfparams) :: c_in, c_out
+        write(*,'(A)') 'test_ctfvars_roundtrip'
+        c_in%ctfflag = CTFFLAG_FLIP
+        c_in%smpd    = 1.1
+        c_in%kv      = 300.0
+        c_in%cs      = 2.7
+        c_in%fraca   = 0.1
+        c_in%dfx     = 1.5
+        c_in%dfy     = 1.6
+        c_in%angast  = 30.0
+        c_in%phshift = 0.5
+        call o%new_ori(.true.)
+        call o%set_ctfvars(c_in)
+        c_out = o%get_ctfvars()
+        call assert_int(int(CTFFLAG_FLIP), int(c_out%ctfflag), 'ctfvars roundtrip ctfflag')
+        call assert_real(1.1,   c_out%smpd,    EPS, 'ctfvars roundtrip smpd')
+        call assert_real(300.0, c_out%kv,      EPS, 'ctfvars roundtrip kv')
+        call assert_real(2.7,   c_out%cs,      EPS, 'ctfvars roundtrip cs')
+        call assert_real(0.1,   c_out%fraca,   EPS, 'ctfvars roundtrip fraca')
+        call assert_real(1.5,   c_out%dfx,     EPS, 'ctfvars roundtrip dfx')
+        call assert_real(1.6,   c_out%dfy,     EPS, 'ctfvars roundtrip dfy')
+        call assert_real(30.0,  c_out%angast,  EPS, 'ctfvars roundtrip angast')
+        call assert_real(0.5,   c_out%phshift, EPS, 'ctfvars roundtrip phshift')
+        call o%kill()
+        ! without a ctf key the flag defaults to yes
+        call o%new_ori(.false.)
+        c_out = o%get_ctfvars()
+        call assert_int(int(CTFFLAG_YES), int(c_out%ctfflag), 'get_ctfvars defaults ctfflag to yes')
+        call o%kill()
+    end subroutine test_ctfvars_roundtrip
 
 end module simple_ori_tester

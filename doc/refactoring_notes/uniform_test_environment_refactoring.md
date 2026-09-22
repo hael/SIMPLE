@@ -6,9 +6,12 @@ Status: in progress. Phases 0, 1 and 2 are complete (2026-09-22): the fast
 gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
-Phase 3 (the review of everything else) is next. This is a large project
-with four workstreams (section 1.1), delivered in slices that are each
-useful on their own.
+Phase 3 (the review of everything else) is under way: the geometry batch
+is done and built (section 9.7; nine identities retired into the
+`unit_ori` testers and one `lib_geometry` case, no production call lost,
+gate green at 3.6 s). This is a large
+project with four workstreams (section 1.1), delivered in slices that are
+each useful on their own.
 
 Validation level: static source inspection of SIMPLE, and of X's test system
 (`production/CMakeLists.txt`, AGENTS.md "Test admission" and "Test tiering",
@@ -895,6 +898,11 @@ First instance, 2026-09-22: `subproject_distr` and
 scheduling framework in `simple_qsys_ctrl`/`simple_qsys_env` (added with
 them on 2026-04-06); both tests and the framework were removed together.
 
+The call-footprint proxy counts, for each `unit_<area>` identity, the
+tester modules and local sub-suites that `suites_<area>()` registers, so a
+`merge into unit_<area>` is credited to the tester that received the checks
+rather than reported as lost coverage.
+
 ### 9.6 Mechanics and pace
 
 The review of an area is one commit series: the verdicts (inventory rows
@@ -908,6 +916,52 @@ a few weeks of reviewer time spread across the migration.
 Verdicts are revisited only through the same process: a `keep` that later
 fails the budget goes back through review with its timing, not straight to
 deletion.
+
+### 9.7 Batch record
+
+**Geometry (2026-09-22, Hans).** Nine identities on both routes: `angres`,
+`ori`/`ori_test`, `oris`/`oris_test`, `sym`/`sym_test`, `uniform_euler`,
+`uniform_rot`. The dossiers showed three print-only smokes with a handful of
+`THROW_HARD`s, one print-only sweep, and two sampling demos. The question
+"is what they touch exactly covered elsewhere?" was answered by comparing
+their call footprint with the `ori`/`oris` tester modules procedure by
+procedure: twelve `ori` methods (`ori_from_rotmat`, `get_axis_angle`,
+`reject`, `append_ori`, `delete_entry`, `get_keys`, `ori_strlen_trim`,
+`ori2chash`/`chash2ori`, `ori2json`, `get_ctfvars`, `print_ori`) and three
+`oris` behaviours (`reallocate`, write/read round-trip, `rnd_oris` bounds)
+were touched only by the old tests, so the verdicts are `merge into
+unit_ori`, with asserting tests added to `simple_ori_tester` and
+`simple_oris_tester` first (`print_ori` stays print-only). `sym` had no
+assertions at all; it is replaced by a new `simple_sym_tester` module
+(sub-suite `symmetry` of `unit_ori`) that pins the order and classification
+of every group, the Euler limits, the subgroup tables, the group axioms of
+the operator set (identity first, proper rotations, distinct, closed under
+composition), `apply` consistency, `rnd_euler` limits, `rot_to_asym`,
+`symrandomize` and `build_refspiral`; the print-only `sym_tester` routine
+left `simple_sym`. `angres` is `modify`: the sweep lives in
+`simple_test_exec test=angres` (tier `lib_geometry`) with assertions
+against the recorded resolution ladder. `uniform_euler` and `uniform_rot`
+are `delete`. Coverage accounting: the retired tests made 31 distinct
+production calls and imported two production modules; every one is still
+made by a remaining test, none lost. Two findings, both acted on by the
+owner the same day: `ori%get_axis_angle` had no production caller and fed
+Euler angles in degrees straight into `cos`/`sin`, so it was removed
+rather than tested (second instance of a test finding dead production
+code, section 9.5); `ori_strlen_trim` over-counted by one for a particle
+with neither hash nor chash entries (it always added the pparms separator)
+and now counts one separator between non-empty parts, which the tester
+pins for every combination of parts. First build of the batch: 712 of 714
+new assertions passed; the two failures were the spiral redundancy check
+for `d7` and `i`, one pair each. That pair is the jittered north pole and
+its mirror mate: for d/o/i the mirror of the pole is symmetry-equivalent
+to the pole, `build_refspiral` nudges it by at most 0.5 degrees so the
+two are not identical, and the mate can land within a few thousandths of
+a degree of it. The test now allows exactly that pair (mirror partners,
+at most once) and still forbids every other near-coincidence; whether the
+spiral should instead replace the degenerate mate with another
+asymmetric-unit direction is an open owner question. Second build: gate
+green, 7/7, 3.6 s real on the reference Mac in Debug (`unit_ori` 3.6 s
+with the three ori/oris/sym sub-suites at 714 assertions).
 
 ## 10. Fast-tier performance
 

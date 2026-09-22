@@ -5,7 +5,7 @@ use simple_ori,  only: ori
 use simple_oris, only: oris
 implicit none
 
-public :: sym, is_valid_pointgroup, sym_tester
+public :: sym, is_valid_pointgroup
 private
 #include "simple_local_flags.inc"
 
@@ -2032,76 +2032,5 @@ contains
         end select
         is_valid_pointgroup = .true.
     end function is_valid_pointgroup
-
-    subroutine sym_tester(pgrp)
-        character(len=*), intent(in) :: pgrp
-        type(sym)  :: se, tmp
-        type(ori)  :: o, oj, north_pole
-        type(oris) :: os
-        integer    :: i,j,isym,n
-        logical    :: found
-        write(logfhandle,'(A,A)')'>>>'
-        write(logfhandle,'(A,A)')'>>> POINT GROUP: ', trim(pgrp)
-        call se%new(pgrp)
-        write(logfhandle,'(A)')'>>> SYMMETRY SUB-GROUPS'
-        do isym=1, se%get_nsubgrp()
-            tmp = se%get_subgrp(isym)
-            write(logfhandle,'(I3,1X,A3)') isym, tmp%get_pgrp()
-        enddo
-        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE PHI  :', se%eullims_nomirr(1,:)
-        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE THETA:', se%eullims_nomirr(2,:)
-        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR PHI  :', se%eullims(1,:)
-        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR THETA:', se%eullims(2,:)
-        write(logfhandle,'(A)')'>>> SPIRAL'
-        call os%new(1000, is_ptcl=.false.)
-        call se%build_refspiral(os)
-        call os%write(string(pgrp//'.txt'))
-        call os%write2bild(string(pgrp//'.bild'))
-        ! redundancy
-        n = 0
-        call oj%new(is_ptcl=.false.)
-        do i=1,os%get_noris()-1
-            call os%get_ori(i, o)
-            do j=i+1,os%get_noris()
-                call os%get_ori(j, oj)
-                if( rad2deg(o.euldist.oj) < 0.001 )then
-                    n=n+1
-                    write(logfhandle,*)i,j,o%get_euler(),oj%get_euler()
-                endif
-            enddo
-        enddo
-        if(n==0)then
-            write(logfhandle,'(A)')'>>> SPIRAL REDUNDANCY PASSED'
-        else
-            write(logfhandle,'(A)')'>>> SPIRAL REDUNDANCY FAILED'
-            write(logfhandle,*)n
-        endif
-        ! north pole
-        call north_pole%new(is_ptcl=.false.)
-        call north_pole%set_euler([0.,0.,0.])
-        found = .false.
-        do i=1,os%get_noris()
-            call os%get_ori(i, o)
-            if( (o.euldist.north_pole) < 0.01 )then
-                found = .true.
-                exit
-            endif
-        enddo
-        if(found)then
-            write(logfhandle,'(A)')'>>> NORTH POLE PASSED'
-        else
-            write(logfhandle,'(A)')'>>> NORTH POLE FAILED'
-        endif
-        write(logfhandle,'(A)')'>>> SYMMETRY OPERATORS EULER ANGLES:'
-        do isym=1, se%get_nsym()
-            call se%e_sym%print(isym)
-        enddo
-        ! cleanup
-        call se%kill
-        call os%kill
-        call tmp%kill
-        call o%kill
-        call oj%kill
-    end subroutine sym_tester
 
 end module simple_sym

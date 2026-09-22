@@ -14,6 +14,7 @@ use simple_cmdline_tester,                   only: run_all_cmdline_tests
 use simple_rec_list_tester,                  only: run_all_rec_list_tests
 use simple_ori_tester,                       only: run_all_ori_tests
 use simple_oris_tester,                      only: run_all_oris_tests
+use simple_sym_tester,                       only: run_all_sym_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
@@ -147,6 +148,7 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'orientation',            run_all_ori_tests)
         call add_suite(s, n, 'orientation collection', run_all_oris_tests)
+        call add_suite(s, n, 'symmetry',               run_all_sym_tests)
         call add_suite(s, n, 'orientation data',       suite_orientation_data)
         call add_suite(s, n, 'Euler shift',            test_euler_shift)
     end subroutine suites_ori

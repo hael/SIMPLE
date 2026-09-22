@@ -38,7 +38,6 @@
       - `simple_pose_cont_refinement_numerics_test.f90`
       - `simple_pose_cont_refinement_solver_test.f90`
       - `simple_pose_cont_refinement_test_helpers.f90`
-      - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
       - `simple_test_binoris.f90`
@@ -106,8 +105,6 @@
       - `simple_test_openmp_offload.f90`
       - `simple_test_opt_lp.f90`
       - `simple_test_order_corr.f90`
-      - `simple_test_ori.f90`
-      - `simple_test_oris.f90`
       - `simple_test_otsu.f90`
       - `simple_test_pca_all.f90`
       - `simple_test_pca_imgvar.f90`
@@ -140,10 +137,7 @@
       - `simple_test_starfile.f90`
       - `simple_test_stream_initial_analysis.f90` — smoke test that invokes stream p03 initial analysis commander
       - `simple_test_stringmatch.f90`
-      - `simple_test_sym.f90`
       - `simple_test_ui_visibility.f90`
-      - `simple_test_uniform_euler.f90`
-      - `simple_test_uniform_rot.f90` — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
       - `test_socket_comm_distr.f90`
   - **scripts/** — home of scripts and code generators
     - **memory/**
@@ -211,6 +205,7 @@
       - `simple_sigma2_state.f90` — canonical per-particle sigma2 state validation, reduction and transactional consolidation
       - `simple_simulator.f90` — simulation of single-particle images
       - `simple_sym.f90` — defines protein point-group symmetries
+      - `simple_sym_tester.f90` — unit test routines for the sym class (point-group symmetries)
       - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
       - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
         - `simple_commanders_api.f90` — API for the commanders
