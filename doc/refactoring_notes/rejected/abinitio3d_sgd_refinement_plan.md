@@ -225,7 +225,7 @@ ab initio and refine behavior.
 
 Owner:
 
-- `src/main/simple_abinitio_controller.f90`
+- `src/main/abinitio/simple_abinitio_controller.f90`
 - `src/main/commanders/simple/simple_commanders_abinitio.f90`
 
 Responsibilities:

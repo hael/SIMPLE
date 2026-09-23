@@ -51,7 +51,7 @@ This note captures the refactor decisions and code changes made to separate:
 ### Matching/Search Paths (Search Range)
 - In-plane matching and scoring utilities remain search-bound.
 - `src/main/strategies/search/simple_strategy2D_utils.f90`
-- `src/utils/simple_corrmat.f90`
+- `src/main/strategies/search/simple_corrmat.f90`
 - Matching-only setup in `src/main/strategies/search/simple_strategy2D_matcher.f90` (`prep_pftc4align2D`) remains `get_pdim_srch()` by design.
 
 ## Partial Sum I/O Confirmation

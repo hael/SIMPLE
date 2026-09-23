@@ -213,7 +213,7 @@ by construction visits little, from looking converged.
 ## Implementation
 
 - Objective and all-rotation evaluation: `src/main/pftc/simple_polarft_corr.f90`.
-- Noise model: `src/main/simple_euclid_sigma2.f90`, `src/main/simple_sigma2_state.f90`.
+- Noise model: `src/main/sigma2/simple_euclid_sigma2.f90`, `src/main/sigma2/simple_sigma2_state.f90`.
 - Search strategies: `src/main/strategies/search/simple_strategy2D_*.f90`;
   annealing constants in `src/utils/math/simple_decay_funs.f90`.
 - Accumulation and restoration: `src/main/class/simple_classaverager*.f90`;

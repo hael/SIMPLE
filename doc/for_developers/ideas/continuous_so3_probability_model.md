@@ -15,21 +15,21 @@ The immediate goal is not to analytically integrate over SO(3). The recommended 
 
 The relevant existing implementation is concentrated in:
 
-- `src/main/simple_eul_prob_tab.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`
   - dense probability-table construction over active discrete projection references
   - `fill_tab`
   - `ref_assign`
   - `ref_score_tab`
   - `read_tab_to_glob`
   - `write_assignment`
-- `src/main/simple_eul_prob_tab_neigh.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90`
   - sparse neighborhood probability-table construction
   - `fill_tab_neigh`
   - `record_sparse_eval`
   - `write_tab_neigh`
   - `read_sparse_tab_to_glob`
   - `ref_assign_neigh`
-- `src/main/simple_eul_prob_tab_utils.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90`
   - distance/correlation conversion
   - bounded and power sampling utilities
   - seeded shift materialization
@@ -39,7 +39,7 @@ The relevant existing implementation is concentrated in:
   - batched extraction of discrete reference polar sections
 - `src/main/pftc/simple_polarft_core.f90`
   - production `vol_pad2ref_pfts` ownership of reference-section extraction
-- `src/main/strategies/search/simple_strategy3D_prob.f90`
+- `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90`
   - consumption of probability-table assignments during search/update
 - `src/main/strategies/search/simple_strategy3D_matcher.f90`
   - partition-level probabilistic assignment use and matcher integration

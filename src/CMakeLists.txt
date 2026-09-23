@@ -150,8 +150,8 @@ set(SIMPLE_INTENTIONAL_HELPER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_pool2D_utils.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/comm/simple_ipc_tcp_socket_tester.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/persistent_worker/simple_persistent_worker_server_tester.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_private_prgs.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_segmentation.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/ui/simple_private_prgs.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/image_processing/simple_segmentation.f90"
 )
 set_property(SOURCE ${SIMPLE_INTENTIONAL_HELPER_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-unused-function")

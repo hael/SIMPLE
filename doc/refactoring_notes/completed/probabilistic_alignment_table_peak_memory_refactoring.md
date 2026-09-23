@@ -556,9 +556,9 @@ flat buffers, and exact old/new candidate-stream comparison.
 
 Primary:
 
-- `src/main/simple_eul_prob_tab.f90`
-- `src/main/simple_eul_prob_tab_neigh.f90`
-- `src/main/simple_eul_prob_tab_utils.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90`
 - `src/main/commanders/simple/simple_commanders_prob.f90`
 
 Likely one small shared module should own `prob_candidate`,

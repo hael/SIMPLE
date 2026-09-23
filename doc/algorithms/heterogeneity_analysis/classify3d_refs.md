@@ -50,6 +50,6 @@ initial source of structural hypotheses.
 - Correlation initialization:
   `src/main/simple_external_reference_pose_initialization.f90`.
 - Frequency schedule: `src/main/simple_refine3D_stage_plan.f90`.
-- State assignment: `src/main/simple_eul_prob_tab.f90` and
-  `src/main/strategies/search/simple_strategy3D_prob.f90`.
+- State assignment: `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` and
+  `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90`.
 - Policy: `doc/policies/3D/classify3D_refs_policy.md`.

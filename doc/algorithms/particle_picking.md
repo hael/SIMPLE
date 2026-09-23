@@ -100,10 +100,10 @@ the data or a micrograph without particles.
 ## Implementation
 
 - Segmentation: `src/main/pick/simple_pickseg.f90`, `src/main/pick/simple_picksegdiam.f90`;
-  thresholds in `src/utils/simple_segmentation.f90`.
+  thresholds in `src/main/image_processing/simple_segmentation.f90`.
 - Reference bank and coordinate selection: `src/main/pick/simple_pickref.f90`,
   `src/main/strategies/parallelization/simple_pick_strategy.f90`.
 - Batched Pearson evaluation: `src/main/pick/simple_pickref_corr_batch.f90`.
 - Workflow and extraction: `src/main/pick/simple_picker_utils.f90`,
-  `src/main/simple_particle_extractor.f90`.
+  `src/main/preprocess/simple_particle_extractor.f90`.
 - Design note: `doc/implementation_notes/reference_picker_flcf_plan.md`.

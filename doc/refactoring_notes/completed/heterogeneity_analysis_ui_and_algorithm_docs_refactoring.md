@@ -59,7 +59,7 @@ helpers, so the relocation is a mechanical cut-and-paste.
 | UI object, constructor `new_ppca_volvar`, registration | `src/main/ui/simple/simple_ui_denoise.f90` |
 | Execution case and `xppca_volvar` commander instance | `src/main/exec/simple_exec_denoise.f90` |
 | `commander_ppca_volvar` type and `exec_ppca_volvar` | `src/main/commanders/simple/simple_commanders_volops.f90` |
-| `make_pcavol` (used only by `exec_ppca_volvar`) | `src/utils/simple_imgproc.f90` |
+| `make_pcavol` (used only by `exec_ppca_volvar`) | `src/main/image_processing/simple_imgproc.f90` |
 | Generated symbol indexes | `doc/code_overview/fortran-indexes/` |
 
 Algorithm documentation is currently flat under `doc/algorithms`. The

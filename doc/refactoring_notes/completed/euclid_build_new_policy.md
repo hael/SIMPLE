@@ -23,7 +23,7 @@ The key architectural decision is:
 - Removed `eucl_sigma2_glob` export and pointer lifecycle.
 - `simple_image_ctf` / polar code paths now receive sigma arrays explicitly as arguments.
 - Updated in:
-  - `src/main/simple_euclid_sigma2.f90`
+  - `src/main/sigma2/simple_euclid_sigma2.f90`
   - `src/main/image/simple_image.f90`
   - `src/main/image/simple_image_ctf.f90`
   - `src/main/pftc/simple_polarft_ops_state.f90`

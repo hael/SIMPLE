@@ -434,7 +434,7 @@ The seed pass is reported by its own `>>> ABINITIO2D SEED PASS` line; the
 ## 9. Files touched (uncommitted)
 
 `src/main/ori/simple_oris.f90`, `src/main/ori/simple_oris_reshape.f90`,
-`src/main/ori/simple_oris_tester.f90`, `src/main/simple_abinitio2D_controller.f90`,
+`src/main/ori/simple_oris_tester.f90`, `src/main/abinitio/simple_abinitio2D_controller.f90`,
 `src/main/commanders/simple/simple_commanders_abinitio2D.f90`,
 `src/main/strategies/parallelization/simple_cluster2D_strategy.f90`,
 `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_phases.f90`,

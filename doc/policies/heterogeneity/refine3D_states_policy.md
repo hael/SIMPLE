@@ -17,7 +17,7 @@ Primary implementation:
 - `src/main/exec/simple_exec_refine3D.f90`
 - `src/main/commanders/simple/simple_commanders_refine3D.f90`
 - `src/main/simple_refine3D_stage_plan.f90`
-- `src/main/strategies/search/simple_strategy3D_prob.f90`
+- `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90`
 
 ## 1. Scientific Scope
 

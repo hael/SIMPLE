@@ -43,6 +43,6 @@ an initially larger state from winning solely through better angular coverage.
 
 - Workflow: `src/main/commanders/simple/simple_commanders_refine3D.f90`.
 - Frequency schedule: `src/main/simple_refine3D_stage_plan.f90`.
-- State assignment: `src/main/simple_eul_prob_tab.f90` and
-  `src/main/strategies/search/simple_strategy3D_prob.f90`.
+- State assignment: `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` and
+  `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90`.
 - Policy: `doc/policies/heterogeneity/refine3D_states_policy.md`.

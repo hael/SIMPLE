@@ -456,7 +456,7 @@ particle-domain matcher.
 
 Update:
 
-- `src/main/simple_abinitio_controller.f90`;
+- `src/main/abinitio/simple_abinitio_controller.f90`;
 - `src/main/commanders/simple/simple_commanders_abinitio.f90`;
 - `doc/policies/abinitio3D_policy.md`;
 - related fractional-update and trailing-reconstruction policy notes.

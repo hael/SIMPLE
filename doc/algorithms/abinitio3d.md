@@ -141,11 +141,11 @@ every active particle received a post-split update.
 
 ## Implementation
 
-- Stage schedule and policies: `src/main/simple_abinitio_controller.f90`;
-  bandwidth ladder in `src/main/simple_abinitio_utils.f90` and
+- Stage schedule and policies: `src/main/abinitio/simple_abinitio_controller.f90`;
+  bandwidth ladder in `src/main/abinitio/simple_abinitio_utils.f90` and
   `src/utils/filter/simple_estimate_ssnr.f90`.
 - Orchestration: `src/main/commanders/simple/simple_commanders_abinitio.f90`.
 - Symmetry axis search: `src/main/volume/simple_volpft_symsrch.f90`,
-  `src/main/simple_symanalyzer.f90`.
+  `src/main/volume/simple_symanalyzer.f90`.
 - Base estimator: `src/main/commanders/simple/simple_commanders_refine3D.f90`.
 - Policy: `doc/policies/abinitio3D_policy.md`.

@@ -116,8 +116,8 @@ class products, and the per-particle assignments, scores, and noise spectra.
 
 ## Implementation
 
-- Stage schedule: `src/main/simple_abinitio2D_controller.f90`.
+- Stage schedule: `src/main/abinitio/simple_abinitio2D_controller.f90`.
 - Orchestration: `src/main/commanders/simple/simple_commanders_abinitio2D.f90`.
 - Iteration execution: `src/main/strategies/parallelization/simple_cluster2D_strategy.f90`.
-- Class-likelihood table: `src/main/simple_eul_prob_tab2D.f90`.
+- Class-likelihood table: `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90`.
 - Policy: `doc/policies/abinitio2D_policy.md`.
