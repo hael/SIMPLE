@@ -2200,16 +2200,19 @@ contains
 
     ! ---------------- self-test ----------------
 
-    !> Three checks on a random Gaussian test volume at the given box. (A) operator: E Pi T Pi E u through
+    !> Four checks on a random Gaussian test volume at the given box. (A) operator: E Pi T Pi E u through
     !! the doubled-coordinate kernels against the exact nonuniform-DFT Gram (the KB-interpolation Gram is
     !! itself 18-22% off and is not a reference); (B) right-hand side: the 2x deposit of exact samples
     !! against the exact adjoint; (C) box <= 32 only: a full preconditioned CG solve of T u = S^H y from
-    !! central-slice samples of the volume, recovery of the volume on a spherical support. loc_fixed
-    !! restricts (A) and (B) to one sample at that position and prints profiles.
-    subroutine test_flex_pcg_operator( box, nsamples, l_pass, loc_fixed )
+    !! central-slice samples of the volume, recovery of the volume on a spherical support: the clean,
+    !! generously supported baseline by default; with sweep=.true. twelve solves over support size, sample
+    !! noise and the Tikhonov term, every clean one held to the baseline criterion. (D) the band-list
+    !! kernels and right-hand side against the dense fold, bitwise.
+    subroutine test_flex_pcg_operator( box, nsamples, l_pass, passes, sweep )
         integer, intent(in)  :: box, nsamples
         logical, intent(out) :: l_pass
-        real, optional, intent(in) :: loc_fixed(3)
+        logical, optional, intent(out) :: passes(4)   !< (A) operator, (B) rhs, (C) solve, (D) band lists
+        logical, optional, intent(in)  :: sweep       !< (C) over all twelve settings (default: the baseline)
         type(flex_pcg_t) :: op
         type(flex_pcg_outcome_t) :: out
         real,    allocatable :: kacc(:,:), kpk(:,:), u(:,:,:,:), hu(:,:,:,:), eu4(:,:,:,:)
@@ -2227,8 +2230,10 @@ contains
         integer :: ih, ik, im, di, dj, dk, c, np, isw
         real    :: mfrac, nlev, lamv, lamr(3)
         real(dp) :: yrms
-        logical :: pass_a, pass_b, pass_c, pass_d
-        integer :: tt, ijk(3), nmiss
+        logical :: pass_a, pass_b, pass_c, pass_d, l_sweep
+        integer :: tt, ijk(3), nmiss, nsw
+        l_sweep = .false.
+        if( present(sweep) ) l_sweep = sweep
         call op%new(box, 1.0, 1)
         call op%set_band(op%Rnat)
         wdim   = 2*ceiling(KBWINSZ - 0.5) + 1
@@ -2238,17 +2243,11 @@ contains
         c   = box/2 + 1
         twopi_n = 2.0_dp * PI / real(box,dp)
         allocate(locs(3,nsamples), wts(nsamples))
-        call seed_rnd
+        call fixed_seed(20260925)   ! reproducible sample positions, volume modulation and slices
         do s = 1, nsamples
             locs(:,s) = (2.0*[ran3(), ran3(), ran3()] - 1.0) * (0.5*real(nyq))
             wts(s)    = 1.0
         end do
-        if( present(loc_fixed) )then
-            locs(:,1) = loc_fixed
-            locs(:,2:) = 0.0
-            wts = 0.0
-            wts(1) = 1.0
-        endif
         allocate(u(box,box,box,1), hu(box,box,box,1), eu4(box,box,box,1))
         ctr = real(box)/2.0 + 1.0
         sig = 0.12*real(box)
@@ -2268,7 +2267,6 @@ contains
         allocate(eu(box,box,box), be(box,box,box), source=0.0_dp)
         eu = real(eu4(:,:,:,1),dp)
         do s = 1, nsamples
-            if( wts(s) == 0.0 ) cycle
             do sgn = 1, -1, -2
                 loc = real(sgn) * locs(:,s)
                 call exps(loc)
@@ -2323,19 +2321,11 @@ contains
             &' samples=', nsamples, '  kernel vs exact Gram: corr=', real(cc), '  LS scale=', real(scale), &
             &'  rel_resid=', real(err), '  |exact|=', real(na)
         pass_a = abs(scale - 1.0_dp) < 0.05_dp .and. err < 0.1_dp
-        if( present(loc_fixed) )then
-            write(logfhandle,'(A,3F7.2)') '    single sample at loc=', loc_fixed
-            write(logfhandle,'(A)') '    x-profile through the centre (exact | kernel):'
-            do j = max(1,c-10), min(box,c+10)
-                write(logfhandle,'(I6,2ES14.5)') j-c, be(j,c,c), hu(j,c,c,1)
-            end do
-        endif
         ! ================= (B) right-hand side: 2x deposit of exact samples vs exact adjoint =================
         allocate(ysmp(nsamples), source=(0.0_dp,0.0_dp))
         allocate(bx(box,box,box), source=0.0_dp)
         eu = real(u(:,:,:,1),dp)
         do s = 1, nsamples
-            if( wts(s) == 0.0 ) cycle
             loc = locs(:,s)
             call exps(loc)
             call sample_exact(eu, ysmp(s))
@@ -2344,7 +2334,6 @@ contains
         allocate(racc4(op%ncomp, op%lims3(1,2)-op%lims3(1,1)+1, op%lims3(2,2)-op%lims3(2,1)+1, &
             &op%lims3(3,2)-op%lims3(3,1)+1), source=cmplx(0.,0.))
         do s = 1, nsamples
-            if( wts(s) == 0.0 ) cycle
             do sgn = 1, -1, -2
                 loc  = real(sgn) * locs(:,s)
                 loc2 = real(op%padf) * loc
@@ -2391,18 +2380,14 @@ contains
         write(logfhandle,'(A,F8.5,A,F10.5,A,ES10.3,A,ES10.3)') '>>> FLEX PCG TEST (B) rhs deposit vs exact adjoint: corr=', &
             &real(cc), '  LS scale=', real(scale), '  rel_resid=', real(err), '  |exact|=', real(na)
         pass_b = abs(scale - 1.0_dp) < 0.05_dp .and. err < 0.1_dp
-        if( present(loc_fixed) )then
-            write(logfhandle,'(A)') '    x-profile through the centre (exact adjoint | deposit):'
-            do j = max(1,c-10), min(box,c+10)
-                write(logfhandle,'(I6,2ES14.5)') j-c, bx(j,c,c), b4(j,c,c,1)
-            end do
-        endif
         deallocate(kpk, rpk, b4, be, bx, ysmp)
         ! ================= (C) preconditioned CG solve from central-slice samples =================
-        ! a sweep over the support size, sample noise and the Tikhonov term; the pass criterion is the
-        ! clean, generously supported baseline, the rest characterises the conditioning
+        ! the clean, generously supported baseline (mask 0.40, no noise, no Tikhonov term); the sweep adds
+        ! the tighter support, sample noise and the Tikhonov term. Every clean solve must meet the baseline
+        ! criterion; the noisy ones characterise what the Tikhonov term is for (unregularised, CG runs
+        ! into the null space and the error outside the low-pass grows without bound)
         pass_c = .true.
-        if( box <= 32 .and. .not. present(loc_fixed) )then
+        if( box <= 32 )then
             np    = 48
             nyqsq = nyq*nyq
             ns = 0
@@ -2469,7 +2454,8 @@ contains
             call op%finalize(kpk)
             allocate(b4(box,box,box,1), x4(box,box,box,1), source=0.0)
             allocate(ut(box,box,box), source=0.0)
-            do isw = 1, 12
+            nsw = merge(12, 1, l_sweep)
+            do isw = 1, nsw
                 mfrac = merge(0.4, 0.25, mod((isw-1)/6, 2) == 0)
                 nlev  = merge(0.0, 0.5,  mod((isw-1)/3, 2) == 0)
                 lamr  = [0.0, 1.0e-3, 1.0e-2]
@@ -2506,22 +2492,35 @@ contains
                     &'>>> FLEX PCG TEST (C) sweep: mask=', mfrac, ' noise=', nlev, ' lam=', lamv, &
                     &'  iters=', out%iteration_count, '  its_to_1e-2=', out%iters_to_1e2, &
                     &'  final resid=', out%final_rel_residual, '  err full=', real(err), '  err inner=', real(cc)
-                if( isw == 1 ) pass_c = cc < 0.05_dp .and. out%final_rel_residual < 1.0e-2
+                if( nlev == 0.0 ) pass_c = pass_c .and. cc < 0.05_dp .and. out%final_rel_residual < 1.0e-2
                 deallocate(rpk)
             end do
             write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PCG TEST (C) slices=', np, ' samples=', ns
             deallocate(kpk, b4, x4, rho_t, ut, ysmp)
         endif
         l_pass = pass_a .and. pass_b .and. pass_c .and. pass_d
+        if( present(passes) ) passes = [pass_a, pass_b, pass_c, pass_d]
         if( l_pass )then
-            write(logfhandle,'(A)') '    PASS: operator, right-hand side and solve within tolerance'
+            write(logfhandle,'(A)') '    PASS: operator, right-hand side, solve and band lists within tolerance'
         else
-            write(logfhandle,'(A,3L2)') '    FAIL (operator, rhs, solve): ', pass_a, pass_b, pass_c
+            write(logfhandle,'(A,4L2)') '    FAIL (operator, rhs, solve, band lists): ', pass_a, pass_b, pass_c, pass_d
         endif
         call op%kill
         deallocate(locs, wts, u, hu, eu4, eu, ex, ey, ez)
 
     contains
+
+        subroutine fixed_seed( base_seed )
+            integer, intent(in) :: base_seed
+            integer, allocatable :: seed(:)
+            integer :: ii, nn
+            call random_seed(size=nn)
+            allocate(seed(nn))
+            do ii = 1, nn
+                seed(ii) = modulo(base_seed + 104729 * (ii - 1), huge(0) - 1) + 1
+            enddo
+            call random_seed(put=seed)
+        end subroutine fixed_seed
 
         !> separable exponentials of one sample position
         subroutine exps( p )
@@ -2534,21 +2533,23 @@ contains
             end do
         end subroutine exps
 
-        !> F = (1/N^3) sum_n v(n) e^{-i...} for the current exponentials
+        !> F = (1/N^3) sum_n v(n) e^{-i...} for the current exponentials, one axis at a time: the x sum
+        !! for every (y,z) column is one real (2,N) x (N,N^2) product (library matmul, also at -O0), then
+        !! y and z; (C) takes 38256 central-slice samples at box 32, 1.25e9 voxel terms. v is the box^3
+        !! volume by sequence association
         subroutine sample_exact( v, f )
-            real(dp),    intent(in)  :: v(:,:,:)
+            real(dp),    intent(in)  :: v(box,box*box)
             complex(dp), intent(out) :: f
-            integer :: ii, jj, kk2
+            real(dp) :: exri(2,box), t(2,box*box)
+            integer  :: kk2, j0
+            exri(1,:) = real(ex, dp)
+            exri(2,:) = aimag(ex)
+            t = matmul(exri, v)
             f = (0.0_dp, 0.0_dp)
-            !$omp parallel do default(shared) private(ii,jj,kk2) reduction(+:f) schedule(static)
             do kk2 = 1, box
-                do jj = 1, box
-                    do ii = 1, box
-                        f = f + v(ii,jj,kk2) * ex(ii) * ey(jj) * ez(kk2)
-                    end do
-                end do
+                j0 = (kk2 - 1)*box
+                f = f + ez(kk2) * sum(ey * cmplx(t(1,j0+1:j0+box), t(2,j0+1:j0+box), dp))
             end do
-            !$omp end parallel do
             f = f / real(box,dp)**3
         end subroutine sample_exact
 

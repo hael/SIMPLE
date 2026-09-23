@@ -148,9 +148,9 @@ unit_numerics and `project records` of unit_project.
 | diff_map_graphs | S | 93 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 10 production calls) |  |  |
 | discrete_stack_io | S | 376 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | eul_prob_tab2D_io | S | 136 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| flex_gpu | S | 12 | none | unsupported capability (not run) | none | cuda | - | platform (uses cuda) |  |  |
-| flex_pca | S | 23 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 6 production calls) |  |  |
-| flex_pcg | S | 17 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| flex_gpu | S | 12 | none | unsupported capability (not run) | none | cuda | - | platform (uses cuda) | keep | Hans, 2026-09-23: platform; `test=flex_gpu` through simple_test_exec with the five CPU-vs-CUDA routines as sub-suites, registered with USE_FLEX_CUDA only; standalone deleted |
+| flex_pca | S | 23 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 6 production calls) | merge into unit_heterogeneity | Hans, 2026-09-23: `flex PCA` sub-suite (`simple_flex_pca_tester`); the six self-tests moved out of the production modules with assertions and fixed seeds; the deconvolution runs on 4 000 particles in the gate and on 20 000 as `flex PCA deconvolution 20k` in lib_heterogeneity (first gate 47.3 s, section 9.7) |
+| flex_pcg | S | 17 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) | modify | Hans, 2026-09-23: `flex PCG operator` (box 32, baseline solve) in unit_heterogeneity, `flex PCG operator 64` and `flex PCG solve sweep` (box 32, every clean solve asserted) in lib_heterogeneity (`simple_flex_pcg_tester`), (A)-(D) asserted by name; the white-box routine stays in simple_flex_pca_pcg with a fixed seed; debug runs and their `loc_fixed` argument dropped |
 | gui_assembler | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | gui_metadata | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | multinomal | S | 24 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
@@ -272,3 +272,6 @@ unit_numerics and `project records` of unit_project.
 | pose_cont_refinement | 2026-09-23 | merge into unit_cart_align3D: numerics and solver of the Cartesian pose refiner, `error stop` assertions | `simple_cartesian_pose_refiner_tester` (`pose refiner`) |
 | pose_cont_refine3D_adapter | 2026-09-23 | modify: adapter contracts and the opt-in 1JYX experiment in one program | `simple_pose_cont_refine3D_adapter_tester` (`pose adapter`, fast) and `simple_pose_cont_1jyx_tester` (`pose 1JYX recovery`, lib_cart_align3D) |
 | cartesian_fourier | 2026-09-23 | merge into unit_cart_align3D: self-re-executing driver over the KB derivative and neutral-extraction cases | `simple_cartesian_fourier_tester` (`Cartesian Fourier`) |
+| flex_pca (standalone) | 2026-09-23 | merge into unit_heterogeneity: driver over six THROW_HARD self-tests embedded in production modules | `simple_flex_pca_tester` (`flex PCA`) |
+| flex_pcg (standalone) | 2026-09-23 | modify: driver over the white-box operator self-test, three ignored debug runs | `simple_flex_pcg_tester` (`flex PCG operator`, fast and nightly) |
+| flex_gpu (standalone) | 2026-09-23 | keep, rerouted: the same five routines behind `simple_test_exec test=flex_gpu` | platform entry `flex_gpu` (USE_FLEX_CUDA) |

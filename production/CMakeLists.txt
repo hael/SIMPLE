@@ -283,13 +283,13 @@ if(BUILD_TESTS)
   endfunction()
 
   # ---- the fast gate ------------------------------------------------------
-  # Ten area suites over the unit tests, one process each, label `fast`;
+  # Eleven area suites over the unit tests, one process each, label `fast`;
   # every sub-suite asserts through simple_test_utils, is localhost-only and
   # runs on one thread (plan, section 5.1). `units` runs all of them in one
   # process as a developer convenience and is not registered: the entries
   # below are the gate. Measured 2026-09-22 (Debug, 1 thread): the seven
   # together about 4 s; the longest, unit_image and unit_ori, about 1.3 s.
-  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction pftc_align2D3D cart_align3D)
+  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction pftc_align2D3D cart_align3D heterogeneity)
     simple_add_test(unit_${_area} fast 120 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
   endforeach()
@@ -307,6 +307,12 @@ if(BUILD_TESTS)
   # volumes and TSVs. Review verdict 2026-09-23 (plan, section 9.7, pose).
   simple_add_test(lib_cart_align3D library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_cart_align3D)
+  # lib_heterogeneity: flex_pca deconvolution of 20 000 particles at realistic
+  # noise, the PCG M-step operator at box 64 with 400 samples against the exact
+  # nonuniform-DFT Gram, and the twelve-setting PCG solve sweep at box 32.
+  # Review verdict 2026-09-23 (plan, section 9.7, heterogeneity).
+  simple_add_test(lib_heterogeneity library 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_heterogeneity)
 
   # ---- workflow gates (nightly) --------------------------------------------
   # The simulated workflows with their current checks (completion, counts,
@@ -340,6 +346,11 @@ if(BUILD_TESTS)
   simple_add_test(forked_process platform 300 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
   # Registered only when CMake has the capability and the launcher.
+  if(USE_FLEX_CUDA)
+    # CUDA-C flex kernels against the CPU batch path; needs a device at run time
+    simple_add_test(flex_gpu platform 1200 1 RUN_SERIAL
+      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_gpu)
+  endif()
   if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE AND TARGET simple_test_coarrays)
     # the standalone program is the one linked against the coarray library
     simple_add_test(coarrays platform 1200 1 RUN_SERIAL
@@ -351,9 +362,12 @@ if(BUILD_TESTS)
   # existing suites, a new process needs a stated reason, and this number only
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays) are counted only when registered.
-  set(SIMPLE_CTEST_BUDGET 25)   # 10 fast + 1 platform + 12 workflow + 2 library
+  set(SIMPLE_CTEST_BUDGET 27)   # 11 fast + 1 platform + 12 workflow + 3 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
+    math(EXPR _simple_expected "${_simple_expected} + 1")
+  endif()
+  if(TEST flex_gpu)
     math(EXPR _simple_expected "${_simple_expected} + 1")
   endif()
   get_property(_simple_tests DIRECTORY PROPERTY TESTS)

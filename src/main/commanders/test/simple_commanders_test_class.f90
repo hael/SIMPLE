@@ -1,7 +1,8 @@
 !@descr: the unit-test suites: the build's fast gate (test=unit_<area>), its umbrella (test=units) and the platform-tier forked-process suite
 module simple_commanders_test_class
 use simple_commanders_api
-use simple_test_utils,                       only: begin_test_suite, end_test_suite, reset_test_report, report_summary
+use simple_test_utils,                       only: begin_test_suite, end_test_suite, reset_test_report, report_summary, &
+    &set_fixed_seed
 ! core library tester modules
 use simple_string_tester,                    only: run_all_string_tests
 use simple_syslib_tester,                    only: run_all_syslib_tests
@@ -49,6 +50,11 @@ use simple_cartesian_pose_refiner_tester,    only: run_all_cartesian_pose_refine
 use simple_pose_cont_refine3D_adapter_tester, only: run_all_pose_cont_adapter_tests
 use simple_pose_cont_1jyx_tester,            only: run_all_pose_cont_1jyx_tests
 use simple_cartesian_fourier_tester,         only: run_all_cartesian_fourier_tests
+use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
+use simple_flex_pcg_tester,                  only: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, &
+    &run_all_flex_pcg_sweep_tests
+use simple_flex_gpu,                         only: test_flex_gpu_insert, test_flex_gpu_coupled, &
+    &test_flex_gpu_coupled_banked, test_flex_gpu_psample, test_flex_gpu_estep
 use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
 use simple_http_post_tester,                 only: run_all_http_post_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
@@ -70,7 +76,7 @@ use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! The fast gate is ten area suites, each one CTest entry under the label
+! The fast gate is eleven area suites, each one CTest entry under the label
 ! `fast` (doc/refactoring_notes/uniform_test_environment_refactoring.md,
 ! section 5.1). Every sub-suite in them makes assertions through
 ! simple_test_utils, needs no network beyond localhost, no download and no
@@ -83,6 +89,8 @@ implicit none
 !                                    convenience, not the gate CTest runs
 !   test=forked_process              real child processes, clock polling:
 !                                    excluded from the build, label `platform`
+!   test=flex_gpu                    CUDA-C flex kernels against the CPU path:
+!                                    label `platform`, registered with USE_FLEX_CUDA
 !   test=lib_<area>                  a library suite of the nightly extensive
 !                                    tier (section 5.2.1): same shape, no
 !                                    30 s budget; lib_reconstruction is the first
@@ -155,6 +163,21 @@ type, extends(commander_base) :: commander_test_lib_cart_align3D
   contains
     procedure :: execute      => exec_test_lib_cart_align3D
 end type commander_test_lib_cart_align3D
+
+type, extends(commander_base) :: commander_test_unit_heterogeneity
+  contains
+    procedure :: execute      => exec_test_unit_heterogeneity
+end type commander_test_unit_heterogeneity
+
+type, extends(commander_base) :: commander_test_lib_heterogeneity
+  contains
+    procedure :: execute      => exec_test_lib_heterogeneity
+end type commander_test_lib_heterogeneity
+
+type, extends(commander_base) :: commander_test_flex_gpu
+  contains
+    procedure :: execute      => exec_test_flex_gpu
+end type commander_test_flex_gpu
 
 type, extends(commander_base) :: commander_test_forked_process
   contains
@@ -308,6 +331,25 @@ contains
         call add_suite(s, n, 'pose 1JYX recovery', run_all_pose_cont_1jyx_tests)
     end subroutine suites_lib_cart_align3D
 
+    !> heterogeneity analysis (flex_pca): latent model, state weights, deconvolution and
+    !! the PCG M-step operator
+    subroutine suites_heterogeneity( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'flex PCA',          run_all_flex_pca_tests)
+        call add_suite(s, n, 'flex PCG operator', run_all_flex_pcg_tests)
+    end subroutine suites_heterogeneity
+
+    !> nightly: deconvolution of 20000 particles at realistic noise, the PCG M-step operator at
+    !! box 64 against the exact Gram, and the twelve-setting PCG solve sweep at box 32
+    subroutine suites_lib_heterogeneity( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'flex PCA deconvolution 20k', run_all_flex_pca_lib_tests)
+        call add_suite(s, n, 'flex PCG operator 64',       run_all_flex_pcg_lib_tests)
+        call add_suite(s, n, 'flex PCG solve sweep',       run_all_flex_pcg_sweep_tests)
+    end subroutine suites_lib_heterogeneity
+
     !> nightly library suite: minutes, full boxes allowed, same assertions and runner
     subroutine suites_lib_reconstruction( s, n )
         type(unit_suite), intent(inout) :: s(:)
@@ -344,6 +386,7 @@ contains
         call suites_reconstruction(s, n)
         call suites_pftc_align2D3D(s, n)
         call suites_cart_align3D(s, n)
+        call suites_heterogeneity(s, n)
         call run_unit_suites('units', cline, s(1:n))
     end subroutine exec_test_units
 
@@ -457,6 +500,42 @@ contains
         call run_unit_suites('lib_cart_align3D', cline, s(1:n))
     end subroutine exec_test_lib_cart_align3D
 
+    subroutine exec_test_unit_heterogeneity( self, cline )
+        class(commander_test_unit_heterogeneity), intent(inout) :: self
+        class(cmdline),                           intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_heterogeneity(s, n)
+        call run_unit_suites('unit_heterogeneity', cline, s(1:n))
+    end subroutine exec_test_unit_heterogeneity
+
+    subroutine exec_test_lib_heterogeneity( self, cline )
+        class(commander_test_lib_heterogeneity), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_lib_heterogeneity(s, n)
+        call run_unit_suites('lib_heterogeneity', cline, s(1:n))
+    end subroutine exec_test_lib_heterogeneity
+
+    !> the CUDA-C flex kernels against the CPU batch path; each routine skips itself
+    !! without a USE_FLEX_CUDA build or a device and fails by THROW_HARD
+    subroutine exec_test_flex_gpu( self, cline )
+        class(commander_test_flex_gpu), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(unit_suite) :: s(5)
+        integer :: n
+        n = 0
+        call add_suite(s, n, 'flex GPU insert',         test_flex_gpu_insert)
+        call add_suite(s, n, 'flex GPU coupled',        test_flex_gpu_coupled)
+        call add_suite(s, n, 'flex GPU coupled banked', test_flex_gpu_coupled_banked)
+        call add_suite(s, n, 'flex GPU psample',        test_flex_gpu_psample)
+        call add_suite(s, n, 'flex GPU estep',          test_flex_gpu_estep)
+        call run_unit_suites('flex_gpu', cline, s(1:n))
+    end subroutine exec_test_flex_gpu
+
     subroutine exec_test_lib_reconstruction( self, cline )
         class(commander_test_lib_reconstruction), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
@@ -493,7 +572,9 @@ contains
         character(len=32)     :: order_env
         logical               :: test_failed, l_reverse
         integer               :: i, isuite, nrun, iostat
-        call seed_rnd
+        ! a fixed seed: every run of a suite draws the same numbers (tests that draw still seed
+        ! themselves, so that suite=<name> and SIMPLE_UNIT_ORDER=reverse draw the same too)
+        call set_fixed_seed(20260923)
         call date_and_time(date=datestr)
         folder = 'SIMPLE_TEST_'//trim(label)//'_'//datestr
         call simple_getcwd(original_cwd)
@@ -568,7 +649,7 @@ contains
     subroutine test_multinomal
         integer :: i, irnd
         real :: pvec(10), prob
-        call seed_rnd
+        call set_fixed_seed(20260926)
         pvec(1) = 0.8
         do i=2,10
             pvec(i) = 0.2/9.

@@ -9,16 +9,15 @@ use simple_parameters, only: parameters
 use simple_srch_sort_loc, only: hpsort
 use simple_linalg, only: matinv
 use simple_flex_pca_util, only: cov_env_flag_on, cov_env_flag_off, cov_env_dp, chi2_median, &
-    &kernel_weights_at_bandwidth, project_onto_target_polyline
+    &kernel_weights_at_bandwidth, project_onto_target_polyline, COV_MAX_BW_GROW
 use simple_flex_pca_gmm, only: gmm_state_weights, gmm_auto_state_weights
 use simple_flex_pca_targets, only: diffusion_kcenter_targets, kmeans_latent_targets, path_latent_targets, reliability_path_targets
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: build_covariance_state_weights, kernel_weights_at_bandwidth, cv_select_bandwidths, project_onto_target_polyline, mask_state_weights_by_half, test_flex_pca_kernel_bandwidth, test_flex_pca_state_weights
+public :: build_covariance_state_weights, kernel_weights_at_bandwidth, cv_select_bandwidths, project_onto_target_polyline, mask_state_weights_by_half
 
-integer,          parameter :: COV_MAX_BW_GROW   = 4
 
 contains
 
@@ -470,82 +469,5 @@ contains
             if( build%spproj_field%get_eo(pinds(i)) /= wanted_eo ) weights(i,:) = 0.
         end do
     end subroutine mask_state_weights_by_half
-
-    !> Kernel contract: compact support, peak 1, neff bounded by the support count, capped widening.
-    subroutine test_flex_pca_kernel_bandwidth()
-        integer,  parameter :: NP = 400
-        integer  :: i, nsupp
-        real(dp) :: dist(NP), h_out, h_wide
-        real     :: w(NP), neff, neff_wide
-        write(logfhandle,'(A)') '>>> TEST flex_pca kernel weights at bandwidth'
-        do i = 1, NP
-            dist(i) = real(i,dp)                    ! squared distances 1..NP
-        end do
-        ! h^2 = 100 -> exactly 99 particles strictly inside the support (dist < 100)
-        call kernel_weights_at_bandwidth(dist, NP, 10.d0, 1, w, h_out, neff)
-        nsupp = count(w > 0.)
-        if( nsupp /= 99 ) THROW_HARD('kernel support count wrong for h^2=100')
-        if( abs(h_out - 10.d0) > 1.d-12 ) THROW_HARD('bandwidth grew when support already sufficed')
-        if( any(w(100:) /= 0.) ) THROW_HARD('kernel is not compactly supported')
-        if( abs(maxval(w) - 1.) > 1.e-6 ) THROW_HARD('kernel peak is not normalised to 1')
-        if( neff > real(nsupp) ) THROW_HARD('neff exceeds raw support count')
-        if( neff < 1. ) THROW_HARD('neff below 1 with non-empty support')
-        call kernel_weights_at_bandwidth(dist, NP, 10.d0, 200, w, h_wide, neff_wide)
-        if( h_wide <= 10.d0 ) THROW_HARD('bandwidth did not widen when support fell short of min_neff')
-        if( h_wide > 10.d0*1.3d0**COV_MAX_BW_GROW + 1.d-9 ) THROW_HARD('bandwidth widening exceeded its cap')
-        if( count(w > 0.) <= nsupp ) THROW_HARD('widening did not increase support')
-        if( neff_wide <= neff ) THROW_HARD('neff did not increase with bandwidth')
-        write(logfhandle,'(A)') '>>>   PASSED (support, normalisation, neff bounds, bounded widening)'
-    end subroutine test_flex_pca_kernel_bandwidth
-
-    subroutine test_flex_pca_state_weights()
-        integer,  parameter :: NPC = 150, NP = 2*NPC, NC = 2, NST = 2
-        integer  :: i, q, state, nlab(NST)
-        real(dp) :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
-        real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
-        integer,  allocatable :: labels(:)
-        write(logfhandle,'(A)') '>>> TEST flex_pca state weights on a two-cluster embedding'
-        do i = 1, NPC
-            z(i,      1) = -5.d0 + 0.01d0*real(mod(i,7),dp)
-            z(i,      2) =  0.02d0*real(mod(i,5),dp)
-            z(NPC+i,  1) =  5.d0 + 0.01d0*real(mod(i,7),dp)
-            z(NPC+i,  2) =  0.02d0*real(mod(i,5),dp)
-        end do
-        do q = 1, NC
-            eigvals(q) = 1.d0
-        end do
-        prec = 0.d0
-        do i = 1, NP
-            do q = 1, NC
-                prec(q,q,i) = 1.d0                  ! identity posterior precision
-            end do
-        end do
-        call build_covariance_state_weights(z, NP, NC, NC, NST, 0, 10, eigvals, prec, &
-            &weights, targets, bandwidths, neff, labels)
-        if( size(weights,1) /= NP .or. size(weights,2) /= NST ) THROW_HARD('weights shape wrong')
-        if( size(labels)    /= NP ) THROW_HARD('labels shape wrong')
-        if( any(labels < 0) .or. any(labels > NST) ) THROW_HARD('label outside 0..nstates')
-        if( any(weights < 0.) ) THROW_HARD('negative kernel weight')
-        do q = 1, NC
-            do state = 1, NST
-                if( real(targets(q,state),dp) < minval(z(:,q)) - 1.d-6 .or. &
-                    &real(targets(q,state),dp) > maxval(z(:,q)) + 1.d-6 ) &
-                    &THROW_HARD('state target lies outside the occupied latent range')
-            end do
-        end do
-        nlab = 0
-        do i = 1, NP
-            if( labels(i) >= 1 ) nlab(labels(i)) = nlab(labels(i)) + 1
-        end do
-        do state = 1, NST
-            if( nlab(state) < 1 ) THROW_HARD('a state drew no particles from a clearly bimodal embedding')
-            if( neff(state) < 1. ) THROW_HARD('state has non-positive effective count')
-        end do
-        ! the two targets must separate along the component that carries the separation
-        if( abs(real(targets(1,1),dp) - real(targets(1,2),dp)) < 5.d0 ) &
-            &THROW_HARD('state targets did not separate along the bimodal component')
-        deallocate(weights, targets, bandwidths, neff, labels)
-        write(logfhandle,'(A)') '>>>   PASSED (shapes, labels, target hull, cluster separation)'
-    end subroutine test_flex_pca_state_weights
 
 end module simple_flex_pca_weights

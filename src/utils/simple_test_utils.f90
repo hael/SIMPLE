@@ -9,6 +9,7 @@ private
 public :: assert_true, assert_int, assert_real, assert_char, assert_string_eq, assert_double, assert_false
 public :: begin_test_suite, end_test_suite, reset_test_report, report_summary
 public :: tests_run, tests_failed
+public :: set_fixed_seed
 
 type :: test_suite_result
     character(len=STDLEN) :: name = ''
@@ -32,6 +33,20 @@ type(test_suite_result), allocatable :: suites(:)
 type(test_failure),      allocatable :: failures(:)
 
 contains
+
+    !> seed the intrinsic generator with a fixed state, seed(i) = base_seed + 104729 (i-1) wrapped into
+    !! [1, huge-1], so every run draws the same numbers (seed_rnd reads /dev/urandom)
+    subroutine set_fixed_seed( base_seed )
+        integer, intent(in) :: base_seed
+        integer, allocatable :: seed(:)
+        integer :: i, n
+        call random_seed(size=n)
+        allocate(seed(n))
+        do i = 1, n
+            seed(i) = modulo(base_seed + 104729 * (i - 1), huge(0) - 1) + 1
+        enddo
+        call random_seed(put=seed)
+    end subroutine set_fixed_seed
 
     subroutine reset_test_report( filename )
         character(len=*), optional, intent(in) :: filename

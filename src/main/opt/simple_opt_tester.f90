@@ -249,11 +249,12 @@ contains
         type(opt_spec)    :: spec
         real :: lowest_cost
         write(*,'(A)') 'test_de_quadratic'
+        call set_fixed_seed(20260927)
         call spec%specify('de', 2, limits=LIMS2, maxits=3000, ftol=1.e-8)
         call spec%set_costfun(quad2d)
         call ofac%new(spec, opt)
         call opt%minimize(spec, opt, lowest_cost)
-        call assert_true(lowest_cost < 1.e-2, 'DE brings the quadratic cost below 1e-2 (population tolerance stop)')
+        call assert_true(lowest_cost < 1.e-2, 'DE brings the quadratic cost below 1e-2')
         call assert_real(XMIN(1), spec%x(1), 0.1, 'DE solution within 0.1 (x)')
         call assert_real(XMIN(2), spec%x(2), 0.1, 'DE solution within 0.1 (y)')
         call assert_true(spec%nevals > spec%npop, 'DE evaluates the population and then the trials')
@@ -276,6 +277,7 @@ contains
         type(opt_spec)    :: spec
         real :: lowest_cost
         write(*,'(A)') 'test_simplex_quadratic'
+        call set_fixed_seed(20260928)
         call spec%specify('simplex', 2, limits=LIMS2, maxits=1000, nrestarts=3, ftol=1.e-7)
         call spec%set_costfun(quad2d)
         call ofac%new(spec, opt)

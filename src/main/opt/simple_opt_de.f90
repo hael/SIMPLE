@@ -75,7 +75,7 @@ contains
         real,            intent(out)   :: lowest_cost !< lowest cost
         real    :: rtol
         real    :: trial(spec%ndim), cost_trial, L
-        integer :: ab(2), i, j, X, t, loc(1), nworse
+        integer :: ab(2), i, j, X, jrand, t, loc(1)
         if( .not. associated(spec%costfun) )then
             THROW_HARD('cost function not associated in opt_spec; de_minimize')
         endif
@@ -102,15 +102,16 @@ contains
         self%best  = loc(1)
         loc        = maxloc(self%costs)
         self%worst = loc(1)
-        nworse = 0
         do t=1,spec%maxits ! generations loop
             ! select solution to modify
             X  = irnd_uni(spec%npop)
             ! select random disjoint pair
             ab = irnd_uni_pair(spec%npop)
+            ! the component that is always mutated, so that the trial differs from member X
+            jrand = irnd_uni(spec%ndim)
             ! create a trial solution
             do i=1,spec%ndim
-                if( i == X .or. ran3() <= self%CR )then
+                if( i == jrand .or. ran3() <= self%CR )then
                     trial(i) = self%pop(i,self%best) + self%F * (self%pop(i,ab(1)) - self%pop(i,ab(2)))
                 else
                     trial(i) = self%pop(i,X)
@@ -124,14 +125,15 @@ contains
             spec%nevals = spec%nevals + 1
             ! update pop if better solution is found
             if( cost_trial <= self%costs(X) )then
-                nworse = 0
                 self%pop(:,X) = trial
                 self%costs(X) = cost_trial
                 ! update global best if needed
                 if( cost_trial <= self%costs(self%best) ) self%best = X
-            else
-                nworse = nworse + 1
-                if( cost_trial > self%costs(self%worst) ) self%worst = X
+                ! the worst member improved: find the new worst (a rejected trial changes no member)
+                if( X == self%worst )then
+                    loc        = maxloc(self%costs)
+                    self%worst = loc(1)
+                endif
             endif
             ! relative tolerance
             rtol = 2.0 * abs(self%costs(self%best) - self%costs(self%worst)) / &

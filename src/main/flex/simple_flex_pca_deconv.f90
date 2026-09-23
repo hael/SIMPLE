@@ -22,7 +22,7 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: calibrate_noise_scale, deconvolve_latent, test_flex_pca_deconv
+public :: calibrate_noise_scale, deconvolve_latent
 public :: noise_and_projection, signal_subspace
 
 integer,  parameter :: XD_MAXIT   = 150
@@ -337,17 +337,20 @@ contains
         deallocate(key, ord)
     end subroutine xd_init
 
-    !> extreme-deconvolution EM with per-particle projection R_i and noise N_i
+    !> extreme-deconvolution EM with per-particle projection R_i and noise N_i. One Cholesky factor of
+    !! T_ik = R_i Sigma_k R_i^T + N_i per particle and component serves the responsibility and the
+    !! conditional moments b_ik, B_ik (component_factor, component_moments); the E-step used to factor
+    !! T_ik a second time and invert it explicitly for the moments
     subroutine xd_fit( z, R, Nz, n, d, nk, mu, Sig, pik, ll )
         integer,  intent(in)    :: n, d, nk
         real(dp), intent(in)    :: z(n,d), R(d,d,n), Nz(d,d,n)
         real(dp), intent(inout) :: mu(d,nk), Sig(d,d,nk), pik(nk)
         real(dp), intent(out)   :: ll
         real(dp), allocatable :: sw(:,:), sb(:,:,:), sBB(:,:,:,:)
-        real(dp) :: T(d,d), Tinv(d,d), SR(d,d), b(d), Bk(d,d), rz(d), logp(nk), lmax, lse, rk(nk)
+        real(dp) :: Lk(d,d,nk), RSk(d,d,nk), yk(d,nk), b(d), Bk(d,d), logp(nk), lmax, lse, rk(nk)
         real(dp) :: ll_prev, ridge, trc
         integer  :: it, i, k, ithr, nthr, q
-        logical  :: ok
+        logical  :: okk(nk)
         nthr = omp_get_max_threads()
         allocate(sw(nk,nthr), sb(d,nk,nthr), sBB(d,d,nk,nthr))
         trc = 0.d0
@@ -359,31 +362,25 @@ contains
         do it = 1, XD_MAXIT
             sw = 0.d0; sb = 0.d0; sBB = 0.d0
             ll = 0.d0
-            !$omp parallel do default(shared) private(i,k,ithr,T,Tinv,SR,b,Bk,rz,logp,lmax,lse,rk,ok,q) &
+            !$omp parallel do default(shared) private(i,k,ithr,Lk,RSk,yk,b,Bk,logp,lmax,lse,rk,okk) &
             !$omp& schedule(static) reduction(+:ll)
             do i = 1, n
                 ithr = omp_get_thread_num() + 1
                 do k = 1, nk
-                    call component_terms(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), ok)
+                    call component_factor(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, &
+                        &logp(k), Lk(:,:,k), RSk(:,:,k), yk(:,k), okk(k))
                     logp(k) = logp(k) + log(max(pik(k), XD_PI_MIN))
-                    if( .not. ok ) logp(k) = -huge(0.d0)/2
+                    if( .not. okk(k) ) logp(k) = -huge(0.d0)/2
                 end do
                 lmax = maxval(logp)
                 lse  = lmax + log(sum(exp(logp - lmax)))
                 ll   = ll + lse
                 rk   = exp(logp - lse)
                 do k = 1, nk
-                    if( rk(k) < 1.d-12 ) cycle
-                    ! b_ik, B_ik
-                    SR = matmul(Sig(:,:,k), transpose(R(:,:,i)))                  ! Sigma R^T
-                    T  = matmul(R(:,:,i), SR) + Nz(:,:,i)                          ! R Sigma R^T + Nz
-                    call spd_inverse(T, Tinv, d, ok)
-                    if( .not. ok ) cycle
-                    rz = z(i,:) - matmul(R(:,:,i), mu(:,k))
-                    b  = mu(:,k) + matmul(SR, matmul(Tinv, rz))
-                    Bk = Sig(:,:,k) - matmul(SR, matmul(Tinv, transpose(SR)))
-                    sw(k,ithr)     = sw(k,ithr) + rk(k)
-                    sb(:,k,ithr)   = sb(:,k,ithr) + rk(k)*b
+                    if( rk(k) < 1.d-12 .or. .not. okk(k) ) cycle
+                    call component_moments(Lk(:,:,k), RSk(:,:,k), yk(:,k), mu(:,k), Sig(:,:,k), d, b, Bk)
+                    sw(k,ithr)      = sw(k,ithr) + rk(k)
+                    sb(:,k,ithr)    = sb(:,k,ithr) + rk(k)*b
                     sBB(:,:,k,ithr) = sBB(:,:,k,ithr) + rk(k)*(Bk + outer(b, b, d))
                 end do
             end do
@@ -411,14 +408,14 @@ contains
     function xd_loglik( z, R, Nz, n, d, nk, mu, Sig, pik ) result( ll )
         integer,  intent(in) :: n, d, nk
         real(dp), intent(in) :: z(n,d), R(d,d,n), Nz(d,d,n), mu(d,nk), Sig(d,d,nk), pik(nk)
-        real(dp) :: ll, logp(nk), lmax
+        real(dp) :: ll, logp(nk), lmax, L(d,d), RS(d,d), y(d)
         integer  :: i, k
         logical  :: ok
         ll = 0.d0
-        !$omp parallel do default(shared) private(i,k,logp,lmax,ok) schedule(static) reduction(+:ll)
+        !$omp parallel do default(shared) private(i,k,logp,lmax,L,RS,y,ok) schedule(static) reduction(+:ll)
         do i = 1, n
             do k = 1, nk
-                call component_terms(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), ok)
+                call component_factor(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), L, RS, y, ok)
                 logp(k) = logp(k) + log(max(pik(k), XD_PI_MIN))
                 if( .not. ok ) logp(k) = -huge(0.d0)/2
             end do
@@ -434,21 +431,16 @@ contains
         real(dp), intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), mu(d,nk), Sig(d,d,nk), pik(nk)
         real(dp), intent(out) :: xhat(n,d), xcov(d,d,n)
         real(dp), optional, intent(out) :: resp(n,nk)
-        real(dp) :: T(d,d), Tinv(d,d), SR(d,d), b(d,nk), Bk(d,d,nk), rz(d), logp(nk), lmax, lse, rk(nk)
+        real(dp) :: L(d,d), RS(d,d), y(d), b(d,nk), Bk(d,d,nk), logp(nk), lmax, lse, rk(nk)
         integer  :: i, k
         logical  :: ok
-        !$omp parallel do default(shared) private(i,k,T,Tinv,SR,b,Bk,rz,logp,lmax,lse,rk,ok) schedule(static)
+        !$omp parallel do default(shared) private(i,k,L,RS,y,b,Bk,logp,lmax,lse,rk,ok) schedule(static)
         do i = 1, n
             do k = 1, nk
-                call component_terms(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), ok)
+                call component_factor(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), L, RS, y, ok)
                 logp(k) = logp(k) + log(max(pik(k), XD_PI_MIN))
                 if( .not. ok ) logp(k) = -huge(0.d0)/2
-                SR = matmul(Sig(:,:,k), transpose(R(:,:,i)))
-                T  = matmul(R(:,:,i), SR) + Nz(:,:,i)
-                call spd_inverse(T, Tinv, d, ok)
-                rz = z(i,:) - matmul(R(:,:,i), mu(:,k))
-                b(:,k)    = mu(:,k) + matmul(SR, matmul(Tinv, rz))
-                Bk(:,:,k) = Sig(:,:,k) - matmul(SR, matmul(Tinv, transpose(SR)))
+                call component_moments(L, RS, y, mu(:,k), Sig(:,:,k), d, b(:,k), Bk(:,:,k))
             end do
             lmax = maxval(logp)
             lse  = lmax + log(sum(exp(logp - lmax)))
@@ -466,28 +458,52 @@ contains
         !$omp end parallel do
     end subroutine xd_posterior
 
-    !> log N(z; R mu, R Sigma R^T + N)
-    subroutine component_terms( zi, Ri, Ni, muk, Sigk, d, logp, ok )
+    !> log N(z; R mu, T), T = R Sigma R^T + N, with what component_moments needs: the lower Cholesky
+    !! factor L of T, RS = R Sigma and y = L^-1 (z - R mu). When T is not SPD: ok=.false., logp=-huge/2
+    !! and L = diag(T)^(1/2), so the moments fall back to diag(T)^-1 as spd_inverse does
+    subroutine component_factor( zi, Ri, Ni, muk, Sigk, d, logp, L, RS, y, ok )
         integer,  intent(in)  :: d
         real(dp), intent(in)  :: zi(d), Ri(d,d), Ni(d,d), muk(d), Sigk(d,d)
-        real(dp), intent(out) :: logp
+        real(dp), intent(out) :: logp, L(d,d), RS(d,d), y(d)
         logical,  intent(out) :: ok
-        real(dp) :: T(d,d), L(d,d), rz(d), y(d), logdet
+        real(dp) :: T(d,d), rz(d), logdet
         integer  :: q
-        T  = matmul(Ri, matmul(Sigk, transpose(Ri))) + Ni
+        RS = matmul(Ri, Sigk)
+        T  = matmul(RS, transpose(Ri)) + Ni
         call cholesky(T, L, d, ok)
+        if( .not. ok )then
+            L = 0.d0
+            do q = 1, d
+                L(q,q) = sqrt(max(T(q,q), DTINY))
+            end do
+        endif
+        rz = zi - matmul(Ri, muk)
+        call chol_forward(L, rz, y, d)
         if( .not. ok )then
             logp = -huge(0.d0)/2
             return
         endif
-        rz = zi - matmul(Ri, muk)
-        call chol_forward(L, rz, y, d)
         logdet = 0.d0
         do q = 1, d
             logdet = logdet + 2.d0*log(L(q,q))
         end do
         logp = -0.5d0*(sum(y*y) + logdet + real(d,dp)*log(2.d0*DPI))
-    end subroutine component_terms
+    end subroutine component_factor
+
+    !> conditional moments of x given z under one component from component_factor: with W = L^-1 R Sigma,
+    !! bvec = mu + W^T y = mu + Sigma R^T T^-1 (z - R mu) and Bcov = Sigma - W^T W = Sigma - Sigma R^T T^-1 R Sigma
+    subroutine component_moments( L, RS, y, muk, Sigk, d, bvec, Bcov )
+        integer,  intent(in)  :: d
+        real(dp), intent(in)  :: L(d,d), RS(d,d), y(d), muk(d), Sigk(d,d)
+        real(dp), intent(out) :: bvec(d), Bcov(d,d)
+        real(dp) :: W(d,d)
+        integer  :: q
+        do q = 1, d
+            call chol_forward(L, RS(:,q), W(:,q), d)
+        end do
+        bvec = muk + matmul(y, W)
+        Bcov = Sigk - matmul(transpose(W), W)
+    end subroutine component_moments
 
     ! ======================================================================= small dense algebra
 
@@ -650,64 +666,5 @@ contains
         end do
         S = 0.5d0*(S + transpose(S))
     end subroutine psd_clip
-
-    ! ======================================================================= self-test
-
-    !> Synthetic check: a 2-component population in d=4 under heavy heteroscedastic noise. The
-    !! held-out rule must pick K=2, the means must be recovered, and the posterior means must be
-    !! closer to the truth than the observations.
-    subroutine test_flex_pca_deconv()
-        integer,  parameter :: n = 20000, d = 4
-        real(dp), allocatable :: x(:,:), z(:,:), prec(:,:,:), zhalf(:,:,:), z0(:,:)
-        real(dp) :: prior(d), a, a_comp(d), s, g(d), mse_z, mse_x, mu_true(d,2)
-        integer  :: i, q, k_out, kt
-        real(dp) :: u
-        allocate(x(n,d), z(n,d), prec(d,d,n), zhalf(n,d,2), z0(n,d))
-        mu_true = 0.d0
-        mu_true(1,1) = -1.5d0; mu_true(1,2) = 1.5d0
-        mu_true(2,1) =  0.5d0; mu_true(2,2) = -0.5d0
-        prior = 1.d0/4.d0                              ! prior variance 4 per axis (weak)
-        call random_seed()
-        do i = 1, n
-            kt = merge(1, 2, mod(i,3) == 0)            ! weights 1/3, 2/3
-            do q = 1, d
-                x(i,q) = mu_true(q,kt) + 0.3d0*gauss()
-            end do
-            call random_number(u)
-            s = 2.d0 + 18.d0*u                         ! noise variance 2..20 per axis (signal ~0.09 + means)
-            prec(:,:,i) = 0.d0
-            do q = 1, d
-                prec(q,q,i)  = 1.d0/s + prior(q)     ! posterior precision = data + prior
-                g(q)         = gauss()*sqrt(s)
-            end do
-            ! z = A^-1 (D x + e), with D = 1/s I:  R = D/A, N = D/A^2
-            do q = 1, d
-                z(i,q) = ((x(i,q) + g(q))/s)/prec(q,q,i)
-                ! halves: each with half the data precision and independent noise
-                zhalf(i,q,1) = ((x(i,q) + gauss()*sqrt(2.d0*s))/(2.d0*s))/(1.d0/(2.d0*s) + prior(q))
-                zhalf(i,q,2) = ((x(i,q) + gauss()*sqrt(2.d0*s))/(2.d0*s))/(1.d0/(2.d0*s) + prior(q))
-            end do
-        end do
-        z0 = z
-        call calibrate_noise_scale(z, zhalf, prec, prior, n, d, a, a_comp)
-        if( abs(a - 1.d0) > 0.15d0 ) THROW_HARD('test_flex_pca_deconv: calibration off (expected 1)')
-        call deconvolve_latent(z, prec, prior, n, d, a, 4, k_out)
-        if( k_out /= 2 ) THROW_HARD('test_flex_pca_deconv: held-out rule did not pick K=2')
-        mse_z = sum((z0 - x)**2)/real(n*d,dp)
-        mse_x = sum((z  - x)**2)/real(n*d,dp)
-        write(logfhandle,'(A,F8.4,A,F8.4)') '>>> test_flex_pca_deconv: mse(z)=', mse_z, '  mse(xhat)=', mse_x
-        if( mse_x > 0.6d0*mse_z ) THROW_HARD('test_flex_pca_deconv: posterior means not closer to the truth')
-        write(logfhandle,'(A)') '>>> test_flex_pca_deconv PASSED'
-        deallocate(x, z, prec, zhalf, z0)
-
-    contains
-
-        real(dp) function gauss()
-            real(dp) :: u1, u2
-            call random_number(u1); call random_number(u2)
-            gauss = sqrt(-2.d0*log(max(u1, 1.d-12)))*cos(2.d0*DPI*u2)
-        end function gauss
-
-    end subroutine test_flex_pca_deconv
 
 end module simple_flex_pca_deconv

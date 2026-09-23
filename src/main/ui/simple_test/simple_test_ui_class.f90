@@ -17,6 +17,9 @@ type(ui_program), target :: lib_reconstruction
 type(ui_program), target :: unit_pftc_align2D3D
 type(ui_program), target :: unit_cart_align3D
 type(ui_program), target :: lib_cart_align3D
+type(ui_program), target :: unit_heterogeneity
+type(ui_program), target :: lib_heterogeneity
+type(ui_program), target :: flex_gpu
 type(ui_program), target :: forked_process
 
 contains
@@ -36,6 +39,9 @@ contains
         call new_unit_pftc_align2D3D(tsttab)
         call new_unit_cart_align3D(tsttab)
         call new_lib_cart_align3D(tsttab)
+        call new_unit_heterogeneity(tsttab)
+        call new_lib_heterogeneity(tsttab)
+        call new_flex_gpu(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
 
@@ -205,6 +211,43 @@ contains
             &'One sub-suite of this suite to run alone (pose_1jyx_recovery)', '', .false., '')
         call add_ui_program('lib_cart_align3D', lib_cart_align3D, tsttab, UI_CATEGORY)
     end subroutine new_lib_cart_align3D
+
+    subroutine new_unit_heterogeneity( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_heterogeneity%new(&
+        &'unit_heterogeneity',&
+        &'unit tests: heterogeneity analysis (flex_pca)',&
+        &'is the fast-gate unit suite for flex_pca: latent model, state weights, deconvolution of 4000 particles and the PCG M-step operator at box 32 with the baseline solve',&
+        &'simple_test_exec',&
+        &.false.)
+        call unit_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (flex_pca, flex_pcg_operator)', '', .false., '')
+        call add_ui_program('unit_heterogeneity', unit_heterogeneity, tsttab, UI_CATEGORY)
+    end subroutine new_unit_heterogeneity
+
+    subroutine new_lib_heterogeneity( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call lib_heterogeneity%new(&
+        &'lib_heterogeneity',&
+        &'library tests: flex_pca deconvolution and PCG operator',&
+        &'is the nightly library suite for flex_pca: deconvolution of 20000 particles at realistic noise, the PCG M-step operator at box 64 against the exact Gram and the PCG solve sweep at box 32',&
+        &'simple_test_exec',&
+        &.false.)
+        call lib_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (flex_pca_deconvolution_20k, flex_pcg_operator_64, flex_pcg_solve_sweep)', '', .false., '')
+        call add_ui_program('lib_heterogeneity', lib_heterogeneity, tsttab, UI_CATEGORY)
+    end subroutine new_lib_heterogeneity
+
+    subroutine new_flex_gpu( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call flex_gpu%new(&
+        &'flex_gpu',&
+        &'CUDA-C flex kernels against the CPU batch path',&
+        &'compares the CUDA-C flex insertion, coupled, banked, psample and E-step kernels with the CPU path; needs a USE_FLEX_CUDA build and a device, platform label',&
+        &'simple_test_exec',&
+        &.false.)
+        call add_ui_program('flex_gpu', flex_gpu, tsttab, UI_CATEGORY)
+    end subroutine new_flex_gpu
 
     subroutine new_forked_process( tsttab )
         class(ui_hash), intent(inout) :: tsttab

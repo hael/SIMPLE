@@ -41,10 +41,10 @@ character(len=*), parameter :: SIGMA_STATE_FNAME= 'flex_pca_sigma_state.txt'
 #include "simple_local_flags.inc"
 
 public :: run_flex_pca, run_flex_pca_worker
-public :: test_flex_pca_embedding_cache_io
-public :: test_flex_pca_auto_settings
-public :: test_flex_pca_population_floor
 public :: auto_box_crop, auto_min_neff, auto_state_count
+! for simple_flex_pca_tester: the resume cache, state placement and the auto-K bounds
+public :: write_embedding_cache, read_embedding_cache, place_states_with_population_floor
+public :: FLEX_AUTO_K_START, FLEX_AUTO_K_MIN
 
 !> Over-provisioning level for npreimages=0. Bounded by cost, not accuracy: 24 and 32 converge to
 !! the same answer, while gate 2 compares K(K-1)/2 map pairs.
@@ -69,8 +69,6 @@ integer :: cov_box_crop_glob  = 0
 real,    allocatable :: umap_plot_xy(:,:)
 integer, allocatable :: umap_plot_pind(:)
 real    :: cov_smpd_crop_glob = 0.
-! Safety cap on the bandwidth widening loop.
-integer,          parameter :: COV_MAX_BW_GROW   = 4
 integer,          parameter :: MIN_NSTATES       = 3
 ! npreimages is a PROVISION CEILING, not a target: state placement lays down that many kernels and
 ! the two-gate merge collapses the indistinct ones, so the recovered K is only ever <= it.
@@ -1562,45 +1560,6 @@ contains
 
     ! ============ SELF-CONTAINED TESTS ============ No project, no images, no data files.
 
-    subroutine test_flex_pca_embedding_cache_io()
-        integer,  parameter :: NP = 37, NC = 4
-        character(len=*), parameter :: FN = 'test_flex_pca_cache.bin'
-        integer  :: pinds(NP), i, q, r, ncomp_rd
-        real(dp) :: z(NP,NC), eigvals(NC), contrast(NP), re(NP), rme(NP)
-        real(dp) :: prec(NC,NC,NP), sig2, sig2_rd
-        real(dp), allocatable :: z_rd(:,:), eig_rd(:), con_rd(:), re_rd(:), rme_rd(:), prec_rd(:,:,:)
-        write(logfhandle,'(A)') '>>> TEST flex_pca embedding cache I/O'
-        do i = 1, NP
-            pinds(i) = 3*i + 1                      ! non-contiguous, as a real selection is
-            contrast(i) = 0.5d0 + 0.01d0*real(i,dp)
-            re(i)       = real(i,dp)
-            rme(i)      = 2.d0*real(i,dp)
-            do q = 1, NC
-                z(i,q) = sin(real(i*q,dp))          ! deterministic, no RNG
-                do r = 1, NC
-                    prec(q,r,i) = 1.d0/real(q+r+i,dp)
-                end do
-            end do
-        end do
-        do q = 1, NC
-            eigvals(q) = 10.d0/real(q,dp)
-        end do
-        sig2 = 0.137d0
-        call write_embedding_cache(FN, pinds, NP, NC, z, eigvals, contrast, re, rme, prec, sig2)
-        call read_embedding_cache(FN, pinds, NP, ncomp_rd, z_rd, eig_rd, con_rd, &
-            &re_rd, rme_rd, prec_rd, sig2_rd)
-        if( ncomp_rd /= NC ) THROW_HARD('cache round trip: component count changed')
-        if( maxval(abs(z    - z_rd   )) > 0.d0 ) THROW_HARD('cache round trip: latents differ')
-        if( maxval(abs(eigvals - eig_rd)) > 0.d0 ) THROW_HARD('cache round trip: eigenvalues differ')
-        if( maxval(abs(contrast - con_rd)) > 0.d0 ) THROW_HARD('cache round trip: contrast differs')
-        if( maxval(abs(re   - re_rd  )) > 0.d0 ) THROW_HARD('cache round trip: residual energy differs')
-        if( maxval(abs(rme  - rme_rd )) > 0.d0 ) THROW_HARD('cache round trip: mean residual energy differs')
-        if( maxval(abs(prec - prec_rd)) > 0.d0 ) THROW_HARD('cache round trip: precision differs')
-        if( abs(sig2 - sig2_rd)         > 0.d0 ) THROW_HARD('cache round trip: sig2_eff differs')
-        call del_file(FN)
-        write(logfhandle,'(A)') '>>>   PASSED (bit-exact for all seven payloads)'
-    end subroutine test_flex_pca_embedding_cache_io
-
 
     !> Smallest even crop that still resolves lp with margin: smpd_crop = smpd*box/box_crop and the
     !! crop's Nyquist is 2*smpd_crop, so lp needs box_crop > 2*box*smpd/lp.
@@ -1636,36 +1595,6 @@ contains
         if( min_neff > 0 ) k = min(k, nptcls/(4*min_neff))
         k = max(FLEX_AUTO_K_MIN, k)
     end function auto_state_count
-
-    !> The derived settings must reproduce what the validation datasets were actually run at.
-    subroutine test_flex_pca_auto_settings()
-        integer :: bc, mn, k
-        write(logfhandle,'(A)') '>>> TEST flex_pca derived settings'
-        ! box_crop: both IgG-RL and Ribosembly are box 128 at 3.0 A/px run at lp=15, box_crop=64
-        bc = auto_box_crop(128, 3.0, 15.0)
-        if( bc /= 64 ) THROW_HARD('auto box_crop did not reproduce the validated 64')
-        ! finer lp must not silently keep a crop that cannot resolve it
-        if( auto_box_crop(128, 3.0, 8.0) <= 64 ) THROW_HARD('auto box_crop did not grow with finer lp')
-        if( auto_box_crop(128, 3.0, 30.0) >= 64 ) THROW_HARD('auto box_crop did not shrink with coarser lp')
-        if( auto_box_crop(128, 3.0, 15.0) > 128 ) THROW_HARD('auto box_crop exceeded the native box')
-        ! min_neff: Ribosembly is occupancy-limited, IgG is SNR-limited
-        mn = auto_min_neff(335240, 16, 0.d0)
-        if( abs(mn - 2095) > 50 ) THROW_HARD('auto min_neff did not reproduce the Ribosembly scale')
-        mn = auto_min_neff(100000, 20, 0.0178d0)
-        if( mn < 56 ) THROW_HARD('auto min_neff fell below the IgG SNR requirement')
-        ! the SNR term must be able to dominate when the signal is weak
-        if( auto_min_neff(10000, 20, 1.d-3) <= auto_min_neff(10000, 20, 1.d-1) ) &
-            &THROW_HARD('auto min_neff did not grow as conformational SNR fell')
-        ! state count: over-provision, but never below the floor or above the validated level
-        k = auto_state_count(335240, 2000)
-        if( k /= 32 ) THROW_HARD('auto state count did not over-provision to the validated level')
-        if( auto_state_count(1000, 2000) /= FLEX_AUTO_K_MIN ) &
-            &THROW_HARD('auto state count ignored the small-dataset floor')
-        if( auto_state_count(100000000, 100) /= FLEX_AUTO_K_START ) &
-            &THROW_HARD('auto state count exceeded the validated over-provision cap')
-        write(logfhandle,'(A,I0,A,I0,A)') '>>>   PASSED (box_crop=',auto_box_crop(128,3.0,15.0), &
-            &', state count=',auto_state_count(335240,2000),', min_neff both regimes)'
-    end subroutine test_flex_pca_auto_settings
 
     subroutine place_states_with_population_floor( z, nptcls, ncomp, nkern, nstates_req, axis, min_neff, &
         &min_state_frac, eigvals, precision, weights, targets, bandwidths, neff, labels, comp_rho )
@@ -1831,56 +1760,6 @@ contains
         call flush(logfhandle)
         deallocate(retained, idx, w_r, t_r, bw_r, nf_r, lab_r, occ, qualifies, order, kept, deliver, sdv)
     end subroutine place_states_with_population_floor
-
-    subroutine test_flex_pca_population_floor()
-        use simple_rnd, only: seed_rnd
-        integer,  parameter :: NA = 300, NB = 250, NO = 20, NP = NA+NB+NO, NC = 2, NST = 2
-        real,     parameter :: FRAC = 0.2
-        integer  :: i, q, state, nmin, nlab(NST)
-        real(dp) :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
-        real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
-        integer,  allocatable :: labels(:)
-        write(logfhandle,'(A)') '>>> TEST flex_pca population floor on two clusters plus outliers'
-        call seed_rnd
-        do i = 1, NA
-            z(i,1) = -3.d0 + 0.01d0*real(mod(i,7),dp)
-            z(i,2) =  0.02d0*real(mod(i,5),dp)
-        end do
-        do i = 1, NB
-            z(NA+i,1) = 3.d0 + 0.01d0*real(mod(i,7),dp)
-            z(NA+i,2) = 0.02d0*real(mod(i,5),dp)
-        end do
-        do i = 1, NO
-            z(NA+NB+i,1) = 60.d0 + 0.05d0*real(mod(i,3),dp)
-            z(NA+NB+i,2) = 60.d0 + 0.05d0*real(mod(i,4),dp)
-        end do
-        eigvals = 1.d0
-        prec    = 0.d0
-        do i = 1, NP
-            do q = 1, NC
-                prec(q,q,i) = 1.d0
-            end do
-        end do
-        call place_states_with_population_floor(z, NP, NC, NC, NST, 0, 10, FRAC, eigvals, prec, &
-            &weights, targets, bandwidths, neff, labels)
-        nmin = max(1, nint(FRAC*real(NP)))
-        if( size(labels) /= NP ) THROW_HARD('labels shape wrong')
-        if( any(labels < 1) .or. any(labels > NST) ) THROW_HARD('a particle was left without a delivered state')
-        if( size(weights,1) /= NP .or. size(weights,2) /= NST ) THROW_HARD('weights shape wrong')
-        do i = 1, NP
-            if( abs(sum(weights(i,:)) - 1.) > 1.e-6 ) THROW_HARD('delivered weights are not hard-label indicators')
-        end do
-        nlab = 0
-        do i = 1, NP
-            nlab(labels(i)) = nlab(labels(i)) + 1
-        end do
-        do state = 1, NST
-            if( nlab(state) < nmin ) THROW_HARD('a delivered state is below the population floor')
-            if( nint(neff(state)) /= nlab(state) ) THROW_HARD('neff does not report the delivered population')
-        end do
-        deallocate(weights, targets, bandwidths, neff, labels)
-        write(logfhandle,'(A)') '>>>   PASSED (every particle labelled, every state at or above the floor)'
-    end subroutine test_flex_pca_population_floor
 
 
     !> The resume embedding path itself ('' when not resuming)

@@ -11,6 +11,7 @@ public :: cov_env_int, cov_env_int_pub, cov_env_flag_on, cov_env_flag_off, cov_e
 public :: chi2_median, punit, two_gauss_unimodal
 public :: kernel_weights_at_bandwidth, project_onto_target_polyline, dilation_template
 public :: flex_pca_write_state
+public :: COV_MAX_BW_GROW
 
 !> safety cap on kernel bandwidth growth when a state's support falls below min_neff
 integer, parameter :: COV_MAX_BW_GROW = 4

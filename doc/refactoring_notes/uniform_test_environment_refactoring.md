@@ -22,7 +22,8 @@ suite, `unit_reconstruction`, and the first nightly library suite,
 `lib_reconstruction`, exist since 2026-09-23 (section 9.7), as do the
 ninth and tenth fast suites `unit_pftc_align2D3D` and
 `unit_cart_align3D` and the second library suite
-`lib_cart_align3D`. This is a large
+`lib_cart_align3D`, and the eleventh fast suite `unit_heterogeneity` with
+the third library suite `lib_heterogeneity`. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -385,7 +386,8 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
 | `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
-| `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | to be measured |
+| `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
+| `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | to be measured (first build 47.3 s, cut down, section 9.7) |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1746,6 +1748,107 @@ of the eleven files is made by the four testers; nothing is lost by name.
 Naming (Hans, same day): the areas are `pftc_align2D3D` and `cart_align3D`
 ("registration" was too long for a suite name); the first was renamed from
 `pftc_registration2D3D`, under which it was committed in 675fdcd8e.
+
+**heterogeneity (2026-09-23, Hans: "go").** The flex trio: three
+standalone drivers (52 lines) over self-tests that lived inside the
+production modules — about 290 lines in `simple_flex_pca_model`,
+`_weights` and `_deconv`, 412 in `simple_flex_pca_pcg`, about 1 300 in
+`simple_flex_gpu` — all failing by `THROW_HARD`, none in CI. `flex_pca`
+is `merge into unit_heterogeneity` as `flex PCA`
+(`simple_flex_pca_tester`): the embedding-cache round trip (bit-exact,
+seven payloads), the derived settings against the validated IgG and
+Ribosembly scales, state placement with a population floor, kernel
+weights at bandwidth with bounded widening, covariance state weights on a
+bimodal embedding, and latent deconvolution (noise-scale calibration,
+held-out K = 2, posterior means closer to the truth); the six routines
+left the production modules (the `ui_hash` precedent) and
+`write_embedding_cache`, `read_embedding_cache`,
+`place_states_with_population_floor`, `FLEX_AUTO_K_START/MIN` became
+public for the tester (Hans agreed). Two of them were not reproducible:
+the population floor seeded from `/dev/urandom` through `seed_rnd` and
+the deconvolution called a bare `random_seed()`; both now draw from a
+fixed seed. Tidy found on the way: `COV_MAX_BW_GROW` was defined three
+times (model, weights, util); the model's copy was unused and is gone,
+the weights module now imports the util one, which is public. `flex_pcg`
+is `modify`: `test_flex_pcg_operator` is white-box (private components of
+`flex_pcg_t`, sixteen private scatter/fold kernels) and stays in the
+module; it gained an optional `passes(4)` out-argument, a fixed seed in
+place of `seed_rnd`, and a FAIL line that also reports (D). The
+`simple_flex_pcg_tester` asserts (A) operator vs exact Gram, (B) rhs
+deposit vs exact adjoint, (C) the CG solve, (D) band lists vs dense fold
+by name: box 32 with 200 samples as `flex PCG operator` in
+`unit_heterogeneity`, box 64 with 400 samples in `lib_heterogeneity`; the
+three single-sample debug runs whose results the driver ignored are
+dropped. `flex_gpu` is `keep`, `platform`: `test=flex_gpu` through
+`simple_test_exec`, the five CPU-vs-CUDA routines as sub-suites (they skip
+themselves without a CUDA build or device and stay in `simple_flex_gpu`),
+registered only with `USE_FLEX_CUDA` and counted like coarrays.
+`SIMPLE_CTEST_BUDGET` 25 -> 27. Coverage accounting: every production call
+of the self-tests is made by the new testers or the wrapped routines;
+nothing is lost.
+
+The first gate with `unit_heterogeneity` passed 11/11 in 47.3 s against
+the 30 s budget: `flex PCA` 36.2 s, all of it the deconvolution
+(20 000 particles, noise variance 2..20 per axis, K ladder to 4), and
+`flex PCG operator` 10.1 s. Two fixes and a split. (1) Production:
+`xd_fit` factored T_ik = R_i Sigma_k R_i^T + N_i twice per particle and
+component and iteration — once for the responsibility, then again with an
+explicit inverse for the conditional moments — and `xd_posterior` did the
+same. One Cholesky factor now serves both (`component_factor`,
+`component_moments`: W = L^-1 R Sigma, b = mu + W^T y,
+B = Sigma - W^T W); `component_terms` is gone. Mathematically identical,
+about half the E-step arithmetic by operation count, in the loop behind
+the 1 178 s K ladder once measured on 105k particles in 17 dimensions
+(the reason for the `XD_CV_MAX` subsample). (2) The PCG
+self-test's `sample_exact` summed the box^3 volume in a triple loop for
+each of the 38 256 central-slice samples of (C) at box 32 (1.25e9 terms);
+it now does the x sum for all columns as one real (2,N) x (N,N^2) library
+matmul, then y and z. (3) The deconvolution runs on 4 000 particles at
+noise variance 0.5..5 in the gate (the ladder stops at n/2000 = 2; an
+independent numpy emulation of the EM over nine seeds gave a held-out
+margin of 54-123 nats for K = 2 over K = 1 and an mse ratio of 0.33-0.35
+against the asserted 0.6) and on 20 000 at 2..20 nightly as
+`flex PCA deconvolution 20k` (the emulation gave K = 3 about 5-6 nats
+below K = 2, as the Fortran run did). The PCG solve (C) runs only the
+clean baseline in the gate; the twelve-setting sweep is `flex PCG solve
+sweep` in `lib_heterogeneity`, where every clean solve (six of them, err
+inner 0.004-0.009 in the first run) is now held to the baseline criterion
+instead of only the first; the noisy ones stay unasserted, they show what
+the Tikhonov term is for. The unused `loc_fixed` argument went with the
+debug runs that used it. Found on the way, not changed: the XD EM runs to
+`XD_MAXIT` = 150 without meeting `XD_TOL` in most K >= 2 fits of the
+emulation (slow EM convergence when the noise dominates the component
+widths), so the ladder's cost is iteration-capped rather than
+tolerance-limited.
+
+**Differential evolution and the harness seed (2026-09-23, found by the
+heterogeneity rebuild).** The second gate was 4.9 s (`unit_heterogeneity`
+4.5 s) but `unit_numerics` failed: `test_de_quadratic` stopped at
+(1.38, -2.47). Nothing in the batch touched it; the test drew from a
+generator that `run_unit_suites` and `test_multinomal` had seeded from
+`/dev/urandom` (`seed_rnd`), so it had been passing by chance. Two
+production defects in `de_minimize`, both clear: (1) the worst member was
+tracked wrongly: a rejected trial set `worst = X` (whose cost had not
+changed; when X was the best member the spread became zero), and an
+accepted trial on the worst member left `worst` pointing at a member that
+had just improved. The relative population-tolerance stop then fired on a
+spread that was not the population's; a numpy replay of the routine on
+this quadratic over 500 seeds stopped early in all 500 (median 270 of 3000
+trials) and missed the asserted optimum in 121. Now `worst` is recomputed
+when the worst member improves and a rejection changes nothing; the replay
+runs to `maxits` in all 500 and reaches cost below 1e-18 in every one.
+(2) The component that must always be mutated was chosen as `i == X`,
+comparing a dimension index with a population index; it is now a random
+dimension `jrand`. The unused `nworse` counter went. DE is production's
+CTF search (`ctf_estimate_cost`, maxits 400): it no longer stops on a
+spurious spread, so it can spend all 400 trials, and its fits change (not
+measured on data). Reproducibility: `simple_test_utils`
+gained `set_fixed_seed` (the formula every tester copy used; the copies in
+the gauran and flex PCA testers are gone); `run_unit_suites` seeds with it
+instead of `seed_rnd`, `test_multinomal` too, and the DE and simplex tests
+seed themselves. Production code that calls `seed_rnd` (for example
+`simple_ftexp_shsrch`, `simple_parameters_phases`) still re-seeds from
+`/dev/urandom` for whatever runs after it.
 
 ## 10. Fast-tier performance
 

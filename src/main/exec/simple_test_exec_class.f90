@@ -7,7 +7,9 @@ use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_ipc, commander_test_forked_process, &
                                         commander_test_unit_reconstruction, commander_test_lib_reconstruction, &
                                         commander_test_unit_pftc_align2D3D, &
-                                        commander_test_unit_cart_align3D, commander_test_lib_cart_align3D
+                                        commander_test_unit_cart_align3D, commander_test_lib_cart_align3D, &
+                                        commander_test_unit_heterogeneity, commander_test_lib_heterogeneity, &
+                                        commander_test_flex_gpu
 implicit none
 
 public :: exec_test_class_commander
@@ -26,6 +28,9 @@ type(commander_test_lib_reconstruction)  :: xlib_reconstruction
 type(commander_test_unit_pftc_align2D3D) :: xunit_pftc_align2D3D
 type(commander_test_unit_cart_align3D)   :: xunit_cart_align3D
 type(commander_test_lib_cart_align3D)    :: xlib_cart_align3D
+type(commander_test_unit_heterogeneity)  :: xunit_heterogeneity
+type(commander_test_lib_heterogeneity)   :: xlib_heterogeneity
+type(commander_test_flex_gpu)            :: xflex_gpu
 type(commander_test_forked_process) :: xforked_process
 
 contains
@@ -65,6 +70,12 @@ contains
                 call xunit_cart_align3D%execute(cline)
             case( 'lib_cart_align3D' )
                 call xlib_cart_align3D%execute(cline)
+            case( 'unit_heterogeneity' )
+                call xunit_heterogeneity%execute(cline)
+            case( 'lib_heterogeneity' )
+                call xlib_heterogeneity%execute(cline)
+            case( 'flex_gpu' )
+                call xflex_gpu%execute(cline)
             case( 'forked_process' )
                 call xforked_process%execute(cline)
             case default

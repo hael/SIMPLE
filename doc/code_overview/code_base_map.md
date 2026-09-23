@@ -22,9 +22,6 @@
       - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
       - `simple_test_discrete_stack_io.f90`
       - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
-      - `simple_test_flex_gpu.f90` — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)
-      - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache and the kernel/state-weight contracts
-      - `simple_test_flex_pcg.f90` — validates the flex_pca PCG M-step operator: the pair Gram kernel on the 2x lattice against the
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
@@ -266,6 +263,8 @@
         - `simple_flex_pca_merge.f90` — Two-gate agglomerative merge of over-provisioned flex_pca states.
         - `simple_flex_pca_model.f90` — Standalone projection-aware low-rank covariance workflow for heterogeneous SPA data
         - `simple_flex_pca_pcg.f90` — flex_pca coupled M-step on the PCG operator (rec_backend=pcg): pair-weighted Gram kernels and the
+        - `simple_flex_pca_tester.f90` — unit tests for the flex_pca latent model, state weights and deconvolution (simple_flex_pca_model, _weights, _util, _deconv)
+        - `simple_flex_pcg_tester.f90` — unit and library tests of the flex_pca PCG M-step operator (simple_flex_pca_pcg)
         - `simple_flex_pca_plane_cache.f90` — flex_pca plane cache: the full-box prep's padded transform, restricted to the box_crop grid, kept on disk per particle
         - `simple_flex_pca_planes.f90` — flex_pca resident planes: prepped particle Fourier planes kept in memory across E-step passes
         - `simple_flex_pca_plot.f90` — flex_pca latent figures rendered in-engine (no external plotting): a three-panel JPEG with

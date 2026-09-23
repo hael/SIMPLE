@@ -31,18 +31,6 @@ contains
         call test_replay_and_independence()
     end subroutine run_all_gauran_tests
 
-    subroutine set_seed( base_seed )
-        integer, intent(in) :: base_seed
-        integer, allocatable :: seed(:)
-        integer :: i, n
-        call random_seed(size=n)
-        allocate(seed(n))
-        do i = 1, n
-            seed(i) = modulo(base_seed + 104729 * (i - 1), huge(0) - 1) + 1
-        enddo
-        call random_seed(put=seed)
-    end subroutine set_seed
-
     !> a smooth signal with non-trivial variance: one off-centre Gaussian blob
     subroutine make_signal( img )
         type(image), intent(inout) :: img
@@ -90,7 +78,7 @@ contains
         real, allocatable :: x(:,:,:)
         write(*,'(A)') 'test_gauran_moments'
         call img%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call set_seed(SEED)
+        call set_fixed_seed(SEED)
         call img%gauran(0., 1.)
         x = img%get_rmat()
         call assert_true(all(ieee_is_finite(x)), 'unit Gaussian samples are finite')
@@ -114,7 +102,7 @@ contains
         write(*,'(A)') 'test_add_gauran_snr'
         call make_signal(clean_img)
         clean = clean_img%get_rmat()
-        call set_seed(SEED + 1)
+        call set_fixed_seed(SEED + 1)
         do i = 1, 3
             snr = snr_of(i)
             call noisy_img%copy(clean_img)
@@ -153,10 +141,10 @@ contains
         call a_img%copy(clean_img)
         call b_img%copy(clean_img)
         call replay_img%copy(clean_img)
-        call set_seed(SEED + 2)
+        call set_fixed_seed(SEED + 2)
         call a_img%add_gauran(0.5)
         call b_img%add_gauran(0.5)
-        call set_seed(SEED + 2)
+        call set_fixed_seed(SEED + 2)
         call replay_img%add_gauran(0.5)
         a      = a_img%get_rmat() - clean
         b      = b_img%get_rmat() - clean
