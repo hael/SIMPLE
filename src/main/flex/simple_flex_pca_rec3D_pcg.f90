@@ -16,6 +16,7 @@ use simple_math_ft,           only: resample_sigma2
 use simple_estimate_ssnr,     only: fsc2optlp_sub, get_resolution
 use simple_flex_pca_rounds,   only: flex_pca_rounds, flex_pca_part_path
 use simple_flex_pca_util,     only: flex_pca_write_state
+!$ use omp_lib, only: omp_get_max_active_levels, omp_set_max_active_levels, omp_set_num_threads
 implicit none
 
 public :: reconstruct_flex_weighted_states_pcg
@@ -30,9 +31,20 @@ real,    parameter :: FLEX_PCG_WEIGHT_FLOOR = 1.0e-3
 !! count of a sparse state is a small fraction of N, so the refinement backend's absolute PCG_LAMBDA
 !! would be a materially stronger prior on it than on a populated state
 real,    parameter :: FLEX_PCG_LAMBDA_REL = 1.0e-3
-!> cold base solves run at least this many iterations (FINAL_PCG_MAXITS_FLOOR of the refinement workflows)
-integer, parameter :: FLEX_PCG_MAXITS_FLOOR = 5
+!> iteration budget of the cold state solves: the reconstruct3D PCG default (maxits_pcg=2). It is NOT
+!! params%maxits_pcg, which is the warm-started basis M-step's budget; a positive rtol still stops earlier
+integer, parameter :: FLEX_PCG_STATE_MAXITS = 2
+!> thread budget of the paired even/odd solve (PCG_MASTER_NTHR_CAP of the reconstruct3D PCG master)
+integer, parameter :: FLEX_PCG_PAIR_NTHR_CAP = 32
 character(len=*), parameter :: PCG_STATE_TABLE = 'flex_pca_state_pcg.txt'
+
+!> outcome of one (state, half) solve, recorded inside the concurrent even/odd sections and reported after
+type :: half_solve_rec
+    type(pcg_solver_outcome) :: outcome
+    integer :: niters  = 0
+    real    :: seconds = 0.0
+    logical :: l_solved = .false.   !< false: no particles above the floor, zero map delivered
+end type half_solve_rec
 
 contains
 
@@ -49,8 +61,8 @@ contains
         logical,                intent(in)    :: l_fuse
         type(string), optional, intent(in)    :: outvol_even, outvol_odd
         class(flex_pca_rounds), intent(inout) :: rounds
-        type(reconstructor_pcg)  :: pcgop
-        type(pcg_solver_outcome) :: outcome
+        type(reconstructor_pcg)  :: pcgop, pcgops(0:1)
+        type(half_solve_rec)     :: sol(0:1)
         type(image), allocatable :: maps_e(:), maps_o(:)
         type(image)   :: img_e, img_o, img_c, state_img, fsc_e, fsc_o, envimg
         type(string)  :: outvol_bak, fname, state_vol_fname
@@ -59,9 +71,9 @@ contains
         real,    allocatable :: fsc_eo(:), res_arr(:), filt_half(:), filt_merged(:)
         integer, allocatable :: nsel_e(:), nsel_o(:)
         real    :: msk_rec, fsc05, fsc0143, kc_lp
-        integer :: state, eo, neo, nsel, nsel_part, ipart, filtsz, k_lp, iv, niters, tunit
-        integer :: envlen, envstat
-        logical :: l_state_eofilt, l_state_filt, l_eo_fsc
+        integer :: state, eo, neo, nsel, nsel_part, ipart, filtsz, k_lp, iv, tunit
+        integer :: envlen, envstat, nthr_half, nthr_pair, prev_levels
+        logical :: l_state_eofilt, l_state_filt, l_eo_fsc, l_pair
         if( size(pinds) < 1 .or. nstates < 1 ) THROW_HARD('invalid flex PCG state reconstruction dimensions')
         if( any(shape(state_weights) /= [size(pinds),nstates]) ) THROW_HARD('flex PCG weighted state table mismatch')
         if( l_fuse .and. .not. rounds%is_worker() )then
@@ -102,7 +114,6 @@ contains
         ! ---- delivery policy (applied per state right after its halves are solved): the same
         ! per-state eo-FSC filter as the gridding path, on the windowed solutions as they come out
         ! of the solve (no background removal, no second mask) ----
-        ! solutions as they come out of the solve (no background removal, no second mask) ----
         l_state_eofilt = .false.
         call get_environment_variable('SIMPLE_COV_STATE_EOFILT', envval, envlen, envstat)
         if( envstat == 0 .and. envlen > 0 )then
@@ -116,34 +127,66 @@ contains
         filtsz = fdim(box_rec) - 1
         allocate(fsc_eo(filtsz), filt_half(filtsz), filt_merged(filtsz))
         outvol_bak = params%outvol
+        ! even and odd of a state solve concurrently on half the threads each (the reconstruct3D PCG
+        ! master's pairing); the accumulation/reduction before them stays serial (shared image batch, disk)
+        ! total capped at the reconstruct3D PCG master's PCG_MASTER_NTHR_CAP (32): the FFT scaling of a
+        ! single solve flattens well before the boosted master budget, and the cap bounds the thread stacks
+        nthr_pair = min(nthr_glob, FLEX_PCG_PAIR_NTHR_CAP)
+        l_pair    = l_fuse .and. nthr_pair >= 2
+        nthr_half = nthr_pair
+        if( l_pair ) nthr_half = max(1, nthr_pair/2)
         do state = 1, nstates
             do eo = 0, neo
                 if( rounds%distributed() )then
-                    call new_state_operator(pcgop)
+                    call new_state_operator(pcgops(eo))
                     write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA PCG STATE ', state, ' half ', eo, &
                         &': reducing ', max(1,params%nparts), ' raw parts and finalizing the kernel'
                     call flush(logfhandle)
-                    call pcgop%begin_reduction
+                    call pcgops(eo)%begin_reduction
                     nsel = 0
                     do ipart = 1, max(1,params%nparts)
                         fname = flex_pcg_state_raw_fname(params, ipart, state, eo)
                         if( .not. file_exists(fname) ) THROW_HARD('missing flex PCG raw part: '//fname%to_char())
-                        call pcgop%add_raw_accum(fname, state, eo, ipart, max(1,params%nparts), provenance, nsel_part)
+                        call pcgops(eo)%add_raw_accum(fname, state, eo, ipart, max(1,params%nparts), provenance, nsel_part)
                         nsel = nsel + nsel_part
                         call del_file(fname)
                         call fname%kill
                     end do
                 else
-                    call accumulate_state_half(state, eo, pcgop, nsel)
+                    call accumulate_state_half(state, eo, pcgops(eo), nsel)
                 endif
                 if( eo == 0 )then
                     nsel_e(state) = nsel
-                    call solve_state_half(pcgop, state, eo, nsel, maps_e(state))
                 else
                     nsel_o(state) = nsel
-                    call solve_state_half(pcgop, state, eo, nsel, maps_o(state))
                 endif
-                call pcgop%kill
+            end do
+            if( l_pair )then
+                prev_levels = 1
+                !$ prev_levels = omp_get_max_active_levels()
+                !$ call omp_set_max_active_levels(max(2, prev_levels))
+                !$omp parallel sections num_threads(2) default(shared)
+                !$omp section
+                !$ call omp_set_num_threads(nthr_half)
+                call solve_state_half(pcgops(0), nsel_e(state), maps_e(state), sol(0))
+                !$omp section
+                !$ call omp_set_num_threads(nthr_half)
+                call solve_state_half(pcgops(1), nsel_o(state), maps_o(state), sol(1))
+                !$omp end parallel sections
+                !$ call omp_set_max_active_levels(prev_levels)
+                !$ call omp_set_num_threads(nthr_glob)
+            else
+                call solve_state_half(pcgops(0), nsel_e(state), maps_e(state), sol(0))
+                if( l_fuse ) call solve_state_half(pcgops(1), nsel_o(state), maps_o(state), sol(1))
+            endif
+            ! serial: the outcome checks, the log lines and the table, in even/odd order
+            do eo = 0, neo
+                if( eo == 0 )then
+                    call report_state_half(state, eo, nsel_e(state), sol(eo))
+                else
+                    call report_state_half(state, eo, nsel_o(state), sol(eo))
+                endif
+                call pcgops(eo)%kill
             end do
             ! deliver this state now: its maps go to disk as soon as both halves are solved,
             ! and its half maps are freed (one pair resident, not nstates)
@@ -239,7 +282,11 @@ contains
         !! spherical support (installed before accumulation so the RHS is projected in end_accum)
         subroutine new_state_operator( op )
             type(reconstructor_pcg), intent(inout) :: op
-            call op%new(box_rec, smpd_rec)
+            if( rounds%is_worker() )then
+                call op%new(box_rec, smpd_rec)
+            else
+                call op%new(box_rec, smpd_rec, fft_nthreads=nthr_half)
+            endif
             call op%set_sym(build%pgrpsyms)
             call op%set_lambda_relative(FLEX_PCG_LAMBDA_REL)
             if( flex_mskfile_set(params) )then
@@ -340,41 +387,54 @@ contains
             deallocate(y_batch, sig2, sel, wsel)
         end subroutine accumulate_state_half
 
-        !> finalize (kernel + preconditioner) and solve one (state, half) cold; the map is window*u
-        subroutine solve_state_half( op, state_here, eo_here, nsel_here, vol )
+        !> finalize (kernel + preconditioner) and solve one (state, half) cold; the map is window*u.
+        !! Runs inside the concurrent even/odd sections: no I/O, no logging, no THROW here -- the
+        !! outcome is recorded and judged by report_state_half afterwards
+        subroutine solve_state_half( op, nsel_here, vol, rec )
             type(reconstructor_pcg), intent(inout) :: op
-            integer,                 intent(in)    :: state_here, eo_here, nsel_here
+            integer,                 intent(in)    :: nsel_here
             type(image),             intent(inout) :: vol
+            type(half_solve_rec),    intent(inout) :: rec
             real, allocatable :: x(:,:,:)
-            integer :: maxits
             integer(timer_int_kind) :: t_solve
+            rec%l_solved = .false.
+            rec%niters   = 0
+            call vol%new([box_rec,box_rec,box_rec], smpd_rec)
+            if( nsel_here == 0 ) return
+            t_solve = tic()
+            call op%end_accum(.true.)
+            call op%set_op_mode(PCG_OP_KERNEL)
+            allocate(x(box_rec,box_rec,box_rec), source=0.0)
+            call op%solve_accum(x, maxits=FLEX_PCG_STATE_MAXITS, rtol=params%rtol, niters=rec%niters, &
+                &outcome=rec%outcome)
+            rec%l_solved = all(ieee_is_finite(x))
+            if( rec%l_solved ) call vol%set_rmat(x, .false.)
+            rec%seconds = real(toc(t_solve))
+            deallocate(x)
+        end subroutine solve_state_half
+
+        !> the serial tail of one half solve: the failure checks, the log line and the table row
+        subroutine report_state_half( state_here, eo_here, nsel_here, rec )
+            integer,              intent(in) :: state_here, eo_here, nsel_here
+            type(half_solve_rec), intent(in) :: rec
             character(len=4) :: half
             half = 'all '
             if( l_fuse ) half = merge('odd ', 'even', eo_here == 1)
-            call vol%new([box_rec,box_rec,box_rec], smpd_rec)
             if( nsel_here == 0 )then
                 write(logfhandle,'(A,I0,A,A,A)') '>>> FLEX_PCA PCG STATE ', state_here, ' ', trim(half), &
                     &': no particles above the weight floor; zero map delivered'
                 return
             endif
-            t_solve = tic()
-            call op%end_accum(.true.)
-            call op%set_op_mode(PCG_OP_KERNEL)
-            allocate(x(box_rec,box_rec,box_rec), source=0.0)
-            maxits = max(params%maxits_pcg, FLEX_PCG_MAXITS_FLOOR)
-            call op%solve_accum(x, maxits=maxits, rtol=params%rtol, niters=niters, outcome=outcome)
-            if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE ) &
+            if( trim(rec%outcome%stop_reason) == PCG_STOP_INDEFINITE ) &
                 &THROW_HARD('flex PCG state solve lost positive-definiteness (cold start)')
-            if( .not. all(ieee_is_finite(x)) ) THROW_HARD('flex PCG state solve returned non-finite values')
-            call vol%set_rmat(x, .false.)
+            if( .not. rec%l_solved ) THROW_HARD('flex PCG state solve returned non-finite values')
             write(logfhandle,'(A,I0,A,A,A,I0,A,I0,A,ES10.3,A,ES10.3,A,A,A,F8.1)') '>>> FLEX_PCA PCG STATE ', &
-                &state_here, ' ', trim(half), '  nptcls=', nsel_here, '  iters=', niters, &
-                &'  resid=', outcome%final_rel_residual, '  update=', outcome%final_rel_update, &
-                &'  stop=', trim(outcome%stop_reason), '  seconds=', toc(t_solve)
+                &state_here, ' ', trim(half), '  nptcls=', nsel_here, '  iters=', rec%niters, &
+                &'  resid=', rec%outcome%final_rel_residual, '  update=', rec%outcome%final_rel_update, &
+                &'  stop=', trim(rec%outcome%stop_reason), '  seconds=', rec%seconds
             call flush(logfhandle)
-            call append_state_table(state_here, half, nsel_here, niters, outcome)
-            deallocate(x)
-        end subroutine solve_state_half
+            call append_state_table(state_here, half, nsel_here, rec%niters, rec%outcome)
+        end subroutine report_state_half
 
         !> one line per (state, half) solve; the run's record of what the PCG delivered
         subroutine append_state_table( state_here, half, nsel_here, niters_here, res )
