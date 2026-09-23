@@ -5,6 +5,7 @@ use simple_defs       ! PI etc.
 use simple_ori,       only: ori
 use simple_oris,      only: oris
 use simple_sym,       only: sym, is_valid_pointgroup
+use simple_linalg,    only: deg2rad, rad2deg
 implicit none
 private
 public :: run_all_sym_tests
@@ -30,6 +31,7 @@ contains
         call test_rot_to_asym()
         call test_symrandomize()
         call test_build_refspiral()
+        call test_neighbour_searches()
         ! call report_summary()
     end subroutine run_all_sym_tests
 
@@ -456,6 +458,136 @@ contains
             end subroutine check_spiral
 
     end subroutine test_build_refspiral
+
+    !---------------- neighbour searches over a symmetric projection set ----------------
+
+    ! find_closest_proj, nearest_proj_neighbors (threshold and count forms), sym_dists and
+    ! find_angres against a brute-force scan over the symmetry-expanded distances; for c1 the
+    ! sym forms delegate to the oris forms, which the same references cover
+    subroutine test_neighbour_searches()
+        integer, parameter :: NSP = 200, NNN = 5, NPROBE = 3
+        integer, parameter :: PROBE_IND(NPROBE) = [1, 37, 120]
+        real,    parameter :: PROBE_JITTER(3,NPROBE) = reshape([3.0, 2.0, 0.0,  -4.0, 1.5, 25.0,  2.5, -3.0, 190.0], [3,NPROBE])
+        real,    parameter :: THRES_DEG = 15.0
+        character(len=2), parameter :: GROUPS(3) = ['c1', 'c2', 'd2']
+        type(sym)  :: se
+        type(oris) :: os, os_dense
+        type(ori)  :: o, oasym, osym, orep
+        real       :: dmin(NSP), sorted(NSP), euls(3), euldist, inpldist, kth, angres, angres_dense
+        integer    :: ig, ip, i, isym, closest, oris_closest, nsel
+        logical    :: lnns(NSP), lnns_oris(NSP), expected(NSP), ok
+        write(*,'(A)') 'test_neighbour_searches'
+        do ig = 1,size(GROUPS)
+            call se%new(GROUPS(ig))
+            call os%new(NSP, is_ptcl=.false.)
+            call se%build_refspiral(os)
+            do ip = 1,NPROBE
+                ! a probe near a spiral direction, off the grid, with an in-plane angle
+                call os%get_ori(PROBE_IND(ip), o)
+                euls = o%get_euler() + PROBE_JITTER(:,ip)
+                euls(2) = min(max(euls(2), 0.0), 180.0)
+                call o%set_euler(euls)
+                ! brute force: the symmetry-expanded distance of every direction to the probe
+                do i = 1,NSP
+                    call os%get_ori(i, oasym)
+                    dmin(i) = oasym.euldist.o
+                    do isym = 2,se%get_nsym()
+                        call se%apply(oasym, isym, osym)
+                        dmin(i) = min(dmin(i), osym.euldist.o)
+                    end do
+                end do
+                ! closest projection
+                closest = se%find_closest_proj(os, o)
+                call assert_true(closest >= 1 .and. closest <= NSP, 'find_closest_proj: index in range '//GROUPS(ig))
+                call assert_true(abs(dmin(closest) - minval(dmin)) < 1.0e-6, 'find_closest_proj: the minimum of the symmetry-expanded distances '//GROUPS(ig))
+                if( GROUPS(ig) == 'c1' )then
+                    oris_closest = os%find_closest_proj(o)
+                    call assert_int(oris_closest, closest, 'find_closest_proj: the sym form is the oris form for c1')
+                endif
+                ! neighbours within a threshold: exactly the brute-force set, accumulated onto what was set
+                expected = dmin <= deg2rad(THRES_DEG)
+                lnns     = .false.
+                call se%nearest_proj_neighbors(os, o, THRES_DEG, lnns)
+                call assert_true(all(lnns .eqv. expected), 'nearest_proj_neighbors (threshold): the brute-force set '//GROUPS(ig))
+                call assert_true(count(lnns) >= 1, 'nearest_proj_neighbors (threshold): the closest direction is within 15 degrees '//GROUPS(ig))
+                call assert_true(count(lnns) < NSP / 2, 'nearest_proj_neighbors (threshold): a neighbourhood, not the whole set '//GROUPS(ig))
+                lnns = .false.
+                i    = merge(NSP, 1, expected(1)) ! an index outside the neighbourhood, if one exists at either end
+                if( .not. expected(i) )then
+                    lnns(i) = .true.
+                    call se%nearest_proj_neighbors(os, o, THRES_DEG, lnns)
+                    call assert_true(lnns(i), 'nearest_proj_neighbors (threshold) does not clear entries set by the caller '//GROUPS(ig))
+                endif
+                if( GROUPS(ig) == 'c1' )then
+                    lnns_oris = .false.
+                    call os%nearest_proj_neighbors(o, THRES_DEG, lnns_oris)
+                    call assert_true(all(lnns_oris .eqv. expected), 'oris%nearest_proj_neighbors (threshold): the brute-force set')
+                endif
+                ! the nnn nearest: exactly nnn flagged, none farther than the nnn-th distance
+                sorted = dmin
+                call insertion_sort(sorted)
+                kth  = sorted(NNN)
+                lnns = .false.
+                call se%nearest_proj_neighbors(os, o, NNN, lnns)
+                nsel = count(lnns)
+                call assert_int(NNN, nsel, 'nearest_proj_neighbors (count): exactly nnn flagged '//GROUPS(ig))
+                ok = .true.
+                do i = 1,NSP
+                    if( lnns(i) .and. dmin(i) > kth + 1.0e-6 ) ok = .false.
+                end do
+                call assert_true(ok, 'nearest_proj_neighbors (count): the flagged ones are the nnn nearest '//GROUPS(ig))
+                call assert_true(lnns(closest), 'nearest_proj_neighbors (count): the closest direction is among them '//GROUPS(ig))
+                if( GROUPS(ig) == 'c1' )then
+                    lnns_oris = .false.
+                    call os%nearest_proj_neighbors(o, NNN, lnns_oris)
+                    call assert_true(all(lnns_oris .eqv. lnns), 'oris%nearest_proj_neighbors (count) agrees with the sym form for c1')
+                endif
+                ! sym_dists: the minimum over the operators, in degrees, with a representative that realises it
+                call os%get_ori(closest, oasym)
+                call se%sym_dists(o, oasym, orep, euldist, inpldist)
+                call assert_real(rad2deg(dmin(closest)), euldist, 1.0e-3, 'sym_dists: the symmetry-expanded distance in degrees '//GROUPS(ig))
+                call assert_real(euldist, rad2deg(orep.euldist.o), 1.0e-3, 'sym_dists: the representative realises the distance '//GROUPS(ig))
+                call assert_true(inpldist >= 0.0 .and. inpldist <= 180.0, 'sym_dists: in-plane distance within [0,180] degrees '//GROUPS(ig))
+                if( GROUPS(ig) == 'c1' )then
+                    ! euldist of a direction with its own copy is acos(1 - eps) ~ 5e-4 rad in single precision
+                    call assert_true((orep.euldist.oasym) < 1.0e-3, 'sym_dists: the representative is the direction itself for c1')
+                endif
+            end do
+            ! angular resolution: positive, of the order of the spiral spacing, smaller for a denser spiral
+            angres = os%find_angres()
+            call assert_true(angres > 3.0 .and. angres < 40.0, 'find_angres: of the order of the spiral spacing '//GROUPS(ig))
+            call os_dense%new(2 * NSP, is_ptcl=.false.)
+            call se%build_refspiral(os_dense)
+            angres_dense = os_dense%find_angres()
+            call assert_true(angres_dense < angres, 'find_angres: a denser spiral resolves finer '//GROUPS(ig))
+            call os_dense%kill
+            call os%kill
+            call se%kill
+        end do
+        call o%kill
+        call oasym%kill
+        call osym%kill
+        call orep%kill
+
+        contains
+
+            pure subroutine insertion_sort( arr )
+                real, intent(inout) :: arr(:)
+                real    :: tmp
+                integer :: i, j
+                do i = 2,size(arr)
+                    tmp = arr(i)
+                    j   = i - 1
+                    do while( j >= 1 )
+                        if( arr(j) <= tmp ) exit
+                        arr(j+1) = arr(j)
+                        j = j - 1
+                    end do
+                    arr(j+1) = tmp
+                end do
+            end subroutine insertion_sort
+
+    end subroutine test_neighbour_searches
 
     !---------------- helpers ----------------
 

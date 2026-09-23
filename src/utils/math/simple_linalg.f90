@@ -6,13 +6,12 @@ implicit none
 private
 
 public :: arg, eigsrt, eigh, euclid, fit_lsq_plane, fit_straight_line
-public :: hyp, jacobi, l1dist, matinv, myacos, norm_2, outerprod
+public :: hyp, jacobi, matinv, myacos, norm_2
 public :: plane_from_points, projz, pythag, rad2deg, deg2rad
-public :: same_energy_euclid, svbksb, svdcmp, svdfit, svd_multifit
-public :: svd_solve, normal_solve, qr_solve, svdvar, test_eigh
+public :: svbksb, svdcmp, svdfit, svd_multifit
+public :: qr_solve
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
 public :: sparse_eigh
-public :: hermitian_eigh, hermitian_invert, hermitian_solve
 public :: gemm_tn
 
 abstract interface
@@ -31,20 +30,6 @@ interface eigh
     module procedure eigh_sp
 end interface eigh
 
-interface hermitian_eigh
-    module procedure hermitian_eigh_z
-end interface hermitian_eigh
-
-interface hermitian_invert
-    module procedure hermitian_invert_dp
-    module procedure hermitian_invert_z
-end interface hermitian_invert
-
-interface hermitian_solve
-    module procedure hermitian_solve_dp
-    module procedure hermitian_solve_z
-end interface hermitian_solve
-
 interface euclid
     module procedure euclid_sp_1, euclid_sp_2, euclid_dp
 end interface euclid
@@ -57,10 +42,6 @@ interface jacobi
     module procedure jacobi_sp, jacobi_dp
 end interface jacobi
 
-interface l1dist
-    module procedure l1dist_sp, l1dist_dp
-end interface l1dist
-
 interface matinv
     module procedure matinv_sp, matinv_dp
 end interface matinv
@@ -72,10 +53,6 @@ end interface myacos
 interface norm_2
     module procedure norm_2_sp, norm_2_dp
 end interface norm_2
-
-interface outerprod
-    module procedure outerprod_r, outerprod_d
-end interface outerprod
 
 interface pythag
     module procedure pythag_sp, pythag_dp
@@ -118,25 +95,11 @@ interface
         real(kind=4), intent(inout) :: c(ldc,*)
     end subroutine sgemm
 
-    function snrm2(n, x, incx) result(res)
-        integer(kind=4), intent(in) :: n, incx
-        real(kind=4), intent(in) :: x(*)
-        real(kind=4) :: res
-    end function snrm2
-
     function dnrm2(n, x, incx) result(res)
         integer(kind=4), intent(in) :: n, incx
         real(kind=8), intent(in) :: x(*)
         real(kind=8) :: res
     end function dnrm2
-
-    subroutine sgelsy(m, n, nrhs, a, lda, b, ldb, jpvt, rcond, rank, work, lwork, info)
-        integer(kind=4), intent(in) :: m, n, nrhs, lda, ldb, lwork
-        integer(kind=4), intent(inout) :: jpvt(*)
-        integer(kind=4), intent(out) :: rank, info
-        real(kind=4), intent(inout) :: a(lda,*), b(ldb,*), work(*)
-        real(kind=4), intent(in) :: rcond
-    end subroutine sgelsy
 
     subroutine dgelsy(m, n, nrhs, a, lda, b, ldb, jpvt, rcond, rank, work, lwork, info)
         integer(kind=4), intent(in) :: m, n, nrhs, lda, ldb, lwork
@@ -145,28 +108,6 @@ interface
         real(kind=8), intent(inout) :: a(lda,*), b(ldb,*), work(*)
         real(kind=8), intent(in) :: rcond
     end subroutine dgelsy
-
-    subroutine dgelss(m, n, nrhs, a, lda, b, ldb, s, rcond, rank, work, lwork, info)
-        integer(kind=4), intent(in) :: m, n, nrhs, lda, ldb, lwork
-        integer(kind=4), intent(out) :: rank, info
-        real(kind=8), intent(inout) :: a(lda,*), b(ldb,*), work(*)
-        real(kind=8), intent(out) :: s(*)
-        real(kind=8), intent(in) :: rcond
-    end subroutine dgelss
-
-    subroutine dposv(uplo, n, nrhs, a, lda, b, ldb, info)
-        character(len=1), intent(in) :: uplo
-        integer(kind=4), intent(in) :: n, nrhs, lda, ldb
-        integer(kind=4), intent(out) :: info
-        real(kind=8), intent(inout) :: a(lda,*), b(ldb,*)
-    end subroutine dposv
-
-    subroutine zposv(uplo, n, nrhs, a, lda, b, ldb, info)
-        character(len=1), intent(in) :: uplo
-        integer(kind=4), intent(in) :: n, nrhs, lda, ldb
-        integer(kind=4), intent(out) :: info
-        complex(kind=8), intent(inout) :: a(lda,*), b(ldb,*)
-    end subroutine zposv
 
     subroutine sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info)
         character(len=1), intent(in) :: jobu, jobvt
@@ -225,14 +166,6 @@ interface
         real(kind=8), intent(inout) :: a(lda,*), work(*)
         real(kind=8), intent(out) :: w(*)
     end subroutine dsyev
-
-    subroutine zheev(jobz, uplo, n, a, lda, w, work, lwork, rwork, info)
-        character(len=1), intent(in) :: jobz, uplo
-        integer(kind=4), intent(in) :: n, lda, lwork
-        integer(kind=4), intent(out) :: info
-        complex(kind=8), intent(inout) :: a(lda,*), work(*)
-        real(kind=8), intent(out) :: w(*), rwork(*)
-    end subroutine zheev
 
     subroutine ssyevr(jobz, range, uplo, n, a, lda, vl, vu, il, iu, abstol, &
         m, w, z, ldz, isuppz, work, lwork, iwork, liwork, info)
@@ -504,10 +437,15 @@ subroutine matinv_dp(matrix, inverse, n, errflg)
     if(info /= 0) errflg = 1
 end subroutine matinv_dp
 
+! Not snrm2: Apple's Accelerate BLAS returns single-precision function results
+! (snrm2, sdot, sasum) in the f2c/g77 convention, as a double, so a gfortran
+! caller expecting a float reads 0. The double-precision accumulation below is
+! portable and at least as accurate. (Found by the linear algebra unit tests,
+! 2026-09-23; norm_2 had returned 0 on macOS since the BLAS switch of 2026-06-10.)
 function norm_2_sp(v) result(r)
     real(kind=4), intent(in) :: v(:)
     real(kind=4) :: r
-    r = snrm2(size(v), v, 1)
+    r = real(sqrt(sum(real(v, kind=8)**2)), kind=4)
 end function norm_2_sp
 
 function norm_2_dp(v) result(r)
@@ -515,18 +453,6 @@ function norm_2_dp(v) result(r)
     real(kind=8) :: r
     r = dnrm2(size(v), v, 1)
 end function norm_2_dp
-
-function outerprod_r(a, b)
-    real(kind=4), intent(in) :: a(:), b(:)
-    real(kind=4) :: outerprod_r(size(a),size(b))
-    outerprod_r = spread(a, dim=2, ncopies=size(b)) * spread(b, dim=1, ncopies=size(a))
-end function outerprod_r
-
-function outerprod_d(a, b)
-    real(kind=8), intent(in) :: a(:), b(:)
-    real(kind=8) :: outerprod_d(size(a),size(b))
-    outerprod_d = spread(a, dim=2, ncopies=size(b)) * spread(b, dim=1, ncopies=size(a))
-end function outerprod_d
 
 function plane_from_points(points) result(sol)
     real(kind=4), intent(inout) :: points(:,:)
@@ -755,21 +681,6 @@ subroutine svd_multifit_dp(x, y, sig, a, v, w, chisq, funcs)
     chisq = vabs(matmul(usav, a) - b)**2
 end subroutine svd_multifit_dp
 
-subroutine svdvar(v, w, cvm)
-    real(kind=4), intent(in) :: v(:,:), w(:)
-    real(kind=4), intent(out) :: cvm(:,:)
-    integer :: ma
-    real(kind=4) :: wti(size(w))
-    ma = assert_eq((/size(v,1), size(v,2), size(w), size(cvm,1), size(cvm,2)/), 'svdvar')
-    where(is_equal(w, 0.0))
-        wti = 0.0_sp
-    elsewhere
-        wti = 1.0_sp / (w * w)
-    endwhere
-    cvm = v * spread(wti, dim=1, ncopies=ma)
-    cvm = matmul(cvm, transpose(v))
-end subroutine svdvar
-
 pure function trace(mat) result(tr)
     real(kind=4), intent(in) :: mat(:,:)
     real(kind=4) :: tr
@@ -783,7 +694,7 @@ end function trace
 function vabs_sp(v)
     real(kind=4), intent(in) :: v(:)
     real(kind=4) :: vabs_sp
-    vabs_sp = snrm2(size(v), v, 1)
+    vabs_sp = real(sqrt(sum(real(v, kind=8)**2)), kind=4) ! not snrm2, see norm_2_sp
 end function vabs_sp
 
 function vabs_dp(v)
@@ -889,33 +800,6 @@ pure function euclid_dp(vec1, vec2) result(dist)
     dist = sqrt(sum((vec1 - vec2)**2))
 end function euclid_dp
 
-pure function l1dist_sp(vec1, vec2) result(dist)
-    real(kind=4), intent(in) :: vec1(:), vec2(:)
-    real(kind=4) :: dist
-    dist = sum(abs(vec1 - vec2))
-end function l1dist_sp
-
-pure function l1dist_dp(vec1, vec2) result(dist)
-    real(kind=8), intent(in) :: vec1(:), vec2(:)
-    real(kind=8) :: dist
-    dist = sum(abs(vec1 - vec2))
-end function l1dist_dp
-
-function same_energy_euclid(vec1, vec2) result(dist)
-    real(kind=4), intent(in) :: vec1(:), vec2(:)
-    real(kind=4) :: avg1, avg2, dist
-    real(kind=4), allocatable :: diff1(:), diff2(:)
-    integer :: sz1, sz2
-    sz1 = size(vec1)
-    sz2 = size(vec2)
-    allocate(diff1(sz1), diff2(sz2))
-    avg1 = sum(vec1) / real(sz1, sp)
-    avg2 = sum(vec2) / real(sz2, sp)
-    diff1 = vec1 - avg1
-    diff2 = vec2 - avg2
-    dist = euclid(diff1, diff2)
-end function same_energy_euclid
-
 function pythag_sp(a, b)
     real(kind=4), intent(in) :: a, b
     real(kind=4) :: pythag_sp
@@ -957,29 +841,6 @@ subroutine eigh_sp(n, mat, neigs, eigvals, eigvecs, smallest)
     if(info /= 0) call lapack_stop('EIGH', 'SSYEVR', info)
 end subroutine eigh_sp
 
-subroutine normal_solve(m, n, a, b, x, flag)
-    integer(kind=4), intent(in) :: m, n
-    real(kind=8), intent(in) :: a(m,n), b(m)
-    real(kind=8), intent(out) :: x(n)
-    integer(kind=4), intent(out) :: flag
-    integer(kind=4) :: info
-    real(kind=8), allocatable :: ata(:,:), atb(:,:)
-    flag = 0
-    if(m < n .or. m <= 0 .or. n <= 0)then
-        flag = 1
-        return
-    endif
-    allocate(ata(n,n), atb(n,1))
-    ata = matmul(transpose(a), a)
-    atb(:,1) = matmul(transpose(a), b)
-    call dposv('U', n, 1, ata, n, atb, n, info)
-    if(info /= 0)then
-        flag = 1
-        return
-    endif
-    x = atb(:,1)
-end subroutine normal_solve
-
 subroutine qr_solve(m, n, a, b, x)
     integer(kind=4), intent(in) :: m, n
     real(kind=8), intent(in) :: a(m,n), b(m)
@@ -1011,224 +872,6 @@ subroutine qr_solve(m, n, a, b, x)
     if(info /= 0) call lapack_stop('QR_SOLVE', 'DGELSY', info)
     x = rhs(1:n,1)
 end subroutine qr_solve
-
-subroutine svd_solve(m, n, a, b, x)
-    integer(kind=4), intent(in) :: m, n
-    real(kind=8), intent(in) :: a(m,n), b(m)
-    real(kind=8), intent(out) :: x(n)
-    integer(kind=4) :: info, lda, ldb, lwork, nrhs, rank
-    real(kind=8), allocatable :: a_copy(:,:), rhs(:,:), s(:), work(:)
-    real(kind=8) :: rcond, work_query(1)
-    if(m <= 0 .or. n <= 0) call lapack_stop('SVD_SOLVE', 'DGELSS', -1)
-    lda = max(1, m)
-    ldb = max(1, m, n)
-    nrhs = 1
-    rcond = epsilon(1.0_dp)
-    allocate(a_copy(lda,n), rhs(ldb,nrhs), s(min(m,n)))
-    a_copy = a
-    rhs = 0.0_dp
-    rhs(1:m,1) = b
-    lwork = -1
-    call dgelss(m, n, nrhs, a_copy, lda, rhs, ldb, s, rcond, rank, work_query, lwork, info)
-    if(info /= 0) call lapack_stop('SVD_SOLVE workspace query', 'DGELSS', info)
-    lwork = max(1, int(work_query(1)))
-    allocate(work(lwork))
-    a_copy = a
-    rhs = 0.0_dp
-    rhs(1:m,1) = b
-    call dgelss(m, n, nrhs, a_copy, lda, rhs, ldb, s, rcond, rank, work, lwork, info)
-    if(info /= 0) call lapack_stop('SVD_SOLVE', 'DGELSS', info)
-    x = rhs(1:n,1)
-end subroutine svd_solve
-
-subroutine hermitian_solve_dp(a, b, x, flag)
-    real(kind=8), intent(in)  :: a(:,:), b(:)
-    real(kind=8), intent(out) :: x(:)
-    integer(kind=4), optional, intent(out) :: flag
-    real(kind=8), allocatable :: acopy(:,:), rhs(:,:)
-    integer(kind=4) :: info, n
-    if(present(flag)) flag = 0
-    n = size(b)
-    x = 0.0_dp
-    if(size(a,1) /= n .or. size(a,2) /= n .or. size(x) /= n .or. n <= 0)then
-        if(present(flag))then
-            flag = 1
-            return
-        endif
-        call lapack_stop('HERMITIAN_SOLVE', 'DPOSV', -1)
-    endif
-    allocate(acopy(n,n), rhs(n,1))
-    acopy = 0.5_dp * (a + transpose(a))
-    rhs(:,1) = b
-    call dposv('U', n, 1, acopy, n, rhs, n, info)
-    if(info /= 0)then
-        if(present(flag))then
-            flag = info
-            return
-        endif
-        call lapack_stop('HERMITIAN_SOLVE', 'DPOSV', info)
-    endif
-    x = rhs(:,1)
-end subroutine hermitian_solve_dp
-
-subroutine hermitian_invert_dp(a, ainv, flag)
-    real(kind=8), intent(in)  :: a(:,:)
-    real(kind=8), intent(out) :: ainv(:,:)
-    integer(kind=4), optional, intent(out) :: flag
-    real(kind=8), allocatable :: acopy(:,:), rhs(:,:)
-    integer(kind=4) :: info, n, i
-    if(present(flag)) flag = 0
-    n = size(a,1)
-    ainv = 0.0_dp
-    if(size(a,2) /= n .or. size(ainv,1) /= n .or. size(ainv,2) /= n .or. n <= 0)then
-        if(present(flag))then
-            flag = 1
-            return
-        endif
-        call lapack_stop('HERMITIAN_INVERT', 'DPOSV', -1)
-    endif
-    allocate(acopy(n,n), rhs(n,n), source=0.0_dp)
-    acopy = 0.5_dp * (a + transpose(a))
-    do i = 1,n
-        rhs(i,i) = 1.0_dp
-    end do
-    call dposv('U', n, n, acopy, n, rhs, n, info)
-    if(info /= 0)then
-        if(present(flag))then
-            flag = info
-            return
-        endif
-        call lapack_stop('HERMITIAN_INVERT', 'DPOSV', info)
-    endif
-    ainv = 0.5_dp * (rhs + transpose(rhs))
-end subroutine hermitian_invert_dp
-
-subroutine hermitian_solve_z(a, b, x, flag)
-    complex(kind=8), intent(in)  :: a(:,:), b(:)
-    complex(kind=8), intent(out) :: x(:)
-    integer(kind=4), optional, intent(out) :: flag
-    complex(kind=8), allocatable :: acopy(:,:), rhs(:,:)
-    integer(kind=4) :: info, n, i
-    if(present(flag)) flag = 0
-    n = size(b)
-    x = cmplx(0.0_dp, 0.0_dp, kind=8)
-    if(size(a,1) /= n .or. size(a,2) /= n .or. size(x) /= n .or. n <= 0)then
-        if(present(flag))then
-            flag = 1
-            return
-        endif
-        call lapack_stop('HERMITIAN_SOLVE', 'ZPOSV', -1)
-    endif
-    allocate(acopy(n,n), rhs(n,1))
-    acopy = 0.5_dp * (a + transpose(conjg(a)))
-    do i = 1,n
-        acopy(i,i) = cmplx(real(acopy(i,i), dp), 0.0_dp, kind=8)
-    end do
-    rhs(:,1) = b
-    call zposv('U', n, 1, acopy, n, rhs, n, info)
-    if(info /= 0)then
-        if(present(flag))then
-            flag = info
-            return
-        endif
-        call lapack_stop('HERMITIAN_SOLVE', 'ZPOSV', info)
-    endif
-    x = rhs(:,1)
-end subroutine hermitian_solve_z
-
-subroutine hermitian_invert_z(a, ainv, flag)
-    complex(kind=8), intent(in)  :: a(:,:)
-    complex(kind=8), intent(out) :: ainv(:,:)
-    integer(kind=4), optional, intent(out) :: flag
-    complex(kind=8), allocatable :: acopy(:,:), rhs(:,:)
-    integer(kind=4) :: info, n, i
-    if(present(flag)) flag = 0
-    n = size(a,1)
-    ainv = cmplx(0.0_dp, 0.0_dp, kind=8)
-    if(size(a,2) /= n .or. any(shape(ainv) /= [n,n]) .or. n <= 0)then
-        if(present(flag))then
-            flag = 1
-            return
-        endif
-        call lapack_stop('HERMITIAN_INVERT', 'ZPOSV', -1)
-    endif
-    allocate(acopy(n,n), rhs(n,n), source=cmplx(0.0_dp, 0.0_dp, kind=8))
-    acopy = 0.5_dp * (a + transpose(conjg(a)))
-    do i = 1,n
-        acopy(i,i) = cmplx(real(acopy(i,i), dp), 0.0_dp, kind=8)
-        rhs(i,i) = cmplx(1.0_dp, 0.0_dp, kind=8)
-    end do
-    call zposv('U', n, n, acopy, n, rhs, n, info)
-    if(info /= 0)then
-        if(present(flag))then
-            flag = info
-            return
-        endif
-        call lapack_stop('HERMITIAN_INVERT', 'ZPOSV', info)
-    endif
-    ainv = 0.5_dp * (rhs + transpose(conjg(rhs)))
-    do i = 1,n
-        ainv(i,i) = cmplx(real(ainv(i,i), dp), 0.0_dp, kind=8)
-    end do
-end subroutine hermitian_invert_z
-
-subroutine hermitian_eigh_z(a, eigvals, eigvecs, flag)
-    complex(kind=8), intent(in)  :: a(:,:)
-    real(kind=8),    intent(out) :: eigvals(:)
-    complex(kind=8), intent(out) :: eigvecs(:,:)
-    integer(kind=4), optional, intent(out) :: flag
-    complex(kind=8), allocatable :: acopy(:,:), work(:), vec_tmp(:)
-    complex(kind=8) :: work_query(1)
-    real(kind=8), allocatable :: rwork(:)
-    real(kind=8) :: eval_tmp
-    integer(kind=4) :: info, lwork, n, i, j
-    if(present(flag)) flag = 0
-    n = size(a,1)
-    eigvals = 0.0_dp
-    eigvecs = cmplx(0.0_dp, 0.0_dp, kind=8)
-    if(size(a,2) /= n .or. size(eigvals) < n .or. size(eigvecs,1) < n .or. size(eigvecs,2) < n .or. n <= 0)then
-        if(present(flag))then
-            flag = 1
-            return
-        endif
-        call lapack_stop('HERMITIAN_EIGH', 'ZHEEV', -1)
-    endif
-    allocate(acopy(n,n), rwork(max(1, 3*n - 2)))
-    acopy = 0.5_dp * (a + transpose(conjg(a)))
-    do i = 1,n
-        acopy(i,i) = cmplx(real(acopy(i,i), dp), 0.0_dp, kind=8)
-    end do
-    lwork = -1
-    call zheev('V', 'U', n, acopy, n, eigvals, work_query, lwork, rwork, info)
-    if(info /= 0)then
-        if(present(flag))then
-            flag = info
-            return
-        endif
-        call lapack_stop('HERMITIAN_EIGH workspace query', 'ZHEEV', info)
-    endif
-    lwork = max(1, int(real(work_query(1), dp)))
-    allocate(work(lwork))
-    call zheev('V', 'U', n, acopy, n, eigvals, work, lwork, rwork, info)
-    if(info /= 0)then
-        if(present(flag))then
-            flag = info
-            return
-        endif
-        call lapack_stop('HERMITIAN_EIGH', 'ZHEEV', info)
-    endif
-    eigvecs(1:n,1:n) = acopy
-    allocate(vec_tmp(n))
-    do i = 1,n / 2
-        j = n - i + 1
-        eval_tmp   = eigvals(i)
-        eigvals(i) = eigvals(j)
-        eigvals(j) = eval_tmp
-        vec_tmp = eigvecs(1:n,i)
-        eigvecs(1:n,i) = eigvecs(1:n,j)
-        eigvecs(1:n,j) = vec_tmp
-    end do
-end subroutine hermitian_eigh_z
 
 subroutine sparse_eigh(matvec, ctx, n, neigs, eigvals, eigvecs, tol, max_basis, info)
     procedure(sparse_matvec_sp_proc) :: matvec
@@ -1353,14 +996,6 @@ subroutine sparse_eigh(matvec, ctx, n, neigs, eigvals, eigvecs, tol, max_basis, 
     endif
     deallocate(resid, v, workd, workl, select)
 end subroutine sparse_eigh
-
-subroutine test_eigh(n, n_eigs)
-    integer, intent(in) :: n, n_eigs
-    real(kind=4) :: a(n,n), eigvals(n_eigs), eigvecs(n,n_eigs)
-    call random_number(a)
-    a = 0.5_sp * (a + transpose(a))
-    call eigh(n, a, n_eigs, eigvals, eigvecs)
-end subroutine test_eigh
 
 subroutine lapack_stop(caller, routine, info)
     character(len=*), intent(in) :: caller, routine

@@ -158,8 +158,6 @@ jobs:
              simple_test_lplims
              echo "-------------------- TEST MULTIMODAL -------------------------"
              simple_test_multinomal
-             echo "-------------------- TEST NEIGH -------------------------"
-             simple_test_neigh
              echo "-------------------- TEST OPENMP -------------------------"
              simple_test_openmp
              echo "-------------------- TEST MASK ROUTINES (THREADED) -------------------------"

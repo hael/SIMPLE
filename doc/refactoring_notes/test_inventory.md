@@ -73,13 +73,9 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 
 ## numerics
 
-| test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
-|---|---|---|---|---|---|---|---|---|---|---|
-| eigh_test | E | 26 | none | not run | none | - | eigh (75%, subset) | lib_numerics (needs assertion) or delete (no failure path; 3 production calls) |  |  |
-| kbinterpol_fast | E+S | 225/249 | assertion | not run | generated | - | same name on both routes | lib_numerics (assertion-bearing) |  |  |
-| maxnloc_test | E | 33 | none | not run | none | - | maxnloc (100%, subset) | lib_numerics (needs assertion) or delete (no failure path; 3 production calls) |  |  |
-| neigh | E+S | 56/56 | none | not run | generated | - | same name on both routes | lib_numerics (needs assertion) or delete (no failure path; 8 production calls) |  |  |
-| trail_rec_blend | E | 108 | assertion | not run | none | - | - | lib_numerics (assertion-bearing) |  |  |
+All five identities reviewed 2026-09-23 (Retired tests); the router, commander module and UI module of the
+category are gone, the coverage lives in the `linear algebra`, `Kaiser-Bessel kernel` and `search, sort, locate`
+sub-suites of unit_numerics, `symmetry` of unit_ori and `trailing-reconstruction blend` of unit_image.
 
 ## optimize
 
@@ -157,7 +153,6 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | ctf | S | 102 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | diff_map_graphs | S | 93 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 10 production calls) |  |  |
 | discrete_stack_io | S | 376 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| eigh | S | 53 | none | not run | none | - | eigh_test (75%, subset) | lib_? (needs assertion) or delete (no failure path; 4 production calls) |  |  |
 | eul_prob_tab2D_io | S | 136 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | flex_gpu | S | 12 | none | unsupported capability (not run) | none | cuda | - | platform (uses cuda) |  |  |
 | flex_pca | S | 23 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 6 production calls) |  |  |
@@ -165,7 +160,6 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | gui_assembler | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | gui_metadata | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | lpstages | S | 26 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| maxnloc | S | 32 | none | not run | none | - | maxnloc_test (100%, subset) | lib_? (needs assertion) or delete (no failure path; 3 production calls) |  |  |
 | multinomal | S | 24 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | nu_envmask | S | 360 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | nu_filter | S | 105 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
@@ -246,3 +240,10 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | binoris_io | 2026-09-23 | merge into unit_project: called binread_oritab/binread_ctfparams_state_eo/binread_nlines/binwrite_oritab on an empty project and printed | `binoris`: the `.txt` and `.simple` dispatch of all four, the ctf/state/eo merge keeping the keys not in the file, `binread_nlines` as the segment record count |
 | binoris_test | 2026-09-23 | delete: an empty exec stub (printed a banner) | as `binoris` |
 | binoris_io_test | 2026-09-23 | delete: an empty exec stub (printed a banner) | as `binoris_io` |
+| eigh_test | 2026-09-23 | merge into unit_numerics: printed svdcmp and eigh of a 5x5 matrix, then eigh of a random 15000x15000 matrix with the result discarded | `simple_linalg_tester` (sub-suite `linear algebra`): eigh largest/smallest against numpy eigenvalues with orthonormal eigenvectors and A v = lambda v, sparse_eigh against eigh, svdcmp reconstruction and singular values, matinv against the reference inverse and a singular flag, jacobi + eigsrt, svdfit/svd_multifit on exact and noisy polynomials, fit_straight_line, fit_lsq_plane/plane_from_points, the vector helpers, gemm_tn; `test_eigh` removed from simple_linalg |
+| eigh | 2026-09-23 | merge into unit_numerics: standalone twin of `eigh_test` with a sparse_eigh-vs-eigh check | as `eigh_test` |
+| kbinterpol_fast | 2026-09-23 | modify: two assertions on apod_fast, then printed Pearson/mean-diff of the 2D/3D stencils against the outer product over 131k kernels on a 256-box and 10M-evaluation timings | `simple_kbinterpol_tester` (sub-suite `Kaiser-Bessel kernel`): window geometry and beta, apod against the double-precision closed form (I0 series), apod_fast tolerance and its coefficients, apod_fast_value_deriv against central differences, the device forms bit for bit, apod_mat_2d/3d equal to the normalised outer product, the fast stencils within 1e-5, apod_mat_3d_fast_grad against finite differences with the switch margin, instr; no timing |
+| maxnloc_test | 2026-09-23 | merge into unit_numerics: printed the ten largest and smallest of a shuffled 1..1000 next to hpsort's answer | `simple_srch_sort_loc_tester` (sub-suite `search, sort, locate`): every hpsort form, locate/find at boundaries and exact hits, maxnloc/minnloc (the old check, asserted), min3, peakfinder, reverse/reverse_f, selec for every k, unique, scores2order/dists2order, mask2inds, reorder |
+| maxnloc | 2026-09-23 | merge into unit_numerics: standalone twin of `maxnloc_test` | as `maxnloc_test` |
+| neigh | 2026-09-23 | merge into unit_ori: printed statistics of find_closest_proj, sym_dists, find_angres and nearest_proj_neighbors on a 20000-direction c2 spiral | `simple_sym_tester` (`symmetry`): on a 200-direction spiral for c1/c2/d2, find_closest_proj is the brute-force argmin over symmetry-expanded distances, nearest_proj_neighbors (threshold) is the brute-force set and accumulates, (count) flags exactly nnn of the nearest, sym_dists returns the minimum with a representative realising it, find_angres is of the order of the spacing and smaller for a denser spiral; the c1 forms agree with the oris forms |
+| trail_rec_blend | 2026-09-23 | modify: an assertion-bearing, hermetic exec case (8^3 accumulators) that ran nowhere | moved as it is into `simple_accum_blend_tester` (sub-suite `trailing-reconstruction blend` of unit_image), minus its own report_summary/simple_end |

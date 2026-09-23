@@ -7,11 +7,13 @@ gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
 Phase 3 (the review of everything else) is under way: the geometry, fft,
-masks and io batches and the segmentation category are done and built
-(section 9.7). The tests written so far have found and fixed six
+masks, io and numerics batches and the segmentation category are done
+and built (section 9.7). The tests written so far have found and fixed nine
 production defects (mask mirror asymmetry, disc padding count, Otsu bin
-edge, Otsu two-valued input, binarize(npix) count, ori_strlen_trim) and
-removed one dead routine. This is a large
+edge, Otsu two-valued input, binarize(npix) count, ori_strlen_trim, the
+`selec` partition typo behind `median`, `reverse` of even double arrays,
+`norm_2`/`vabs` returning 0 on macOS through Accelerate's `snrm2`) and
+removed sixteen dead routines. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -1197,6 +1199,94 @@ contract; `binoris%open` on a file that does not exist yet leaves
 `discrete_stack_io` (standalone only, assertion-bearing, unassigned) tests
 `dstack_io` and the float16 encoder boundaries and is the natural next
 addition to `stack I/O`.
+
+**numerics (2026-09-23, Hans).** Five router identities plus the
+standalone twins `eigh` and `maxnloc`; the theme is not what was deleted
+but what had no tester: `simple_linalg`, `simple_kbinterpol`,
+`simple_srch_sort_loc` and the symmetric neighbour searches. `eigh_test`
+(prints, then `eigh` of a random 15000x15000 matrix thrown away) is
+`merge into unit_numerics` through a new `simple_linalg_tester`
+(sub-suite `linear algebra`): the LAPACK example matrix with numpy's
+eigenvalues and inverse as the reference, `eigh` largest and smallest
+with orthonormal eigenvectors and the residual, `sparse_eigh` against
+`eigh` (the standalone's one check), `svdcmp` reconstruction and
+singular values, `matinv` plus the singular flag, `jacobi`/`eigsrt`,
+`svdfit`/`svd_multifit` on exact and noisy polynomials (chi-squared
+pinned to numpy's least squares), `fit_straight_line` (its `corr` is r
+squared, now said so), the plane fits, the vector helpers and `gemm_tn`;
+`test_eigh` left `simple_linalg`. `kbinterpol_fast` is `modify` into a
+new `simple_kbinterpol_tester` (`Kaiser-Bessel kernel`): the printed
+outer-product comparison became assertions at fixed sub-pixel positions,
+and the tester adds what nothing checked: `apod` against the closed form
+(I0 series in double precision), the fast polynomial's coefficients as
+(beta^2/4)^k/(k!)^2, `apod_fast_value_deriv` against central
+differences, the three device forms bit for bit, `apod_mat_3d_fast_grad`
+against finite differences of `apod_mat_3d_fast` with the switch
+margin, and `instr`; box 16, no timing loops. `maxnloc_test` is `merge`
+into a new `simple_srch_sort_loc_tester` (`search, sort, locate`) that
+pins every routine of the module against brute force. `neigh` is `merge
+into unit_ori`: `symmetry` now checks `find_closest_proj`,
+`nearest_proj_neighbors` in both forms, `sym_dists` and `find_angres` on
+a 200-direction spiral for c1, c2 and d2 against a brute-force scan over
+the symmetry-expanded distances, and the c1 forms against the `oris`
+forms. `trail_rec_blend` is `modify`: moved as it is into
+`simple_accum_blend_tester` (`trailing-reconstruction blend` of
+`unit_image`). With nothing left in the category, the numerics
+commander module, router and UI module are gone (three files, three
+call sites); CI lost `simple_test_neigh`. Coverage accounting: 28 calls,
+5 not made by name any more (`ran_tabu%shuffle`, `progress_gfortran`,
+`rotmat2D`, all scaffolding; `test_eigh`, removed; `calc_stats`, now
+pinned in `statistics`), none a loss. Two production defects found
+while deriving the expected answers, both fixed: (1) `selec` (the
+Numerical Recipes selection behind `median`, `median_nocopy`, the
+nu-filter evidence thresholds and the image edge median) tested
+`ir-1 == 1` where `ir-l == 1` was meant, so a two-element final
+partition away from the array start was left unsorted; emulated in
+Python, the median of a random array was wrong in 14 % of cases for
+n >= 10 (an adjacent order statistic), and the `selec`-for-every-k
+check and a `median` test on two arrays the typo gets wrong now pin it;
+(2) `reverse` on an even-length double-precision array kept element 1
+in place and reversed the rest (the body of `reverse_f`, the
+Fourier-origin-preserving variant, pasted into `reverse_drarr`); no
+caller passes double arrays today, fixed and pinned. Also seen and
+fixed the same day (Hans: "fix now"): `oris%nearest_proj_neighbors`
+(count form) recomputed and sorted the distance table n times over an
+outer loop whose index was unused, O(n^2 log n) for an O(n log n) job;
+the loop is gone, the result is the same and `symmetry` pins it. Dead
+code, removed the same day under the section 9.5 rule as Hans stated it
+("if they are not used they go"): nine public `simple_linalg` routines
+with no caller anywhere (`hermitian_eigh`, `hermitian_invert`,
+`hermitian_solve`, `svd_solve`, `normal_solve`, `svdvar`, `outerprod`,
+`l1dist`, `same_energy_euclid`, 295 lines, with the LAPACK interface
+declarations only they used: `zheev`, `zposv`, `dposv`, `dgelss`,
+`sgelsy`), and the five from the segmentation batch's owner list
+(`hough_line` and `detect_peak_thres_sortmeans` in `simple_segmentation`,
+`polish_ccs`, `diameter_bin` and `elim_largestcc` in `image_bin`, 310
+lines; the one commented-out call in `simple_pickref` went with them).
+The section 9.5 owner list is empty. First build: `unit_image`,
+`unit_core`, `unit_project` green with the new sub-suites; `Kaiser-Bessel
+kernel` 93/93, `search, sort, locate` 75/75, `statistics` 74/74;
+`linear algebra` 117/120 and `symmetry` 427/428. Of the four failures,
+one was the tests and three were real: (1) `norm_2([3,4])` returned 0.
+`norm_2_sp` and `vabs_sp` called BLAS `snrm2`; Apple's Accelerate
+returns single-precision function results (`snrm2`, `sdot`, `sasum`) in
+the f2c/g77 convention, as a double, so a gfortran caller reading a
+float gets 0. On macOS, since the switch to external BLAS on 2026-06-10,
+`norm_2` (the gradient-norm convergence tests of `simple_opt_helpers`,
+the BFGS2 and steepest-descent optimisers, two nanoparticle radius
+checks) and `vabs` (the chi-squared of `svdfit`/`svd_multifit`, which
+the noisy-fit test also caught as exactly 0) had returned 0; Linux with
+OpenBLAS was unaffected. Both now accumulate in double precision without
+BLAS; `dnrm2` stays for the double versions, which the convention does
+not touch. (2) `jacobi` is an `ssyev` wrapper that reports `nrot = 0`;
+the test now pins that instead of expecting rotations. (3) `euldist` of a
+direction with its own copy is `acos(1 - eps)`, about 5e-4 rad in single
+precision; the c1 representative check allows that. The two
+near-coincident spiral directions printed for `symmetry` are the known
+pole/mirror pair (section 9.7, geometry). Ninth production defect.
+Third build: gate green, 7/7, 4.9 s real (`unit_ori` 4.9 s with the
+neighbour searches on three 200-direction spirals plus a 400-direction
+one per group, `unit_numerics` 1.3 s with the three new sub-suites).
 
 ## 10. Fast-tier performance
 

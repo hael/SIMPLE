@@ -59,7 +59,6 @@
       - `simple_test_ctf.f90`
       - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
       - `simple_test_discrete_stack_io.f90`
-      - `simple_test_eigh.f90`
       - `simple_test_eo_diff.f90` — tests randomization of phases below noise power
       - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
       - `simple_test_extr_frac.f90`
@@ -69,15 +68,12 @@
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
-      - `simple_test_kbinterpol_fast.f90`
       - `simple_test_lbfgsb.f90`
       - `simple_test_lbfgsb_cosine.f90`
       - `simple_test_lplims.f90`
       - `simple_test_lpstages.f90`
-      - `simple_test_maxnloc.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_multinomal.f90`
-      - `simple_test_neigh.f90` — test for refine=neigh modes
       - `simple_test_nice.f90`
       - `simple_test_nu_envmask.f90`
       - `simple_test_nu_filter.f90`
@@ -249,7 +245,6 @@
           - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate); the hermetic I/O tests are the
           - `simple_commanders_test_masks.f90` — for all masks tests
           - `simple_commanders_test_network.f90` — for all network tests
-          - `simple_commanders_test_numerics.f90` — for all numerics tests
           - `simple_commanders_test_optimize.f90` — for all optimize tests
           - `simple_commanders_test_parallel.f90` — for all parallel tests
           - `simple_commanders_test_single.f90` — tests for single
@@ -290,7 +285,6 @@
         - `simple_test_exec_io.f90` — execution of test input/output processing commanders (manual, user-data cases)
         - `simple_test_exec_masks.f90` — execution of test masks processing commanders
         - `simple_test_exec_network.f90` — execution of test network processing commanders
-        - `simple_test_exec_numerics.f90` — execution of test numerics processing commanders
         - `simple_test_exec_optimize.f90` — execution of test optimize processing commanders
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
@@ -342,6 +336,7 @@
         - `simple_umap.f90` — UMAP projection of a high-dimensional embedding, for plotting it
         - **cuda/**
       - **image/** — home of the submodules of the image class, its extensions, and its variants
+        - `simple_accum_blend_tester.f90` — unit test routines for the accumulator-domain trailing-reconstruction blend (scale_mats, sum_reduce_mats, the ufrac_trec contract)
         - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
         - `simple_ftiter.f90` — Fourier index loop range generator and mapping of logical indexing to physical indexing
@@ -382,6 +377,7 @@
         - `simple_edges_sqwins.f90` — square windows and mask edges
         - `simple_gridding.f90` — utilities for convolution interpolation (gridding)
         - `simple_kbinterpol.f90` — Kaiser-Bessel interpolation kernel
+        - `simple_kbinterpol_tester.f90` — unit test routines for the Kaiser-Bessel interpolation kernel: apodisation, fast polynomial form, derivatives, 2D/3D stencils, instrument function
         - `simple_winfuns.f90` — window functions for Fourier interpolation
       - **motion/** — home of modules for movie motion correction
         - `simple_denoise_movies.f90` — diffusion-map denoising helpers for real-space image stacks
@@ -642,7 +638,6 @@
           - `simple_test_ui_io.f90` — module defining the user interfaces for input/output test programs in the simple_test_exec suite
           - `simple_test_ui_masks.f90` — module defining the user interfaces for masks test programs in the simple_test_exec suite
           - `simple_test_ui_network.f90` — module defining the user interfaces for network test programs in the simple_test_exec suite
-          - `simple_test_ui_numerics.f90` — module defining the user interfaces for numerics programs in the simple_test_exec suite
           - `simple_test_ui_optimize.f90` — module defining the user interfaces for optimize test programs in the simple_test_exec suite
           - `simple_test_ui_parallel.f90` — module defining the user interfaces for parallel test programs in the simple_test_exec suite
           - `simple_test_ui_single.f90` — module defining the user interfaces for single test programs in the simple_test_exec suite
@@ -743,6 +738,7 @@
         - `simple_decay_funs.f90` — decay functions for annealing
         - `simple_histogram.f90` — abstract data type for histogram generation
         - `simple_linalg.f90` — SIMPLE linear algebra helpers with BLAS/LAPACK-backed kernels.
+        - `simple_linalg_tester.f90` — unit test routines for simple_linalg: eigensolvers, SVD, inversion, least-squares fits and vector helpers
         - `simple_math.f90` — various mathematical subroutines and functions
         - `simple_math_ctf.f90` — CTF-related math routines
         - `simple_math_ft.f90` — Fourier transform-related math routines
@@ -751,6 +747,7 @@
         - `simple_ran_tabu.f90` — routines for generation of directed random numbers
         - `simple_rnd.f90` — random number generation module
         - `simple_srch_sort_loc.f90` — searching ordered tables, sorting, locate etc.
+        - `simple_srch_sort_loc_tester.f90` — unit test routines for simple_srch_sort_loc: heap sorts, locate/find, n-largest/smallest, peaks, reversal, selection, unique, orderings
         - `simple_stat.f90` — statistics utility functions
         - `simple_stat_tester.f90` — unit test routines for the statistics utilities (simple_stat)
         - `simple_testfuns.f90` — provides 20 mathematical test functions for evaluating unconstrained optimization procedures

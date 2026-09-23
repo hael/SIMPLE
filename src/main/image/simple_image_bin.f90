@@ -33,19 +33,16 @@ type, extends(image) :: image_bin
     procedure          :: diameter_cc
     procedure          :: elim_cc
     procedure          :: elim_ccs
-    procedure          :: elim_largestcc
     procedure          :: set_largestcc2background
     procedure          :: set_edgecc2background
     procedure          :: find_ccs
     procedure          :: masscen_cc
     procedure          :: order_ccs
-    procedure          :: polish_ccs
     procedure          :: size_ccs
     ! BINARY IMAGE METHODS
     procedure          :: border_mask
     procedure          :: cc2bin
     procedure          :: cos_edge
-    procedure          :: diameter_bin
     procedure          :: feret_minmax
     procedure          :: inv_bimg 
     procedure          :: grow_bins
@@ -304,37 +301,6 @@ contains
         enddo
     end function size_ccs
 
-    ! Takes in input a connected component (cc) image and eliminates the largest cc.
-    subroutine elim_largestcc( self )
-        class(image_bin), intent(inout) :: self
-        integer, allocatable :: sz(:), bimat_copy(:,:,:)
-        integer :: ind_bg, n_cc, cnt
-        if(.not. any(self%bimat > 0)) then
-            THROW_WARN('Inputted non-existent cc; elim_ccs')
-            return
-        endif
-        sz = self%size_ccs()
-        allocate(bimat_copy(self%bldim(1), self%bldim(2), self%bldim(3)), source = self%bimat)
-        ind_bg  = maxloc(sz, dim=1)
-        cnt = 0 ! number of remaining ccs
-        do n_cc = 1, size(sz) ! for each cc
-            if( n_cc .eq. ind_bg )then ! if the cc is the largest
-                where( self%bimat == n_cc ) ! rmat == label
-                    bimat_copy = 0          ! set to 0
-                endwhere
-            else
-                cnt = cnt + 1
-            endif
-        enddo
-        call self%set_imat(bimat_copy)
-        ! re-oder cc
-        call self%order_ccs()
-        ! update number of connected components
-        self%nccs = maxval(self%bimat)
-        deallocate(sz)
-        call self%update_img_rmat
-    end subroutine elim_largestcc
-
     ! Removes a single connected component (CC) from the binary image by label index.
     ! The target label is zeroed in bimat; remaining CCs are then re-labelled
     ! 1..nccs-1 and the real-valued rmat is synchronised.
@@ -429,79 +395,6 @@ contains
         self%nccs = maxval(self%bimat)
     end subroutine order_ccs
 
-    ! This subroutine takes in input a connected components (cc)
-    ! image and eliminates some of the ccs according to their size.
-    ! The decision method calculates the avg size of the ccs
-    ! and their standar deviation.
-    ! Elimin ccs which have size: > ave + 2.*stdev
-    !                             < ave - 2.*stdev
-    ! If present(minmax_rad(2)), it cleans up ccs more, also considering
-    ! if the cc is supposed to be circular/elongated.
-    subroutine polish_ccs( self, minmax_rad, circular, elongated, min_nccs )
-        class(image_bin),            intent(inout) :: self
-        real, optional,             intent(in)    :: minmax_rad(2)
-        character(len=3), optional, intent(in)    :: circular, elongated
-        integer,          optional, intent(in)    :: min_nccs
-        integer, allocatable :: sz(:)
-        real    :: ave, stdev ! avg and stdev of the size od the ccs
-        integer :: n_cc, thresh_down, thresh_up
-        character(len=3)   :: ccircular, eelongated
-        if(.not. any(self%bimat > 0)) then
-            THROW_WARN('Inputted non-existent cc; polish_ccs')
-            return
-        endif
-        ! set default
-        ccircular  = ' no'
-        eelongated = ' no'
-        if(present(circular))  ccircular  = circular
-        if(present(elongated)) eelongated = elongated
-        sz = self%size_ccs()
-        ave = sum(sz)/size(sz)
-        stdev = 0.
-        do n_cc = 1, size(sz)
-            stdev = stdev + (real(sz(n_cc))-ave)**2
-        enddo
-        stdev = sqrt(stdev/real(size(sz)-1))
-        ! Assuming gaussian distribution 95% of the particles
-        ! are in [-2sigma, 2sigma]
-        ! Use particle radius.
-        ! In general case: the biggest possible area is when
-        ! particle is circular (with rad 2*minmax_rad(2)), the smallest
-        ! one is when the particle is rectangular
-        ! with lengths minmax_rad(1)/2 and minmax_rad(1)/2
-        ! In circular case: the biggest possible area is when
-        ! particle is circular (with rad 2*minmax_rad(2)), the smallest
-        ! one is when the particle is circular (with rad minmax_rad(2)/2),
-        ! In elongated case: the biggest possible area is when
-        ! particle is rectanguler with lenghts 2*minmax_rad(1) and 2*minmax_rad(2),
-        ! the smallest one is when the particle is rectangular
-        ! with lengths minmax_rad(1)/2 and minmax_rad(2)/2
-        if( .not. present(minmax_rad) )then
-            thresh_down = floor(ave-2.*stdev)
-            thresh_up   = ceiling(ave+2.*stdev)
-        else
-            if(ccircular .eq. 'yes') then
-                thresh_down = int(min(2.*PI*(.5*minmax_rad(1))**2.,   ave-2.*stdev))
-                thresh_up   = int(max(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
-            elseif(eelongated .eq. 'yes') then
-                thresh_down = int(min(minmax_rad(1)*minmax_rad(1)/4., ave-2.*stdev))
-                thresh_up   = int(max(minmax_rad(2)*minmax_rad(2)*4., ave+2.*stdev))
-            else
-                thresh_down = int(min(minmax_rad(1)*minmax_rad(1)/4., ave-2.*stdev))
-                thresh_up   = int(max(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
-            endif
-        endif
-        if(present(min_nccs)) then
-            call self%elim_ccs([thresh_down,thresh_up], min_nccs)
-        else
-            call self%elim_ccs([thresh_down,thresh_up])
-        endif
-        ! call img_cc%order_cc() is already done in the elim_cc subroutine
-        ! update number of connected components
-        self%nccs = maxval(self%bimat)
-        call self%update_img_rmat
-    end subroutine polish_ccs
-
     ! This subroutine calculates the diamenter of the
     ! connected component labelled n_cc in the connected
     ! component image img_cc
@@ -553,13 +446,6 @@ contains
         xy = real(pxy) / real(n) ! average position
         xy = xy - real(cen)      ! with respect to image center
     end subroutine masscen_cc
-
-    subroutine diameter_bin( self, diam )
-        class(image_bin), intent(inout) :: self
-        real,            intent(out)   :: diam
-        if( .not. self%bimat_is_set ) call self%set_imat
-        call self%diameter_cc(1, diam)
-    end subroutine diameter_bin
 
     subroutine feret_minmax( self, min_feret, max_feret, ntheta )
         class(image_bin),   intent(inout) :: self

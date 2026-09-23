@@ -4,7 +4,7 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! TINY
 use simple_type_defs  ! weighting criteria enumerators
 use simple_stat,      only: corrs2weights, conv2rank_weights, rank_sum_weights, rank_centroid_weights,&
-                           &rank_exponent_weights, rank_inverse_weights
+                           &rank_exponent_weights, rank_inverse_weights, median, median_nocopy, calc_stats
 implicit none
 private
 public :: run_all_stat_tests
@@ -19,7 +19,49 @@ contains
         call test_conv2rank_weights()
         call test_corrs2weights_corrw()
         call test_corrs2weights_other_criteria()
+        call test_median()
+        call test_calc_stats()
     end subroutine run_all_stat_tests
+
+    !---------------- median ----------------
+
+    ! two arrays on which the selection routine's two-element final partition matters (they
+    ! gave 14.5 and 23 with the `ir-1` typo in selec, 2026-09-23); the true medians by sorting
+    subroutine test_median()
+        real, parameter :: EVEN(10) = [4., 15., 3., 36., 9., 19., 27., 10., 35., 8.]
+        real, parameter :: ODD(11)  = [25., 23., 20., 28., 6., 4., 31., 13., 24., 35., 29.]
+        real :: work(11)
+        write(*,'(A)') 'test_median'
+        call assert_real(12.5, median(EVEN), 0., 'median of an even count is the mean of the two middle values')
+        call assert_real(24.0, median(ODD),  0., 'median of an odd count is the middle value')
+        call assert_real(2.0,  median([2.]), 0., 'median of one value')
+        call assert_real(2.5,  median([3., 2.]), 0., 'median of two values')
+        call assert_real(7.0,  median([7., 7., 7., 7.]), 0., 'median of equal values')
+        work(1:10) = EVEN
+        call assert_real(12.5, median_nocopy(work(1:10)), 0., 'median_nocopy gives the same value')
+        work = ODD
+        call assert_real(24.0, median_nocopy(work), 0., 'median_nocopy on the odd array')
+    end subroutine test_median
+
+    ! calc_stats on the even array above and on its masked half
+    subroutine test_calc_stats()
+        real, parameter :: EVEN(10) = [4., 15., 3., 36., 9., 19., 27., 10., 35., 8.]
+        type(stats_struct) :: st
+        logical :: mask(10)
+        write(*,'(A)') 'test_calc_stats'
+        call calc_stats(EVEN, st)
+        call assert_real(16.6,     st%avg,  1.e-4, 'calc_stats: mean')
+        call assert_real(12.5,     st%med,  0.,    'calc_stats: median')
+        call assert_real(12.24926, st%sdev, 1.e-3, 'calc_stats: standard deviation (n-1 normalisation)')
+        call assert_real(3.,       st%minv, 0.,    'calc_stats: minimum')
+        call assert_real(36.,      st%maxv, 0.,    'calc_stats: maximum')
+        mask = [.true., .false., .true., .false., .true., .false., .true., .false., .true., .false.]
+        call calc_stats(EVEN, st, mask)
+        call assert_real(15.6,     st%avg,  1.e-4, 'calc_stats with mask: mean of the odd entries')
+        call assert_real(9.,       st%med,  0.,    'calc_stats with mask: median of the odd entries')
+        call assert_real(3.,       st%minv, 0.,    'calc_stats with mask: minimum')
+        call assert_real(35.,      st%maxv, 0.,    'calc_stats with mask: maximum')
+    end subroutine test_calc_stats
 
     !---------------- the four rank-weight kernels ----------------
 

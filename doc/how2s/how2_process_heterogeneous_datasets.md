@@ -20,13 +20,14 @@ one or more abinitio2D runs
       +-- optional: abinitio2D_chunks + learned class-rejection model
       |
       v
-initial abinitio3D cleanup, normally with three states
+initial abinitio3D cleanup, normally with three/four states
       |
       v
-select the particles to retain
+choose the state(s) to retain
       |
-      v
-single-state abinitio3D
+      +-- one state --> continue that state with abinitio3D state=N
+      |
+      +-- merged states --> select/merge, then single-state abinitio3D
       |
       v
 refine3D_states
@@ -80,7 +81,7 @@ Most workflows create a new numbered execution directory and write a new
 1. read the final lines of the log;
 2. record the execution directory and output project;
 3. inspect the result; and
-4. use that output project as `projfile` for the next accepted step.
+4. use that output project as `projfile` for the next step.
 
 Never assume that the original project was modified. Keeping a small text file
 with every command and its accepted output project prevents most lineage
@@ -103,7 +104,7 @@ metadata:
 
 ```bash
 simple_exec prg=particle_sieving \
-  projfile=<PICKED_PROJECT.simple> \
+  projfile=<EXTRACTED_PROJECT.simple> \
   nparts=<CONCURRENT_CHUNKS> nthr=<THREADS_PER_CHUNK>
 ```
 
@@ -133,8 +134,30 @@ ab-initio 2D a second time on the retained particles. More than one run is
 useful because genuine views should recur, whereas unstable junk classes tend
 not to.
 
-If a reviewed class selection has been exported as a text file containing one
-`1` (keep) or `0` (reject) per 2D class, apply it with:
+The easiest manual-selection route is to use `e2display.py` from EMAN2:
+
+1. Open the final `cavgs_iterNNN_ranked.mrcs` stack from the `abinitio2D`
+   execution directory.
+2. In the image-stack window, use the middle-mouse menu and `Del` to mark the
+   bad classes.
+3. Use `Save` from the same menu to write the remaining good classes to a new
+   stack, for example `selected_cavgs.mrcs`.
+4. Map that subset back to its particles:
+
+```bash
+simple_exec prg=map_cavgs_selection \
+  projfile=<ABINITIO2D_PROJECT.simple> \
+  stk2=<SELECTED_CAVGS.mrcs> prune=yes
+```
+
+`map_cavgs_selection` identifies the selected classes by correlation, so the
+saved subset does not have to preserve the original class order. Use the
+project from the generated numbered `_selection/` directory for the next 2D
+run.
+
+If EMAN2 is unavailable, a text selection remains possible. Create a file
+containing one `1` (keep) or `0` (reject) per 2D class, in project class order,
+and apply it with:
 
 ```bash
 simple_exec prg=selection \
@@ -142,8 +165,8 @@ simple_exec prg=selection \
   infile=<CLASS_KEEP_FLAGS.txt> prune=yes
 ```
 
-Use the resulting selection project for the next 2D run. The flag file must
-contain exactly one line per class, in project class order.
+Use the resulting project from the generated numbered `_selection/` directory
+for the next 2D run.
 
 **Checkpoint:** continue only when the retained classes have recognizable
 particle features, cover the expected range of views, and no longer contain a
@@ -179,7 +202,7 @@ For most heterogeneous data sets, start with three states:
 
 ```bash
 simple_exec prg=abinitio3D \
-  projfile=<CLEAN_2D_PROJECT.simple> \
+  projfile=<SELECTED_CLEAN_2D_PROJECT.simple> \
   nstates=3 pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
 ```
@@ -187,17 +210,18 @@ simple_exec prg=abinitio3D \
 Use `pgrp=c1` when no point-group symmetry is justified. Do not impose symmetry
 only to make a map appear cleaner.
 
-Inspect all three volumes, their particle populations, and their directional
-coverage. At this stage the three-state run is primarily a cleanup tool. A
-state can represent junk, damaged particles, a preferred-view failure, or an
-unstable reconstruction rather than a biological conformation.
+Inspect all three volumes, their particle populations, their directional
+coverage and generated re-projections. At this stage the three-state run is
+primarily a cleanup tool. A state can represent junk, damaged particles, a
+preferred-view failure, or an unstable reconstruction rather than a biological
+conformation.
 
 For a large, high-contrast complex with an already clean particle set, it can
 be reasonable to use one state and postpone heterogeneity analysis:
 
 ```bash
 simple_exec prg=abinitio3D \
-  projfile=<CLEAN_2D_PROJECT.simple> \
+  projfile=<SELECTED_CLEAN_2D_PROJECT.simple> \
   nstates=1 pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
 ```
@@ -205,42 +229,61 @@ simple_exec prg=abinitio3D \
 Use this shortcut only when the single-state result is stable and there is no
 substantial junk population left to isolate.
 
-### Select the acceptable initial states
+### Choose the acceptable initial states
 
-To retain one state:
-
-```bash
-simple_exec prg=selection \
-  projfile=<THREE_STATE_ABINITIO3D_PROJECT.simple> \
-  oritype=ptcl3D state=<STATE_NUMBER> prune=yes
-```
+Record which state or states contain the particles to retain. If one state is
+sufficient, no separate selection command is needed: section 4 uses SIMPLE's
+direct state-continuation mode.
 
 To merge two or more acceptable states into one retained particle group:
 
 ```bash
 simple_exec prg=selection \
   projfile=<THREE_STATE_ABINITIO3D_PROJECT.simple> \
-  oritype=ptcl3D states=<STATE_1,STATE_2> prune=yes
+  oritype=ptcl3D states=<COMMA_SEPARATED_STATES> prune=yes
 ```
 
-Run each selection from the original three-state project, not from a project
-that has already been pruned. Keep the original project so that the decision
-can be revisited.
+For example, use `states=1,3` to merge states 1 and 3. Run every independent
+selection from the original multi-state project, not from a project that has
+already been pruned. Keep the original project so that the decision can be
+revisited.
 
 ## 4. Establish a clean consensus model
 
-Run a new, single-state ab-initio reconstruction on the retained particle set:
+If one state was retained from the multi-state cleanup, a complete new
+reference-free `abinitio3D` run is unnecessary. Continue directly from that
+state:
 
 ```bash
 simple_exec prg=abinitio3D \
-  projfile=<SELECTED_CLEAN_PARTICLES.simple> \
+  projfile=<MULTISTATE_ABINITIO3D_PROJECT.simple> \
+  state=<STATE_NUMBER> pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
+  nparts=<PARTITIONS> nthr=<THREADS>
+```
+
+This mode internally selects and prunes the requested state, preserves its
+particle poses, reconstructs a same-lineage starting map, and resumes the
+single-state search at stage 5 with nonuniform filtering. It is therefore a
+gentle continuation of the selected solution rather than another full
+ab-initio search. Do not supply `vol1` or `nstates`: the state-continuation
+path owns preparation of the starting reference.
+
+If two or more states were merged in section 3, there is no single state map
+that represents the merged particle group. In that case, establish a new
+single-state consensus with:
+
+```bash
+simple_exec prg=abinitio3D \
+  projfile=<MERGED_STATE_SELECTION_PROJECT.simple> \
   nstates=1 pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
 ```
 
-This run establishes a common map and pose scaffold for the actual
-heterogeneity analysis. Inspect the map, half-map agreement, angular coverage,
-and particle count before continuing.
+If the initial cleanup itself used `nstates=1`, that project already provides
+the clean consensus and this section can be skipped. In all three cases, the
+resulting single-state project supplies the common map and pose scaffold for
+the actual heterogeneity analysis. Inspect its map, half-map agreement,
+angular coverage, and particle count before continuing.
 
 ## 5. Separate conformational or binding states
 
@@ -262,7 +305,7 @@ refinement.
 The pose policy controls how much orientation can change while states compete:
 
 - `global` is the default and performs a full orientation search.
-- `local` permits a limited change around each existing direction.
+- `local` permits a limited change around each consensus direction.
 - `fixed` keeps the projection direction fixed while optimizing state,
   in-plane angle, and shift.
 
@@ -275,7 +318,7 @@ view coverage, show interpretable structural differences, and remain similar
 when the analysis is repeated or the requested state count is changed. Treat
 very small, poorly oriented, or irreproducible states as suspect.
 
-## 6. Extract and polish each useful state
+## 6. Extract and refine each useful state
 
 For every state worth retaining, run a separate selection from the original
 `refine3D_states` project:
@@ -298,16 +341,18 @@ simple_exec prg=refine3D_auto \
 
 Replace `NN` with the zero-padded original state number: state 1 is `01`,
 state 2 is `02`, and so on. Use the map produced by the same
-`refine3D_states` run as the selected particles.
+`refine3D_states` run as the selected particles. Passing `vol1` explicitly
+is important and guarantees that `refine3D_auto` starts from the matching
+state map. Because this reference volume and these poses have the same SIMPLE
+lineage, leave the advanced `ref_pose_init` parameter at its default `none`.
 
-Passing `vol1` explicitly is important for state 2 and above. The selection
-command relabels the retained particles as state 1, while its project can still
-carry the original multi-state map records. The explicit volume guarantees
-that `refine3D_auto` starts from the matching state map. Because this reference
-and these poses have the same SIMPLE lineage, leave the advanced
-`ref_pose_init` parameter at its default `none`.
+This refinement includes a methodology similar to what is usually referred to
+as auto- or envelope masking. SIMPLE derives a density envelope internally and
+suppresses low-density solvent outside that envelope when preparing matching
+references and filtering the reconstruction; no input mask is required. This
+procedure can be switched off by setting the optional parameter `automsk=no`.
 
-Do not polish several states together. Each selected state gets its own
+Do not refine several states together. Each selected state gets its own
 selection project, `refine3D_auto` run, and validation record.
 
 ## 7. Optional continuous-heterogeneity analysis
@@ -350,9 +395,9 @@ Accepted sieving project (or STREAM):
 Accepted abinitio2D project, run 1:
 Accepted abinitio2D project, run 2:
 Initial abinitio3D cleanup project:
-States retained from cleanup:
-Selection project containing clean particles:
-Single-state abinitio3D project:
+State retained from cleanup, or states merged:
+Merged-state selection project, if applicable:
+State-continuation or single-state consensus project:
 refine3D_states project:
 
 State | selected project | matching recvol_stateNN.mrc | refine3D_auto project
@@ -368,8 +413,10 @@ State | selected project | matching recvol_stateNN.mrc | refine3D_auto project
   unnecessarily and can remove useful particles.
 - **Treating cleanup states as final biology:** the initial three-state
   `abinitio3D` is primarily for separating useful particles from junk.
-- **Skipping the clean single-state model:** `refine3D_states` benefits from a
-  common map and pose scaffold.
+- **Repeating ab initio unnecessarily:** when retaining one cleanup state, use
+  `abinitio3D state=N`; do not start over or also supply `vol1`.
+- **Skipping the clean consensus:** whether continued from one state or rebuilt
+  after merging states, `refine3D_states` needs a common map and pose scaffold.
 - **Selecting from an already selected project:** make every independent state
   extraction from the original multi-state project.
 - **Using the wrong map for a selected state:** pass the matching

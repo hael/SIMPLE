@@ -17,8 +17,12 @@ use simple_ori_tester,                       only: run_all_ori_tests
 use simple_oris_tester,                      only: run_all_oris_tests
 use simple_sym_tester,                       only: run_all_sym_tests
 use simple_stat_tester,                      only: run_all_stat_tests
+use simple_linalg_tester,                    only: run_all_linalg_tests
+use simple_kbinterpol_tester,                only: run_all_kbinterpol_tests
+use simple_srch_sort_loc_tester,             only: run_all_srch_sort_loc_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
+use simple_accum_blend_tester,               only: run_all_accum_blend_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_starproject_tester,               only: run_all_starproject_tests
 use simple_binoris_tester,                   only: run_all_binoris_tests
@@ -171,6 +175,7 @@ contains
         call add_suite(s, n, 'masks',                run_all_mask_tests)
         call add_suite(s, n, 'binary image',         run_all_image_bin_tests)
         call add_suite(s, n, 'segmentation',         run_all_segmentation_tests)
+        call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )
@@ -182,6 +187,9 @@ contains
         call add_suite(s, n, 'affinity propagation',    test_aff_prop)
         call add_suite(s, n, 'hierarchical clustering', test_hclust)
         call add_suite(s, n, 'statistics',              run_all_stat_tests)
+        call add_suite(s, n, 'linear algebra',          run_all_linalg_tests)
+        call add_suite(s, n, 'Kaiser-Bessel kernel',    run_all_kbinterpol_tests)
+        call add_suite(s, n, 'search, sort, locate',    run_all_srch_sort_loc_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
         call add_suite(s, n, 'shift search, correlator', test_ftexp_shsrch)
         call add_suite(s, n, 'shift search, optimiser',  test_ftexp_shsrch2)

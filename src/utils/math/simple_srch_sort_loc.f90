@@ -549,20 +549,20 @@ contains
     !> reverses a double precision real vector
     subroutine reverse_drarr( drarr )
         real(kind=dp), intent(inout) :: drarr(:) !< vector for modification
-        integer                      :: i, j, sz, st, en
+        integer                      :: i, j, sz, en
         real(kind=dp)                :: rswap
         sz = size(drarr,1)
         if( sz < 2 )then
             return
         endif
+        ! same bounds as reverse_rarr; the even-length branch used to be reverse_f's
+        ! (element 1 kept in place), so an even-length double array was not reversed
         if( mod(sz,2) == 0 )then
-            st = 1
-            en = sz/2+2
+            en = sz/2+1
         else
-            st = 0
             en = (sz+1)/2+1
         endif
-        j = st
+        j = 0
         do i = sz,en,-1
             j = j+1
             rswap   = drarr(j)
@@ -596,7 +596,7 @@ contains
         end do
     end subroutine reverse_f
 
-    !>   for selecting kth largest, array is modified
+    !>   for selecting the kth smallest (Numerical Recipes select), array is modified
     real function selec(k,n,arr)
         integer, intent(in)    :: k,n
         real,    intent(inout) :: arr(:)
@@ -605,7 +605,7 @@ contains
         l = 1
         ir = n
     22  if (ir-l.le.1) then
-            if (ir-1.eq.1) then
+            if (ir-l.eq.1) then ! was ir-1: a two-element final partition with l > 1 was left unsorted
                 if (arr(ir).lt.arr(l)) then
                     temp = arr(l)
                     arr(l) = arr(ir)

@@ -324,7 +324,6 @@ contains
         ! Otsu thres (level=1)
         call detect_peak_thres(n, 1, tmp, self%t)
         call refine_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
-        ! call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
         elsewhere
