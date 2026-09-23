@@ -135,17 +135,21 @@ contains
         else
             call b%vol%mask3D_soft(p%msk)
         endif
-        call b%vol%fft()
-        call b%vol%expand_cmat()
+        ! the production projector: the masked volume padded by OSMPL_PAD_FAC, since the
+        ! polar coordinates of the pftc live on the padded lattice (an unpadded projector
+        ! is read beyond its expanded bounds at the full band)
+        call b%vol_pad%new([p%box_croppd, p%box_croppd, p%box_croppd], p%smpd_crop, wthreads=.false.)
+        call b%vol%pad_fft(b%vol_pad)
+        call b%vol_pad%expand_cmat()
         call b%eulspace%get_ori(1, o_ref)
         call o_ref%e3set(0.0)
         o_particle = o_ref
         call o_particle%e3set(truth_angle)
         call b%eulspace%set_ori(1, o_particle)
-        call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
+        call vol_pad2ref_pfts(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
         call b%pftc%cp_even_ref2ptcl(1, 1)
         call b%eulspace%set_ori(1, o_ref)
-        call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
+        call vol_pad2ref_pfts(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
         call b%pftc%set_eo(1, .true.)
         ! the particle is rotated first, then shifted by the production phase: the
         ! recovered shift is expressed in the rotated frame, R(truth_angle) * shift
@@ -169,6 +173,8 @@ contains
 
     subroutine kill_fixture( b )
         type(builder), intent(inout) :: b
+        call b%vol_pad%kill_expanded
+        call b%vol_pad%kill
         call b%kill_strategy3D_tbox
         call b%kill_general_tbox
         if( allocated(sigma2_fixture) ) deallocate(sigma2_fixture)

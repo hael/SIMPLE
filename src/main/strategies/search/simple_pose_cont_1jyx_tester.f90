@@ -1,18 +1,14 @@
-!> Long-running, opt-in quality experiment for Cartesian five-parameter LM.
-!!
-!! The fixture owns every scientific input: it builds 1JYX from SIMPLE's
-!! embedded molecule data, samples 5,000 reproducible projections, applies
-!! reproducible varying CTFs and finite image noise, and perturbs each starting
-!! pose by exactly 15 degrees and two pixels. No PFTC search changes a pose.
-!!
-!! Four MRC volumes make the result reviewable in a volume viewer:
-!!   1JYX.mrc                         masked truth;
-!!   reconstruction_truth_pose.mrc   reconstruction-harness control;
-!!   reconstruction_perturbed.mrc    reconstruction from starting poses; and
-!!   reconstruction_pose_cont.mrc    reconstruction from LM terminal poses.
-!!
-!! pose_metrics.tsv and reconstruction_fsc.tsv provide the quantitative record.
-module pose_cont_refine3D_adapter_1jyx_test
+!@descr: library test of Cartesian pose refinement on simulated 1JYX particles (simple_pose_cont_refine3D_adapter)
+! A long-running quality gate for the five-parameter LM: 1JYX from the embedded
+! coordinates at box 144, 5 000 reproducible projections with varying CTF and finite
+! noise, every starting pose perturbed by exactly 15 degrees and two pixels, no PFTC
+! search. Refines every particle through the adapter, reconstructs the truth, perturbed
+! and refined pose sets and scores them by FSC and truth-map correlation. Pinned: the
+! aggregate objective, rotation error and shift error fall, and the refined
+! reconstruction correlates better with the truth than the perturbed one. The run
+! directory keeps 1JYX.mrc, the three reconstructions, pose_metrics.tsv and
+! reconstruction_fsc.tsv as the reviewable record. Nightly (lib_cart_align3D).
+module simple_pose_cont_1jyx_tester
 use ieee_arithmetic, only: ieee_is_finite
 use iso_fortran_env, only: int64
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
@@ -36,12 +32,13 @@ use simple_reconstructor, only: reconstructor
 use simple_sp_project, only: sp_project
 use simple_sym, only: sym
 use simple_ui, only: make_ui
+use simple_test_utils
 implicit none
 private
 
 #include "simple_local_flags.inc"
 
-public :: run_pose_cont_1jyx_reconstruction
+public :: run_all_pose_cont_1jyx_tests
 
 integer, parameter :: TEST_BOX = 144
 integer, parameter :: TEST_PARTICLES = 5000
@@ -68,6 +65,12 @@ character(len=*), parameter :: SIMULATION_ORIENTATION_FILE = '1JYX_simulation_or
 character(len=*), parameter :: TRUTH_ORIENTATION_FILE = '1JYX_truth_orientations.txt'
 
 contains
+
+subroutine run_all_pose_cont_1jyx_tests()
+    write(*,'(A)') '**** running all pose_cont 1JYX tests ****'
+    write(*,'(A)') 'test_pose_cont_1jyx_reconstruction'
+    call run_pose_cont_1jyx_reconstruction()
+end subroutine run_all_pose_cont_1jyx_tests
 
 subroutine run_pose_cont_1jyx_reconstruction()
     type(atoms) :: molecule
@@ -277,17 +280,14 @@ subroutine run_pose_cont_1jyx_reconstruction()
         &terminal_rotations,terminal_shifts,reconstruction_control_valid,reconstruction_improved)
     call assert_pose_improvement(statuses,objectives_before,objectives_after, &
         &initial_rotation_errors,terminal_rotation_errors,initial_shift_errors,terminal_shift_errors)
-    if( .not. reconstruction_control_valid ) &
-        &error stop 'exact-pose reconstruction control is invalid'
-    if( .not. reconstruction_improved ) &
-        &error stop 'pose_cont reconstruction did not improve truth-map correlation'
+    call assert_true(reconstruction_control_valid, 'the exact-pose reconstruction control is valid')
+    call assert_true(reconstruction_improved, 'the refined reconstruction correlates better with the truth than the perturbed one')
 
     call workspace%kill
     call remove_pose_cont_reference_artifacts(1)
     call truth_orientations%kill
     call truth_image%kill
     write(logfhandle,'(a)') 'POSE_CONT_1JYX_RESULTS: '//result_directory%to_char()
-    write(logfhandle,'(a)') 'POSE_CONT_1JYX_RECONSTRUCTION: PASS'
 end subroutine run_pose_cont_1jyx_reconstruction
 
 subroutine make_perturbed_pose(truth_rotation,truth_shift,rotation,shift)
@@ -534,8 +534,7 @@ subroutine assert_pose_improvement(statuses,objectives_before,objectives_after, 
 
     finite_objective = ieee_is_finite(objectives_before) .and. ieee_is_finite(objectives_after) .and. &
         &objectives_before >= 0._dp .and. objectives_after >= 0._dp
-    if( count(finite_objective) /= size(statuses) ) &
-        &error stop 'pose_cont 1JYX test produced incomplete objective evidence'
+    call assert_int(size(statuses), count(finite_objective), 'every particle has finite, non-negative objectives before and after')
     accepted = count(statuses == LM_ACCEPTED_IMPROVEMENT)
     objective_before_mean = sum(objectives_before)/real(size(statuses),dp)
     objective_after_mean = sum(objectives_after)/real(size(statuses),dp)
@@ -552,13 +551,10 @@ subroutine assert_pose_improvement(statuses,objectives_before,objectives_after, 
     write(logfhandle,'(a,2(1x,f8.3))') 'POSE_CONT_1JYX shift RMS before/after (pixels):', &
         &shift_before_rms,shift_after_rms
 
-    if( accepted < 1 ) error stop 'pose_cont accepted no 1JYX particle'
-    if( objective_after_mean >= objective_before_mean ) &
-        &error stop 'pose_cont did not reduce the aggregate Cartesian objective'
-    if( rotation_after_rms >= rotation_before_rms ) &
-        &error stop 'pose_cont did not reduce aggregate rotation error'
-    if( shift_after_rms >= shift_before_rms ) &
-        &error stop 'pose_cont did not reduce aggregate shift error'
+    call assert_true(accepted >= 1, 'at least one particle was accepted')
+    call assert_true(objective_after_mean < objective_before_mean, 'the aggregate Cartesian objective falls')
+    call assert_true(rotation_after_rms < rotation_before_rms, 'the aggregate rotation error falls')
+    call assert_true(shift_after_rms < shift_before_rms, 'the aggregate shift error falls')
 end subroutine assert_pose_improvement
 
 pure real(dp) function centered_array_correlation(array_a,array_b) result(correlation)
@@ -590,4 +586,4 @@ subroutine set_deterministic_seed(base_seed)
     deallocate(seed)
 end subroutine set_deterministic_seed
 
-end module pose_cont_refine3D_adapter_1jyx_test
+end module simple_pose_cont_1jyx_tester

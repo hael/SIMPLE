@@ -1,36 +1,121 @@
-module pose_cont_refinement_numerics_test
+!@descr: unit tests for the Cartesian five-parameter pose refiner (simple_cartesian_pose_refiner)
+! The numerics: prepared-particle validity and shell capping, an exact match giving a
+! zero objective and gradient without and with CTF (incl. phase flip) and shell
+! whitening, the inverse-envelope reference constructor, the Fourier shift phase sign
+! on the native pixel scale, the 1-NCC formula and its invariance to particle gain, the
+! five-parameter gradients of both objectives against central differences, the
+! Cartesian gather against the PFTC projector kernel at a matched boundary, and the
+! right rotation increment keeping orthogonality. The solvers: shift-only LM recovery
+! within its step bound, joint LM recovery of a known pose, exact poses retained,
+! active-parameter masks, the cumulative guard, the NCC solver on a gain-scaled
+! particle, and invalid or unobservable inputs leaving the pose untouched.
+module simple_cartesian_pose_refiner_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
-use pose_cont_refinement_test_helpers, only: assert_true, build_test_volume, &
-    &identity_rotation, prepare_unweighted_particle, TEST_BOX
-use simple_defs, only: dp, sp, DPI, KBALPHA, KBWINSZ, OSMPL_PAD_FAC
-use simple_core_module_api, only: euler2m
+use simple_defs,                   only: dp, sp, DPI, KBALPHA, KBWINSZ, OSMPL_PAD_FAC
+use simple_core_module_api,        only: euler2m
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, cartesian_pose_data, &
-    &right_increment_rotation, POSE_CONT_OBJECTIVE_CART_NCC, &
-    &POSE_CONT_OBJECTIVE_CART_EUCLID
-use simple_ctf, only: ctf
-use simple_gridding, only: kb_stencil_centered_crop_inv_envelope_1d
-use simple_image, only: image
-use simple_kbinterpol, only: kbinterpol
-use simple_projector, only: projector
-use simple_type_defs, only: ctfparams, ctfvars, CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES
+    &right_increment_rotation, shift_lm_config, pose_lm_config, pose_lm_result, pose_lm_diagnostics, &
+    &POSE_CONT_OBJECTIVE_CART_NCC, POSE_CONT_OBJECTIVE_CART_EUCLID, &
+    &LM_ACCEPTED_IMPROVEMENT, LM_FINITE_NO_IMPROVEMENT, LM_NO_RELIABLE_UPDATE, LM_STEP_BOUND_REJECTED
+use simple_ctf,                    only: ctf
+use simple_gridding,               only: kb_stencil_centered_crop_inv_envelope_1d
+use simple_image,                  only: image
+use simple_kbinterpol,             only: kbinterpol
+use simple_projector,              only: projector
+use simple_type_defs,              only: ctfparams, ctfvars, CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES
+use simple_test_utils
 implicit none
 private
-public :: run_pose_cont_numerics
+public :: run_all_cartesian_pose_refiner_tests
 
-real(dp), parameter :: GRADIENT_TOL = 3.e-2_dp
-real(dp), parameter :: ORTHOGONAL_TOL = 2.e-12_dp
+integer,  parameter :: TEST_BOX = 24
+real(dp), parameter :: GRADIENT_TOL    = 3.e-2_dp
+real(dp), parameter :: ORTHOGONAL_TOL  = 2.e-12_dp
 real(dp), parameter :: NCC_FORMULA_TOL = 20._dp*real(epsilon(1.), dp)
+real(dp), parameter :: ROTATION_TOL    = 8.e-4_dp
+real(dp), parameter :: SHIFT_TOL       = 2.e-3_dp
 
 contains
 
+    subroutine run_all_cartesian_pose_refiner_tests()
+        write(*,'(A)') '**** running all Cartesian pose refiner tests ****'
+        call run_pose_cont_numerics()
+        call run_pose_cont_solver()
+    end subroutine run_all_cartesian_pose_refiner_tests
+
+
+
+    subroutine build_test_volume(volume)
+        real, allocatable, intent(out) :: volume(:,:,:)
+        real, parameter :: centres(3,4) = reshape([ &
+            &-5.,-3., 2., 4., 5.,-3., 0.,-6.,-5., 3.,-2., 6.],[3,4])
+        real, parameter :: sigmas(4) = [2.,2.5,1.8,2.2]
+        real, parameter :: amplitudes(4) = [1.,0.8,0.6,0.5]
+        real :: centre, dx, dy, dz
+        integer :: blob, i, j, k
+
+        allocate(volume(TEST_BOX,TEST_BOX,TEST_BOX),source=0.)
+        centre = real(TEST_BOX)/2.+0.5
+        do k = 1, TEST_BOX
+            do j = 1, TEST_BOX
+                do i = 1, TEST_BOX
+                    do blob = 1, 4
+                        dx = real(i)-centre-centres(1,blob)
+                        dy = real(j)-centre-centres(2,blob)
+                        dz = real(k)-centre-centres(3,blob)
+                        volume(i,j,k) = volume(i,j,k)+amplitudes(blob)* &
+                            &exp(-(dx*dx+dy*dy+dz*dz)/(2.*sigmas(blob)**2))
+                    enddo
+                enddo
+            enddo
+        enddo
+    end subroutine build_test_volume
+
+    pure function identity_rotation() result(rotation)
+        real(dp) :: rotation(3,3)
+        rotation = 0._dp
+        rotation(1,1) = 1._dp
+        rotation(2,2) = 1._dp
+        rotation(3,3) = 1._dp
+    end function identity_rotation
+
+    subroutine prepare_unweighted_particle(workspace,observed,data,shell_range)
+        type(cartesian_pose_refiner), intent(in) :: workspace
+        complex, intent(in) :: observed(-TEST_BOX/2:,-TEST_BOX/2:)
+        type(cartesian_pose_data), intent(out) :: data
+        integer, intent(in), optional :: shell_range(2)
+        type(ctfparams) :: no_ctf
+        real :: sigma2(0:TEST_BOX/2)
+        integer :: active_range(2)
+
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2 = 1.
+        active_range = [2,TEST_BOX/2]
+        if( present(shell_range) ) active_range = shell_range
+        call workspace%prepare_particle(observed,no_ctf,sigma2,active_range,data)
+    end subroutine prepare_unweighted_particle
+
+    pure function rotation_distance(left,right) result(distance)
+        real(dp), intent(in) :: left(3,3), right(3,3)
+        real(dp) :: distance, cosine
+        cosine = 0.5_dp*(sum(left*right)-1._dp)
+        distance = acos(max(-1._dp,min(1._dp,cosine)))
+    end function rotation_distance
+
+
     subroutine run_pose_cont_numerics()
+        write(*,'(A)') 'test_prepared_particle_contract'
         call test_prepared_particle_contract()
+        write(*,'(A)') 'test_shift_phase_sign'
         call test_shift_phase_sign()
+        write(*,'(A)') 'test_ncc_objective_formula'
         call test_ncc_objective_formula()
+        write(*,'(A)') 'test_five_parameter_gradient'
         call test_five_parameter_gradient()
+        write(*,'(A)') 'test_matched_projector_boundary'
         call test_matched_projector_boundary()
+        write(*,'(A)') 'test_rotation_increment'
         call test_rotation_increment()
-        write (*, '(a)') 'POSE_CONT_REFINEMENT_NUMERICS: PASS'
     end subroutine run_pose_cont_numerics
 
     subroutine test_prepared_particle_contract()
@@ -372,4 +457,212 @@ contains
             &matrix(1, 3)*(matrix(2, 1)*matrix(3, 2) - matrix(2, 2)*matrix(3, 1))
     end function determinant3
 
-end module pose_cont_refinement_numerics_test
+
+    subroutine run_pose_cont_solver()
+        write(*,'(A)') 'test_shift_solver'
+        call test_shift_solver()
+        write(*,'(A)') 'test_joint_solver'
+        call test_joint_solver()
+        write(*,'(A)') 'test_ncc_solver'
+        call test_ncc_solver()
+        write(*,'(A)') 'test_invalid_and_unobservable_inputs'
+        call test_invalid_and_unobservable_inputs()
+    end subroutine run_pose_cont_solver
+
+    subroutine test_shift_solver()
+        type(cartesian_pose_refiner) :: workspace
+        type(cartesian_pose_data) :: data
+        type(shift_lm_config) :: config
+        type(pose_lm_result) :: result
+        type(pose_lm_diagnostics) :: diagnostics
+        real, allocatable :: volume(:, :, :)
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: rotation(3, 3), truth_shift(2), shift(2)
+
+        call build_test_volume(volume)
+        call workspace%new_physical_reference(volume)
+        rotation = real(euler2m([19., 37., 28.]), dp)
+        truth_shift = [0.31_dp, -0.24_dp]
+        call workspace%predict_unweighted(rotation, truth_shift, observed)
+        call prepare_unweighted_particle(workspace, observed, data)
+        config = shift_lm_config(shift_step_bound=1._dp, max_iterations=20)
+        shift = [-0.15_dp, 0.12_dp]
+        call workspace%refine_shift_lm(rotation, shift, data, config, result, diagnostics)
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
+            &sqrt(sum((shift - truth_shift)**2)) < SHIFT_TOL, &
+            &'shift-only LM did not recover a known shift')
+        call assert_true(diagnostics%naccepted > 0 .and. &
+            &diagnostics%max_shift_step <= config%shift_step_bound + epsilon(1._dp), &
+            &'shift-only LM violated its accepted-step contract')
+        shift = truth_shift
+        call workspace%refine_shift_lm(rotation, shift, data, config, result, diagnostics)
+        call assert_true(result%status == LM_FINITE_NO_IMPROVEMENT .and. &
+            &all(shift == truth_shift), 'exact shift was not retained')
+        call workspace%kill
+    end subroutine test_shift_solver
+
+    subroutine test_joint_solver()
+        type(cartesian_pose_refiner) :: workspace
+        type(cartesian_pose_data) :: data
+        type(pose_lm_config) :: config
+        type(pose_lm_result) :: result
+        type(pose_lm_diagnostics) :: diagnostics
+        real, allocatable :: volume(:, :, :)
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: truth_rotation(3, 3), rotation(3, 3), frozen_rotation(3, 3)
+        real(dp) :: truth_shift(2), shift(2), frozen_shift(2), objective_before, objective_after
+        real(dp) :: gradient(5)
+
+        call build_test_volume(volume)
+        call workspace%new_physical_reference(volume)
+        truth_rotation = real(euler2m([19., 37., 28.]), dp)
+        truth_shift = [0.31_dp, -0.24_dp]
+        call workspace%predict_unweighted(truth_rotation, truth_shift, observed)
+        call prepare_unweighted_particle(workspace, observed, data)
+        config = pose_lm_config(rotation_scale=0.10_dp, shift_step_bound=1._dp, max_iterations=20)
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        shift = [-0.08_dp, 0.06_dp]
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. objective_after < objective_before, &
+            &'joint LM did not accept an objective-reducing pose')
+        call assert_true(rotation_distance(rotation, truth_rotation) < ROTATION_TOL .and. &
+            &sqrt(sum((shift - truth_shift)**2)) < SHIFT_TOL, &
+            &'joint LM did not recover the known five-parameter pose')
+        call assert_true(diagnostics%max_rotation_step <= config%rotation_scale + epsilon(1._dp) .and. &
+            &diagnostics%max_shift_step <= config%shift_step_bound + epsilon(1._dp), &
+            &'joint LM exceeded a configured proposal bound')
+
+        rotation = truth_rotation
+        shift = truth_shift
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call assert_true(result%status == LM_FINITE_NO_IMPROVEMENT .and. &
+            &all(rotation == truth_rotation) .and. all(shift == truth_shift), &
+            &'exact joint pose was not retained')
+
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        shift = [-0.08_dp, 0.06_dp]
+        frozen_rotation = rotation
+        frozen_shift = shift
+        config%active_parameters = [.false., .false., .false., .true., .true.]
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
+            &objective_after < objective_before .and. sqrt(sum((shift - frozen_shift)**2)) > 1.e-10_dp .and. &
+            &all(rotation == frozen_rotation), 'shift-only joint solve did not improve only active shifts')
+
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        shift = [-0.08_dp, 0.06_dp]
+        frozen_rotation = rotation
+        frozen_shift = shift
+        config%active_parameters = [.true., .true., .true., .false., .false.]
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
+            &objective_after < objective_before .and. rotation_distance(rotation, frozen_rotation) > 1.e-10_dp .and. &
+            &all(shift == frozen_shift), 'rotation-only joint solve did not improve only active rotations')
+
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        shift = [-0.08_dp, 0.06_dp]
+        frozen_rotation = rotation
+        frozen_shift = shift
+        config%active_parameters = .true.
+        config%use_cumulative_guard = .true.
+        config%anchor_rotmat = rotation
+        config%anchor_shift = shift
+        config%max_total_rotation = 1.e-12_dp
+        config%max_total_shift = 1.e-12_dp
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
+        call assert_true(diagnostics%nbound_hits > 0, &
+            &'cumulative guard test did not exercise an out-of-bound proposal')
+        select case(result%status)
+            case(LM_ACCEPTED_IMPROVEMENT)
+                call assert_true(objective_after < objective_before .and. &
+                    &rotation_distance(rotation, frozen_rotation) <= &
+                    &config%max_total_rotation + 10._dp*epsilon(1._dp) .and. &
+                    &sqrt(sum((shift - frozen_shift)**2)) <= &
+                    &config%max_total_shift + 10._dp*epsilon(1._dp), &
+                    &'cumulative guard accepted a pose outside its bounds')
+            case(LM_STEP_BOUND_REJECTED)
+                call assert_true(all(rotation == frozen_rotation) .and. all(shift == frozen_shift), &
+                    &'cumulative-bound rejection changed the complete input pose')
+            case default
+                call assert_true(.false., 'cumulative guard returned an unexpected LM status')
+        end select
+        call workspace%kill
+    end subroutine test_joint_solver
+
+    subroutine test_ncc_solver()
+        type(cartesian_pose_refiner) :: workspace
+        type(cartesian_pose_data) :: data
+        type(pose_lm_config) :: config
+        type(pose_lm_result) :: result
+        type(pose_lm_diagnostics) :: diagnostics
+        real, allocatable :: volume(:, :, :)
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: truth_rotation(3, 3), rotation(3, 3), truth_shift(2), shift(2)
+        real(dp) :: objective_before, objective_after, gradient(5)
+
+        call build_test_volume(volume)
+        call workspace%new_physical_reference(volume)
+        truth_rotation = real(euler2m([19., 37., 28.]), dp)
+        truth_shift = [0.31_dp, -0.24_dp]
+        call workspace%predict_unweighted(truth_rotation, truth_shift, observed)
+        call prepare_unweighted_particle(workspace, 2.*observed, data)
+        config = pose_lm_config(rotation_scale=0.10_dp, shift_step_bound=1._dp, &
+            &max_iterations=20, objective=POSE_CONT_OBJECTIVE_CART_NCC)
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        shift = [-0.08_dp, 0.06_dp]
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient, &
+            &POSE_CONT_OBJECTIVE_CART_NCC)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient, &
+            &POSE_CONT_OBJECTIVE_CART_NCC)
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
+            &objective_after < objective_before, &
+            &'Cartesian NCC LM did not accept a correlation-improving pose')
+        call assert_true(rotation_distance(rotation, truth_rotation) < ROTATION_TOL .and. &
+            &sqrt(sum((shift - truth_shift)**2)) < SHIFT_TOL, &
+            &'Cartesian NCC LM did not recover the known gain-scaled pose')
+        call workspace%kill()
+    end subroutine test_ncc_solver
+
+    subroutine test_invalid_and_unobservable_inputs()
+        type(cartesian_pose_refiner) :: workspace
+        type(cartesian_pose_data) :: data
+        type(pose_lm_config) :: config
+        type(pose_lm_result) :: result
+        type(pose_lm_diagnostics) :: diagnostics
+        type(ctfparams) :: no_ctf
+        real :: sigma2(0:TEST_BOX/2), zero_volume(TEST_BOX, TEST_BOX, TEST_BOX)
+        complex :: zero_plane(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: rotation(3, 3), original_rotation(3, 3), shift(2), original_shift(2)
+
+        zero_volume = 0.
+        zero_plane = cmplx(0., 0.)
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2 = 1.
+        sigma2(2) = -1.
+        call workspace%new_physical_reference(zero_volume)
+        call workspace%prepare_particle(zero_plane, no_ctf, sigma2, [2, TEST_BOX/2], data)
+        call assert_true(.not. data%is_valid(), 'invalid sigma data was accepted')
+        sigma2 = 1.
+        call workspace%prepare_particle(zero_plane, no_ctf, sigma2, [2, TEST_BOX/2], data)
+        rotation = real(euler2m([19., 37., 28.]), dp)
+        shift = [0.2_dp, -0.1_dp]
+        original_rotation = rotation
+        original_shift = shift
+        config = pose_lm_config(rotation_scale=0.10_dp, max_iterations=10)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result, diagnostics)
+        call assert_true(result%status == LM_NO_RELIABLE_UPDATE .and. &
+            &all(rotation == original_rotation) .and. all(shift == original_shift), &
+            &'unobservable joint solve changed the input pose')
+        call workspace%kill
+    end subroutine test_invalid_and_unobservable_inputs
+
+end module simple_cartesian_pose_refiner_tester

@@ -1,9 +1,18 @@
-program simple_test_pose_cont_refine3D_adapter
-use simple_core_module_api, only: CTFFLAG_NO, ctfparams, dp, euler2m
-use simple_image, only: image
-use simple_ori, only: ori
-use simple_cartesian_pose_refiner, only: cartesian_pose_refiner
-use simple_strategy3D_pose_cont, only: pose_cont_seed_is_valid
+!@descr: unit tests for the pose_cont refine3D adapter (simple_pose_cont_refine3D_adapter, simple_strategy3D_pose_cont)
+! The layer between refine3D and the Cartesian pose refiner, with no fixture beyond
+! reference artifacts written to and removed from the run directory: the reference
+! workspace lifecycle over even/odd half-set artifacts, the observation adapter against
+! the established particle path (norm_noise_fft_clip_shift, ifft_mask_fft) and the
+! native/cropped shift conversion, the inpl_cont winner to pose_cont seed handoff and
+! its round trip with metadata intact, the transaction contracts of the shift-then-joint
+! and joint routes (stage accounting, bound rejection and no-improvement preserving the
+! pose, invalid preparation) and the strategy's seed validity.
+module simple_pose_cont_refine3D_adapter_tester
+use simple_core_module_api,           only: CTFFLAG_NO, ctfparams, dp, euler2m
+use simple_image,                     only: image
+use simple_ori,                       only: ori
+use simple_cartesian_pose_refiner,    only: cartesian_pose_refiner
+use simple_strategy3D_pose_cont,      only: pose_cont_seed_is_valid
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_particle_workspace, &
     &pose_cont_pose, pose_cont_limits, pose_cont_config, pose_cont_particle_spec, &
@@ -18,58 +27,31 @@ use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &POSE_CONT_INVALID_PREPARATION, LM_ACCEPTED_IMPROVEMENT, &
     &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED, POSE_CONT_NOT_ATTEMPTED, &
     &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
-use pose_cont_refine3D_adapter_1jyx_test, only: run_pose_cont_1jyx_reconstruction
+use simple_test_utils
 implicit none
+private
+public :: run_all_pose_cont_adapter_tests
 
-integer, parameter :: TEST_BOX = 16
-real, parameter :: TEST_SMPD = 1.5
-character(len=32) :: selected_case
-integer :: occurrences
-
-call find_selected_case(selected_case, occurrences)
-if (occurrences > 1) error stop 'pose-cont adapter suite accepts only one case= argument'
-if (occurrences == 0) then
-    call run_adapter_contracts()
-else
-    select case (trim(selected_case))
-    case ('adapter')
-        call run_adapter_contracts()
-    case ('1jyx_reconstruction')
-        call run_pose_cont_1jyx_reconstruction()
-    case default
-        error stop 'pose-cont adapter suite requires case=adapter or case=1jyx_reconstruction'
-    end select
-end if
+integer, parameter :: TEST_BOX  = 16
+real,    parameter :: TEST_SMPD = 1.5
 
 contains
 
-    subroutine run_adapter_contracts()
+    subroutine run_all_pose_cont_adapter_tests()
+        write(*,'(A)') '**** running all pose_cont adapter tests ****'
+        write(*,'(A)') 'test_reference_workspace_lifecycle'
         call test_reference_workspace_lifecycle()
+        write(*,'(A)') 'test_observation_and_coordinate_adapters'
         call test_observation_and_coordinate_adapters()
+        write(*,'(A)') 'test_inpl_pose_cont_handoff'
         call test_inpl_pose_cont_handoff()
+        write(*,'(A)') 'test_transaction_contracts'
         call test_transaction_contracts()
+        write(*,'(A)') 'test_strategy_seed_contract'
         call test_strategy_seed_contract()
-        write (*, '(a)') 'POSE_CONT_REFINE3D_ADAPTER: PASS'
-    end subroutine run_adapter_contracts
+    end subroutine run_all_pose_cont_adapter_tests
 
-    subroutine find_selected_case(case_name, count)
-        character(len=*), intent(out) :: case_name
-        integer, intent(out) :: count
-        character(len=256) :: argument
-        integer :: iarg, separator, status
 
-        case_name = ''
-        count = 0
-        do iarg = 1, command_argument_count()
-            call get_command_argument(iarg, argument, status=status)
-            if (status /= 0) error stop 'could not read pose-cont adapter test argument'
-            separator = index(argument, '=')
-            if (separator <= 1) cycle
-            if (trim(argument(:separator - 1)) /= 'case') cycle
-            count = count + 1
-            case_name = trim(argument(separator + 1:))
-        end do
-    end subroutine find_selected_case
 
     subroutine test_reference_workspace_lifecycle()
         type(pose_cont_reference_workspace) :: workspace
@@ -375,10 +357,4 @@ contains
         end do
     end subroutine build_test_volume
 
-    subroutine assert_true(condition, message)
-        logical, intent(in) :: condition
-        character(len=*), intent(in) :: message
-        if (.not. condition) error stop trim(message)
-    end subroutine assert_true
-
-end program simple_test_pose_cont_refine3D_adapter
+end module simple_pose_cont_refine3D_adapter_tester

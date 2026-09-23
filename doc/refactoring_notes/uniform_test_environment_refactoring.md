@@ -19,8 +19,10 @@ projection scaling, the non-convergent cosine pre-image, the residual BIC of
 the PPCA rank scan) and removed
 thirty-one dead routines and three unused optimisers. The eighth fast area
 suite, `unit_reconstruction`, and the first nightly library suite,
-`lib_reconstruction`, exist since 2026-09-23 (section 9.7), as does the
-ninth fast suite `unit_pftc_registration2D3D`. This is a large
+`lib_reconstruction`, exist since 2026-09-23 (section 9.7), as do the
+ninth and tenth fast suites `unit_pftc_align2D3D` and
+`unit_cart_align3D` and the second library suite
+`lib_cart_align3D`. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -382,7 +384,8 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
-| `unit_pftc_registration2D3D` | continuous in-plane, refine3D in-plane state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches. Its Cartesian counterpart, `unit_cart_registration3D`, comes with the pose family | to be measured |
+| `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
+| `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | to be measured |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1640,12 +1643,12 @@ state (`strategy3D_srch` storage routes, `seed_continuous_inplane_candidate`,
 `resolve_inplane_e3`, `joint_evaluation_invalid`) and the `inpl_cont`
 policy; (C) post-run project metadata scans and a TSV baseline. Nothing in
 the gate touched `polarft_calc` before. Hans's area decision: the 2D and
-3D searches share the machinery, so the area is `pftc_registration2D3D`
-for everything on the polar Fourier transform, with `cart_registration3D`
+3D searches share the machinery, so the area is `pftc_align2D3D`
+for everything on the polar Fourier transform, with `cart_align3D`
 reserved for the Cartesian continuous implementations (the pose family).
 Verdicts: `inplane_cc_grad`, `inplane_hybrid_grad`, `inplane_rot2D_stage1`,
 the numeric and route-construction halves of `inplane_rot2D_routes` and
-refine3D's `synthetic_recovery` are `merge into unit_pftc_registration2D3D`
+refine3D's `synthetic_recovery` are `merge into unit_pftc_align2D3D`
 as the `continuous in-plane` sub-suite (`simple_pftc_inplane_tester`,
 beside `simple_polarft_calc`). All five needed `vol1=`; the fixture is now
 hermetic — a four-blob phantom (box 64, 1.3 A, 60 A mask) written to the
@@ -1668,7 +1671,7 @@ probabilistic mode. Dropped: the hybrid-objective rejection (the
 constructor `error stop`s; the old test spawned itself to observe it) and
 the aliasing experiment (printed, never asserted). refine3D's
 `search_state`, `joint_state`, `direct_route`, `metadata_state` and
-`policy` are `merge into unit_pftc_registration2D3D` as `refine3D
+`policy` are `merge into unit_pftc_align2D3D` as `refine3D
 in-plane state` (`simple_strategy3D_inplane_tester`): hermetic, no
 fixture, `error stop` became assertions, `resolve_inplane_e3` gained the
 first-grid-angle case. `inplane_rot2D` (a driver: GNU `find -printf` for a
@@ -1679,11 +1682,70 @@ is `delete`. `inplane_rot2D_meta`, refine3D `metadata_project` and
 are `delete`: the e3/inpl consistency they scan for is what
 `resolve_inplane_e3` guarantees, and a project-level assertion after a
 real run belongs to the simulated workflow (Phase 5). Registration:
-`unit_pftc_registration2D3D` is the ninth `fast` entry, `SIMPLE_CTEST_BUDGET`
+`unit_pftc_align2D3D` is the ninth `fast` entry, `SIMPLE_CTEST_BUDGET`
 22 -> 23. Coverage accounting: every production call of the fourteen files
 is made by the two new testers except the abinitio2D workflow run and the
 project scans, which were the deleted drivers' own business; nothing is
-lost by name.
+lost by name. Build notes: `vol_pad2ref_pfts` fills `nspace` references
+and checks the bank (a 2026-09-10 change the August tests predate), so the
+fixture asks for `nspace=2` (the smallest even count `build_refspiral`
+accepts) and a two-reference bank; and the Linux bounds-checked build
+showed that the old tests projected from the *unpadded* volume while the
+pftc's polar coordinates live on the padded lattice, reading past the
+expanded bounds at the full band (silent on the Mac at lp = 8): the
+fixture now builds `vol_pad` exactly as `simple_matcher_refvol_utils` does
+(`pad_fft` by OSMPL_PAD_FAC, `expand_cmat`) and projects from it.
+
+**pose (2026-09-23, Hans).** The third family of the unassigned area:
+`pose_cont_refinement` (numerics, solver, helpers), `pose_cont_refine3D_adapter`
+(adapter contracts and the opt-in 1JYX experiment) and, because it is the
+Cartesian Fourier layer under the pose refiner and under PCG,
+`cartesian_fourier` — eleven files, about 2 600 lines, all hermetic, none
+in CI, written mid-September on the `simple_cartesian_pose_refiner`,
+`simple_pose_cont_refine3D_adapter` and `simple_cartesian_fourier` modules.
+Hans's area decision: `cart_align3D` for the Cartesian continuous
+implementations, so this batch creates `unit_cart_align3D` (tenth
+`fast` entry) and `lib_cart_align3D` (second `library` entry).
+Verdicts: `pose_cont_refinement` is `merge into unit_cart_align3D`
+as `pose refiner` (`simple_cartesian_pose_refiner_tester`, 669 lines):
+prepared-particle validity and shell capping, exact matches giving zero
+objective and gradient without CTF, with CTF and shell whitening and with
+phase flip, the inverse-envelope constructor applying its correction once,
+the Fourier shift phase sign on the native pixel scale, the 1-NCC formula
+against an independent evaluation and its invariance to particle gain,
+five-parameter gradients of both objectives against central differences,
+the Cartesian gather against the PFTC projector kernel at a matched
+boundary, orthogonality under the right rotation increment; then the LM
+solvers: shift-only recovery within the step bound and the exact shift
+retained, joint recovery of a known five-parameter pose within its bounds,
+active-parameter masks, the cumulative guard, the NCC solver on a
+gain-scaled particle, and invalid or unobservable inputs leaving the pose
+untouched — everything the old test asserted, on `simple_test_utils`.
+The `adapter` case of `pose_cont_refine3D_adapter` is `merge` as `pose
+adapter` (`simple_pose_cont_refine3D_adapter_tester`): reference-artifact
+workspace lifecycle, the observation adapter against the established
+particle path, native/crop shift conversion, the inpl_cont-to-pose_cont
+seed handoff and round trip, the transaction contracts of both routes and
+the seed validity. Its `1jyx_reconstruction` case is `demote` to
+`lib_cart_align3D` as `pose 1JYX recovery`
+(`simple_pose_cont_1jyx_tester`): 1JYX from the embedded coordinates at
+box 144, 5 000 simulated particles with varying CTF and noise, every pose
+perturbed by 15 degrees and 2 px, LM on each, three reconstructions with
+FSC; the aggregate objective, rotation and shift errors must fall and the
+refined reconstruction correlate better with the truth than the perturbed
+one; the MRC volumes and TSVs it writes are the reviewable record and stay
+in the nightly's run directory. `cartesian_fourier` is `merge` as
+`Cartesian Fourier` (`simple_cartesian_fourier_tester`): the fast KB
+polynomial and derivative against the ideal Bessel window, normalised
+stencil derivatives and partition of unity, the stencil-switch jump, the
+packed/Friedel gather derivative against finite differences, and the
+parity of the extracted neutral operations with the pre-extraction
+oracles retained in the tester; the self-re-executing driver is gone.
+`SIMPLE_CTEST_BUDGET` 23 -> 25. Coverage accounting: every production call
+of the eleven files is made by the four testers; nothing is lost by name.
+Naming (Hans, same day): the areas are `pftc_align2D3D` and `cart_align3D`
+("registration" was too long for a suite name); the first was renamed from
+`pftc_registration2D3D`, under which it was committed in 675fdcd8e.
 
 ## 10. Fast-tier performance
 

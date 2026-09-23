@@ -6,7 +6,8 @@ use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_numerics, commander_test_unit_project, commander_test_unit_ui, &
                                         commander_test_unit_ipc, commander_test_forked_process, &
                                         commander_test_unit_reconstruction, commander_test_lib_reconstruction, &
-                                        commander_test_unit_pftc_registration2D3D
+                                        commander_test_unit_pftc_align2D3D, &
+                                        commander_test_unit_cart_align3D, commander_test_lib_cart_align3D
 implicit none
 
 public :: exec_test_class_commander
@@ -22,7 +23,9 @@ type(commander_test_unit_ui)        :: xunit_ui
 type(commander_test_unit_ipc)       :: xunit_ipc
 type(commander_test_unit_reconstruction) :: xunit_reconstruction
 type(commander_test_lib_reconstruction)  :: xlib_reconstruction
-type(commander_test_unit_pftc_registration2D3D) :: xunit_pftc_registration2D3D
+type(commander_test_unit_pftc_align2D3D) :: xunit_pftc_align2D3D
+type(commander_test_unit_cart_align3D)   :: xunit_cart_align3D
+type(commander_test_lib_cart_align3D)    :: xlib_cart_align3D
 type(commander_test_forked_process) :: xforked_process
 
 contains
@@ -56,8 +59,12 @@ contains
                 call xunit_reconstruction%execute(cline)
             case( 'lib_reconstruction' )
                 call xlib_reconstruction%execute(cline)
-            case( 'unit_pftc_registration2D3D' )
-                call xunit_pftc_registration2D3D%execute(cline)
+            case( 'unit_pftc_align2D3D' )
+                call xunit_pftc_align2D3D%execute(cline)
+            case( 'unit_cart_align3D' )
+                call xunit_cart_align3D%execute(cline)
+            case( 'lib_cart_align3D' )
+                call xlib_cart_align3D%execute(cline)
             case( 'forked_process' )
                 call xforked_process%execute(cline)
             case default

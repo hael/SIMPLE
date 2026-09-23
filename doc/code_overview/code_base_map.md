@@ -12,17 +12,8 @@
     - `simple_test_exec.f90` — executes SIMPLE tests workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
-      - `simple_cartesian_fourier_kb_gather_test.f90`
-      - `simple_cartesian_fourier_kb_test.f90`
-      - `simple_cartesian_fourier_neutral_extract_test.f90` — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks
-      - `simple_cartesian_fourier_test_helpers.f90`
-      - `simple_pose_cont_refine3D_adapter_1jyx_test.f90`
-      - `simple_pose_cont_refinement_numerics_test.f90`
-      - `simple_pose_cont_refinement_solver_test.f90`
-      - `simple_pose_cont_refinement_test_helpers.f90`
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
-      - `simple_test_cartesian_fourier.f90`
       - `simple_test_cavg_quality_relations.f90`
       - `simple_test_cavg_registration.f90`
       - `simple_test_cmdline.f90`
@@ -47,8 +38,6 @@
       - `simple_test_phase_rand_fsc.f90`
       - `simple_test_phshift_policy.f90`
       - `simple_test_phshift_star.f90`
-      - `simple_test_pose_cont_refine3D_adapter.f90`
-      - `simple_test_pose_cont_refinement.f90`
       - `simple_test_projdir_accumulator.f90`
       - `simple_test_project_merge.f90`
       - `simple_test_qsys_ctrl.f90`
@@ -331,6 +320,7 @@
         - `simple_stackops.f90` — stack image processing routines
       - **interp/** — home of the window functions for Fourier gridding interpolation
         - `simple_cartesian_fourier.f90` — neutral Cartesian Fourier lattice embedding, extraction, and packed KB gathers
+        - `simple_cartesian_fourier_tester.f90` — unit tests for the neutral Cartesian Fourier layer (simple_cartesian_fourier, simple_kbinterpol)
         - `simple_edges_sqwins.f90` — square windows and mask edges
         - `simple_gridding.f90` — utilities for convolution interpolation (gridding)
         - `simple_kbinterpol.f90` — Kaiser-Bessel interpolation kernel
@@ -493,6 +483,8 @@
           - `simple_matcher_refvol_utils.f90` — shared helpers for reading, masking, filtering and reprojecting reference volumes
           - `simple_matcher_smpl_and_lplims.f90` — search-space and particle-selection policy routines for matcher workflows
           - `simple_pose_cont_refine3D_adapter.f90` — Reference, particle-data, and transaction adapters for refine3D pose_cont
+          - `simple_pose_cont_refine3D_adapter_tester.f90` — unit tests for the pose_cont refine3D adapter (simple_pose_cont_refine3D_adapter, simple_strategy3D_pose_cont)
+          - `simple_pose_cont_1jyx_tester.f90` — library test of Cartesian pose refinement on simulated 1JYX particles (simple_pose_cont_refine3D_adapter)
           - `simple_pose_cont_run_stats.f90` — thread-local accumulation and iteration reporting for pose_cont refinement
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_srchspace_map.f90`
@@ -620,6 +612,8 @@
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and preconditioned
         - `simple_pcg_halfset_tester.f90` — library tests of independent half-set PCG reconstruction against gridding (simple_reconstructor_pcg)
+        - `simple_cartesian_pose_refiner.f90` — Cartesian five-parameter (rotation, shift) pose refiner on the neutral Fourier lattice, LM solvers
+        - `simple_cartesian_pose_refiner_tester.f90` — unit tests for the Cartesian five-parameter pose refiner (simple_cartesian_pose_refiner)
         - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
         - `simple_vol_pproc_policy.f90` — per-state mask artifact compatibility check shared by volume assembly, postprocess and the abinitio final rec
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
