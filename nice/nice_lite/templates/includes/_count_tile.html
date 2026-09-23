@@ -6,7 +6,9 @@
     count      — numeric value
     count_unit — (optional) unit appended after count (e.g. "px", "Å")
     label      — display label (shown in header row with dot)
-    sublabel   — (optional) secondary value shown after count, separated by ·
+    sublabel   — (optional) secondary numeric value shown after count, separated by ·
+    sublabel_text — (optional) pre-formatted secondary value (e.g. after floatformat); takes
+                     precedence over sublabel, since sublabel is compared numerically
     variant    — "neutral" | "rejected" | "action" | omit for default (streamring accent)
 {% endcomment %}
 {% load humanize %}
@@ -16,7 +18,7 @@
         <!-- <div class="w-1.5 h-1.5 rounded-full bg-streamlabel flex-shrink-0"></div> -->
         <p class="text-[10px] mr-[5px] font-medium text-streamlabel">{{ label }}</p>
     </div>
-    <p class="text-[10px] font-medium text-streamlabel leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+    <p class="text-[10px] font-medium text-streamlabel leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel_text %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% elif sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
 </div>
 {% elif variant == "action" %}
 <div class="flex-1 bg-streamaction/10 border-0 border-streamaction/20 rounded-lg pl-2 pr-0 py-1 min-w-max">
@@ -24,7 +26,7 @@
         <!-- <div class="w-1.5 h-1.5 rounded-full bg-streamaction flex-shrink-0"></div> -->
         <p class="text-[10px] mr-[5px] font-medium text-streamaction">{{ label }}</p>
     </div>
-    <p class="text-[10px] font-medium text-streamaction leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+    <p class="text-[10px] font-medium text-streamaction leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel_text %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% elif sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
 </div>
 {% elif variant == "rejected" %}
 <div class="flex-1 bg-streamrejected/10 border-0 border-streamrejected/20 rounded-lg pl-2 pr-0 py-1 min-w-max">
@@ -32,7 +34,7 @@
         <!-- <div class="w-1.5 h-1.5 rounded-full bg-streamrejected flex-shrink-0"></div> -->
         <p class="text-[10px] mr-[5px] font-medium text-streamrejected">{{ label }}</p>
     </div>
-    <p class="text-[10px] font-medium text-streamrejected leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+    <p class="text-[10px] font-medium text-streamrejected leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel_text %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% elif sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
 </div>
 {% else %}
 <div class="flex-1 bg-streamring/10 border-0 border-streamring/20 rounded-lg pl-2 pr-0 py-1 min-w-max">
@@ -40,6 +42,6 @@
         <!-- <div class="w-1.5 h-1.5 rounded-full bg-streamring flex-shrink-0"></div> -->
         <p class="text-[10px] mr-[5px] font-medium text-streamring">{{ label }}</p>
     </div>
-    <p class="text-[10px] font-medium text-streamring leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+    <p class="text-[10px] font-medium text-streamring leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel_text %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% elif sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
 </div>
 {% endif %}

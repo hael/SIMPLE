@@ -1,0 +1,81 @@
+{% comment %}
+  _volume3D_viewer.html — basic Mol* viewport for the abinitio3D_multistate zoom panel.
+  Expects `volume_outputs` (list of state/kind volume metadata dicts, see _state_volume_outputs)
+  and `volume_kinds` (list of {key, label} kinds present across volume_outputs, see
+  _present_volume_kinds). Options carry `data-volume-state`/`data-volume-kind` so
+  selectState()/selectVolumeKind() in zoomabinitio3Dmultistate.html can switch the
+  displayed volume to match the currently selected state and path kind.
+{% endcomment %}
+<style>
+    [data-basic-3d-viewer] > .msp-plugin {
+        position: absolute;
+        inset: 0;
+    }
+    [data-basic-3d-viewer] .msp-layout-standard {
+        border: none;
+    }
+</style>
+
+<div data-volume-viewer class="flex min-h-0 flex-1 flex-col">
+    <select data-volume-source hidden aria-label="volume source">
+        {% for volume in volume_outputs %}
+            <option value="{% url 'nice_lite:volume' volume.path %}"
+                    data-volume-state="{{ volume.state }}"
+                    data-volume-kind="{{ volume.kind }}"
+                    data-volume-name="state {{ volume.state }} ({{ volume.kind }})"
+                    data-volume-width="{{ volume.width }}"
+                    data-volume-height="{{ volume.height }}"
+                    data-volume-depth="{{ volume.depth }}"
+                    data-volume-voxel-x="{{ volume.voxel_size.0 }}"
+                    data-volume-voxel-y="{{ volume.voxel_size.1 }}"
+                    data-volume-voxel-z="{{ volume.voxel_size.2 }}"
+                    data-volume-minimum="{{ volume.minimum }}"
+                    data-volume-maximum="{{ volume.maximum }}">
+                state {{ volume.state }} ({{ volume.kind }})
+            </option>
+        {% endfor %}
+    </select>
+    <select data-volume-background hidden aria-label="viewer background">
+        <option value="white" selected>white</option>
+    </select>
+    <button data-volume-reset type="button" hidden>reset view</button>
+    <p data-volume-metadata hidden></p>
+
+    <div class="m-2 flex flex-shrink-0 flex-row items-center justify-between gap-2">
+        {% if volume_kinds|length > 1 %}
+        <div class="flex flex-row items-center gap-1">
+            {% for kind in volume_kinds %}
+            <button type="button" onclick="selectVolumeKind(this)" data-volume-kind="{{ kind.key }}"
+                    class="rounded px-2 py-1 text-[9px] uppercase tracking-wide {% if kind.key == 'volpath' %}bg-streamring/20 text-streamtext{% else %}text-streamlabel hover:bg-streamsurface{% endif %}">
+                {{ kind.label }}
+            </button>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div></div>
+        {% endif %}
+        <div class="flex flex-row items-center">
+            <div class="mr-2 text-[11px] text-streamlabel">iso surface</div>
+            {% include 'includes/_slider.html' with range_min=0 range_max=1 range_step=0.001 range_value=0.3 range_id='volume_isovalue' range_class='w-48' range_data_attribute='data-volume-isovalue' range_aria_label='iso surface' text_min=0 text_max=1 text_step=0.001 text_id='volume_isovalue_text' text_class='w-20 pl-[5px] text-[11px] bg-transparent text-right' text_data_attribute='data-volume-isovalue-text' text_aria_label='iso surface value' %}
+        </div>
+    </div>
+
+    <div data-volume-viewport
+         class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md bg-white"
+         style="min-height:22rem">
+        <div data-volume-molstar data-basic-3d-viewer role="region"
+             class="absolute inset-0"
+             aria-label="Interactive Mol* 3D volume viewer; drag to rotate and scroll to zoom"></div>
+        <div data-volume-loading
+             class="hidden pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/70"
+             role="status" aria-live="polite">
+            <div class="flex flex-col items-center gap-2">
+                <div class="h-6 w-6 animate-spin rounded-full border-2 border-streamring border-t-transparent"></div>
+                <p class="text-[10px] uppercase tracking-wide text-streamlabel">loading volume…</p>
+            </div>
+        </div>
+        <p class="pointer-events-none absolute bottom-2 right-3 rounded bg-black/60 px-2 py-1 text-[9px] text-gray-300">
+            Mol* · drag to rotate · scroll to zoom
+        </p>
+    </div>
+</div>

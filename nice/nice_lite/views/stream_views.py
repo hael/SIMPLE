@@ -27,6 +27,7 @@ from django.contrib.auth.decorators import login_required
 # local imports
 from ..models                    import WorkspaceModel
 from ..data_structures.batchjob  import BatchJob
+from ..data_structures.mrc       import read_mrc_volume_info
 from ..data_structures.project   import Project
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
@@ -55,6 +56,52 @@ def _render_if_changed(request, template, context, checksum_cookie):
     response = render(request, template, context)
     response.set_cookie(key=checksum_cookie, value=checksum)
     return response
+
+
+# Path field, display label, in the order shown in the volume-kind toggle.
+_VOLUME_KINDS = (
+    ("volpath", "raw"),
+    ("lppath", "lowpass"),
+    ("pprocpath", "postprocessed"),
+    ("pprocmirrpath", "postprocessed mirror"),
+)
+
+
+def _state_volume_outputs(jobstats):
+    """Return Mol*-ready metadata for each state's volume, one entry per available kind."""
+    state_volumes = jobstats.get("state_volumes") if isinstance(jobstats, dict) else None
+    if not isinstance(state_volumes, list):
+        return []
+
+    outputs = []
+    for entry in state_volumes:
+        if not isinstance(entry, dict):
+            continue
+        for kind, _label in _VOLUME_KINDS:
+            path = entry.get(kind)
+            if not isinstance(path, str) or not path.strip():
+                continue
+            info = read_mrc_volume_info(path)
+            if info is None:
+                continue
+            outputs.append({
+                "path": path,
+                "kind": kind,
+                "state": entry.get("state"),
+                "width": info.width,
+                "height": info.height,
+                "depth": info.depth,
+                "voxel_size": info.voxel_size,
+                "minimum": info.minimum,
+                "maximum": info.maximum,
+            })
+    return outputs
+
+
+def _present_volume_kinds(volume_outputs):
+    """Return the {key, label} kinds actually present in volume_outputs, in fixed order."""
+    present = {volume["kind"] for volume in volume_outputs}
+    return [{"key": key, "label": label} for key, label in _VOLUME_KINDS if key in present]
 
 
 def _is_workspace_accessible(workspace_obj, username=None):
@@ -1174,9 +1221,11 @@ def view_stream_abinitio3D_multistate_zoom(request):
         "desc"     : jobmodel.desc,
         "jobstats" : jobmodel.abinitio3D_multistate_stats,
         "status"   : jobmodel.abinitio3D_multistate_status,
+        "volume_outputs": _state_volume_outputs(jobmodel.abinitio3D_multistate_stats),
         "log"      : [],
         "error"    : "",
     }
+    context["volume_kinds"] = _present_volume_kinds(context["volume_outputs"])
 
     logfile = os.path.join(jobdir, logfile)
     errfile = os.path.join(jobdir, errfile)

@@ -141,6 +141,7 @@ async function initializeMolstarVolumeViewer(root) {
     const viewport = root.querySelector("[data-volume-viewport]");
     const host = root.querySelector("[data-volume-molstar]");
     const metadata = root.querySelector("[data-volume-metadata]");
+    const loadingIndicator = root.querySelector("[data-volume-loading]");
     if (
         !sourceSelect
         || !backgroundSelect
@@ -232,6 +233,7 @@ async function initializeMolstarVolumeViewer(root) {
         setIsovalueDisplayDisabled(isovalueDisplay, true);
         resetButton.disabled = true;
         metadata.textContent = formatVolumeMetadata(option);
+        loadingIndicator?.classList.remove("hidden");
         window.clearTimeout(isovalueUpdateTimer);
         await isovalueUpdatePromise.catch(() => {});
         const isovalue = configureIsovalueControl(
@@ -258,6 +260,7 @@ async function initializeMolstarVolumeViewer(root) {
         } finally {
             sourceSelect.disabled = false;
             resetButton.disabled = false;
+            loadingIndicator?.classList.add("hidden");
         }
     };
 

@@ -6,6 +6,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+            crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"
+            crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"
+            crossorigin="anonymous" defer></script>
+    {% if volume_outputs %}
+        <link rel="stylesheet"
+              href="https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.css"
+              integrity="sha384-RIontCdJN53gEl2fmiHN+4bscIBvaUaOiCeeGktXqmFqdEBF+COnSdt9O4IKFSvq"
+              crossorigin="anonymous">
+        <script defer
+                src="https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.js"
+                integrity="sha384-5Mfx4eL50NkWPky+mcH//qY0sbml4il0CLFFmrMp8uv/saB3Z6uZMHn2dUpAnH92"
+                crossorigin="anonymous"></script>
+        <script defer src="{% static 'nice_lite/molstar_volume_viewer.js' %}"></script>
+    {% endif %}
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'includes/_nav_header.html' with page_title='multistate 3D' desc=desc %}
@@ -33,7 +50,7 @@
                     {% for state in jobstats.states %}
                         {% with state_num=state.state|stringformat:"s" %}
                             {% with state_label="state "|add:state_num %}
-                                {% include 'includes/_count_tile.html' with count=state.population label=state_label sublabel=state.resolution|floatformat:1 sublabel_unit="Å" %}
+                                {% include 'includes/_count_tile.html' with count=state.population label=state_label sublabel_text=state.resolution|floatformat:1 sublabel_unit="Å" %}
                             {% endwith %}
                         {% endwith %}
                     {% endfor %}
@@ -50,17 +67,14 @@
         <div class="flex w-min mx-[10px] flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-y-auto">
             {% if "state_volumes" in jobstats and jobstats.state_volumes|length > 0 %}
             <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">state volumes</p>
+                <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volumes</p>
             </div>
             <div class="flex flex-wrap gap-2 p-4">
                 {% for state in jobstats.state_volumes %}
-                <div class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1">
+                <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
+                     class="flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
                     <p class="mt-1 w-full text-[9px] text-streamlabel">
                         <strong class="text-streamtext">state {{ state.state }}</strong>
-                        {% if state.res0143 %} · {{ state.res0143|floatformat:1 }} Å{% endif %}
-                    </p>
-                    <p class="mt-1 w-full text-[9px] text-streamlabel">
-                        {% if state.pop is not None %} · {{ state.pop|intcomma }} ptcls{% endif %}
                     </p>
                     {% if state.reprojtiles %}
                     <div class="flex w-full gap-1">
@@ -75,11 +89,17 @@
         <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
             {% if "state_volumes" in jobstats and jobstats.state_volumes|length > 0 %}
             <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volume</p>
+                <p data-volume-panel-title class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volume · state {{ jobstats.state_volumes.0.state }}</p>
             </div>
-            <div class="flex flex-row h-full w-full bg-streambg">
-                <div class="flex flex-1 items-center justify-center">
-                    vol here
+            <div class="flex flex-row h-full w-full min-h-0">
+                <div class="flex flex-1 min-h-0">
+                    {% if volume_outputs %}
+                        {% include 'nice_stream/includes/_volume3D_viewer.html' %}
+                    {% else %}
+                        <div class="flex flex-1 items-center justify-center">
+                            <p class="text-[10px] text-streamlabel">no volume output is available yet</p>
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="flex w-min flex-col overflow-y-auto">
                     {% if "state_volumes" in jobstats and jobstats.state_volumes|length > 0 %}
@@ -88,7 +108,7 @@
                     </div>
                     <div class="flex flex-wrap gap-2 p-4">
                         {% for state in jobstats.state_volumes %}
-                        <div class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1">
+                        <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
                             {% if state.reprojtiles %}
                             <div class="flex w-full gap-1">
                                 {% for tile in state.reprojtiles %}
@@ -104,13 +124,20 @@
                     </div>
                     <div class="flex flex-wrap gap-2 p-4">
                         {% for state in jobstats.state_volumes %}
-                        <div class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1">
-                            {% if state.reprojtiles %}
-                            <div class="flex w-full gap-1">
-                                {% for tile in state.reprojtiles %}
-                                {% include 'includes/_reproj_tile.html' with tile=tile state=state %}
-                                {% endfor %}
-                            </div>
+                        <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
+                            {% if state.fsc_invres %}
+                            {% if state.res0143 or state.res05 %}
+                            <p class="w-full text-[9px] text-streamlabel">
+                                {% if state.res0143 %}<strong class="text-streamtext">{{ state.res0143|floatformat:1 }} Å</strong> @ 0.143{% endif %}
+                                {% if state.res0143 and state.res05 %}&middot;{% endif %}
+                                {% if state.res05 %}<strong class="text-streamtext">{{ state.res05|floatformat:1 }} Å</strong> @ 0.5{% endif %}
+                            </p>
+                            {% endif %}
+                            <canvas class="fsc_chart" width="400" height="200"
+                                    data-invres="{{ state.fsc_invres }}"
+                                    data-corr="{{ state.fsc_corr }}"
+                                    {% if state.res0143 %}data-res0143="{{ state.res0143 }}"{% endif %}
+                                    {% if state.res05 %}data-res05="{{ state.res05 }}"{% endif %}></canvas>
                             {% endif %}
                         </div>
                         {% endfor %}
@@ -120,13 +147,28 @@
                     </div>
                     <div class="flex flex-wrap gap-2 p-4">
                         {% for state in jobstats.state_volumes %}
-                        <div class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1">
+                        <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
                             {% if state.oridistpath %}
-                            <span class="relative block w-[300px] overflow-hidden rounded bg-black mt-1">
+                            <span class="relative block w-[400px] overflow-hidden rounded bg-black mt-1">
                                 <img src="{% url 'nice_lite:image' state.oridistpath %}" loading="lazy" decoding="async"
                                     class="block w-full h-auto"
                                     alt="state {{ state.state }} orientation distribution">
                             </span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="flex items-center px-4 pt-3 flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">ORIENTATION DISTRIBUTION 2</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 p-4">
+                        {% for state in jobstats.state_volumes %}
+                        <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
+                            {% if state.oridist %}
+                            <div class="flex items-stretch">
+                                <canvas class="oridist_chart" width="440" height="260" data-oridist="{{ state.oridist }}"></canvas>
+                                <canvas class="oridist_colorbar" width="70" height="260"></canvas>
+                            </div>
                             {% endif %}
                         </div>
                         {% endfor %}
@@ -141,7 +183,240 @@
     <script>
         let lastinteraction = Date.now();
 
+        // Parse a JSON array/number stored in a data-* attribute (Python repr may use single quotes).
+        const parseAttr = (str) => JSON.parse((str || "[]").replaceAll("'", '"'));
+
+        // Nearest FSC sample index to a given 1/resolution value, for placing a threshold line.
+        const nearestFscIndex = (invres, target) => invres.reduce(
+            (best, v, i) => (Math.abs(v - target) < Math.abs(invres[best] - target) ? i : best), 0
+        );
+
+        const buildFsc = (canvas) => {
+            const style = getComputedStyle(document.body);
+            const colorLine  = style.getPropertyValue("--color-streamring").trim();
+            const colorGrid  = style.getPropertyValue("--color-streamdivider").trim();
+            const colorLabel = style.getPropertyValue("--color-streamtext").trim();
+
+            const invres = parseAttr(canvas.dataset.invres);
+            const corr   = parseAttr(canvas.dataset.corr);
+            const labels = invres.map((v) => v.toFixed(3));
+
+            const annotations = {};
+            if (canvas.dataset.res0143) {
+                annotations.res0143 = {
+                    type: "line", scaleID: "x", value: nearestFscIndex(invres, 1 / canvas.dataset.res0143),
+                    borderColor: colorLine, borderWidth: 1, borderDash: [4, 4],
+                    label: { display: true, content: `${Number(canvas.dataset.res0143).toFixed(1)} Å`, position: "start", font: { size: 8 }, backgroundColor: colorGrid, color: colorLabel, padding: 2 }
+                };
+            }
+            if (canvas.dataset.res05) {
+                annotations.res05 = {
+                    type: "line", scaleID: "x", value: nearestFscIndex(invres, 1 / canvas.dataset.res05),
+                    borderColor: colorLine, borderWidth: 1, borderDash: [2, 2],
+                    label: { display: true, content: `${Number(canvas.dataset.res05).toFixed(1)} Å`, position: "end", font: { size: 8 }, backgroundColor: colorGrid, color: colorLabel, padding: 2 }
+                };
+            }
+
+            new Chart(canvas.getContext("2d"), {
+                type: "line",
+                options: {
+                    responsive: false,
+                    scales: {
+                        x: { ticks: { font: { size: 8 }, maxTicksLimit: 5 }, title: { display: true, text: "1/Å", font: { size: 8 } } },
+                        y: { min: 0, max: 1, ticks: { font: { size: 8 }, maxTicksLimit: 5 } }
+                    },
+                    plugins: { legend: { display: false }, annotation: { annotations } }
+                },
+                data: {
+                    labels,
+                    datasets: [{ data: corr, borderColor: colorLine, pointRadius: 0, borderWidth: 1.5, tension: 0 }]
+                }
+            });
+        };
+
+        // Turbo-like colour ramp (dark navy -> blue -> cyan -> green -> yellow -> orange -> dark red) for t in [0, 1].
+        const TURBO_STOPS = [
+            [48, 18, 59], [65, 90, 196], [42, 160, 197], [34, 168, 132],
+            [122, 209, 81], [211, 221, 57], [239, 176, 36], [220, 84, 33], [122, 4, 3]
+        ];
+        const turboColor = (t) => {
+            const clamped = Math.min(Math.max(t, 0), 1);
+            const segT = clamped * (TURBO_STOPS.length - 1);
+            const i = Math.min(Math.floor(segT), TURBO_STOPS.length - 2);
+            const localT = segT - i;
+            const a = TURBO_STOPS[i], b = TURBO_STOPS[i + 1];
+            const mix = (k) => Math.round(a[k] + (b[k] - a[k]) * localT);
+            return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`;
+        };
+
+        // Unicode superscript digits, for "10^n" colorbar tick labels.
+        const SUPERSCRIPTS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+        const superscript = (n) => String(n).split("").map((d) => SUPERSCRIPTS[+d]).join("");
+
+        // Format a radian value as a fraction of π (e.g. -π/2, 3π/4), matching cryoSPARC axis labels.
+        const piLabel = (value) => {
+            if (Math.abs(value) < 1e-9) return "0";
+            const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+            let quarters = Math.round((value / Math.PI) * 4);
+            const sign = quarters < 0 ? "-" : "";
+            let num = Math.abs(quarters), den = 4;
+            const g = gcd(num, den) || 1;
+            num /= g; den /= g;
+            const piPart = num === 1 ? "π" : `${num}π`;
+            return den === 1 ? `${sign}${piPart}` : `${sign}${piPart}/${den}`;
+        };
+
+        // Vertical log-scale legend for the orientation-distribution heatmap ("# of images", cryoSPARC-style).
+        const drawOridistColorbar = (canvas, maxV) => {
+            if (!canvas || maxV <= 0) return;
+            const style = getComputedStyle(document.body);
+            const colorAxis = style.getPropertyValue("--color-streamtext").trim();
+            const ctx = canvas.getContext("2d");
+            const w = canvas.width, h = canvas.height;
+            const barX = 4, barW = 16, barY0 = 10, barY1 = h - 30;
+            const barHeight = barY1 - barY0;
+            ctx.clearRect(0, 0, w, h);
+            for (let py = 0; py < barHeight; py++) {
+                ctx.fillStyle = turboColor(1 - py / barHeight);
+                ctx.fillRect(barX, barY0 + py, barW, 1);
+            }
+            ctx.strokeStyle = colorAxis;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX + 0.5, barY0 + 0.5, barW, barHeight);
+
+            ctx.fillStyle = colorAxis;
+            ctx.font = "9px sans-serif";
+            ctx.textBaseline = "middle";
+            const logMax = Math.log10(Math.max(maxV, 1));
+            const topPow = Math.max(1, Math.ceil(logMax));
+            for (let p = 0; p <= topPow; p++) {
+                if (Math.pow(10, p) > maxV * 1.05) continue;
+                const y = barY0 + barHeight * (1 - (logMax > 0 ? p / logMax : 0));
+                ctx.beginPath();
+                ctx.moveTo(barX + barW, y);
+                ctx.lineTo(barX + barW + 3, y);
+                ctx.stroke();
+                ctx.fillText(`10${superscript(p)}`, barX + barW + 6, y);
+            }
+
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.translate(w - 8, barY0 + barHeight / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText("# of images", 0, 0);
+            ctx.restore();
+        };
+
+        const buildOridist = (canvas) => {
+            const oridist = parseAttr(canvas.dataset.oridist); // [azimuth][elevation] bin counts, 5 degree bins
+            const nx = oridist.length;
+            const ny = nx > 0 ? oridist[0].length : 0;
+            const binWidth = (2 * Math.PI) / nx;  // radians per bin, azimuth -π..π
+            const binHeight = Math.PI / ny;       // radians per bin, elevation -π/2..π/2
+            let maxV = 0;
+            const points = [];
+            for (let ix = 0; ix < nx; ix++) {
+                for (let iy = 0; iy < ny; iy++) {
+                    const v = oridist[ix][iy];
+                    if (v > maxV) maxV = v;
+                    points.push({ x: -Math.PI + (ix + 0.5) * binWidth, y: -Math.PI / 2 + (iy + 0.5) * binHeight, v });
+                }
+            }
+            const logMax = Math.log10(Math.max(maxV, 1));
+            const cellColor = (v) => (v <= 0 ? "#ffffff" : turboColor(logMax > 0 ? Math.log10(v) / logMax : 1));
+
+            const style = getComputedStyle(document.body);
+            const colorAxis = style.getPropertyValue("--color-streamtext").trim();
+            const tickOptions = { stepSize: Math.PI / 4, callback: piLabel, font: { size: 9 } };
+
+            new Chart(canvas.getContext("2d"), {
+                type: "matrix",
+                data: {
+                    datasets: [{
+                        data: points,
+                        backgroundColor: (ctx) => cellColor(ctx.raw.v),
+                        // Stroke each cell in its own fill colour to paint over antialiasing seams at shared edges.
+                        borderColor: (ctx) => cellColor(ctx.raw.v),
+                        borderWidth: 1,
+                        // Size each cell to one 5 degree bin in scale pixel space, +1px to cover antialiasing seams between cells.
+                        width: ({ chart }) => Math.abs(chart.scales.x.getPixelForValue(binWidth) - chart.scales.x.getPixelForValue(0)) + 1,
+                        height: ({ chart }) => Math.abs(chart.scales.y.getPixelForValue(binHeight) - chart.scales.y.getPixelForValue(0)) + 1
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    scales: {
+                        x: {
+                            type: "linear", min: -Math.PI, max: Math.PI, ticks: tickOptions,
+                            title: { display: true, text: "Azimuth", font: { size: 10 }, color: colorAxis },
+                            grid: { display: false }, border: { color: colorAxis }
+                        },
+                        y: {
+                            type: "linear", min: -Math.PI / 2, max: Math.PI / 2, ticks: tickOptions,
+                            title: { display: true, text: "Elevation", font: { size: 10 }, color: colorAxis },
+                            grid: { display: false }, border: { color: colorAxis }
+                        }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } }
+                }
+            });
+
+            drawOridistColorbar(canvas.parentElement.querySelector(".oridist_colorbar"), maxV);
+        };
+
+        let currentStateNum = "1";
+        let currentVolumeKind = "volpath";
+
+        // Pick the option matching the current state and kind, falling back to volpath if that kind is unavailable.
+        const applyVolumeSelection = () => {
+            const volumeSelect = document.querySelector("[data-volume-source]");
+            if (!volumeSelect) return;
+            const options = Array.from(volumeSelect.options);
+            const match = options.find((opt) => opt.dataset.volumeState == currentStateNum && opt.dataset.volumeKind == currentVolumeKind)
+                || options.find((opt) => opt.dataset.volumeState == currentStateNum && opt.dataset.volumeKind == "volpath");
+            if (match && volumeSelect.value !== match.value) {
+                volumeSelect.value = match.value;
+                volumeSelect.dispatchEvent(new Event("change"));
+            }
+        };
+
+        const selectVolumeKind = (element) => {
+            currentVolumeKind = element.dataset.volumeKind;
+            document.querySelectorAll("button[data-volume-kind]").forEach((el) => {
+                const selected = el.dataset.volumeKind === currentVolumeKind;
+                el.classList.toggle("bg-streamring/20", selected);
+                el.classList.toggle("text-streamtext", selected);
+                el.classList.toggle("text-streamlabel", !selected);
+            });
+            applyVolumeSelection();
+            lastinteraction = Date.now();
+        };
+
+        const selectState = (element) => {
+            currentStateNum = element.dataset.stateSelector;
+            document.querySelectorAll("[data-state-selector]").forEach((el) => {
+                const selected = el.dataset.stateSelector == currentStateNum;
+                el.classList.toggle("border-streamring", selected);
+                el.classList.toggle("bg-streamring/10", selected);
+                el.classList.toggle("border-streamline", !selected);
+                el.classList.toggle("bg-streambg", !selected);
+            });
+            document.querySelectorAll("[data-state-panel]").forEach((el) => {
+                el.classList.toggle("hidden", el.dataset.statePanel != currentStateNum);
+            });
+            const volumePanelTitle = document.querySelector("[data-volume-panel-title]");
+            if (volumePanelTitle) volumePanelTitle.textContent = `volume · state ${currentStateNum}`;
+            applyVolumeSelection();
+            lastinteraction = Date.now();
+        };
+
         window.addEventListener("load", () => {
+            for (const canvas of document.getElementsByClassName("fsc_chart")) {
+                buildFsc(canvas);
+            }
+            for (const canvas of document.getElementsByClassName("oridist_chart")) {
+                buildOridist(canvas);
+            }
             const logtext = document.querySelector(".logtext");
             if (logtext) logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight;
         });

@@ -30,6 +30,7 @@ urlpatterns = [
     # API
     # ------------------------------------------------------------------
     path("image <path:src>",                   api.image,                                         name="image"),
+    path("volume <path:src>",                  api.volume,                                        name="volume"),
     path("api",                                api.index,                                         name="api"),
 
     # ------------------------------------------------------------------

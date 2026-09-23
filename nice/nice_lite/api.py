@@ -14,6 +14,7 @@ import json
 import os
 
 # django imports
+from django.http                    import FileResponse
 from django.http                    import HttpResponse
 from django.http                    import JsonResponse
 from django.views.decorators.http   import require_GET
@@ -151,6 +152,11 @@ def _image_content_type_from_path(path):
     return extension_to_content_type.get(extension, "application/octet-stream")
 
 
+def _is_allowed_volume_path(path):
+    """Return True when path suffix is the supported MRC volume extension."""
+    return os.path.splitext(path)[1].lower() == ".mrc"
+
+
 # ------------------------------------------------------------------
 # API Endpoints
 # ------------------------------------------------------------------
@@ -240,3 +246,32 @@ def image(request, src):
     except OSError:
         print_error("image IO error")
         return HttpResponse(status=404)
+
+
+@login_required(login_url="/login")
+@require_GET
+@cache_control(private=True, max_age=300, no_transform=True)
+def volume(request, src):
+    """Stream a supported MRC density map constrained to the selected project root."""
+    safe_path = _resolve_safe_image_path(request, src)
+    if safe_path is None:
+        print_error("invalid volume path request")
+        return HttpResponse(status=404)
+    if not _is_allowed_volume_path(safe_path):
+        print_error("unsupported volume extension")
+        return HttpResponse(status=404)
+
+    try:
+        volume_file = open(safe_path, "rb")
+    except OSError:
+        print_error("volume IO error")
+        return HttpResponse(status=404)
+
+    response = FileResponse(
+        volume_file,
+        as_attachment=False,
+        filename=os.path.basename(safe_path),
+        content_type="application/octet-stream",
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
