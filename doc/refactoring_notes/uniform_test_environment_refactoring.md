@@ -6,8 +6,9 @@ Status: in progress. Phases 0, 1 and 2 are complete (2026-09-22): the fast
 gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
-Phase 3 (the review of everything else) is under way: the geometry and
-fft batches are done and built (section 9.7). This is a large
+Phase 3 (the review of everything else) is under way: the geometry, fft
+and masks batches are done and built (section 9.7); the masks batch
+found and fixed a one-pixel asymmetry in the memoised mask routines. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -363,8 +364,8 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 |---|---|---:|
 | `unit_core` | string, syslib, fileio, character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
-| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D | 1.3 s (before the shift search moved out) |
-| `unit_numerics` | online variance, multinomial random draw, straight-line fit, affinity propagation, hierarchical clustering, statistics, shift search (correlator; 0.30 s after the trim) and shift search (optimiser) — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
+| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation | 1.3 s (before the shift search moved out and the mask suites moved in) |
+| `unit_numerics` | online variance, multinomial random draw, straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser) — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
 | `unit_project` | STAR file, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
@@ -1009,6 +1010,86 @@ angle, with cc 0.998. The `IEEE_DIVIDE_BY_ZERO` note seen in the first
 run came from `image%bp(0., lp)`, whose `get_find(1, 0.)` divides by
 zero; production calls `bp(0., lp)` in imgops and resolest, harmless
 because the flag is raised, not trapped.
+
+**masks (2026-09-22, Hans).** Nine router identities plus three
+standalone-only twins (`bounds_from_mask3D`, `otsu`, `cc_connectivity`);
+two with a failure path. `bounds_from_mask3D(_test)`, `graphene_mask`,
+`mask`, `image_bin` and `cc_connectivity` are `merge into unit_image`
+through a new `simple_image_msk_tester` with two sub-suites: `masks`
+(bounds against a brute-force scan, the three-shells-per-band graphene
+rule, disc/transfer2bimg/cos_edge with the edge pinned at 1, 0.5 and 0,
+and the hard/soft/softavg mask semantics in 2D and 3D: 1 inside
+`mskrad-COSMSKHALFWIDTH`, 0 beyond `mskrad+COSMSKHALFWIDTH`, monotone
+cosine between, softavg filling with the outside average) and `binary
+image` (the old `image_bin` examples with their answers, and the
+26-connectivity contract that only the standalone `cc_connectivity`
+enforced). `otsu(_test)` is `merge into unit_numerics` (`statistics`): a
+two-Gaussian mixture, the threshold between the modes, class sizes, the
+three overloads agreeing. `msk_routines` is `modify`: the single-thread
+semantics live in `masks`; the exec case keeps what needs threads and
+asserts parallel == serial for all six routines with the coordinates
+memoised once outside the region (tier `lib_masks`, `nthr=8` in CI).
+`nano_mask` and `score_volume_shape` are `demote` to manual;
+`vol_shape_descr`/`calc_3D_shape_descriptors` stay for the latter.
+`ptcl_center` is `delete` (an RCSB download and a centering experiment);
+its gap is recorded: it was the only test naming `masscen`, `roavg`,
+`window_center`, `shift2Dserial`, `power_spectrum`, `fproject` and
+`get_nyq`, image-area basics for the image review. Coverage accounting:
+46 calls, none lost. Findings: `calc_graphene_mask` excludes the three
+shells nearest each band unconditionally, so at a pixel size where a
+band lies beyond Nyquist it silently drops the highest shells instead
+(the test uses 0.358 A, where both bands are inside); `otsu` on a
+constant sample divides by zero in its range scaling (not tested for that
+reason). First build: 46 of 53 `masks` checks passed; the seven failures
+were all the code, not the test. (1) `image%disc` (the `npix` form)
+applied its threshold to the whole `rmat` including the two Fourier
+padding columns, which `cendist` leaves with a partial distance, so the
+padding was set to 1 and `npix` over-counted by two discs' worth (18671
+against the 17077 voxels a 48-box sphere of radius 16 actually has);
+fixed to the logical dimensions, as the `lmsk` form already did (its one
+production caller, opt_filter, does not read `npix`). (2) The memoised
+mask routines (`mask2D_soft/softavg/hard`, `mask3D_*`) compute the edge
+weight at pixel `i` and apply it to the mirror pixel `n+1-i` as well, but
+the memoised coordinate of pixel `i` is `-n/2 + (i-1)` (origin at pixel
+`n/2+1`, the convention of `cendist` and of the per-pixel routines), so
+the mirror of coordinate `-(r+1)` is applied to coordinate `+r`: every
+mask is one pixel tighter on the positive side of each axis than on the
+negative side (a hard mask of radius R keeps `-R..R-1`; the soft mask
+reads 0.368 instead of 0.5 on the radius at `+x`, 0.5 at `-x`). The
+fix is to mirror about the origin pixel (`ir = n+2-i`, with the
+`-n/2` row having no partner and the origin row applied once). This
+changes results by one pixel on the positive side in every mask
+consumer (40 files); Hans decided to fix it the same day. The four
+mirrored routines now mirror about the origin pixel (`softavg` loops
+over every pixel and was never affected), the loop structure was
+checked against a direct per-pixel evaluation for boxes 6 to 64 (every
+pixel touched exactly once, identical result), and the `masks` sub-suite
+gained the assertion that would have caught it: each mask reads the same
+at `+r` and `-r` along every axis and the same along x, y (and z). `msk_routines` passed its first run (7/7, 0.23 s with 24 threads); it
+reads the thread count from the OpenMP environment, not from `nthr=`, so
+CI sets `OMP_NUM_THREADS=8` and CTest will pass it the same way. Second build of the batch: gate green, 7/7, 3.5 s real (`unit_image`
+2.1 s with the two new sub-suites, `unit_numerics` 1.3 s).
+
+**segmentation (2026-09-22, Hans).** A category rather than an area:
+Otsu is a thresholding method, not a statistic, so `test_otsu` moved out
+of `statistics` into a new `simple_segmentation_tester` (sub-suite
+`segmentation` of `unit_image`, beside `binary image`, which keeps the
+connected-component contract). `peak_thres_fdr`, an assertion-bearing
+exec case for `detect_peak_thres_fdr` that its router had filed under
+utils, is `merge into unit_image` there and its exec case is gone. What
+the category is for: `simple_segmentation` and `image_bin` hold about
+twenty production routines with callers and no test (`otsu_img` 8
+callers, `binarize` and `masscen_cc` 5, `erode`, `grow_bins`,
+`diameter_cc`, `cc2bin` 4, `canny`, `sobel`, `sauvola` 3,
+`detect_peak_thres_sortmeans`, `otsu_robust_fast`, `elim_ccs`,
+`order_ccs`, `set_edgecc2background`, `feret_minmax` 1 to 2); they are
+to be pinned here on generated fixtures with known answers (two-level
+images for the thresholds, a disc whose edge is a one-pixel ring for the
+edge detectors, erode/grow round trips, a placed blob for `masscen_cc`
+and `diameter_cc`) as a scheduled slot of its own. Owner list for the
+section 9.5 decision, routines with no caller at all: `hough_line`,
+`polish_ccs`, `diameter_bin`, `border_mask`, `elim_largestcc`. Built and green the same day: gate 7/7, 3.5 s, `unit_image` 2.2 s with
+eight sub-suites.
 
 ## 10. Fast-tier performance
 

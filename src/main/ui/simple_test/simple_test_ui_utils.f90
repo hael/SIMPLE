@@ -14,7 +14,6 @@ type(ui_program), target :: cmdline
 type(ui_program), target :: install
 type(ui_program), target :: nice
 type(ui_program), target :: pdb2mrc
-type(ui_program), target :: peak_thres_fdr
 type(ui_program), target :: serialize
 type(ui_program), target :: stringmatch
 
@@ -32,7 +31,6 @@ contains
         call new_install(tsttab)
         call new_nice(tsttab)
         call new_pdb2mrc(tsttab)
-        call new_peak_thres_fdr(tsttab)
         call new_serialize(tsttab)
         call new_stringmatch(tsttab)
     end subroutine construct_test_utils_programs
@@ -327,19 +325,6 @@ subroutine new_ansi_colors( tsttab )
         ! add to ui_hash
         call add_ui_program('serialize', serialize, tsttab, UI_CATEGORY)
     end subroutine new_serialize
-
-    subroutine new_peak_thres_fdr( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call peak_thres_fdr%new(&
-        &'peak_thres_fdr',&                  ! name
-        &'peak_thres_fdr ',&                 ! summary
-        &'is a unit test for detect_peak_thres_fdr',&
-        &'simple_test_exec',&                ! executable
-        &.false.)                            ! requires sp_project
-        ! add to ui_hash
-        call add_ui_program('peak_thres_fdr', peak_thres_fdr, tsttab, UI_CATEGORY)
-    end subroutine new_peak_thres_fdr
 
     subroutine new_stringmatch( tsttab )
         class(ui_hash), intent(inout) :: tsttab

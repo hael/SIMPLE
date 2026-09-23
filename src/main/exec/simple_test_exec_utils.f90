@@ -5,7 +5,7 @@ use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_te
                                         commander_test_binoris_io_test, commander_test_cavg_registration, &
                                         commander_test_cmdline, &
                                         commander_test_install, commander_test_nice, commander_test_pdb2mrc, &
-                                        commander_test_peak_thres_fdr, commander_test_serialize, &
+                                        commander_test_serialize, &
                                         commander_test_stringmatch, commander_test_cif2pdb, &
                                         commander_test_cif2mrc
 
@@ -24,7 +24,6 @@ type(commander_test_cmdline)         :: xcmdline
 type(commander_test_install)         :: xinstall
 type(commander_test_nice)            :: xnice
 type(commander_test_pdb2mrc)         :: xpdb2mrc
-type(commander_test_peak_thres_fdr)  :: xpeak_thres_fdr
 type(commander_test_serialize)       :: xserialize
 type(commander_test_stringmatch)     :: xstringmatch
 
@@ -59,8 +58,6 @@ contains
                 call xnice%execute(cline)
             case( 'pdb2mrc' )
                 call xpdb2mrc%execute(cline)
-            case( 'peak_thres_fdr' )
-                call xpeak_thres_fdr%execute(cline)
             case( 'serialize' )
                 call xserialize%execute(cline)
             case( 'stringmatch' )

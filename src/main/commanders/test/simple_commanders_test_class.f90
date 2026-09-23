@@ -16,6 +16,8 @@ use simple_ori_tester,                       only: run_all_ori_tests
 use simple_oris_tester,                      only: run_all_oris_tests
 use simple_sym_tester,                       only: run_all_sym_tests
 use simple_stat_tester,                      only: run_all_stat_tests
+use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_image_bin_tests
+use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
@@ -162,6 +164,9 @@ contains
         call add_suite(s, n, 'Fourier iterator',     test_ftiter)
         call add_suite(s, n, 'B-spline smoother 2D', suite_bspline_2d)
         call add_suite(s, n, 'B-spline smoother 3D', suite_bspline_3d)
+        call add_suite(s, n, 'masks',                run_all_mask_tests)
+        call add_suite(s, n, 'binary image',         run_all_image_bin_tests)
+        call add_suite(s, n, 'segmentation',         run_all_segmentation_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )

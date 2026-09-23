@@ -42,11 +42,9 @@
       - `simple_test_atomfit.f90`
       - `simple_test_binoris.f90`
       - `simple_test_binoris_io.f90`
-      - `simple_test_bounds_from_mask3D.f90`
       - `simple_test_cartesian_fourier.f90`
       - `simple_test_cavg_quality_relations.f90`
       - `simple_test_cavg_registration.f90`
-      - `simple_test_cc_connectivity.f90`
       - `simple_test_class_sample.f90`
       - `simple_test_clustering.f90`
       - `simple_test_cmdline.f90`
@@ -70,10 +68,8 @@
       - `simple_test_flex_gpu.f90` — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)
       - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache and the kernel/state-weight contracts
       - `simple_test_flex_pcg.f90` — validates the flex_pca PCG M-step operator: the pair Gram kernel on the 2x lattice against the
-      - `simple_test_graphene_mask.f90`
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
-      - `simple_test_image_bin.f90`
       - `simple_test_imgfile.f90`
       - `simple_test_inside_write.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
@@ -84,14 +80,11 @@
       - `simple_test_lbfgsb_cosine.f90`
       - `simple_test_lplims.f90`
       - `simple_test_lpstages.f90`
-      - `simple_test_mask.f90`
       - `simple_test_maxnloc.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_mrc2jpeg.f90`
       - `simple_test_mrc_validate.f90`
-      - `simple_test_msk_routines.f90`
       - `simple_test_multinomal.f90`
-      - `simple_test_nano_mask.f90`
       - `simple_test_neigh.f90` — test for refine=neigh modes
       - `simple_test_nice.f90`
       - `simple_test_nu_envmask.f90`
@@ -100,7 +93,6 @@
       - `simple_test_openmp.f90`
       - `simple_test_openmp_offload.f90`
       - `simple_test_opt_lp.f90`
-      - `simple_test_otsu.f90`
       - `simple_test_pca_all.f90`
       - `simple_test_pca_imgvar.f90`
       - `simple_test_pdb2mrc.f90`
@@ -111,7 +103,6 @@
       - `simple_test_pose_cont_refinement.f90`
       - `simple_test_projdir_accumulator.f90`
       - `simple_test_project_merge.f90`
-      - `simple_test_ptcl_center.f90`
       - `simple_test_qsys_ctrl.f90`
       - `simple_test_qsys_env.f90`
       - `simple_test_rec3D_backend.f90`
@@ -390,6 +381,7 @@
         - `simple_image_geom.f90` — geometrical image operations: window, shift, pad, clip etc.
         - `simple_image_io.f90` — for reading and writing images from/to disk
         - `simple_image_msk.f90` — extension of the image class to provide 2D/3D envelope and adaptive masking
+        - `simple_image_msk_tester.f90` — unit test routines for masks: mask bounds, graphene shells, real-space masks and binary images
         - `simple_image_norm.f90` — image normalization routines
         - `simple_image_ops.f90` — operations on images not fitting elsewhere: noise, zero, background, CTF division etc.
         - `simple_image_polar.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
@@ -692,6 +684,7 @@
       - `simple_progress.f90` — job progress estimation
       - `simple_sauron.f90` — SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
       - `simple_segmentation.f90` — segmentation routines: peak detection, edge detection, otsu's algorithm, Hough transform, Sauvola etc.
+      - `simple_segmentation_tester.f90` — unit test routines for segmentation: thresholding and peak detection
       - `simple_srchspace_map.f90`
       - `simple_stackops.f90` — stack image processing routines
       - `simple_string.f90` — the string class that replaces intrinsic allocatable strings in SIMPLE

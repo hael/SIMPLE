@@ -216,12 +216,14 @@ contains
         integer, optional, intent(inout) :: npix
         call self%new(ldim, smpd)
         call self%cendist
-        where(self%rmat <= radius)
-            self%rmat = 1.
+        ! logical dimensions only: cendist leaves the Fourier padding columns with a
+        ! partial distance, which used to put them inside the disc and into npix
+        where(self%rmat(:ldim(1),:ldim(2),:ldim(3)) <= radius)
+            self%rmat(:ldim(1),:ldim(2),:ldim(3)) = 1.
         else where
-            self%rmat = 0.
+            self%rmat(:ldim(1),:ldim(2),:ldim(3)) = 0.
         end where
-        if( present(npix) ) npix = count(self%rmat>0.5)
+        if( present(npix) ) npix = count(self%rmat(:ldim(1),:ldim(2),:ldim(3)) > 0.5)
     end subroutine disc_1
 
     module subroutine disc_2( self, ldim, smpd, radius, lmsk, npix )

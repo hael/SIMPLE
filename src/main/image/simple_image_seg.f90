@@ -412,6 +412,7 @@ contains
         real, optional,   intent(in)    :: backgr
         real     :: r2, e, cjs2
         integer  :: minlen,  i, j, ir, jr, n1, n2, n3, h1, h2
+        logical  :: l_jr
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  )then
             if( OMP_IN_PARALLEL() )then
@@ -434,20 +435,26 @@ contains
         else
             call self%zero_background
         endif
-        h1 = n1/2; h2 = n2/2
+        ! The memoised coordinate of pixel i is -n/2 + (i-1): the origin is pixel
+        ! n/2+1 and the mirror of pixel i is n+2-i. Pixel 1 (coordinate -n/2) has
+        ! no partner and the origin pixel is its own, so each of those is applied once.
+        h1 = n1/2 + 1; h2 = n2/2 + 1
         do j = 1, h2
-            jr = n2 + 1 - j
+            jr   = n2 + 2 - j
+            l_jr = j > 1 .and. j < h2
             cjs2 = mem_msk_cs2(j)
-            !$omp simd
+            !$omp simd private(ir,r2,e)
             do i = 1, h1
-                ir = n1 + 1 - i
+                ir = n1 + 2 - i
                 r2 = mem_msk_cs2(i) + cjs2
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e > 0.9999) cycle
-                self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
-                self%rmat(i ,jr,1)  = e * self%rmat(i ,jr,1)
-                self%rmat(ir,j ,1)  = e * self%rmat(ir,j ,1)
-                self%rmat(ir,jr,1)  = e * self%rmat(ir,jr,1)
+                self%rmat(i,j,1) = e * self%rmat(i,j,1)
+                if( l_jr ) self%rmat(i,jr,1) = e * self%rmat(i,jr,1)
+                if( i > 1 .and. i < h1 )then
+                    self%rmat(ir,j,1) = e * self%rmat(ir,j,1)
+                    if( l_jr ) self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                endif
             end do
         end do
     end subroutine mask2D_soft
@@ -511,7 +518,8 @@ contains
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         integer :: i, j, ir, jr, h1, h2, n1, n2, n3
-        real :: r2, e, cjs2
+        real    :: r2, e, cjs2
+        logical :: l_jr
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  )then
             if( OMP_IN_PARALLEL() )then
@@ -524,20 +532,24 @@ contains
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         n3 = 1
-        h1 = n1/2; h2 = n2/2
+        ! mirror about the origin pixel n/2+1 (see mask2D_soft)
+        h1 = n1/2 + 1; h2 = n2/2 + 1
         do j = 1, h2
-            jr   = n2 + 1 - j
+            jr   = n2 + 2 - j
+            l_jr = j > 1 .and. j < h2
             cjs2 = mem_msk_cs2(j)
-            !$omp simd
+            !$omp simd private(ir,r2,e)
             do i = 1, h1
-                ir = n1 + 1 - i
+                ir = n1 + 2 - i
                 r2 = mem_msk_cs2(i) + cjs2
                 e  = hardedge_r2_2d(r2, mskrad)
                 if (e > 0.9999) cycle
-                self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
-                self%rmat(i ,jr,1)  = e * self%rmat(i ,jr,1)
-                self%rmat(ir,j ,1)  = e * self%rmat(ir,j ,1)
-                self%rmat(ir,jr,1)  = e * self%rmat(ir,jr,1)
+                self%rmat(i,j,1) = e * self%rmat(i,j,1)
+                if( l_jr ) self%rmat(i,jr,1) = e * self%rmat(i,jr,1)
+                if( i > 1 .and. i < h1 )then
+                    self%rmat(ir,j,1) = e * self%rmat(ir,j,1)
+                    if( l_jr ) self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                endif
             end do
         end do
     end subroutine mask2D_hard
@@ -548,6 +560,7 @@ contains
         real, optional,   intent(in)    :: backgr
         real     :: r2, e, cjs2, cks2
         integer  :: minlen, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
+        logical  :: l_jr, l_kr, l_ir
         if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
         if( self%ldim(1) /= mem_msk_box  )then
             if( OMP_IN_PARALLEL() )then
@@ -570,27 +583,37 @@ contains
         else
             call self%zero_background
         endif            
-        h1 = n1/2; h2 = n2/2; h3 = n3/2
+        ! mirror about the origin voxel n/2+1 on each axis (see mask2D_soft)
+        h1 = n1/2 + 1; h2 = n2/2 + 1; h3 = n3/2 + 1
         do j = 1, h2
-            jr   = n2 + 1 - j
+            jr   = n2 + 2 - j
+            l_jr = j > 1 .and. j < h2
             cjs2 = mem_msk_cs2(j)
             do k = 1, h3
-                kr   = n3 + 1 - k
+                kr   = n3 + 2 - k
+                l_kr = k > 1 .and. k < h3
                 cks2 = mem_msk_cs2(k)
-                !$omp simd
+                !$omp simd private(ir,r2,e,l_ir)
                 do i = 1, h1
-                    ir = n1 + 1 - i
+                    ir = n1 + 2 - i
                     r2 = mem_msk_cs2(i) + cjs2 + cks2
                     e  = cosedge_r2_3d(r2, minlen, mskrad)
                     if (e > 0.9999) cycle
-                    self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
-                    self%rmat(i ,j ,kr)  = e * self%rmat(i ,j ,kr)
-                    self%rmat(i ,jr,k )  = e * self%rmat(i ,jr,k )
-                    self%rmat(i ,jr,kr)  = e * self%rmat(i ,jr,kr)
-                    self%rmat(ir,j ,k )  = e * self%rmat(ir,j ,k )
-                    self%rmat(ir,j ,kr)  = e * self%rmat(ir,j ,kr)
-                    self%rmat(ir,jr,k )  = e * self%rmat(ir,jr,k )
-                    self%rmat(ir,jr,kr)  = e * self%rmat(ir,jr,kr)
+                    l_ir = i > 1 .and. i < h1
+                    self%rmat(i,j,k) = e * self%rmat(i,j,k)
+                    if( l_kr ) self%rmat(i,j,kr) = e * self%rmat(i,j,kr)
+                    if( l_jr )then
+                        self%rmat(i,jr,k) = e * self%rmat(i,jr,k)
+                        if( l_kr ) self%rmat(i,jr,kr) = e * self%rmat(i,jr,kr)
+                    endif
+                    if( l_ir )then
+                        self%rmat(ir,j,k) = e * self%rmat(ir,j,k)
+                        if( l_kr ) self%rmat(ir,j,kr) = e * self%rmat(ir,j,kr)
+                        if( l_jr )then
+                            self%rmat(ir,jr,k) = e * self%rmat(ir,jr,k)
+                            if( l_kr ) self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                        endif
+                    endif
                 end do
             end do
         end do
@@ -663,6 +686,7 @@ contains
         real,         intent(in)    :: mskrad
         real     :: r2, e, cjs2, cks2
         integer  :: i, j, k, ir, jr, kr, h1, h2, h3, n1, n2, n3
+        logical  :: l_jr, l_kr, l_ir
         if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
         if( self%ldim(1) /= mem_msk_box  )then
             if( OMP_IN_PARALLEL() )then
@@ -675,27 +699,37 @@ contains
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         n3 = self%ldim(3)           
-        h1 = n1/2; h2 = n2/2; h3 = n3/2
+        ! mirror about the origin voxel n/2+1 on each axis (see mask2D_soft)
+        h1 = n1/2 + 1; h2 = n2/2 + 1; h3 = n3/2 + 1
         do j = 1, h2
-            jr   = n2 + 1 - j
+            jr   = n2 + 2 - j
+            l_jr = j > 1 .and. j < h2
             cjs2 = mem_msk_cs2(j)
             do k = 1, h3
-                kr   = n3 + 1 - k
+                kr   = n3 + 2 - k
+                l_kr = k > 1 .and. k < h3
                 cks2 = mem_msk_cs2(k)
-                !$omp simd
+                !$omp simd private(ir,r2,e,l_ir)
                 do i = 1, h1
-                    ir = n1 + 1 - i
-                    r2 = mem_msk_cs2(i) + cjs2 + cks2 
+                    ir = n1 + 2 - i
+                    r2 = mem_msk_cs2(i) + cjs2 + cks2
                     e  = hardedge_r2_3d(r2, mskrad)
                     if (e > 0.9999) cycle
-                    self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
-                    self%rmat(i ,j ,kr)  = e * self%rmat(i ,j ,kr)
-                    self%rmat(i ,jr,k )  = e * self%rmat(i ,jr,k )
-                    self%rmat(i ,jr,kr)  = e * self%rmat(i ,jr,kr)
-                    self%rmat(ir,j ,k )  = e * self%rmat(ir,j ,k )
-                    self%rmat(ir,j ,kr)  = e * self%rmat(ir,j ,kr)
-                    self%rmat(ir,jr,k )  = e * self%rmat(ir,jr,k )
-                    self%rmat(ir,jr,kr)  = e * self%rmat(ir,jr,kr)
+                    l_ir = i > 1 .and. i < h1
+                    self%rmat(i,j,k) = e * self%rmat(i,j,k)
+                    if( l_kr ) self%rmat(i,j,kr) = e * self%rmat(i,j,kr)
+                    if( l_jr )then
+                        self%rmat(i,jr,k) = e * self%rmat(i,jr,k)
+                        if( l_kr ) self%rmat(i,jr,kr) = e * self%rmat(i,jr,kr)
+                    endif
+                    if( l_ir )then
+                        self%rmat(ir,j,k) = e * self%rmat(ir,j,k)
+                        if( l_kr ) self%rmat(ir,j,kr) = e * self%rmat(ir,j,kr)
+                        if( l_jr )then
+                            self%rmat(ir,jr,k) = e * self%rmat(ir,jr,k)
+                            if( l_kr ) self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                        endif
+                    endif
                 end do
             end do
         end do
