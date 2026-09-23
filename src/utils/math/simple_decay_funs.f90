@@ -3,25 +3,22 @@ module simple_decay_funs
 use simple_core_module_api
 implicit none
 
-public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto
+public :: calc_update_frac, calc_update_frac_dyn, inv_nsampl_decay, calc_nsampl_fromto
 public :: cos_decay, inv_cos_decay, extremal_decay2D, extremal_decay
 private
 #include "simple_local_flags.inc"
 
 contains
 
+    ! the maximum sample size, scaled by the number of states and capped at the particle count, as a
+    ! fraction of the particles (the former half-the-particles and minimum clamps could not change the
+    ! result, review of 2026-09-23)
     function calc_update_frac( nptcls, nstates, nsample_minmax ) result( update_frac )
         integer, intent(in) :: nptcls, nstates, nsample_minmax(2)
         real    :: update_frac
-        integer :: nsampl, nsample_minmax_here(2)
-        nsample_minmax_here    = nsample_minmax * nstates
-        nsample_minmax_here(1) = min(nptcls,nsample_minmax_here(1))
-        nsample_minmax_here(2) = min(nptcls,nsample_minmax_here(2))
-        nsampl       = min(nsample_minmax_here(2), nint(0.5 * real(nptcls)))
-        nsampl       = max(nsampl, nsample_minmax_here(1))
-        nsampl       = min(nptcls, max(nsampl,nsample_minmax_here(2)))
-        update_frac  = real(nsampl) / real(nptcls)
-        update_frac  = min(1.0, update_frac)
+        integer :: nsampl
+        nsampl      = min(nptcls, nsample_minmax(2) * nstates)
+        update_frac = min(1.0, real(nsampl) / real(nptcls))
     end function calc_update_frac
 
     function calc_update_frac_dyn( nptcls, nstates, nsample_minmax, it, maxits ) result( update_frac )
@@ -35,13 +32,6 @@ contains
         update_frac = real(nsampl) / real(nptcls)
         update_frac = min(1.0, update_frac)
     end function calc_update_frac_dyn
-
-    function nsampl_decay( it, maxits, nptcls, nsample_minmax ) result( nsampl )
-        integer, intent(in) :: it, maxits, nptcls, nsample_minmax(2)
-        integer :: nsampl, nsampl_fromto(2)
-        nsampl_fromto = calc_nsampl_fromto(nptcls, nsample_minmax)
-        nsampl = nint(cos_decay(min(it,maxits), maxits, real(nsampl_fromto)))
-    end function nsampl_decay
 
     function inv_nsampl_decay( it, maxits, nptcls, nsample_minmax ) result( nsampl )
         integer, intent(in) :: it, maxits, nptcls, nsample_minmax(2)

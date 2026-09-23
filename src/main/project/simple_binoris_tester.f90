@@ -1,5 +1,6 @@
-!@descr: unit test routines for the binary orientation file (binoris): header bookkeeping, segment round trips,
-!@descr: in-place segment rewrites, legacy particle records, and the binoris_io / sp_project front doors
+!@descr: unit test routines for the binary orientation file (binoris)
+! Header bookkeeping, segment round trips, in-place segment rewrites, legacy particle records, and the
+! binoris_io / sp_project front doors.
 module simple_binoris_tester
 use simple_test_utils    ! assertions etc.
 use simple_defs_ori,     only: N_PTCL_ORIPARAMS

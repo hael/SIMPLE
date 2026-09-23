@@ -397,37 +397,6 @@ contains
         if( didft ) call self%ifft()
     end subroutine phase_rand
 
-    module subroutine ran_phases_below_noise_power( self_even, self_odd )
-        class(image), intent(inout) :: self_even, self_odd
-        integer :: h, k, l, lims(3,2), phys(3)
-        real    :: noise_pow, even_pow, odd_pow, phase
-        complex :: diff
-        lims  = self_even%fit%loop_lims(2)
-        if( .not.self_even%is_ft() ) THROW_HARD('even image needs to be FTed')
-        if( .not.self_odd%is_ft()  ) THROW_HARD('odd  image needs to be FTed')
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow,phase)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    phys      = self_even%comp_addr_phys(h,k,l)
-                    diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
-                               &self_odd%cmat(phys(1),phys(2),phys(3))
-                    noise_pow = csq_fast(diff)
-                    even_pow  = csq_fast(self_even%cmat(phys(1),phys(2),phys(3)))
-                    odd_pow   = csq_fast(self_odd%cmat(phys(1),phys(2),phys(3)))
-                    if( noise_pow > even_pow .or. noise_pow > odd_pow )then
-                        phase = ran3() * TWOPI
-                        self_even%cmat(phys(1),phys(2),phys(3)) = mycabs(self_even%cmat(phys(1),phys(2),phys(3))) * cmplx(cos(phase), sin(phase))
-                        phase = ran3() * TWOPI
-                        self_odd%cmat(phys(1),phys(2),phys(3))  = mycabs(self_odd%cmat(phys(1),phys(2),phys(3)))  * cmplx(cos(phase), sin(phase))
-                    endif
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine ran_phases_below_noise_power
-
     module subroutine whiten_noise_power( self_even, self_odd, is_ptcl )
         class(image), intent(inout) :: self_even, self_odd
         logical,      intent(in)    :: is_ptcl

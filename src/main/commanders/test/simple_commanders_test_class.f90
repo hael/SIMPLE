@@ -7,6 +7,7 @@ use simple_string_tester,                    only: run_all_string_tests
 use simple_syslib_tester,                    only: run_all_syslib_tests
 use simple_fileio_tester,                    only: run_all_fileio_tests
 use simple_stack_io_tester,                  only: run_all_stack_io_tests
+use simple_class_sample_io_tester,           only: run_all_class_sample_io_tests
 use simple_chash_tester,                     only: run_all_chash_tests
 use simple_vrefhash_tester,                  only: run_all_vrefhash_tests
 use simple_hash_tester,                      only: run_all_hash_tests
@@ -20,12 +21,16 @@ use simple_stat_tester,                      only: run_all_stat_tests
 use simple_linalg_tester,                    only: run_all_linalg_tests
 use simple_kbinterpol_tester,                only: run_all_kbinterpol_tests
 use simple_srch_sort_loc_tester,             only: run_all_srch_sort_loc_tests
+use simple_decay_funs_tester,                only: run_all_decay_funs_tests
+use simple_pca_tester,                       only: run_all_pca_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_accum_blend_tester,               only: run_all_accum_blend_tests
+use simple_ctf_tester,                       only: run_all_ctf_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_starproject_tester,               only: run_all_starproject_tests
 use simple_binoris_tester,                   only: run_all_binoris_tests
+use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
@@ -146,6 +151,7 @@ contains
         call add_suite(s, n, 'syslib',               run_all_syslib_tests)
         call add_suite(s, n, 'fileio',               run_all_fileio_tests)
         call add_suite(s, n, 'stack I/O',            run_all_stack_io_tests)
+        call add_suite(s, n, 'class sample I/O',     run_all_class_sample_io_tests)
         call add_suite(s, n, 'character hash',       run_all_chash_tests)
         call add_suite(s, n, 'hash',                 run_all_hash_tests)
         call add_suite(s, n, 'value-reference hash', run_all_vrefhash_tests)
@@ -176,6 +182,7 @@ contains
         call add_suite(s, n, 'binary image',         run_all_image_bin_tests)
         call add_suite(s, n, 'segmentation',         run_all_segmentation_tests)
         call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
+        call add_suite(s, n, 'CTF',                  run_all_ctf_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )
@@ -190,6 +197,8 @@ contains
         call add_suite(s, n, 'linear algebra',          run_all_linalg_tests)
         call add_suite(s, n, 'Kaiser-Bessel kernel',    run_all_kbinterpol_tests)
         call add_suite(s, n, 'search, sort, locate',    run_all_srch_sort_loc_tests)
+        call add_suite(s, n, 'decay schedules',         run_all_decay_funs_tests)
+        call add_suite(s, n, 'PCA',                     run_all_pca_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
         call add_suite(s, n, 'shift search, correlator', test_ftexp_shsrch)
         call add_suite(s, n, 'shift search, optimiser',  test_ftexp_shsrch2)
@@ -201,6 +210,7 @@ contains
         call add_suite(s, n, 'STAR file',               run_all_starfile_tests)
         call add_suite(s, n, 'STAR project',            run_all_starproject_tests)
         call add_suite(s, n, 'binoris',                 run_all_binoris_tests)
+        call add_suite(s, n, 'project records',         run_all_sp_project_tests)
         call add_suite(s, n, 'project merge',           run_all_project_merge_tests)
         call add_suite(s, n, 'class compatibility',     run_all_class_compatibility_tests)
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)

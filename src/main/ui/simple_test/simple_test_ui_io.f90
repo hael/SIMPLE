@@ -1,5 +1,5 @@
-!@descr: module defining the user interfaces for input/output test programs in the simple_test_exec suite
-!@descr: (manual cases on user data; the hermetic I/O tests are unit_core/unit_project sub-suites)
+!@descr: user interfaces for the input/output test programs run by hand on user data (simple_test_exec)
+! The hermetic I/O tests are the stack I/O (unit_core), binoris and STAR sub-suites (unit_project).
 module simple_test_ui_io
 use simple_ui_modules
 implicit none

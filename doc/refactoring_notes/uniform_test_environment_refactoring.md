@@ -7,13 +7,17 @@ gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
 Phase 3 (the review of everything else) is under way: the geometry, fft,
-masks, io and numerics batches and the segmentation category are done
-and built (section 9.7). The tests written so far have found and fixed nine
-production defects (mask mirror asymmetry, disc padding count, Otsu bin
-edge, Otsu two-valued input, binarize(npix) count, ori_strlen_trim, the
-`selec` partition typo behind `median`, `reverse` of even double arrays,
-`norm_2`/`vabs` returning 0 on macOS through Accelerate's `snrm2`) and
-removed sixteen dead routines. This is a large
+masks, io, numerics and stats batches and the segmentation category are
+done (section 9.7; stats awaiting its first build). The tests written so
+far have found and fixed thirteen production defects (mask mirror
+asymmetry, disc padding count, Otsu bin edge, Otsu two-valued input,
+binarize(npix) count, ori_strlen_trim, the `selec` partition typo behind
+`median`, `reverse` of even double arrays, `norm_2`/`vabs` returning 0 on
+macOS through Accelerate's `snrm2`, the `indices_post` size of a
+descending `print_segment_json` window, the Nystroem kPCA feature and
+projection scaling, the non-convergent cosine pre-image, the residual BIC of
+the PPCA rank scan) and removed
+twenty-five dead routines. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -1287,6 +1291,160 @@ pole/mirror pair (section 9.7, geometry). Ninth production defect.
 Third build: gate green, 7/7, 4.9 s real (`unit_ori` 4.9 s with the
 neighbour searches on three 200-direction spirals plus a 400-direction
 one per group, `unit_numerics` 1.3 s with the three new sub-suites).
+
+**stats (2026-09-23, Hans).** Nine router identities plus the unassigned
+standalone twins `class_sample` and `ctf`; nothing in the category
+asserted except the two standalones (`ctf`, the 12-check phase-shift
+policy test, and `sp_project`, of which the exec case was an older
+subset), and nothing in the gate covered the CTF, the PCA classes, the
+decay schedules or the class-sampling file. `clustering` (one call to
+`test_aff_prop`, already the `affinity propagation` sub-suite) and
+`multinomal_test` (prints; `multinomial random draw` is in the gate) are
+`retire`. `eo_diff` is `retire`: it needed refine3D half-volumes in cwd
+and asserted nothing, and `ran_phases_below_noise_power`, its only
+production call, had no production caller (removed). `class_sample_test`
+and its twin are `merge into unit_core` through
+`simple_class_sample_io_tester` (`class sample I/O`): the ragged
+round trip field by field, an empty class (unallocated `pinds`, as
+`get_class_sample_stats` leaves it) coming back with pop 0 and
+zero-sized arrays, replacement of a previously allocated array.
+`ctf_test` and `ctf` are `merge into unit_image` through
+`simple_ctf_tester` (`CTF`): the policy checks moved as they are, now
+through `eval_canonical` and `canonical_phshift`, plus the 300/200 kV
+wavelength, the ctfvars unit conversions, `apply_convention`, the
+closed-form CTF at three frequencies (chi of 10, 50 and 160 radians,
+tolerances accordingly) and along/across the astigmatism axis,
+`nextrema` at three frequencies and at the first three zeros (computed
+from the quadratic in double precision), `ctf2img` against the closed
+form, `ft2img` placement in three modes and the `gen_fplane4rec`
+restoration contracts. `extr_frac` is `merge into unit_numerics` through
+`simple_decay_funs_tester` (`decay schedules`): every public schedule
+pinned on endpoints, quarter points, monotonicity and the mirror
+symmetry of `cos_decay`/`inv_cos_decay`, `calc_nsampl_fromto` on both
+branches, the update fractions, `extremal_decay` and `extremal_decay2D`
+with their clamps. `pca_all` and `pca_imgvar` are `merge into
+unit_numerics` through `simple_pca_tester` (`PCA`), on Hans's
+instruction that the PCA suite gets real unit tests: `pca_svd` on both
+branches (D >= N and the transposed D < N) against numpy's SVD;
+`ppca` on a rank-2-plus-noise 5x16 fixture against the Tipping-Bishop
+maximum-likelihood solution (EM converges to it from a random start,
+the tolerances follow the slow direction at the built-in stopping
+thresholds), `reconstruct_external`, `calc_bic` and `suggest_rank`;
+`kpca_svd` on a two-cluster 4x12 fixture against a double-precision
+emulation of the same pipeline (kpca_ref.py, kpca_nys.py): kernel
+eigenvalues, features and pre-images for exact/cosine, exact/RBF,
+Nystroem with every point a landmark for both kernels, a 6-landmark
+Nystroem run with local support (ordered spectrum, pre-images inside the
+data's bounding box and on their own cluster's side) and
+`suggest_kpca_nystrom_neigs`. `sp_project` is `merge into unit_project`
+through `simple_sp_project_tester` (`project records`): the phase-shift
+checks moved as they are, the write/read round trip at 7 mics / 300
+particles, the read probe from another cwd, the three-document merge,
+and, on Hans's rule that `print_segment_json` (the GUI's segment view,
+called by `print_project_field`) can only go if unused, that routine
+parsed back from a diverted `logfhandle` with json-fortran: the data
+window and `indices_pre`/`indices_post`, ascending and descending sorts,
+the histogram and plot blocks, a particle segment. With nothing left in
+the category, the stats commander module, router and UI module are gone
+(three files, three call sites); CI lost `simple_test_ctf`,
+`simple_test_extr_frac` and `simple_test_multinomal`; the phase-shift
+policy document (sections 9 and 10.1) and the staged-refactor note now
+name the sub-suites. Coverage accounting: 41 calls, 6 not made by name
+any more: three removed routines, `test_aff_prop` (in the gate as a
+sub-suite; the dossier script does not see a bare procedure argument),
+and `get_res`/`subtr` (accepted, trivial image arithmetic). Tenth
+production defect, fixed: `print_segment_json` sized `indices_post`
+from the caller's window (`fromto(2)`) instead of the remapped one
+(`ffromto(2)`) when sorting in descending order, so the array was too
+long for the section assigned to it; the descending-window test pins
+the sizes. Simplified, behaviour preserved: `calc_update_frac` clamped
+to half the particles and to the minimum before overriding both with
+the maximum; it now computes the maximum over the particle count
+directly. Dead code removed under the section 9.5 rule (nine routines):
+`ran_phases_below_noise_power`, `nsampl_decay`, `write_segment2txt`
+(85 lines, only the old test called it), `print_class_sample`,
+`class_samples_same` (compared only the integer part of a record) and
+the private `unserialize_class_sample`, `ctf%eval` in both forms (the
+six-argument one said its angle was in radians and passed it to `init`,
+which converts degrees) and `eval_sign`; `eval_canonical` is the CTF
+evaluator (7 production callers). `spafreqsqatnthzero` was removed too
+and the first build failed on `simple_ctf_estimate_fit`, which calls it
+as `SpaFreqSqAtNthZero`: the caller search had been case-sensitive.
+Restored, with the CTF fit's use (the fitting ranges between the first
+zeros) pinned in `CTF`; caller searches are `grep -i` from now on.
+Second build: everything green except five assertions, all the tests':
+three in `CTF` because the apply_convention locals were named `dfx`,
+`dfy`, `angast` and hid the module constants of the same names (the
+trap of the io batch, a third time; renamed), two in `project records`
+that expected `add_single_movie` to store a defocus (a movie record
+carries optics only until CTF estimation; the test now says so).
+`PCA` and `decay schedules` passed first time, `unit_numerics` 1.35 s.
+Third build: green except `suggest_rank`, which returned 3 for the
+rank-2 fixture where the second build had returned 2. Its BIC is
+residual-based, D N log(rss/(D N)) + (D Q + 1) log(D N), so an extra
+component lowers it whenever the eigenvalue it explains outweighs the
+D log(D N) penalty, which the largest remaining eigenvalue always does
+here (rank 3 has rss 1.6 against 3.3); which rank wins after the
+ten-iteration cap depends on the random start, and the test had pinned
+luck. It now pins what the routine guarantees (rank 1 loses by ~200,
+ranks 2 and 3 are close, sigma^2 falls with the rank, duplicates are
+skipped) and the finding goes to Hans: the auto-neigs of `ppca` classes
+(cluster2D, `PPCA_AUTO_CAND` up to 16, 15 iterations) is decided by the
+iteration cap and BIC_TOL rather than by the data; the PPCA marginal
+likelihood (Tipping & Bishop, sigma^2 the mean of the discarded
+eigenvalues) would stop at the rank where the spectrum flattens.
+Hans: "make the ppca change". `ppca%calc_bic` is now -2 ln L + p ln N
+with ln L = -(N/2)[D ln 2pi + sum_k ln lambda_k + (D-Q) ln sigma^2 + D]
+with ln|C| from the fitted retained eigenvalues and sigma^2 and
+tr(C^-1 S) evaluated at the fitted W (the stationary-point form, which
+drops that trace as D, was tried first and let a ten-iteration rank-3
+fit score above its own optimum and win; the exact likelihood cannot),
+p = D Q - Q(Q-1)/2 + 1. On the fixture the converged values are 249.8,
+171.5, 176.7, 180.5 for ranks 1 to 4 and ten-iteration fits from six
+random starts give 250, 175, 182: the scan stops at 2 by more than 5.
+The tester pins the rank-2 BIC and the scan again; cluster2D's
+auto-neigs for `ppca` classes changes behaviour accordingly.
+Thirteenth. Seen on the build in between: `suggest_rank` skipped a
+repeated candidate only when it equalled the previous slot, so a
+third copy (or `[1,1,1]`, or candidates clamped to the same rank) was
+fitted again; it now compares with the previous fitted rank.
+Four more findings, decided by Hans the same day (1 and 3) or left to
+the reviewer (2 and 4), all acted on: (1) the Nystroem kPCA backend
+returned unit-norm eigenvectors as features and weighted its projected
+kernel column by the eigenvalues, where the exact backend (and
+Schoelkopf's projection) return sqrt(lambda_k) v_k and weight the
+column by v_k(i) v_k(j); with every point a landmark the two backends
+agreed on the spectrum but not on the features or the RBF pre-images
+(Nystroem's collapsed each cluster onto its centroid on the fixture).
+Fixed ("fix"): `master_nystrom` now stores sqrt(lambda_k) v_k as the
+features and normalises the eigenvectors as the exact backend does for
+the projected column; with every point a landmark the two backends now
+agree to 1e-15 in the emulation, and the tester pins Nystroem against
+the exact constants. `cls_split` with `pca_mode=kpca` (non-default)
+sees differently scaled embedding coordinates from now on. Eleventh
+production defect. (2) The exact cosine pre-image iteration did not
+converge when the projected kernel column mixed signs within the
+point's own cluster (the L1-normalised update flipped direction); on
+the fixture one cluster ran the full 500 iterations and landed in the
+other cluster. Fixed (reviewer's call): the weights are now
+max(0, projected column) x max(0, cosine), a convex combination as the
+RBF rule and the Nystroem cosine rule already were; every point
+converges in three iterations and moves towards its cluster centre
+(clipping the product alone, tried first, let anti-aligned points of
+the other cluster in with positive weight). Twelfth. (3)
+`master_nystrom` had `PROFILE = .true.` as a parameter and printed
+twenty-odd timing lines on every call; off ("turn off profile"). The
+per-percent pre-image progress lines are not under PROFILE and remain
+(the tester diverts `logfhandle` around the Nystroem calls). (4)
+`print_segment_json` for `ptcl2D` printed every record with
+`os_ptcl2D%print(iori)` as it went (the loop index, not even the
+selected record) - a debug leftover, removed; its histogram and plot
+blocks dereferenced the optional `sort_key` whenever `hist` or
+`plot_key` was passed, which the one caller always does together -
+now guarded, and the tester asks for both without a sort key. Left as
+is: in a descending window `indices_pre`/`indices_post` refer to the
+ascending order (swapped relative to the displayed order); the GUI's
+reading of them is not known here.
 
 ## 10. Fast-tier performance
 

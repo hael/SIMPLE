@@ -208,7 +208,6 @@ contains
     procedure          :: gabor_filter2D
     procedure          :: tophat
     procedure          :: phase_rand
-    procedure          :: ran_phases_below_noise_power
     procedure          :: whiten_noise_power
     procedure          :: real_space_filter
     procedure          :: hannw
@@ -1340,10 +1339,6 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: lp
     end subroutine phase_rand
-
-    module subroutine ran_phases_below_noise_power( self_even, self_odd )
-        class(image), intent(inout) :: self_even, self_odd
-    end subroutine ran_phases_below_noise_power
 
     module subroutine whiten_noise_power( self_even, self_odd, is_ptcl )
         class(image), intent(inout) :: self_even, self_odd

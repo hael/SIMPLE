@@ -452,15 +452,18 @@ command is explicitly a repair/migration command.
   `production/tests/simple_test_ori.f90`, and
   `production/tests/simple_test_oris.f90` cover orientation value behavior and
   serialization.
-- `production/tests/simple_test_sp_project.f90` already covers project
+- `src/main/project/simple_sp_project_tester.f90` (the `project records`
+  sub-suite of `simple_test_exec test=unit_project`, formerly
+  `production/tests/simple_test_sp_project.f90`) already covers project
   write/read comparison, partial reads, alignment-document merging, phase
   preservation, and non-mutating reads. It is the immediate home for compatible
   project adapter round trips until dedicated tests are warranted.
 - `production/tests/simple_test_binoris_io.f90` and
   `production/tests/simple_test_inside_write.f90` exercise binary orientation
   and in-place segment I/O boundaries.
-- `production/tests/simple_test_ctf.f90` is the numerical oracle for the CTF
-  model and phase convention.
+- `src/main/ctf/simple_ctf_tester.f90` (the `CTF` sub-suite of
+  `simple_test_exec test=unit_image`, formerly `production/tests/simple_test_ctf.f90`)
+  is the numerical oracle for the CTF model and phase convention.
 - `production/tests/simple_test_mini_stream.f90` provides an end-to-end
   acquisition/preprocessing/selection/particle-analysis path when its external
   fixtures are available.
@@ -786,7 +789,7 @@ Exit gate:
 - runtime fitting-policy configuration parity passes independently of project
   persistence, and no test claims that fitting policy round-trips through a
   project;
-- numerical `simple_test_ctf` behavior is unchanged.
+- numerical `CTF` sub-suite behavior is unchanged.
 
 ### M4: add typed acquisition views
 

@@ -30,12 +30,9 @@ type ctf
     procedure          :: init
     procedure          :: get_ctfvars
     procedure, private :: evalPhSh
-    ! No phase-free overload exists: the numerical phase is a required argument of
-    ! every CTF evaluation, and conventional callers pass zero explicitly.
-    procedure, private :: eval_2, eval_4
-    generic            :: eval => eval_2, eval_4
+    ! the only evaluator: the numerical phase is a required argument, already canonical
+    ! (get_ctfvars canonicalises once per record; conventional callers pass zero explicitly)
     procedure          :: eval_canonical
-    procedure, private :: eval_sign
     procedure, private :: eval_df
     procedure          :: nextrema
     procedure          :: spafreqsqatnthzero
@@ -111,49 +108,6 @@ contains
             &+ add_phshift
     end function evalPhSh
 
-    !>  \brief Returns the CTF, based on CTFFIND4 subroutine (Rohou & Grigorieff (2015))
-    !
-    ! How to use eval:
-    !
-    !            lFreqSq = tfun%getLowFreq4Fit**2
-    !            hFreqSq = tfun%getHighFreq4Fit**2
-    !            do k=-ydim,ydim
-    !                kinv = inv_logical_kdim*real(k)
-    !                kinvsq = kinv*kinv
-    !                do h=-xdim,xdim
-    !                   hinv = inv_logical_hdim*real(h)
-    !                    hinvsq = hinv*hinv
-    !                    spaFreqSq = kinvsq+hinvsq
-    !                    if( spaFreqSq .gt. lFreqSq .and. spaFreqSq .le. hFreqSq )then
-    !                        if( spaFreqSq .gt. 0. )then
-    !                            ang = atan2(k,h)
-    !                        else
-    !                            ang = 0.
-    !                        endif
-    real function eval_2( self, spaFreqSq, dfx, dfy, angast, ang, add_phshift )
-        class(ctf), intent(inout) :: self        !< instance
-        real,       intent(in)    :: spaFreqSq   !< squared reciprocal pixels
-        real,       intent(in)    :: dfx         !< Defocus along first axis (micrometers)
-        real,       intent(in)    :: dfy         !< Defocus along second axis (for astigmatic CTF, dfx .ne. dfy) (micrometers)
-        real,       intent(in)    :: angast      !< Azimuth of first axis. 0.0 means axis is at 3 o'clock. (radians)
-        real,       intent(in)    :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in)    :: add_phshift !< additive CTF phase shift (radians)
-        ! initialize the CTF object, using the input parameters
-        call self%init(dfx, dfy, angast)
-        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
-        eval_2 = sin( self%evalPhSh(spaFreqSq, ang, canonical_phshift(add_phshift)) + self%amp_contr_const )
-    end function eval_2
-
-    !>  \brief Returns the CTF with pre-initialize parameters
-    elemental real function eval_4( self, spaFreqSq, ang, add_phshift )
-        class(ctf), intent(in) :: self        !< instance
-        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
-        real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in) :: add_phshift !< additive CTF phase shift (radians)
-        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
-        eval_4 = sin( self%evalPhSh(spaFreqSq, ang, canonical_phshift(add_phshift)) + self%amp_contr_const )
-    end function eval_4
-
     !> Returns the CTF for a phase already canonicalized to [0,2pi).
     !! Use this in verified pixel loops to avoid repeated modulo operations.
     elemental real function eval_canonical( self, spaFreqSq, ang, add_phshift )
@@ -163,25 +117,6 @@ contains
         real,       intent(in) :: add_phshift !< additive CTF phase shift (canonical radians)
         eval_canonical = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
     end function eval_canonical
-
-    !>  \brief Returns the sign of the CTF with pre-initialize parameters
-    elemental integer function eval_sign( self, spaFreqSq, ang, add_phshift )
-        class(ctf), intent(in) :: self        !< instance
-        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
-        real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in) :: add_phshift !< additive CTF phase shift (radians)
-        real :: angle
-        ! compute phase shift + amplitude constrast term, no need to evaluate the sine to workout the sign
-        angle = self%evalPhSh(spaFreqSq, ang, canonical_phshift(add_phshift)) + self%amp_contr_const
-        do while( angle > TWOPI )
-            angle = angle - TWOPI
-        enddo
-        do while( angle < 0. )
-            angle = angle + TWOPI
-        enddo
-        eval_sign = 1
-        if( angle > PI ) eval_sign = -1
-    end function eval_sign
 
     !>  \brief  Return the effective defocus given the pre-set CTF parameters (from CTFFIND4)
     elemental real function eval_df( self, ang )

@@ -299,7 +299,11 @@ The implementation was built and the following focused checks passed on
 
 - full CMake build
 - `simple_test_ctf`: 12/12 scalar/optimized, canonicalization, and restoration checks
+  (since 2026-09-23 the `CTF` sub-suite of `simple_test_exec test=unit_image`, which
+  also pins the closed-form CTF, `nextrema` and `ft2img`; the executable is gone)
 - `simple_test_sp_project`: phase presence and all four project-field mappings
+  (since 2026-09-23 the `project records` sub-suite of `simple_test_exec test=unit_project`;
+  the executable is gone)
 - `simple_test_phshift_star`: RELION degree/radian contract
 - `simple_test_phshift_policy`: all five fitting-program UI contracts
 - `simple_test_project_merge`: project assembly and validation behavior
@@ -336,8 +340,8 @@ Run file-producing tests from separate temporary directories. The expected
 executables are:
 
 ```text
-build/production/simple_test_ctf
-build/production/simple_test_sp_project
+build/production/simple_test_exec test=unit_image    (CTF sub-suite)
+build/production/simple_test_exec test=unit_project  (project records sub-suite)
 build/production/simple_test_phshift_star
 build/production/simple_test_phshift_policy
 build/production/simple_test_project_merge

@@ -1,6 +1,0 @@
-program simple_test_clustering
-use simple_aff_prop
-use simple_linalg
-implicit none
-call test_aff_prop
-end program simple_test_clustering

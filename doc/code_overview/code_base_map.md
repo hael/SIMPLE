@@ -43,8 +43,6 @@
       - `simple_test_cartesian_fourier.f90`
       - `simple_test_cavg_quality_relations.f90`
       - `simple_test_cavg_registration.f90`
-      - `simple_test_class_sample.f90`
-      - `simple_test_clustering.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
       - `simple_test_continuous_3D_pcg_reconstruction.f90`
@@ -56,12 +54,9 @@
       - `simple_test_continuous_inplane_rotation2D_route_identity.f90`
       - `simple_test_continuous_inplane_rotation2D_stage1_validation.f90`
       - `simple_test_create_gain.f90`
-      - `simple_test_ctf.f90`
       - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
       - `simple_test_discrete_stack_io.f90`
-      - `simple_test_eo_diff.f90` — tests randomization of phases below noise power
       - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
-      - `simple_test_extr_frac.f90`
       - `simple_test_flex_gpu.f90` — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)
       - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache and the kernel/state-weight contracts
       - `simple_test_flex_pcg.f90` — validates the flex_pca PCG M-step operator: the pair Gram kernel on the 2x lattice against the
@@ -73,7 +68,6 @@
       - `simple_test_lplims.f90`
       - `simple_test_lpstages.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
-      - `simple_test_multinomal.f90`
       - `simple_test_nice.f90`
       - `simple_test_nu_envmask.f90`
       - `simple_test_nu_filter.f90`
@@ -81,8 +75,6 @@
       - `simple_test_openmp.f90`
       - `simple_test_openmp_offload.f90`
       - `simple_test_opt_lp.f90`
-      - `simple_test_pca_all.f90`
-      - `simple_test_pca_imgvar.f90`
       - `simple_test_pdb2mrc.f90`
       - `simple_test_phase_rand_fsc.f90`
       - `simple_test_phshift_policy.f90`
@@ -102,7 +94,6 @@
       - `simple_test_socket_client.f90`
       - `simple_test_socket_io.f90`
       - `simple_test_socket_server.f90`
-      - `simple_test_sp_project.f90`
       - `simple_test_stream_initial_analysis.f90` — smoke test that invokes stream p03 initial analysis commander
       - `simple_test_stringmatch.f90`
       - `simple_test_ui_visibility.f90`
@@ -129,6 +120,7 @@
       - `simple_binoris.f90` — for managing orientation data using binary files
       - `simple_binoris_io.f90` — high-level binoris i/o routines
       - `simple_class_sample_io.f90` — for storing class sampling information on disk
+      - `simple_class_sample_io_tester.f90` — unit test routines for the class-sampling checkpoint file (simple_class_sample_io)
       - `simple_discrete_stack_io.f90` — for cached non-contiguous reading of image stacks
       - `simple_eer_factory.f90` — for eer movie format i/o
       - `simple_error.f90` — exception handling
@@ -242,17 +234,17 @@
           - `simple_commanders_test_fft.f90` — for all fft tests
           - `simple_commanders_test_geometry.f90` — for all geometry tests
           - `simple_commanders_test_highlevel.f90` — for all highlevel tests
-          - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate); the hermetic I/O tests are the
+          - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate)
           - `simple_commanders_test_masks.f90` — for all masks tests
           - `simple_commanders_test_network.f90` — for all network tests
           - `simple_commanders_test_optimize.f90` — for all optimize tests
           - `simple_commanders_test_parallel.f90` — for all parallel tests
           - `simple_commanders_test_single.f90` — tests for single
-          - `simple_commanders_test_stats.f90` — for all stats tests
           - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
           - `simple_commanders_test_utils.f90` — for all utils tests
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
+        - `simple_ctf_tester.f90` — unit test routines for the contrast transfer function (simple_ctf)
         - `simple_ctf_estimate_cost.f90` — cost functions for CTF fitting
         - `simple_ctf_estimate_fit.f90` — routines for anisotroic (patched) CTF estimation
         - `simple_ctf_estimate_iter.f90` — does one iteration of CTF estimation
@@ -288,7 +280,6 @@
         - `simple_test_exec_optimize.f90` — execution of test optimize processing commanders
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
-        - `simple_test_exec_stats.f90` — execution of test stats processing commanders
         - `simple_test_exec_stream.f90` — execution of stream test programs
         - `simple_test_exec_utils.f90` — execution of test utils processing commanders
         - `single_exec_atom.f90`
@@ -336,7 +327,7 @@
         - `simple_umap.f90` — UMAP projection of a high-dimensional embedding, for plotting it
         - **cuda/**
       - **image/** — home of the submodules of the image class, its extensions, and its variants
-        - `simple_accum_blend_tester.f90` — unit test routines for the accumulator-domain trailing-reconstruction blend (scale_mats, sum_reduce_mats, the ufrac_trec contract)
+        - `simple_accum_blend_tester.f90` — unit test routines for the accumulator-domain trailing-reconstruction blend
         - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
         - `simple_ftiter.f90` — Fourier index loop range generator and mapping of logical indexing to physical indexing
@@ -377,7 +368,7 @@
         - `simple_edges_sqwins.f90` — square windows and mask edges
         - `simple_gridding.f90` — utilities for convolution interpolation (gridding)
         - `simple_kbinterpol.f90` — Kaiser-Bessel interpolation kernel
-        - `simple_kbinterpol_tester.f90` — unit test routines for the Kaiser-Bessel interpolation kernel: apodisation, fast polynomial form, derivatives, 2D/3D stencils, instrument function
+        - `simple_kbinterpol_tester.f90` — unit test routines for the Kaiser-Bessel interpolation kernel (simple_kbinterpol)
         - `simple_winfuns.f90` — window functions for Fourier interpolation
       - **motion/** — home of modules for movie motion correction
         - `simple_denoise_movies.f90` — diffusion-map denoising helpers for real-space image stacks
@@ -454,6 +445,7 @@
         - `simple_kpca_svd.f90` — kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs
         - `simple_pca.f90` — abstract pca strategy base class
         - `simple_pca_svd.f90` — PCA using standard SVD
+        - `simple_pca_tester.f90` — unit test routines for SVD, probabilistic and kernel PCA (simple_pca_svd, simple_ppca, simple_kpca_svd)
         - `simple_ppca.f90` — Bishop/Tipping probabilistic PCA with explicit isotropic noise
       - **pftc/** — home of the polar FT calc submodules and modules for operations on polar FTs
         - `simple_pftc_shsrch_grad.f90` — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
@@ -478,12 +470,13 @@
         - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb for power spectrum and thumbnails generation
         - `simple_pspecs.f90` — abstract data type for power spectra
       - **project/** — home of the submodules of the single-particle project class for managing project information in memory and on disk
-        - `simple_binoris_tester.f90` — unit test routines for the binary orientation file (binoris): header bookkeeping, segment round trips,
+        - `simple_binoris_tester.f90` — unit test routines for the binary orientation file (binoris)
         - `simple_project_merge_tester.f90` — unit tests for SIMPLE project merging
         - `simple_sp_project.f90` — single-particle project, the complete interface and abstract data type
         - `simple_sp_project_cls.f90` — single-particle project routines for managing 2D class info
         - `simple_sp_project_core.f90` — single-particle project core routines, lifecycle, accessors, modifiers etc.
         - `simple_sp_project_io.f90` — single-particle project I/O routines
+        - `simple_sp_project_tester.f90` — unit test routines for the project container as a whole (sp_project)
         - `simple_sp_project_mic.f90` — single-particle project routines for managing micrograph and move information
         - `simple_sp_project_optics.f90` — single-particle project routines for managing optics information
         - `simple_sp_project_out.f90` — single-particle project routines for managing outputs from various processes
@@ -635,13 +628,12 @@
           - `simple_test_ui_fft.f90` — module defining the user interfaces for fft testprograms in the simple_test_exec suite
           - `simple_test_ui_geometry.f90` — module defining the user interfaces for geometry test programs in the simple_test_exec suite
           - `simple_test_ui_highlevel.f90` — module defining the user interfaces for highlevel test programs in the simple_test_exec suite
-          - `simple_test_ui_io.f90` — module defining the user interfaces for input/output test programs in the simple_test_exec suite
+          - `simple_test_ui_io.f90` — user interfaces for the input/output test programs run by hand on user data (simple_test_exec)
           - `simple_test_ui_masks.f90` — module defining the user interfaces for masks test programs in the simple_test_exec suite
           - `simple_test_ui_network.f90` — module defining the user interfaces for network test programs in the simple_test_exec suite
           - `simple_test_ui_optimize.f90` — module defining the user interfaces for optimize test programs in the simple_test_exec suite
           - `simple_test_ui_parallel.f90` — module defining the user interfaces for parallel test programs in the simple_test_exec suite
           - `simple_test_ui_single.f90` — module defining the user interfaces for single test programs in the simple_test_exec suite
-          - `simple_test_ui_stats.f90` — module defining the user interfaces for statistics test programs in the simple_test_exec suite
           - `simple_test_ui_stream.f90` — module defining the user interfaces for stream test programs in the simple_test_exec suite
           - `simple_test_ui_utils.f90` — module defining the user interfaces for utils programs in the simple_test_exec suite
         - **single/**
@@ -736,9 +728,10 @@
             - `simple_gui_metadata_stream_update.f90` — GUI metadata for a stream quality update â thresholds and user selections broadcast from the GUI
       - **math/** — home of mathematical and statistical utility routines
         - `simple_decay_funs.f90` — decay functions for annealing
+        - `simple_decay_funs_tester.f90` — unit test routines for the annealing and particle-sampling schedules (simple_decay_funs)
         - `simple_histogram.f90` — abstract data type for histogram generation
         - `simple_linalg.f90` — SIMPLE linear algebra helpers with BLAS/LAPACK-backed kernels.
-        - `simple_linalg_tester.f90` — unit test routines for simple_linalg: eigensolvers, SVD, inversion, least-squares fits and vector helpers
+        - `simple_linalg_tester.f90` — unit test routines for simple_linalg (eigensolvers, SVD, inversion, least-squares fits, vector helpers)
         - `simple_math.f90` — various mathematical subroutines and functions
         - `simple_math_ctf.f90` — CTF-related math routines
         - `simple_math_ft.f90` — Fourier transform-related math routines
@@ -747,7 +740,7 @@
         - `simple_ran_tabu.f90` — routines for generation of directed random numbers
         - `simple_rnd.f90` — random number generation module
         - `simple_srch_sort_loc.f90` — searching ordered tables, sorting, locate etc.
-        - `simple_srch_sort_loc_tester.f90` — unit test routines for simple_srch_sort_loc: heap sorts, locate/find, n-largest/smallest, peaks, reversal, selection, unique, orderings
+        - `simple_srch_sort_loc_tester.f90` — unit test routines for simple_srch_sort_loc (sorting, searching, locating, selection, ordering)
         - `simple_stat.f90` — statistics utility functions
         - `simple_stat_tester.f90` — unit test routines for the statistics utilities (simple_stat)
         - `simple_testfuns.f90` — provides 20 mathematical test functions for evaluating unconstrained optimization procedures

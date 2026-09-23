@@ -367,7 +367,6 @@ contains
                     if(.not. copy_oris) then
                         call calculate_indices(self%os_ptcl2D)
                         do iori=1, size(indices)
-                            call self%os_ptcl2D%print(iori)
                             call self%os_ptcl2D%ori2json(indices(iori), json_ori)
                             call json%add(json_data, json_ori)
                         end do
@@ -537,6 +536,7 @@ contains
                 real,              allocatable :: rvec(:)
                 integer                        :: n_bins, i
                 n_bins = 20
+                if( .not. present(sort_key) ) return   ! the histogram is of the sort key
                 if(hist .eq. 'yes') then
                     if((.not. sort_key .eq. '') .and. (.not. sort_key .eq. 'n')) then
                         call json%create_object(json_hist,'histogram')
@@ -561,6 +561,7 @@ contains
                 type(json_value),  pointer     :: data, xy
                 real,              allocatable :: rvecx(:), rvecy(:)
                 integer                        :: i
+                if( .not. present(sort_key) ) return   ! the plot is plot_key against the sort key
                 if((.not. sort_key .eq. '') .and. (.not. plot_key .eq. '')) then
                     call json%create_object(json_plot, 'plot')
                     call json%create_array(data,     "data")
@@ -621,7 +622,7 @@ contains
                 if( .not. sort_ascending)  ffromto = [noris - ffromto(2) + 1, noris - ffromto(1) + 1]
                 allocate(indices(ffromto(2) - ffromto(1) + 1))
                 if(ffromto(1) .gt. 1)     allocate(indices_pre(ffromto(1) - 1))
-                if(ffromto(2) .lt. noris) allocate(indices_post(noris - fromto(2)))
+                if(ffromto(2) .lt. noris) allocate(indices_post(noris - ffromto(2)))
                 if(sort) then
                     order = sort_oris(seg_oris)
                     indices(:) = order(ffromto(1):ffromto(2))
@@ -1140,92 +1141,6 @@ contains
             THROW_HARD('projfile: '//projfile%to_char()//' nonexistent; write_non_data_segments')
         endif
     end subroutine write_non_data_segments
-
-    module subroutine write_segment2txt( self, oritype, fname, fromto )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: oritype
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: fromto(2)
-        call ensure_phase_shift_fields(self)
-        select case(fname2format(fname))
-            case('O')
-                THROW_HARD('write_segment2txt is not supported for *.simple project files; write_segment2txt')
-            case('T')
-                ! *.txt plain text ori file
-                select case(trim(oritype))
-                    case('mic')
-                        if( self%os_mic%get_noris() > 0 )then
-                            call self%os_mic%write(fname)
-                        else
-                            THROW_WARN('no mic-type oris available to write; write_segment2txt')
-                        endif
-                    case('stk')
-                        if( self%os_stk%get_noris() > 0 )then
-                            call self%os_stk%write(fname)
-                        else
-                            THROW_WARN('no stk-type oris available to write; write_segment2txt')
-                        endif
-                    case('ptcl2D')
-                        if( self%os_ptcl2D%get_noris() > 0 )then
-                            call self%os_ptcl2D%write(fname, fromto)
-                        else
-                            THROW_WARN('no ptcl2D-type oris available to write; write_segment2txt')
-                        endif
-                    case('cls2D')
-                        if( self%os_cls2D%get_noris() > 0 )then
-                            call self%os_cls2D%write(fname)
-                        else
-                            THROW_WARN('no cls2D-type oris available to write; write_segment2txt')
-                        endif
-                    case('cls3D')
-                        if( self%os_cls3D%get_noris() > 0 )then
-                            call self%os_cls3D%write(fname,  fromto)
-                        else
-                            THROW_WARN('no cls3D-type oris available to write; write_segment2txt')
-                        endif
-                    case('ptcl3D')
-                        if( self%os_ptcl3D%get_noris() > 0 )then
-                            call self%os_ptcl3D%write(fname, fromto)
-                        else
-                            THROW_WARN('no ptcl3D-type oris available to write; write_segment2txt')
-                        endif
-                    case('out')
-                        if( self%os_out%get_noris() > 0 )then
-                            call self%os_out%write(fname)
-                        else
-                            THROW_WARN('no out-type oris available to write; write_segment2txt')
-                        endif
-                    case('optics')
-                        if( self%os_optics%get_noris() > 0 )then
-                            call self%os_optics%write(fname)
-                        else
-                            THROW_WARN('no optics-type oris available to write; write_segment2txt')
-                        endif
-                    case('projinfo')
-                        if( self%projinfo%get_noris() > 0 )then
-                            call self%projinfo%write(fname, fromto)
-                        else
-                            THROW_WARN('no projinfo-type oris available to write; write_segment2txt')
-                        endif
-                    case('jobproc')
-                        if( self%jobproc%get_noris() > 0 )then
-                            call self%jobproc%write(fname)
-                        else
-                            THROW_WARN('no jobproc-type oris available to write; write_segment2txt')
-                        endif
-                    case('compenv')
-                        if( self%compenv%get_noris() > 0 )then
-                            call self%compenv%write(fname)
-                        else
-                            THROW_WARN('no compenv-type oris available to write; write_segment2txt')
-                        endif
-                    case DEFAULT
-                        THROW_HARD('unsupported oritype flag; write_segment2txt')
-                end select
-            case DEFAULT
-                THROW_HARD('file format of: '//fname%to_char()//'not supported; write_segment2txt')
-        end select
-    end subroutine write_segment2txt
 
     module subroutine segwriter( self, isegment, fromto )
         class(sp_project), intent(inout) :: self

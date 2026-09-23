@@ -179,7 +179,6 @@ contains
     procedure          :: write
     procedure          :: write_segment_inside
     procedure          :: write_non_data_segments
-    procedure          :: write_segment2txt
     procedure          :: write_mics_star
     procedure          :: write_ptcl2D_star
     procedure          :: write_optics_map
@@ -881,13 +880,6 @@ interface
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: fname
     end subroutine write_non_data_segments
-
-    module subroutine write_segment2txt( self, oritype, fname, fromto )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: oritype
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: fromto(2)
-    end subroutine write_segment2txt
 
     module subroutine segwriter( self, isegment, fromto )
         class(sp_project),          intent(inout) :: self

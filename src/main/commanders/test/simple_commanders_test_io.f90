@@ -1,5 +1,5 @@
-!@descr: input/output tests run by hand on user data (mrc2jpeg, mrc_validate); the hermetic I/O tests are the
-!@descr: stack I/O (unit_core), binoris and STAR sub-suites (unit_project)
+!@descr: input/output tests run by hand on user data (mrc2jpeg, mrc_validate)
+! The hermetic I/O tests are the stack I/O (unit_core), binoris and STAR sub-suites (unit_project).
 module simple_commanders_test_io
 use simple_commanders_api
 implicit none

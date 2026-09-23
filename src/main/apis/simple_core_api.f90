@@ -10,7 +10,7 @@ use simple_defs
 use simple_type_defs
 use simple_binoris,         only: binoris, binoris_seginfo
 use simple_chash,           only: chash
-use simple_class_sample_io, only: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
+use simple_class_sample_io, only: write_class_samples, read_class_samples, deallocate_class_samples
 use simple_error,           only: simple_exception
 use simple_estimate_ssnr,   only: fsc2optlp, fsc2optlp_sub, gaussian_filter, get_resolution, mskdiam2lplimits,get_resolution_at_fsc,&
                                  &lpstages, lpstages_fast, lpstages_setlims, mskdiam2streamresthreshold,calc_dose_weights

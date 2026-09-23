@@ -263,8 +263,11 @@ contains
                     iter              = 1
                     do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                         norm_prev(:,ithr) = norm_data(:,ithr)
-                        proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
-                        denom = sum(abs(real(proj_data(:,ithr),dp)))
+                        ! non-negative weights only (as the RBF rule clips the projected kernel column and the
+                        ! Nystroem cosine rule clips the cosines): with sign-mixed weights and an L1 denominator
+                        ! the iteration flipped direction and never converged (2026-09-23)
+                        proj_data(:,ithr) = max(0., ker_col(:,ithr)) * max(0., matmul(norm_pcavecs_t, norm_prev(:,ithr)))
+                        denom = sum(real(proj_data(:,ithr),dp))
                         if( denom < DTINY ) exit
                         self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                         denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
@@ -292,7 +295,7 @@ contains
         integer, parameter :: EARLY_STOP_PATIENCE = 3
         real,    parameter :: TOL     = 0.0001
         real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
-        logical, parameter :: PROFILE = .true.
+        logical, parameter :: PROFILE = .false.
         integer, parameter :: SUPPORT_REFRESH_ITERS = 3
         integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, k, nthr_use, local_nbrs, local_pool_nbrs
         integer  :: progress_done, progress_step, progress_next, done_now
@@ -493,14 +496,22 @@ contains
         eig_q(1:q_used)                       = gram_eigvals
         gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,1:q_used)
         call self%dense_mm(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used), alpha(:,1:q_used))
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
-        do i = 1,q_used
-            if( eig_q(i) > real(DTINY) ) alpha(:,i) = alpha(:,i) / sqrt(eig_q(i))
-        enddo
-        !$omp end parallel do
+        ! the columns of alpha are sqrt(lambda_k) v_k, the kernel-PCA projections, stored as the features
+        ! exactly as the exact backend stores them (2026-09-23; they were the unit-norm v_k before)
         self%eigvals = eig_q
         self%E_zn = 0.
         if( q_used > 0 ) self%E_zn(1:q_used,1:self%N) = transpose(alpha(:,1:q_used))
+        ! for the projected kernel column the eigenvectors carry the exact backend's normalisation
+        ! v_k / sqrt(lambda_k), so that sum_k lambda_k alpha(i,k) alpha(j,k) = sum_k v_k(i) v_k(j)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
+        do i = 1,q_used
+            if( eig_q(i) > real(DTINY) )then
+                alpha(:,i) = alpha(:,i) / eig_q(i)
+            else
+                alpha(:,i) = 0.
+            endif
+        enddo
+        !$omp end parallel do
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström reduced eigensolve/proj: ', real(t1-t0)/real(trate), ' s; q=', q_used

@@ -182,24 +182,48 @@ contains
         deallocate(wt_w, mloc, minvloc, z)
     end subroutine reconstruct_external_ppca
 
+    ! BIC of the fitted model from the PPCA marginal likelihood (Tipping & Bishop 1999):
+    ! -2 ln L + p ln N with ln L = -(N/2) [D ln 2pi + ln|C| + tr(C^-1 S)], C = W W^T + sigma^2 I and S the
+    ! sample covariance, evaluated at the fitted W and sigma^2 (so an unconverged fit scores no better
+    ! than its optimum): ln|C| = sum_k ln lambda_k + (D-Q) ln sigma^2 with lambda_k the retained
+    ! eigenvalues, tr(C^-1 S) = [tr S - (1/N) sum_n t_n^T M^-1 t_n] / sigma^2 with t_n = W^T x_n and
+    ! M = W^T W + sigma^2 I; p = D Q - Q(Q-1)/2 + 1 free parameters (W up to a rotation, sigma^2). The
+    ! residual-sum-of-squares form used until 2026-09-23 kept rewarding components, so the rank scan was
+    ! decided by the iteration cap; this one stops where the spectrum flattens
     real(dp) function calc_bic_ppca( self, pcavecs ) result(bic)
         class(ppca), intent(inout) :: self
         real,        intent(in)    :: pcavecs(self%D,self%N)
-        real, allocatable :: zeroavg(:), recon(:)
-        real(dp) :: rss
-        integer :: i, pcount
-        allocate(zeroavg(self%D), recon(self%D))
-        zeroavg = 0.
-        recon   = 0.
-        rss = 0._dp
-        do i = 1, self%N
-            call self%generate(i, zeroavg, recon)
-            rss = rss + sum((real(pcavecs(:,i),dp) - real(recon,dp))**2)
+        real(dp), allocatable :: m(:,:), minv(:,:), t(:,:)
+        real(dp) :: loglik, sigma2, lam, logdet, trace
+        integer  :: k, n, nparams, err
+        sigma2 = max(real(self%sigma2,dp), real(DTINY,dp))
+        logdet = real(self%D - self%Q,dp) * log(sigma2)
+        do k = 1,self%Q
+            lam    = max(real(self%eigvals(k),dp), sigma2)
+            logdet = logdet + log(lam)
         enddo
-        rss = max(rss, real(DTINY,dp))
-        pcount = self%D * self%Q + 1
-        bic = real(self%D*self%N,dp) * log(rss / real(self%D*self%N,dp)) + real(pcount,dp) * log(real(self%D*self%N,dp))
-        deallocate(zeroavg, recon)
+        allocate(m(self%Q,self%Q), minv(self%Q,self%Q), t(self%Q,self%N))
+        t = matmul(real(self%Wt,dp), real(pcavecs,dp))
+        m = matmul(real(self%Wt,dp), real(self%W,dp))
+        do k = 1,self%Q
+            m(k,k) = m(k,k) + sigma2
+        enddo
+        call matinv(m, minv, self%Q, err)
+        if( err == -1 )then
+            minv = 0._dp
+            do k = 1,self%Q
+                minv(k,k) = 1._dp
+            enddo
+        endif
+        trace = self%xnorm2_total
+        do n = 1,self%N
+            trace = trace - dot_product(t(:,n), matmul(minv, t(:,n)))
+        enddo
+        trace   = trace / (real(self%N,dp) * sigma2)
+        loglik  = -0.5_dp * real(self%N,dp) * (real(self%D,dp) * log(2._dp * acos(-1._dp)) + logdet + trace)
+        nparams = self%D * self%Q - (self%Q * (self%Q - 1)) / 2 + 1
+        bic     = -2._dp * loglik + real(nparams,dp) * log(real(self%N,dp))
+        deallocate(m, minv, t)
     end function calc_bic_ppca
 
     integer function suggest_rank_ppca( self, pcavecs, candidates, maxpcaits, qs_out, bics_out, sigma2_out ) result(best_q)
@@ -211,7 +235,7 @@ contains
         real(dp), optional, allocatable, intent(out) :: bics_out(:)
         real(dp), optional, allocatable, intent(out) :: sigma2_out(:)
         real(dp), parameter :: BIC_TOL = 2._dp
-        integer :: i, q, nloc, dloc, maxits, best_idx
+        integer :: i, q, qprev, nloc, dloc, maxits, best_idx
         real(dp) :: bic, best_bic
         real(dp), allocatable :: bics(:), sigma2s(:)
         integer,  allocatable :: qs(:)
@@ -229,11 +253,11 @@ contains
         sigma2s = huge(1._dp)
         best_bic = huge(1._dp)
         best_idx = 0
+        qprev    = 0
         do i = 1, size(candidates)
             q = min(max(candidates(i), 1), max(nloc-1, 1))
-            if( i > 1 )then
-                if( q == qs(i-1) ) cycle
-            endif
+            if( q == qprev ) cycle   ! a repeated (or clamped-to-the-same) rank is fitted once
+            qprev = q
             qs(i) = q
             call self%new(nloc, dloc, q)
             call self%set_verbose(.false.)

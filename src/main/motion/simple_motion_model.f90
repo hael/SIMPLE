@@ -241,7 +241,7 @@ contains
         sig = 1.d0
         idx = 0
         do iframe = 1, self%nframes
-            dframe = real(iframe-self%fixed_frame, dp)
+            dframe = iframe - self%fixed_frame
             do i = 1, self%nx_patch
                 do j = 1, self%ny_patch
                     idx      = idx+1
@@ -249,7 +249,7 @@ contains
                     yy(idx)  = real(self%local_offsets_y(iframe,i,j),dp)
                     x(1,idx) = self%pix2coordx( real(self%patch_coords(i,j,1),dp) )
                     x(2,idx) = self%pix2coordy( real(self%patch_coords(i,j,2),dp) )
-                    x(3,idx) = dframe
+                    x(3,idx) = real(dframe, dp)
                 end do
             end do
         end do

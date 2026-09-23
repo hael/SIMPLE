@@ -7,40 +7,12 @@ use simple_syslib
 use simple_fileio
 implicit none
 
-public :: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
+public :: write_class_samples, read_class_samples, deallocate_class_samples
 private
 #include "simple_local_flags.inc"
 
 contains
     
-    subroutine print_class_sample( cs_entry )
-        type(class_sample), intent(in)  :: cs_entry
-        print *, 'clsind             ', cs_entry%clsind
-        print *, 'pop                ', cs_entry%pop
-        print *, 'nsample            ', cs_entry%nsample
-        print *, 'size(pinds)        ', size(cs_entry%pinds)
-        print *, 'size(cs_entry%ccs) ', size(cs_entry%ccs)
-    end subroutine print_class_sample
-
-    function class_samples_same( cs1, cs2 ) result( l_same )
-        type(class_sample), intent(inout) :: cs1, cs2
-        real, allocatable :: rarr1(:), rarr2(:)
-        integer :: sz1, sz2, sz_pinds, sz_ints
-        logical :: l_same
-        rarr1  = serialize_class_sample(cs1)
-        rarr2  = serialize_class_sample(cs2)
-        sz1    = size(rarr1)
-        sz2    = size(rarr2)
-        l_same = .false.
-        if( sz1 == sz2 )then
-            sz_pinds = (sz1 - 3) / 2
-            if( sz_pinds > 0 )then
-                sz_ints = 3 + sz_pinds
-                if( all(nint(rarr1(:sz_ints)) == nint(rarr2(:sz_ints))) ) l_same = .true.
-            endif
-        endif
-    end function class_samples_same
-
     function serialize_class_sample( cs_entry ) result( rarr )
         type(class_sample), intent(in)  :: cs_entry
         real, allocatable :: rarr(:)
@@ -64,31 +36,6 @@ contains
             end do
         endif
     end function serialize_class_sample
-
-    function unserialize_class_sample( rarr ) result( cs_entry )
-        real, allocatable, intent(in) :: rarr(:)
-        type(class_sample) :: cs_entry
-        integer :: sz_pinds, sz_rarr, cnt, i
-        if( .not. allocated(rarr) ) THROW_HARD('Input array not allocated')
-        sz_rarr          = size(rarr)
-        sz_pinds         = (sz_rarr - 3) / 2
-        cs_entry%clsind  = nint(rarr(1))
-        cs_entry%pop     = nint(rarr(2))
-        cs_entry%nsample = nint(rarr(3))
-        if( sz_pinds > 0 )then
-            allocate(cs_entry%pinds(sz_pinds), source=0 )
-            allocate(cs_entry%ccs(sz_pinds),   source=0.)
-            cnt = 3
-            do i = 1,sz_pinds
-                cnt = cnt + 1
-                cs_entry%pinds(i) = nint(rarr(cnt)) 
-            end do
-            do i = 1,sz_pinds
-                cnt = cnt + 1
-                cs_entry%ccs(i) = rarr(cnt)
-            end do
-        endif
-    end function unserialize_class_sample
 
     subroutine write_class_samples( csarr, fname )
         type(class_sample), intent(in) :: csarr(:)
