@@ -1400,8 +1400,13 @@ tr(C^-1 S) evaluated at the fitted W (the stationary-point form, which
 drops that trace as D, was tried first and let a ten-iteration rank-3
 fit score above its own optimum and win; the exact likelihood cannot),
 p = D Q - Q(Q-1)/2 + 1. On the fixture the converged values are 249.8,
-171.5, 176.7, 180.5 for ranks 1 to 4 and ten-iteration fits from six
-random starts give 250, 175, 182: the scan stops at 2 by more than 5.
+171.5, 176.7, 180.5 for ranks 1 to 4. The scan's hard cap of ten EM
+iterations then failed the Linux build: a ten-iteration rank-2 fit
+scores 174-176 against a rank-3 fit that may reach 177, inside
+BIC_TOL, and which one wins depends on the random start. The cap is
+gone: `suggest_rank` honours the caller's `maxpcaits` (cluster2D
+passes 15) and EM stops on its own tolerances before that; the tester
+scans with 500 and pins the converged BICs and sigma^2.
 The tester pins the rank-2 BIC and the scan again; cluster2D's
 auto-neigs for `ppca` classes changes behaviour accordingly.
 Thirteenth. Seen on the build in between: `suggest_rank` skipped a

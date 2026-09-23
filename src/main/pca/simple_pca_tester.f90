@@ -397,10 +397,10 @@ contains
         call prob%kill
     end subroutine test_ppca_ml_solution
 
-    ! suggest_rank fits each candidate for at most ten EM iterations and takes the smallest rank whose BIC
-    ! is within 2 of the best. With the marginal-likelihood BIC the converged values on this fixture are
-    ! 249.8 (rank 1), 171.5 (rank 2), 176.7 (rank 3): the scan stops where the spectrum flattens, and an
-    ! unconverged higher-rank fit only scores worse
+    ! suggest_rank fits each candidate (EM to its own tolerances within the caller's cap) and takes the
+    ! smallest rank whose BIC is within 2 of the best. With the marginal-likelihood BIC the converged values
+    ! on this fixture are 249.8 (rank 1), 171.5 (rank 2), 176.7 (rank 3): the scan stops where the spectrum
+    ! flattens (ten iterations, the former hard cap, left the margin within the tolerance on Linux)
     subroutine test_ppca_rank_suggestion()
         type(ppca) :: prob
         real     :: avg(PPCA_D), xc(PPCA_D,PPCA_N)
@@ -409,7 +409,7 @@ contains
         real(dp), allocatable :: bics(:), sigma2s(:)
         write(*,'(A)') 'test_ppca_rank_suggestion'
         call centre(PPCA_X, avg, xc)
-        best_q = prob%suggest_rank(xc, [1, 2, 3], 10, qs, bics, sigma2s)
+        best_q = prob%suggest_rank(xc, [1, 2, 3], 500, qs, bics, sigma2s)
         call assert_int(2, best_q, 'the rank-2-plus-noise fixture is recognised as rank 2')
         call assert_int(3, size(qs), 'one entry per candidate')
         call assert_int(1, qs(1), 'candidate ranks are reported')
@@ -417,13 +417,13 @@ contains
         call assert_int(3, qs(3), 'candidate ranks are reported (last)')
         call assert_true(bics(2) < bics(3) .and. bics(3) < bics(1), 'BIC ranks the candidates 2 < 3 < 1')
         call assert_true(bics(3) - bics(2) > 2._dp, 'rank 3 loses to rank 2 by more than the tolerance')
+        call assert_real(171.46, real(bics(2)), 0.5, 'rank 2 BIC at convergence')
+        call assert_real(176.70, real(bics(3)), 0.5, 'rank 3 BIC at convergence')
         call assert_true(bics(1) - bics(2) > 50._dp, 'rank 1 loses by far (the second signal component unexplained)')
-        ! ten EM iterations do not order the rank-2 and rank-3 sigma^2 reliably (the third component grows
-        ! slowly from a random start); what holds is the drop once the second signal component is in
-        call assert_true(sigma2s(1) > 0.3_dp, 'rank 1 leaves the second signal component in sigma^2')
-        call assert_true(sigma2s(2) < 0.2_dp .and. sigma2s(3) < 0.2_dp, 'ranks 2 and 3 have sigma^2 at the noise floor')
-        call assert_true(sigma2s(1) > sigma2s(2), 'sigma^2 drops from rank 1 to rank 2')
-        best_q = prob%suggest_rank(xc, [2, 2, 2, 4], 10, qs, bics, sigma2s)
+        call assert_true(sigma2s(1) > sigma2s(2) .and. sigma2s(2) > sigma2s(3), 'sigma^2 shrinks with the rank (converged fits)')
+        call assert_real(0.6728, real(sigma2s(1)), 5.e-3, 'rank 1: sigma^2 is the mean of the four discarded eigenvalues')
+        call assert_real(0.0675, real(sigma2s(2)), 2.e-3, 'rank 2: sigma^2 is the mean of the three discarded eigenvalues')
+        best_q = prob%suggest_rank(xc, [2, 2, 2, 4], 500, qs, bics, sigma2s)
         call assert_int(2, best_q, 'repeated candidates are fitted once; rank 4 does not beat rank 2')
         call assert_int(0, qs(2), 'a repeated candidate is reported as rank 0')
         call assert_int(0, qs(3), 'a twice-repeated candidate is reported as rank 0 too (compared with the previous fit, not the previous slot)')

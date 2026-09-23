@@ -242,10 +242,13 @@ contains
 
         dloc = size(pcavecs,1)
         nloc = size(pcavecs,2)
+        ! the likelihood comparison needs each candidate fit near its optimum: EM stops on its own
+        ! tolerances, the caller's cap is honoured as given (the former hard cap of ten iterations left
+        ! the lower rank as under-fitted as the higher one and the margins within BIC_TOL, 2026-09-23)
         if( present(maxpcaits) )then
-            maxits = min(max(maxpcaits, 1), 10)
+            maxits = max(maxpcaits, 1)
         else
-            maxits = 10
+            maxits = 50
         endif
         allocate(bics(size(candidates)), qs(size(candidates)), sigma2s(size(candidates)))
         bics = huge(1._dp)
