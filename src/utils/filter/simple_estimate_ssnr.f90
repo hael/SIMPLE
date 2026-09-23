@@ -395,16 +395,19 @@ contains
 
     end subroutine lpstages
 
-    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart )
+    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart, verbose )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
-        logical, optional, intent(in)  :: force_lpstart
+        logical, optional, intent(in)  :: force_lpstart, verbose
         real,    parameter :: LP2SMPD_TARGET   = 0.4
         real,    parameter :: SMPD_TARGET_MIN  = 2.5
         integer :: i
         real    :: lpstart_eff
+        logical :: l_verbose
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_fast')
         lpstart_eff = max(lpstart, LPSTAGES_STAGE1_LP_FLOOR)
         if( present(force_lpstart) )then
@@ -419,10 +422,12 @@ contains
             endif
             call calc_scaleinfo(i)
         enddo
-        do i = 1,nstages
-            print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
-                &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
-        enddo
+        if( l_verbose )then
+            do i = 1,nstages
+                print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
+                    &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+            enddo
+        endif
         contains
 
             subroutine calc_scaleinfo( istage )
@@ -436,17 +441,19 @@ contains
 
     end subroutine lpstages_fast
 
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo)
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
-        real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
-        real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
+        logical, optional, intent(in)  :: verbose
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial
         real    :: rbox_stepsz, smpd_target
+        logical :: l_verbose
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_setlims')
         lpinfo(:)%l_lpset = .true.
         do i = 1,nstages
@@ -471,10 +478,12 @@ contains
                 lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
             end do
         endif
-        do i = 1, nstages
-            print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
-                &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
-        end do
+        if( l_verbose )then
+            do i = 1, nstages
+                print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
+                    &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+            end do
+        endif
     end subroutine lpstages_setlims
 
 end module simple_estimate_ssnr

@@ -150,8 +150,6 @@ jobs:
              simple_test_ansi_colors
              echo "-------------------- TEST INSTALL -------------------------"
              simple_test_install
-             echo "-------------------- TEST LPLIMS -------------------------"
-             simple_test_lplims
              echo "-------------------- TEST OPENMP -------------------------"
              simple_test_openmp
              echo "-------------------- TEST MASK ROUTINES (THREADED) -------------------------"

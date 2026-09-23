@@ -103,6 +103,7 @@ contains
   subroutine test_new_and_kill_lifecycle()
     type(persistent_worker_server) :: server
     integer                        :: port
+    integer(8)                     :: t0, t1, trate
     write(*,'(A)') 'test_new_and_kill_lifecycle'
     call server%new(TEST_NWORKERS, TEST_NTHR_WORKERS)
     call assert_true(server%is_running(), 'new() should start the listener thread')
@@ -112,7 +113,10 @@ contains
     call assert_true(associated(server%listener_args), 'new() should associate listener_args')
     call assert_int(TEST_NWORKERS, server%n_workers, 'new() should persist requested n_workers')
     call assert_int(TEST_NTHR_WORKERS, server%nthr_workers, 'new() should persist requested nthr_workers')
+    call system_clock(t0, trate)
     call server%kill()
+    call system_clock(t1)
+    call assert_true(real(t1-t0)/real(trate) < 0.5, 'kill() with no workers connected returns at once (no fixed wait)')
     call assert_false(server%is_running(), 'kill() should stop the listener thread')
     call assert_int(0, server%get_port(), 'kill() should reset port to 0')
     call assert_false(associated(server%worker_data), 'kill() should deassociate worker_data')

@@ -63,10 +63,6 @@
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
-      - `simple_test_lbfgsb.f90`
-      - `simple_test_lbfgsb_cosine.f90`
-      - `simple_test_lplims.f90`
-      - `simple_test_lpstages.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_nice.f90`
       - `simple_test_nu_envmask.f90`
@@ -74,7 +70,6 @@
       - `simple_test_openacc.f90`
       - `simple_test_openmp.f90`
       - `simple_test_openmp_offload.f90`
-      - `simple_test_opt_lp.f90`
       - `simple_test_pdb2mrc.f90`
       - `simple_test_phase_rand_fsc.f90`
       - `simple_test_phshift_policy.f90`
@@ -237,7 +232,6 @@
           - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate)
           - `simple_commanders_test_masks.f90` — for all masks tests
           - `simple_commanders_test_network.f90` — for all network tests
-          - `simple_commanders_test_optimize.f90` — for all optimize tests
           - `simple_commanders_test_parallel.f90` — for all parallel tests
           - `simple_commanders_test_single.f90` — tests for single
           - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
@@ -277,7 +271,6 @@
         - `simple_test_exec_io.f90` — execution of test input/output processing commanders (manual, user-data cases)
         - `simple_test_exec_masks.f90` — execution of test masks processing commanders
         - `simple_test_exec_network.f90` — execution of test network processing commanders
-        - `simple_test_exec_optimize.f90` — execution of test optimize processing commanders
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
         - `simple_test_exec_stream.f90` — execution of stream test programs
@@ -401,16 +394,13 @@
         - `simple_nu_filter_state.f90` — simple nu filter state implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_stats.f90` — simple nu filter stats implementation for volume-domain nonuniform filtering
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
-        - `simple_opt_bfgs2.f90` — function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
-        - `simple_opt_bforce.f90` — brute force function minimisation
         - `simple_opt_de.f90` — continuous function optimisation by differential evolution
         - `simple_opt_factory.f90` — factory pattern class for the SIMPLE optimisers
-        - `simple_opt_helpers.f90` — helper routines and definitions for certain optimizer routines (those taken from the gsl library)
         - `simple_opt_lbfgsb.f90` — memory limited bound-constained BFGS optimiser
         - `simple_opt_simplex.f90` — The Nelder-Mead simplex method for continuous function minimisation
         - `simple_opt_spec.f90` — optimiser specification
-        - `simple_opt_stde.f90` — function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
-        - `simple_opt_subs.f90` — optimisation algorithm utilities, line searches etc.
+        - `simple_opt_subs.f90` — the downhill simplex step (amoeba) behind the restarted simplex optimiser
+        - `simple_opt_tester.f90` — unit test routines for the optimiser framework (opt_spec, opt_factory, L-BFGS-B, differential evolution, simplex)
         - `simple_optimizer.f90` — abstract optimizer defining an interface for the extending optimization classes
       - **ori/** — home of modules for metadata (orientation) management
         - `simple_ori.f90` — an orientation (abstract data type for per-particle data)
@@ -631,7 +621,6 @@
           - `simple_test_ui_io.f90` — user interfaces for the input/output test programs run by hand on user data (simple_test_exec)
           - `simple_test_ui_masks.f90` — module defining the user interfaces for masks test programs in the simple_test_exec suite
           - `simple_test_ui_network.f90` — module defining the user interfaces for network test programs in the simple_test_exec suite
-          - `simple_test_ui_optimize.f90` — module defining the user interfaces for optimize test programs in the simple_test_exec suite
           - `simple_test_ui_parallel.f90` — module defining the user interfaces for parallel test programs in the simple_test_exec suite
           - `simple_test_ui_single.f90` — module defining the user interfaces for single test programs in the simple_test_exec suite
           - `simple_test_ui_stream.f90` — module defining the user interfaces for stream test programs in the simple_test_exec suite
@@ -694,6 +683,7 @@
         - `simple_bspline_smoother.f90` — quadratic B-spline Laplacian smoother (Tikhonov regularization, Fourier-domain solve).
         - `simple_butterworth.f90` — Butterworth low-pass filtering kernel
         - `simple_estimate_ssnr.f90` — spectral signal-to-noise ratio estimation routines
+        - `simple_lpstages_tester.f90` — unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims) and the Butterworth kernel
         - `simple_fsc.f90` — various Fourier Shell Correlation utilities
         - `simple_opt_filter.f90` — optimization(search)-based filtering
         - `simple_tent_smooth.f90`

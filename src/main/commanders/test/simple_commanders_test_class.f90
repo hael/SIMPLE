@@ -23,6 +23,8 @@ use simple_kbinterpol_tester,                only: run_all_kbinterpol_tests
 use simple_srch_sort_loc_tester,             only: run_all_srch_sort_loc_tests
 use simple_decay_funs_tester,                only: run_all_decay_funs_tests
 use simple_pca_tester,                       only: run_all_pca_tests
+use simple_opt_tester,                       only: run_all_opt_tests
+use simple_lpstages_tester,                  only: run_all_lpstages_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_accum_blend_tester,               only: run_all_accum_blend_tests
@@ -199,6 +201,8 @@ contains
         call add_suite(s, n, 'search, sort, locate',    run_all_srch_sort_loc_tests)
         call add_suite(s, n, 'decay schedules',         run_all_decay_funs_tests)
         call add_suite(s, n, 'PCA',                     run_all_pca_tests)
+        call add_suite(s, n, 'optimisers',              run_all_opt_tests)
+        call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
         call add_suite(s, n, 'shift search, correlator', test_ftexp_shsrch)
         call add_suite(s, n, 'shift search, optimiser',  test_ftexp_shsrch2)

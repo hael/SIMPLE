@@ -148,7 +148,6 @@ contains
         call reg%add_char('pose_cont', self%pose_cont)
         call reg%add_char('pose_cont_route', self%pose_cont_route)
         call reg%add_char('omit_neg', self%omit_neg)
-        call reg%add_char('opt', self%opt)
         call reg%add_char('optics_dir', self%optics_dir)
         call reg%add_char('oritype', self%oritype)
         call reg%add_char('outdir', self%outdir)

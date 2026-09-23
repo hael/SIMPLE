@@ -404,7 +404,6 @@ contains
         call cmd_dict%push('objfun_den',    'augment raw Euclidean objective with denoised-particle correlation(yes|no){no}')
         call cmd_dict%push('objfun_den_w',  'denoised correlation weight in hybrid objective(0-1){0.5}')
         call cmd_dict%push('offset',        'pixels offset{10}')
-        call cmd_dict%push('opt',           'optimiser (bfgs|simplex){bfgs}')
         call cmd_dict%push('order',         'order ptcls according to correlation(yes|no){no}')
         call cmd_dict%push('oritab',        'table of orientations(.txt|.simple)')
         call cmd_dict%push('oritab2',       'table of orientations 2(.txt|.simple)')

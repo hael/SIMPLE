@@ -59,11 +59,13 @@ module simple_ipc_tcp_socket_client
     integer(kind=c_int)   :: fd         = -1
     type(string)          :: server_ips
     type(string)          :: server_ip
+    integer               :: retry_backoff_ms = TCP_TIMEOUT_MS  !< pause between send_recv_msg retries
   contains
     procedure :: new
     procedure :: connect
     procedure :: kill
     procedure :: send_recv_msg
+    procedure :: set_retry_backoff_ms
   end type ipc_tcp_socket_client
 
   contains
@@ -77,6 +79,14 @@ module simple_ipc_tcp_socket_client
     self%port       = port
     self%server_ips = server_list
   end subroutine new
+
+  !> Pause between the retries of send_recv_msg (default TCP_TIMEOUT_MS); 0 retries at once.
+  !> Tests of the failure path set it to 0 so that five retries do not cost four seconds.
+  subroutine set_retry_backoff_ms(self, backoff_ms)
+    class(ipc_tcp_socket_client), intent(inout) :: self
+    integer,                      intent(in)    :: backoff_ms
+    self%retry_backoff_ms = max(0, backoff_ms)
+  end subroutine set_retry_backoff_ms
 
   !> Close an open socket (if any) and reset object fields.
   subroutine kill(self)
@@ -266,7 +276,9 @@ module simple_ipc_tcp_socket_client
         rc = c_close(self%fd)
         self%fd = -1
       end if
-      if( itry < TCP_MAX_RETRIES ) rc = c_usleep(int(int(TCP_TIMEOUT_MS, c_long) * 1000_c_long, c_useconds_t))
+      if( itry < TCP_MAX_RETRIES .and. self%retry_backoff_ms > 0 )then
+        rc = c_usleep(int(int(self%retry_backoff_ms, c_long) * 1000_c_long, c_useconds_t))
+      endif
     end do
     write(logfhandle,'(A)') '>>> IPC_TCP_SOCKET_CLIENT: send_recv_msg failed after retries'
   end subroutine send_recv_msg

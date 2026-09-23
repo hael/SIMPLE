@@ -2,7 +2,6 @@
 module simple_opt_lbfgsb
 use simple_core_module_api
 use simple_optimizer, only: optimizer
-use simple_opt_helpers
 implicit none
 
 public :: opt_lbfgsb, PRINT_NEVALS
@@ -84,7 +83,6 @@ contains
     !>  \brief  nonlinear conjugate gradient minimizer
     subroutine lbfgsb_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
-        use simple_opt_subs, only: lnsrch
         class(opt_lbfgsb), intent(inout) :: self        !< instance
         class(opt_spec),   intent(inout) :: spec        !< specification
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function

@@ -14,7 +14,6 @@ use simple_test_exec_highlevel, only: exec_test_highlevel_commander
 use simple_test_exec_io,        only: exec_test_io_commander
 use simple_test_exec_masks,     only: exec_test_masks_commander
 use simple_test_exec_network,   only: exec_test_network_commander
-use simple_test_exec_optimize,  only: exec_test_optimize_commander
 use simple_test_exec_parallel,  only: exec_test_parallel_commander
 use simple_test_exec_single,    only: exec_test_single_commander
 use simple_test_exec_stream,    only: exec_test_stream_commander

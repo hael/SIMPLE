@@ -172,7 +172,7 @@ module simple_ipc_tcp_socket_server
     if( rc /= 0 ) THROW_HARD('start_listener: c_pthread_create failed')
     self%thread_started = .true.
     ! wait up to 2 s for the thread to signal it is ready
-    do i = 1, 20
+    do i = 1, 2000   ! up to 2 s, checked every millisecond (the thread is usually ready on the first check)
       rc = c_pthread_mutex_lock(args%mutex)
       if( args%ready /= 0 ) then
         self%listening = .true.
@@ -180,7 +180,7 @@ module simple_ipc_tcp_socket_server
         exit
       end if
       rc = c_pthread_mutex_unlock(args%mutex)
-      rc = c_usleep(100000)  ! 100 ms
+      rc = c_usleep(1000)  ! 1 ms
     end do
     if( self%listening ) then
       write(logfhandle,'(A,I0)')'>>> IPC_TCP_SOCKET listener running on port ', self%port

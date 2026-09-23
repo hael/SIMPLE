@@ -7,8 +7,8 @@ gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
 Phase 3 (the review of everything else) is under way: the geometry, fft,
-masks, io, numerics and stats batches and the segmentation category are
-done (section 9.7; stats awaiting its first build). The tests written so
+masks, io, numerics, stats and optimize batches and the segmentation
+category are done (section 9.7; optimize awaiting its first build). The tests written so
 far have found and fixed thirteen production defects (mask mirror
 asymmetry, disc padding count, Otsu bin edge, Otsu two-valued input,
 binarize(npix) count, ori_strlen_trim, the `selec` partition typo behind
@@ -17,7 +17,7 @@ macOS through Accelerate's `snrm2`, the `indices_post` size of a
 descending `print_segment_json` window, the Nystroem kPCA feature and
 projection scaling, the non-convergent cosine pre-image, the residual BIC of
 the PPCA rank scan) and removed
-twenty-five dead routines. This is a large
+twenty-five dead routines and three unused optimisers. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -1450,6 +1450,72 @@ now guarded, and the tester asks for both without a sort key. Left as
 is: in a descending window `indices_pre`/`indices_post` refer to the
 ascending order (swapped relative to the displayed order); the GUI's
 reading of them is not known here.
+
+**optimize (2026-09-23, Hans).** Five router identities plus the
+unassigned standalone `lpstages`. `lbfgsb` and `lbfgsb_cosine` (twins
+on both routes, print-only) are `merge into unit_numerics` through
+`simple_opt_tester` (`optimisers`): nothing in the gate had touched
+the optimiser framework production runs on (`lbfgsb` at five sites,
+`de` in CTF estimation, `simplex` in the volume symmetry search). The
+tester goes through `opt_factory`/`opt_spec` as production does:
+bookkeeping of the specification, L-BFGS-B on the 1D quadratic free
+and against an active bound (converged flag, one gradient per cost
+evaluation), on the direction problem (as 1 - cos, since acos has an
+infinite derivative at the optimum the old test aimed at) and on
+Rosenbrock, DE and the restarted simplex on a 2D quadratic from preset
+and random starts. Hans's (a): the `bfgs2`, `bforce` and `stde`
+optimisers, with no production caller, are gone, and with them
+`simple_opt_helpers` (only they used it), the line searches, the
+hill-climbing selector and the limit corrector of `simple_opt_subs`
+(now `amoeba` alone, 465 to 135 lines), their factory cases, and the
+`opt` parameter whose `bfgs` default nothing read: 1195 lines.
+`lplims` (prints, was in CI), `lpstages_test` (prints) and the
+unassigned `lpstages` (five THROW_HARDs) are `merge into unit_numerics`
+through `simple_lpstages_tester` (`low-pass stages`): the three clamp
+regimes of `mskdiam2lplimits`, `lpstages` with one stage, from a
+falling FRC (the crossings, thresholds, crop boxes through the magic
+boxes, cropped sampling and shift limits, pinned on a double-precision
+emulation), the particle and class-average threshold floors on an FRC
+that separates them, the linear fallback of a flat FRC (what the old
+exec case ran without noticing), `lpstages_fast` with its floor and
+`force_lpstart`, `lpstages_setlims` including the no-crop case, and
+the Butterworth kernel in all four forms against 1/sqrt(1+(s/fc)^16);
+`lpstages_fast` and `lpstages_setlims` gained the `verbose` optional
+`lpstages` already had (default unchanged). `opt_lp` is `retire`: a
+manual experiment that downloads 1JYX from RCSB, reprojects it and
+prints Butterworth-band residuals; `create_hist_vector`, which it
+called, stays because `otsu` uses it. With nothing left in the
+category the optimize commander module, router and UI module are gone
+(three files, three call sites); CI lost `simple_test_lplims`.
+Coverage accounting: 20 calls, 3 not made by name any more
+(`apply_filter`, exercised by the image self-test and inside
+`butterworth_filter`; `avg_sdev`; `create_hist_vector`, inside `otsu`),
+none a loss. Nothing found wrong in what was reviewed. First build:
+green except two assertions of the tester's own making (DE reaches
+the quadratic minimum to about 1e-2 in cost at its population
+tolerance, not 1e-3; the notch value at s = 40 is 0.0996, the
+assertion had said below 0.01).
+
+**The ipc gate and its sleeps (2026-09-23, Hans: "we cannot spend time
+sleeping in unit tests that are part of the build process").**
+`unit_ipc` took 24 s on Linux and, on a later run, 16 s on the Mac
+(1.4 s before): the four ipc sub-suites do not sleep, the production
+code they call does. `persistent_worker_server%kill` slept a fixed
+2 s "to allow workers to receive TERMINATE" on every call, and the
+server tester kills eight started servers: 16 s. The TCP client's
+`send_recv_msg` paused 1 s between its five retries, and the tester's
+no-listener test pays four of them: 4 s. The socket server's
+`start_listener` polled the ready flag every 100 ms. Fixed in
+production, not in the tests: kill() now waits until the listener has
+sent TERMINATE to every worker that was registered when kill() was
+called (a mutex-protected counter the listener increments when it
+replies TERMINATE), polling every 10 ms up to the old 2 s cap, so a
+server with no workers stops at once and a server with workers stops
+as soon as they have been told; the client's retry pause is a
+component with a setter (`set_retry_backoff_ms`, default unchanged at
+1 s) that the failure-path test sets to 0; the listener start polls
+every 1 ms under the same 2 s cap. The server tester asserts that
+kill() with no workers returns within half a second.
 
 ## 10. Fast-tier performance
 

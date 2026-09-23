@@ -172,6 +172,7 @@ contains
     call assert_true(TCP_MAX_RETRIES > 0, 'client retry constant should be positive')
     call assert_true(TCP_TIMEOUT_MS  > 0, 'client timeout constant should be positive')
     call client%new(string('127.0.0.1'), TEST_UNREACHABLE_PORT)
+    call client%set_retry_backoff_ms(0)   ! the five retries are the contract, the second-long pauses are not
     allocate(character(kind=c_char, len=NO_LISTENER_BUF_LEN) :: snd_buffer)
     snd_buffer = 'no-listener'
     call client%send_recv_msg(snd_buffer, rcv_buffer, sent, nread)

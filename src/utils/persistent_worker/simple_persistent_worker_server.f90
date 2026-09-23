@@ -63,7 +63,8 @@ module simple_persistent_worker_server
     integer, parameter :: WORKER_STATUS_ERROR = 2       !< message was malformed or invalid
     integer, parameter :: TASK_QUEUE_SIZE     = 1000    !< max tasks per priority level; arbitrary large value
     integer, parameter :: TCP_BUFSZ           = 1460    !< TCP MTU (1500) - IP header (20) - TCP header (20)
-    integer, parameter :: KILL_WAIT_TIME_US   = 2000000 !< wait time after kill() before closing socket (us)
+    integer, parameter :: KILL_WAIT_TIME_US   = 2000000 !< longest wait in kill() for the workers to receive TERMINATE (us)
+    integer, parameter :: KILL_POLL_TIME_US    = 10000   !< how often kill() checks whether every worker has been told (us)
     integer, parameter :: POLL_TIMEOUT_MS     = 100     !< timeout for poll() in milliseconds
     integer, parameter :: SWEEP_PERIOD        = 1       !< sweep dead fds every N poll wakeups (1 = every wakeup)
     integer, parameter :: SCALE_DOWN_COOLDOWN_S = 300   !< queue-pressure cooldown before idle worker scale-down (seconds)
@@ -95,6 +96,7 @@ module simple_persistent_worker_server
         logical :: launch_pending_worker_ids(TASK_QUEUE_SIZE) = .false. !< .true. when a warm-up launch has been submitted for slot and worker has not connected yet
         logical :: enable_warmup_cooldown           = .false. !< .true. enables queue-pressure warmup/cooldown autoscaling
         logical :: l_terminate                      = .false. !< set .true. by kill(); listener sends TERMINATE to all workers
+        integer :: n_terminate_sent                 = 0       !< TERMINATE replies sent since l_terminate was set; kill() waits on it
     end type persistent_worker_data
 
     !> TCP accept-loop server that receives worker heartbeats and dispatches
@@ -221,6 +223,7 @@ contains
     subroutine kill( self )
         class(persistent_worker_server), intent(inout) :: self
         integer(kind=c_int)                      :: rc
+        integer                                  :: n_to_terminate, n_told, waited_us
         self%nthr_workers = 0
         self%job_count    = 0
         ! host_ips%kill is a no-op when the string was never allocated, so this is safe
@@ -232,14 +235,25 @@ contains
             self%port = 0
             return
         end if
-        ! Signal the listener thread; it will forward TERMINATE to each worker.
+        ! Signal the listener thread; it will forward TERMINATE to each worker on its next heartbeat.
         rc = c_pthread_mutex_lock(self%listener_args%mutex)
         if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER kill: mutex_lock failed, rc=', rc
-        self%worker_data%l_terminate = .true.
+        self%worker_data%l_terminate      = .true.
+        self%worker_data%n_terminate_sent = 0
+        n_to_terminate                    = self%worker_data%n_active_workers
         rc = c_pthread_mutex_unlock(self%listener_args%mutex)
         if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER kill: mutex_unlock failed, rc=', rc
-        ! Wait to allow workers to receive TERMINATE before we close the socket.
-        rc = c_usleep(KILL_WAIT_TIME_US)
+        ! Wait until every registered worker has been told, at most KILL_WAIT_TIME_US; with no workers
+        ! there is nothing to wait for (a fixed two-second sleep here cost the unit tests 16 s, 2026-09-23).
+        waited_us = 0
+        do while( n_to_terminate > 0 .and. waited_us < KILL_WAIT_TIME_US )
+            rc = c_pthread_mutex_lock(self%listener_args%mutex)
+            n_told = self%worker_data%n_terminate_sent
+            rc = c_pthread_mutex_unlock(self%listener_args%mutex)
+            if( n_told >= n_to_terminate ) exit
+            rc = c_usleep(KILL_POLL_TIME_US)
+            waited_us = waited_us + KILL_POLL_TIME_US
+        end do
         call self%ipc_socket_server%kill()
         self%port = 0  ! zero only after listener thread has been joined
         call self%ipc_socket_client%kill()  ! close the short-lived connection
@@ -1114,6 +1128,10 @@ contains
                 call terminate_msg%serialise(send_buffer)
                 call repl_msg(conn_fd, send_buffer, nread, ok)
                 if( .not. ok ) write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER repl_msg failed for TERMINATE to worker ', int2str(worker_id)
+                ! let kill() know one more worker has been told (counted whether or not the reply landed)
+                rc = c_pthread_mutex_lock(args%mutex)
+                if( status%l_terminate ) status%n_terminate_sent = status%n_terminate_sent + 1
+                rc = c_pthread_mutex_unlock(args%mutex)
                 call terminate_msg%kill()
                 call dispatch_task%kill()
                 replied = .true.
