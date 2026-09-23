@@ -27,7 +27,11 @@
 !     assemble_stream_opening2D()          — write 2D-classification section
 !     assemble_stream_particle_sieving()   — write particle-sieving section
 !     assemble_stream_pool2D()             — write pool-2D section
-!     assemble_stream_abinitio3D_multistate() — write multistate abinitio3D section
+!     assemble_stream_abinitio3D_multistate() — write multistate abinitio3D section,
+!                                               including an optional per-state 'state_volumes'
+!                                               array of gui_metadata_vol3D entries, each with a
+!                                               nested 'reprojtiles' array of gui_metadata_cavg2D
+!                                               orthogonal reprojection tiles
 !
 ! DEPENDENCIES:
 !   unix, simple_string, simple_forked_process, simple_gui_metadata_api
@@ -57,6 +61,7 @@ module simple_gui_assembler
                                      gui_metadata_stream_pool2D,             &
                                      gui_metadata_stream_pool2D_snapshot,    &
                                      gui_metadata_stream_abinitio3D_multistate, &
+                                     gui_metadata_vol3D,                     &
                                      gui_metadata_project
   implicit none
 
@@ -700,17 +705,62 @@ contains
   end subroutine assemble_stream_pool2D
 
   ! Write the multistate abinitio3D section.
+  ! meta_states_vol3D, when present, holds the vol3D metadata for the current
+  ! per-state reconstructed volumes and is embedded as a 'state_volumes' array,
+  ! distinct from the lightweight per-state 'states' array already emitted by
+  ! meta_abinitio3D_multistate%jsonise() to avoid a duplicate JSON key.
+  ! meta_reprojtiles, when present, holds the individual orthogonal reprojection
+  ! tiles (gui_metadata_cavg2D, idx=state) and is nested per-state as a
+  ! 'reprojtiles' array inside the matching state_volumes entry.
   ! The whole section is suppressed when its hash matches the previously sent hash.
-  subroutine assemble_stream_abinitio3D_multistate( self, meta_abinitio3D_multistate )
+  subroutine assemble_stream_abinitio3D_multistate( self, meta_abinitio3D_multistate, meta_states_vol3D, meta_reprojtiles )
     class(gui_assembler),                            intent(inout) :: self
     type(gui_metadata_stream_abinitio3D_multistate), intent(inout) :: meta_abinitio3D_multistate
+    type(gui_metadata_vol3D), allocatable, optional, intent(inout) :: meta_states_vol3D(:)
+    type(gui_metadata_cavg2D), allocatable, optional, intent(inout) :: meta_reprojtiles(:)
     character(kind=CK,len=:),                        allocatable   :: buffer
-    type(json_value),                                pointer       :: json_ptr => null()
+    type(json_value),                                pointer       :: json_ptr => null(), json_states_ptr => null()
+    type(json_value),                                pointer       :: json_state_vol_ptr => null(), json_tiles_ptr => null()
     type(string)                                                   :: str, hash
+    logical                                                        :: l_add
+    integer                                                        :: i_state, i_tile
     call self%json%remove_if_present(self%json_root, 'abinitio3D_multistate')
     json_ptr => meta_abinitio3D_multistate%jsonise()
     if( .not. associated(json_ptr) ) return
     call self%json%rename(json_ptr, 'abinitio3D_multistate')
+    if( present(meta_states_vol3D) ) then
+      if( allocated(meta_states_vol3D) ) then
+        l_add = .false.
+        call self%json%create_array(json_states_ptr, 'state_volumes')
+        do i_state=1, size(meta_states_vol3D)
+          if( meta_states_vol3D(i_state)%assigned() ) then
+            l_add = .true.
+            json_state_vol_ptr => meta_states_vol3D(i_state)%jsonise()
+            if( present(meta_reprojtiles) ) then
+              if( allocated(meta_reprojtiles) ) then
+                nullify(json_tiles_ptr)
+                call self%json%create_array(json_tiles_ptr, 'reprojtiles')
+                do i_tile=1, size(meta_reprojtiles)
+                  if( meta_reprojtiles(i_tile)%assigned() ) then
+                    if( meta_reprojtiles(i_tile)%get_idx() == meta_states_vol3D(i_state)%get_state() ) then
+                      call self%json%add(json_tiles_ptr, meta_reprojtiles(i_tile)%jsonise())
+                    endif
+                  endif
+                enddo
+                call self%json%add(json_state_vol_ptr, json_tiles_ptr)
+              endif
+            endif
+            call self%json%add(json_states_ptr, json_state_vol_ptr)
+          endif
+        enddo
+        if( l_add ) then
+          call self%json%add(json_ptr, json_states_ptr)
+        else
+          call self%json%destroy(json_states_ptr)
+          nullify(json_states_ptr)
+        end if
+      endif
+    endif
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()

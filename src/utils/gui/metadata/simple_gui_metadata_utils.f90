@@ -37,6 +37,8 @@ contains
     type(gui_metadata_stream_particle_sieving)  :: meta_particle_sieving
     type(gui_metadata_stream_pool2D)            :: meta_pool2D
     type(gui_metadata_stream_pool2D_snapshot)   :: meta_pool2D_snapshot
+    type(gui_metadata_stream_abinitio3D_multistate) :: meta_abinitio3D_multistate
+    type(gui_metadata_vol3D)                    :: meta_vol3D
     integer                                     :: max_size
     max_size = max(sizeof(meta_base),              &
                    sizeof(meta_micrograph),        &
@@ -51,7 +53,9 @@ contains
                    sizeof(meta_opening2D),         &
                    sizeof(meta_particle_sieving),  &
                    sizeof(meta_pool2D),            &
-                   sizeof(meta_pool2D_snapshot))
+                   sizeof(meta_pool2D_snapshot),   &
+                   sizeof(meta_abinitio3D_multistate), &
+                   sizeof(meta_vol3D))
   end function max_metadata_size
 
 end module simple_gui_metadata_utils

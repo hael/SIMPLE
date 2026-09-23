@@ -1157,6 +1157,54 @@ def view_stream_abinitio3D_multistate(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 @login_required(login_url="/login")
+def view_stream_abinitio3D_multistate_zoom(request):
+    """Returns abinitio3D multistate zoom panel in stream view."""
+    template = "nice_stream/zoomabinitio3Dmultistate.html"
+    checksum_cookie = "panel_abinitio3D_multistate_checksum"
+    logfile = "abinitio3D_multistate.log"
+    errfile = "abinitio3D_multistate.error"
+    jobmodel, jobdir = _get_jobmodel_and_dir_from_request(request)
+
+    if jobmodel is None:
+        return HttpResponseNoContent()
+
+    context = {
+        "jobid"    : jobmodel.id,
+        "displayid": jobmodel.disp,
+        "desc"     : jobmodel.desc,
+        "jobstats" : jobmodel.abinitio3D_multistate_stats,
+        "status"   : jobmodel.abinitio3D_multistate_status,
+        "log"      : [],
+        "error"    : "",
+    }
+
+    logfile = os.path.join(jobdir, logfile)
+    errfile = os.path.join(jobdir, errfile)
+    if os.path.exists(logfile) and os.path.isfile(logfile):
+        with open(logfile, "rb") as f:
+            logtext = f.read()
+            logtext_str = str(logtext, errors="replace")
+            logpart_str = ""
+            for line in logtext_str.splitlines():
+                if ">>> JPEG " in line:
+                    split_line = line.split()
+                    if len(split_line) >= 3:
+                        context["log"].append({"text": logpart_str})
+                        context["log"].append({"image": split_line[2]})
+                        logpart_str = ""
+                    else:
+                        logpart_str += line + "\n"
+                else:
+                    logpart_str += line + "\n"
+            if logpart_str != "":
+                context["log"].append({"text": logpart_str})
+    if os.path.exists(errfile) and os.path.isfile(errfile):
+        with open(errfile, "rb") as f:
+            errortext = f.read()
+            context["error"] = str(errortext, errors="replace")
+    return _render_if_changed(request, template, context, checksum_cookie)
+
+@login_required(login_url="/login")
 def view_stream_particle_sets(request):
     """Returns particle sets panel in stream view."""
     template = "nice_stream/panelparticlesets.html"

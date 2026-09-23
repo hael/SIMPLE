@@ -34,7 +34,7 @@
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · stop/restart -->
-        {% include 'includes/_panel_header.html' with panel_title="multistate 3D" terminate_field="terminate_abinitio3D_multistate" restart_field="restart_abinitio3D_multistate" last_import=jobstats.last_import_time %}
+        {% include 'includes/_panel_header.html' with panel_title="multistate 3D" zoom_url="nice_lite:view_stream_abinitio3D_multistate_zoom" terminate_field="terminate_abinitio3D_multistate" restart_field="restart_abinitio3D_multistate" last_import=jobstats.last_import_time %}
 
         <!-- Waiting gauze: shown until particles arrive (below header) -->
         {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}

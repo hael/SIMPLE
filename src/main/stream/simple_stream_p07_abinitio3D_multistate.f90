@@ -7,24 +7,45 @@
 !   streaming pipeline. Watches for completed 3D-export sets (written by
 !   stream_p06_pool2D) and imports them into a growing pool project.
 !
-!   For now this stage only imports newly available sets into the pool; no
-!   3D reconstruction/refinement is performed yet.
+!   Broadcasts stage/progress metadata and per-state gui_metadata_vol3D
+!   (volume paths, population, FSC-derived resolution/curve, orientation
+!   distribution histogram) to the GUI via ipc_pipe_abinitio3D_multstate_in.
+!   refine3D is not yet wired in — only the abinitio3D stage currently
+!   produces per-state volumes/FSCs.
 !
 ! ENTRY POINT:
 !   stream_p07_abinitio3D_multistate%execute(cline) — called by the stream master
 !
 ! INTERNAL SUBROUTINES:
-!   import_sets_into_pool — read new exported sets into the pool
+!   import_sets_into_pool          — read new exported sets into the pool
+!   send_meta_abinitio3D_multistate — broadcast stage/progress metadata to the GUI
+!   build_and_send_vol3D_states     — build/send per-state gui_metadata_vol3D once
+!                                      abinitio3D volumes/FSCs are available
+!   compute_oridist_for_state       — bin one state's particle orientations into
+!                                      the 72x36 azimuth/elevation histogram
+!   locate_state_jpeg               — locate a per-state output jpeg (reprojections
+!                                      or orientation-distribution heatmap) alongside its volume
+!   send_state_reprojtiles           — send one gui_metadata_cavg2D entry per
+!                                      orthogonal reprojection tile in a state's sprite sheet
+!   send_to_abinitio3D_multstate_in_pipe — frame and write a metadata buffer
 !   sigterm_handler       — SIGTERM handler: sets l_terminate for graceful exit
 !
 ! DEPENDENCIES:
-!   simple_stream_api, unix
+!   simple_stream_api, simple_stream_state, simple_gui_metadata_api,
+!   simple_refine3D_fnames, unix
 !==============================================================================
 module simple_stream_p07_abinitio3D_multistate
-use unix,                    only: SIGTERM
-use simple_commanders_cavgs, only: commander_model_cavgs_rejection
-use simple_gui_utils,        only: mrc2jpeg_tiled
-use simple_qsys_env,         only: qsys_env
+use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
+use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
+use simple_commanders_cavgs,     only: commander_model_cavgs_rejection
+use simple_gui_utils,            only: mrc2jpeg_tiled
+use simple_qsys_env,             only: qsys_env
+use simple_refine3D_fnames,      only: refine3D_oris_heatmap_fname
+use simple_stream_state,         only: ipc_pipe_abinitio3D_multstate_in
+use simple_gui_metadata_api,     only: gui_metadata_stream_abinitio3D_multistate, gui_metadata_vol3D, &
+                                       gui_metadata_cavg2D, sprite_sheet_pos,                          &
+                                       GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE, &
+                                       GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE
 use simple_stream_api
 implicit none
 
@@ -33,7 +54,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter       :: NSTATES3D  = 3                 ! number of classes for abinitio3D
-integer, parameter       :: NSTAGES3D  = 5                 ! number of stages for abinitio3D
+integer, parameter       :: NSTAGES3D  = 1!5                 ! number of stages for abinitio3D
 
 type, extends(commander_base) :: stream_p07_abinitio3D_multistate
   contains
@@ -52,6 +73,10 @@ contains
         type(sp_project)          :: spproj_glob
         type(qsys_env)            :: qenv
         type(string), allocatable :: projects(:)
+        type(gui_metadata_stream_abinitio3D_multistate) :: meta_abinitio3D_multistate
+        type(gui_metadata_vol3D), allocatable            :: meta_states_vol3D(:)
+        type(gui_metadata_cavg2D), allocatable            :: meta_reprojtiles(:)
+        character(len=:),         allocatable            :: meta_buffer
         integer                   :: i, nprojects, nimported, nptcls_glob, abinitio_stage, refine_stage
         integer                   :: envlen, refine_it, nptcls_at_last_refine
         character(len=STDLEN)     :: preproc_part_env
@@ -78,6 +103,8 @@ contains
         ! master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        ! GUI metadata
+        call meta_abinitio3D_multistate%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE)
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PREPROC_PARTITION, preproc_part_env, envlen)
         if(envlen > 0) then
@@ -130,6 +157,7 @@ contains
                       call finish_abinitio3D(spproj_glob, string('abinitio3D'))
                       abinitio_stage    = 2
                       l_pause_ingestion = .false.
+                      call build_and_send_vol3D_states
                   end if
                 end if
             end if
@@ -158,6 +186,8 @@ contains
                     refine_stage = 0 ! for testing purposes
                 end if
             end if
+            ! broadcast progress to the GUI
+            call send_meta_abinitio3D_multistate
             ! Wait
             call sleep(WAITTIME)
         enddo
@@ -307,6 +337,256 @@ contains
                 deallocate(spprojs)
             end subroutine import_sets_into_pool
 
+            ! Broadcast pipeline stage/progress and per-state population/resolution to the GUI.
+            subroutine send_meta_abinitio3D_multistate
+                type(string)      :: my_stage, fsc_fname
+                integer           :: istate, my_pop, fsc_box
+                real              :: my_res, res0143, res05
+                real, allocatable :: fsc_arr(:), res_arr(:)
+                if( abinitio_stage == 0 ) then
+                    my_stage = string('importing particles')
+                else if( abinitio_stage == 1 ) then
+                    my_stage = string('running abinitio3D')
+                else if( refine_stage == 1 ) then
+                    my_stage = string('running refine3D')
+                else
+                    my_stage = string('idle')
+                endif
+                call meta_abinitio3D_multistate%set(                                  &
+                    stage                    = my_stage,                              &
+                    abinitio3D_stage         = abinitio_stage,                        &
+                    refine_iteration         = refine_it,                             &
+                    nstates                  = NSTATES3D,                             &
+                    particles_imported       = spproj_glob%os_ptcl3D%get_noris(),     &
+                    particles_at_last_refine = nptcls_at_last_refine,                 &
+                    resolution               = 0.0)
+                if( abinitio_stage == 2 ) then
+                    do istate = 1, NSTATES3D
+                        my_pop = spproj_glob%os_ptcl3D%get_pop(istate, 'state')
+                        my_res = 0.0
+                        if( spproj_glob%isthere_in_osout('fsc', istate) ) then
+                            call spproj_glob%get_fsc(istate, fsc_fname, fsc_box)
+                            if( fsc_fname%strlen() > 0 ) then
+                                if( file_exists(fsc_fname) ) then
+                                    fsc_arr = file2rarr(fsc_fname)
+                                    res_arr = get_resarr(fsc_box, spproj_glob%get_smpd())
+                                    call get_resolution(fsc_arr, res_arr, res05, res0143)
+                                    my_res = res0143
+                                endif
+                            endif
+                        endif
+                        call meta_abinitio3D_multistate%set_state_stats(istate, my_pop, my_res)
+                    enddo
+                endif
+                if( meta_abinitio3D_multistate%assigned() ) then
+                    call meta_abinitio3D_multistate%serialise(meta_buffer)
+                    call send_to_abinitio3D_multstate_in_pipe(meta_buffer)
+                endif
+            end subroutine send_meta_abinitio3D_multistate
+
+            ! Build (once volumes/FSCs are available) and send one gui_metadata_vol3D
+            ! entry per state: paths, population, FSC-derived resolution/curve, and
+            ! the orientation-distribution histogram. Called once abinitio3D completes;
+            ! refine3D is not yet wired in, so this reflects the abinitio3D output only.
+            subroutine build_and_send_vol3D_states
+                integer                      :: istate, my_pop, my_box, n_fsc_pts, k, fsc_box
+                real                         :: my_smpd, res0143, res05
+                type(string)                 :: volpath, fsc_fname, pprocpath, lppath, pprocmirrpath, reprojpath, oridistpath
+                real,          allocatable   :: fsc_arr(:), res_arr(:), invres_arr(:)
+                integer                      :: hist(72, 36) ! matches gui_metadata_vol3D's ORIDIST_NBINS_X x ORIDIST_NBINS_Y (5-degree bins)
+                logical                      :: l_have_fsc
+                if( .not.allocated(meta_states_vol3D) ) then
+                    allocate(meta_states_vol3D(NSTATES3D))
+                    do istate = 1, NSTATES3D
+                        call meta_states_vol3D(istate)%new(GUI_METADATA_VOL3D_TYPE)
+                    enddo
+                endif
+                do istate = 1, NSTATES3D
+                    if( .not.spproj_glob%isthere_in_osout('vol', istate) ) cycle
+                    call spproj_glob%get_vol('vol', istate, volpath, my_smpd, my_box)
+                    if( volpath%strlen() == 0 ) cycle
+                    my_pop = spproj_glob%os_ptcl3D%get_pop(istate, 'state')
+                    ! optional postprocessed/low-pass/mirrored products, if already present on disk
+                    ! (no postprocessing step runs in this stage yet, so these are typically absent)
+                    pprocpath = add2fbody(volpath, MRC_EXT, PPROC_SUFFIX)
+                    if( .not.file_exists(pprocpath) ) pprocpath = string('')
+                    lppath = add2fbody(volpath, MRC_EXT, LP_SUFFIX)
+                    if( .not.file_exists(lppath) ) lppath = string('')
+                    if( pprocpath%strlen() > 0 ) then
+                        pprocmirrpath = add2fbody(pprocpath, MRC_EXT, MIRR_SUFFIX)
+                        if( .not.file_exists(pprocmirrpath) ) pprocmirrpath = string('')
+                    else
+                        pprocmirrpath = string('')
+                    endif
+                    call locate_state_jpeg(volpath, string('orthogonal_reprojs_state')//int2str_pad(istate,2)//JPG_EXT, reprojpath)
+                    call locate_state_jpeg(volpath, refine3D_oris_heatmap_fname(istate), oridistpath)
+                    if( reprojpath%strlen() > 0 ) call send_state_reprojtiles(istate, reprojpath, volpath, my_pop)
+                    ! FSC curve + resolution
+                    l_have_fsc = .false.
+                    res0143    = 0.0
+                    res05      = 0.0
+                    if( spproj_glob%isthere_in_osout('fsc', istate) ) then
+                        call spproj_glob%get_fsc(istate, fsc_fname, fsc_box)
+                        if( fsc_fname%strlen() > 0 ) then
+                            if( file_exists(fsc_fname) ) then
+                                fsc_arr    = file2rarr(fsc_fname)
+                                res_arr    = get_resarr(fsc_box, my_smpd)
+                                call get_resolution(fsc_arr, res_arr, res05, res0143)
+                                l_have_fsc = .true.
+                            endif
+                        endif
+                    endif
+                    if( l_have_fsc ) then
+                        call meta_states_vol3D(istate)%set(reprojpath, volpath, pprocpath, lppath, pprocmirrpath, &
+                            &istate, my_box, my_smpd, istate, NSTATES3D, res0143=res0143, res05=res05, pop=my_pop, &
+                            &oridistpath=oridistpath)
+                    else
+                        call meta_states_vol3D(istate)%set(reprojpath, volpath, pprocpath, lppath, pprocmirrpath, &
+                            &istate, my_box, my_smpd, istate, NSTATES3D, pop=my_pop, oridistpath=oridistpath)
+                    endif
+                    if( l_have_fsc ) then
+                        n_fsc_pts = min(size(fsc_arr), 1000) ! matches gui_metadata_vol3D's MAX_FSC_VOL3D
+                        allocate(invres_arr(n_fsc_pts))
+                        do k = 1, n_fsc_pts
+                            invres_arr(k) = 1.0 / res_arr(k)
+                        enddo
+                        call meta_states_vol3D(istate)%set_fsc(invres_arr(1:n_fsc_pts), fsc_arr(1:n_fsc_pts))
+                        deallocate(invres_arr)
+                    endif
+                    call compute_oridist_for_state(istate, hist)
+                    call meta_states_vol3D(istate)%set_oridist(hist)
+                    if( meta_states_vol3D(istate)%assigned() ) then
+                        call meta_states_vol3D(istate)%serialise(meta_buffer)
+                        call send_to_abinitio3D_multstate_in_pipe(meta_buffer)
+                    endif
+                enddo
+            end subroutine build_and_send_vol3D_states
+
+            ! Bin one state's particle orientations (os_ptcl3D projection directions)
+            ! into a 72x36 azimuth (-180..180) x elevation (-90..90) histogram, 5 degree bins.
+            subroutine compute_oridist_for_state( istate, hist )
+                integer, intent(in)  :: istate
+                integer, intent(out) :: hist(72, 36)
+                real    :: normal(3), azimuth, elevation
+                integer :: iptcl, nptcls, ix, iy
+                hist   = 0
+                nptcls = spproj_glob%os_ptcl3D%get_noris()
+                do iptcl = 1, nptcls
+                    if( spproj_glob%os_ptcl3D%get_state(iptcl) /= istate ) cycle
+                    normal    = spproj_glob%os_ptcl3D%get_normal(iptcl)
+                    azimuth   = rad2deg(atan2(normal(2), normal(1)))
+                    elevation = rad2deg(asin(max(-1.0, min(1.0, normal(3)))))
+                    ix = min(72, max(1, floor((azimuth   + 180.0) / 5.0) + 1))
+                    iy = min(36, max(1, floor((elevation + 90.0)  / 5.0) + 1))
+                    hist(ix, iy) = hist(ix, iy) + 1
+                enddo
+            end subroutine compute_oridist_for_state
+
+            ! Locate a per-state output jpeg already produced alongside the volume
+            ! (by abinitio3D's calc_final_rec/gen_ortho_reprojs4viz and refine3D's
+            ! orientation-distribution heatmap); '' if not present on disk.
+            subroutine locate_state_jpeg( volpath, fname, jpegpath )
+                type(string), intent(in)  :: volpath, fname
+                type(string), intent(out) :: jpegpath
+                jpegpath = get_fpath(volpath) // fname
+                if( .not. file_exists(jpegpath) ) jpegpath = string('')
+            end subroutine locate_state_jpeg
+
+            ! Send the 3 orthogonal reprojection tiles of one state's sprite-sheet
+            ! jpeg as individual gui_metadata_cavg2D entries (idx=state, sprite
+            ! position selects the tile); flat-indexed i/i_max across all states.
+            subroutine send_state_reprojtiles( istate, reprojpath, volpath, pop )
+                integer,      intent(in) :: istate, pop
+                type(string), intent(in) :: reprojpath, volpath
+                integer, parameter :: NTILES = 3
+                integer            :: itile, i_flat
+                if( .not.allocated(meta_reprojtiles) ) then
+                    allocate(meta_reprojtiles(NSTATES3D * NTILES))
+                    do i_flat = 1, size(meta_reprojtiles)
+                        call meta_reprojtiles(i_flat)%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE)
+                    enddo
+                endif
+                do itile = 1, NTILES
+                    i_flat = (istate - 1) * NTILES + itile
+                    call meta_reprojtiles(i_flat)%set(path=reprojpath, mrcpath=volpath, idx=istate, &
+                        &sprite=sprite_sheet_pos(x=real(itile-1)*(100.0/real(NTILES-1)), y=0.0, h=100, w=100*NTILES), &
+                        &i=i_flat, i_max=size(meta_reprojtiles), pop=pop)
+                    call meta_reprojtiles(i_flat)%serialise(meta_buffer)
+                    call send_to_abinitio3D_multstate_in_pipe(meta_buffer)
+                enddo
+            end subroutine send_state_reprojtiles
+
+            ! Frame (length-prefix) and write a serialised metadata buffer to the
+            ! master-facing abinitio3D_multistate IPC pipe, with EAGAIN/EINTR retry.
+            subroutine send_to_abinitio3D_multstate_in_pipe(buffer)
+                character(len=*), intent(in)                :: buffer
+                character(len=:), allocatable               :: framed
+                character(kind=c_char), allocatable, target :: cbuf(:)
+                integer(c_int)                              :: nwritten
+                integer(c_int), target                      :: msg_len
+                integer                                     :: err_no
+                integer                                     :: sent, nbytes, header_bytes, framed_nbytes, retry_count, ich, rc_sleep
+                integer, parameter                          :: MAX_RETRIES    = 3000
+                integer, parameter                          :: RETRY_SLEEP_US = 10000
+
+                if( ipc_pipe_abinitio3D_multstate_in(2) < 0 ) return
+                nbytes = len(buffer)
+                if( nbytes <= 0 ) return
+
+                msg_len = int(nbytes, c_int)
+                header_bytes = sizeof(msg_len)
+                framed_nbytes = header_bytes + nbytes
+                allocate(character(len=framed_nbytes) :: framed)
+                framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+                framed(header_bytes + 1:) = buffer
+
+                allocate(cbuf(framed_nbytes))
+                do ich = 1, framed_nbytes
+                    cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+                end do
+
+                sent = 0
+                retry_count = 0
+                do while( sent < framed_nbytes )
+                    nwritten = int(c_write(ipc_pipe_abinitio3D_multstate_in(2), c_loc(cbuf(sent + 1)), &
+                        &int(framed_nbytes - sent, c_size_t)))
+                    if( nwritten > 0 ) then
+                        sent = sent + int(nwritten)
+                        retry_count = 0
+                        cycle
+                    end if
+
+                    err_no = ierrno()
+                    if( err_no == int(EINTR) ) then
+                        ! interrupted system call; not backpressure, just retry immediately
+                        ! without counting against the retry budget or touching sent
+                        cycle
+                    end if
+
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                        retry_count = retry_count + 1
+                        if( retry_count > MAX_RETRIES ) then
+                            ! Bail out unconditionally once the retry budget is exhausted,
+                            ! even if part of the frame already reached the pipe. Blocking
+                            ! forever on a stalled/dead reader would silently hang the whole
+                            ! polling loop (no further metadata, no reprojections, no log
+                            ! output). A partial frame may desync the reader's length-prefixed
+                            ! framing, but that is preferable to an indefinite hang; the next
+                            ! reconnect/restart of the reader will resynchronise.
+                            THROW_WARN('failed to write abinitio3D_multistate metadata to ipc_pipe_abinitio3D_multstate_in: retry limit exceeded')
+                            exit
+                        end if
+                        rc_sleep = c_usleep(RETRY_SLEEP_US)
+                        cycle
+                    end if
+
+                    THROW_WARN('failed to write abinitio3D_multistate metadata to ipc_pipe_abinitio3D_multstate_in')
+                    exit
+                end do
+
+                if( allocated(cbuf) ) deallocate(cbuf)
+            end subroutine send_to_abinitio3D_multstate_in_pipe
+
             ! Run ab-initio 3D classification 
             subroutine start_abinitio3D( spproj_stage, outdir, mskdiam_in )
                 type(sp_project),   intent(inout) :: spproj_stage
@@ -335,6 +615,8 @@ contains
                 call cline_abinitio3D%set('nthr',                       16)
                 call cline_abinitio3D%set('nstages',             NSTAGES3D)
                 call cline_abinitio3D%set('projfile',  'abinitio3D.simple')
+                call cline_abinitio3D%set('worker_priority',        'high')
+                if( server_address%strlen() > 0 ) call cline_abinitio3D%set('worker_server', server_address)
                 call cline_abinitio3D%printline()
                 call qenv%exec_simple_prg_in_queue_async( cline_abinitio3D, string('./distr_abinitio3D'), string('simple_log_abinitio3D'), exec_bin=string('simple_exec') )
                 call simple_chdir(cwd)

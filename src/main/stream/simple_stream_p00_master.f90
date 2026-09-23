@@ -242,6 +242,8 @@ contains
         type(gui_metadata_cavg2D),       allocatable :: meta_reference_picking_cavgs2D(:), meta_pool2D_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_pool2D_snapshot_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_particle_sieving_cavgs2D(:), meta_particle_sieving_ref_cavgs2D(:)
+        type(gui_metadata_vol3D),        allocatable :: meta_states_vol3D(:)
+        type(gui_metadata_cavg2D),       allocatable :: meta_abinitio3D_multistate_reprojtiles(:)
         ! forked processes
         type(preprocess_fork)                      :: fork_preprocess
         type(assign_optics_fork)                   :: fork_assign_optics
@@ -404,7 +406,7 @@ contains
             call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot, meta_pool2D_snapshot_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
-            call assembler%assemble_stream_abinitio3D_multistate(meta_abinitio3D_multistate)
+            call assembler%assemble_stream_abinitio3D_multistate(meta_abinitio3D_multistate, meta_states_vol3D, meta_abinitio3D_multistate_reprojtiles)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             request = assembler%to_string()
             ! send
@@ -683,7 +685,7 @@ contains
                 pending_bytes = pending_bytes + rx_state(ipipe)%pending_len
             enddo
 
-            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0)') &
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0)') &
                 '>>> MASTER META STATE: pending_bytes=', pending_bytes, &
                 ' preprocess_mics=', alloc_size_micrograph(meta_preprocess_micrographs), &
                 ' init_pick_mics=', alloc_size_micrograph(meta_initial_picking_micrographs), &
@@ -693,7 +695,9 @@ contains
                 ' opening2D_final=', alloc_size_cavg2D(meta_opening2D_final_cavgs2D), &
                 ' ref_pick_cls=', alloc_size_cavg2D(meta_reference_picking_cavgs2D), &
                 ' sieve_cls=', alloc_size_cavg2D(meta_particle_sieving_cavgs2D), &
-                ' pool2D_cls=', alloc_size_cavg2D(meta_pool2D_cavgs2D)
+                ' pool2D_cls=', alloc_size_cavg2D(meta_pool2D_cavgs2D), &
+                ' states_vol3D=', alloc_size_vol3D(meta_states_vol3D), &
+                ' abinitio3D_multistate_reprojtiles=', alloc_size_cavg2D(meta_abinitio3D_multistate_reprojtiles)
             call flush(logfhandle)
         end subroutine log_master_memory_state
 
@@ -724,6 +728,15 @@ contains
             endif
         end function alloc_size_cavg2D
 
+        integer function alloc_size_vol3D(arr) result(n)
+            type(gui_metadata_vol3D), allocatable, intent(in) :: arr(:)
+            if( allocated(arr) )then
+                n = size(arr)
+            else
+                n = 0
+            endif
+        end function alloc_size_vol3D
+
         subroutine sigint_handler()
             integer :: my_rc
             write(logfhandle, '(A)') 'SIGINT RECEIVED (MASTER)'
@@ -741,6 +754,7 @@ contains
             type(gui_metadata_micrograph)   :: meta_mic_tmp
             type(gui_metadata_optics_group) :: meta_optics_group_tmp
             type(gui_metadata_cavg2D)       :: meta_cavg2D_tmp 
+            type(gui_metadata_vol3D)        :: meta_vol3D_tmp
             integer                         :: my_rc, my_buffer_type, my_i
             logical                         :: my_l_continue, my_l_reinit
             my_l_continue = .true.
@@ -782,6 +796,27 @@ contains
                                     meta_pool2D_snapshot = transfer(my_buffer, meta_pool2D_snapshot)
                                 case( GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE )
                                     meta_abinitio3D_multistate = transfer(my_buffer, meta_abinitio3D_multistate)         
+                                case( GUI_METADATA_VOL3D_TYPE )
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of vol3D metadata to read routing fields
+                                    meta_vol3D_tmp = transfer(my_buffer, meta_vol3D_tmp)
+                                    ! allocate or resize meta_states_vol3D as necessary based on i_max
+                                    if( .not.allocated(meta_states_vol3D) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_states_vol3D) /= meta_vol3D_tmp%get_i_max() ) then
+                                        deallocate(meta_states_vol3D)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_states_vol3D
+                                        allocate(meta_states_vol3D(meta_vol3D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_states_vol3D)
+                                            call meta_states_vol3D(my_i)%new(GUI_METADATA_VOL3D_TYPE)
+                                            if( .not.meta_states_vol3D(my_i)%initialized() ) THROW_HARD('failed to initialise vol3D metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_states_vol3D(meta_vol3D_tmp%get_i()) = meta_vol3D_tmp
                                 case( GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
@@ -993,6 +1028,27 @@ contains
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_pool2D_snapshot_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
+                                case( GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE )
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of cavg2D metadata to read routing fields
+                                    meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
+                                    ! allocate or resize meta_abinitio3D_multistate_reprojtiles as necessary based on i_max
+                                    if( .not.allocated(meta_abinitio3D_multistate_reprojtiles) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_abinitio3D_multistate_reprojtiles) /= meta_cavg2D_tmp%get_i_max() ) then
+                                        deallocate(meta_abinitio3D_multistate_reprojtiles)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_abinitio3D_multistate_reprojtiles
+                                        allocate(meta_abinitio3D_multistate_reprojtiles(meta_cavg2D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_abinitio3D_multistate_reprojtiles)
+                                            call meta_abinitio3D_multistate_reprojtiles(my_i)%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE)
+                                            if( .not.meta_abinitio3D_multistate_reprojtiles(my_i)%initialized() ) THROW_HARD('failed to initialise abinitio3D multistate reproj cavg2D metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_abinitio3D_multistate_reprojtiles(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
                             end select
                             deallocate(my_buffer)
                         end if
@@ -1096,7 +1152,14 @@ contains
                 msg_len_c = transfer(state%pending(1:header_bytes), msg_len_c)
                 state%expected_len = int(msg_len_c)
                 if( state%expected_len <= 0 .or. state%expected_len > max_msgsize ) then
-                    THROW_HARD('invalid framed metadata length read from stream pipe')
+                    ! a writer that gave up mid-frame (e.g. after exhausting its own
+                    ! retry budget on a full pipe) desyncs this framing; drop the
+                    ! corrupted buffer and resync on the next frame instead of taking
+                    ! down the whole master over one stalled pipe
+                    THROW_WARN('invalid framed metadata length read from stream pipe; dropping buffered bytes and resyncing')
+                    state%pending_len  = 0
+                    state%expected_len = -1
+                    return
                 endif
                 remaining = state%pending_len - header_bytes
                 if( remaining > 0 ) state%pending(1:remaining) = state%pending(header_bytes + 1:state%pending_len)
@@ -1326,6 +1389,8 @@ contains
         end subroutine init_metadata_multistate3D
 
         subroutine init_cline_multistate3D()
+            type(string) :: server_address
+            server_address = qsys%get_persistent_worker_server_address()
             call cline_abinitio3D_multistate%set('prg',                       'abinitio3D_stream')
             call cline_abinitio3D_multistate%set('projfile',  MULTISTATE3D_JOB_NAME//METADATA_EXT)
             call cline_abinitio3D_multistate%set('outdir',                  MULTISTATE3D_JOB_NAME)
@@ -1334,6 +1399,12 @@ contains
             call cline_abinitio3D_multistate%set('nparts',                                      1)
             call cline_abinitio3D_multistate%set('mkdir',                                   'yes')
             call cline_abinitio3D_multistate%set('nicedispid',                  params%nicedispid)
+            call cline_abinitio3D_multistate%set('worker_priority',                        'high')
+            if( server_address%strlen() > 0 ) call cline_abinitio3D_multistate%set('worker_server', server_address)
+            if( params%memreport == 'yes' ) then
+                call cline_abinitio3D_multistate%set('memreport', 'yes')
+                call cline_abinitio3D_multistate%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_multistate3D
 
         subroutine init_ipc_pipe( pipe )

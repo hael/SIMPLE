@@ -50,6 +50,10 @@ module simple_gui_assembler_tester
                                      gui_metadata_stream_pool2D_snapshot,                 &
                                      GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,            &
                                      gui_metadata_cavg2D,                                 &
+                                     gui_metadata_vol3D,                                  &
+                                     gui_metadata_stream_abinitio3D_multistate,           &
+                                     GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE,      &
+                                     GUI_METADATA_VOL3D_TYPE,                             &
                                      sprite_sheet_pos
   use simple_gui_metadata_api, only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
   use simple_gui_assembler,    only: gui_assembler
@@ -79,6 +83,7 @@ contains
     call test_opening2D()
     call test_particle_sieving()
     call test_pool2D()
+    call test_abinitio3D_multistate()
     call test_project()
   end subroutine run_all_gui_assembler_tests
 
@@ -464,6 +469,44 @@ contains
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_latest_cavgs2D)
   end subroutine test_pool2D
+
+  !---------------- abinitio3D_multistate assembly ----------------
+
+  ! Assemble a multistate abinitio3D JSON payload with a per-state 'state_volumes'
+  ! vol3D array and verify the section is non-empty.  An exact hash comparison
+  ! is not possible because the section embeds a live Unix timestamp (last_import_time).
+  subroutine test_abinitio3D_multistate()
+    type(gui_assembler)                                       :: assembler
+    type(gui_metadata_stream_abinitio3D_multistate)           :: meta_abinitio3D_multistate
+    type(gui_metadata_vol3D),                     allocatable :: meta_states_vol3D(:)
+    type(string)                                               :: json_str
+    integer                                                    :: i
+    write(*,'(A)') 'test_abinitio3D_multistate'
+    call meta_abinitio3D_multistate%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE)
+    call meta_abinitio3D_multistate%set(stage=string('refine3D'), abinitio3D_stage=1, refine_iteration=5, &
+                                        nstates=2, particles_imported=20000, particles_at_last_refine=18000, &
+                                        resolution=3.5)
+    allocate(meta_states_vol3D(2))
+    do i=1, size(meta_states_vol3D)
+      call meta_states_vol3D(i)%new(GUI_METADATA_VOL3D_TYPE)
+    enddo
+    call meta_states_vol3D(1)%set(reprojpath=string('/test/path/reproj_state01.mrc'), volpath=string('/test/path/vol_state01.mrc'), &
+                                  pprocpath=string('/test/path/vol_state01_pproc.mrc'), lppath=string('/test/path/vol_state01_lp.mrc'), &
+                                  pprocmirrpath=string('/test/path/vol_state01_pproc_mirr.mrc'), state=1, box=256, smpd=1.5, &
+                                  i=1, i_max=2, res0143=3.5, res05=6.5, pop=9000)
+    call meta_states_vol3D(2)%set(reprojpath=string('/test/path/reproj_state02.mrc'), volpath=string('/test/path/vol_state02.mrc'), &
+                                  pprocpath=string('/test/path/vol_state02_pproc.mrc'), lppath=string('/test/path/vol_state02_lp.mrc'), &
+                                  pprocmirrpath=string('/test/path/vol_state02_pproc_mirr.mrc'), state=2, box=256, smpd=1.5, &
+                                  i=2, i_max=2, res0143=4.5, res05=7.5, pop=9000)
+    call assembler%new(0)
+    call assert_true(assembler%is_associated(), 'assembler json associated')
+    call assembler%assemble_stream_abinitio3D_multistate(meta_abinitio3D_multistate, meta_states_vol3D)
+    json_str = assembler%to_string()
+    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assembler%kill()
+    call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    deallocate(meta_states_vol3D)
+  end subroutine test_abinitio3D_multistate
 
   !---------------- project assembly ----------------
 

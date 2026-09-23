@@ -12,7 +12,7 @@
 !   Types covered:
 !     gui_metadata_base, gui_metadata_micrograph, gui_metadata_histogram,
 !     gui_metadata_timeplot, gui_metadata_optics_group, gui_metadata_cavg2D,
-!     gui_metadata_ptcl, gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
+!     gui_metadata_vol3D, gui_metadata_ptcl, gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
 !     gui_metadata_stream_update, gui_metadata_stream_picking (initial and
 !     reference picking), gui_metadata_stream_opening2D,
 !     gui_metadata_stream_particle_sieving, gui_metadata_stream_pool2D,
@@ -55,6 +55,9 @@ contains
     call test_set_get_cavg2D()
     call test_serialise_cavg2D()
     call test_jsonise_cavg2D()
+    call test_set_get_vol3D()
+    call test_serialise_vol3D()
+    call test_jsonise_vol3D()
     call test_set_get_ptcl()
     call test_serialise_ptcl()
     call test_jsonise_ptcl()
@@ -550,7 +553,117 @@ contains
     call assert_true(.not.json%failed(), 'json destroyed')
   end subroutine test_jsonise_cavg2D
 
-  !---------------- ptcl ----------------
+  !---------------- vol3D ----------------
+
+  ! Verify that all vol3D fields round-trip through set/get, including optional
+  ! res0143/res05/pop, the FSC curve and the orientation-distribution histogram.
+  subroutine test_set_get_vol3D()
+    type(gui_metadata_vol3D)  :: meta
+    type(string)               :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
+    integer                    :: state, box, pop, ix, iy
+    real                       :: smpd, res0143, res05
+    real,          allocatable :: invres(:), corr(:)
+    integer                    :: hist(72,36), hist2(72,36)
+    write(*,'(A)') 'test_set_get_vol3D'
+    call meta%new(GUI_METADATA_VOL3D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_VOL3D_TYPE, 'type is set correctly')
+    call meta%set(reprojpath=string('/test/path/to/vol_reproj.mrc'), volpath=string('/test/path/to/vol.mrc'), &
+                 &pprocpath=string('/test/path/to/vol_pproc.mrc'), lppath=string('/test/path/to/vol_lp.mrc'), &
+                 &pprocmirrpath=string('/test/path/to/vol_pproc_mirr.mrc'), state=1, box=256, smpd=1.5, &
+                 &i=1, i_max=1, res0143=3.5, res05=6.5, pop=5000)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_int(meta%get_state(), 1, 'get_state returns correct value')
+    call assert_true(meta%get(reprojpath=reprojpath, volpath=volpath, pprocpath=pprocpath, lppath=lppath, &
+                 &pprocmirrpath=pprocmirrpath, state=state, box=box, smpd=smpd, res0143=res0143, res05=res05, pop=pop), &
+                 &'metadata retrieved')
+    call assert_char(reprojpath%to_char(),    '/test/path/to/vol_reproj.mrc',    'reprojpath set/get correctly')
+    call assert_char(volpath%to_char(),       '/test/path/to/vol.mrc',           'volpath set/get correctly')
+    call assert_char(pprocpath%to_char(),     '/test/path/to/vol_pproc.mrc',     'pprocpath set/get correctly')
+    call assert_char(lppath%to_char(),        '/test/path/to/vol_lp.mrc',        'lppath set/get correctly')
+    call assert_char(pprocmirrpath%to_char(), '/test/path/to/vol_pproc_mirr.mrc','pprocmirrpath set/get correctly')
+    call assert_int(state, 1,   'state set/get correctly')
+    call assert_int(box,   256, 'box set/get correctly')
+    call assert_true(smpd    == 1.5, 'smpd set/get correctly')
+    call assert_true(res0143 == 3.5, 'res0143 set/get correctly')
+    call assert_true(res05   == 6.5, 'res05 set/get correctly')
+    call assert_int(pop, 5000, 'pop set/get correctly')
+    allocate(invres(5), corr(5))
+    do ix = 1, 5
+      invres(ix) = real(ix) * 0.5
+      corr(ix)   = real(6 - ix)
+    end do
+    call meta%set_fsc(invres, corr)
+    deallocate(invres, corr)
+    call assert_true(meta%get_fsc(invres, corr), 'fsc curve retrieved')
+    call assert_int(size(invres), 5, 'fsc invres correctly allocated')
+    call assert_int(size(corr),   5, 'fsc corr correctly allocated')
+    call assert_true(invres(1) == 0.5, 'fsc invres set/get correctly')
+    call assert_true(corr(5)   == 1.0, 'fsc corr set/get correctly')
+    do ix = 1, 72
+      do iy = 1, 36
+        hist(ix,iy) = ix*100 + iy
+      end do
+    end do
+    call meta%set_oridist(hist)
+    call assert_true(meta%get_oridist(hist2), 'oridist histogram retrieved')
+    call assert_int(hist2(1,1),   101,  'oridist(1,1) set/get correctly')
+    call assert_int(hist2(72,36), 7236, 'oridist(72,36) set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    deallocate(invres, corr)
+  end subroutine test_set_get_vol3D
+
+  ! Verify that the vol3D serialise buffer is the expected size.
+  subroutine test_serialise_vol3D()
+    character(len=:),         allocatable :: buffer
+    type(gui_metadata_vol3D)              :: meta
+    write(*,'(A)') 'test_serialise_vol3D'
+    call meta%new(GUI_METADATA_VOL3D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_VOL3D_TYPE, 'type is set correctly')
+    call meta%set(reprojpath=string('/test/path/to/vol_reproj.mrc'), volpath=string('/test/path/to/vol.mrc'), &
+                 &pprocpath=string('/test/path/to/vol_pproc.mrc'), lppath=string('/test/path/to/vol_lp.mrc'), &
+                 &pprocmirrpath=string('/test/path/to/vol_pproc_mirr.mrc'), state=1, box=256, smpd=1.5, &
+                 &i=1, i_max=1, res0143=3.5, res05=6.5, pop=5000)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_serialise_vol3D
+
+  ! Verify the vol3D JSON output via buffer length and FNV-1a hash.
+  subroutine test_jsonise_vol3D()
+    character(kind=CK, len=:), allocatable :: buffer
+    type(gui_metadata_vol3D)               :: meta
+    type(json_core)                        :: json
+    type(json_value),          pointer     :: json_ptr
+    type(string)                           :: json_str, json_hash
+    write(*,'(A)') 'test_jsonise_vol3D'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_VOL3D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_VOL3D_TYPE, 'type is set correctly')
+    call meta%set(reprojpath=string('/test/path/to/vol_reproj.mrc'), volpath=string('/test/path/to/vol.mrc'), &
+                 &pprocpath=string('/test/path/to/vol_pproc.mrc'), lppath=string('/test/path/to/vol_lp.mrc'), &
+                 &pprocmirrpath=string('/test/path/to/vol_pproc_mirr.mrc'), state=1, box=256, smpd=1.5, &
+                 &i=1, i_max=1, res0143=3.5, res05=6.5, pop=5000)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), 288, 'buffer correct size')
+    json_str = buffer
+    call assert_int(json_str%strlen(), 288, 'string correct size')
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '391C1FAF94D2689E', 'correct checksum')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+  end subroutine test_jsonise_vol3D
 
   ! Verify that all ptcl fields round-trip through set/get, including optional df and box.
   subroutine test_set_get_ptcl()
