@@ -99,10 +99,30 @@ contains
             allocate(nsel_o(nstates), source=0)
         endif
         if( .not. rounds%distributed() ) call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        ! ---- delivery policy (applied per state right after its halves are solved): the same
+        ! per-state eo-FSC filter as the gridding path, on the windowed solutions as they come out
+        ! of the solve (no background removal, no second mask) ----
+        ! solutions as they come out of the solve (no background removal, no second mask) ----
+        l_state_eofilt = .false.
+        call get_environment_variable('SIMPLE_COV_STATE_EOFILT', envval, envlen, envstat)
+        if( envstat == 0 .and. envlen > 0 )then
+            if( trim(adjustl(envval)) == '1' ) l_state_eofilt = .true.
+        endif
+        l_state_filt = .true.
+        call get_environment_variable('SIMPLE_COV_STATE_FILT', envval, envlen, envstat)
+        if( envstat == 0 .and. envlen > 0 )then
+            if( trim(adjustl(envval)) == '0' ) l_state_filt = .false.
+        endif
+        filtsz = fdim(box_rec) - 1
+        allocate(fsc_eo(filtsz), filt_half(filtsz), filt_merged(filtsz))
+        outvol_bak = params%outvol
         do state = 1, nstates
             do eo = 0, neo
                 if( rounds%distributed() )then
                     call new_state_operator(pcgop)
+                    write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA PCG STATE ', state, ' half ', eo, &
+                        &': reducing ', max(1,params%nparts), ' raw parts and finalizing the kernel'
+                    call flush(logfhandle)
                     call pcgop%begin_reduction
                     nsel = 0
                     do ipart = 1, max(1,params%nparts)
@@ -125,23 +145,22 @@ contains
                 endif
                 call pcgop%kill
             end do
+            ! deliver this state now: its maps go to disk as soon as both halves are solved,
+            ! and its half maps are freed (one pair resident, not nstates)
+            call deliver_state(state)
         end do
-        ! ---- delivery: the same per-state eo-FSC filter policy as the gridding path, on the windowed
-        ! solutions as they come out of the solve (no background removal, no second mask) ----
-        l_state_eofilt = .false.
-        call get_environment_variable('SIMPLE_COV_STATE_EOFILT', envval, envlen, envstat)
-        if( envstat == 0 .and. envlen > 0 )then
-            if( trim(adjustl(envval)) == '1' ) l_state_eofilt = .true.
-        endif
-        l_state_filt = .true.
-        call get_environment_variable('SIMPLE_COV_STATE_FILT', envval, envlen, envstat)
-        if( envstat == 0 .and. envlen > 0 )then
-            if( trim(adjustl(envval)) == '0' ) l_state_filt = .false.
-        endif
-        filtsz = fdim(box_rec) - 1
-        allocate(fsc_eo(filtsz), filt_half(filtsz), filt_merged(filtsz))
-        outvol_bak = params%outvol
-        do state = 1, nstates
+        call build%spproj%write_segment_inside('out', params%projfile)
+        params%outvol = outvol_bak
+        call state_vol_fname%kill
+        call outvol_bak%kill
+        deallocate(fsc_eo, filt_half, filt_merged, maps_e, nsel_e)
+        if( l_fuse ) deallocate(maps_o, nsel_o)
+
+    contains
+
+        !> combine even+odd, take the eo-FSC, filter and write the three maps of one solved state
+        subroutine deliver_state( state )
+            integer, intent(in) :: state
             if( l_fuse )then
                 call img_e%copy(maps_e(state))
                 call img_o%copy(maps_o(state))
@@ -214,15 +233,7 @@ contains
                 call state_img%kill
             endif
             call maps_e(state)%kill
-        end do
-        call build%spproj%write_segment_inside('out', params%projfile)
-        params%outvol = outvol_bak
-        call state_vol_fname%kill
-        call outvol_bak%kill
-        deallocate(fsc_eo, filt_half, filt_merged, maps_e, nsel_e)
-        if( l_fuse ) deallocate(maps_o, nsel_o)
-
-    contains
+        end subroutine deliver_state
 
         !> operator of one (state, half) solve at the reconstruction box: relative ridge, symmetry,
         !! spherical support (installed before accumulation so the RHS is projected in end_accum)
