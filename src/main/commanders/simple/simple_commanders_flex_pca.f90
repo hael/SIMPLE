@@ -77,6 +77,8 @@ contains
     !! not descend into one of its own). NOT merge('no ','yes',..): merge pads the shorter branch.
     subroutine apply_flex_pca_defaults( cline )
         class(cmdline), intent(inout) :: cline
+        ! the pickup and derivations below read the project before params%new discovers one in cwd
+        if( .not. cline%defined('projfile') ) THROW_HARD('projfile is required for flex_pca')
         if( .not.cline%defined('mkdir') )then
             if( cline%defined('part') )then
                 call cline%set('mkdir','no')
@@ -91,7 +93,7 @@ contains
         ! one, because run_flex_pca reads cline%defined('npreimages') to decide whether it may raise
         ! the ceiling to the auto value -- injecting a default here would make that test always true.
         if( .not.cline%defined('npreimages') .and. .not.flex_pca_auto_states(cline) ) &
-            &call cline%set('npreimages',16)
+            &call cline%set('npreimages',4)
         if( .not.cline%defined('neigs') )       call cline%set('neigs',10)
         ! an UPPER BOUND, not an iteration count: the probe stops itself on COV_PROBE_CONV
         if( .not.cline%defined('n_probe_iters') ) call cline%set('n_probe_iters',4)
@@ -249,9 +251,7 @@ contains
         real             :: smpd, vol_smpd
         integer          :: box, vol_box
         if( cline%defined('vol1') ) return
-        if( .not. cline%defined('projfile') ) return
         projfile = cline%get_carg('projfile')
-        if( .not. file_exists(projfile) ) return
         call spproj%read_segment('out', projfile)
         if( .not. spproj%isthere_in_osout('vol', 1) )then
             call spproj%kill
@@ -294,9 +294,7 @@ contains
                 &cline%get_iarg('box_crop'), ' (override; smpd_target ignored)'
             return
         endif
-        if( .not. cline%defined('projfile') ) return
         projfile = cline%get_carg('projfile')
-        if( .not. file_exists(projfile) ) return
         call spproj%read_segment('stk', projfile)
         box  = spproj%get_box()
         smpd = spproj%get_smpd()
@@ -340,9 +338,7 @@ contains
         real             :: smpd, smpd_crop, lp_here
         integer          :: box, box_crop
         if( cline%defined('lp') .and. cline%defined('box_rec') ) return
-        if( .not. cline%defined('projfile') ) return
         projfile = cline%get_carg('projfile')
-        if( .not. file_exists(projfile) ) return
         call spproj%read_segment('stk', projfile)
         box  = spproj%get_box()
         smpd = spproj%get_smpd()

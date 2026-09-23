@@ -41,11 +41,11 @@ contains
             '# components', .false., 10.0, &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'npreimages', 'num', &
-            'Max state volumes (default 16)', &
+            'Max state volumes (default 4)', &
             'Upper bound on the kernel-regression targets in latent space; with the default state_axis=0 &
             &these are diffusion k-centers over all retained components. The two-gate merge collapses &
             &indistinct states, so the recovered count is <= this', &
-            'max # states 3-32', .false., 16.0, &
+            'max # states 3-32', .false., 4.0, &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'preimage_auto', 'binary', &
             'Determine the state count automatically (default no)', &
