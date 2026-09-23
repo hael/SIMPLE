@@ -283,16 +283,25 @@ if(BUILD_TESTS)
   endfunction()
 
   # ---- the fast gate ------------------------------------------------------
-  # Seven area suites over the unit tests, one process each, label `fast`;
+  # Eight area suites over the unit tests, one process each, label `fast`;
   # every sub-suite asserts through simple_test_utils, is localhost-only and
   # runs on one thread (plan, section 5.1). `units` runs all of them in one
   # process as a developer convenience and is not registered: the entries
   # below are the gate. Measured 2026-09-22 (Debug, 1 thread): the seven
   # together about 4 s; the longest, unit_image and unit_ori, about 1.3 s.
-  foreach(_area IN ITEMS core ori image numerics project ui ipc)
+  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction)
     simple_add_test(unit_${_area} fast 120 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
   endforeach()
+
+  # ---- library suites (nightly) --------------------------------------------
+  # One process per coherent part of the library, label `library`, the same
+  # runner and assertions as the fast gate without its 30 s budget (plan,
+  # section 5.2.1). lib_reconstruction: half-set PCG solves against gridding
+  # at box 24, minutes on one thread. Review verdict 2026-09-23 (plan,
+  # section 9.7, reconstruction).
+  simple_add_test(lib_reconstruction library 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_reconstruction)
 
   # ---- workflow gates (nightly) --------------------------------------------
   # The simulated workflows with their current checks (completion, counts,
@@ -309,6 +318,11 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow element=Pt)
   simple_add_test(pcg_recon workflow 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
+  # reproject + simulate_particles on the embedded 6VXX volume; the only
+  # nightly run of either commander (simulated_workflow uses simulate_movie).
+  # Review verdict 2026-09-23 (plan, section 9.7, highlevel).
+  simple_add_test(simulate_particles workflow 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulate_particles nthr=8)
   foreach(_stream IN ITEMS preproc assign_optics gen_pickrefs pick_extract sieve_cavgs abinitio2D_stream master)
     simple_add_test(stream_${_stream} workflow 3600 8 RUN_SERIAL
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=${_stream})
@@ -332,7 +346,7 @@ if(BUILD_TESTS)
   # existing suites, a new process needs a stated reason, and this number only
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays) are counted only when registered.
-  set(SIMPLE_CTEST_BUDGET 19)   # 7 fast + 1 platform + 11 workflow
+  set(SIMPLE_CTEST_BUDGET 22)   # 8 fast + 1 platform + 12 workflow + 1 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

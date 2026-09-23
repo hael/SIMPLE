@@ -1,10 +1,11 @@
 !@descr: execution of the unit-test suite commanders (the fast gate and its umbrella)
 module simple_test_exec_class
 use simple_cmdline,               only: cmdline
-use simple_commanders_test_class, only: commander_test_units, commander_test_ui_hash_test, &
+use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_core, commander_test_unit_ori, commander_test_unit_image, &
                                         commander_test_unit_numerics, commander_test_unit_project, commander_test_unit_ui, &
-                                        commander_test_unit_ipc, commander_test_forked_process
+                                        commander_test_unit_ipc, commander_test_forked_process, &
+                                        commander_test_unit_reconstruction, commander_test_lib_reconstruction
 implicit none
 
 public :: exec_test_class_commander
@@ -18,8 +19,9 @@ type(commander_test_unit_numerics)  :: xunit_numerics
 type(commander_test_unit_project)   :: xunit_project
 type(commander_test_unit_ui)        :: xunit_ui
 type(commander_test_unit_ipc)       :: xunit_ipc
+type(commander_test_unit_reconstruction) :: xunit_reconstruction
+type(commander_test_lib_reconstruction)  :: xlib_reconstruction
 type(commander_test_forked_process) :: xforked_process
-type(commander_test_ui_hash_test)   :: xui_hash_test
 
 contains
 
@@ -48,10 +50,12 @@ contains
                 call xunit_ui%execute(cline)
             case( 'unit_ipc' )
                 call xunit_ipc%execute(cline)
+            case( 'unit_reconstruction' )
+                call xunit_reconstruction%execute(cline)
+            case( 'lib_reconstruction' )
+                call xlib_reconstruction%execute(cline)
             case( 'forked_process' )
                 call xforked_process%execute(cline)
-            case( 'ui_hash_test' )
-                call xui_hash_test%execute(cline)
             case default
                 l_did_execute = .false.
         end select

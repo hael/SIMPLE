@@ -1,4 +1,4 @@
-!@descr: user interfaces of the unit-test suites: the fast gate (unit_<area>), its umbrella (units) and the platform-tier forked-process suite
+!@descr: user interfaces of the unit-test suites: the fast gate (unit_<area>), its umbrella (units), the library suites (lib_<area>) and the platform-tier forked-process suite
 module simple_test_ui_class
 use simple_ui_modules
 implicit none
@@ -12,8 +12,9 @@ type(ui_program), target :: unit_numerics
 type(ui_program), target :: unit_project
 type(ui_program), target :: unit_ui
 type(ui_program), target :: unit_ipc
+type(ui_program), target :: unit_reconstruction
+type(ui_program), target :: lib_reconstruction
 type(ui_program), target :: forked_process
-type(ui_program), target :: ui_hash_test
 
 contains
 
@@ -27,8 +28,9 @@ contains
         call new_unit_project(tsttab)
         call new_unit_ui(tsttab)
         call new_unit_ipc(tsttab)
+        call new_unit_reconstruction(tsttab)
+        call new_lib_reconstruction(tsttab)
         call new_forked_process(tsttab)
-        call new_ui_hash_test(tsttab)
     end subroutine construct_test_class_programs
 
     subroutine new_units( tsttab )
@@ -133,6 +135,32 @@ contains
         call add_ui_program('unit_ipc', unit_ipc, tsttab, UI_CATEGORY)
     end subroutine new_unit_ipc
 
+    subroutine new_unit_reconstruction( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_reconstruction%new(&
+        &'unit_reconstruction',&
+        &'unit tests: 3D reconstruction backends and observation noise',&
+        &'is the fast-gate unit suite for 3D reconstruction: the rec3D backend selector and the Gaussian observation-noise contracts',&
+        &'simple_test_exec',&
+        &.false.)
+        call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise)', '', .false., '')
+        call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
+    end subroutine new_unit_reconstruction
+
+    subroutine new_lib_reconstruction( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call lib_reconstruction%new(&
+        &'lib_reconstruction',&
+        &'library tests: half-set PCG reconstruction against gridding',&
+        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding',&
+        &'simple_test_exec',&
+        &.false.)
+        call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (pcg_half_set)', '', .false., '')
+        call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
+    end subroutine new_lib_reconstruction
+
     subroutine new_forked_process( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call forked_process%new(&
@@ -143,16 +171,5 @@ contains
         &.false.)
         call add_ui_program('forked_process', forked_process, tsttab, UI_CATEGORY)
     end subroutine new_forked_process
-
-    subroutine new_ui_hash_test( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        call ui_hash_test%new(&
-        &'ui_hash_test',&
-        &'ui_hash_test ',&
-        &'is a test program for ui_hash',&
-        &'simple_test_exec',&
-        &.false.)
-        call add_ui_program('ui_hash_test', ui_hash_test, tsttab, UI_CATEGORY)
-    end subroutine new_ui_hash_test
 
 end module simple_test_ui_class

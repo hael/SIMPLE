@@ -7,7 +7,6 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('highl
 type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
-type(ui_program), target :: reproject
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
@@ -19,7 +18,6 @@ contains
         call new_mini_stream(tsttab)
         call new_simulate_particles(tsttab)
         call new_simulated_workflow(tsttab)
-        call new_reproject(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
         call new_rec3D_backends(tsttab)
@@ -31,7 +29,6 @@ contains
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
-        write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
         write(logfhandle,'(A)') rec3D_backends%name%to_char()
@@ -66,26 +63,13 @@ contains
         call add_ui_program('mini_stream', mini_stream, tsttab, UI_CATEGORY)
     end subroutine new_mini_stream
 
-    subroutine new_reproject( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call reproject%new(&
-        &'reproject',&                              ! name
-        &'reproject',&                              ! descr_short
-        &'is a test program for reproject',&
-        &'simple_test_exec',&                       ! executable
-        &.false.)                                   ! requires sp_project
-        ! add to ui_hash
-        call add_ui_program('reproject', reproject, tsttab, UI_CATEGORY)
-    end subroutine new_reproject
-
     subroutine new_simulate_particles( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call simulate_particles%new(&
         &'simulate_particles',&                     ! name
-        &'simulate_particles',&                     ! descr_short
-        &'is a test program for simulate_particles',&
+        &'reproject and simulate particles from an embedded volume',&  ! descr_short
+        &'is a hermetic smoke of reproject and simulate_particles on the embedded 6VXX volume',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
         ! add to ui_hash

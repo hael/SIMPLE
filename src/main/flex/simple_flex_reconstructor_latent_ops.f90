@@ -1040,14 +1040,4 @@ contains
         endif
     end function projected_model_kfromto
 
-    subroutine cleanup_plane( fpl )
-        type(fplane_type), intent(inout) :: fpl
-        if( allocated(fpl%cmplx_plane) ) deallocate(fpl%cmplx_plane)
-        if( allocated(fpl%ctfsq_plane) ) deallocate(fpl%ctfsq_plane)
-        if( allocated(fpl%transfer_plane) ) deallocate(fpl%transfer_plane)
-        fpl%frlims  = 0
-        fpl%shconst = 0.
-        fpl%nyq     = 0
-    end subroutine cleanup_plane
-
 end module simple_flex_reconstructor_latent_ops

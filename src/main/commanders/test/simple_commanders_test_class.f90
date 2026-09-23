@@ -39,6 +39,10 @@ use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
 use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
+use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
+use simple_gauran_tester,                    only: run_all_gauran_tests
+use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
+use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
 use simple_http_post_tester,                 only: run_all_http_post_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
@@ -60,7 +64,7 @@ use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! The fast gate is seven area suites, each one CTest entry under the label
+! The fast gate is eight area suites, each one CTest entry under the label
 ! `fast` (doc/refactoring_notes/uniform_test_environment_refactoring.md,
 ! section 5.1). Every sub-suite in them makes assertions through
 ! simple_test_utils, needs no network beyond localhost, no download and no
@@ -73,14 +77,13 @@ implicit none
 !                                    convenience, not the gate CTest runs
 !   test=forked_process              real child processes, clock polling:
 !                                    excluded from the build, label `platform`
+!   test=lib_<area>                  a library suite of the nightly extensive
+!                                    tier (section 5.2.1): same shape, no
+!                                    30 s budget; lib_reconstruction is the first
 !
 ! SIMPLE_UNIT_ORDER=reverse runs a suite's table backwards; a result that
 ! differs from the forward run is a state leak between sub-suites.
 
-type, extends(commander_base) :: commander_test_ui_hash_test
-  contains
-    procedure :: execute      => exec_test_ui_hash_test
-end type commander_test_ui_hash_test
 
 type, extends(commander_base) :: commander_test_units
   contains
@@ -121,6 +124,16 @@ type, extends(commander_base) :: commander_test_unit_ipc
   contains
     procedure :: execute      => exec_test_unit_ipc
 end type commander_test_unit_ipc
+
+type, extends(commander_base) :: commander_test_unit_reconstruction
+  contains
+    procedure :: execute      => exec_test_unit_reconstruction
+end type commander_test_unit_reconstruction
+
+type, extends(commander_base) :: commander_test_lib_reconstruction
+  contains
+    procedure :: execute      => exec_test_lib_reconstruction
+end type commander_test_lib_reconstruction
 
 type, extends(commander_base) :: commander_test_forked_process
   contains
@@ -229,6 +242,7 @@ contains
         call add_suite(s, n, 'UI JSON',       suite_ui_json)
         call add_suite(s, n, 'GUI metadata',  run_all_gui_metadata_tests)
         call add_suite(s, n, 'GUI assembler', run_all_gui_assembler_tests)
+        call add_suite(s, n, 'UI hash',       run_all_ui_hash_tests)
     end subroutine suites_ui
 
     subroutine suites_ipc( s, n )
@@ -240,6 +254,20 @@ contains
         call add_suite(s, n, 'persistent worker message', run_all_persistent_worker_message_tests)
         call add_suite(s, n, 'persistent worker server',  run_all_persistent_worker_server_tests)
     end subroutine suites_ipc
+
+    subroutine suites_reconstruction( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'rec3D backend',     run_all_rec3D_strategy_tests)
+        call add_suite(s, n, 'observation noise', run_all_gauran_tests)
+    end subroutine suites_reconstruction
+
+    !> nightly library suite: minutes, full boxes allowed, same assertions and runner
+    subroutine suites_lib_reconstruction( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'PCG half-set', run_all_pcg_halfset_tests)
+    end subroutine suites_lib_reconstruction
 
     subroutine add_suite( s, n, name, proc )
         type(unit_suite),      intent(inout) :: s(:)
@@ -254,14 +282,6 @@ contains
 
     ! ---- commanders ----------------------------------------------------------
 
-    subroutine exec_test_ui_hash_test( self, cline )
-        use simple_ui_hash, only: test_ui_hash
-        class(commander_test_ui_hash_test), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        call test_ui_hash
-        call simple_end('**** SIMPLE_TEST_UI_HASH_TEST NORMAL STOP ****')
-    end subroutine exec_test_ui_hash_test
-
     subroutine exec_test_units( self, cline )
         class(commander_test_units), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -275,6 +295,7 @@ contains
         call suites_project(s, n)
         call suites_ui(s, n)
         call suites_ipc(s, n)
+        call suites_reconstruction(s, n)
         call run_unit_suites('units', cline, s(1:n))
     end subroutine exec_test_units
 
@@ -347,6 +368,26 @@ contains
         call suites_ipc(s, n)
         call run_unit_suites('unit_ipc', cline, s(1:n))
     end subroutine exec_test_unit_ipc
+
+    subroutine exec_test_unit_reconstruction( self, cline )
+        class(commander_test_unit_reconstruction), intent(inout) :: self
+        class(cmdline),                            intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_reconstruction(s, n)
+        call run_unit_suites('unit_reconstruction', cline, s(1:n))
+    end subroutine exec_test_unit_reconstruction
+
+    subroutine exec_test_lib_reconstruction( self, cline )
+        class(commander_test_lib_reconstruction), intent(inout) :: self
+        class(cmdline),                           intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_lib_reconstruction(s, n)
+        call run_unit_suites('lib_reconstruction', cline, s(1:n))
+    end subroutine exec_test_lib_reconstruction
 
     subroutine exec_test_forked_process( self, cline )
         class(commander_test_forked_process), intent(inout) :: self

@@ -25,11 +25,6 @@ type, extends(commander_base) :: commander_test_simulate_particles
     procedure :: execute      => exec_test_simulate_particles
 end type commander_test_simulate_particles
 
-type, extends(commander_base) :: commander_test_reproject
-  contains
-    procedure :: execute      => exec_test_reproject
-end type commander_test_reproject
-
 type, extends(commander_base) :: commander_test_simulated_workflow
   contains
     procedure :: execute      => exec_test_simulated_workflow
@@ -92,13 +87,6 @@ subroutine exec_test_mini_stream( self, cline )
     integer                       :: i, ndata_sets, n_nonzero, nmovf
     type(string)                  :: abspath, projfile
     character(len=*), parameter   :: filetab_file='filetab.txt'
-    ! Parsing
-    if( command_argument_count() < 1 )then
-        write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mini_stream fname=filetab.txt'
-        call exit(-1)
-    else 
-        call cline%parse_oldschool
-    endif
     call cline%checkvar('fname',        1)
     call cline%check()
     call params%new(cline)
@@ -171,7 +159,6 @@ subroutine exec_test_mini_stream( self, cline )
         endif
         ! reject based on CTF resolution and ice score
         call simple_chdir(output_dir//'/'//params%projname%to_char())
-        call cline_select%delete('nran')
         call cline_select%set('prg',                           'selection')
         call cline_select%set('mkdir',                               'yes')
         call cline_select%set('oritype',                             'mic')
@@ -222,226 +209,139 @@ subroutine exec_test_mini_stream( self, cline )
     call simple_end('**** SIMPLE_TEST_MINI_STREAM_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_mini_stream
 
+!> Hermetic simulation smoke: one embedded 6VXX volume, reprojected (nspace
+!  projections) and turned into CTF-affected particles (NPTCLS_SIM), with the
+!  stack and orientation-file bookkeeping of both commanders checked. Registered
+!  under the workflow label; simulate_movie is covered by simulated_workflow.
 subroutine exec_test_simulate_particles( self, cline )
     use simple_atoms,         only: atoms
     use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
     use simple_imghead,       only: find_ldim_nptcls, find_img_smpd
     class(commander_test_simulate_particles), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    type(cmdline)                       :: cline_sim
+    real,    parameter                  :: SMPD       = 1.3
+    real,    parameter                  :: MSKDIAM    = 180.
+    integer, parameter                  :: NSPACE     = 100
+    integer, parameter                  :: NPTCLS_SIM = 200
+    type(cmdline)                       :: cline_reproj, cline_sim
     type(parameters)                    :: params
+    type(commander_reproject)           :: xreproject
     type(commander_simulate_particles)  :: xsim_ptcls
     type(atoms)                         :: molecule
-    real, parameter                     :: smpd = 1.3
     type(molecule_data)                 :: mol
-    integer, parameter                  :: NPTCLS_SIM = 200
-    type(string)                        :: outstk, outfile, vol_file
-    integer                             :: ldim(3), nptcls_stk, nlines_ori
-    real                                :: smpd_stk
+    type(string)                        :: vol_file
+    integer                             :: ldim(3), nvols
+    real                                :: smpd_vol
     logical                             :: all_ok
-    mol = sars_cov2_spkgp_6vxx()
-    call molecule%pdb2mrc(smpd=smpd, mol=mol, center_pdb=.true.)
     call params%new(cline)
-    all_ok = .true.
+    all_ok   = .true.
+    vol_file = '6VXX.mrc'
+    ! ---- one volume from the embedded coordinates ----
+    write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES: generating '//vol_file%to_char()
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc(smpd=SMPD, volfile=vol_file, mol=mol, center_pdb=.true.)
+    call molecule%kill()
+    if( .not. file_exists(vol_file) ) THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: volume not generated')
+    call find_ldim_nptcls(vol_file, ldim, nvols)
+    smpd_vol = find_img_smpd(vol_file)
+    write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_vol
+    if( ldim(1) /= ldim(2) .or. ldim(1) /= ldim(3) .or. ldim(1) < 1 )then
+        write(logfhandle,'(a)') '    FAIL: volume is not a cube'
+        all_ok = .false.
+    endif
+    if( abs(smpd_vol - SMPD) > 0.01 )then
+        write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: volume smpd mismatch, expected ', SMPD, ' got ', smpd_vol
+        all_ok = .false.
+    endif
+    ! ---- reproject ----
+    write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES: reproject'
+    call cline_reproj%set('prg',      'reproject')
+    call cline_reproj%set('vol1',      vol_file)
+    call cline_reproj%set('smpd',      SMPD)
+    call cline_reproj%set('pgrp',      'c1')
+    call cline_reproj%set('mskdiam',   MSKDIAM)
+    call cline_reproj%set('nspace',    NSPACE)
+    call cline_reproj%set('nthr',      params%nthr)
+    call xreproject%execute(cline_reproj)
+    call cline_reproj%kill()
+    call check_stack(string('reprojs.mrcs'), NSPACE, 'reprojection')
+    call check_oris(string('reproject_oris'//trim(TXT_EXT)), NSPACE, 'reprojection')
     ! ---- simulate particles ----
-    write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES:'
+    write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES: simulate_particles'
     call cline_sim%set('prg',      'simulate_particles')
-    call cline_sim%set('vol1',           'molecule.mrc')
-    call cline_sim%set('smpd',                     smpd)
-    call cline_sim%set('mskdiam',                   180)
-    call cline_sim%set('nthr',                       16)
-    call cline_sim%set('nptcls',             NPTCLS_SIM)
-    call cline_sim%set('pgrp',                     'c1')
-    call cline_sim%set('snr',                      0.01)
-    call cline_sim%set('ctf',                     'yes')
-    call cline_sim%set('sherr',                     0.0)
-    call cline_sim%set('even',                     'on')
+    call cline_sim%set('vol1',      vol_file)
+    call cline_sim%set('smpd',      SMPD)
+    call cline_sim%set('mskdiam',   MSKDIAM)
+    call cline_sim%set('nthr',      params%nthr)
+    call cline_sim%set('nptcls',    NPTCLS_SIM)
+    call cline_sim%set('pgrp',      'c1')
+    call cline_sim%set('snr',       0.01)
+    call cline_sim%set('ctf',       'yes')
+    call cline_sim%set('sherr',     0.0)
+    call cline_sim%set('even',      'on')
     call xsim_ptcls%execute(cline_sim)
-    ! ---- define expected output file names ----
-    vol_file = 'molecule.mrc'
-    outstk   = 'simulated_particles.mrc'
-    outfile  = 'simulated_oris'//trim(TXT_EXT)
-    ! ---- check volume was generated ----
-    write(logfhandle,'(a)') '>>> CHECK: volume file exists'
-    if( .not. file_exists(vol_file) )then
-        write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not found'
-        THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: volume not generated')
-    else
-        call find_ldim_nptcls(vol_file, ldim, nptcls_stk)
-        smpd_stk = find_img_smpd(vol_file)
-        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_stk
-        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
-            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
-            all_ok = .false.
-        endif
-        if( abs(smpd_stk - smpd) > 0.01 )then
-            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_stk
-            all_ok = .false.
-        endif
-    endif
-    ! ---- validate output stack ----
-    write(logfhandle,'(a)') '>>> CHECK: output particle stack'
-    if( .not. file_exists(outstk) )then
-        write(logfhandle,'(a)') '    FAIL: '//outstk%to_char()//' not found'
-        all_ok = .false.
-    else
-        call find_ldim_nptcls(outstk, ldim, nptcls_stk)
-        smpd_stk = find_img_smpd(outstk)
-        write(logfhandle,'(a,i6)')  '    particles in stack: ', nptcls_stk
-        write(logfhandle,'(a,i4,a,i4)') '    box size:           ', ldim(1), ' x ', ldim(2)
-        write(logfhandle,'(a,f6.2)')    '    smpd:               ', smpd_stk
-        if( nptcls_stk /= NPTCLS_SIM )then
-            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NPTCLS_SIM, ' particles, got ', nptcls_stk
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: particle count matches'
-        endif
-        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
-            write(logfhandle,'(a)') '    FAIL: invalid box dimensions'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: box dimensions valid'
-        endif
-        if( abs(smpd_stk - smpd) > 0.01 )then
-            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_stk
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: sampling distance matches'
-        endif
-    endif
-    ! ---- validate orientations file ----
-    write(logfhandle,'(a)') '>>> CHECK: orientations file'
-    if( .not. file_exists(outfile) )then
-        write(logfhandle,'(a)') '    FAIL: '//outfile%to_char()//' not found'
-        all_ok = .false.
-    else
-        nlines_ori = nlines(outfile)
-        write(logfhandle,'(a,i6)') '    orientation records: ', nlines_ori
-        if( nlines_ori /= NPTCLS_SIM )then
-            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NPTCLS_SIM, ' records, got ', nlines_ori
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: orientation count matches'
-        endif
-    endif
+    call cline_sim%kill()
+    call check_stack(string('simulated_particles.mrc'), NPTCLS_SIM, 'particle')
+    call check_oris(string('simulated_oris'//trim(TXT_EXT)), NPTCLS_SIM, 'particle')
     ! ---- final verdict ----
     if( all_ok )then
         call simple_end('**** SIMPLE_TEST_SIMULATE_PARTICLES NORMAL STOP ****')
     else
         THROW_HARD('TEST_SIMULATE_PARTICLES FAILED')
     endif
-end subroutine exec_test_simulate_particles
 
-subroutine exec_test_reproject( self, cline )
-    use simple_atoms,         only: atoms
-    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
-    use simple_imghead,       only: find_ldim_nptcls, find_img_smpd
-    class(commander_test_reproject), intent(inout) :: self
-    class(cmdline),                  intent(inout) :: cline
-    integer, parameter              :: NSPACE = 100
-    real,    parameter              :: SMPD   = 1.3
-    type(cmdline)                   :: cline_reproj
-    type(parameters)                :: params
-    type(commander_reproject)       :: xreproject
-    type(atoms)                     :: molecule
-    type(molecule_data)             :: mol
-    type(string)                    :: vol_file, outstk, outori
-    integer                         :: ldim(3), nptcls_stk, nlines_ori
-    real                            :: smpd_stk
-    logical                         :: all_ok
-        ! ---- define expected output file names ----
-    vol_file = '6VXX.mrc'
-    outstk   = 'reprojs.mrcs'
-    outori   = 'reproject_oris'//trim(TXT_EXT)
-    ! ---- generate 6VXX volume from built-in molecule data ----
-    write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating 6VXX.mrc volume'
-    mol = sars_cov2_spkgp_6vxx()
-    call molecule%pdb2mrc(smpd=SMPD, volfile=vol_file, mol=mol)
-    call params%new(cline)
-    all_ok = .true.
-    ! ---- check volume was generated ----
-    write(logfhandle,'(a)') '>>> CHECK: volume file exists'
-    if( .not. file_exists(vol_file) )then
-        write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not found'
-        THROW_HARD('TEST_REPROJECT FAILED: volume not generated')
-    else
-        call find_ldim_nptcls(vol_file, ldim, nptcls_stk)
-        smpd_stk = find_img_smpd(vol_file)
-        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_stk
-        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
-            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+  contains
+
+    !> the stack exists, holds nexpected square images at the volume's smpd
+    subroutine check_stack( fname, nexpected, what )
+        type(string),     intent(in) :: fname
+        integer,          intent(in) :: nexpected
+        character(len=*), intent(in) :: what
+        integer :: ldim_stk(3), nimgs
+        real    :: smpd_stk
+        write(logfhandle,'(a)') '>>> CHECK: '//what//' stack '//fname%to_char()
+        if( .not. file_exists(fname) )then
+            write(logfhandle,'(a)') '    FAIL: '//fname%to_char()//' not found'
+            all_ok = .false.
+            return
+        endif
+        call find_ldim_nptcls(fname, ldim_stk, nimgs)
+        smpd_stk = find_img_smpd(fname)
+        write(logfhandle,'(a,i6,a,i4,a,i4,a,f6.2)') '    images: ', nimgs, ', box: ', ldim_stk(1), ' x ', ldim_stk(2), ', smpd: ', smpd_stk
+        if( nimgs /= nexpected )then
+            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', nexpected, ' images, got ', nimgs
             all_ok = .false.
         endif
-        if( abs(smpd_stk - SMPD) > 0.01 )then
-            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', SMPD, ' got ', smpd_stk
-            all_ok = .false.
-        endif
-    endif
-    ! ---- run reproject ----
-    write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating reprojections'
-    call cline_reproj%set('prg',              'reproject')
-    call cline_reproj%set('vol1',              '6VXX.mrc')
-    call cline_reproj%set('smpd',                    SMPD)
-    call cline_reproj%set('pgrp',                    'c1')
-    call cline_reproj%set('mskdiam',                 180.)
-    call cline_reproj%set('nspace',          real(NSPACE))
-    call cline_reproj%set('nthr',                     16.)
-    call xreproject%execute(cline_reproj)
-    call cline_reproj%kill()
-    ! ---- validate output stack ----
-    write(logfhandle,'(a)') '>>> CHECK: output reprojection stack'
-    if( .not. file_exists(outstk) )then
-        write(logfhandle,'(a)') '    FAIL: '//outstk%to_char()//' not found'
-        all_ok = .false.
-    else
-        call find_ldim_nptcls(outstk, ldim, nptcls_stk)
-        smpd_stk = find_img_smpd(outstk)
-        write(logfhandle,'(a,i6)')       '    projections in stack: ', nptcls_stk
-        write(logfhandle,'(a,i4,a,i4)')  '    box size:             ', ldim(1), ' x ', ldim(2)
-        write(logfhandle,'(a,f6.2)')     '    smpd:                 ', smpd_stk
-        if( nptcls_stk /= NSPACE )then
-            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NSPACE, ' projections, got ', nptcls_stk
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: projection count matches'
-        endif
-        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
+        if( ldim_stk(1) /= ldim_stk(2) .or. ldim_stk(1) < 1 )then
             write(logfhandle,'(a)') '    FAIL: invalid box dimensions'
             all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: box dimensions valid'
         endif
         if( abs(smpd_stk - SMPD) > 0.01 )then
             write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', SMPD, ' got ', smpd_stk
             all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: sampling distance matches'
         endif
-    endif
-    ! ---- validate orientations file ----
-    write(logfhandle,'(a)') '>>> CHECK: orientations file'
-    if( .not. file_exists(outori) )then
-        write(logfhandle,'(a)') '    FAIL: '//outori%to_char()//' not found'
-        all_ok = .false.
-    else
-        nlines_ori = nlines(outori)
-        write(logfhandle,'(a,i6)') '    orientation records: ', nlines_ori
-        if( nlines_ori /= NSPACE )then
-            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NSPACE, ' records, got ', nlines_ori
+    end subroutine check_stack
+
+    !> the orientation file exists with one record per image
+    subroutine check_oris( fname, nexpected, what )
+        type(string),     intent(in) :: fname
+        integer,          intent(in) :: nexpected
+        character(len=*), intent(in) :: what
+        integer :: nrecs
+        write(logfhandle,'(a)') '>>> CHECK: '//what//' orientations '//fname%to_char()
+        if( .not. file_exists(fname) )then
+            write(logfhandle,'(a)') '    FAIL: '//fname%to_char()//' not found'
             all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: orientation count matches'
+            return
         endif
-    endif
-    ! ---- final verdict ----
-    if( all_ok )then
-        call simple_end('**** SIMPLE_TEST_REPROJECT NORMAL STOP ****')
-    else
-        THROW_HARD('TEST_REPROJECT FAILED')
-    endif
-end subroutine exec_test_reproject
+        nrecs = nlines(fname)
+        if( nrecs /= nexpected )then
+            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', nexpected, ' records, got ', nrecs
+            all_ok = .false.
+        endif
+    end subroutine check_oris
+
+end subroutine exec_test_simulate_particles
 
 subroutine exec_test_simulated_workflow( self, cline )
     use simple_atoms,         only: atoms

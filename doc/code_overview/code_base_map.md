@@ -16,17 +16,6 @@
       - `simple_cartesian_fourier_kb_test.f90`
       - `simple_cartesian_fourier_neutral_extract_test.f90` — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks
       - `simple_cartesian_fourier_test_helpers.f90`
-      - `simple_continuous_3D_pcg_reconstruction_halfset_gridding.f90`
-      - `simple_continuous_3D_pcg_reconstruction_halfset_matrix.f90`
-      - `simple_continuous_3D_pcg_reconstruction_halfset_support.f90`
-      - `simple_continuous_3D_pcg_reconstruction_halfset_test.f90`
-      - `simple_continuous_3D_pcg_reconstruction_noise_gauran_test.f90`
-      - `simple_continuous_3D_pcg_reconstruction_noise_observation_test.f90`
-      - `simple_continuous_3D_pcg_reconstruction_noise_support.f90`
-      - `simple_continuous_3D_pcg_reconstruction_noise_test.f90`
-      - `simple_continuous_3D_pcg_reconstruction_noise_volume_test.f90`
-      - `simple_continuous_3D_pcg_reconstruction_test_helpers.f90`
-      - `simple_continuous_3D_pcg_reconstruction_volume_test.f90`
       - `simple_continuous_inplane_refine3D_baseline.f90`
       - `simple_continuous_inplane_refine3D_direct.f90`
       - `simple_continuous_inplane_refine3D_joint.f90`
@@ -45,7 +34,6 @@
       - `simple_test_cavg_registration.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
-      - `simple_test_continuous_3D_pcg_reconstruction.f90`
       - `simple_test_continuous_inplane_cc_grad.f90`
       - `simple_test_continuous_inplane_hybrid_grad.f90`
       - `simple_test_continuous_inplane_refine3D.f90`
@@ -63,7 +51,6 @@
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
-      - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_nice.f90`
       - `simple_test_nu_envmask.f90`
       - `simple_test_nu_filter.f90`
@@ -80,7 +67,6 @@
       - `simple_test_project_merge.f90`
       - `simple_test_qsys_ctrl.f90`
       - `simple_test_qsys_env.f90`
-      - `simple_test_rec3D_backend.f90`
       - `simple_test_rnd_shuffle.f90`
       - `simple_test_search_gain_flips.f90`
       - `simple_test_serialize.f90`
@@ -341,6 +327,7 @@
         - `simple_image_msk_tester.f90` — unit test routines for masks: mask bounds, graphene shells, real-space masks and binary images
         - `simple_image_norm.f90` — image normalization routines
         - `simple_image_ops.f90` — operations on images not fitting elsewhere: noise, zero, background, CTF division etc.
+        - `simple_gauran_tester.f90` — unit test routines for the Gaussian noise generators of simple_image (gauran, add_gauran)
         - `simple_image_polar.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
         - `simple_image_seg.f90` — image segmentation related stuff to support masking
         - `simple_image_vis.f90` — for supporting visualization of images in various ways
@@ -505,6 +492,7 @@
           - `simple_preprocess_strategy.f90`
           - `simple_rec3D_pcg_strategy.f90` — shared-memory production strategy body for kernel PCG reconstruct3D
           - `simple_rec3D_strategy.f90`
+          - `simple_rec3D_strategy_tester.f90` — unit test routines for the rec3D backend selector (simple_rec3D_strategy)
           - `simple_reextract_strategy.f90`
           - `simple_refine3D_strategy.f90`
         - **search/** — home of strategies for 2D and 3D orientation search
@@ -578,7 +566,8 @@
         - `simple_private_prgs.f90` — private program interface defintions (those executed by simple_private_exec)
         - `simple_ui.f90` — the main user interface module
         - `simple_ui_descriptor_types.f90` — shared presentation-only value types for the command descriptor layer
-        - `simple_ui_hash.f90` — extension type providing typed convenience accessors for ui_param & ui_program
+        - `simple_ui_hash.f90` — extension type providing typed convenience accessors for ui_program
+        - `simple_ui_hash_tester.f90` — unit test routines for the typed UI program table (simple_ui_hash)
         - `simple_ui_modules.f90` — module aggregating ui utility modules
         - `simple_ui_param.f90` — module defining the ui_param type, which is used to define input parameters for the simple_ui_program interface
         - `simple_ui_params_common.f90` — module defining the common parameters for all simple_ui_program interfaces
@@ -642,6 +631,7 @@
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and preconditioned
+        - `simple_pcg_halfset_tester.f90` — library tests of independent half-set PCG reconstruction against gridding (simple_reconstructor_pcg)
         - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
         - `simple_vol_pproc_policy.f90` — per-state mask artifact compatibility check shared by volume assembly, postprocess and the abinitio final rec
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
@@ -672,7 +662,7 @@
       - **comm/** — utilities for interprocess communication
         - `simple_distr_comm.f90` — for initializing a server for direct socket communication
         - `simple_http_post.f90` — libcurl-based HTTP POST client with response capture
-        - `simple_http_post_tester.f90` — unit tests for simple_http_post (lifecycle, body-less POST, POST with body, response reset)
+        - `simple_http_post_tester.f90` — unit tests for simple_http_post against a loopback HTTP server (no network beyond localhost)
         - `simple_ipc_tcp_socket_client.f90`
         - `simple_ipc_tcp_socket_helpers.f90`
         - `simple_ipc_tcp_socket_server.f90`

@@ -158,8 +158,6 @@ jobs:
              simple_test_exec test=gencorrs_fft
              echo "-------------------- TEST PCG RECONSTRUCTION -------------------------"
              simple_test_exec test=pcg_recon
-             echo "-------------------- TEST REC3D BACKEND SELECTOR -------------------------"
-             simple_test_rec3D_backend
              echo "-------------------- TEST SERIALIZE -------------------------"
              simple_test_serialize
              echo "-------------------- TEST SIMD -------------------------"

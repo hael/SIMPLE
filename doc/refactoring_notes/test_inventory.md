@@ -10,18 +10,20 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 
 ## class
 
+All identities reviewed 2026-09-23 (Hans). `ui_hash_test` is retired (Retired tests); the rest are the gate
+itself and are recorded here so the area is closed.
+
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| forked_process | E | 9 | none | not run | none | - | - | platform (real child processes, clock polling; excluded from the build by decision) |  |  |
-| ui_hash_test | E | 7 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| unit_core | E | 9 | assertion | not run | committed, user-supplied | - | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| unit_image | E | 9 | assertion | not run | committed | - | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| unit_ipc | E | 9 | assertion | not run | download | socket | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| unit_numerics | E | 9 | assertion | not run | generated | - | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| unit_ori | E | 9 | assertion | not run | committed, generated | - | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| unit_project | E | 9 | assertion | not run | committed | - | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| unit_ui | E | 9 | assertion | not run | none | - | - | fast (area suite of the fast gate (Phase 2)) |  |  |
-| units | E | 15 | none | debug/exec missing fixture; debug/stan measured 17.9s | none | - | - | fast (umbrella, not registered) (runs every area suite in one process; developer convenience) |  |  |
+| forked_process | E | 9 | none | not run | none | - | - | platform (real child processes, clock polling; excluded from the build by decision) | keep | Hans, 2026-09-23: platform, as decided in plan section 4.6 and registered in `production/CMakeLists.txt` (label `platform`, RUN_SERIAL) |
+| unit_core | E | 9 | assertion | not run | committed, user-supplied | - | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate; the fixture flags are the script's heuristics over the sub-suite bodies, every sub-suite is hermetic |
+| unit_image | E | 9 | assertion | not run | committed | - | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate |
+| unit_ipc | E | 9 | assertion | not run | download | socket | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate; localhost only (the "download" flag is the script matching the word `http` in the `HTTP POST` sub-suite name), no sleeps since the optimize batch |
+| unit_numerics | E | 9 | assertion | not run | committed, generated | - | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate |
+| unit_ori | E | 9 | assertion | not run | committed, generated | - | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate |
+| unit_project | E | 9 | assertion | not run | committed, generated | - | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate |
+| unit_ui | E | 9 | assertion | not run | none | - | - | fast (area suite of the fast gate (Phase 2)) | keep | Hans, 2026-09-23: fast gate; gained the `UI hash` sub-suite from `ui_hash_test` |
+| units | E | 15 | none | not run | none | - | - | fast (umbrella, not registered) (runs every area suite in one process; developer convenience) | keep | Hans, 2026-09-23: developer umbrella, deliberately not a CTest entry (plan section 5.1) |
 
 ## fft
 
@@ -37,15 +39,20 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 
 ## highlevel
 
+All identities reviewed 2026-09-23 (Hans). `reproject` merged into `simulate_particles` and the standalone
+route of `mini_stream` removed (Retired tests). The two "delete candidate" proposals were dossier artefacts:
+their THROW_HARDs live in the production module (`validate_rec3D_pcg_fractional_updates`) and in the
+commander module's helper (`run_rec3D_backends_single`/`gate_fail`), outside the `exec_test_*` body the
+script inspects.
+
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| mini_stream | E+S | 150/155 | none | not run | committed, user-supplied / cs dir_movies fname fraca gainref kv moldiam_max nparts nran nthr projname smpd total_dose | - | same name on both routes | manual (needs user-supplied) |  |  |
-| pcg_frac_update | E | 23 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| pcg_recon | E | 1160 | THROW_HARD | not run | generated | - | - | workflow (assertion-bearing) |  |  |
-| rec3D_backends | E | 15 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| reproject | E | 109 | THROW_HARD | not run | generated | - | simulate_particles (100%, subset) | workflow (runs production commanders) |  |  |
-| simulate_particles | E | 110 | THROW_HARD | not run | generated | - | reproject (100%, subset) | workflow (runs production commanders) |  |  |
-| simulated_workflow | E | 341 | THROW_HARD | not run | committed, generated / system | - | - | workflow (runs production commanders) |  |  |
+| mini_stream | E | 142 | none | not run | committed, user-supplied / fname | - | - | manual (needs user-supplied) | demote | Hans, 2026-09-23: manual; runs new_project/import_movies/preprocess/selection/mini_stream over a user filetab of data-set command lines (movies, gain reference, cluster). Standalone route deleted (same body); the commander route lost its `command_argument_count`/`parse_oldschool` block (the cline arrives parsed) and a `delete('nran')` on an empty cline. To promote: a committed micrograph set and an assertion on the stream's output |
+| pcg_frac_update | E | 23 | THROW_HARD (in the production module) | not run | user-supplied / projfile with sigma2 | - | - | delete candidate (no failure path and fewer than 3 production calls) | demote | Hans, 2026-09-23: manual; the fractional/trailing-update equivalence gate of `doc/policies/3D/reconstruct3D_pcg_policy.md` (`validate_rec3D_pcg_fractional_updates`, RAW_TOL/REPLAY_TOL); needs a refine3D project with sigma2 groups. Not a delete candidate: the assertions are in the production routine |
+| pcg_recon | E | 1160 | THROW_HARD | to be measured | generated | - | - | workflow (assertion-bearing) | keep | Hans, 2026-09-23: workflow (registered, 3600 s, 8 threads; also in CI). Box 24, fixed seed, 14 gated stages on the PCG operator. If it runs in seconds on one thread it could become a fast-gate sub-suite (would need the THROW_HARD/all_ok checks rewritten on simple_test_utils); time to be measured first |
+| rec3D_backends | E | 15 | THROW_HARD (in the helper) | not run | user-supplied / projfile, pgrp, mskdiam | - | - | delete candidate (no failure path and fewer than 3 production calls) | demote | Hans, 2026-09-23: manual; dual-backend (gridding vs PCG) reconstruction comparison of the PCG policy, run inside a refine3D directory. Not a delete candidate: `gate_fail` in `run_rec3D_backends_single` is a hard failure |
+| simulate_particles | E | 128 | THROW_HARD | not run | generated | - | - | workflow (runs production commanders) | modify | Hans, 2026-09-23: absorbed `reproject`: one embedded 6VXX volume (pdb2mrc, centred), reproject with nspace=100 and simulate_particles with nptcls=200 and CTF, each checked for stack presence, image count, square box, smpd and one orientation record per image; `nthr` from the command line instead of the hard-coded 16. Registered under `workflow` (`simulate_particles`, nthr=8) as the only nightly run of either commander; SIMPLE_CTEST_BUDGET 19 -> 20 |
+| simulated_workflow | E | 341 | THROW_HARD | not run | committed, generated / system | - | - | workflow (runs production commanders) | keep | Hans, 2026-09-23: workflow (registered twice, 6vxx and 1jxy); the "user-supplied" flag is only the `system=` keyword |
 
 ## io
 
@@ -129,7 +136,7 @@ unit_numerics and `project records` of unit_project.
 | atomfit | S | 12 | none | not run | committed | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | cartesian_fourier | S | 874 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | cavg_quality_relations | S | 8 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| continuous_3D_pcg_reconstruction | S | 1645 | assertion | not run | committed, generated | - | - | lib_? (assertion-bearing) |  |  |
+| continuous_3D_pcg_reconstruction | S | 1645 | assertion | not run | committed, generated | - | - | lib_? (assertion-bearing) | modify | Hans, 2026-09-23: split into `observation noise` (unit_reconstruction, `simple_gauran_tester`) and `PCG half-set` (lib_reconstruction, `simple_pcg_halfset_tester`, in-process, no MRC output); the twelve standalone files are deleted (Retired tests) |
 | continuous_inplane_cc_grad | S | 231 | error stop | not run | user-supplied | - | continuous_inplane_hybrid_grad (67%); continuous_inplane_rotation2D_stage1_validation (54%) | manual (needs user-supplied) |  |  |
 | continuous_inplane_hybrid_grad | S | 208 | error stop | not run | user-supplied | - | continuous_inplane_cc_grad (67%); continuous_inplane_rotation2D_stage1_validation (52%) | manual (needs user-supplied) |  |  |
 | continuous_inplane_refine3D | S | 972 | error stop | not run | user-supplied | - | phshift_policy (12%, subset) | manual (needs user-supplied) |  |  |
@@ -159,7 +166,7 @@ unit_numerics and `project records` of unit_project.
 | project_merge | S | 6 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | qsys_ctrl | S | 484 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 16 production calls) |  |  |
 | qsys_env | S | 72 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| rec3D_backend | S | 55 | error stop | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| rec3D_backend | S | 55 | error stop | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_reconstruction | Hans, 2026-09-23: `rec3D backend` sub-suite (`simple_rec3D_strategy_tester`), all six factory branches pinned; standalone and CI line removed |
 | rnd_shuffle | S | 58 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | search_gain_flips | S | 83 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | sigma2_state | S | 451 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
@@ -250,3 +257,8 @@ unit_numerics and `project records` of unit_project.
 | lpstages_test | 2026-09-23 | merge into unit_numerics: called lpstages with a flat FRC and printed | `simple_lpstages_tester`: lpstages with one stage, from a falling FRC (limits, thresholds, crop boxes, sampling, shift limits), particle vs class-average thresholds, the linear fallback of a flat FRC, lpstages_fast (floor, force_lpstart), lpstages_setlims (incl. the no-crop case), the Butterworth kernel in all four forms against its closed form; `verbose` added to lpstages_fast/setlims (default unchanged) |
 | lpstages | 2026-09-23 | merge into unit_numerics: unassigned standalone with five THROW_HARD checks on lpstages/lpstages_fast/lpstages_setlims | as `lpstages_test` (all five checks are among the assertions) |
 | opt_lp | 2026-09-23 | retire: a manual experiment (downloads 1JYX from RCSB, converts, reprojects, prints Butterworth-band residuals), no assertion; `create_hist_vector` stays (otsu uses it) | - (accepted loss by name: `apply_filter` and `avg_sdev`, both exercised elsewhere) |
+| ui_hash_test | 2026-09-23 | merge into unit_ui: called `test_ui_hash`, a print-only PASS/FAIL routine embedded in the production module `simple_ui_hash`; the routine is deleted with it, as are the unused `set_ui_param`/`get_ui_param` accessors and the unused string-key set / char-key get overloads | `simple_ui_hash_tester` (sub-suite `UI hash`): set by char key and get by string key with pointer identity, reference semantics, absent key and wrong dynamic type as typed misses, overwrite retargeting, key trimming, `found` optional |
+| reproject | 2026-09-23 | merge into simulate_particles: same 6VXX volume and the same three checks (stack, box/smpd, orientation count) on the reproject commander | `simulate_particles` (workflow): reproject stage with nspace=100 |
+| mini_stream (standalone route) | 2026-09-23 | delete: byte-identical body to the commander route | `simple_test_exec test=mini_stream` (manual) |
+| continuous_3D_pcg_reconstruction | 2026-09-23 | modify: child-process driver with a fixture self-test, the gauran/add_gauran contracts and a half-set PCG-vs-gridding study writing twelve MRC volumes per run | `simple_gauran_tester` (unit_reconstruction, `observation noise`) and `simple_pcg_halfset_tester` (lib_reconstruction, `PCG half-set`) |
+| rec3D_backend | 2026-09-23 | merge into unit_reconstruction: defaults, backend resolution and two factory branches, `error stop` on failure; was in CI | `simple_rec3D_strategy_tester` (`rec3D backend`): defaults, resolution incl. case and blanks, wiring, six factory branches |

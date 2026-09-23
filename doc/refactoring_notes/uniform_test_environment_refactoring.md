@@ -17,7 +17,9 @@ macOS through Accelerate's `snrm2`, the `indices_post` size of a
 descending `print_segment_json` window, the Nystroem kPCA feature and
 projection scaling, the non-convergent cosine pre-image, the residual BIC of
 the PPCA rank scan) and removed
-twenty-five dead routines and three unused optimisers. This is a large
+thirty-one dead routines and three unused optimisers. The eighth fast area
+suite, `unit_reconstruction`, and the first nightly library suite,
+`lib_reconstruction`, exist since 2026-09-23 (section 9.7). This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -378,6 +380,7 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_project` | STAR file, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
+| `unit_reconstruction` | rec3D backend, observation noise — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | to be measured |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1516,6 +1519,113 @@ component with a setter (`set_retry_backoff_ms`, default unchanged at
 1 s) that the failure-path test sets to 0; the listener start polls
 every 1 ms under the same 2 s cap. The server tester asserts that
 kill() with no workers returns within half a second.
+
+**class and highlevel (2026-09-23, Hans).** Two areas in one batch, because
+class has one live item. Class: `ui_hash_test` called `test_ui_hash`, a
+print-only PASS/FAIL routine embedded in the production module
+`simple_ui_hash`; it is `merge into unit_ui` as the `UI hash` sub-suite
+(`simple_ui_hash_tester`: set by character key and get by string key with
+pointer identity and reference semantics, absent key and wrong dynamic type
+as typed misses with a null pointer, overwrite retargeting the pointer to the
+new object, key trimming, `found` optional). Reviewing the module showed that
+production uses exactly two of its eight accessors (`add_ui_program` sets by
+character key, `simple_ui` gets by string key): the `set_ui_param`/
+`get_ui_param` family and the other two overloads had no caller and are
+deleted with the embedded test (Hans: "(a)"; six routines, the generic
+interfaces collapsed to two type-bound procedures). `forked_process`
+(platform, section 4.6), the seven `unit_<area>` suites (fast) and `units`
+(unregistered umbrella) are `keep` and recorded so the area is closed.
+Highlevel: `mini_stream` is `demote` to manual (user movies, gain reference,
+cluster); its standalone route was byte-identical and is deleted, and the
+commander route lost a copy-paste relic (`command_argument_count()` /
+`parse_oldschool` on a cline that arrives parsed) and a `delete('nran')` on
+an empty cline. `pcg_frac_update` and `rec3D_backends` are `demote` to
+manual: both need a refine3D project and are the equivalence and
+backend-comparison gates of `doc/policies/3D/reconstruct3D_pcg_policy.md`;
+the dossier's "delete candidate, no failure path" was an artefact, since
+their THROW_HARDs live in `validate_rec3D_pcg_fractional_updates` (production)
+and in `run_rec3D_backends_single`/`gate_fail` (the commander module's
+helper), outside the `exec_test_*` body the script inspects. `pcg_recon` is
+`keep`, workflow (registered, in CI): box 24, fixed seed, fourteen gated
+stages; whether it belongs in the fast gate instead depends on its one-thread
+time, which is to be measured (a move would mean rewriting its
+THROW_HARD/`all_ok` checks on `simple_test_utils`). `reproject` is `merge
+into simulate_particles`: one embedded 6VXX volume (centred), reproject with
+nspace=100 and simulate_particles with nptcls=200 and CTF, each checked for
+stack presence, image count, square box, smpd and one orientation record
+per image; `nthr` comes from the command line instead of the hard-coded 16.
+It is registered under `workflow` (`simulate_particles`, nthr=8) as the only
+nightly run of either commander (`simulated_workflow` uses `simulate_movie`),
+so `SIMPLE_CTEST_BUDGET` goes 19 -> 20 with that reason. `simulated_workflow`
+is `keep` (registered twice). Coverage accounting: the retired routes made
+no production call that a remaining test does not make (`test_ui_hash` is
+deleted with its module's dead accessors; reproject's three calls are a
+subset of simulate_particles'; the mini_stream commander route stays), so
+nothing is lost. Noted, not done: the simulation checks are still
+bookkeeping (counts, box, smpd); a simulation-truth floor (a zero-Euler
+reprojection against the volume's z-sum, say) is Phase 5 material.
+
+**reconstruction (2026-09-23, Hans).** The first family of the unassigned
+standalone-only area, and the batch that creates the `reconstruction` area
+in both tiers (Hans: "B"). `continuous_3D_pcg_reconstruction` (twelve
+files, 1 645 lines, 2026-08-27, never in CI) was a driver re-executing
+itself as a child process per case, with three cases: a self-test of its
+own phantom builder, the `gauran`/`add_gauran` noise contracts, and a
+half-set study (24 and 48 views per half, iteration trajectories with and
+without support, a thirteen-value lambda sweep at forty iterations, a
+gridding control, FSC between halves) that wrote twelve MRC volumes per
+run. Verdict `modify`: the noise contracts become the `observation noise`
+sub-suite of the new fast area suite `unit_reconstruction`
+(`simple_gauran_tester`: N(mean, sdev^2) moments, the SNR definition
+var_noise = var_signal/snr realised within 6 %, zero-mean and
+signal-uncorrelated noise, replay after reseeding, independence of
+consecutive draws; statistical tolerances, since the stream behind
+`random_number` is compiler-specific), and the half-set study becomes the
+`PCG half-set` sub-suite of the new nightly library suite
+`lib_reconstruction` (`simple_pcg_halfset_tester`, next to
+`simple_reconstructor_pcg`): in-process, no volume output, the same
+observations (simulate_particles projection path, seeded noise) and the
+same solves, asserting half ownership, realised SNR and noise
+independence, exact iteration counts, reproduction of a solve by a fresh
+operator (relative L2 < 1e-5 rather than bit identity, since the operator
+reduces under OpenMP), finite gridding and PCG half maps that differ, the
+FSC contract (bounded, low-shell mean > 0.4, decay of at least 0.1 towards
+Nyquist), noiseless recovery of the supported truth (corr > 0.85), and on
+the 48-view matrix a noisy raw-L2 lambda optimum interior to the sweep
+that beats the gridding control. The phantom fingerprints stay as one
+small test of the fixture. `rec3D_backend` (in CI) is `merge into
+unit_reconstruction` as `rec3D backend` (`simple_rec3D_strategy_tester`):
+the defaults (`rec_backend=gridding`, `maxits_pcg=2`, `rtol<=0`), name
+resolution (case-sensitive, blanks trimmed, empty invalid), wiring, and
+the factory's dynamic type on all six branches (the old test pinned two).
+`flex_pcg` is deferred to the heterogeneity family (Hans). Registration:
+`unit_reconstruction` is the eighth `fast` entry and `lib_reconstruction`
+the first `library` entry (3600 s, 8 threads, RUN_SERIAL), the template
+for the other Phase 4 library suites; `SIMPLE_CTEST_BUDGET` 20 -> 22. The
+CI line `simple_test_rec3D_backend` is gone. Coverage accounting: the
+retired programs' production calls are all made by the two new testers
+or by `pcg_recon`/the image and ori testers; nothing is lost by name.
+
+**HTTP POST left the network (2026-09-23, Hans).** The eight-suite gate
+passed on the Mac but took 58.9 s: `unit_ipc` 58.9 s, of it `HTTP POST`
+58 s. The four tests posted to `https://jsonplaceholder.typicode.com` and
+pinned FNV hashes of that site's responses — a live external service in
+the build gate, against the admission rule (localhost only) and the
+`unit_ipc` row of section 5.1, and on that day 14 s per request. The
+tester now runs its own loopback HTTP/1.1 server on a listener thread of
+`ipc_tcp_socket_server` (accept, read until the header block and
+Content-Length bytes of body are in, answer, close; the server's kill
+sentinel ends the loop): a request with a body is echoed back with 201,
+a body-less request gets a canned document with 200, and the assertions
+are on the exact content and content type rather than hashes, plus the
+reset of the response between three requests on one object and the fast
+failure against a closed port. The request tests are skipped on the
+platforms where the ipc listener-thread tests are skipped (`_WIN32`,
+`__FreeBSD__`, which the Mac build defines), like `persistent worker
+server`; the lifecycle test runs everywhere. Finding, not changed: a
+body-less `http_post%request` sets no POST fields, so libcurl issues a
+GET; every production caller passes a body, and the test pins the
+behaviour as it is.
 
 ## 10. Fast-tier performance
 
