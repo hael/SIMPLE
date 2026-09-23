@@ -306,7 +306,7 @@ contains
             spaFreqSq = ft_map_spafreqsq(h, k)
             ang       = ft_map_astigang(h, k)
             tval      = real(self%tfun%eval_canonical(spaFreqSq, ang, phshift),dp)
-            tval      = min(1.d0,max(tval,DSMALL))
+            tval      = min(1.d0,max(abs(tval),DSMALL))
             ! correlation sums
             ctf_sqsum  = ctf_sqsum  + tval*tval
             dotproduct = dotproduct + tval*real(prmat(i,j,1),dp)

@@ -880,6 +880,7 @@ contains
         real    :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq, scale
         integer :: ish,sh,n,nshells,cenbox,box_sc
         phshift = self%parms%phshift
+        if( self%parms%l_fit_phshift ) phshift = modulo(phshift, PI)
         pspec   = self%pspec4ctfres
         call pspec%get_rmat_ptr(ppspec)
         ! resampling, it is assumed the central spot has already been dealt with
