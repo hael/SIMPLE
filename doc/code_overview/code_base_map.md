@@ -16,13 +16,6 @@
       - `simple_cartesian_fourier_kb_test.f90`
       - `simple_cartesian_fourier_neutral_extract_test.f90` — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks
       - `simple_cartesian_fourier_test_helpers.f90`
-      - `simple_continuous_inplane_refine3D_baseline.f90`
-      - `simple_continuous_inplane_refine3D_direct.f90`
-      - `simple_continuous_inplane_refine3D_joint.f90`
-      - `simple_continuous_inplane_refine3D_metadata.f90`
-      - `simple_continuous_inplane_refine3D_policy.f90`
-      - `simple_continuous_inplane_refine3D_recovery.f90`
-      - `simple_continuous_inplane_refine3D_state.f90`
       - `simple_pose_cont_refine3D_adapter_1jyx_test.f90`
       - `simple_pose_cont_refinement_numerics_test.f90`
       - `simple_pose_cont_refinement_solver_test.f90`
@@ -34,13 +27,6 @@
       - `simple_test_cavg_registration.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
-      - `simple_test_continuous_inplane_cc_grad.f90`
-      - `simple_test_continuous_inplane_hybrid_grad.f90`
-      - `simple_test_continuous_inplane_refine3D.f90`
-      - `simple_test_continuous_inplane_rotation2D.f90`
-      - `simple_test_continuous_inplane_rotation2D_metadata.f90`
-      - `simple_test_continuous_inplane_rotation2D_route_identity.f90`
-      - `simple_test_continuous_inplane_rotation2D_stage1_validation.f90`
       - `simple_test_create_gain.f90`
       - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
       - `simple_test_discrete_stack_io.f90`
@@ -426,6 +412,7 @@
         - `simple_ppca.f90` — Bishop/Tipping probabilistic PCA with explicit isotropic noise
       - **pftc/** — home of the polar FT calc submodules and modules for operations on polar FTs
         - `simple_pftc_shsrch_grad.f90` — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
+        - `simple_pftc_inplane_tester.f90` — unit tests for continuous in-plane registration on the polar Fourier transform (simple_polarft_calc, simple_pftc_shsrch_grad)
         - `simple_polarft_access.f90` — polarft class accessors submodule
         - `simple_polarft_calc.f90` — polarft class complete interface
         - `simple_polarft_core.f90` — polarft class core submodule: object lifecycle etc.
@@ -535,6 +522,7 @@
           - `simple_strategy3D_shc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
           - `simple_strategy3D_snhc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
           - `simple_strategy3D_srch.f90` — common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
+          - `simple_strategy3D_inplane_tester.f90` — unit tests for the continuous in-plane state of the refine3D search (simple_strategy3D_srch, _alloc, _utils)
           - `simple_strategy3D_utils.f90` — utility routines for 3D strategies
           - **probabilistic/** — probabilistic 2D and 3D search strategies, candidate stores, and assignment tables
             - `simple_eul_prob_tab.f90` — the core probability table routines used for probabilistic 3D search

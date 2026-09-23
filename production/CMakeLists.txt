@@ -283,13 +283,13 @@ if(BUILD_TESTS)
   endfunction()
 
   # ---- the fast gate ------------------------------------------------------
-  # Eight area suites over the unit tests, one process each, label `fast`;
+  # Nine area suites over the unit tests, one process each, label `fast`;
   # every sub-suite asserts through simple_test_utils, is localhost-only and
   # runs on one thread (plan, section 5.1). `units` runs all of them in one
   # process as a developer convenience and is not registered: the entries
   # below are the gate. Measured 2026-09-22 (Debug, 1 thread): the seven
   # together about 4 s; the longest, unit_image and unit_ori, about 1.3 s.
-  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction)
+  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction pftc_registration2D3D)
     simple_add_test(unit_${_area} fast 120 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
   endforeach()
@@ -346,7 +346,7 @@ if(BUILD_TESTS)
   # existing suites, a new process needs a stated reason, and this number only
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays) are counted only when registered.
-  set(SIMPLE_CTEST_BUDGET 22)   # 8 fast + 1 platform + 12 workflow + 1 library
+  set(SIMPLE_CTEST_BUDGET 23)   # 9 fast + 1 platform + 12 workflow + 1 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

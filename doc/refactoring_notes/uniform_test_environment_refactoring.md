@@ -19,7 +19,8 @@ projection scaling, the non-convergent cosine pre-image, the residual BIC of
 the PPCA rank scan) and removed
 thirty-one dead routines and three unused optimisers. The eighth fast area
 suite, `unit_reconstruction`, and the first nightly library suite,
-`lib_reconstruction`, exist since 2026-09-23 (section 9.7). This is a large
+`lib_reconstruction`, exist since 2026-09-23 (section 9.7), as does the
+ninth fast suite `unit_pftc_registration2D3D`. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -380,7 +381,8 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_project` | STAR file, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
-| `unit_reconstruction` | rec3D backend, observation noise — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | to be measured |
+| `unit_reconstruction` | rec3D backend, observation noise — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
+| `unit_pftc_registration2D3D` | continuous in-plane, refine3D in-plane state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches. Its Cartesian counterpart, `unit_cart_registration3D`, comes with the pose family | to be measured |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1626,6 +1628,62 @@ server`; the lifecycle test runs everywhere. Finding, not changed: a
 body-less `http_post%request` sets no POST fields, so libcurl issues a
 GET; every production caller passes a body, and the test pins the
 behaviour as it is.
+
+**inplane (2026-09-23, Hans).** The second family of the unassigned area:
+seven identities, fourteen files, about 2 500 lines from the continuous
+in-plane rotation project of August, none in CI, all standalone. Three
+things were under test: (A) the polar continuous-angle evaluators of
+`simple_polarft_calc` (`gen_raw_euclid/corr/hybrid_grad_at_angle` against
+the discrete `gen_raw_euclid_grad_for_rot_8` and `gen_objfun_vals`) and
+the joint route of `simple_pftc_shsrch_grad`; (B) the refine3D search
+state (`strategy3D_srch` storage routes, `seed_continuous_inplane_candidate`,
+`resolve_inplane_e3`, `joint_evaluation_invalid`) and the `inpl_cont`
+policy; (C) post-run project metadata scans and a TSV baseline. Nothing in
+the gate touched `polarft_calc` before. Hans's area decision: the 2D and
+3D searches share the machinery, so the area is `pftc_registration2D3D`
+for everything on the polar Fourier transform, with `cart_registration3D`
+reserved for the Cartesian continuous implementations (the pose family).
+Verdicts: `inplane_cc_grad`, `inplane_hybrid_grad`, `inplane_rot2D_stage1`,
+the numeric and route-construction halves of `inplane_rot2D_routes` and
+refine3D's `synthetic_recovery` are `merge into unit_pftc_registration2D3D`
+as the `continuous in-plane` sub-suite (`simple_pftc_inplane_tester`,
+beside `simple_polarft_calc`). All five needed `vol1=`; the fixture is now
+hermetic — a four-blob phantom (box 64, 1.3 A, 60 A mask) written to the
+run directory for the suite and removed at its end; the checks are
+properties of the evaluators, not of a molecule. Kept as asserted: the
+score = exp(-raw loss) and scalar-route identities, parity of the
+continuous evaluator with the discrete reference at grid angles (loss and
+x/y gradient), analytic-vs-central-difference gradients at twelve probe
+poses per evaluator (1 % + 3e-3 floor), the non-negative loss series and
+[0,1] scores under near-noiseless shell-dependent sigma2 with stale and
+re-memoised square sums (scan thinned from 5x5x81 to 3x3x41), the cc
+penalty for an undefined denominator (finite, > 1, zero gradient), the
+hybrid capability flags, the joint route's seed parity with the legacy
+callback, and recovery: the joint solve from the grid seed does not worsen
+the objective, improves the angle over the grid and lands within 0.25 px
+rms of the known shift; plus the full-band hard-edge fixture at 359.375
+degrees and the zero-angle fixture (first grid angle selected, vanishing
+loss), and the strategy2D route flags under inpl_cont=no|yes and the
+probabilistic mode. Dropped: the hybrid-objective rejection (the
+constructor `error stop`s; the old test spawned itself to observe it) and
+the aliasing experiment (printed, never asserted). refine3D's
+`search_state`, `joint_state`, `direct_route`, `metadata_state` and
+`policy` are `merge into unit_pftc_registration2D3D` as `refine3D
+in-plane state` (`simple_strategy3D_inplane_tester`): hermetic, no
+fixture, `error stop` became assertions, `resolve_inplane_e3` gained the
+first-grid-angle case. `inplane_rot2D` (a driver: GNU `find -printf` for a
+1JYX project made by a `simple_test_1jyx_abinitio` that no longer exists,
+two `simple_exec prg=abinitio2D` runs, the other programs as subprocesses)
+is `delete`. `inplane_rot2D_meta`, refine3D `metadata_project` and
+`baseline` (all need a finished project, the baseline a TSV snapshot too)
+are `delete`: the e3/inpl consistency they scan for is what
+`resolve_inplane_e3` guarantees, and a project-level assertion after a
+real run belongs to the simulated workflow (Phase 5). Registration:
+`unit_pftc_registration2D3D` is the ninth `fast` entry, `SIMPLE_CTEST_BUDGET`
+22 -> 23. Coverage accounting: every production call of the fourteen files
+is made by the two new testers except the abinitio2D workflow run and the
+project scans, which were the deleted drivers' own business; nothing is
+lost by name.
 
 ## 10. Fast-tier performance
 

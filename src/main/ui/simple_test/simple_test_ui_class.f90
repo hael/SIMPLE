@@ -14,6 +14,7 @@ type(ui_program), target :: unit_ui
 type(ui_program), target :: unit_ipc
 type(ui_program), target :: unit_reconstruction
 type(ui_program), target :: lib_reconstruction
+type(ui_program), target :: unit_pftc_registration2D3D
 type(ui_program), target :: forked_process
 
 contains
@@ -30,6 +31,7 @@ contains
         call new_unit_ipc(tsttab)
         call new_unit_reconstruction(tsttab)
         call new_lib_reconstruction(tsttab)
+        call new_unit_pftc_registration2D3D(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
 
@@ -160,6 +162,19 @@ contains
             &'One sub-suite of this suite to run alone (pcg_half_set)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
+
+    subroutine new_unit_pftc_registration2D3D( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_pftc_registration2D3D%new(&
+        &'unit_pftc_registration2D3D',&
+        &'unit tests: registration on the polar Fourier transform (2D and 3D)',&
+        &'is the fast-gate unit suite for polar Fourier registration: the continuous in-plane evaluators and joint route, and the refine3D in-plane search state and policy',&
+        &'simple_test_exec',&
+        &.false.)
+        call unit_pftc_registration2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (continuous_in_plane, refine3d_in_plane_state)', '', .false., '')
+        call add_ui_program('unit_pftc_registration2D3D', unit_pftc_registration2D3D, tsttab, UI_CATEGORY)
+    end subroutine new_unit_pftc_registration2D3D
 
     subroutine new_forked_process( tsttab )
         class(ui_hash), intent(inout) :: tsttab

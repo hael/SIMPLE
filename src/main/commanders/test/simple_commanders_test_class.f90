@@ -43,6 +43,8 @@ use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
 use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
+use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
+use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
 use simple_http_post_tester,                 only: run_all_http_post_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
@@ -64,7 +66,7 @@ use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! The fast gate is eight area suites, each one CTest entry under the label
+! The fast gate is nine area suites, each one CTest entry under the label
 ! `fast` (doc/refactoring_notes/uniform_test_environment_refactoring.md,
 ! section 5.1). Every sub-suite in them makes assertions through
 ! simple_test_utils, needs no network beyond localhost, no download and no
@@ -135,6 +137,11 @@ type, extends(commander_base) :: commander_test_lib_reconstruction
     procedure :: execute      => exec_test_lib_reconstruction
 end type commander_test_lib_reconstruction
 
+type, extends(commander_base) :: commander_test_unit_pftc_registration2D3D
+  contains
+    procedure :: execute      => exec_test_unit_pftc_registration2D3D
+end type commander_test_unit_pftc_registration2D3D
+
 type, extends(commander_base) :: commander_test_forked_process
   contains
     procedure :: execute      => exec_test_forked_process
@@ -151,7 +158,7 @@ type :: unit_suite
     procedure(no_arg_test), pointer, nopass :: run => null()
 end type unit_suite
 
-integer, parameter :: MAX_SUITES = 64
+integer, parameter :: MAX_SUITES = 128   ! `units` registers 63 sub-suites (2026-09-23)
 
 contains
 
@@ -262,6 +269,14 @@ contains
         call add_suite(s, n, 'observation noise', run_all_gauran_tests)
     end subroutine suites_reconstruction
 
+    !> registration on the polar Fourier transform, shared by the 2D and 3D searches
+    subroutine suites_pftc_registration2D3D( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'continuous in-plane',     run_all_pftc_inplane_tests)
+        call add_suite(s, n, 'refine3D in-plane state', run_all_strategy3D_inplane_tests)
+    end subroutine suites_pftc_registration2D3D
+
     !> nightly library suite: minutes, full boxes allowed, same assertions and runner
     subroutine suites_lib_reconstruction( s, n )
         type(unit_suite), intent(inout) :: s(:)
@@ -296,6 +311,7 @@ contains
         call suites_ui(s, n)
         call suites_ipc(s, n)
         call suites_reconstruction(s, n)
+        call suites_pftc_registration2D3D(s, n)
         call run_unit_suites('units', cline, s(1:n))
     end subroutine exec_test_units
 
@@ -379,6 +395,16 @@ contains
         call run_unit_suites('unit_reconstruction', cline, s(1:n))
     end subroutine exec_test_unit_reconstruction
 
+    subroutine exec_test_unit_pftc_registration2D3D( self, cline )
+        class(commander_test_unit_pftc_registration2D3D), intent(inout) :: self
+        class(cmdline),                                   intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_pftc_registration2D3D(s, n)
+        call run_unit_suites('unit_pftc_registration2D3D', cline, s(1:n))
+    end subroutine exec_test_unit_pftc_registration2D3D
+
     subroutine exec_test_lib_reconstruction( self, cline )
         class(commander_test_lib_reconstruction), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
@@ -411,7 +437,8 @@ contains
         type(unit_suite), intent(in)    :: suites(:)
         character(8)          :: datestr
         character(len=STDLEN) :: folder
-        type(string)          :: original_cwd, report_file, only_suite, order
+        type(string)          :: original_cwd, report_file, only_suite
+        character(len=32)     :: order_env
         logical               :: test_failed, l_reverse
         integer               :: i, isuite, nrun, iostat
         call seed_rnd
@@ -427,8 +454,9 @@ contains
             only_suite = cline%get_carg('suite')
             only_suite = suite_id(only_suite%to_char())
         endif
-        order     = simple_getenv('SIMPLE_UNIT_ORDER', iostat)
-        l_reverse = iostat == 0 .and. order == 'reverse'
+        ! an optional developer switch: read directly so that an unset variable is silent
+        call get_environment_variable('SIMPLE_UNIT_ORDER', value=order_env, status=iostat)
+        l_reverse = iostat == 0 .and. trim(order_env) == 'reverse'
         nrun = 0
         do i = 1, size(suites)
             isuite = i
