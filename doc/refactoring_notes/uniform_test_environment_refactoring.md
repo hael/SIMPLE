@@ -6,8 +6,8 @@ Status: in progress. Phases 0, 1 and 2 are complete (2026-09-22): the fast
 gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
-Phase 3 (the review of everything else) is under way: the geometry, fft
-and masks batches and the segmentation category are done and built
+Phase 3 (the review of everything else) is under way: the geometry, fft,
+masks and io batches and the segmentation category are done and built
 (section 9.7). The tests written so far have found and fixed six
 production defects (mask mirror asymmetry, disc padding count, Otsu bin
 edge, Otsu two-valued input, binarize(npix) count, ori_strlen_trim) and
@@ -1128,6 +1128,75 @@ with a `>=` comparison; now `n-npix+1`). Its one caller is the
 `binarize` commander's `npix` option. `detect_peak_thres_sortmeans` is
 referenced only from a comment and prints debug lines; it joins the
 dead-code list for the owner. Built green first time: gate 7/7, 3.4 s, `unit_image` 2.1 s.
+
+**io (2026-09-23, Hans).** Nine router identities plus the four `binoris`
+identities from the utils and unassigned tables (two of them empty exec
+stubs). `imgfile` is `delete`: SPIDER/MRC squares and cubes converted both
+ways and compared by correlation is a strict subset of `test_image` part
+20, already in the gate. `io` and `io_parallel` are `delete`: 40 GB
+throughput benchmarks with no assertion. `star_export` is `delete`: it
+timed two writers that `STAR file` asserts. `mrc2jpeg` and `mrc_validate`
+are `demote` to manual (a filetab-to-JPEG converter and a read/write-back
+of a user volume). `stack_io` is `modify`: the exec case copied a committed
+stack and asserted nothing, the standalone was the real test; its hermetic
+part now lives in a new `simple_stack_io_tester` (sub-suite `stack I/O` of
+`unit_core`) and gained what it lacked: open/close state, `same_stk`,
+buffer sizes of 2, 3, the whole stack and more than the stack (a partial
+last window in each case), forward skipping reads through the refill loop,
+`get_image` from the current buffer, the float32 header beside the
+float16 one, and a position-dependent pattern in the 1025-box float16
+stack so a pixel displaced across the converter's 1 M-element buffer
+flush would be seen (the old test wrote a constant). The benchmarks are
+gone. `inside_write`, `binoris` and `binoris_io` are `merge into
+unit_project` through a new `simple_binoris_tester` (sub-suite `binoris`):
+header-only files; a hash-backed segment and a fixed-width particle
+segment round-tripped with every header field checked against the file
+size; partial and sub-range particle reads landing at absolute indices
+(what `merge_algndocs` relies on); a 40-value particle record written by
+hand under a narrower header, read back with zeros in the twelve newer
+slots (the legacy-project path of `read_particle_record`, which no test
+had touched); `write_segment_inside` growing and then shrinking the
+middle of three segments with the neighbours byte-identical, in both its
+oris and string-array forms; the `sp_project` front door rewriting `stk`
+in place (the old `inside_write` case, now asserted) and falling back to
+a full write when the file is missing; and the four `binoris_io`
+dispatchers on `.txt` and `.simple`, including the ctf/state/eo merge that
+keeps the keys the file does not carry. `starfile_test`/`starfile` are
+`modify`: the wrapper demo became assertions in `simple_starfile_tester`
+(table names, comment, string, doubles pinned to the `%12.6f`/`%12.6e`
+formatting the C++ writer uses, absent labels, first/next iteration), and
+`run_all_starproject_tests`, a 23-test suite that only this exec case ran,
+is registered as sub-suite `STAR project` of `unit_project`. Two things in
+it were incompatible with a shared process and were removed: it called
+`report_summary` and `error stop` on the process-wide failure counter
+(so a failure in any earlier sub-suite would have aborted the run), and
+it set the OpenMP thread count to 4 for good; it now restores the count
+it found. Its tier is provisional: the per-entry timing table decides
+whether the 20 000-row export stays in the gate or moves to `lib_project`
+in Phase 4. Coverage accounting: 44 calls, 4 not made by name any more
+(`image%corr`, made by `test_image` part 16; `image%ran`, a random fill;
+`rslices`/`wmrcslices`, the imgfile layer under `stack_io%read`/`write`),
+all accepted; `simple_imgfile` is no longer imported by a test directly.
+The dossier script now counts a bare `call obj%meth` (no argument list) as
+a type-bound call; it had missed `write_header` and `update_byte_ranges`.
+First build: `unit_core` (with `stack I/O`) green in 1.1 s, `STAR file`
+67/67, `STAR project` 67/67 in 0.41 s (so it stays in the gate), and
+`unit_project` crashed with SIGSEGV in the binoris tester's fifth test. The
+file left behind showed the production path was right (the grown segment
+and the moved particle segment byte-correct); the fault was the tester's:
+a helper's optional dummy named `nmics` hid the module constant `NMICS`
+(Fortran is case-insensitive), so the helper read the absent optional.
+Renamed, with the same trap removed from `verify_stack` in the stack_io
+tester (`bufsz`), and a comment at each. Second build: gate green, 7/7,
+3.5 s real (`unit_project` 2.0 s with the three new sub-suites,
+`unit_core` 1.1 s).
+Findings, not acted on: `stack_io%read` loops for ever on a backward read
+(the refill loop only advances), where a `THROW_HARD` would name the
+contract; `binoris%open` on a file that does not exist yet leaves
+`fname` unset, so the error messages of a first write name an empty file;
+`discrete_stack_io` (standalone only, assertion-bearing, unassigned) tests
+`dstack_io` and the float16 encoder boundaries and is the natural next
+addition to `stack I/O`.
 
 ## 10. Fast-tier performance
 

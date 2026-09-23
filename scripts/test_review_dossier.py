@@ -38,6 +38,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RE_USE = re.compile(r'^\s*use\s+(\w+)', re.I | re.M)
 RE_TBP = re.compile(r'\b(\w+)(?:\([^()]*\))?\s*%\s*(\w+)\s*\(', re.I)   # obj%meth( and arr(i)%meth(
+RE_TBP_BARE = re.compile(r'^\s*call\s+(\w+)(?:\([^()]*\))?\s*%\s*(\w+)\s*$', re.I | re.M)   # call obj%meth with no argument list
 RE_CALL = re.compile(r'^\s*call\s+(\w+)\s*(?:\((?![^()]*\)\s*%)|$)', re.I | re.M)   # call proc( or bare call proc; not call arr(i)%meth(
 RE_SUB = re.compile(r'^\s*(?:recursive\s+)?subroutine\s+(\w+)\s*\(.*?^\s*end\s+subroutine\s+\1', re.I | re.M | re.S)
 NOT_PRODUCTION = {'simple_core_module_api', 'simple_commanders_api', 'simple_test_exec_api', 'simple_test_utils',
@@ -116,7 +117,7 @@ def footprint(text):
     # procedures the text defines itself (internal helpers, sub-suite bodies) are not production calls
     local = {m.lower() for m in re.findall(r'^\s*(?:pure\s+|elemental\s+|recursive\s+|logical\s+|integer\s+|real\s+)*(?:subroutine|function)\s+(\w+)', t, re.I | re.M)}
     calls = set()
-    for obj, meth in RE_TBP.findall(t):
+    for obj, meth in RE_TBP.findall(t) + RE_TBP_BARE.findall(t):
         if obj.lower() in NOT_OBJECT:
             continue
         m = meth.lower()

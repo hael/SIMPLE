@@ -6,6 +6,7 @@ use simple_test_utils,                       only: begin_test_suite, end_test_su
 use simple_string_tester,                    only: run_all_string_tests
 use simple_syslib_tester,                    only: run_all_syslib_tests
 use simple_fileio_tester,                    only: run_all_fileio_tests
+use simple_stack_io_tester,                  only: run_all_stack_io_tests
 use simple_chash_tester,                     only: run_all_chash_tests
 use simple_vrefhash_tester,                  only: run_all_vrefhash_tests
 use simple_hash_tester,                      only: run_all_hash_tests
@@ -19,6 +20,8 @@ use simple_stat_tester,                      only: run_all_stat_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
+use simple_starproject_tester,               only: run_all_starproject_tests
+use simple_binoris_tester,                   only: run_all_binoris_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
@@ -138,6 +141,7 @@ contains
         call add_suite(s, n, 'string',               run_all_string_tests)
         call add_suite(s, n, 'syslib',               run_all_syslib_tests)
         call add_suite(s, n, 'fileio',               run_all_fileio_tests)
+        call add_suite(s, n, 'stack I/O',            run_all_stack_io_tests)
         call add_suite(s, n, 'character hash',       run_all_chash_tests)
         call add_suite(s, n, 'hash',                 run_all_hash_tests)
         call add_suite(s, n, 'value-reference hash', run_all_vrefhash_tests)
@@ -187,6 +191,8 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'STAR file',               run_all_starfile_tests)
+        call add_suite(s, n, 'STAR project',            run_all_starproject_tests)
+        call add_suite(s, n, 'binoris',                 run_all_binoris_tests)
         call add_suite(s, n, 'project merge',           run_all_project_merge_tests)
         call add_suite(s, n, 'class compatibility',     run_all_class_compatibility_tests)
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)

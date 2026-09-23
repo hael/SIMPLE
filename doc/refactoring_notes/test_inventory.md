@@ -51,15 +51,8 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| imgfile | E+S | 60/62 | THROW_HARD | not run | none | - | same name on both routes | lib_io (assertion-bearing) |  |  |
-| inside_write | E+S | 20/20 | none | not run | none | - | same name on both routes | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| io | E+S | 110/110 | none | not run | committed, generated | - | same name on both routes; io_parallel (57%, subset) | delete candidate (benchmark or timing tool without assertions) |  |  |
-| io_parallel | E+S | 102/101 | none | not run | committed, generated | - | same name on both routes; io (57%, subset) | delete candidate (benchmark or timing tool without assertions) |  |  |
-| mrc2jpeg | E+S | 43/47 | none | not run | user-supplied / filetab smpd | - | same name on both routes | manual (needs user-supplied) |  |  |
-| mrc_validate | E+S | 20/24 | THROW_HARD | not run | none / smpd vol | - | same name on both routes | lib_io (assertion-bearing) |  |  |
-| stack_io | E+S | 41/339 | assertion | not run | none | - | same name on both routes | lib_io (assertion-bearing) |  |  |
-| star_export | E+S | 26/31 | THROW_HARD | not run | none | - | same name on both routes | lib_io (assertion-bearing) |  |  |
-| starfile_test | E | 95 | none | not run | none | - | starfile (100%, subset) | lib_io (needs assertion) or delete (no failure path; 14 production calls) |  |  |
+| mrc2jpeg | E | 43 | none | not run | user-supplied / filetab smpd | - | - | manual (needs user-supplied) | demote | Hans, 2026-09-23: manual; converts a user filetab of MRC micrographs or stacks to JPEG through `image%write_jpg` and asserts nothing; a hermetic write_jpg check (file present, non-empty, JPEG magic bytes) is a lib_io candidate; standalone deleted |
+| mrc_validate | E | 20 | THROW_HARD | not run | user-supplied / smpd vol | - | - | manual (needs user-supplied) | demote | Hans, 2026-09-23: manual; reads a user volume and writes it back as vol_simple.mrc (a conversion utility, THROW_HARD only on missing arguments); standalone deleted |
 
 ## masks
 
@@ -149,8 +142,6 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
 | atomfit | S | 12 | none | not run | committed | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| binoris | S | 185 | THROW_HARD | not run | committed | - | - | workflow (runs production commanders) |  |  |
-| binoris_io | S | 40 | THROW_HARD | not run | none | - | - | workflow (runs production commanders) |  |  |
 | cartesian_fourier | S | 874 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | cavg_quality_relations | S | 8 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | class_sample | S | 42 | none | not run | none | - | class_sample_test (100%, subset) | lib_? (needs assertion) or delete (no failure path; 5 production calls) |  |  |
@@ -192,7 +183,6 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | rnd_shuffle | S | 58 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | search_gain_flips | S | 83 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | sigma2_state | S | 451 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| starfile | S | 95 | none | not run | none | - | starfile_test (100%, subset) | lib_? (needs assertion) or delete (no failure path; 14 production calls) |  |  |
 | stream_initial_analysis | S | 22 | none | not run | none | - | - | workflow (needs assertion) (runs production commanders but checks nothing) |  |  |
 | ui_visibility | S | 428 | assertion | not run | committed | - | phshift_policy (28%, subset) | lib_? (assertion-bearing) |  |  |
 
@@ -201,8 +191,6 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
 | ansi_colors | E+S | 15/13 | none | not run | none | - | same name on both routes | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| binoris_io_test | E | 5 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| binoris_test | E | 5 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | cavg_registration | E+S | 7/5 | none | not run | none | - | same name on both routes | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | cif2mrc | E | 16 | none | not run | committed, download | - | - | manual (needs download) |  |  |
 | cif2pdb | E | 15 | none | not run | committed, download | - | - | manual (needs download) |  |  |
@@ -246,3 +234,15 @@ Tier proposals follow section 5 of the plan: `units` is the fast gate; everythin
 | otsu | 2026-09-22 | merge into unit_image: standalone twin of `otsu_test` | as `otsu_test` |
 | ptcl_center | 2026-09-22 | delete: downloaded 1JYX from RCSB, projected it and explored a windowed radial-profile centering heuristic, printing candidate centres; an experiment script | none; gap recorded: it was the only test naming masscen, roavg, window_center, shift2Dserial, power_spectrum, fproject, get_nyq (image-area basics, for the image review) |
 | peak_thres_fdr | 2026-09-22 | merge into unit_image: an assertion-bearing exec case for detect_peak_thres_fdr, filed under utils/project by its router only | `simple_segmentation_tester` (sub-suite `segmentation`): the same six checks |
+| imgfile | 2026-09-23 | delete: SPIDER/MRC squares and cubes written, converted both ways and compared by correlation; a strict subset of `test_image` part 20 (sub-suite `image` of unit_image) | `test_image` part 20 |
+| inside_write | 2026-09-23 | merge into unit_project: wrote a project and `write_segment_inside('stk')` into it, asserting nothing; the six production callers of the in-place segment rewrite had no test | `simple_binoris_tester` (sub-suite `binoris`): the stk segment is rewritten longer in place, the mic/ptcl2D/ptcl3D/projinfo segments read back byte-identical, a missing project file falls back to a full write |
+| io | 2026-09-23 | delete: a 40 GB stack-and-volume read/write throughput benchmark writing SIMPLE_IO_BENCH.txt, no assertion | the stack_io round trips in `stack I/O` (unit_core) |
+| io_parallel | 2026-09-23 | delete: as `io`, with four volumes under an OpenMP team on the standalone route | as `io`; `rslices`/`wmrcslices` are reached through `stack_io%read`/`write` and `image%read`/`write` |
+| stack_io | 2026-09-23 | modify: the exec case copied a committed class-average stack and asserted nothing; the standalone was a real test (synthetic stacks, reader/writer round trips, float16 header and chunked round trip) followed by write/read benchmarks | `simple_stack_io_tester` (sub-suite `stack I/O` of unit_core): open/close state, image-written and stack_io-copied stacks pixel by pixel, buffer sizes of 2/3/whole/oversized with a partial last window, forward skipping reads and `get_image`, float32 and float16 MRC headers (mode, 2014 version stamp, dims, file size), a float16-exact pattern round trip, and a 1025-box float16 stack that crosses the converter's 1 M-element write buffer twice; benchmarks dropped |
+| star_export | 2026-09-23 | delete: timed `write_mics_star`/`write_ptcl2D_star` on a `test.simple` from the working directory | both are asserted in `STAR file` (unit_project) |
+| starfile_test | 2026-09-23 | modify: a print-only exercise of the starfile_table wrappers followed by `run_all_starproject_tests`, which was run from nowhere else | the wrapper round trip is now assertions in `simple_starfile_tester` (table names, comment, string, doubles to the %12.6f/%12.6e formatting, absent labels, first/next iteration); `run_all_starproject_tests` is the sub-suite `STAR project` of unit_project (its process-wide `error stop` and thread forcing removed; the OpenMP part restores the thread count it found) |
+| starfile | 2026-09-23 | delete: standalone twin of `starfile_test` | as `starfile_test` |
+| binoris | 2026-09-23 | merge into unit_project: created a project through `new_project`, then called open/write_header/write_segment/add_segment/update_byte_ranges/is_opened with prints and one assertion (`is_opened`) | `simple_binoris_tester` (sub-suite `binoris`): header-only files, string and particle segment round trips with header bookkeeping (n_segments, n_records, fromto, record width, first data byte, total bytes = file size, segments_info), partial and sub-range particle reads at absolute indices, legacy 40-value particle records reading with zeros in the new slots, `write_segment_inside` growing and shrinking a middle segment with its neighbours intact (oris and string-array forms) |
+| binoris_io | 2026-09-23 | merge into unit_project: called binread_oritab/binread_ctfparams_state_eo/binread_nlines/binwrite_oritab on an empty project and printed | `binoris`: the `.txt` and `.simple` dispatch of all four, the ctf/state/eo merge keeping the keys not in the file, `binread_nlines` as the segment record count |
+| binoris_test | 2026-09-23 | delete: an empty exec stub (printed a banner) | as `binoris` |
+| binoris_io_test | 2026-09-23 | delete: an empty exec stub (printed a banner) | as `binoris_io` |

@@ -148,22 +148,12 @@ jobs:
              simple_test_exec test=angres
              echo "-------------------- TEST ANSI COLORS -------------------------"
              simple_test_ansi_colors
-             echo "-------------------- TEST BINORIS -------------------------"
-             simple_test_binoris
              echo "-------------------- TEST CTF -------------------------"
              simple_test_ctf
              echo "-------------------- TEST EXTR FRAC -------------------------"
              simple_test_extr_frac
-             echo "-------------------- TEST FILE INPUT OUTPUT IN PARALLEL-------------------------"
-             simple_test_io_parallel
-             echo "-------------------- TEST IMAGE FILE -------------------------"
-             simple_test_imgfile
-             echo "-------------------- TEST INSIDE WRITE -------------------------"
-             simple_test_inside_write
              echo "-------------------- TEST INSTALL -------------------------"
              simple_test_install
-             echo "-------------------- TEST INPUT OUTPUT -------------------------"
-             simple_test_io
              echo "-------------------- TEST LPLIMS -------------------------"
              simple_test_lplims
              echo "-------------------- TEST MULTIMODAL -------------------------"

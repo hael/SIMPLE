@@ -34,8 +34,12 @@ contains
     !  MAIN ENTRY
     !=======================================================================
     subroutine run_all_starproject_tests()
+        integer :: nthr_orig
         write(*,'(A)') "**** Running SIMPLE STARPROJECT test suite ****"
         call setup_tmpdir()
+        ! deterministic threading for the OpenMP part; restored at the end so the
+        ! sub-suites that follow in the same process see the thread count they started with
+        nthr_orig = omp_get_max_threads()
         call force_openmp_threads(4)
         write(*,'(A)') "**** Running PART 1/4 (starfile core tests) ****"
         call test_starfile_basic_init()
@@ -64,10 +68,8 @@ contains
         call test_relion_writer_micrographs()
         call test_roundtrip_micrographs()
         write(*,'(A)') "**** Completed big integration tests (Part 4/4) ****"
-        call report_summary()
-        if( tests_failed > 0 )then
-            error stop 'STARPROJECT test suite assertions failed'
-        endif
+        call omp_set_num_threads(nthr_orig)
+        ! the caller reports and fails the run (simple_test_utils counters are process-wide)
     end subroutine run_all_starproject_tests
 
     !=======================================================================

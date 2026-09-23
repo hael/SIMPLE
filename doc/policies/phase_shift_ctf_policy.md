@@ -305,10 +305,13 @@ The implementation was built and the following focused checks passed on
 - `simple_test_project_merge`: project assembly and validation behavior
 - `simple_test_projdir_accumulator`: unchanged reconstruction accumulation contract
 
-The broad pre-existing `simple_test_starfile` executable is not currently a
-clean acceptance gate because of unrelated legacy failures and nondeterministic
-lifetime errors. Phase-specific STAR checks must remain independently runnable
-until that harness is repaired.
+The broad pre-existing `simple_test_starfile` executable was not a clean
+acceptance gate because of unrelated legacy failures and nondeterministic
+lifetime errors. Its suite (`run_all_starproject_tests`) is, since
+2026-09-23, the `STAR project` sub-suite of `simple_test_exec test=unit_project`
+and the executable is gone (test-environment plan, section 9.7, io batch).
+Phase-specific STAR checks must remain independently runnable until that
+sub-suite is known to be clean in the gate.
 
 ## 10. Scientific validation procedure
 

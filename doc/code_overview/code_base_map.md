@@ -40,8 +40,6 @@
       - `simple_pose_cont_refinement_test_helpers.f90`
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
-      - `simple_test_binoris.f90`
-      - `simple_test_binoris_io.f90`
       - `simple_test_cartesian_fourier.f90`
       - `simple_test_cavg_quality_relations.f90`
       - `simple_test_cavg_registration.f90`
@@ -70,11 +68,7 @@
       - `simple_test_flex_pcg.f90` — validates the flex_pca PCG M-step operator: the pair Gram kernel on the 2x lattice against the
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
-      - `simple_test_imgfile.f90`
-      - `simple_test_inside_write.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
-      - `simple_test_io.f90`
-      - `simple_test_io_parallel.f90`
       - `simple_test_kbinterpol_fast.f90`
       - `simple_test_lbfgsb.f90`
       - `simple_test_lbfgsb_cosine.f90`
@@ -82,8 +76,6 @@
       - `simple_test_lpstages.f90`
       - `simple_test_maxnloc.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
-      - `simple_test_mrc2jpeg.f90`
-      - `simple_test_mrc_validate.f90`
       - `simple_test_multinomal.f90`
       - `simple_test_neigh.f90` — test for refine=neigh modes
       - `simple_test_nice.f90`
@@ -115,9 +107,6 @@
       - `simple_test_socket_io.f90`
       - `simple_test_socket_server.f90`
       - `simple_test_sp_project.f90`
-      - `simple_test_stack_io.f90`
-      - `simple_test_star_export.f90`
-      - `simple_test_starfile.f90`
       - `simple_test_stream_initial_analysis.f90` — smoke test that invokes stream p03 initial analysis commander
       - `simple_test_stringmatch.f90`
       - `simple_test_ui_visibility.f90`
@@ -159,6 +148,7 @@
       - `simple_sigma2_state_file.f90` — versioned binary persistence and transaction primitives for canonical sigma2 state
       - `simple_srchspace_map2D_io.f90` — for storing search-space maps on disk
       - `simple_stack_io.f90` — This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes
+      - `simple_stack_io_tester.f90` — unit test routines for stack_io: buffered contiguous MRC stack reading and writing, float32 and float16
       - `simple_syslib.f90` — System utilities & POSIX/OS wrappers
       - `simple_syslib_tester.f90` — unit tests for the syslib module
       - `simple_tifflib.f90` — Fortran wrapper for libtiff, edited from Unblur
@@ -486,6 +476,7 @@
         - `simple_pickseg.f90` — the abstract data type implementing the original version of segmentation-based picking
         - `simple_picksegdiam.f90` — the abstract data type implementing the version of segmentation-based picking used in the stream
       - **project/** — home of the submodules of the single-particle project class for managing project information in memory and on disk
+        - `simple_binoris_tester.f90` — unit test routines for the binary orientation file (binoris): header bookkeeping, segment round trips, in-place segment rewrites, legacy particle records, and the binoris_io / sp_project front doors
         - `simple_project_merge_tester.f90` — unit tests for SIMPLE project merging
         - `simple_sp_project.f90` — single-particle project, the complete interface and abstract data type
         - `simple_sp_project_cls.f90` — single-particle project routines for managing 2D class info

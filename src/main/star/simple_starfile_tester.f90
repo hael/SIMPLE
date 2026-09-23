@@ -25,6 +25,8 @@ contains
     subroutine run_all_starfile_tests()
         write(*,'(A)') '**** running all simple_starfile tests ****'
         call setup_tmpdir()
+        ! --- table wrappers ---
+        call test_table_wrappers_roundtrip()
         ! --- lifecycle ---
         call test_init_creates_no_files()
         call test_complete_renames_tmp()
@@ -157,6 +159,106 @@ contains
         call o%new(n, is_ptcl=is_ptcl)
         call o%set_all2single('state', 1.0)
     end subroutine make_oris_n
+
+    !=======================================================================
+    !  SECTION 0: TABLE WRAPPERS (starfile_table_type round trip)
+    !=======================================================================
+
+    ! 0.1 — three tables through the C++ wrappers: a list with a comment, a
+    !       four-row loop and a one-row list; names, comment, string, doubles
+    !       (%12.6f, or %12.6e beyond 1e5) and absent labels all read back
+    subroutine test_table_wrappers_roundtrip()
+        real(dp), parameter :: LATE(4)      = [0.12345678901234567890_dp, 456._dp, 789._dp, 101112345678._dp]
+        real(dp), parameter :: LATE_READ(4) = [0.123457_dp,               456._dp, 789._dp, 1.011123e11_dp]
+        type(starfile_table_type)     :: tbl
+        type(string)                  :: path
+        type(string),     allocatable :: names(:)
+        character(len=:), allocatable :: str
+        real(dp)        :: dv
+        integer(C_long) :: obj, nobj
+        integer         :: irow
+        logical         :: ok
+        write(*,'(A)') 'test_table_wrappers_roundtrip'
+        path = tmp('wrappers.star')
+        call starfile_table__new(tbl)
+        call starfile_table__open_ofile(tbl, path%to_char())
+        call starfile_table__clear(tbl)
+        call starfile_table__setname(tbl, 'name1')
+        call starfile_table__setIsList(tbl, .true.)
+        call starfile_table__addObject(tbl)
+        call starfile_table__setcomment(tbl, 'this_is_a_comment')
+        call starfile_table__setValue_string(tbl, EMDL_MICROGRAPH_NAME, 'this_is_a_string')
+        call starfile_table__setValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_TOTAL, LATE(1))
+        call starfile_table__setValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_EARLY, 42._dp)
+        call starfile_table__write_ofile(tbl)
+        call starfile_table__clear(tbl)
+        call starfile_table__setname(tbl, 'name2')
+        call starfile_table__setIsList(tbl, .false.)
+        do irow = 1,4
+            call starfile_table__addObject(tbl)
+            call starfile_table__setValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, LATE(irow))
+        end do
+        call starfile_table__write_ofile(tbl)
+        call starfile_table__clear(tbl)
+        call starfile_table__setname(tbl, 'name3')
+        call starfile_table__setIsList(tbl, .true.)
+        call starfile_table__addObject(tbl)
+        call starfile_table__setValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 523._dp)
+        call starfile_table__write_ofile(tbl)
+        call starfile_table__close_ofile(tbl)
+        call starfile_table__delete(tbl)
+        call assert_true(file_exists(path), 'wrappers: the STAR file is written')
+        ! table names
+        call starfile_table__new(tbl)
+        call starfile_table__getnames(tbl, path, names)
+        call assert_int(3, size(names), 'wrappers: three tables in the file')
+        if( size(names) == 3 )then
+            call assert_string_eq('name1', names(1), 'wrappers: first table name')
+            call assert_string_eq('name2', names(2), 'wrappers: second table name')
+            call assert_string_eq('name3', names(3), 'wrappers: third table name')
+        endif
+        ! first table: a list with a comment, a string and two doubles
+        call starfile_table__read(tbl, path, 'name1')
+        call assert_true(starfile_table__hascomment(tbl), 'wrappers: the comment survives')
+        call starfile_table__getcomment(tbl, str)
+        call assert_char('this_is_a_comment', str, 'wrappers: comment text')
+        call assert_true(starfile_table__haslabel(tbl, EMDL_MICROGRAPH_NAME),         'wrappers: string label present')
+        call assert_false(starfile_table__haslabel(tbl, EMDL_MLMODEL_REF_IMAGE),      'wrappers: unwritten label absent')
+        ok = starfile_table__getValue_string(tbl, EMDL_MICROGRAPH_NAME, str)
+        call assert_true(ok, 'wrappers: string value found')
+        call assert_char('this_is_a_string', str, 'wrappers: string value')
+        ok = starfile_table__getValue_string(tbl, EMDL_MLMODEL_REF_IMAGE, str)
+        call assert_false(ok, 'wrappers: string lookup of an absent label reports absence')
+        ok = starfile_table__getValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_TOTAL, dv)
+        call assert_true(ok, 'wrappers: double value found')
+        call assert_double(LATE_READ(1), dv, 'wrappers: a double reads back to the six decimals written')
+        ok = starfile_table__getValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_EARLY, dv)
+        call assert_true(ok, 'wrappers: second double value found')
+        call assert_double(42._dp, dv, 'wrappers: an integral double reads back exactly')
+        ok = starfile_table__getValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, dv)
+        call assert_false(ok, 'wrappers: double lookup of an absent label reports absence')
+        ! second table: a four-row loop, walked with first/next
+        call starfile_table__read(tbl, path, 'name2')
+        nobj = starfile_table__numberofobjects(tbl)
+        call assert_int(4, int(nobj), 'wrappers: loop table row count')
+        obj  = starfile_table__firstobject(tbl)
+        irow = 0
+        do while( obj >= 0 .and. obj < nobj )
+            irow = irow + 1
+            ok = starfile_table__getValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, dv)
+            call assert_true(ok, 'wrappers: loop row '//int2str(irow)//' has the value')
+            if( irow <= 4 ) call assert_double(LATE_READ(irow), dv, 'wrappers: loop row '//int2str(irow)//' value')
+            obj = starfile_table__nextobject(tbl)
+        end do
+        call assert_int(4, irow, 'wrappers: first/next visit every row once')
+        ! third table: a one-row list
+        call starfile_table__read(tbl, path, 'name3')
+        call assert_int(1, int(starfile_table__numberofobjects(tbl)), 'wrappers: one-row list count')
+        ok = starfile_table__getValue_double(tbl, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, dv)
+        call assert_true(ok, 'wrappers: one-row list value found')
+        call assert_double(523._dp, dv, 'wrappers: one-row list value')
+        call starfile_table__delete(tbl)
+    end subroutine test_table_wrappers_roundtrip
 
     !=======================================================================
     !  SECTION 1: LIFECYCLE (init / complete)

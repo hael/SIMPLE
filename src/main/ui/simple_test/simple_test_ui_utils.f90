@@ -5,8 +5,6 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('utils', 'Utilities', 140)
 type(ui_program), target :: ansi_colors
-type(ui_program), target :: binoris_test
-type(ui_program), target :: binoris_io_test
 type(ui_program), target :: cavg_registration
 type(ui_program), target :: cif2mrc
 type(ui_program), target :: cif2pdb
@@ -22,8 +20,6 @@ contains
     subroutine construct_test_utils_programs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call new_ansi_colors(tsttab)
-        call new_binoris_test(tsttab)
-        call new_binoris_io_test(tsttab)
         call new_cavg_registration(tsttab)
         call new_cif2mrc(tsttab)
         call new_cif2pdb(tsttab)
@@ -62,62 +58,6 @@ subroutine new_ansi_colors( tsttab )
         ! add to ui_hash
         call add_ui_program('ansi_colors', ansi_colors, tsttab, UI_CATEGORY)
     end subroutine new_ansi_colors
-
-    subroutine new_binoris_test( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call binoris_test%new(&
-        &'binoris_test',&                      ! name
-        &'binoris_test ',&                     ! summary
-        &'is a test program for binoris',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call binoris_test%add_input(UI_IO, )
-        ! parameter input/output
-        !call binoris_test%add_input(UI_IMG, )
-        ! <no additional inputs>
-        !call binoris_test%add_input(UI_PARM, )
-        ! search controls
-        !call binoris_test%add_input(UI_SRCH, )
-        ! filter controls
-        !call binoris_test%add_input(UI_FILT, )
-        ! mask controls
-        !call binoris_test%add_input(UI_MASK, )
-        ! computer controls
-        !call binoris_test%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('binoris_test', binoris_test, tsttab, UI_CATEGORY)
-    end subroutine new_binoris_test
-
-    subroutine new_binoris_io_test( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call binoris_io_test%new(&
-        &'binoris_io_test',&                   ! name
-        &'binoris_io_test ',&                  ! summary
-        &'is a test program for binoris input/output',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call binoris_io_test%add_input(UI_IO, )
-        ! parameter input/output
-        !call binoris_io_test%add_input(UI_IMG, )
-        ! <no additional inputs>
-        !call binoris_io_test%add_input(UI_PARM, )
-        ! search controls
-        !call binoris_io_test%add_input(UI_SRCH, )
-        ! filter controls
-        !call binoris_io_test%add_input(UI_FILT, )
-        ! mask controls
-        !call binoris_io_test%add_input(UI_MASK, )
-        ! computer controls
-        !call binoris_io_test%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('binoris_io_test', binoris_io_test, tsttab, UI_CATEGORY)
-    end subroutine new_binoris_io_test
 
     subroutine new_cavg_registration( tsttab )
         class(ui_hash), intent(inout) :: tsttab

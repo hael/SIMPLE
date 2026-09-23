@@ -1,8 +1,7 @@
 !@descr: execution of test utils processing commanders
 module simple_test_exec_utils
 use simple_cmdline,               only: cmdline
-use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_test_binoris_test, &
-                                        commander_test_binoris_io_test, commander_test_cavg_registration, &
+use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_test_cavg_registration, &
                                         commander_test_cmdline, &
                                         commander_test_install, commander_test_nice, commander_test_pdb2mrc, &
                                         commander_test_serialize, &
@@ -15,8 +14,6 @@ public :: exec_test_utils_commander
 private
 
 type(commander_test_ansi_colors)     :: xansi_colors
-type(commander_test_binoris_test)    :: xbinoris_test
-type(commander_test_binoris_io_test) :: xbinoris_io_test
 type(commander_test_cavg_registration) :: xcavg_registration
 type(commander_test_cif2mrc)         :: xcif2mrc
 type(commander_test_cif2pdb)         :: xcif2pdb
@@ -40,10 +37,6 @@ contains
         select case(trim(which))
             case( 'ansi_colors' )
                 call xansi_colors%execute(cline)
-            case( 'binoris_test' )
-                call xbinoris_test%execute(cline)
-            case( 'binoris_io_test' )
-                call xbinoris_io_test%execute(cline)
             case( 'cavg_registration' )
                 call xcavg_registration%execute(cline)
             case( 'cif2mrc' )
