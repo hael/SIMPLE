@@ -29,8 +29,10 @@ cmake -DBUILD_TESTS=${BUILD_TESTS} .. -DUSE_FLEX_CUDA=ON \
     ${NVCC:+-DCMAKE_CUDA_COMPILER=$NVCC} \
     ${CUDA_HOST:+-DCMAKE_CUDA_HOST_COMPILER=$CUDA_HOST} \
     ${CUDA_ARCH:+-DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCH}
-make -j16 install
-# With --compile-tests, run the build-time test gate on the installed tree
-# (scripts/run_fast_gate.sh); its status is the script's status.
+make -j16 || exit $?
+# With --compile-tests, the build-time test gate (scripts/run_fast_gate.sh) runs
+# between build and install, as in X: a failed gate is a failed build and
+# nothing is installed; its status is the script's status.
 if [ "$BUILD_TESTS" = ON ]; then "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?; fi
+[ "${GATE_RC:-0}" = 0 ] && { make install || exit $?; }
 exit ${GATE_RC:-0}

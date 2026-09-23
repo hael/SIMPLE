@@ -431,9 +431,10 @@ contains
         call assert_true(.not. err, 'stats_1 no error')
         call os%stats('corr', ave, sdev, var, err, fromto=[2,4])
         call assert_true(.not. err, 'stats_2 no error with fromto')
-        ! order / order_cls
+        ! order / order_cls: best correlation first, state ignored
         inds = os%order()
         call assert_int(n, size(inds), 'order size')
+        call assert_true(all(inds == [4, 2, 5, 1, 3]), 'order sorts by corr, best first')
         ncls = os%get_n('class')
         inds = os%order_cls(ncls)
         call assert_int(ncls, size(inds), 'order_cls size')

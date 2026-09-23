@@ -59,7 +59,6 @@
       - `simple_test_continuous_inplane_rotation2D_metadata.f90`
       - `simple_test_continuous_inplane_rotation2D_route_identity.f90`
       - `simple_test_continuous_inplane_rotation2D_stage1_validation.f90`
-      - `simple_test_corrs2weights.f90`
       - `simple_test_create_gain.f90`
       - `simple_test_ctf.f90`
       - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
@@ -67,13 +66,10 @@
       - `simple_test_eigh.f90`
       - `simple_test_eo_diff.f90` — tests randomization of phases below noise power
       - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
-      - `simple_test_eval_polarftcc.f90`
       - `simple_test_extr_frac.f90`
       - `simple_test_flex_gpu.f90` — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)
       - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache and the kernel/state-weight contracts
       - `simple_test_flex_pcg.f90` — validates the flex_pca PCG M-step operator: the pair Gram kernel on the 2x lattice against the
-      - `simple_test_ft_expanded.f90`
-      - `simple_test_gencorrs_fft.f90`
       - `simple_test_graphene_mask.f90`
       - `simple_test_gui_assembler.f90`
       - `simple_test_gui_metadata.f90`
@@ -104,13 +100,11 @@
       - `simple_test_openmp.f90`
       - `simple_test_openmp_offload.f90`
       - `simple_test_opt_lp.f90`
-      - `simple_test_order_corr.f90`
       - `simple_test_otsu.f90`
       - `simple_test_pca_all.f90`
       - `simple_test_pca_imgvar.f90`
       - `simple_test_pdb2mrc.f90`
       - `simple_test_phase_rand_fsc.f90`
-      - `simple_test_phasecorr.f90`
       - `simple_test_phshift_policy.f90`
       - `simple_test_phshift_star.f90`
       - `simple_test_pose_cont_refine3D_adapter.f90`
@@ -120,10 +114,8 @@
       - `simple_test_ptcl_center.f90`
       - `simple_test_qsys_ctrl.f90`
       - `simple_test_qsys_env.f90`
-      - `simple_test_rank_weights.f90`
       - `simple_test_rec3D_backend.f90`
       - `simple_test_rnd_shuffle.f90`
-      - `simple_test_rotate_ref.f90`
       - `simple_test_search_gain_flips.f90`
       - `simple_test_serialize.f90`
       - `simple_test_sigma2_state.f90` — validates canonical sigma2 transactions, grouping and recovery guards
@@ -296,7 +288,6 @@
           - `simple_commanders_test_stats.f90` — for all stats tests
           - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
           - `simple_commanders_test_utils.f90` — for all utils tests
-          - `simple_test_mod_phasecorr.f90`
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
         - `simple_ctf_estimate_cost.f90` — cost functions for CTF fitting
@@ -775,6 +766,7 @@
         - `simple_rnd.f90` — random number generation module
         - `simple_srch_sort_loc.f90` — searching ordered tables, sorting, locate etc.
         - `simple_stat.f90` — statistics utility functions
+        - `simple_stat_tester.f90` — unit test routines for the statistics utilities (simple_stat)
         - `simple_testfuns.f90` — provides 20 mathematical test functions for evaluating unconstrained optimization procedures
       - **persistent_worker/**
         - `simple_persistent_worker_server.f90`

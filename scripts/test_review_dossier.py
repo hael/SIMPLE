@@ -37,8 +37,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RE_USE = re.compile(r'^\s*use\s+(\w+)', re.I | re.M)
-RE_TBP = re.compile(r'\b(\w+)\s*%\s*(\w+)\s*\(', re.I)
-RE_CALL = re.compile(r'^\s*call\s+(\w+)\s*\(', re.I | re.M)
+RE_TBP = re.compile(r'\b(\w+)(?:\([^()]*\))?\s*%\s*(\w+)\s*\(', re.I)   # obj%meth( and arr(i)%meth(
+RE_CALL = re.compile(r'^\s*call\s+(\w+)\s*\((?![^()]*\)\s*%)', re.I | re.M)   # call proc(; not call arr(i)%meth(
 RE_SUB = re.compile(r'^\s*(?:recursive\s+)?subroutine\s+(\w+)\s*\(.*?^\s*end\s+subroutine\s+\1', re.I | re.M | re.S)
 NOT_PRODUCTION = {'simple_core_module_api', 'simple_commanders_api', 'simple_test_exec_api', 'simple_test_utils',
                   'simple_cmdline', 'simple_parameters', 'simple_defs', 'simple_string', 'simple_syslib',
@@ -49,9 +49,9 @@ PLATFORM = [('coarray', r'\bcoarray|\bco_(sum|max|min|broadcast)\b|\bsync\s+(all
             ('offload', r'omp target|openmp_offload|USE_OPENMP_OFFLOAD'), ('openacc', r'!\$acc|openacc'),
             ('cuda', r'\bcuda|flex_gpu'), ('socket', r'socket|tcp_'), ('openmp', r'!\$omp')]
 DOWNLOAD = re.compile(r'\bcurl\b|\bwget\b|https?://', re.I)
-GENERATED = re.compile(r'simulate_(particles|movie|nanoparticle|noise)|molecule_data|betagal_1jyx|sars_cov2|%simulate|make_random|gauran|ran3|spiral', re.I)
+GENERATED = re.compile(r'simulate_(particles|movie|nanoparticle|noise)|molecule_data|betagal_1jyx|sars_cov2|%simulate|make_random|gauran|ran3|%ran\b|random_number|spiral', re.I)
 COMMITTED = re.compile(r"\.txt'|\.pdb'|\.cif'|\.star'|test_data|fixture", re.I)
-USER = re.compile(r"checkvar\('(vol1|vol2|stk|projfile|filetab|pdbfile|mskfile|fname|dir_movies|gainref)'|SIMPLE_TEST_VOL1", re.I)
+USER = re.compile(r"(?:checkvar|defined|get_carg)\('(vol1|vol2|stk|projfile|filetab|pdbfile|mskfile|fname|dir_movies|gainref)'|SIMPLE_TEST_VOL1", re.I)
 INTRINSIC_CALLS = {'date_and_time', 'cpu_time', 'system_clock', 'random_seed', 'random_number', 'get_command_argument',
                    'get_command', 'get_environment_variable', 'execute_command_line', 'sleep', 'flush', 'move_alloc',
                    'exit', 'abort', 'backtrace', 'srand', 'random_init', 'omp_set_num_threads'}

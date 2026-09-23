@@ -152,8 +152,6 @@ jobs:
              simple_test_binoris
              echo "-------------------- TEST BOUNDS FROM MASK3D -------------------------"
              simple_test_bounds_from_mask3D
-             echo "-------------------- TEST COORS TO WEIGHTS -------------------------"
-             simple_test_corrs2weights
              echo "-------------------- TEST CTF -------------------------"
              simple_test_ctf
              echo "-------------------- TEST EXTR FRAC -------------------------"
@@ -182,18 +180,14 @@ jobs:
              simple_test_neigh
              echo "-------------------- TEST OPENMP -------------------------"
              simple_test_openmp
-             echo "-------------------- TEST ORDER CORR -------------------------"
-             simple_test_order_corr
              echo "-------------------- TEST OTSU -------------------------"
              simple_test_otsu
-             echo "-------------------- TEST PHASE CORR -------------------------"
-             simple_test_phasecorr
+             echo "-------------------- TEST POLAR CORRELATION -------------------------"
+             simple_test_exec test=gencorrs_fft
              echo "-------------------- TEST PCG RECONSTRUCTION -------------------------"
              simple_test_exec test=pcg_recon
              echo "-------------------- TEST REC3D BACKEND SELECTOR -------------------------"
              simple_test_rec3D_backend
-             echo "-------------------- TEST RANK WEIGHTS -------------------------"
-             simple_test_rank_weights
              echo "-------------------- TEST SERIALIZE -------------------------"
              simple_test_serialize
              echo "-------------------- TEST SIMD -------------------------"

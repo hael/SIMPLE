@@ -6,10 +6,8 @@ Status: in progress. Phases 0, 1 and 2 are complete (2026-09-22): the fast
 gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
-Phase 3 (the review of everything else) is under way: the geometry batch
-is done and built (section 9.7; nine identities retired into the
-`unit_ori` testers and one `lib_geometry` case, no production call lost,
-gate green at 3.6 s). This is a large
+Phase 3 (the review of everything else) is under way: the geometry and
+fft batches are done and built (section 9.7). This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -364,9 +362,9 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | suite | sub-suites of `units` | Debug, 1 thread (2026-09-22) |
 |---|---|---:|
 | `unit_core` | string, syslib, fileio, character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
-| `unit_ori` | orientation, orientation collection, orientation data, Euler shift | 1.2 s |
-| `unit_image` | image, image header, Fourier iterator, Fourier shift search, B-spline smoother 2D and 3D | 1.3 s (Fourier shift search 0.30 s after the trim) |
-| `unit_numerics` | online variance, multinomial random draw, straight-line fit, affinity propagation, hierarchical clustering | 0.1 s |
+| `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
+| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D | 1.3 s (before the shift search moved out) |
+| `unit_numerics` | online variance, multinomial random draw, straight-line fit, affinity propagation, hierarchical clustering, statistics, shift search (correlator; 0.30 s after the trim) and shift search (optimiser) — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
 | `unit_project` | STAR file, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
@@ -681,26 +679,33 @@ capability is available.
    the test-only library sources and every CTest registration. Nothing test-
    related is built otherwise.
 2. **The fast gate runs from the compile scripts.** With `--compile-tests`,
-   each `compile_*.sh` runs, after `make install`:
+   each `compile_*.sh` runs, between `make` and `make install` (the X
+   order: build, test, install; a failed gate is a failed build and nothing
+   is installed, so the install banner is the last thing on a green build):
 
    ```bash
    ctest --test-dir build -L fast --output-on-failure --parallel "$NJOBS" --timeout 120 \
        2>&1 | tee build/test_runs/ctest_fast.log
-   scripts/ctest_budget.py build/test_runs/ctest_fast.log --budget 30
+   scripts/ctest_budget.py build/test_runs/ctest_fast.log --budget 30 --quiet
    ```
 
    Until Phase 2 declares the fast gate, the label expression is
    `"fast|provisional"` and `ctest_budget.py` runs with `--no-budget`, so the
    provisional `units` entry runs and is timed on every build without a
    budget it cannot yet meet. This is `scripts/run_fast_gate.sh`, called by
-   every `compile_*.sh --compile-tests` after `make install` and by
-   `make check`; `GATE_DECLARED` inside it is the Phase 2 switch.
+   every `compile_*.sh --compile-tests` between build and install and by
+   `make check`; `GATE_DECLARED` inside it is the Phase 2 switch. The fast
+   suites run in-process from the build tree and need nothing from the
+   install tree.
 
    `NJOBS` is the core count divided by two (tests are pinned to one thread
-   but do I/O). `ctest_budget.py` reads the `ctest` output, prints every
-   entry sorted by time, fails if the run's real time exceeded 30 s or if
-   any entry failed, and writes the table beside the log so the numbers are
-   kept. The `check` target runs the same thing by hand.
+   but do I/O). `ctest_budget.py` reads the `ctest` output, fails if the
+   run's real time exceeded 30 s or if any entry failed, and writes the
+   per-entry table sorted by time beside the log so the numbers are kept.
+   What the developer sees is ctest's own report, as in X (2026-09-22, by
+   decision): with `--quiet` the checker prints nothing on a green run
+   within budget and prints the table and the problems only when there is
+   something to fix. The `check` target runs the same thing by hand.
 3. **Registration by suite.** One `add_test` per fast area suite
    (`simple_test_exec test=unit_core`), per library suite
    (`test=lib_fft`), per workflow gate, per platform case and per binary
@@ -962,6 +967,48 @@ spiral should instead replace the degenerate mate with another
 asymmetric-unit direction is an open owner question. Second build: gate
 green, 7/7, 3.6 s real on the reference Mac in Debug (`unit_ori` 3.6 s
 with the three ori/oris/sym sub-suites at 714 assertions).
+
+**fft (2026-09-22, Hans).** Eight identities, six on both routes, none
+with a failure path, none timed. `corrs2weights_test` (and its standalone
+twin `corrs2weights`) and `rank_weights` printed or plotted weight curves
+of production code that nothing else tested (`corrs2weights` drives the
+motion-correction frame weights under every `wcrit`; the rank kernels are
+its `sum|cen|exp|inv` modes): `merge into unit_numerics` through a new
+`simple_stat_tester` (sub-suite `statistics`) that pins sums, signs,
+monotonicity, closed-form spot values and the single-/all-zero edge cases.
+`ft_expanded` ran `test_ftexp_shsrch` (already in the gate) and
+`test_ftexp_shsrch2` (never run): both are now sub-suites of
+`unit_numerics`, moved out of `unit_image` because the expanded-Fourier
+shift search is a motion-correction optimiser, not an image test.
+`order_corr` (PASSED on an array size), `phasecorr` (a convention demo
+with gnuplot windows), `rotate_ref` (a benchmark of two local copies of
+what is now `polarft_calc%rotate_ref_8`) and `eval_polarftcc`
+(user-supplied volume, timing printout) are `delete`; the oris tester
+gained the corr-descending assertion `order_corr` never made.
+`gencorrs_fft` is `modify`: its four unique calls were the image-to-polar
+path, so it is now hermetic (three low-passed noise images from a fixed
+seed) and asserts that `gen_objfun_vals` peaks at rotation 1 with
+correlation 1 for an image against itself, at the applied step for a
+copy rotated with `rtsq` (either angular convention; the sign is not what
+is tested), and below 0.5 for an unrelated image. Coverage accounting:
+33 calls, 2 not made by name any more (`image%polarize` and
+`set_ptcl_pft`), both accepted: the new test reaches them through the
+pftc's own `polarize_ref_pft`/`polarize_ptcl_pft`, which is the
+production path. Findings: `polarft_calc%rotate_ref_8` has no unit test
+(the deleted benchmark validated a copy of it, not it); the dossier's
+fixture detection missed `defined('vol1')`, so `continuous_inplane_*`
+were listed as hermetic when they need a volume (fixed, the inventory
+now says `user-supplied`). First run of the new `gencorrs_fft` failed two
+checks through its own fixture: uniform noise (mean 0.5) under the soft
+mask gave every image the same disc term, which correlates under any
+rotation; zero-mean Gaussian noise, a Gaussian low-pass and a sixth-of-a-
+turn probe fixed it (8/8, 0.03 s). The run also pinned the convention:
+a real-space `rtsq` by +60 degrees peaks at polar index 5·nrots/6 + 1
+(300 degrees), i.e. the pftc's rotation index runs opposite to `rtsq`'s
+angle, with cc 0.998. The `IEEE_DIVIDE_BY_ZERO` note seen in the first
+run came from `image%bp(0., lp)`, whose `get_find(1, 0.)` divides by
+zero; production calls `bp(0., lp)` in imgops and resolest, harmless
+because the flag is raised, not trapped.
 
 ## 10. Fast-tier performance
 

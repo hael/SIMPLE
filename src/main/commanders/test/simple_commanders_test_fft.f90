@@ -4,413 +4,117 @@ use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_test_corrs2weights_test
-  contains
-    procedure :: execute      => exec_test_corrs2weights_test
-end type commander_test_corrs2weights_test
-
-type, extends(commander_base) :: commander_test_eval_polarftcc
-  contains
-    procedure :: execute      => exec_test_eval_polarftcc
-end type commander_test_eval_polarftcc
-
-type, extends(commander_base) :: commander_test_ft_expanded
-  contains
-    procedure :: execute      => exec_test_ft_expanded
-end type commander_test_ft_expanded
-
 type, extends(commander_base) :: commander_test_gencorrs_fft
   contains
     procedure :: execute      => exec_test_gencorrs_fft
 end type commander_test_gencorrs_fft
 
-type, extends(commander_base) :: commander_test_order_corr
-  contains
-    procedure :: execute      => exec_test_order_corr
-end type commander_test_order_corr
-
-type, extends(commander_base) :: commander_test_phasecorr
-  contains
-    procedure :: execute      => exec_test_phasecorr
-end type commander_test_phasecorr
-
-type, extends(commander_base) :: commander_test_rank_weights
-  contains
-    procedure :: execute      => exec_test_rank_weights
-end type commander_test_rank_weights
-
-type, extends(commander_base) :: commander_test_rotate_ref
-  contains
-    procedure :: execute      => exec_test_rotate_ref
-end type commander_test_rotate_ref
-
 contains
 
-subroutine exec_test_corrs2weights_test( self, cline )
-    use simple_core_module_api
-    class(commander_test_corrs2weights_test), intent(inout) :: self
-    class(cmdline),                           intent(inout) :: cline
-    real    :: corrs(12), weights(12)
-    integer :: i
-    corrs(1)  = -1.
-    corrs(2)  = 0.0
-    corrs(3)  = 0.005
-    corrs(4)  = 0.1
-    corrs(5)  = 0.2
-    corrs(6)  = 0.3
-    corrs(7)  = 0.4
-    corrs(8)  = 0.5
-    corrs(9)  = 0.51
-    corrs(10) = 0.52
-    corrs(11) = 0.53
-    corrs(12) = 0.6
-    weights = corrs2weights(corrs, CORRW_CRIT)
-    do i=1,size(corrs)
-        print *, 'corr/weight: ', corrs(i), weights(i)
-    end do
-    call simple_end('**** SIMPLE_TEST_CORRS2WEIGHTS_TEST_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_corrs2weights_test
-
-subroutine exec_test_eval_polarftcc( self, cline )
-    use simple_pftc_srch_api
-    use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-    use simple_builder,             only: builder
-    use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
-    use simple_polarft_calc,        only: vol_pad2ref_pfts
-    class(commander_test_eval_polarftcc), intent(inout) :: self
-    class(cmdline),                       intent(inout) :: cline
-    type(parameters)         :: p
-    type(builder)            :: b
-    type(ori)                :: o
-    real                     :: shvec(2), shift_err, ang_err, lims(2,2), cxy(3), rot
-    real, allocatable        :: cc_fft(:)
-    integer(timer_int_kind)  :: tfft
-    integer                  :: loc
-    type(pftc_shsrch_grad)  :: grad_shsrch_obj
-    if( command_argument_count() < 4 )then
-        write(logfhandle,'(a)',advance='no') 'simple_test_eval_polarftcc vol1=xx mskdiam=xx lp=xx'
-        write(logfhandle,'(a)') ' smpd=xx>'
-        stop
-    endif
-    call cline%parse_oldschool
-    call cline%checkvar('vol1', 1)
-    call cline%checkvar('mskdiam',  2)
-    call cline%checkvar('smpd', 3)
-    call cline%checkvar('lp',   4)
-    call cline%set('nptcls',1.0)
-    call cline%set('ctf','no')
-    call cline%set('objfun','cc')
-    call cline%check
-    call b%init_params_and_build_strategy3D_tbox(cline,p)
-    call set_bp_range3D(p, b, cline)
-    ang_err   = 16.
-    shift_err = 8.
-    call b%eulspace%get_ori(irnd_uni(p%nspace), o)
-    ! Preserve the original single-reference test while using the batch projector.
-    p%nspace = 1
-    print *,'Particle orientation:'
-    call o%print_ori
-    print *,'Shift= 0.0 0.0'
-    print *,'---------------------'
-    call b%pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
-    call b%vol%read(p%vols(1))
-    call b%vol%mask3D_soft(p%msk)
-    call b%vol%fft()
-    call b%vol%expand_cmat()
-    call b%eulspace%set_ori(1, o)
-    call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
-    call b%pftc%cp_even_ref2ptcl(1,1)
-    call b%pftc%set_eo(1, .true. )
-    if( o%e3get() < 0.)then
-        call o%e3set(o%e3get() - 29.5)
-    else
-        call o%e3set(o%e3get() + 29.5)
-    endif
-    call b%eulspace%set_ori(1, o)
-    call vol_pad2ref_pfts(b%pftc, b%vol, b%eulspace, 1, iseven=.true.)
-    shvec(1) = -2.
-    shvec(2) =  2.
-    print *,'Ref orientation:'
-    call o%print_ori
-    print *,'Shift= ',shvec
-    print *,'---------------------'
-    call b%pftc%shift_ptcl(1,shvec)
-    call b%pftc%memoize_ptcls
-    !### TIMING
-    allocate(cc_fft(b%pftc%get_nrots()))
-    tfft = tic()
-    call b%pftc%gen_objfun_vals(1, 1, [0.,0.], cc_fft)
-    print *, 'time of gen_corrs (no cache): ', toc(tfft)
-    loc = maxloc(cc_fft, dim=1)
-    print *, b%pftc%get_rot(loc)
-    ! searching
-    lims(:,1) = -5.
-    lims(:,2) =  5.
-    call grad_shsrch_obj%new_legacy(b, lims)
-    call grad_shsrch_obj%set_indices(1, 1)
-    loc = 1
-    tfft = tic()
-    cxy = grad_shsrch_obj%minimize(irot=loc)
-    print *, 'time of shift_search: ', toc(tfft)
-    if( loc > 0 )then
-        rot = b%pftc%get_rot(loc)
-        print *, cxy, rot
-    else
-        print *, 'shift search found no better solution'
-    endif
-    call simple_end('**** SIMPLE_TEST_EVAL_POLARFTCC_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_eval_polarftcc
-
-subroutine exec_test_ft_expanded( self, cline )
-    use simple_ftexp_shsrch
-    class(commander_test_ft_expanded), intent(inout) :: self
-    class(cmdline),                    intent(inout) :: cline
-    call seed_rnd
-    call test_ftexp_shsrch
-    call test_ftexp_shsrch2
-    call simple_end('**** SIMPLE_TEST_FT_EXPANDED_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_ft_expanded
-
+!> image -> polar Fourier transform -> rotational correlation, end to end and hermetic.
+!! Three smooth zero-mean random images are polarised into a polarft_calc as references
+!! and, in rotated or unrelated form, as particles; gen_objfun_vals (objfun=cc) must then
+!! peak at rotation 1 with correlation ~1 for an image against itself, at the applied
+!! rotation (a sixth of a turn) for a rotated copy, and stay low for an unrelated image.
+!! The noise is zero-mean so that the shared mask envelope carries no correlation.
 subroutine exec_test_gencorrs_fft( self, cline )
-    use simple_pftc_srch_api
-    use simple_timer
-    use simple_builder, only: builder
+    use simple_test_utils,   only: begin_test_suite, end_test_suite, assert_true, assert_int, assert_real, report_summary
+    use simple_polarft_calc, only: polarft_calc
+    use simple_image,        only: image
     class(commander_test_gencorrs_fft), intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
-    type(parameters)        :: p
-    type(builder)           :: b
-    real,    allocatable    :: cc_fft(:)
-    complex, allocatable    :: pft(:,:)
-    integer                 :: iptcl, jptcl
-    integer(timer_int_kind) :: tfft
-    if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)',advance='no') 'simple_test_exec test=gencorrs_fft stk=<particles.mrc>'
-        write(logfhandle,'(a)') ' mskdiam=<mask diameter(in A)> smpd=<sampling distance(in A)>'
-        stop
-    endif
-    call cline%parse_oldschool
-    call cline%checkvar('stk',     1)
-    call cline%checkvar('mskdiam', 2)
-    call cline%checkvar('smpd',    3)
-    call cline%set('objfun', 'cc')
-    call cline%check
+    integer, parameter :: BOX = 64, NIMGS = 3
+    real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+    type(parameters), target :: p
+    type(polarft_calc)  :: pftc
+    type(image)         :: imgs(NIMGS), ptcls(NIMGS)
+    real, allocatable   :: cc(:)
+    integer, allocatable :: seed(:)
+    real    :: ang, dang
+    integer :: pdim(3), kfromto(2), nrots, rotstep, i, loc, loc_fwd, loc_bwd, nseed
+    logical :: test_failed, peak_ok
+    call begin_test_suite('polar correlation of generated images')
+    ! fixed seed: the fixture is generated, so the run is reproducible
+    call random_seed(size=nseed)
+    allocate(seed(nseed))
+    seed = [(20260922 + 37*i, i=1,nseed)]
+    call random_seed(put=seed)
+    deallocate(seed)
+    ! a polarft_calc from parameters alone (no stack on disk)
+    call cline%set('box',     real(BOX))
+    call cline%set('smpd',    SMPD)
+    call cline%set('mskdiam', MSKDIAM)
+    call cline%set('nptcls',  real(NIMGS))
+    call cline%set('nthr',    1.0)
+    call cline%set('ctf',     'no')
+    call cline%set('objfun',  'cc')
     call p%new(cline)
-    p%kfromto(1) = 2
-    p%kfromto(2) = 100
-    call b%build_general_tbox(p, cline)
-    call b%pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
-    call b%img_crop%memoize4polarize(b%pftc%get_pdim_srch())
-    pft = b%pftc%allocate_pft()
-    do iptcl=1,p%nptcls
-        call b%img_crop%read(p%stk, iptcl)
-        call b%img_crop%fft()
-        ! transfer to polar coordinates
-        call b%img_crop%polarize(pft)
-        call b%pftc%set_ref_pft(iptcl, pft, iseven=.true.)
-        call b%img_crop%polarize(pft)
-        call b%pftc%set_ptcl_pft(iptcl, pft)
+    kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
+    call pftc%new(p, NIMGS, [1,NIMGS], kfromto)
+    pdim  = pftc%get_pdim_srch()
+    nrots = pftc%get_nrots()
+    dang    = 360.0 / real(nrots)
+    rotstep = nrots / 6
+    call assert_true(rotstep >= 3, 'enough in-plane rotations for the probe step')
+    ! smooth, asymmetric, masked test images: Gaussian low-passed zero-mean Gaussian noise
+    do i = 1,NIMGS
+        call imgs(i)%new([BOX,BOX,1], SMPD)
+        call imgs(i)%gauran(0.0, 1.0)
+        call imgs(i)%fft
+        call imgs(i)%bpgau2D(0.0, LP)
+        call imgs(i)%ifft
+        call imgs(i)%memoize_mask_coords
+        call imgs(i)%mask2D_soft(MSKRAD, backgr=0.0)
     end do
-    call b%pftc%memoize_refs
-    call b%pftc%memoize_ptcls
-    allocate(cc_fft(b%pftc%get_nrots()))
-
-    !### TIMING
-
-    tfft = tic()
-    do iptcl=1,p%nptcls - 1
-        do jptcl=iptcl + 1, p%nptcls
-            call b%pftc%gen_objfun_vals(iptcl, jptcl, [0.,0.], cc_fft)
-        end do
+    ! particles: 1 = image 1 itself, 2 = image 2 rotated by rotstep polar steps, 3 = image 3 (unrelated to reference 1)
+    ang = real(rotstep) * dang
+    call ptcls(1)%copy(imgs(1))
+    call imgs(2)%rtsq(ang, 0.0, 0.0, ptcls(2))
+    call ptcls(3)%copy(imgs(3))
+    ! image -> polar transform through the production path
+    call imgs(1)%memoize4polarize(pdim)
+    do i = 1,NIMGS
+        call imgs(i)%fft
+        call ptcls(i)%fft
+        call pftc%polarize_ref_pft(imgs(i), i, iseven=.true., pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ptcl_pft(ptcls(i), i, pdim=pdim, oversamp=.false.)
+        call pftc%set_eo(i, .true.)
     end do
-    print *, 'time of fft_mod: ', toc(tfft)
-    call simple_end('**** SIMPLE_TEST_GENCORRS_FFT_WORKFLOW NORMAL STOP ****')
+    call pftc%memoize_refs
+    call pftc%memoize_ptcls
+    allocate(cc(nrots))
+    ! an image against itself: correlation 1 at rotation 1, nowhere higher
+    call pftc%gen_objfun_vals(1, 1, [0.0,0.0], cc)
+    loc = maxloc(cc, dim=1)
+    call assert_int(1, loc,                    'self-correlation peaks at rotation 1')
+    call assert_real(1.0, cc(1), 1.0e-3,       'self-correlation at rotation 1 is 1')
+    call assert_true(all(cc <= cc(1) + 1.0e-5), 'no rotation correlates better than the identity')
+    ! a rotated copy: the peak sits rotstep polar steps from the identity, in either
+    ! angular convention (the sign of the real-space rotation is not what is tested here)
+    call pftc%gen_objfun_vals(2, 2, [0.0,0.0], cc)
+    loc     = maxloc(cc, dim=1)
+    loc_fwd = rotstep + 1
+    loc_bwd = nrots - rotstep + 1
+    peak_ok = abs(loc - loc_fwd) <= 1 .or. abs(loc - loc_bwd) <= 1
+    write(logfhandle,'(A,I4,A,F7.2,A,I4,A,I4,A,F6.3)') 'rotated copy: peak index', loc, ' (', pftc%get_rot(loc),&
+        &' deg), expected', loc_fwd, ' or', loc_bwd, ', cc=', cc(loc)
+    call assert_true(peak_ok,                  'rotated copy peaks at the applied rotation (within one step)')
+    call assert_true(cc(loc) > 0.9,            'rotated copy correlates above 0.9 at its peak')
+    call assert_true(cc(1) < cc(loc) - 0.3,    'rotated copy does not peak at the identity')
+    ! an unrelated image: no rotation correlates strongly
+    call pftc%gen_objfun_vals(1, 3, [0.0,0.0], cc)
+    call assert_true(maxval(cc) < 0.5,         'unrelated image stays below 0.5 at every rotation')
+    ! cleanup
+    do i = 1,NIMGS
+        call imgs(i)%kill
+        call ptcls(i)%kill
+    end do
+    call pftc%kill
+    deallocate(cc)
+    call end_test_suite
+    call report_summary(failed=test_failed)
+    if( test_failed ) error stop 1
+    call simple_end('**** SIMPLE_TEST_GENCORRS_FFT NORMAL STOP ****')
 end subroutine exec_test_gencorrs_fft
-
-subroutine exec_test_order_corr( self, cline )
-    class(commander_test_order_corr), intent(inout) :: self
-    class(cmdline),                   intent(inout) :: cline
-    type(oris)           :: os
-    type(ori)            :: o
-    integer, allocatable :: order(:)
-    integer              :: i
-    call seed_rnd
-    call os%new(11, is_ptcl=.false.)
-    call os%set_all2single('state',1.)
-    do i=1,11
-        call os%set(i, 'corr', ran3())
-    end do
-    call os%set(7, 'state', 0.)
-    order = os%order()
-    do i=1,11
-        call os%get_ori(order(i), o)
-        call o%print_ori()
-    end do
-    call o%kill
-    if( size(order) == 11 )then
-        print *,'PASSED'
-    else
-        print *,'FAILED'
-    endif
-    call simple_end('**** SIMPLE_TEST_ORDER_CORR_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_order_corr
-
-subroutine exec_test_phasecorr( self, cline )
-    use mod_phasecorr
-    class(commander_test_phasecorr), intent(inout) :: self
-    class(cmdline),                  intent(inout) :: cline
-    type(t_phasecorr) :: tphasecorr
-    call tphasecorr%new
-    call tphasecorr%run
-    call tphasecorr%kill
-    call simple_end('**** SIMPLE_TEST_PHASECORR_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_phasecorr
-
-subroutine exec_test_rank_weights( self, cline )
-    use simple_core_module_api
-    use gnufor2, only: plot
-    class(commander_test_rank_weights), intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
-    real    :: ranks(200), weights(200)
-    integer :: i
-    do i=1,200
-        ranks(i) = real(i)
-    end do
-    call rank_sum_weights(200, weights)
-    call plot(ranks, weights)
-    call rank_inverse_weights(200, weights)
-    call plot(ranks, weights)
-    call rank_centroid_weights(200, weights)
-    call plot(ranks, weights)
-    call rank_exponent_weights(200, 10.0, weights)
-    call plot(ranks, weights)
-    ! do i=1,100
-    !     weights(i) = 101.0 - real(i)
-    ! end do
-    ! do i=101,200
-    !     weights(i) = real(i) - 99.5
-    ! end do
-    ! call plot(ranks, weights)
-    ! call conv2rank_weights(200, weights, RANK_SUM_CRIT)
-    ! call plot(ranks, weights)
-    ! call conv2rank_weights(200, weights, RANK_CEN_CRIT)
-    ! ! call plot(ranks, weights)
-    ! call conv2rank_weights(200, weights, RANK_EXP_CRIT, p=2.0)
-    ! ! call plot(ranks, weights)
-    ! call conv2rank_weights(200, weights, RANK_INV_CRIT)
-    ! ! call plot(ranks, weights)
-    call simple_end('**** SIMPLE_TEST_RANK_WEIGHTS_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_rank_weights
-
-subroutine exec_test_rotate_ref( self, cline )
-    class(commander_test_rotate_ref), intent(inout) :: self
-    class(cmdline),                   intent(inout) :: cline
-    integer, parameter :: NP = 100, NK = 300, NR = 200
-    complex :: ref(NP, NK), ref_rot(NP, NK), fast_ref_rot(NP, NK)
-    real    :: a(NP, NK), b(NP, NK), start, finish, norm_all, fast_all
-    integer :: i
-    call random_number(a)
-    call random_number(b)
-    ref      = cmplx(a,b)
-    norm_all = 0.
-    fast_all = 0.
-    do i = 1,NR
-        call cpu_time(start)
-        call rotate_ref(ref, i, ref_rot)
-        call cpu_time(finish)
-        norm_all = norm_all + (finish - start)
-        call cpu_time(start)
-        call fast_rotate_ref(ref, i, fast_ref_rot)
-        call cpu_time(finish)
-        fast_all = fast_all + (finish - start)
-        if( .not.(all(ref_rot .eq. fast_ref_rot)) )then
-            print *, 'FAILED'
-            stop
-        endif
-    enddo
-    print *, 'current timing = ', norm_all
-    print *, '-----------'
-    print *, 'improved timing = ', fast_all
-    print *, '-----------'
-    print *, 'PASSED'
-    call simple_end('**** SIMPLE_TEST_ROTATE_REF_WORKFLOW NORMAL STOP ****')
-
-    contains
-
-        subroutine rotate_ref( ref_in, irot, ref_rot_out )
-            complex, intent(in)  :: ref_in(NP, NK)
-            integer, intent(in)  :: irot
-            complex, intent(out) :: ref_rot_out(NP, NK)
-            integer :: rot, jrot
-            do jrot = 1,NP
-                rot = jrot - (irot - 1) ! reverse rotation
-                if( rot < 1 ) rot = rot + NR
-                if( rot > NP )then
-                    ref_rot_out(jrot,:) = conjg(ref_in(rot-NP,:))
-                else
-                    ref_rot_out(jrot,:) = ref_in(rot,:)
-                endif
-            enddo
-        end subroutine rotate_ref
-
-        subroutine rotate_ref_2( ref_in, irot, ref_rot_out )
-            complex, intent(in)  :: ref_in(NP, NK)
-            integer, intent(in)  :: irot
-            complex, intent(out) :: ref_rot_out(NP, NK)
-            integer :: rot, jrot
-            do jrot = 1,irot-1
-                rot = jrot - (irot - 1) + NR ! reverse rotation
-                if( rot > NP )then
-                    ref_rot_out(jrot,:) = conjg(ref_in(rot-NP,:))
-                else
-                    ref_rot_out(jrot,:) = ref_in(rot,:)
-                endif
-            enddo
-            do jrot = irot,NP
-                rot = jrot - (irot - 1) ! reverse rotation
-                if( rot > NP )then
-                    ref_rot_out(jrot,:) = conjg(ref_in(rot-NP,:))
-                else
-                    ref_rot_out(jrot,:) = ref_in(rot,:)
-                endif
-            enddo
-        end subroutine rotate_ref_2
-
-        subroutine rotate_ref_t( ref_in, irot, ref_rot_out )
-            complex, intent(in)  :: ref_in(NK, NP)
-            integer, intent(in)  :: irot
-            complex, intent(out) :: ref_rot_out(NK, NP)
-            integer :: rot, jrot
-            do jrot = 1,NP
-                rot = jrot - (irot - 1) ! reverse rotation
-                if( rot < 1 ) rot = rot + NR
-                if( rot > NP )then
-                    ref_rot_out(:,jrot) = conjg(ref_in(:,rot-NP))
-                else
-                    ref_rot_out(:,jrot) = ref_in(:,rot)
-                endif
-            enddo
-        end subroutine rotate_ref_t
-
-        subroutine fast_rotate_ref( ref_in, irot, ref_rot_out )
-            complex, intent(in)  :: ref_in(NP, NK)
-            integer, intent(in)  :: irot
-            complex, intent(out) :: ref_rot_out(NP, NK)
-            integer :: mid
-            if( irot == 1 )then
-                ref_rot_out = ref_in
-            elseif( irot >= 2 .and. irot <= NP )then
-                mid = NP - irot + 1
-                ref_rot_out(   1:irot-1,:) = conjg(ref_in(mid+1:NP, :))
-                ref_rot_out(irot:NP,    :) =       ref_in(    1:mid,:)
-            elseif( irot == NP + 1 )then
-                ref_rot_out = conjg(ref_in)
-            else
-                mid = NR - irot + 1
-                ref_rot_out(irot-NP:NP,       :)  = conjg(ref_in(    1:mid,:))
-                ref_rot_out(      1:irot-NP-1,:) =        ref_in(mid+1:NP, :)
-            endif
-        end subroutine fast_rotate_ref
-
-end subroutine exec_test_rotate_ref
 
 end module simple_commanders_test_fft

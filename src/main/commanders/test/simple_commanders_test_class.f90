@@ -15,6 +15,7 @@ use simple_rec_list_tester,                  only: run_all_rec_list_tests
 use simple_ori_tester,                       only: run_all_ori_tests
 use simple_oris_tester,                      only: run_all_oris_tests
 use simple_sym_tester,                       only: run_all_sym_tests
+use simple_stat_tester,                      only: run_all_stat_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
@@ -32,7 +33,7 @@ use simple_imghead,                          only: test_imghead
 use simple_oris,                             only: test_oris
 use simple_image,                            only: test_image
 use simple_ftiter,                           only: test_ftiter
-use simple_ftexp_shsrch,                     only: test_ftexp_shsrch
+use simple_ftexp_shsrch,                     only: test_ftexp_shsrch, test_ftexp_shsrch2
 use simple_bspline_smoother,                 only: test_bspline_smoother, test_bspline_smoother_3d
 use simple_online_var,                       only: test_online_var
 use simple_aff_prop,                         only: test_aff_prop
@@ -159,7 +160,6 @@ contains
         call add_suite(s, n, 'image',                suite_image)
         call add_suite(s, n, 'image header',         test_imghead)
         call add_suite(s, n, 'Fourier iterator',     test_ftiter)
-        call add_suite(s, n, 'Fourier shift search', test_ftexp_shsrch)
         call add_suite(s, n, 'B-spline smoother 2D', suite_bspline_2d)
         call add_suite(s, n, 'B-spline smoother 3D', suite_bspline_3d)
     end subroutine suites_image
@@ -172,6 +172,10 @@ contains
         call add_suite(s, n, 'straight-line fit',       test_fit_line)
         call add_suite(s, n, 'affinity propagation',    test_aff_prop)
         call add_suite(s, n, 'hierarchical clustering', test_hclust)
+        call add_suite(s, n, 'statistics',              run_all_stat_tests)
+        ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
+        call add_suite(s, n, 'shift search, correlator', test_ftexp_shsrch)
+        call add_suite(s, n, 'shift search, optimiser',  test_ftexp_shsrch2)
     end subroutine suites_numerics
 
     subroutine suites_project( s, n )

@@ -202,10 +202,6 @@ if(BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_openmp_offload.f90"
     PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable"
   )
-  set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_rotate_ref.f90"
-    PROPERTIES COMPILE_OPTIONS "-Wno-unused-function"
-  )
   foreach(main_src IN LISTS TEST_MAINS)
     get_filename_component(main_we "${main_src}" NAME_WE)         # simple_test_ft_expanded
     string(REGEX REPLACE "^simple_test_" "" test_id "${main_we}") # ft_expanded
