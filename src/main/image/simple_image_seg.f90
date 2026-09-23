@@ -53,7 +53,10 @@ contains
         npixtot = product(self%ldim)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
-        thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
+        ! the npix largest values are foreground: binarize_1 keeps >= thres, so thres is
+        ! the npix-th largest (it used to be two positions lower, giving npix+2 pixels;
+        ! segmentation tester, 2026-09-22)
+        thres = forsort(npixtot-npix+1)
         call self%binarize_1( thres )
         deallocate( forsort )
     end subroutine binarize_2

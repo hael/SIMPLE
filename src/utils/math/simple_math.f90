@@ -818,7 +818,9 @@ contains
         do i = MIN_VAL, MAX_VAL
             sum2 = sum2 + i * p(i)
         enddo
-        sigma = HUGE(sigma) ! initialisation, to get into the loop
+        sigma  = HUGE(sigma) ! initialisation, to get into the loop
+        thresh = real(MIN_VAL) ! a two-valued input is already optimally split at the first bin,
+                               ! so the loop below never assigns thresh (segmentation tester, 2026-09-22)
         do T = MIN_VAL, MAX_VAL - 1
           q1   = q1 + p(T)
           q2   = q2 - p(T)
@@ -852,8 +854,11 @@ contains
               sigma = sigma_next
           endif
         enddo
-        ! rescale in the old range
-        thresh = thresh / sc + old_range(1)
+        ! T is the last bin of the lower class; bin T holds the values that round to T,
+        ! i.e. [T-0.5, T+0.5), so the class boundary in value space is T+0.5. Returning
+        ! T itself put the upper half of that bin into the foreground (found by the
+        ! segmentation tester, 2026-09-22).
+        thresh = (thresh + 0.5) / sc + old_range(1)
     end subroutine otsu_1
 
     ! Otsu's method, see above

@@ -308,6 +308,9 @@ contains
         call test_ccs_connectivity_3D()
         call test_ccs_connectivity_2D()
         call test_ccs_degenerate()
+        call test_morphology()
+        call test_cc_bookkeeping()
+        call test_holes_and_feret()
     end subroutine run_all_image_bin_tests
 
     !---------------- the original image_bin examples, with their answers ----------------
@@ -490,5 +493,148 @@ contains
         call ccimg%kill_bimg
         if( allocated(sz) ) deallocate(sz)
     end subroutine test_ccs_degenerate
+
+    !---------------- morphology: dilate, erode, grow_bins ----------------
+
+    ! a 10x10 square: erode strips the outer layer (8x8), dilate puts it back exactly,
+    ! dilate once more gives 12x12; grow_bins uses a disc template, so corners are not added
+    subroutine test_morphology()
+        integer, parameter :: BOX = 32, SIDE = 10
+        type(image_bin) :: bimg
+        integer, allocatable :: imat(:,:,:), imat0(:,:,:)
+        integer :: i0
+        write(*,'(A)') 'test_morphology'
+        i0 = BOX/2 - SIDE/2 + 1
+        call bimg%new_bimg([BOX,BOX,1], 1.0)
+        allocate(imat0(BOX,BOX,1), source=0)
+        imat0(i0:i0+SIDE-1, i0:i0+SIDE-1, 1) = 1
+        call bimg%set_imat(imat0)
+        call bimg%erode
+        call bimg%get_imat(imat)
+        call assert_int((SIDE-2)**2, sum(imat),                      'erode: the outer layer is removed')
+        call assert_true(all(imat(i0+1:i0+SIDE-2, i0+1:i0+SIDE-2, 1) == 1), 'erode: the interior survives')
+        call bimg%dilate
+        call bimg%get_imat(imat)
+        call assert_int(SIDE**2, sum(imat),                          'dilate after erode restores the square')
+        call assert_true(all(imat == imat0),                         'dilate after erode restores it exactly')
+        call bimg%dilate
+        call bimg%get_imat(imat)
+        call assert_int((SIDE+2)**2, sum(imat),                      'dilate adds one layer all round, corners included')
+        ! grow_bins(1): a cross template, so the corners are not added
+        call bimg%set_imat(imat0)
+        call bimg%grow_bins(1)
+        call bimg%get_imat(imat)
+        call assert_int((SIDE+2)**2 - 4, sum(imat),                  'grow_bins(1) adds one layer without the corners')
+        ! grow_bins(2) on a single pixel: the 13-pixel digital disc of radius 2
+        imat0 = 0
+        imat0(BOX/2, BOX/2, 1) = 1
+        call bimg%set_imat(imat0)
+        call bimg%grow_bins(2)
+        call bimg%get_imat(imat)
+        call assert_int(13, sum(imat),                               'grow_bins(2) on a pixel is the digital disc of radius 2')
+        call assert_int(1, imat(BOX/2+2, BOX/2, 1),                  'grow_bins(2): two pixels along an axis are in')
+        call assert_int(0, imat(BOX/2+2, BOX/2+1, 1),                'grow_bins(2): (2,1) is outside the disc')
+        call bimg%kill_bimg
+        deallocate(imat, imat0)
+    end subroutine test_morphology
+
+    !---------------- connected-component bookkeeping ----------------
+
+    ! three blobs of known size and position: labels, sizes, centres, diameters, and the
+    ! elimination/relabelling/extraction routines that the pickers and cavg tools use
+    subroutine test_cc_bookkeeping()
+        integer, parameter :: BOX = 48
+        real,    parameter :: SMPD = 2.0
+        type(image_bin) :: bimg, ccimg
+        integer, allocatable :: imat(:,:,:), sz(:)
+        integer :: nccs, lab_a, lab_b, lab_c
+        real    :: xy(2), diam
+        write(*,'(A)') 'test_cc_bookkeeping'
+        call bimg%new_bimg([BOX,BOX,1], SMPD)
+        allocate(imat(BOX,BOX,1), source=0)
+        imat( 5: 6,  5: 6, 1) = 1     ! A: 2x2 = 4 pixels
+        imat(10:14, 20:24, 1) = 1     ! B: 5x5 = 25 pixels, centre (12,22)
+        imat(30:39, 30:39, 1) = 1     ! C: 10x10 = 100 pixels
+        call bimg%set_imat(imat)
+        call bimg%find_ccs(ccimg)
+        call ccimg%get_nccs(nccs)
+        call assert_int(3, nccs, 'find_ccs: three blobs')
+        call ccimg%get_imat(imat)
+        lab_a = imat(5,5,1); lab_b = imat(12,22,1); lab_c = imat(35,35,1)
+        call assert_true(lab_a /= lab_b .and. lab_b /= lab_c .and. lab_a /= lab_c, 'find_ccs: distinct labels')
+        sz = ccimg%size_ccs()
+        call assert_int(3, size(sz),      'size_ccs: one size per component')
+        call assert_int(4,   sz(lab_a),   'size_ccs: blob A')
+        call assert_int(25,  sz(lab_b),   'size_ccs: blob B')
+        call assert_int(100, sz(lab_c),   'size_ccs: blob C')
+        ! centre of mass of B relative to the image centre (box/2+1 = 25)
+        call ccimg%masscen_cc(lab_b, xy)
+        call assert_real(12.0 - 25.0, xy(1), 1.0e-5, 'masscen_cc: x offset from the image centre')
+        call assert_real(22.0 - 25.0, xy(2), 1.0e-5, 'masscen_cc: y offset from the image centre')
+        ! diameter of B: twice the farthest pixel from its centre of mass, in Angstroms
+        call ccimg%diameter_cc(lab_b, diam)
+        call assert_real(2.0 * sqrt(8.0) * SMPD, diam, 1.0e-3, 'diameter_cc: 5x5 block, corner at sqrt(8) pixels')
+        ! cc2bin keeps one component as a binary image
+        call ccimg%cc2bin(lab_b)
+        call ccimg%get_imat(imat)
+        call assert_int(25, sum(imat),              'cc2bin: only the chosen component remains')
+        call assert_int(1,  maxval(imat),           'cc2bin: as a 0/1 image')
+        call assert_int(1,  imat(12,22,1),          'cc2bin: the chosen component is where it was')
+        ! elim_ccs by size: keep the sizes in [10,50], relabel contiguously
+        call bimg%find_ccs(ccimg)
+        call ccimg%elim_ccs([10, 50])
+        call ccimg%get_nccs(nccs)
+        call assert_int(1, nccs,                    'elim_ccs: one component survives the size window')
+        sz = ccimg%size_ccs()
+        call assert_int(1,  size(sz),               'elim_ccs: sizes of the survivors only')
+        call assert_int(25, sz(1),                  'elim_ccs: the survivor is blob B')
+        call ccimg%get_imat(imat)
+        call assert_int(1, imat(12,22,1),           'elim_ccs: the survivor is relabelled 1')
+        ! order_ccs closes the gaps in the labelling
+        imat = 0
+        imat( 5: 6,  5: 6, 1) = 3
+        imat(10:14, 20:24, 1) = 7
+        call ccimg%set_imat(imat)
+        call ccimg%order_ccs
+        call ccimg%get_imat(imat)
+        call assert_int(1, imat(5,5,1),             'order_ccs: the lowest label becomes 1')
+        call assert_int(2, imat(12,22,1),           'order_ccs: the next label becomes 2')
+        call ccimg%get_nccs(nccs)
+        call assert_int(2, nccs,                    'order_ccs: nccs is the number of labels')
+        call bimg%kill_bimg
+        call ccimg%kill_bimg
+        deallocate(imat)
+        if( allocated(sz) ) deallocate(sz)
+    end subroutine test_cc_bookkeeping
+
+    !---------------- hole filling and Feret diameters ----------------
+
+    subroutine test_holes_and_feret()
+        integer, parameter :: BOX = 40
+        type(image_bin) :: bimg
+        integer, allocatable :: imat(:,:,:)
+        real :: fmin, fmax
+        write(*,'(A)') 'test_holes_and_feret'
+        call bimg%new_bimg([BOX,BOX,1], 1.0)
+        allocate(imat(BOX,BOX,1), source=0)
+        ! a square ring: 20x20 with a 10x10 hole
+        imat(11:30, 11:30, 1) = 1
+        imat(16:25, 16:25, 1) = 0
+        call bimg%set_imat(imat)
+        call bimg%set_edgecc2background
+        call bimg%get_imat(imat)
+        call assert_int(400, sum(imat),                       'set_edgecc2background fills the hole')
+        call assert_int(1,   imat(20,20,1),                   'set_edgecc2background: the hole centre is foreground')
+        call assert_int(0,   imat(1,1,1),                     'set_edgecc2background: the outside stays background')
+        ! Feret diameters of a 5 x 21 axis-aligned bar (pixel centres plus one pixel)
+        imat = 0
+        imat(18:22, 10:30, 1) = 1
+        call bimg%set_imat(imat)
+        call bimg%feret_minmax(fmin, fmax)
+        call assert_real(5.0, fmin, 1.0e-3,                   'feret_minmax: minimum Feret of a 5-wide bar is 5')
+        call assert_true(fmax > 21.0 .and. fmax < 21.5,       'feret_minmax: maximum Feret is the bar diagonal (21.4)')
+        call bimg%kill_bimg
+        deallocate(imat)
+    end subroutine test_holes_and_feret
 
 end module simple_image_msk_tester

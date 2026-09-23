@@ -7,8 +7,11 @@ gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
 under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
 process-count ratchet armed and every suite passing in both table orders.
 Phase 3 (the review of everything else) is under way: the geometry, fft
-and masks batches are done and built (section 9.7); the masks batch
-found and fixed a one-pixel asymmetry in the memoised mask routines. This is a large
+and masks batches and the segmentation category are done and built
+(section 9.7). The tests written so far have found and fixed six
+production defects (mask mirror asymmetry, disc padding count, Otsu bin
+edge, Otsu two-valued input, binarize(npix) count, ori_strlen_trim) and
+removed one dead routine. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -1088,8 +1091,43 @@ images for the thresholds, a disc whose edge is a one-pixel ring for the
 edge detectors, erode/grow round trips, a placed blob for `masscen_cc`
 and `diameter_cc`) as a scheduled slot of its own. Owner list for the
 section 9.5 decision, routines with no caller at all: `hough_line`,
-`polish_ccs`, `diameter_bin`, `border_mask`, `elim_largestcc`. Built and green the same day: gate 7/7, 3.5 s, `unit_image` 2.2 s with
+`polish_ccs`, `diameter_bin`, `elim_largestcc`, `detect_peak_thres_sortmeans`
+(`border_mask`, listed at first, is what `erode` uses). Built and green the same day: gate 7/7, 3.5 s, `unit_image` 2.2 s with
 eight sub-suites.
+
+The scheduled slot followed the same day (Hans: "pin the seg routines").
+`segmentation` now pins, on generated fixtures with known answers:
+`binarize` in all three forms (a ramp image, one pixel per value);
+`otsu_img` plain, `positive`, `tight` and `tighter` (two-, three- and
+four-level discs with 1 % noise, the binarised image equal to the object
+to the pixel); `otsu_robust_fast` (salt-and-pepper on a disc, every
+flipped pixel away from the edge repaired); `sauvola` (local standard
+deviations equal to brute-force window statistics, the binarisation
+following the Sauvola formula pixel by pixel); `calc_gradient` (a unit
+ramp has gradient exactly 1 inside) and `sobel` (a ring along a square's
+edge, nothing elsewhere); `canny` with explicit thresholds (a thin edge
+around the square, nothing elsewhere, the input untouched);
+`detect_peak_thres` in both forms, `detect_peak_thres_for_npeaks` and
+`refine_peak_thres_sortmeans` (200 background scores and 20 peaks). The
+`binary image` sub-suite pins the `image_bin` morphology and
+bookkeeping: `erode`/`dilate` (a 10x10 square loses and regains its
+outer layer exactly), `grow_bins` (cross template: no corners; the
+13-pixel digital disc of radius 2), `size_ccs`, `masscen_cc`,
+`diameter_cc`, `cc2bin`, `elim_ccs`, `order_ccs` on three placed blobs,
+`set_edgecc2background` (a square ring is filled) and `feret_minmax`
+(a 5x21 bar: 5 and the 21.4 diagonal). Three defects found while
+deriving the expected answers, all fixed: (1) `otsu` returned the centre
+of the last background bin instead of its upper edge, so the upper half
+of that bin (up to 1/512 of the range) was classified as foreground; a
+few background pixels per image, in a third of the emulated runs
+(`thresh = T + 0.5` in bin units); (2) `otsu` never assigned `thresh`
+for a two-valued input, because the first bin is already the optimal
+split and only strictly better splits assign (initialised to the first
+bin); (3) `image%binarize(npix)` kept `npix+2` pixels (`forsort(n-npix-1)`
+with a `>=` comparison; now `n-npix+1`). Its one caller is the
+`binarize` commander's `npix` option. `detect_peak_thres_sortmeans` is
+referenced only from a comment and prints debug lines; it joins the
+dead-code list for the owner. Built green first time: gate 7/7, 3.4 s, `unit_image` 2.1 s.
 
 ## 10. Fast-tier performance
 
