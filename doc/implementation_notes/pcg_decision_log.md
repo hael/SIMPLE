@@ -869,3 +869,8 @@ known optimism of the scalar shrink about high-frequency solvent noise; it
 does not move the argmin. Replay start residual from the solvent pair in
 the final 0.74 (was 1.55; in-stage 0.12) -- the closed-form replay at box
 256 is the next thing to look at if the final map is questioned.
+
+**2026-09-22 -- activation moved to the final stage.** The stage-7/8 results
+above remain the validation record, but the active abinitio3D policy now sets
+`PCG_SOLVENT_START_STAGE = NSTAGES`: stages 6-7 remain prior-free and an
+explicitly requested solvent prior is applied only in stage 8.

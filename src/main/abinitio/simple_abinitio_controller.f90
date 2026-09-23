@@ -28,7 +28,7 @@ integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first sta
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
-integer,          parameter :: PCG_SOLVENT_START_STAGE = NU_FILTER_STAGE + 1 ! requested PCG solvent prior from the second NU stage
+integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8
 integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
 integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for abinitio 3D 
@@ -598,9 +598,8 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
-        ! The soft solvent prior starts one stage after the first NU stage
-        ! (PCG_SOLVENT_START_STAGE), once the NU label field it is applied
-        ! to has settled. The strength is forwarded only when given; an
+        ! The soft solvent prior starts only in the final stage, after the NU
+        ! label field it is applied to has settled. The strength is forwarded only when given; an
         ! unset pcg_solvent_lambda keeps the per-iteration estimate.
         if( params%l_pcg_solvent .and. istage >= PCG_SOLVENT_START_STAGE .and. &
             &trim(cfg%rec_backend%to_char()) == 'pcg' )then

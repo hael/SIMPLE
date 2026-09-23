@@ -92,8 +92,8 @@ Stage policy includes:
 - staged NU filtering from `NU_FILTER_STAGE`
 - staged automasking only from `AUTOMSK_STAGE`
 - an explicitly requested PCG solvent prior from `PCG_SOLVENT_START_STAGE`
-  (stage 7, one stage after `NU_FILTER_STAGE`), so the NU label field the
-  prior'd pair receives has settled on a prior-free stage first
+  (stage 8, the final stage), so the NU label field the prior'd pair receives
+  has settled over stages 6-7 without the prior
 
 The downscaled particle cache is a 2D-only feature: `abinitio3D` rejects
 `cache=yes`, and each stage uses its own crop from the low-pass/downscaling
