@@ -437,6 +437,46 @@ def _public_volume_outputs(batch_job, jobmodel):
     ]
 
 
+def _present_volume_kinds(volume_outputs):
+    """Return the {key, label} kinds actually present in volume_outputs, in fixed order."""
+    present = {volume["kind"] for volume in volume_outputs if "kind" in volume}
+    return [
+        {"key": key, "label": label}
+        for key, label in BatchJob.VOLUME_KINDS
+        if key in present
+    ]
+
+
+def _cls3d_stages(jobstats, stage_volume_outputs):
+    """Group cls3D per-stage states with that stage's own browser-safe volume outputs.
+
+    jobstats["cls3D"] is a dict of stage key -> list of state entries (reprojtiles/
+    FSC/oridist/volpath/lppath/pprocpath/pprocmirrpath); stage_volume_outputs entries
+    carry a matching "stage" key (see BatchJob.get_stage_volume_outputs), so each
+    stage's Mol* volume <select> only ever offers that stage's own volumes. Entries
+    keep their "path" (like streaming) so the viewer serves volumes via the
+    project-scoped nice_lite:volume route instead of a job-scoped one.
+    """
+    cls3d = jobstats.get("cls3D") if isinstance(jobstats, dict) else None
+    if not isinstance(cls3d, dict):
+        return []
+    stages = []
+    for stage_key, states in cls3d.items():
+        if not isinstance(states, list):
+            continue
+        outputs = [
+            output for output in stage_volume_outputs
+            if output.get("stage") == stage_key
+        ]
+        stages.append({
+            "key": stage_key,
+            "states": states,
+            "volume_outputs": outputs,
+            "volume_kinds": _present_volume_kinds(outputs),
+        })
+    return stages
+
+
 def _movie_thumbnail_token(job_id, movie_path):
     """Sign an imported movie path so it cannot be replaced in the URL."""
     return signing.Signer(salt=_BATCH_MOVIE_THUMBNAIL_SALT).sign_object(
@@ -874,11 +914,15 @@ def _batch_overview_context(
     stdout_entry = log_by_name.get("stdout.log", {})
     stderr_entry = log_by_name.get("stderr.log", {})
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    jobstats = metadata.get("project_metadata", {})
     arguments = _argument_rows(jobmodel)
     show_volume_viewer = (
         volume_viewer_requested
-        and jobmodel.status == "finished"
         and jobmodel.prog == "abinitio3D"
+        and jobmodel.status != "queued"
+    )
+    stage_volume_outputs = (
+        batchjob.get_stage_volume_outputs(jobstats) if show_volume_viewer else []
     )
 
     return {
@@ -891,17 +935,17 @@ def _batch_overview_context(
         "args"   : jobmodel.args,
         "created": jobmodel.cdat,
         "folder" : batchjob.get_absdir(),
-        "jobstats": metadata.get("project_metadata", {}),
+        "jobstats": jobstats,
+        "cls3d_stages": _cls3d_stages(jobstats, stage_volume_outputs),
         "log"    : _log_parts(stdout_entry["text"]) if stdout_entry.get("exists") else [],
         "error"  : stderr_entry.get("text") if stderr_entry.get("exists") else None,
         "arguments": arguments,
         "submitted_argument_count": sum(argument["submitted"] for argument in arguments),
         "volume_viewer_requested": show_volume_viewer,
-        "volume_outputs": (
-            _public_volume_outputs(batchjob, jobmodel)
-            if show_volume_viewer
-            else []
-        ),
+        "volume_outputs": [
+            {key: value for key, value in output.items() if key != "path"}
+            for output in stage_volume_outputs
+        ],
     }
 
 def _manualpick_overview_context(batchjob, jobmodel):
@@ -992,10 +1036,15 @@ def view_batch_volume_data(request, jobid, volume_name):
     ):
         return HttpResponse(status=404)
 
+    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    jobstats = metadata.get("project_metadata", {})
     volume = next(
         (
             output
-            for output in batch_job.get_volume_outputs()
+            for output in (
+                batch_job.get_volume_outputs()
+                + batch_job.get_stage_volume_outputs(jobstats)
+            )
             if output.get("name") == volume_name
         ),
         None,

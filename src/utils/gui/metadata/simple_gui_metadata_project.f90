@@ -28,24 +28,31 @@ module simple_gui_metadata_project
   use json_kinds
   use json_module,                    only: json_core, json_value
   use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ, SHORTSTRLEN
-  use simple_defs_fname,              only: MRC_EXT, JPG_EXT, MOVTHUMB_FBODY
-  use simple_fileio,                  only: swap_suffix, file_exists, fname2format
+  use simple_defs_fname,              only: MRC_EXT, JPG_EXT, MOVTHUMB_FBODY, PPROC_SUFFIX, LP_SUFFIX, MIRR_SUFFIX
+  use simple_fileio,                  only: swap_suffix, file_exists, fname2format, file2rarr, add2fbody, get_fpath, simple_copy_file
   use simple_string,                  only: string
   use simple_error,                   only: simple_exception
-  use simple_string_utils,            only: int2str
+  use simple_string_utils,            only: int2str, int2str_pad
   use simple_sp_project,              only: sp_project
   use simple_gui_metadata_base,       only: gui_metadata_base
-  use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE, GUI_METADATA_PTCL_TYPE
+  use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE, GUI_METADATA_PTCL_TYPE, &
+                                            &GUI_METADATA_VOL3D_TYPE
   use simple_gui_metadata_micrograph, only: gui_metadata_micrograph
   use simple_gui_metadata_ptcl,       only: gui_metadata_ptcl
   use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D, sprite_sheet_pos
+  use simple_gui_metadata_vol3D,      only: gui_metadata_vol3D
+  use simple_imghead,                 only: get_mrc_minmax
   use simple_nrtxtfile,               only: nrtxtfile
   use simple_image,                   only: image
   use simple_math,                    only: round2even
+  use simple_math_ft,                 only: get_resarr
+  use simple_estimate_ssnr,           only: get_resolution
   use simple_motion_gain_helpers,     only: read_movies_and_sum_frames
   use simple_procimgstk,              only: random_selection_from_imgfile, bp_imgfile
   use simple_gui_utils,               only: mrc2jpeg_tiled
   use simple_syslib,                  only: del_file, simple_abspath, simple_rename, get_process_id
+  use simple_refine3D_fnames,         only: refine3D_oris_heatmap_fname
+  use simple_linalg,                  only: rad2deg
 
   implicit none
 
@@ -60,6 +67,13 @@ module simple_gui_metadata_project
     type(gui_metadata_cavg2D), allocatable :: cavgs(:)
   end type gui_metadata_cavg2D_stage
 
+  ! one refinement stage's set of per-state 3D volume metadata entries
+  type :: gui_metadata_vol3D_stage
+    private
+    logical                               :: is_final = .false.
+    type(gui_metadata_vol3D), allocatable :: states(:)
+  end type gui_metadata_vol3D_stage
+
   type, extends(gui_metadata_base) :: gui_metadata_project
     private
     character(len=LONGSTRLEN)     :: projname = '' ! SIMPLE project name
@@ -71,6 +85,7 @@ module simple_gui_metadata_project
     integer                       :: nptcls_selected = 0  ! number of selected records in the ptcl2D segment
     integer                       :: ncls2D   = 0  ! number of records in the cls2D segment
     integer                       :: ncls2D_selected = 0  ! number of selected records in the cls2D segment
+    integer                       :: nstates3D = 0 ! number of states in the ptcl3D 'state' label
     integer                       :: created  = 0  ! Unix timestamp of first assignment
     real                          :: mskdiam   = 0. ! mask diameter (in A) used for the cls2D run
     real                          :: mskscale  = 0. ! cavgs box size in A (box * smpd), for overlay scaling
@@ -84,6 +99,7 @@ module simple_gui_metadata_project
     type(gui_metadata_micrograph),   allocatable :: meta_movies(:)
     type(gui_metadata_micrograph),   allocatable :: meta_micrographs(:)
     type(gui_metadata_cavg2D_stage), allocatable :: meta_cavg2D(:)
+    type(gui_metadata_vol3D_stage),  allocatable :: meta_vol3D(:)
     type(gui_metadata_ptcl),         allocatable :: meta_ptcls(:)
   contains
     procedure :: set
@@ -122,7 +138,20 @@ contains
     type(image)                                    :: movsum, movthumb
     type(string)                                   :: movfname, movthumbfname
     integer                                        :: n_movthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
-    real                                            :: scale_thumb
+    real                                           :: scale_thumb
+    type(gui_metadata_vol3D_stage),  allocatable   :: meta_vol3D_tmp(:)
+    type(gui_metadata_vol3D),        allocatable   :: vol3D_tmp(:)
+    type(string)                                   :: volpath, volpath_out, fsc_fname, pprocpath, lppath, pprocmirrpath
+    type(string)                                   :: reprojpath, reprojpath_stage, oridistpath, oridistpath_stage
+    type(gui_metadata_cavg2D)                      :: reproj_tiles3D(3)
+    integer,                            parameter  :: NTILES3D = 3
+    integer                                        :: itile3D, iptcl3D, ix3D, iy3D, oridist_hist3D(72,36)
+    real                                            :: normal3D(3), azimuth3D, elevation3D
+    real,                            allocatable   :: fsc_arr(:), res_arr(:), invres_arr(:)
+    integer                                        :: istate3D, n_valid_states3D, box3D, pop3D, fsc_box, n_fsc_pts, k
+    real                                            :: smpd3D, res0143, res05, cfar
+    real                                            :: minval3D, maxval3D
+    logical                                         :: l_have_fsc
                 
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_final = present(stage2D)
@@ -408,6 +437,179 @@ contains
             end if
         end if
     end if
+    ! add 3D states/volumes
+    if( nstage2D == 1 ) then
+        if( allocated(self%meta_vol3D) ) deallocate(self%meta_vol3D)
+    end if
+    if( md_oritype == 'cls3D' .or. md_oritype == 'all' ) then
+        self%nstates3D = spproj%os_ptcl3D%get_n('state')
+        if( self%nstates3D > 0 ) then
+            if( l_final ) then
+                ! reuse an existing final slot, or append a new one at the end of the stage array
+                array_idx = 0
+                if( allocated(self%meta_vol3D) ) then
+                    do i = 1, size(self%meta_vol3D)
+                        if( self%meta_vol3D(i)%is_final ) then
+                            array_idx = i
+                            exit
+                        end if
+                    end do
+                end if
+                if( array_idx == 0 ) then
+                    if( .not. allocated(self%meta_vol3D) ) then
+                        allocate(self%meta_vol3D(1))
+                    else
+                        allocate(meta_vol3D_tmp(size(self%meta_vol3D) + 1))
+                        meta_vol3D_tmp(1:size(self%meta_vol3D)) = self%meta_vol3D
+                        call move_alloc(meta_vol3D_tmp, self%meta_vol3D)
+                    end if
+                    array_idx = size(self%meta_vol3D)
+                end if
+                self%meta_vol3D(array_idx)%is_final = .true.
+            else
+                if( .not. allocated(self%meta_vol3D) ) then
+                    allocate(self%meta_vol3D(nstage2D))
+                else if( size(self%meta_vol3D) < nstage2D ) then
+                    ! grow the stage array, preserving previously recorded stage containers
+                    allocate(meta_vol3D_tmp(nstage2D))
+                    meta_vol3D_tmp(1:size(self%meta_vol3D)) = self%meta_vol3D
+                    call move_alloc(meta_vol3D_tmp, self%meta_vol3D)
+                end if
+                array_idx = nstage2D
+                self%meta_vol3D(array_idx)%is_final = .false.
+            end if
+            if( allocated(self%meta_vol3D(array_idx)%states) ) deallocate(self%meta_vol3D(array_idx)%states)
+            allocate(self%meta_vol3D(array_idx)%states(self%nstates3D))
+            n_valid_states3D = 0
+            do istate3D = 1, self%nstates3D
+                if( .not. spproj%isthere_in_osout('vol', istate3D) ) cycle
+                call spproj%get_vol('vol', istate3D, volpath, smpd3D, box3D)
+                if( volpath%strlen() == 0 ) cycle
+                n_valid_states3D = n_valid_states3D + 1
+                pop3D = spproj%os_ptcl3D%get_pop(istate3D, 'state')
+                if( l_final ) then
+                    volpath_out   = volpath
+                    lppath        = add2fbody(volpath, MRC_EXT, LP_SUFFIX)
+                    pprocpath     = add2fbody(volpath, MRC_EXT, PPROC_SUFFIX)
+                    if( .not. file_exists(pprocpath) ) pprocpath = string('')
+                    if( pprocpath%strlen() > 0 ) then
+                        pprocmirrpath = add2fbody(pprocpath, MRC_EXT, MIRR_SUFFIX)
+                        if( .not. file_exists(pprocmirrpath) ) pprocmirrpath = string('')
+                    else
+                        pprocmirrpath = string('')
+                    end if
+                else
+                    ! non-final stages only ever get a per-stage lowpass snapshot,
+                    ! e.g. recvol_state01_stage03_lp.mrc (simple_abinitio_utils exec_refine3D);
+                    ! volpath/pprocpath/pprocmirrpath are final-only products, withheld here
+                    volpath_out   = string('')
+                    lppath        = add2fbody(volpath, MRC_EXT, '_stage'//int2str_pad(nstage2D,2)//LP_SUFFIX)
+                    pprocpath     = string('')
+                    pprocmirrpath = string('')
+                end if
+                if( .not. file_exists(lppath) ) lppath = string('')
+                ! orthogonal reprojections + orientation-distribution heatmap jpegs, written
+                ! alongside the volume (mirrors simple_stream_p07_abinitio3D_multistate's locate_state_jpeg)
+                reprojpath = get_fpath(volpath) // string('orthogonal_reprojs_state') // int2str_pad(istate3D,2) // JPG_EXT
+                if( .not. file_exists(reprojpath) ) then
+                    reprojpath = string('')
+                else if( .not. l_final ) then
+                    ! shared filename gets overwritten by the next stage; copy it out so
+                    ! this stage's reprojections remain available, e.g. ..._state01_stage03.jpg
+                    reprojpath_stage = add2fbody(reprojpath, JPG_EXT, '_stage'//int2str_pad(nstage2D,2))
+                    call simple_copy_file(reprojpath, reprojpath_stage)
+                    reprojpath = reprojpath_stage
+                end if
+                oridistpath = get_fpath(volpath) // refine3D_oris_heatmap_fname(istate3D)
+                if( .not. file_exists(oridistpath) ) then
+                    oridistpath = string('')
+                else if( .not. l_final ) then
+                    ! shared filename gets overwritten by the next stage; copy it out so
+                    ! this stage's heatmap remains available, e.g. ..._state01_stage03.jpg
+                    oridistpath_stage = add2fbody(oridistpath, JPG_EXT, '_stage'//int2str_pad(nstage2D,2))
+                    call simple_copy_file(oridistpath, oridistpath_stage)
+                    oridistpath = oridistpath_stage
+                end if
+                call self%meta_vol3D(array_idx)%states(n_valid_states3D)%new(GUI_METADATA_VOL3D_TYPE)
+                l_have_fsc = .false.
+                res0143    = 0.
+                res05      = 0.
+                cfar       = 0.0
+                if( spproj%isthere_in_osout('fsc', istate3D) ) then
+                    call spproj%get_fsc(istate3D, fsc_fname, fsc_box)
+                    if( fsc_fname%strlen() > 0 ) then
+                        if( file_exists(fsc_fname) ) then
+                            fsc_arr    = file2rarr(fsc_fname)
+                            res_arr    = get_resarr(fsc_box, smpd3D)
+                            call get_resolution(fsc_arr, res_arr, res05, res0143)
+                          !  call spproj%get_vol_cfar(cfar, istate3D)
+                            l_have_fsc = .true.
+                        end if
+                    end if
+                end if
+                if( l_have_fsc ) then
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set(reprojpath, volpath_out, pprocpath, lppath, pprocmirrpath, &
+                        &istate3D, box3D, smpd3D, n_valid_states3D, self%nstates3D, res0143=res0143, res05=res05, cfar=cfar, pop=pop3D, oridistpath=oridistpath)
+                    n_fsc_pts = min(size(fsc_arr), 1000)
+                    allocate(invres_arr(n_fsc_pts))
+                    do k = 1, n_fsc_pts
+                        invres_arr(k) = 1.0 / res_arr(k)
+                    end do
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_fsc(invres_arr(1:n_fsc_pts), fsc_arr(1:n_fsc_pts))
+                    deallocate(invres_arr)
+                else
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set(reprojpath, volpath_out, pprocpath, lppath, pprocmirrpath, &
+                        &istate3D, box3D, smpd3D, n_valid_states3D, self%nstates3D, pop=pop3D, oridistpath=oridistpath)
+                end if
+                ! MRC header min/max, read once here so GUI consumers don't need to
+                ! reopen each volume file per request
+                if( volpath_out%strlen() > 0 ) then
+                    call get_mrc_minmax(volpath_out, minval3D, maxval3D)
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('volpath', minval3D, maxval3D)
+                end if
+                if( pprocpath%strlen() > 0 ) then
+                    call get_mrc_minmax(pprocpath, minval3D, maxval3D)
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('pprocpath', minval3D, maxval3D)
+                end if
+                if( lppath%strlen() > 0 ) then
+                    call get_mrc_minmax(lppath, minval3D, maxval3D)
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('lppath', minval3D, maxval3D)
+                end if
+                if( pprocmirrpath%strlen() > 0 ) then
+                    call get_mrc_minmax(pprocmirrpath, minval3D, maxval3D)
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('pprocmirrpath', minval3D, maxval3D)
+                end if
+                if( reprojpath%strlen() > 0 ) then
+                    do itile3D = 1, NTILES3D
+                        call reproj_tiles3D(itile3D)%new(GUI_METADATA_CAVG2D_TYPE)
+                        call reproj_tiles3D(itile3D)%set(path=reprojpath, mrcpath=volpath, idx=istate3D, &
+                            &sprite=sprite_sheet_pos(x=real(itile3D-1)*(100.0/real(NTILES3D-1)), y=0.0, h=100, w=100*NTILES3D), &
+                            &i=itile3D, i_max=NTILES3D, pop=pop3D)
+                    end do
+                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_reprojtiles(reproj_tiles3D)
+                end if
+                ! bin this state's particle orientations into the azimuth/elevation
+                ! histogram (mirrors simple_stream_p07_abinitio3D_multistate's compute_oridist_for_state)
+                oridist_hist3D = 0
+                do iptcl3D = 1, spproj%os_ptcl3D%get_noris()
+                    if( spproj%os_ptcl3D%get_state(iptcl3D) /= istate3D ) cycle
+                    normal3D    = spproj%os_ptcl3D%get_normal(iptcl3D)
+                    azimuth3D   = rad2deg(atan2(normal3D(2), normal3D(1)))
+                    elevation3D = rad2deg(asin(max(-1.0, min(1.0, normal3D(3)))))
+                    ix3D = min(72, max(1, floor((azimuth3D   + 180.0) / 5.0) + 1))
+                    iy3D = min(36, max(1, floor((elevation3D + 90.0)  / 5.0) + 1))
+                    oridist_hist3D(ix3D, iy3D) = oridist_hist3D(ix3D, iy3D) + 1
+                end do
+                call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_oridist(oridist_hist3D)
+            end do
+            ! trim unused (unassigned) slots left by states with no volume yet
+            if( n_valid_states3D < self%nstates3D ) then
+                allocate(vol3D_tmp(n_valid_states3D))
+                vol3D_tmp = self%meta_vol3D(array_idx)%states(1:n_valid_states3D)
+                call move_alloc(vol3D_tmp, self%meta_vol3D(array_idx)%states)
+            end if
+        end if
+    end if
 
   end subroutine set
 
@@ -434,8 +636,9 @@ contains
     class(gui_metadata_project), intent(inout) :: self
     type(json_core)                            :: json
     type(json_value),             pointer      :: json_ptr, json_mics_ptr, json_cls2D_ptr, json_stage_ptr, json_ptcls_ptr
+    type(json_value),             pointer      :: json_cls3D_ptr
     type(string)                               :: stage_key
-    integer                                    :: i_mic, i_stage2D, i_ptcl
+    integer                                    :: i_mic, i_stage2D, i_stage3D, i_state3D, i_ptcl
     logical                                    :: l_add
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( self%l_assigned ) then
@@ -538,6 +741,33 @@ contains
           call json%add(json_ptr, json_cls2D_ptr)
         else
           call json%destroy(json_cls2D_ptr)
+        endif
+      endif
+      ! Add cls3D section if available
+      if( allocated(self%meta_vol3D) ) then
+        l_add = .false.
+        call json%create_object(json_cls3D_ptr, 'cls3D')
+        do i_stage3D=1, size(self%meta_vol3D)
+          if( self%meta_vol3D(i_stage3D)%is_final ) then
+            stage_key = 'final'
+          else
+            stage_key = 'stage' // int2str(i_stage3D)
+          end if
+          call json%create_array(json_stage_ptr, stage_key%to_char())
+          if( allocated(self%meta_vol3D(i_stage3D)%states) ) then
+            do i_state3D=1, size(self%meta_vol3D(i_stage3D)%states)
+              if( self%meta_vol3D(i_stage3D)%states(i_state3D)%assigned() ) then
+                l_add = .true.
+                call json%add(json_stage_ptr, self%meta_vol3D(i_stage3D)%states(i_state3D)%jsonise())
+              endif
+            enddo
+          endif
+          call json%add(json_cls3D_ptr, json_stage_ptr)
+        enddo
+        if( l_add ) then
+          call json%add(json_ptr, json_cls3D_ptr)
+        else
+          call json%destroy(json_cls3D_ptr)
         endif
       endif
     else

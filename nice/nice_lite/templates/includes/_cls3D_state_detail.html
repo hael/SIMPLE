@@ -1,0 +1,42 @@
+{% comment %}
+  _cls3D_state_detail.html — volume viewer + reprojections/FSC/orientation-distribution
+  detail panel for a set of 3D volume states. Requires `states` (list of state
+  entries: state, reprojtiles, fsc_invres/fsc_corr/res0143/res05, oridistpath,
+  oridist) and `volume_outputs` in context. Used by the streaming multistate zoom
+  page (states=jobstats.state_volumes) and the non-streaming per-stage cls3D
+  panel (states=<currently selected stage's states>, see _cls3D_viewer.html).
+{% endcomment %}
+{% if states|length > 0 %}
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p data-volume-panel-title class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volume · state {{ states.0.state }}</p>
+</div>
+<div class="flex flex-row h-full w-full min-h-0">
+    <div class="flex flex-1 min-h-0">
+        {% if volume_outputs %}
+            {% include 'includes/_cls3D_volume_viewer.html' %}
+        {% else %}
+            <div class="flex flex-1 items-center justify-center">
+                <p class="text-[10px] text-streamlabel">no volume output is available yet</p>
+            </div>
+        {% endif %}
+    </div>
+    <div class="flex w-min flex-col overflow-y-auto">
+        <div class="flex items-center px-4 pt-3 flex-shrink-0">
+            <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">REPROJECTIONS</p>
+        </div>
+        {% include 'includes/_cls3D_state_reprojections.html' with states=states %}
+        <div class="flex items-center px-4 pt-3 flex-shrink-0">
+            <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">FSC</p>
+        </div>
+        {% include 'includes/_cls3D_state_FSC.html' with states=states %}
+        <div class="flex items-center px-4 pt-3 flex-shrink-0">
+            <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">ORIENTATION DISTRIBUTION</p>
+        </div>
+        {% include 'includes/_cls3D_state_oridist.html' with states=states %}
+        <div class="flex items-center px-4 pt-3 flex-shrink-0">
+            <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">ORIENTATION DISTRIBUTION 2</p>
+        </div>
+        {% include 'includes/_cls3D_state_oridist_2.html' with states=states %}
+    </div>
+</div>
+{% endif %}

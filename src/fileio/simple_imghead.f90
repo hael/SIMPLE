@@ -28,7 +28,7 @@ use simple_tifflib
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
-public :: test_imghead, find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info
+public :: test_imghead, find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info, get_mrc_minmax
 public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141
 private
 #include "simple_local_flags.inc"
@@ -1322,6 +1322,32 @@ contains
             THROW_HARD('file: '//fname%to_char()//' does not exists')
         endif
     end subroutine get_mrcfile_info
+
+    !>  \brief  Return an MRC file's header-recorded minimum/maximum density
+    !!          values (dmin/dmax) without reading any voxel data. Used by the
+    !!          GUI metadata pipeline to expose per-volume intensity ranges
+    !!          once at generation time instead of re-reading each file's
+    !!          header on every GUI request. minval/maxval are 0.0 if fname
+    !!          does not exist.
+    subroutine get_mrc_minmax( fname, minval, maxval )
+        class(string), intent(in)  :: fname
+        real,          intent(out) :: minval, maxval
+        class(imghead), allocatable :: hed
+        integer :: filnum, ios
+        minval = 0.
+        maxval = 0.
+        if( .not. file_exists(fname) ) return
+        allocate(MrcImgHead :: hed)
+        call hed%new
+        call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
+        call fileiochk(" get_mrc_minmax fopen error "//fname%to_char(),ios)
+        call hed%read(filnum)
+        call fclose(filnum)
+        minval = hed%getMinPixVal()
+        maxval = hed%getMaxPixVal()
+        call hed%kill
+        deallocate(hed)
+    end subroutine get_mrc_minmax
 
     !>  \brief is for gettign a part of the info in a SPIDER image header
     subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )

@@ -184,7 +184,7 @@ contains
             ! update GUI
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('out',   params%projfile)
-            call gui_comm%add_metadata(spproj, oritype='cls2D', stage2D=istage)
+            call gui_comm%add_metadata(spproj, oritype='cls2D', stage=istage)
         enddo
         if( l_checkpoint .and. stop_stage < nstages )then
             last_iter = cline_cluster2D%get_iarg('endit')
@@ -224,7 +224,7 @@ contains
         ! final update GUI
         call spproj%read_segment('cls2D', params%projfile)
         call spproj%read_segment('out',   params%projfile)
-        call gui_comm%add_metadata(spproj, oritype='cls2D', stage2D=0, selection=.true.) ! stage2D=0 signifies final
+        call gui_comm%add_metadata(spproj, oritype='cls2D', stage=0, selection=.true.) ! stage=0 signifies final
         ! cleanup
         call del_file('start2Drefs'//params%ext%to_char())
         call del_file('start2Drefs_even'//params%ext%to_char())

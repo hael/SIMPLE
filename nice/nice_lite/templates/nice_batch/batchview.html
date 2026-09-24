@@ -28,7 +28,6 @@
     error   — optional error text for the logs panel (stderr.log tail)
     arguments — list of {key, label, value, origin, submitted} for the arguments panel
     submitted_argument_count — count of user-submitted arguments
-    volume_viewer_requested — whether to show the abinitio3D volume viewer
     volume_outputs — browser-safe metadata for owned abinitio3D result volumes
 {% endcomment %}
 {% load static %}
@@ -38,6 +37,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+            crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"
+            crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"
+            crossorigin="anonymous" defer></script>
     {% if volume_outputs %}
         <link rel="stylesheet"
               href="https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.css"
@@ -112,13 +118,13 @@
                     <span>2D classes</span>
                 </button>
             {% endif %}
-            {% if volume_viewer_requested %}
+            {% if "cls3D" in jobstats and jobstats.cls3D|length > 0 %}
                 <button type="button" class="job-panel-tab flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg text-[11px] font-medium transition-colors text-streamlabel hover:text-streamring hover:bg-streamring/10" data-panel-target="volume3D" onclick="showJobPanel(this)">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 flex-shrink-0">
                         <path d="M8 1.5 14 4.75v6.5L8 14.5l-6-3.25v-6.5L8 1.5Z"/>
                         <path d="M2 4.75 8 8l6-3.25M8 8v6.5"/>
                     </svg>
-                    <span>3D volume</span>
+                    <span>3D volumes</span>
                 </button>
             {% endif %}
         </div>
@@ -184,15 +190,13 @@
             </div>
 
             <!-- 3D volume panel -->
-            {% if volume_viewer_requested %}
-                <div data-panel="volume3D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
-                    <div class="flex flex-col h-full gap-2.5 w-full">
-                        <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
-                            {% include 'includes/_volume_viewer.html' with panel_title='3D volume' %}
-                        </div>
+            <div data-panel="volume3D" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
+                <div class="flex flex-col h-full gap-2.5 w-full">
+                    <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+                         {% include 'includes/_cls3D_viewer.html' with panel_title='3D volumes'%}
                     </div>
                 </div>
-            {% endif %}
+            </div>
         </div>
     </div>
 

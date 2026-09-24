@@ -507,10 +507,12 @@ class BatchViewTests(SimpleTestCase):
         batch_job = Mock()
         batch_job.get_log_tails.return_value = []
         batch_job.get_absdir.return_value = "/workspace/9_abinitio3D"
-        batch_job.get_volume_outputs.return_value = [{
+        batch_job.get_stage_volume_outputs.return_value = [{
             "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
             "name": "recvol_state01.mrc",
+            "stage": "1",
             "state": 1,
+            "kind": "volpath",
             "width": 256,
             "height": 256,
             "depth": 256,
@@ -561,12 +563,14 @@ class BatchViewTests(SimpleTestCase):
         jobmodel = SimpleNamespace(
             status="finished",
             prog="abinitio3D",
+            master_stats={},
         )
         batch_job = Mock()
         batch_job.get_volume_outputs.return_value = [{
             "name": "recvol_state01.mrc",
             "path": volume_path,
         }]
+        batch_job.get_stage_volume_outputs.return_value = []
 
         with patch.object(
             batch_views,
@@ -594,12 +598,14 @@ class BatchViewTests(SimpleTestCase):
         jobmodel = SimpleNamespace(
             status="finished",
             prog="abinitio3D",
+            master_stats={},
         )
         batch_job = Mock()
         batch_job.get_volume_outputs.return_value = [{
             "name": "recvol_state01.mrc",
             "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
         }]
+        batch_job.get_stage_volume_outputs.return_value = []
 
         with patch.object(
             batch_views,

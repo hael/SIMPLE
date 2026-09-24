@@ -36,7 +36,7 @@
                             </span>
                         </td>
                         <td class="py-2 pr-3 text-streamtext font-medium">
-                            <a href="{% if job.prog == 'manualpick' %}{% url 'nice_lite:view_batch_manual_picker' job.id %}{% else %}{% url 'nice_lite:view_batch' job.id %}{% if job.status == 'finished' and job.prog == 'abinitio2D' %}?class_selector=1{% elif job.status == 'finished' and job.prog == 'abinitio3D' %}?volume_viewer=1#batch_volume_viewer{% endif %}{% endif %}" target="_parent" class="hover:text-streamring transition-colors">
+                            <a href="{% if job.prog == 'manualpick' %}{% url 'nice_lite:view_batch_manual_picker' job.id %}{% else %}{% url 'nice_lite:view_batch' job.id %}{% if job.status == 'finished' and job.prog == 'abinitio2D' %}?class_selector=1{% elif job.status != 'queued' and job.prog == 'abinitio3D' %}?volume_viewer=1#batch_volume_viewer{% endif %}{% endif %}" target="_parent" class="hover:text-streamring transition-colors">
                                 {{ job.disp }} {{ job.name }}
                             </a>
                         </td>

@@ -109,36 +109,36 @@ contains
         self%remote_active = .false.
     end subroutine kill_gui_communicator
 
-    subroutine add_metadata_1( self, spproj, oritype, stage2D, selection )
+    subroutine add_metadata_1( self, spproj, oritype, stage, selection )
         class(gui_communicator),    intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         character(len=*), optional, intent(in)    :: oritype
-        integer,          optional, intent(in)    :: stage2D
+        integer,          optional, intent(in)    :: stage
         logical,          optional, intent(in)    :: selection
         character(len=SHORTSTRLEN)                :: md_oritype
-        integer                                   :: i_stage2D
+        integer                                   :: i_stage
         logical                                   :: l_selection
         if( .not. self%is_active) return
-        i_stage2D = 1
+        i_stage = 1
         md_oritype = 'all'
         l_selection = .false.
         if( present(oritype)   ) md_oritype = oritype
-        if( present(stage2D)   ) i_stage2D = stage2D
+        if( present(stage)     ) i_stage = stage
         if( present(selection) ) l_selection = selection
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage2D, l_selection)
+        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage, l_selection)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
     end subroutine add_metadata_1
 
-    subroutine add_metadata_2( self, projfile, oritype, stage2D, selection )
+    subroutine add_metadata_2( self, projfile, oritype, stage, selection )
         class(gui_communicator),    intent(inout) :: self
         type(string),               intent(in)    :: projfile
         character(len=*), optional, intent(in)    :: oritype
-        integer,          optional, intent(in)    :: stage2D
+        integer,          optional, intent(in)    :: stage
         logical,          optional, intent(in)    :: selection
         type(sp_project)                          :: spproj
         character(len=SHORTSTRLEN)                :: md_oritype
-        integer                                   :: i_stage2D
+        integer                                   :: i_stage
         logical                                   :: l_selection
         if( .not. self%is_active        ) return
         if( .not. file_exists(projfile) ) return
@@ -160,12 +160,12 @@ contains
         end if
         call spproj%read_segment('projinfo', projfile)
         call spproj%read_segment('out',      projfile)
-        i_stage2D  = 1
+        i_stage    = 1
         md_oritype = 'all'
-        if( present(stage2D) ) i_stage2D  = stage2D
+        if( present(stage)   ) i_stage    = stage
         if( present(oritype) ) md_oritype = oritype
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage2D, l_selection)
+        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage, l_selection)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
         call spproj%kill()
     end subroutine add_metadata_2

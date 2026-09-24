@@ -63,6 +63,14 @@ class BatchJob(Job):
     ))
     MOVIE_THUMBNAIL_CACHE_DIR = ".nice_movie_thumbnails"
     MOVIE_THUMBNAIL_CACHE_VERSION = 2
+    # Path field, display label, in the order shown in the volume-kind toggle
+    # (mirrors stream_views._VOLUME_KINDS).
+    VOLUME_KINDS = (
+        ("volpath", "raw"),
+        ("lppath", "lowpass"),
+        ("pprocpath", "postprocessed"),
+        ("pprocmirrpath", "postprocessed mirror"),
+    )
 
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
@@ -769,6 +777,81 @@ class BatchJob(Job):
             output["state"] or 0,
             output["name"],
         ))
+
+    def get_stage_volume_outputs(self, jobstats):
+        """Return safe, per-stage/per-kind volume metadata sourced from cls3D project metadata.
+
+        Unlike get_volume_outputs (which only exposes the single final 'vol' record
+        read from the finished project), this reads every refine3D stage's already
+        stage-resolved volpath/lppath/pprocpath/pprocmirrpath from jobstats["cls3D"]
+        (written by the Fortran GUI-metadata pipeline), giving one entry per state
+        per stage per available kind. Only the filename is trusted from jobstats;
+        it is always re-resolved against this job's own directory via
+        _safe_job_file, so a path outside the job dir cannot be read. Dimensions/
+        voxel size/intensity range are sourced directly from the Fortran-written
+        metadata (box/smpd/<kind>_min/<kind>_max) rather than re-opening each MRC
+        file's header per request.
+        """
+        if self.prog != "abinitio3D":
+            return []
+        cls3d = jobstats.get("cls3D") if isinstance(jobstats, dict) else None
+        if not isinstance(cls3d, dict):
+            return []
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None:
+            return []
+
+        outputs = []
+        seen = set()
+        for stage_key, states in cls3d.items():
+            if not isinstance(states, list):
+                continue
+            for entry in states:
+                if not isinstance(entry, dict):
+                    continue
+                state = entry.get("state")
+                if isinstance(state, bool) or not isinstance(state, int):
+                    continue
+                box = entry.get("box")
+                smpd = entry.get("smpd")
+                if (
+                    isinstance(box, bool) or not isinstance(box, int) or box <= 0
+                    or isinstance(smpd, bool) or not isinstance(smpd, (int, float)) or smpd <= 0
+                ):
+                    continue
+                for kind, _label in self.VOLUME_KINDS:
+                    declared_path = entry.get(kind)
+                    if not isinstance(declared_path, str) or not declared_path.strip():
+                        continue
+                    minimum = entry.get(f"{kind}_min")
+                    maximum = entry.get(f"{kind}_max")
+                    if (
+                        isinstance(minimum, bool) or not isinstance(minimum, (int, float))
+                        or isinstance(maximum, bool) or not isinstance(maximum, (int, float))
+                    ):
+                        continue
+                    volume_name = os.path.basename(declared_path.strip())
+                    safe_path = self._safe_job_file(volume_name, job_dir)
+                    if safe_path is None:
+                        continue
+                    dedupe_key = (stage_key, state, kind)
+                    if dedupe_key in seen:
+                        continue
+                    seen.add(dedupe_key)
+                    outputs.append({
+                        "path": safe_path,
+                        "name": volume_name,
+                        "stage": stage_key,
+                        "state": state,
+                        "kind": kind,
+                        "width": box,
+                        "height": box,
+                        "depth": box,
+                        "voxel_size": (float(smpd), float(smpd), float(smpd)),
+                        "minimum": float(minimum),
+                        "maximum": float(maximum),
+                    })
+        return outputs
 
     def get_particle_stack_page(self, page=1, page_size=40):
         """Return one page of addressable images from owned output stacks.

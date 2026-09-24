@@ -39,6 +39,7 @@ use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOUL
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_commanders_cavgs,     only: commander_model_cavgs_rejection
 use simple_gui_utils,            only: mrc2jpeg_tiled
+use simple_imghead,              only: get_mrc_minmax
 use simple_qsys_env,             only: qsys_env
 use simple_refine3D_fnames,      only: refine3D_oris_heatmap_fname
 use simple_stream_state,         only: ipc_pipe_abinitio3D_multstate_in
@@ -391,6 +392,7 @@ contains
             subroutine build_and_send_vol3D_states
                 integer                      :: istate, my_pop, my_box, n_fsc_pts, k, fsc_box
                 real                         :: my_smpd, res0143, res05
+                real                         :: minval3D, maxval3D
                 type(string)                 :: volpath, fsc_fname, pprocpath, lppath, pprocmirrpath, reprojpath, oridistpath
                 real,          allocatable   :: fsc_arr(:), res_arr(:), invres_arr(:)
                 integer                      :: hist(72, 36) ! matches gui_metadata_vol3D's ORIDIST_NBINS_X x ORIDIST_NBINS_Y (5-degree bins)
@@ -444,6 +446,22 @@ contains
                         call meta_states_vol3D(istate)%set(reprojpath, volpath, pprocpath, lppath, pprocmirrpath, &
                             &istate, my_box, my_smpd, istate, NSTATES3D, pop=my_pop, oridistpath=oridistpath)
                     endif
+                    ! MRC header min/max, read once here so GUI consumers don't need to
+                    ! reopen each volume file per request
+                    call get_mrc_minmax(volpath, minval3D, maxval3D)
+                    call meta_states_vol3D(istate)%set_minmax('volpath', minval3D, maxval3D)
+                    if( pprocpath%strlen() > 0 ) then
+                        call get_mrc_minmax(pprocpath, minval3D, maxval3D)
+                        call meta_states_vol3D(istate)%set_minmax('pprocpath', minval3D, maxval3D)
+                    end if
+                    if( lppath%strlen() > 0 ) then
+                        call get_mrc_minmax(lppath, minval3D, maxval3D)
+                        call meta_states_vol3D(istate)%set_minmax('lppath', minval3D, maxval3D)
+                    end if
+                    if( pprocmirrpath%strlen() > 0 ) then
+                        call get_mrc_minmax(pprocmirrpath, minval3D, maxval3D)
+                        call meta_states_vol3D(istate)%set_minmax('pprocmirrpath', minval3D, maxval3D)
+                    end if
                     if( l_have_fsc ) then
                         n_fsc_pts = min(size(fsc_arr), 1000) ! matches gui_metadata_vol3D's MAX_FSC_VOL3D
                         allocate(invres_arr(n_fsc_pts))

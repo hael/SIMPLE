@@ -1,0 +1,84 @@
+{% comment %}
+  _cls3D_viewer.html — titled panel for non-streaming per-stage 3D volumes.
+  Expects `jobstats.cls3D` (dict of stage key -> list of state entries, mirroring
+  jobstats.cls2D) or `jobstats.state_volumes` (streaming, flat list) in context,
+  plus `cls3d_stages` (batch only: list of {key, states, volume_outputs,
+  volume_kinds}, one entry per cls3D stage - see _batch_overview_context/
+  _cls3d_stages in batch_views.py) so each stage's own volumes drive its Mol*
+  viewer instead of the whole job's. The state tile list, "stage" selector, and
+  per-stage grouping/JS all live in _cls3D_state_selector.html; volume/FSC/
+  reprojection/orientation-distribution detail lives in _cls3D_state_detail.html,
+  rendered once per stage below (all stages present in the DOM, toggled in sync
+  with the stage selector via selectCls3DStage(), defaulting to the last stage).
+  Bundled JS mirrors zoomabinitio3Dmultistate.html's volume-selection/kind-
+  switching wiring (parseAttr/applyVolumeSelection/selectVolumeKind) and triggers
+  buildFsc()/buildOridist() (defined in _cls3D_state_FSC.html/
+  _cls3D_state_oridist_2.html) on load; the streaming page's idle-reload logic
+  is intentionally omitted since this panel is used on the static, non-streaming
+  batch job view.
+{% endcomment %}
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+</div>
+<div class="flex flex-row flex-1 h-full w-full">
+    {% include 'includes/_cls3D_state_selector.html' %}
+    <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+        {% if "cls3D" in jobstats %}
+            {% for stage in cls3d_stages %}
+                <div class="cls3dstagedetail flex flex-1 flex-col h-full min-h-0{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
+                    {% include 'includes/_cls3D_state_detail.html' with states=stage.states volume_outputs=stage.volume_outputs volume_kinds=stage.volume_kinds %}
+                </div>
+            {% endfor %}
+        {% elif "state_volumes" in jobstats %}
+            {% include 'includes/_cls3D_state_detail.html' with states=jobstats.state_volumes %}
+        {% endif %}
+    </div>
+</div>
+<script>
+    // Parse a JSON array/number stored in a data-* attribute (Python repr may use single quotes);
+    // consumed by buildFsc()/buildOridist(), defined in _cls3D_state_FSC.html/_cls3D_state_oridist_2.html.
+    const parseAttr = (str) => JSON.parse((str || "[]").replaceAll("'", '"'));
+
+    let currentVolumeKind = "volpath";
+
+    // Batch renders one .cls3dstagedetail panel per cls3D stage (all present in the DOM,
+    // only one visible at a time); streaming has no stage wrapper at all, so fall back to
+    // the whole document there. Keeps the volume-select/kind-button lookups below scoped
+    // to whichever stage is actually on screen instead of always the first one in the DOM.
+    const activeCls3DScope = () => document.querySelector(".cls3dstagedetail:not(.hidden)") || document;
+
+    // Pick the option matching the current state and kind, falling back to volpath, then
+    // any kind for that state (e.g. running stages only ever expose lppath).
+    const applyVolumeSelection = () => {
+        const volumeSelect = activeCls3DScope().querySelector("[data-volume-source]");
+        if (!volumeSelect) return;
+        const options = Array.from(volumeSelect.options);
+        const match = options.find((opt) => opt.dataset.volumeState == currentStateNum && opt.dataset.volumeKind == currentVolumeKind)
+            || options.find((opt) => opt.dataset.volumeState == currentStateNum && opt.dataset.volumeKind == "volpath")
+            || options.find((opt) => opt.dataset.volumeState == currentStateNum);
+        if (match && volumeSelect.value !== match.value) {
+            volumeSelect.value = match.value;
+            volumeSelect.dispatchEvent(new Event("change"));
+        }
+    };
+
+    const selectVolumeKind = (element) => {
+        currentVolumeKind = element.dataset.volumeKind;
+        activeCls3DScope().querySelectorAll("button[data-volume-kind]").forEach((el) => {
+            const selected = el.dataset.volumeKind === currentVolumeKind;
+            el.classList.toggle("bg-streamring/20", selected);
+            el.classList.toggle("text-streamtext", selected);
+            el.classList.toggle("text-streamlabel", !selected);
+        });
+        applyVolumeSelection();
+    };
+
+    window.addEventListener("load", () => {
+        for (const canvas of document.getElementsByClassName("fsc_chart")) {
+            buildFsc(canvas);
+        }
+        for (const canvas of document.getElementsByClassName("oridist_chart")) {
+            buildOridist(canvas);
+        }
+    });
+</script>

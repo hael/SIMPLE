@@ -1,10 +1,12 @@
 {% comment %}
-  _volume3D_viewer.html — basic Mol* viewport for the abinitio3D_multistate zoom panel.
-  Expects `volume_outputs` (list of state/kind volume metadata dicts, see _state_volume_outputs)
-  and `volume_kinds` (list of {key, label} kinds present across volume_outputs, see
+  _cls3D_volume_viewer.html — basic Mol* viewport for 3D volume viewer panels.
+  Expects `volume_outputs` (list of state/kind volume metadata dicts) and
+  `volume_kinds` (list of {key, label} kinds present across volume_outputs, see
   _present_volume_kinds). Options carry `data-volume-state`/`data-volume-kind` so
-  selectState()/selectVolumeKind() in zoomabinitio3Dmultistate.html can switch the
-  displayed volume to match the currently selected state and path kind.
+  selectState()/selectVolumeKind() can switch the displayed volume to match the
+  currently selected state and path kind. Both streaming (_state_volume_outputs)
+  and non-streaming batch (BatchJob.get_stage_volume_outputs) entries carry a raw
+  `path`, served via the project-scoped nice_lite:volume route.
 {% endcomment %}
 <style>
     [data-basic-3d-viewer] > .msp-plugin {

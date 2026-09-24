@@ -1111,7 +1111,7 @@ contains
         if( params%oritype == 'mic') then
             call gui_comm%add_metadata(spproj, oritype='mic', selection=.true.)
         else if( params%oritype == 'cls2D') then
-            call gui_comm%add_metadata(spproj, oritype='cls2D', stage2D=0, selection=.true.)
+            call gui_comm%add_metadata(spproj, oritype='cls2D', stage=0, selection=.true.)
         endif
         if( l_writecls2d ) call spproj%cavgs2mrc()
         if( l_writestar ) then

@@ -27,7 +27,6 @@ from django.contrib.auth.decorators import login_required
 # local imports
 from ..models                    import WorkspaceModel
 from ..data_structures.batchjob  import BatchJob
-from ..data_structures.mrc       import read_mrc_volume_info
 from ..data_structures.project   import Project
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
@@ -68,7 +67,13 @@ _VOLUME_KINDS = (
 
 
 def _state_volume_outputs(jobstats):
-    """Return Mol*-ready metadata for each state's volume, one entry per available kind."""
+    """Return Mol*-ready metadata for each state's volume, one entry per available kind.
+
+    Dimensions/voxel size/intensity range are sourced directly from the
+    Fortran-written GUI metadata (box/smpd/<kind>_min/<kind>_max), recorded
+    once at metadata-generation time, rather than re-opening each MRC file's
+    header on every request.
+    """
     state_volumes = jobstats.get("state_volumes") if isinstance(jobstats, dict) else None
     if not isinstance(state_volumes, list):
         return []
@@ -77,23 +82,34 @@ def _state_volume_outputs(jobstats):
     for entry in state_volumes:
         if not isinstance(entry, dict):
             continue
+        box = entry.get("box")
+        smpd = entry.get("smpd")
+        if (
+            isinstance(box, bool) or not isinstance(box, int) or box <= 0
+            or isinstance(smpd, bool) or not isinstance(smpd, (int, float)) or smpd <= 0
+        ):
+            continue
         for kind, _label in _VOLUME_KINDS:
             path = entry.get(kind)
             if not isinstance(path, str) or not path.strip():
                 continue
-            info = read_mrc_volume_info(path)
-            if info is None:
+            minimum = entry.get(f"{kind}_min")
+            maximum = entry.get(f"{kind}_max")
+            if (
+                isinstance(minimum, bool) or not isinstance(minimum, (int, float))
+                or isinstance(maximum, bool) or not isinstance(maximum, (int, float))
+            ):
                 continue
             outputs.append({
                 "path": path,
                 "kind": kind,
                 "state": entry.get("state"),
-                "width": info.width,
-                "height": info.height,
-                "depth": info.depth,
-                "voxel_size": info.voxel_size,
-                "minimum": info.minimum,
-                "maximum": info.maximum,
+                "width": box,
+                "height": box,
+                "depth": box,
+                "voxel_size": (float(smpd), float(smpd), float(smpd)),
+                "minimum": float(minimum),
+                "maximum": float(maximum),
             })
     return outputs
 

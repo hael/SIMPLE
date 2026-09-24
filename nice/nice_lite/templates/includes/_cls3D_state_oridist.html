@@ -1,0 +1,22 @@
+{% comment %}
+  _cls3D_state_oridist.html — per-state orientation-distribution image panel for
+  the 3D volume viewer. Requires `states` (state, oridistpath) - callers must
+  pass it explicitly (e.g. `with states=jobstats.state_volumes`); a `default`
+  filter fallback isn't used here since resolving a filter argument that
+  references a wholly-absent dict key raises an uncaught VariableDoesNotExist.
+  Panel visibility is toggled by selectState() in _cls3D_state_selector.html
+  via data-state-panel; no dedicated JS of its own.
+{% endcomment %}
+<div class="flex flex-wrap gap-2 p-4">
+    {% for state in states %}
+    <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
+        {% if state.oridistpath %}
+        <span class="relative block w-[400px] overflow-hidden rounded bg-black mt-1">
+            <img src="{% url 'nice_lite:image' state.oridistpath %}" loading="lazy" decoding="async"
+                class="block w-full h-auto"
+                alt="state {{ state.state }} orientation distribution">
+        </span>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>

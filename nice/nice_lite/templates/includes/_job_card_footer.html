@@ -12,7 +12,7 @@
     <!-- View -->
     <form method="GET" action="{% if job.prog == 'manualpick' %}{% url 'nice_lite:view_batch_manual_picker' job.id %}{% else %}{% url 'nice_lite:view_batch' job.id %}{% endif %}" target="_parent" class="viewform hidden">
         {% csrf_token %}
-        {% if job.status == "finished" and job.prog == "abinitio3D" %}
+        {% if job.status != "queued" and job.prog == "abinitio3D" %}
             <input type="hidden" name="volume_viewer" value="1">
         {% endif %}
     </form>

@@ -1,0 +1,105 @@
+{% comment %}
+  _cls3D_state_selector.html — clickable state tile list for 3D volume viewers.
+  Two contexts:
+   - streaming multistate zoom page: flat `jobstats.state_volumes` (reprojtiles).
+     selectState() drives data-state-selector/data-state-panel/data-volume-panel-title
+     and calls the page's applyVolumeSelection()/lastinteraction when present.
+   - non-streaming per-stage panel (_cls3D_viewer.html): `cls3d_stages` (list of
+     {key, states, volume_outputs, volume_kinds}, one entry per cls3D stage - see
+     _batch_overview_context/_cls3d_stages in batch_views.py), grouped into
+     .cls3dstagegroup tile groups AND .cls3dstagedetail detail panels (in
+     _cls3D_viewer.html), both toggled by the "stage" <select> via
+     selectCls3DStage().
+{% endcomment %}
+<div class="flex w-min mx-[10px] flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-y-auto">
+    {% if "cls3D" in jobstats %}
+    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+        <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volumes</p>
+        <div class="m-auto">
+            <label for="cls3d-stage-select" class="text-[10px] text-streamlabel px-2">stage</label>
+            <select id="cls3d-stage-select" class="text-[10px] text-streamlabel" onchange="selectCls3DStage(this)">
+                {% for stage in cls3d_stages %}
+                    <option value="{{ stage.key }}"{% if forloop.last %} selected{% endif %}>{{ stage.key }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div id="cls3d_state_slider" class="flex flex-wrap gap-2 p-4">
+        {% for stage in cls3d_stages %}
+        <div class="cls3dstagegroup flex flex-wrap gap-2{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
+            {% for state in stage.states %}
+            <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
+                 class="flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
+                <p class="mt-1 w-full text-[9px] text-streamlabel">
+                    <strong class="text-streamtext">state {{ state.state }}</strong>
+                </p>
+                {% if state.reprojtiles %}
+                <div class="flex w-full gap-1">
+                    {% include 'includes/_reproj_tile.html' with tile=state.reprojtiles.0 state=state %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    {% elif "state_volumes" in jobstats and jobstats.state_volumes|length > 0 %}
+    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+        <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volumes</p>
+    </div>
+    <div class="flex flex-wrap gap-2 p-4">
+        {% for state in jobstats.state_volumes %}
+        <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
+             class="flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
+            <p class="mt-1 w-full text-[9px] text-streamlabel">
+                <strong class="text-streamtext">state {{ state.state }}</strong>
+            </p>
+            {% if state.reprojtiles %}
+            <div class="flex w-full gap-1">
+                {% include 'includes/_reproj_tile.html' with tile=state.reprojtiles.0 state=state %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+<script>
+    let currentStateNum = "1";
+
+    const selectState = (element) => {
+        currentStateNum = element.dataset.stateSelector;
+        document.querySelectorAll("[data-state-selector]").forEach((el) => {
+            const selected = el.dataset.stateSelector == currentStateNum;
+            el.classList.toggle("border-streamring", selected);
+            el.classList.toggle("bg-streamring/10", selected);
+            el.classList.toggle("border-streamline", !selected);
+            el.classList.toggle("bg-streambg", !selected);
+        });
+        document.querySelectorAll("[data-state-panel]").forEach((el) => {
+            el.classList.toggle("hidden", el.dataset.statePanel != currentStateNum);
+        });
+        const volumeScope = document.querySelector(".cls3dstagedetail:not(.hidden)") || document;
+        const volumePanelTitle = volumeScope.querySelector("[data-volume-panel-title]");
+        if (volumePanelTitle) volumePanelTitle.textContent = `volume · state ${currentStateNum}`;
+        // applyVolumeSelection()/lastinteraction only exist on the streaming zoom page.
+        if (typeof applyVolumeSelection === "function") applyVolumeSelection();
+        if (typeof lastinteraction !== "undefined") lastinteraction = Date.now();
+    };
+
+    const selectCls3DStage = (select) => {
+        const slider = document.getElementById("cls3d_state_slider");
+        if (slider) {
+            for (const group of slider.querySelectorAll(".cls3dstagegroup")) {
+                group.classList.toggle("hidden", group.dataset.stage !== select.value);
+            }
+        }
+        // .cls3dstagedetail panels (volume/FSC/reprojections/oridist) live in _cls3D_viewer.html.
+        document.querySelectorAll(".cls3dstagedetail").forEach((panel) => {
+            panel.classList.toggle("hidden", panel.dataset.stage !== select.value);
+        });
+        // Re-sync the newly-visible stage's volume <select> to the current state/kind.
+        if (typeof applyVolumeSelection === "function") applyVolumeSelection();
+    };
+</script>
+

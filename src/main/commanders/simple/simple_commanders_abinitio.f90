@@ -13,6 +13,8 @@ use simple_commanders_rec,          only: commander_rec3D
 use simple_cluster_seed,            only: gen_labelling
 use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
+use simple_gui_communicator,        only: gui_communicator
+
 implicit none
 
 public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_conditional_restarts
@@ -609,7 +611,7 @@ contains
         type(string),       allocatable :: external_refs(:), external_checkpoint(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
-        type(simple_nice_comm)          :: nice_comm
+        type(gui_communicator)          :: gui_comm
         real    :: lprange(2)
         integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
         integer :: nstates_in_project, split_stage, last_stage, pose_init_iter
@@ -686,6 +688,7 @@ contains
         endif
         ! make master parameters
         call params%new(cline)
+        call gui_comm%new(params)
         write(logfhandle,'(A,A)') '>>> ABINITIO3D PARTICLE SOURCE: ', trim(params%ptcl_src)
         l_state_continue_mode = l_state_continue
         if( trim(params%multivol_mode).eq.'independent' )then
@@ -724,9 +727,6 @@ contains
             params%nstates = 1
             call cline%delete('nstates')
         endif
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         ! read project
         call spproj%read(params%projfile)
         ! A fresh abinitio3D never continues another run's sigma2 estimate: a
@@ -759,9 +759,6 @@ contains
         endif
         if( trim(params%cavg_ini).eq.'yes' )then
             if( last_stage < abinitio_nstages_ini3D() - 1 ) THROW_HARD('nstages must be >= first executable abinitio3D stage')
-            ! nice
-            nice_comm%stat_root%stage = "initialising 3D volume from class averages"
-            call nice_comm%cycle()
             ! execution
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
@@ -770,9 +767,6 @@ contains
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
         endif
-        ! nice
-        nice_comm%stat_root%stage = "preparing workflow"
-        call nice_comm%cycle()
         ! initialization on class averages done outside this workflow (externally)?
         l_cavg_ini_ext = trim(params%cavg_ini_ext).eq.'yes'
         if( l_cavg_ini_ext )then
@@ -987,23 +981,7 @@ contains
         endif
         ! Frequency marching
         call print_states(params, 0)
-        ! nice
-        nice_comm%stat_root%stage = "starting workflow"
-        call nice_comm%cycle()
         do istage = start_stage, nstages_refine3D
-            ! nice
-             if( nice_comm%stop )then
-                ! termination
-                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                call spproj%kill
-                call qsys_cleanup(params)
-                call nice_comm%terminate(stop=.true.)
-                call simple_end('**** SIMPLE_ABINITIO3D USER STOP ****')
-                call EXIT(0)
-            endif
-            nice_comm%stat_root%stage = "running workflow"
-            call nice_comm%update_ini3D(stage=istage, number_states=nstates_glob, lp=lpinfo(istage)%lp) 
-            call nice_comm%cycle()
             ! Splitting stage of docked mode
             if( params%multivol_mode.eq.'docked' )then
                 if( istage == split_stage-1 )then
@@ -1048,8 +1026,6 @@ contains
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 call handoff_split_checkpoint_to_refine3D_states
                 l_states_handoff_complete = .true.
-                call nice_comm%update_ini3D(last_stage_completed=.true.)
-                call nice_comm%cycle()
                 exit
             endif
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
@@ -1067,9 +1043,12 @@ contains
             if( istage == abinitio_symsrch_stage() )then
                 call symmetrize(params, istage, spproj, params%projfile, xrec3D)
             endif
-            ! nice
-            call nice_comm%update_ini3D(last_stage_completed=.true.) 
-            call nice_comm%cycle()
+            ! update GUI
+            call spproj%read_segment('cls3D',  params%projfile)
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call spproj%read_segment('out',    params%projfile)
+            call gen_ortho_reprojs4viz(params, spproj)
+            call gui_comm%add_metadata(spproj, oritype='cls3D', stage=istage)
         enddo
         if( l_states_handoff_complete )then
             write(logfhandle,'(A)') &
@@ -1087,13 +1066,15 @@ contains
             write(logfhandle,'(A,I0)')'>>> ABINITIO3D EARLY STOP AFTER STAGE ', nstages_refine3D
             write(logfhandle,'(A)')'>>> FINAL ALL-PARTICLE RECONSTRUCTION SKIPPED'
         endif
-        ! termination
-        nice_comm%stat_root%stage = "terminating"
-        call nice_comm%cycle()
+        ! final update GUI
+        call spproj%read_segment('cls2D',  params%projfile)
+        call spproj%read_segment('ptcl3D', params%projfile)
+        call spproj%read_segment('out',    params%projfile)
+        call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true.) ! stage=0 signifies final
         ! cleanup
-        call nice_comm%terminate(export_project=spproj)
         call spproj%kill
         call qsys_cleanup(params)
+        call gui_comm%kill()
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
 

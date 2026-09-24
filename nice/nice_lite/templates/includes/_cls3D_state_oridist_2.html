@@ -1,0 +1,154 @@
+{% comment %}
+  _cls3D_state_oridist_2.html — per-state orientation-distribution heatmap panel
+  (azimuth/elevation canvas + colorbar) for the 3D volume viewer. Requires
+  `states` (state, oridist) - callers must pass it explicitly (e.g. `with
+  states=jobstats.state_volumes`); a `default` filter fallback isn't used here
+  since resolving a filter argument that references a wholly-absent dict key
+  raises an uncaught VariableDoesNotExist. Panel visibility is toggled by
+  selectState() in _cls3D_state_selector.html via data-state-panel. Relies on
+  the page's shared parseAttr() helper; buildOridist() is invoked by the main
+  template's window "load" handler for each ".oridist_chart" canvas.
+{% endcomment %}
+<div class="flex flex-wrap gap-2 p-4">
+    {% for state in states %}
+    <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
+        {% if state.oridist %}
+        <div class="flex items-stretch">
+            <canvas class="oridist_chart" width="440" height="260" data-oridist="{{ state.oridist }}"></canvas>
+            <canvas class="oridist_colorbar" width="70" height="260"></canvas>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+<script>
+    // Turbo-like colour ramp (dark navy -> blue -> cyan -> green -> yellow -> orange -> dark red) for t in [0, 1].
+    const TURBO_STOPS = [
+        [48, 18, 59], [65, 90, 196], [42, 160, 197], [34, 168, 132],
+        [122, 209, 81], [211, 221, 57], [239, 176, 36], [220, 84, 33], [122, 4, 3]
+    ];
+    const turboColor = (t) => {
+        const clamped = Math.min(Math.max(t, 0), 1);
+        const segT = clamped * (TURBO_STOPS.length - 1);
+        const i = Math.min(Math.floor(segT), TURBO_STOPS.length - 2);
+        const localT = segT - i;
+        const a = TURBO_STOPS[i], b = TURBO_STOPS[i + 1];
+        const mix = (k) => Math.round(a[k] + (b[k] - a[k]) * localT);
+        return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`;
+    };
+
+    // Unicode superscript digits, for "10^n" colorbar tick labels.
+    const SUPERSCRIPTS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+    const superscript = (n) => String(n).split("").map((d) => SUPERSCRIPTS[+d]).join("");
+
+    // Format a radian value as a fraction of π (e.g. -π/2, 3π/4), matching cryoSPARC axis labels.
+    const piLabel = (value) => {
+        if (Math.abs(value) < 1e-9) return "0";
+        const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+        let quarters = Math.round((value / Math.PI) * 4);
+        const sign = quarters < 0 ? "-" : "";
+        let num = Math.abs(quarters), den = 4;
+        const g = gcd(num, den) || 1;
+        num /= g; den /= g;
+        const piPart = num === 1 ? "π" : `${num}π`;
+        return den === 1 ? `${sign}${piPart}` : `${sign}${piPart}/${den}`;
+    };
+
+    // Vertical log-scale legend for the orientation-distribution heatmap ("# of images", cryoSPARC-style).
+    const drawOridistColorbar = (canvas, maxV) => {
+        if (!canvas || maxV <= 0) return;
+        const style = getComputedStyle(document.body);
+        const colorAxis = style.getPropertyValue("--color-streamtext").trim();
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width, h = canvas.height;
+        const barX = 4, barW = 16, barY0 = 10, barY1 = h - 30;
+        const barHeight = barY1 - barY0;
+        ctx.clearRect(0, 0, w, h);
+        for (let py = 0; py < barHeight; py++) {
+            ctx.fillStyle = turboColor(1 - py / barHeight);
+            ctx.fillRect(barX, barY0 + py, barW, 1);
+        }
+        ctx.strokeStyle = colorAxis;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX + 0.5, barY0 + 0.5, barW, barHeight);
+
+        ctx.fillStyle = colorAxis;
+        ctx.font = "9px sans-serif";
+        ctx.textBaseline = "middle";
+        const logMax = Math.log10(Math.max(maxV, 1));
+        const topPow = Math.max(1, Math.ceil(logMax));
+        for (let p = 0; p <= topPow; p++) {
+            if (Math.pow(10, p) > maxV * 1.05) continue;
+            const y = barY0 + barHeight * (1 - (logMax > 0 ? p / logMax : 0));
+            ctx.beginPath();
+            ctx.moveTo(barX + barW, y);
+            ctx.lineTo(barX + barW + 3, y);
+            ctx.stroke();
+            ctx.fillText(`10${superscript(p)}`, barX + barW + 6, y);
+        }
+
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.translate(w - 8, barY0 + barHeight / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText("# of images", 0, 0);
+        ctx.restore();
+    };
+
+    const buildOridist = (canvas) => {
+        const oridist = parseAttr(canvas.dataset.oridist); // [azimuth][elevation] bin counts, 5 degree bins
+        const nx = oridist.length;
+        const ny = nx > 0 ? oridist[0].length : 0;
+        const binWidth = (2 * Math.PI) / nx;  // radians per bin, azimuth -π..π
+        const binHeight = Math.PI / ny;       // radians per bin, elevation -π/2..π/2
+        let maxV = 0;
+        const points = [];
+        for (let ix = 0; ix < nx; ix++) {
+            for (let iy = 0; iy < ny; iy++) {
+                const v = oridist[ix][iy];
+                if (v > maxV) maxV = v;
+                points.push({ x: -Math.PI + (ix + 0.5) * binWidth, y: -Math.PI / 2 + (iy + 0.5) * binHeight, v });
+            }
+        }
+        const logMax = Math.log10(Math.max(maxV, 1));
+        const cellColor = (v) => (v <= 0 ? "#ffffff" : turboColor(logMax > 0 ? Math.log10(v) / logMax : 1));
+
+        const style = getComputedStyle(document.body);
+        const colorAxis = style.getPropertyValue("--color-streamtext").trim();
+        const tickOptions = { stepSize: Math.PI / 4, callback: piLabel, font: { size: 9 } };
+
+        new Chart(canvas.getContext("2d"), {
+            type: "matrix",
+            data: {
+                datasets: [{
+                    data: points,
+                    backgroundColor: (ctx) => cellColor(ctx.raw.v),
+                    // Stroke each cell in its own fill colour to paint over antialiasing seams at shared edges.
+                    borderColor: (ctx) => cellColor(ctx.raw.v),
+                    borderWidth: 1,
+                    // Size each cell to one 5 degree bin in scale pixel space, +1px to cover antialiasing seams between cells.
+                    width: ({ chart }) => Math.abs(chart.scales.x.getPixelForValue(binWidth) - chart.scales.x.getPixelForValue(0)) + 1,
+                    height: ({ chart }) => Math.abs(chart.scales.y.getPixelForValue(binHeight) - chart.scales.y.getPixelForValue(0)) + 1
+                }]
+            },
+            options: {
+                responsive: false,
+                scales: {
+                    x: {
+                        type: "linear", min: -Math.PI, max: Math.PI, ticks: tickOptions,
+                        title: { display: true, text: "Azimuth", font: { size: 10 }, color: colorAxis },
+                        grid: { display: false }, border: { color: colorAxis }
+                    },
+                    y: {
+                        type: "linear", min: -Math.PI / 2, max: Math.PI / 2, ticks: tickOptions,
+                        title: { display: true, text: "Elevation", font: { size: 10 }, color: colorAxis },
+                        grid: { display: false }, border: { color: colorAxis }
+                    }
+                },
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }
+            }
+        });
+
+        drawOridistColorbar(canvas.parentElement.querySelector(".oridist_colorbar"), maxV);
+    };
+</script>

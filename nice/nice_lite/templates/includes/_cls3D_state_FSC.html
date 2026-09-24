@@ -1,0 +1,78 @@
+{% comment %}
+  _cls3D_state_FSC.html — per-state FSC curve panel for the 3D volume viewer.
+  Requires `states` (state, fsc_invres, fsc_corr, res0143, res05) - callers must
+  pass it explicitly (e.g. `with states=jobstats.state_volumes`); a `default`
+  filter fallback isn't used here since resolving a filter argument that
+  references a wholly-absent dict key raises an uncaught VariableDoesNotExist.
+  Panel visibility is toggled by selectState() in _cls3D_state_selector.html
+  via data-state-panel. Relies on the page's shared parseAttr() helper.
+{% endcomment %}
+<div class="flex flex-wrap gap-2 p-4">
+    {% for state in states %}
+    <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
+        {% if state.fsc_invres %}
+        {% if state.res0143 or state.res05 %}
+        <p class="w-full text-[9px] text-streamlabel">
+            {% if state.res0143 %}<strong class="text-streamtext">{{ state.res0143|floatformat:1 }} Å</strong> @ 0.143{% endif %}
+            {% if state.res0143 and state.res05 %}&middot;{% endif %}
+            {% if state.res05 %}<strong class="text-streamtext">{{ state.res05|floatformat:1 }} Å</strong> @ 0.5{% endif %}
+        </p>
+        {% endif %}
+        <canvas class="fsc_chart" width="400" height="200"
+                data-invres="{{ state.fsc_invres }}"
+                data-corr="{{ state.fsc_corr }}"
+                {% if state.res0143 %}data-res0143="{{ state.res0143 }}"{% endif %}
+                {% if state.res05 %}data-res05="{{ state.res05 }}"{% endif %}></canvas>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+<script>
+    // Nearest FSC sample index to a given 1/resolution value, for placing a threshold line.
+    const nearestFscIndex = (invres, target) => invres.reduce(
+        (best, v, i) => (Math.abs(v - target) < Math.abs(invres[best] - target) ? i : best), 0
+    );
+
+    const buildFsc = (canvas) => {
+        const style = getComputedStyle(document.body);
+        const colorLine  = style.getPropertyValue("--color-streamring").trim();
+        const colorGrid  = style.getPropertyValue("--color-streamdivider").trim();
+        const colorLabel = style.getPropertyValue("--color-streamtext").trim();
+
+        const invres = parseAttr(canvas.dataset.invres);
+        const corr   = parseAttr(canvas.dataset.corr);
+        const labels = invres.map((v) => v.toFixed(3));
+
+        const annotations = {};
+        if (canvas.dataset.res0143) {
+            annotations.res0143 = {
+                type: "line", scaleID: "x", value: nearestFscIndex(invres, 1 / canvas.dataset.res0143),
+                borderColor: colorLine, borderWidth: 1, borderDash: [4, 4],
+                label: { display: true, content: `${Number(canvas.dataset.res0143).toFixed(1)} Å`, position: "start", font: { size: 8 }, backgroundColor: colorGrid, color: colorLabel, padding: 2 }
+            };
+        }
+        if (canvas.dataset.res05) {
+            annotations.res05 = {
+                type: "line", scaleID: "x", value: nearestFscIndex(invres, 1 / canvas.dataset.res05),
+                borderColor: colorLine, borderWidth: 1, borderDash: [2, 2],
+                label: { display: true, content: `${Number(canvas.dataset.res05).toFixed(1)} Å`, position: "end", font: { size: 8 }, backgroundColor: colorGrid, color: colorLabel, padding: 2 }
+            };
+        }
+
+        new Chart(canvas.getContext("2d"), {
+            type: "line",
+            options: {
+                responsive: false,
+                scales: {
+                    x: { ticks: { font: { size: 8 }, maxTicksLimit: 5 }, title: { display: true, text: "1/Å", font: { size: 8 } } },
+                    y: { min: 0, max: 1, ticks: { font: { size: 8 }, maxTicksLimit: 5 } }
+                },
+                plugins: { legend: { display: false }, annotation: { annotations } }
+            },
+            data: {
+                labels,
+                datasets: [{ data: corr, borderColor: colorLine, pointRadius: 0, borderWidth: 1.5, tension: 0 }]
+            }
+        });
+    };
+</script>
