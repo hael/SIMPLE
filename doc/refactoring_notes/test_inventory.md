@@ -73,10 +73,10 @@ script inspects.
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| socket_client | E+S | 12/10 | none | not run | none | socket | same name on both routes | platform (socket client/server role) |  |  |
-| socket_comm_distr | E | 11 | none | not run | none | socket | - | platform (socket client/server role) |  |  |
-| socket_io | E+S | 40/38 | none | not run | none | socket | same name on both routes | lib_project (needs assertion) or delete (no failure path; 6 production calls) |  |  |
-| socket_server | E+S | 26/24 | none | not run | none | socket | same name on both routes | platform (socket client/server role) |  |  |
+| socket_client | E+S | 12/10 | none | not run | none | socket | same name on both routes | platform (socket client/server role) | delete | Hans, 2026-09-23 (network): socket role program without assertions (endless server loop, sleeps) over simple_socket_comm/simple_distr_comm, which had no production caller; deleted with the modules and the network test category; the live TCP transport is tested in `IPC TCP socket` (unit_ipc) |
+| socket_comm_distr | E | 11 | none | not run | none | socket | - | platform (socket client/server role) | delete | Hans, 2026-09-23 (network): socket role program without assertions (endless server loop, sleeps) over simple_socket_comm/simple_distr_comm, which had no production caller; deleted with the modules and the network test category; the live TCP transport is tested in `IPC TCP socket` (unit_ipc) |
+| socket_io | E+S | 40/38 | none | not run | none | socket | same name on both routes | lib_project (needs assertion) or delete (no failure path; 6 production calls) | delete | Hans, 2026-09-23 (network): socket role program without assertions (endless server loop, sleeps) over simple_socket_comm/simple_distr_comm, which had no production caller; deleted with the modules and the network test category; the live TCP transport is tested in `IPC TCP socket` (unit_ipc) |
+| socket_server | E+S | 26/24 | none | not run | none | socket | same name on both routes | platform (socket client/server role) | delete | Hans, 2026-09-23 (network): socket role program without assertions (endless server loop, sleeps) over simple_socket_comm/simple_distr_comm, which had no production caller; deleted with the modules and the network test category; the live TCP transport is tested in `IPC TCP socket` (unit_ipc) |
 
 ## numerics
 
@@ -300,3 +300,7 @@ unit_numerics and `project records` of unit_project.
 | simd | 2026-09-23 | delete: simd timing, no assertions (was in CI) | - |
 | qsys_ctrl | 2026-09-23 | merge into unit_parallel: flag checks | `simple_qsys_ctrl_tester` (`qsys control`) |
 | qsys_env | 2026-09-23 | merge into unit_parallel: THROW_HARD checks | `simple_qsys_env_tester` (`qsys environment`) |
+| socket_client | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |
+| socket_comm_distr | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |
+| socket_io | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |
+| socket_server | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |

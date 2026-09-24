@@ -7,7 +7,6 @@ use simple_test_ui_geometry, only: construct_test_geometry_programs
 use simple_test_ui_highlevel,only: construct_test_highlevel_programs
 use simple_test_ui_io,       only: construct_test_io_programs
 use simple_test_ui_masks,    only: construct_test_masks_programs
-use simple_test_ui_network,  only: construct_test_network_programs
 use simple_test_ui_parallel, only: construct_test_parallel_programs
 use simple_test_ui_single,   only: construct_test_single_programs
 use simple_test_ui_stream,   only: construct_test_stream_programs
@@ -27,7 +26,6 @@ contains
         call construct_test_highlevel_programs(tsttab)
         call construct_test_io_programs(tsttab)
         call construct_test_masks_programs(tsttab)
-        call construct_test_network_programs(tsttab)
         call construct_test_parallel_programs(tsttab)
         call construct_test_single_programs(tsttab)
         call construct_test_stream_programs(tsttab)

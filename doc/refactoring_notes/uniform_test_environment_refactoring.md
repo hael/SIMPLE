@@ -1979,6 +1979,23 @@ in every run without a partition. `simple_getenv` gained `silent=` and
 the optional reads (`SIMPLE_QSYS_PARTITION`, `SIMPLE_EMAIL`, which has a
 default) in `qsys_env` and `update_compenv` use it.
 
+**network (2026-09-23, Hans: "agreed").** `socket_client`,
+`socket_server`, `socket_io` (both routes) and `socket_comm_distr` (exec)
+were role programs to run by hand, asserting nothing: an endless accept
+loop, a server thread that never ends with five 10 s sleeps, a 10 s
+sleep. What they drove was dead: `simple_distr_comm` (71 lines) had no
+caller and `simple_socket_comm` (298 lines) was used only by it; the TCP
+transport production uses is `simple_ipc_tcp_socket_*`, tested by the
+bounded localhost `IPC TCP socket` sub-suite of unit_ipc. Deleted: the
+four tests on both routes, the network test category
+(`simple_commanders_test_network`, `simple_test_exec_network`,
+`simple_test_ui_network` and their hooks in `simple_test_exec_api`,
+`simple_test_exec.f90`, `simple_ui_test_group`), the two modules, and
+`production/tests/test_socket_comm_distr.f90`, which had never been
+built (without the `simple_` prefix the CMake glob does not see it).
+`network` is no longer a `simple_test_exec` category. `nice` waits for
+the utils batch.
+
 ## 10. Fast-tier performance
 
 The 30 s budget will not be met by classification alone; the fast candidates
