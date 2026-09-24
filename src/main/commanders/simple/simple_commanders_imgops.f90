@@ -792,7 +792,7 @@ contains
         type(stack_io)   :: stkio_r, stkio_w
         real             :: ave, sdev, var, med, smpd_new, scale, smpd_sc
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
-        integer          :: istk, nstks, ptcl_fromp, ptcl_top
+        integer          :: istk, nstks, ptcl_fromp, ptcl_top, newbox
         integer          :: numlen
         type(string)     :: fname, stkin, stkout, ext
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -834,6 +834,7 @@ contains
             if( cline%defined('stk') )then
                 ! 2D
                 call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+                call parse_smpd_target
                 if( cline%defined('scale') .or. cline%defined('newbox') )then
                     call del_file(params%outstk)
                     ! Rescaling
@@ -872,6 +873,7 @@ contains
             else if( cline%defined('vol1') )then
                 ! 3D
                 call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+                call parse_smpd_target
                 if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
                 call build%vol%read(params%vols(1))
                 if( cline%defined('scale') .or. cline%defined('newbox') )then
@@ -909,6 +911,7 @@ contains
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('filetab') )then
                 call params%new(cline)
+                call parse_smpd_target
                 call read_filetable(params%filetab, filenames)
                 nfiles = size(filenames)
                 call find_ldim_nptcls(filenames(1),ldim,nframes)
@@ -969,6 +972,26 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
         call qsys_job_finished(params, string('simple_commanders_imgops :: exec_scale'))
-    end subroutine exec_scale
+        contains
+
+            subroutine parse_smpd_target()
+                if( cline%defined('smpd_target') )then
+                    if( cline%defined('scale')  ) THROW_HARD('SMPD_TARGET and SCALE are mutually exclusive')
+                    if( cline%defined('newbox') ) THROW_HARD('NEWBOX and SCALE are mutually exclusive')
+                    ! derive scaling parameters
+                    scale    = params%smpd / params%smpd_target
+                    newbox   = nint(real(params%box)*scale)
+                    newbox   = find_magic_box(newbox)
+                    scale    = real(newbox) / real(params%box)
+                    smpd_new = params%smpd / scale
+                    ! update command line and params
+                    call cline%set('scale',  scale)
+                    call cline%set('newbox', newbox)
+                    params%scale  = scale
+                    params%newbox = newbox
+                endif
+            end subroutine parse_smpd_target
+
+        end subroutine exec_scale
 
 end module simple_commanders_imgops

@@ -250,6 +250,8 @@ subroutine new_binarize( prgtab )
         ! parameter input/output
         call scale%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
+        call scale%add_input(UI_PARM, smpd_target, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call scale%add_input(UI_PARM, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0., &
         &visibility=UI_VIS_ADVANCED)
         call scale%add_input(UI_PARM, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1+)', '(0-1+)', .false., 1., &
