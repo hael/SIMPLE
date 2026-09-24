@@ -23,7 +23,7 @@ from django.utils import timezone
 from ..helpers import directory_exists, ensure_directory, analyse_heartbeat, print_error
 from ..models import JobModel, WorkspaceModel
 from .class_selection import ClassSelectionError, SIMPLEProjectFileReader
-from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
+from .simple import SIMPLEBatch, SIMPLEProjFile
 from .job import Job
 from .mrc import (
     read_mrc_stack_info,
@@ -1190,11 +1190,7 @@ class BatchJob(Job):
                 logger.error("new: batch project source is unavailable")
                 return False
         else:
-            parent_proj = os.path.join(workspace_dir, "workspace.simple")
-            if not os.path.isfile(parent_proj):
-                if not SIMPLEProject(workspace_dir).create():
-                    logger.error("new: failed to initialize workspace.simple")
-                    return False
+            source = {"type": "none"}
 
         self.pckg = pckg
         self.prog = prog

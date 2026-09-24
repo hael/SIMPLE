@@ -1059,16 +1059,25 @@ class BatchJobLifecycleTests(TestCase):
         self.assertTrue(os.path.isdir(outside_dir))
         self.assertTrue(JobModel.objects.filter(id=jobmodel.id).exists())
 
-    def test_new_initializes_missing_workspace_project_before_dispatch(self):
+    def test_new_without_project_does_not_initialize_workspace_project(self):
         os.remove(os.path.join(self.workspace_dir, "workspace.simple"))
         launcher = batchjob_module.SIMPLEBatch
-        project_initializer = batchjob_module.SIMPLEProject
 
-        with patch.object(project_initializer, "create", return_value=True) as create, patch.object(launcher, "loadUIJSON", return_value=True), patch.object(launcher, "start", return_value=True):
-            created = BatchJob().new(self.workspace, "simple", "import_movies", {})
+        with patch.object(launcher, "loadUIJSON", return_value=True), patch.object(launcher, "start", return_value=True) as start:
+            job = BatchJob()
+            created = job.new(self.workspace, "simple", "import_movies", {})
 
         self.assertTrue(created)
-        create.assert_called_once_with()
+        self.assertFalse(os.path.exists(os.path.join(self.workspace_dir, "workspace.simple")))
+        jobmodel = JobModel.objects.get(id=job.id)
+        self.assertEqual(jobmodel.master_stats["source"], {"type": "none"})
+        start.assert_called_once_with(
+            {},
+            os.path.join(self.workspace_dir, "1_import_movies"),
+            self.workspace_dir,
+            "import_movies",
+            job.id,
+        )
 
     def test_new_keeps_failed_record_when_job_directory_cannot_be_created(self):
         launcher = batchjob_module.SIMPLEBatch
@@ -1295,6 +1304,18 @@ class BatchJobLifecycleTests(TestCase):
             (None, None, None),
         )
 
+    def test_recorded_projectless_rerun_stays_projectless(self):
+        source = {"type": "none"}
+
+        self.assertEqual(
+            job_builder_views.resolve_recorded_batch_project(
+                self.workspace,
+                "scale",
+                {"source": source},
+            ),
+            (None, source, None),
+        )
+
     def test_new_rejects_explicit_project_outside_workspace(self):
         outside_project = os.path.join(self.tempdir.name, "outside.simple")
         with open(outside_project, "w", encoding="utf-8"):
@@ -1454,6 +1475,41 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertIn("# CPU 8", content)
                     self.assertNotIn("nice_status_callback()", content)
                     submit.assert_called_once()
+
+    def test_dispatch_without_parent_project_omits_project_commands(self):
+        with tempfile.TemporaryDirectory() as parent_dir:
+            base_dir = os.path.join(parent_dir, "scale")
+            os.mkdir(base_dir)
+            dispatch = type("Dispatch", (), {
+                "tplt": "#!/bin/sh\nexport SIMPLE_PATH=XXXSIMPLEPATHXXX\nXXXSIMPLEXXX",
+                "scmd": "sh",
+                "simple_path": "/opt/simple",
+                "url": "http://localhost:8000",
+            })()
+
+            with (
+                patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+                patch.object(simple_module.DispatchModel.objects, "filter") as dispatch_filter,
+                patch.object(simple_module.shutil, "which", return_value="/bin/sh"),
+                patch.object(simple_module, "_submit") as submit,
+            ):
+                dispatch_filter.return_value.last.return_value = dispatch
+                started = SIMPLEBatch(pckg="simple").start(
+                    {"stk": "/data/particles.mrcs"},
+                    base_dir,
+                    parent_dir,
+                    "scale",
+                    9,
+                )
+
+            self.assertTrue(started)
+            with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
+                content = script.read()
+            self.assertIn("simple_exec prg=scale stk=/data/particles.mrcs mkdir=no", content)
+            self.assertNotIn("cp -v", content)
+            self.assertNotIn("prg=update_project", content)
+            self.assertNotIn("projfile=workspace.simple", content)
+            submit.assert_called_once()
 
     def test_dispatch_omits_status_callback_wrapper(self):
         with tempfile.TemporaryDirectory() as parent_dir:

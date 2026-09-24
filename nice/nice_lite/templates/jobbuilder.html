@@ -314,6 +314,7 @@
                         <form id="batch_form_simple_{{ program.prg }}" method="POST"
                               action="{% url 'nice_lite:create_batch' %}" target="workspace_iframe"
                               data-batch-package="simple"
+                              data-requires-project="{{ program.requires_project|yesno:'true,false' }}"
                               class="hidden simple-program-config">
                             {% csrf_token %}
                             <input type="hidden" name="package" value="simple">
@@ -538,6 +539,7 @@
                         <form id="batch_form_single_{{ program.prg }}" method="POST"
                               action="{% url 'nice_lite:create_batch' %}" target="workspace_iframe"
                               data-batch-package="single"
+                              data-requires-project="{{ program.requires_project|yesno:'true,false' }}"
                               class="hidden single-program-config">
                             {% csrf_token %}
                             <input type="hidden" name="package" value="single">
@@ -1179,6 +1181,14 @@
                 return false;
             }
 
+            const projectFileSelector = document.getElementById(packageName + "_batch_project_file");
+            const projectFile = projectFileSelector ? projectFileSelector.value.trim() : "";
+            if (form.dataset.requiresProject === "true" && !projectFile) {
+                setBatchFeedback(packageName, "input project is required");
+                if (projectFileSelector) projectFileSelector.focus();
+                return false;
+            }
+
             const requirements = Array.from(form.querySelectorAll("[data-batch-requirement]"));
             for (const requirement of requirements) {
                 const keys = (requirement.dataset.requirementKeys || "")
@@ -1188,7 +1198,7 @@
                 const minSelected = Number(requirement.dataset.requirementMin || 0);
                 const maxSelected = Number(requirement.dataset.requirementMax || keys.length);
                 const selected = keys.filter((key) => {
-                    if (key === "projfile") return true;
+                    if (key === "projfile") return Boolean(projectFile);
                     const field = form.elements.namedItem(key);
                     return Boolean(field && String(field.value || "").trim() !== "");
                 });

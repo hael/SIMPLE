@@ -331,11 +331,12 @@ class SIMPLEBatch:
     Manages the launch of a single classic SIMPLE job (simple_exec or single_exec).
 
     Unlike SIMPLEStream, each job corresponds to one program call rather than a
-    pipeline. Project-dependent programs copy the workspace project file into
-    the job directory, run update_project, then execute the program. The SIMPLE
-    new_project and reproject programs do not inherit workspace.simple;
-    new_project creates its project directly in the job directory, while
-    reproject writes standalone reprojection artifacts.
+    pipeline. When a project is explicitly selected, project-dependent programs
+    copy it into the job directory, run update_project, then execute the program.
+    Jobs submitted without a project remain independent. The SIMPLE new_project
+    and reproject programs never inherit a selected project; new_project creates
+    its project directly in the job directory, while reproject writes standalone
+    reprojection artifacts.
 
     Typical usage:
         simple = SIMPLEBatch(pckg="simple")
@@ -403,14 +404,14 @@ class SIMPLEBatch:
         """
         Set job parameters, validate the filesystem state, and dispatch.
 
-        parent_proj defaults to <parent_dir>/workspace.simple when not supplied.
+        parent_proj is optional; an omitted project produces an independent job.
         Returns True on success, False on any failure.
         """
         self.base_dir    = base_dir
         self.args        = args
         self.jobtype     = jobtype
         self.jobid       = jobid
-        self.parent_proj = parent_proj if parent_proj is not None else os.path.join(parent_dir, "workspace.simple")
+        self.parent_proj = parent_proj
         if not self.base_dir:
             print_error("Base directory is not specified")
             return False
@@ -420,7 +421,7 @@ class SIMPLEBatch:
         if not os.path.isdir(parent_dir):
             print_error("Parent directory does not exist")
             return False
-        if not os.path.isfile(self.parent_proj):
+        if self.parent_proj is not None and not os.path.isfile(self.parent_proj):
             print_error("Parent project file does not exist: " + self.parent_proj)
             return False
         if not self.executable or not self.jobtype:
@@ -451,7 +452,7 @@ class SIMPLEBatch:
             return False
 
         creates_project = self.executable == "simple_exec" and self.jobtype == "new_project"
-        propagates_project = not (
+        propagates_project = self.parent_proj is not None and not (
             self.executable == "simple_exec"
             and self.jobtype in ("new_project", "reproject")
         )

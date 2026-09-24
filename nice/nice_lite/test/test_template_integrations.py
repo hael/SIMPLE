@@ -412,6 +412,13 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('form.addEventListener("submit", markBatchSubmissionPending);', jobbuilder)
         self.assertIn('button.textContent = "starting...";', jobbuilder)
 
+    def test_batch_project_validation_uses_visible_selection(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertIn('data-requires-project="{{ program.requires_project|yesno:', jobbuilder)
+        self.assertIn('form.dataset.requiresProject === "true"', jobbuilder)
+        self.assertIn('if (key === "projfile") return Boolean(projectFile);', jobbuilder)
+
     def test_batch_submission_guard_does_not_change_stream_submission(self):
         jobbuilder = self._read_template("jobbuilder.html")
 
@@ -420,15 +427,14 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(jobbuilder.count('data-batch-package='), 2)
         self.assertIn('document.querySelectorAll("form[data-batch-package]")', jobbuilder)
 
-    def test_batch_project_file_selector_uses_inherited_simple_project(self):
-        project_path = "/workspace/1_import_movies/workspace.simple"
+    def test_batch_project_file_selector_starts_empty_without_prefill(self):
         rendered = render_to_string("jobbuilder.html", {
             "stream_user_inputs": [],
             "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
             "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
             "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
             "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "default_batch_project_file": project_path,
+            "default_batch_project_file": "",
         })
 
         self.assertIn('id="simple_batch_project_file"', rendered)
@@ -436,7 +442,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertNotIn('id="simple_batch_source"', rendered)
         self.assertNotIn('id="single_batch_source"', rendered)
         self.assertEqual(
-            rendered.count(f'name="batch_project_file" value="{project_path}"'),
+            rendered.count('name="batch_project_file" value=""'),
             2,
         )
         self.assertEqual(rendered.count('data-required-extension=".simple"'), 2)

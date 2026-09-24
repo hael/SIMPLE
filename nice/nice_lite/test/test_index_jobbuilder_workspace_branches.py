@@ -337,11 +337,6 @@ class JobBuilderBranchTests(SimpleTestCase):
             patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
             patch.object(
                 job_builder_views,
-                "_default_batch_project_file",
-                return_value="/workspace/latest.simple",
-            ),
-            patch.object(
-                job_builder_views,
                 "resolve_recorded_batch_project",
                 return_value=("/workspace/input.simple", jobmodel.master_stats["source"], None),
             ) as resolve_project,
@@ -419,11 +414,6 @@ class JobBuilderBranchTests(SimpleTestCase):
             patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
             patch.object(
                 job_builder_views,
-                "_default_batch_project_file",
-                return_value="/workspace/latest.simple",
-            ),
-            patch.object(
-                job_builder_views,
                 "_resolve_class_selection_prefill",
                 return_value=(project_path, infile_path, None),
             ) as resolve_selection,
@@ -452,7 +442,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         )
         resolve_selection.assert_called_once_with(jobmodel)
 
-    def test_job_builder_defaults_file_selector_to_latest_completed_batch_project(self):
+    def test_job_builder_defaults_project_selector_to_latest_finished_batch(self):
         request = self.factory.get("/jobbuilder")
         request.user = _AuthUser()
         simple_stream = Mock()
@@ -477,8 +467,6 @@ class JobBuilderBranchTests(SimpleTestCase):
                 "_default_batch_project_file",
                 return_value=project_path,
             ) as default_project,
-            patch.object(job_builder_views, "_collect_batch_job_sources") as batch_sources,
-            patch.object(job_builder_views, "_collect_batch_snapshot_sources") as snapshot_sources,
             patch.object(job_builder_views, "render", side_effect=_render_with_context),
             patch.object(job_builder_views, "clear_checksum_cookies"),
         ):
@@ -487,8 +475,6 @@ class JobBuilderBranchTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response._ctx["default_batch_project_file"], project_path)
         default_project.assert_called_once_with(workspace)
-        batch_sources.assert_not_called()
-        snapshot_sources.assert_not_called()
 
     def test_create_batch_allowlists_program_and_arguments_from_ui(self):
         request = self.factory.post("/createbatch", {
@@ -509,7 +495,6 @@ class JobBuilderBranchTests(SimpleTestCase):
                 },
                 "inputs": [
                     {"key": "mode", "options": ["fast", "slow"]},
-                    {"key": "projfile", "required": True},
                 ],
             },
         }
@@ -855,7 +840,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             "Supply either a volume or an image stack.",
         )
 
-    def test_batch_requirements_include_launcher_project_file(self):
+    def test_batch_requirements_include_only_selected_project_file(self):
         program_cfg = {
             "program": {
                 "requirements": [{
@@ -868,7 +853,73 @@ class JobBuilderBranchTests(SimpleTestCase):
             },
         }
 
-        self.assertIsNone(job_builder_views._validate_batch_requirements(program_cfg, {}))
+        self.assertEqual(
+            job_builder_views._validate_batch_requirements(program_cfg, {}),
+            "Supply an input source.",
+        )
+        self.assertIsNone(job_builder_views._validate_batch_requirements(
+            program_cfg,
+            {},
+            project_file="/workspace/input.simple",
+        ))
+        self.assertEqual(
+            job_builder_views._validate_batch_requirements(
+                program_cfg,
+                {"vol1": "map.mrc"},
+                project_file="/workspace/input.simple",
+            ),
+            "Supply an input source.",
+        )
+
+    def test_batch_requirements_reject_missing_required_project_file(self):
+        program_cfg = {
+            "program": {},
+            "inputs": [{"key": "projfile", "required": True}],
+        }
+
+        self.assertEqual(
+            job_builder_views._validate_batch_requirements(program_cfg, {}),
+            "input project is required",
+        )
+        self.assertIsNone(job_builder_views._validate_batch_requirements(
+            program_cfg,
+            {},
+            project_file="/workspace/input.simple",
+        ))
+
+    def test_create_batch_rejects_missing_required_project_before_launch(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "validate_projfile",
+        })
+        request.user = _AuthUser()
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "validate_projfile": {
+                "program": {"executable": "simple_exec"},
+                "inputs": [{"key": "projfile", "required": True}],
+            },
+        }
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(job_builder_views, "BatchJob") as batchjob_class,
+            patch.object(job_builder_views.messages, "add_message") as add_message,
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob_class.assert_not_called()
+        add_message.assert_called_once_with(
+            request,
+            job_builder_views.messages.ERROR,
+            "input project is required",
+        )
 
     def test_create_batch_rejects_unsatisfied_ui_requirement_before_launch(self):
         request = self.factory.post("/createbatch", {
@@ -1040,7 +1091,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             source=source,
         )
 
-    def test_create_batch_inherits_latest_job_when_source_is_omitted(self):
+    def test_create_batch_does_not_inherit_project_when_source_is_omitted(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
             "program": "motion_correct",
@@ -1056,7 +1107,6 @@ class JobBuilderBranchTests(SimpleTestCase):
         }
         batchjob = Mock()
         batchjob.new.return_value = True
-        source = {"type": "batch_job", "batch_job_id": 8}
 
         with (
             patch.object(job_builder_views, "get_workspace_id", return_value=4),
@@ -1066,13 +1116,8 @@ class JobBuilderBranchTests(SimpleTestCase):
             patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
             patch.object(
                 job_builder_views,
-                "_default_batch_project_file",
-                return_value="/workspace/1_import_movies/workspace.simple",
-            ) as default_project,
-            patch.object(
-                job_builder_views,
                 "_resolve_batch_project_file",
-                return_value=("/workspace/1_import_movies/workspace.simple", source, None),
+                return_value=(None, None, None),
             ) as resolve_project,
             patch.object(job_builder_views, "BatchJob", return_value=batchjob),
             patch.object(job_builder_views.messages, "add_message"),
@@ -1080,18 +1125,12 @@ class JobBuilderBranchTests(SimpleTestCase):
             response = job_builder_views.view_create_batch(request)
 
         self.assertEqual(response.status_code, 302)
-        default_project.assert_called_once_with(workspace)
-        resolve_project.assert_called_once_with(
-            workspace,
-            "/workspace/1_import_movies/workspace.simple",
-        )
+        resolve_project.assert_called_once_with(workspace, None)
         batchjob.new.assert_called_once_with(
             workspace,
             "simple",
             "motion_correct",
             {},
-            parent_proj="/workspace/1_import_movies/workspace.simple",
-            source=source,
         )
 
 

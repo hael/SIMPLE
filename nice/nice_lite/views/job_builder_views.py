@@ -195,6 +195,8 @@ def _collect_programs(
             "requirements": program_meta.get("requirements", []),
             "sections": sections,
         }
+        if _program_requires_project_file(prg_cfg):
+            program_input["requires_project"] = True
         if (
             prg == prefill_program
             and isinstance(rerun_of, int)
@@ -230,6 +232,23 @@ def _get_batch_program(batchui, package, program):
     return program_cfg
 
 
+def _program_requires_project_file(program_cfg):
+    """Return whether the selected program declares projfile as required."""
+    if not isinstance(program_cfg, dict):
+        return False
+    for section_name, section_inputs in program_cfg.items():
+        if section_name == "program" or not isinstance(section_inputs, list):
+            continue
+        for user_input in section_inputs:
+            if (
+                isinstance(user_input, dict)
+                and user_input.get("key") == "projfile"
+                and bool(user_input.get("required"))
+            ):
+                return True
+    return False
+
+
 # manualpick has no backing SIMPLE program: it just creates a finished job record
 # that routes to the manual-picker detail view (see BatchJob.new/view_batch_manual_picker).
 _MANUALPICK_PROGRAM_CFG = {
@@ -239,6 +258,9 @@ _MANUALPICK_PROGRAM_CFG = {
         "summary": "Open a manual particle-picking session for this workspace.",
         "requirements": [],
     },
+    "inputs": [
+        {"key": "projfile", "required": True},
+    ],
 }
 
 
@@ -290,15 +312,18 @@ def _collect_batch_args(post, program_cfg):
     return args, None
 
 
-def _validate_batch_requirements(program_cfg, args):
+def _validate_batch_requirements(program_cfg, args, project_file=None):
     """Validate cross-field requirements published in the batch UI metadata."""
+    has_project_file = isinstance(project_file, str) and bool(project_file.strip())
+    if _program_requires_project_file(program_cfg) and not has_project_file:
+        return "input project is required"
+
     program_meta = program_cfg.get("program") if isinstance(program_cfg, dict) else None
     requirements = program_meta.get("requirements") if isinstance(program_meta, dict) else None
     if not isinstance(requirements, list):
         return None
 
-    # The batch launcher always supplies the selected project source.
-    supplied_keys = {"projfile"}
+    supplied_keys = {"projfile"} if has_project_file else set()
     supplied_keys.update(
         key for key, value in args.items()
         if isinstance(key, str) and str(value).strip() != ""
@@ -577,7 +602,7 @@ def _default_batch_source_key(workspace_obj):
 
 
 def _default_batch_project_file(workspace_obj):
-    """Return the inherited batch project path, falling back to workspace.simple."""
+    """Return the newest finished batch project, then the workspace seed."""
     workspace_dir = workspace_obj.get_absdir()
     if not isinstance(workspace_dir, str):
         return ""
@@ -685,6 +710,8 @@ def resolve_recorded_batch_project(workspace_obj, prog, metadata, parent=0):
         return None, None, "batch project source is invalid"
 
     source_type = source.get("type")
+    if source_type == "none":
+        return None, source, None
     if source_type == "batch_job":
         source_id = source.get("batch_job_id")
         if not isinstance(source_id, int) or isinstance(source_id, bool) or source_id <= 0:
@@ -1036,7 +1063,15 @@ def view_create_batch(request):
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
-    error = _validate_batch_requirements(program_cfg, args)
+    project_file = class_selection_project
+    if project_file is None:
+        project_file = request.POST.get("batch_project_file")
+
+    error = _validate_batch_requirements(
+        program_cfg,
+        args,
+        project_file=project_file,
+    )
     if error is not None:
         logger.error("create_batch: %s", error)
         messages.add_message(request, messages.ERROR, error)
@@ -1048,11 +1083,6 @@ def view_create_batch(request):
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
-    project_file = class_selection_project
-    if project_file is None:
-        project_file = request.POST.get("batch_project_file")
-    if project_file in (None, ""):
-        project_file = _default_batch_project_file(workspace_obj)
     parent_proj, source_metadata, error = _resolve_batch_project_file(
         workspace_obj,
         project_file,
