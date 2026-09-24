@@ -43,6 +43,7 @@ use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
 use simple_ui_visibility_tester,             only: run_all_ui_visibility_tests
 use simple_rnd_tester,                       only: run_all_rnd_tests
+use simple_diff_map_graphs_tester,           only: run_all_diff_map_graphs_tests
 use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relations_tests
 use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
@@ -265,6 +266,7 @@ contains
         call add_suite(s, n, 'decay schedules',         run_all_decay_funs_tests)
         call add_suite(s, n, 'PCA',                     run_all_pca_tests)
         call add_suite(s, n, 'cavg quality relations',  run_all_cavg_quality_relations_tests)
+        call add_suite(s, n, 'diffusion-map graphs',    run_all_diff_map_graphs_tests)
         call add_suite(s, n, 'optimisers',              run_all_opt_tests)
         call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)

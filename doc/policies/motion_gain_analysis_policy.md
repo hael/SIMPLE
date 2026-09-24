@@ -9,8 +9,10 @@ Scope:
 
 - `simple_motion_gain_analysis.f90`
 - `simple_motion_gain_helpers.f90`
-- test wiring through `simple_motion_gain_tester.f90`,
-  `simple_test_search_gain_flips.f90`, and unit-test entrypoints
+- test wiring through `simple_motion_gain_tester.f90` (the `motion gain`
+  sub-suite of `simple_test_exec test=unit_project`); the movie-driven
+  runners `simple_test_search_gain_flips` and `simple_test_create_gain` were
+  retired on 2026-09-23
 
 This is a workflow contract document, not a line-by-line implementation map.
 
@@ -113,8 +115,9 @@ this workflow. Test code may create and clean them up explicitly.
 
 ## 7. Batch Execution Policy
 
-The current batch runner (`simple_test_search_gain_flips`) processes movies in
-fixed-size batches (default `10` movies per batch), and for each batch:
+The batch runner, stream preprocessing (`simple_stream_p01_preprocess_new`;
+formerly also the standalone `simple_test_search_gain_flips`), processes movies
+in fixed-size batches (`10` movies per batch), and for each batch:
 
 1. sum frames for that batch only
 2. call analyzer with batch-local `sum_part_img`, `part_frames`, `part_movies`

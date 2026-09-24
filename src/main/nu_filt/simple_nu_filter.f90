@@ -203,7 +203,7 @@ real,             parameter   :: NU_SHARP_BFAC_FINEST_A = 5.0 !< Guinier sharpen
 ! streptavidin when the offset was a median+3MAD detection threshold) marks a
 ! failed null calibration, not a property of the specimen. The replay must
 ! hard-error rather than attach an uncalibrated precision. Provisional (R9),
-! anchored to the simple_test_nu_envmask fixture and the 2026-08-27
+! anchored to the simple_test_nu_envmask fixture (retired 2026-09-23) and the 2026-08-27
 ! streptavidin run; recalibrate against real-data operating points before
 ! relaxing.
 real,             parameter   :: NU_EVIDENCE_MIN_NULL_FRAC = 0.01

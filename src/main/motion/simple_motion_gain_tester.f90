@@ -3,7 +3,7 @@ module simple_motion_gain_tester
 use simple_core_module_api
 use simple_image,                        only: image
 use simple_motion_gain_analysis,         only: gain_flip_analyzer
-use simple_motion_gain_helpers, only: read_movies_and_sum_frames
+use simple_motion_gain_helpers, only: read_movies_and_sum_frames, normalized_inverse_average_intensity
 use simple_test_utils
 implicit none
 private
@@ -17,6 +17,7 @@ contains
         write(*,'(A)') '**** running all motion gain tests ****'
         call test_read_movies_and_sum_frames_counts()
         call test_gain_flip_analyzer_batch_updates()
+        call test_normalized_inverse_average_intensity()
     end subroutine run_all_motion_gain_tests
 
     subroutine test_read_movies_and_sum_frames_counts()
@@ -88,6 +89,34 @@ contains
         call del_file(string('average_all_movies.mrc'))
         call del_file(string('best_gainref_by_corr.mrc'))
     end subroutine test_gain_flip_analyzer_batch_updates
+
+    !> the gain reference is mean/pixel-mean: 8x8 pixels summed over four frames, per-pixel mean 2
+    !! except one pixel at 4 and one at 0, so the global mean is (62*2 + 4)/64 = 2 exactly, the gain 1
+    !! on the plain pixels, 0.5 on the bright one and 0 on the dead one
+    subroutine test_normalized_inverse_average_intensity()
+        integer, parameter :: NFRAMES = 4
+        type(image) :: sum_img, gain_img
+        real, allocatable :: gain(:,:,:)
+        real    :: rmat(8,8,1), avg_value
+        logical :: plain(8,8)
+        write(*,'(A)') 'test_normalized_inverse_average_intensity'
+        rmat = 2. * real(NFRAMES)
+        rmat(1,1,1) = 4. * real(NFRAMES)
+        rmat(2,1,1) = 0.
+        call sum_img%new([8,8,1], 1.0)
+        call sum_img%set_rmat(rmat, .false.)
+        call normalized_inverse_average_intensity(sum_img, NFRAMES, gain_img, avg_value)
+        call assert_real(2., avg_value, 1.e-6, 'gain reference: global mean intensity per frame')
+        gain  = gain_img%get_rmat()
+        plain = .true.
+        plain(1,1) = .false.
+        plain(2,1) = .false.
+        call assert_true(all(abs(pack(gain(1:8,1:8,1), plain) - 1.) <= 1.e-6), 'gain reference: 1 on pixels at the mean')
+        call assert_real(0.5, gain(1,1,1), 1.e-6, 'gain reference: 0.5 on a pixel twice as bright')
+        call assert_real(0.,  gain(2,1,1), 1.e-6, 'gain reference: 0 on a dead pixel')
+        call sum_img%kill
+        call gain_img%kill
+    end subroutine test_normalized_inverse_average_intensity
 
     subroutine create_movie_stack(fname, ldim, smpd, frame_values)
         type(string), intent(in) :: fname

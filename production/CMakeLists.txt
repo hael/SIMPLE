@@ -351,6 +351,15 @@ if(BUILD_TESTS)
     simple_add_test(flex_gpu platform 1200 1 RUN_SERIAL
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_gpu)
   endif()
+  if(USE_OPENMP_OFFLOAD AND TARGET simple_test_openmp_offload)
+    # OpenMP target offload, cuFFT against FFTW, cuBLAS, the KB device forms (Cyril's
+    # standalone, moved as it is); it stops with status 0 on a failed check, so the
+    # entry fails on its failure messages
+    simple_add_test(openmp_offload platform 1200 8 RUN_SERIAL
+      COMMAND $<TARGET_FILE:simple_test_openmp_offload> nthr=8 device=0)
+    set_property(TEST openmp_offload APPEND PROPERTY ENVIRONMENT "OMP_TARGET_OFFLOAD=MANDATORY")
+    set_tests_properties(openmp_offload PROPERTIES FAIL_REGULAR_EXPRESSION "Fatal error|FAIL: ")
+  endif()
   if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE AND TARGET simple_test_coarrays)
     # the standalone program is the one linked against the coarray library
     simple_add_test(coarrays platform 1200 1 RUN_SERIAL
@@ -361,13 +370,17 @@ if(BUILD_TESTS)
   # A CTest entry is an isolation unit, not an assertion: checks grow inside
   # existing suites, a new process needs a stated reason, and this number only
   # goes down. Raising it is an owner decision recorded in the plan. Entries
-  # that depend on a capability (coarrays) are counted only when registered.
+  # that depend on a capability (coarrays, flex_gpu, openmp_offload) are counted only
+  # when registered.
   set(SIMPLE_CTEST_BUDGET 27)   # 11 fast + 1 platform + 12 workflow + 3 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")
   endif()
   if(TEST flex_gpu)
+    math(EXPR _simple_expected "${_simple_expected} + 1")
+  endif()
+  if(TEST openmp_offload)
     math(EXPR _simple_expected "${_simple_expected} + 1")
   endif()
   get_property(_simple_tests DIRECTORY PROPERTY TESTS)

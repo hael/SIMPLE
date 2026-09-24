@@ -233,7 +233,8 @@ independent density automask, and the NU objective keeps the spherical
   `src/main/image/simple_image_calc.f90`
 - Component filtering, hole filling, dilation, and soft edge:
   `src/main/image/simple_image_msk.f90`
-- Synthetic regression:
-  `production/tests/simple_test_nu_envmask.f90`
+- Synthetic regression: `production/tests/simple_test_nu_envmask.f90` was
+  retired on 2026-09-23 (test-environment plan, section 9.7, singles II); the
+  filter is exercised end to end through `simple_exec prg=nu_filt3D`
 
 Design constraints: [nu_evidence_envelope_masking.md](../implementation_notes/nu_evidence_envelope_masking.md).

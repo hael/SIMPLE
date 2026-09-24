@@ -380,7 +380,7 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_core` | string, syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
 | `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation | 1.3 s (before the shift search moved out and the mask suites moved in) |
-| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
+| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
 | `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
@@ -1907,6 +1907,38 @@ could not have run past it. `make_ui` and `make_test_ui` now build
 their table once per process and return on a second call; the duplicate
 guard in `add_ui_program` stays, it catches two programs registering one
 key. The other ten fast suites passed in that build (gate 5.0 s).
+
+**singles II (2026-09-23, Hans: verdicts 1-9).** The remaining eleven
+unassigned standalones. `nu_envmask`, `nu_filter` and `phase_rand_fsc`
+are "not needed": `simple_exec prg=nu_filt3D` exercises the NU filter
+and the `fsc` commander `phase_rand_fsc`; deleted. Every routine the two
+NU programs called stays used in production (the evidence-state
+accessors from the sharpening step, the margin from the envelope), so
+nothing follows them out. `diff_map_graphs` is
+`simple_diff_map_graphs_tester` (`diffusion-map graphs`, unit_numerics):
+its thirteen checks were `stop 'message'`, which exits with status 0, so
+none could ever fail; they are assertions now (gated neighbours stay in
+their projection bin, block-row assembly equals the whole build,
+occupancy weights, the Perron vector of the view-balanced operator,
+Nystrom coefficients equal to the eigenfunctions, an uncapped spectral
+scan). `create_gain` and `search_gain_flips` were movie-driven runners
+without assertions; stream preprocessing does both in production and
+`motion gain` tests the summing and the analyser; deleted, and
+`normalized_inverse_average_intensity`, which nothing tested, gained a
+closed-form test in `motion gain` (per-pixel mean 2 with one pixel at 4
+and one at 0: global mean 2, gain 1, 0.5 and 0). `atomfit` needed a PDB
+in the working directory and asserted nothing; the routine it called,
+`atoms%fit_bfactors` (133 lines), had no caller and is deleted with it.
+`stream_initial_analysis` ran the p03 commander on a missing folder;
+deleted. `openmp_offload` is Cyril's and moved as it is (Hans): the
+standalone becomes a `platform` CTest entry registered with
+`USE_OPENMP_OFFLOAD` (`nthr=8 device=0`, `OMP_TARGET_OFFLOAD=MANDATORY`),
+counted in the process budget only when registered; its failed checks
+`stop` with status 0, so the entry fails on `Fatal error|FAIL: ` in the
+output instead of by exit code (the one-word fix, `error stop`, is left
+to him). `qsys_ctrl` and `qsys_env` wait for the parallel-area batch
+(option a). Eight standalones deleted; the NU envelope algorithm note,
+the motion-gain policy and the code map follow.
 
 ## 10. Fast-tier performance
 

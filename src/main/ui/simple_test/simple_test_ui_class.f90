@@ -104,7 +104,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, straight_line_fit, affinity_propagation, hierarchical_clustering, cavg_quality_relations)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, straight_line_fit, affinity_propagation, hierarchical_clustering, cavg_quality_relations, diffusion_map_graphs)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
