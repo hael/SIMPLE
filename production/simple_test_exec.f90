@@ -46,8 +46,6 @@ call mem_monitor_init(cline, 'simple_test_exec:'//trim(prg))
 l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed
 call exec_test_class_commander(    trim(prg), cline, l_silent, l_did_execute)
-call exec_test_fft_commander(      trim(prg), cline, l_silent, l_did_execute)
-call exec_test_geometry_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_highlevel_commander(trim(prg), cline, l_silent, l_did_execute)
 call exec_test_io_commander(       trim(prg), cline, l_silent, l_did_execute)
 call exec_test_masks_commander(    trim(prg), cline, l_silent, l_did_execute)

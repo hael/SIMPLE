@@ -2,8 +2,6 @@
 module simple_ui_test_group
 use simple_ui_hash,          only: ui_hash
 use simple_test_ui_class,    only: construct_test_class_programs
-use simple_test_ui_fft,      only: construct_test_fft_programs
-use simple_test_ui_geometry, only: construct_test_geometry_programs
 use simple_test_ui_highlevel,only: construct_test_highlevel_programs
 use simple_test_ui_io,       only: construct_test_io_programs
 use simple_test_ui_masks,    only: construct_test_masks_programs
@@ -20,8 +18,6 @@ contains
     subroutine add_test_programs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call construct_test_class_programs(tsttab)
-        call construct_test_fft_programs(tsttab)
-        call construct_test_geometry_programs(tsttab)
         call construct_test_highlevel_programs(tsttab)
         call construct_test_io_programs(tsttab)
         call construct_test_masks_programs(tsttab)

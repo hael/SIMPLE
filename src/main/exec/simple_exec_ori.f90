@@ -1,7 +1,8 @@
 !@descr: execution of orientation commanders
 module simple_exec_ori
 use simple_cmdline, only: cmdline
-use simple_commanders_ori, only: commander_make_oris, commander_oriops, commander_oristats, commander_vizoris
+use simple_commanders_ori, only: commander_make_oris, commander_oriops, commander_oristats, commander_vizoris, &
+    &commander_measure_projspace_angres
 implicit none
 
 public :: exec_ori_commander
@@ -10,7 +11,8 @@ private
 type(commander_make_oris) :: xmake_oris
 type(commander_oriops)    :: xoriops
 type(commander_oristats)  :: xoristats
-type(commander_vizoris)   :: xvizoris   
+type(commander_vizoris)   :: xvizoris
+type(commander_measure_projspace_angres) :: xmeasure_projspace_angres
 
 contains
 
@@ -31,6 +33,8 @@ contains
                 call xoristats%execute(cline)
             case( 'vizoris' )
                 call xvizoris%execute(cline)
+            case( 'measure_projspace_angres' )
+                call xmeasure_projspace_angres%execute(cline)
             case default
                 l_did_execute = .false.
         end select

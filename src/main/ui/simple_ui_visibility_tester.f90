@@ -208,6 +208,7 @@ contains
         call assert_registered_category('export_starproject', 'project', 'Project Management', 10)
         call assert_registered_category('stack', 'image', 'General Image Processing', 90)
         call assert_registered_category('motion_correct', 'preproc', 'Pre-processing', 20)
+        call assert_registered_category('measure_projspace_angres', 'ori', 'Orientation Processing', 110)
         call assert_program_not_registered('ppca_volvar')
         call assert_program_not_registered('export_manifoldem_starproject')
         call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
@@ -229,7 +230,7 @@ contains
     subroutine test_registered_test_programs()
         write(*,'(A)') 'test_registered_test_programs'
         call make_test_ui
-        call assert_registered_test_category('angres',         'geometry', 'Geometry',   30)
+        call assert_registered_test_category('nano_mask',      'masks',    'Masks',      60)
         call assert_registered_test_category('preproc',        'stream',   'Stream',     130)
         call assert_registered_test_category('lib_stream',     'class',    'Unit tests', 10)
         call assert_registered_test_category('openmp_offload', 'class',    'Unit tests', 10)

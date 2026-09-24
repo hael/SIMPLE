@@ -8,11 +8,6 @@ use simple_external_reference_pose_initialization, only: initialize_poses_agains
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: nspace_commander
- contains
-   procedure :: execute      => exec_nspace
-end type nspace_commander
-
 type, extends(commander_base) :: commander_refine3D_auto
   contains
     procedure :: execute      => exec_refine3D_auto
@@ -44,23 +39,6 @@ type, extends(commander_base) :: commander_bootstrap_rec3D
 end type commander_bootstrap_rec3D
 
 contains
-
-    subroutine exec_nspace(self,cline)
-        class(nspace_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
-        type(parameters) :: params
-        type(oris)       :: o
-        real             :: ares
-        integer          :: i
-        call params%new(cline)
-        do i=500,5000,500
-            o = oris(i, is_ptcl=.false.)
-            call o%spiral
-            ares = o%find_angres()
-            write(logfhandle,'(A,1X,I7,1X,A,1X,F5.2)') 'NR OF PROJDIRS:', i, 'RESOLUTION:', resang(ares, params%moldiam)
-        end do
-        call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
-    end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
         use simple_final_rec,      only: calc_final_rec

@@ -95,9 +95,9 @@
         - `simple_class_compatibility_tester.f90` — unit test routines for the class_compatibility support model
         - `simple_class_frcs.f90` — for Fourier Ring Correlation bookkeeping for class averages in memory and on disk
         - `simple_classaverager.f90` — Types and interfaces for production of Cartesian class averages
-        - `simple_classaverager_tester.f90` — unit tests for the class averager's Fourier 2D accumulator: padded splat and compact export (simple_classaverager)
         - `simple_classaverager_core.f90` — Implementations of core types and routines underpinning cavg restoration
         - `simple_classaverager_restore.f90` — Routines to perform the classes restoration and processing
+        - `simple_classaverager_tester.f90` — unit tests for the class averager's Fourier 2D accumulator: padded splat and compact export (simple_classaverager)
       - **commanders/** — object-oriented command pattern implementations
         - **simple/** — home of the simple commanders implementing high-level application code
           - `simple_commander_base.f90` — abstract base commander
@@ -146,8 +146,6 @@
           - `single_commanders_tseries.f90` — commanders operating on the full time-series field of view, used in SINGLE for nanoparticle processing
         - **test/** — home of the test commanders implementing high-level testing code
           - `simple_commanders_test_class.f90` — the unit-test suites: the build's fast gate (test=unit_<area>), its umbrella (test=units) and the platform-tier forked-process suite
-          - `simple_commanders_test_fft.f90` — for all fft tests
-          - `simple_commanders_test_geometry.f90` — for all geometry tests
           - `simple_commanders_test_highlevel.f90` — for all highlevel tests
           - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate)
           - `simple_commanders_test_masks.f90` — for all masks tests
@@ -156,10 +154,10 @@
           - `simple_commanders_test_stream.f90` — stream preprocessing workflow test: simulated movies through the stream's preprocessing stage and its worker jobs
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
-        - `simple_ctf_tester.f90` — unit test routines for the contrast transfer function (simple_ctf)
         - `simple_ctf_estimate_cost.f90` — cost functions for CTF fitting
         - `simple_ctf_estimate_fit.f90` — routines for anisotroic (patched) CTF estimation
         - `simple_ctf_estimate_iter.f90` — does one iteration of CTF estimation
+        - `simple_ctf_tester.f90` — unit test routines for the contrast transfer function (simple_ctf)
       - **exec/**
         - `simple_exec_abinitio3D.f90` — execution of abinitio3D commanders
         - `simple_exec_cavgproc.f90` — execution of cavgs processing commanders
@@ -183,8 +181,6 @@
         - `simple_exec_validate.f90` — execution of validation commanders
         - `simple_exec_volume.f90` — execution of volume manipulation commanders
         - `simple_test_exec_class.f90` — execution of the unit-test suite commanders (the fast gate and its umbrella)
-        - `simple_test_exec_fft.f90` — execution of test fft processing commanders
-        - `simple_test_exec_geometry.f90` — execution of test geometry processing commanders
         - `simple_test_exec_highlevel.f90` — execution of test highlevel processing commanders
         - `simple_test_exec_io.f90` — execution of test input/output processing commanders (manual, user-data cases)
         - `simple_test_exec_masks.f90` — execution of test masks processing commanders
@@ -221,8 +217,6 @@
         - `simple_flex_pca_merge.f90` — Two-gate agglomerative merge of over-provisioned flex_pca states.
         - `simple_flex_pca_model.f90` — Standalone projection-aware low-rank covariance workflow for heterogeneous SPA data
         - `simple_flex_pca_pcg.f90` — flex_pca coupled M-step on the PCG operator (rec_backend=pcg): pair-weighted Gram kernels and the
-        - `simple_flex_pca_tester.f90` — unit tests for the flex_pca latent model, state weights and deconvolution (simple_flex_pca_model, _weights, _util, _deconv)
-        - `simple_flex_pcg_tester.f90` — unit and library tests of the flex_pca PCG M-step operator (simple_flex_pca_pcg)
         - `simple_flex_pca_plane_cache.f90` — flex_pca plane cache: the full-box prep's padded transform, restricted to the box_crop grid, kept on disk per particle
         - `simple_flex_pca_planes.f90` — flex_pca resident planes: prepped particle Fourier planes kept in memory across E-step passes
         - `simple_flex_pca_plot.f90` — flex_pca latent figures rendered in-engine (no external plotting): a three-panel JPEG with
@@ -231,8 +225,10 @@
         - `simple_flex_pca_rec3D_pcg.f90` — flex_pca state maps on the reconstruct3D PCG backend (rec_backend=pcg): the kernel weight of a
         - `simple_flex_pca_rounds.f90` — flex_pca distribution contract: the role/round object handed down by the strategy
         - `simple_flex_pca_targets.f90` — flex_pca latent targets: k-means, diffusion k-centre, FINCH, path and reliability-path placement; basis rotations
+        - `simple_flex_pca_tester.f90` — unit tests for the flex_pca latent model, state weights and deconvolution (simple_flex_pca_model, _weights, _util, _deconv)
         - `simple_flex_pca_util.f90` — flex_pca shared helpers: environment switches, chi-squared median, unimodality test
         - `simple_flex_pca_weights.f90` — flex_pca state weights: kernel/equal-mass/on-axis placement, bandwidth selection, half masks
+        - `simple_flex_pcg_tester.f90` — unit and library tests of the flex_pca PCG M-step operator (simple_flex_pca_pcg)
         - `simple_flex_reconstructor_latent_ops.f90` — flex_pca projection-aware latent model: Fourier projection/backprojection helpers, particle prep, the coupled M-step solve
         - `simple_flex_weights_state.f90` — flex per-state weight files: identity, science validation, transactions, delivery and loading
         - `simple_umap.f90` — UMAP projection of a high-dimensional embedding, for plotting it
@@ -242,6 +238,7 @@
         - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
         - `simple_ftiter.f90` — Fourier index loop range generator and mapping of logical indexing to physical indexing
+        - `simple_gauran_tester.f90` — unit test routines for the Gaussian noise generators of simple_image (gauran, add_gauran)
         - `simple_image.f90` — the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class and FTs done in-place to reduce memory usage
         - `simple_image_access.f90` — image class getters, setters, serializers etc.
         - `simple_image_arith.f90` — arithmetics on images
@@ -257,12 +254,11 @@
         - `simple_image_io.f90` — for reading and writing images from/to disk
         - `simple_image_msk.f90` — extension of the image class to provide 2D/3D envelope and adaptive masking
         - `simple_image_msk_tester.f90` — unit test routines for masks: mask bounds, graphene shells, real-space masks and binary images
-        - `simple_image_serialize_tester.f90` — unit tests for image serialisation (serialize, unserialize), the pixel vectors of PCA and denoising
         - `simple_image_norm.f90` — image normalization routines
         - `simple_image_ops.f90` — operations on images not fitting elsewhere: noise, zero, background, CTF division etc.
-        - `simple_gauran_tester.f90` — unit test routines for the Gaussian noise generators of simple_image (gauran, add_gauran)
         - `simple_image_polar.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
         - `simple_image_seg.f90` — image segmentation related stuff to support masking
+        - `simple_image_serialize_tester.f90` — unit tests for image serialisation (serialize, unserialize), the pixel vectors of PCA and denoising
         - `simple_image_vis.f90` — for supporting visualization of images in various ways
         - `simple_memoize_ft_maps.f90` — Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly
         - `simple_projector.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
@@ -294,15 +290,16 @@
         - `simple_motion_gain_analysis.f90`
         - `simple_motion_gain_helpers.f90`
         - `simple_motion_gain_tester.f90` — unit tests for motion gain helper and analyzer
+        - `simple_motion_model.f90` — Motion correction polynomial model
         - `simple_motion_patched.f90` — patched-based anisotropic motion correction
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
         - `simple_calpha_finder.f90` — Buccaneer-inspired oriented target detection of alpha carbons in cryo-EM maps
         - `simple_calpha_finder_tester.f90` — unit tests for the C-alpha candidate search in density maps (simple_calpha_finder)
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
-        - `simple_pdb2mrc_tester.f90` — library tests of pdb2mrc (simple_atoms): density maps from the built-in 6VXX and 1JYX models
         - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building in SINGLE
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
+        - `simple_pdb2mrc_tester.f90` — library tests of pdb2mrc (simple_atoms): density maps from the built-in 6VXX and 1JYX models
         - `simple_tseries_graphene_subtr.f90` — graphene background subtraction in SINGLE
         - `single_tseries_extractor.f90` — Extractions routine for nanoparticles time series intended for frames and given per frame coordinates
         - `single_tseries_tracker.f90` — time series tracker intended for movies of nanoparticles spinning in solution
@@ -362,12 +359,13 @@
         - `simple_pca_tester.f90` — unit test routines for SVD, probabilistic and kernel PCA (simple_pca_svd, simple_ppca, simple_kpca_svd)
         - `simple_ppca.f90` — Bishop/Tipping probabilistic PCA with explicit isotropic noise
       - **pftc/** — home of the polar FT calc submodules and modules for operations on polar FTs
-        - `simple_pftc_shsrch_grad.f90` — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
         - `simple_pftc_inplane_tester.f90` — unit tests for continuous in-plane registration on the polar Fourier transform (simple_polarft_calc, simple_pftc_shsrch_grad)
+        - `simple_pftc_shsrch_grad.f90` — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
         - `simple_polarft_access.f90` — polarft class accessors submodule
         - `simple_polarft_calc.f90` — polarft class complete interface
         - `simple_polarft_core.f90` — polarft class core submodule: object lifecycle etc.
         - `simple_polarft_corr.f90` — polarft class submodule for objective function evaluations
+        - `simple_polarft_corr_tester.f90` — unit tests of the polar-Fourier correlations (gen_objfun_vals) on generated images, through the production polarisation path
         - `simple_polarft_ctf.f90` — polarft class submodule for dealing with CTF-related things
         - `simple_polarft_geom.f90` — polarft class submodule for geometry-related things: shift, rotate, mirror etc.
         - `simple_polarft_memo.f90` — polarft class submodule for memoization for performance
@@ -391,12 +389,12 @@
         - `simple_sp_project_cls.f90` — single-particle project routines for managing 2D class info
         - `simple_sp_project_core.f90` — single-particle project core routines, lifecycle, accessors, modifiers etc.
         - `simple_sp_project_io.f90` — single-particle project I/O routines
-        - `simple_sp_project_tester.f90` — unit test routines for the project container as a whole (sp_project)
         - `simple_sp_project_mic.f90` — single-particle project routines for managing micrograph and move information
         - `simple_sp_project_optics.f90` — single-particle project routines for managing optics information
         - `simple_sp_project_out.f90` — single-particle project routines for managing outputs from various processes
         - `simple_sp_project_ptcl.f90` — single-particle project routines for managing particle-level information
         - `simple_sp_project_stk.f90` — single-particle project routines for managing stack-level information
+        - `simple_sp_project_tester.f90` — unit test routines for the project container as a whole (sp_project)
       - **sieve/** — particle-sieve chunk generation and coarse/fine rejection orchestration utilities
         - `simple_ptcl_sieve.f90` — multi-tier particle sieve with coarse/fine 2D chunking and rejection
         - `simple_ptcl_sieve_tester.f90` — unit test routines for the ptcl_sieve orchestrator
@@ -445,9 +443,9 @@
           - `simple_matcher_ptcl_io.f90` — particle image batch I/O routines shared by matcher workflows
           - `simple_matcher_refvol_utils.f90` — shared helpers for reading, masking, filtering and reprojecting reference volumes
           - `simple_matcher_smpl_and_lplims.f90` — search-space and particle-selection policy routines for matcher workflows
+          - `simple_pose_cont_1jyx_tester.f90` — library test of Cartesian pose refinement on simulated 1JYX particles (simple_pose_cont_refine3D_adapter)
           - `simple_pose_cont_refine3D_adapter.f90` — Reference, particle-data, and transaction adapters for refine3D pose_cont
           - `simple_pose_cont_refine3D_adapter_tester.f90` — unit tests for the pose_cont refine3D adapter (simple_pose_cont_refine3D_adapter, simple_strategy3D_pose_cont)
-          - `simple_pose_cont_1jyx_tester.f90` — library test of Cartesian pose refinement on simulated 1JYX particles (simple_pose_cont_refine3D_adapter)
           - `simple_pose_cont_run_stats.f90` — thread-local accumulation and iteration reporting for pose_cont refinement
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_srchspace_map.f90`
@@ -471,13 +469,13 @@
           - `simple_strategy3D_greedy_inpl.f90` — 3D strategy for exhaustive in-plane matching of a single re-projection
           - `simple_strategy3D_greedy_smpl.f90` — 3D strategy for exhaustive projection matching with probabilistic in-plane search
           - `simple_strategy3D_greedy_sub.f90` — 3D strategy for neighborhood projection matching with exhaustive subspace initialization
+          - `simple_strategy3D_inplane_tester.f90` — unit tests for the continuous in-plane state of the refine3D search (simple_strategy3D_srch, _alloc, _utils)
           - `simple_strategy3D_matcher.f90` — high-level particle matching and partial-reconstruction orchestration for refine3D workers
           - `simple_strategy3D_pose_cont.f90` — standalone Cartesian local-pose strategy for already aligned particles
           - `simple_strategy3D_shc.f90` — 3D strategy for projection matching by stochastic hill climbing
           - `simple_strategy3D_shc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
           - `simple_strategy3D_snhc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
           - `simple_strategy3D_srch.f90` — common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
-          - `simple_strategy3D_inplane_tester.f90` — unit tests for the continuous in-plane state of the refine3D search (simple_strategy3D_srch, _alloc, _utils)
           - `simple_strategy3D_utils.f90` — utility routines for 3D strategies
           - **probabilistic/** — probabilistic 2D and 3D search strategies, candidate stores, and assignment tables
             - `simple_eul_prob_tab.f90` — the core probability table routines used for probabilistic 3D search
@@ -549,9 +547,7 @@
           - `simple_ui_validation.f90` — module defining the user interfaces for validation programs in the simple_exec suite
           - `simple_ui_volume.f90` — module defining the user interfaces for volume processing programs in the simple_exec suite
         - **simple_test/**
-          - `simple_test_ui_class.f90` — user interfaces of the unit-test suites: the fast gate (unit_<area>), its umbrella (units) and the platform-tier forked-process suite
-          - `simple_test_ui_fft.f90` — module defining the user interfaces for fft testprograms in the simple_test_exec suite
-          - `simple_test_ui_geometry.f90` — module defining the user interfaces for geometry test programs in the simple_test_exec suite
+          - `simple_test_ui_class.f90` — user interfaces of the unit-test suites: the fast gate (unit_<area>), its umbrella (units), the library suites (lib_<area>) and the platform-tier forked-process suite
           - `simple_test_ui_highlevel.f90` — module defining the user interfaces for highlevel test programs in the simple_test_exec suite
           - `simple_test_ui_io.f90` — user interfaces for the input/output test programs run by hand on user data (simple_test_exec)
           - `simple_test_ui_masks.f90` — module defining the user interfaces for masks test programs in the simple_test_exec suite
@@ -568,16 +564,15 @@
           - `single_ui_validate.f90` — module defining the user interfaces for validation programs in the single_exec suite
       - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
         - `simple_cartesian_pose_refiner.f90` — Fixed-volume Cartesian Fourier particle-pose refinement numerics
+        - `simple_cartesian_pose_refiner_tester.f90` — unit tests for the Cartesian five-parameter pose refiner (simple_cartesian_pose_refiner)
         - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
         - `simple_halfmap_diagnostics.f90` — backend-neutral half-map FSC, cFAR, and resolution diagnostics shared by the gridding and PCG reconstruction paths
         - `simple_nu_state_filter.f90` — assembly-owned nonuniform (NU) filtering of one state's half-map pair
+        - `simple_pcg_halfset_tester.f90` — library tests of independent half-set PCG reconstruction against gridding (simple_reconstructor_pcg)
         - `simple_pcg_solvent_sidecar.f90` — opt-in soft solvent prior of the PCG base solve (pcg_solvent=yes)
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and preconditioned
-        - `simple_pcg_halfset_tester.f90` — library tests of independent half-set PCG reconstruction against gridding (simple_reconstructor_pcg)
-        - `simple_cartesian_pose_refiner.f90` — Cartesian five-parameter (rotation, shift) pose refiner on the neutral Fourier lattice, LM solvers
-        - `simple_cartesian_pose_refiner_tester.f90` — unit tests for the Cartesian five-parameter pose refiner (simple_cartesian_pose_refiner)
         - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
         - `simple_vol_pproc_policy.f90` — per-state mask artifact compatibility check shared by volume assembly, postprocess and the abinitio final rec
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
@@ -593,8 +588,8 @@
       - `simple_jiffys.f90` — jiffy = the time it takes light to travel one centimeter in vacuum
       - `simple_magic_boxes.f90` — box sizes optimised for FFTW perfomance
       - `simple_map_reduce.f90` — routines for distributed SIMPLE execution
-      - `simple_openmp_offload_tester.f90` — platform test of OpenMP target offload: device setup, persistence, async, cuFFT against FFTW, cuBLAS, KB device forms
       - `simple_memory_monitor.f90` — opt-in process memory telemetry for all SIMPLE commanders and processing phases
+      - `simple_openmp_offload_tester.f90` — platform test of OpenMP target offload: device setup, persistence, async, cuFFT against FFTW, cuBLAS, KB device forms
       - `simple_progress.f90` — job progress estimation
       - `simple_test_utils.f90` — reusable assertion, suite tracking, and reporting utilities for tests
       - `simple_timer.f90` — Simple timer module: High resolution (nanoseconds) timer in Fortran
@@ -618,8 +613,8 @@
         - `simple_bspline_smoother.f90` — quadratic B-spline Laplacian smoother (Tikhonov regularization, Fourier-domain solve).
         - `simple_butterworth.f90` — Butterworth low-pass filtering kernel
         - `simple_estimate_ssnr.f90` — spectral signal-to-noise ratio estimation routines
-        - `simple_lpstages_tester.f90` — unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims) and the Butterworth kernel
         - `simple_fsc.f90` — various Fourier Shell Correlation utilities
+        - `simple_lpstages_tester.f90` — unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims) and the Butterworth kernel
         - `simple_opt_filter.f90` — optimization(search)-based filtering
         - `simple_tent_smooth.f90`
       - **gui/** — utilities for feeding information to the GUI
@@ -641,6 +636,7 @@
           - `simple_gui_metadata_timeplot.f90` — GUI metadata type for a time-series plot with one or two data traces.
           - `simple_gui_metadata_types.f90` — Integer type-tag constants for all GUI metadata kinds.
           - `simple_gui_metadata_utils.f90` — Utility functions for GUI metadata types.
+          - `simple_gui_metadata_vol3D.f90` — GUI metadata type for a single 3D volume entry (product paths + stats).
           - **stream/** — stream related metadata structures
             - `simple_gui_metadata_stream_abinitio3D_multistate.f90` — GUI metadata for the stream multistate abinitio3D stage â pipeline stage, particle/state counts, per-state resolution, and user-input flag
             - `simple_gui_metadata_stream_opening2D.f90` — GUI metadata for the stream opening-2D stage â particle counts, masking parameters, and user-input flag

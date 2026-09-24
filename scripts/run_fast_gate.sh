@@ -14,6 +14,10 @@
 # (ctest_fast.log.timing.txt), so a suite that grows is visible from build to
 # build. Exit status is the budget checker's.
 #
+# Before ctest, scripts/check_test_registry.py checks that the CTest
+# registrations, the test UI and the test routers agree (plan, section 7);
+# a mismatch fails the gate with status 1 before any test runs.
+#
 # Called by every compile_*.sh between `make` and `make install` when
 # --compile-tests is given (a failed gate installs nothing), and by
 # `make check`. The fast suites run in-process from the build tree and need
@@ -25,6 +29,7 @@ case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
 [ -f "$BUILD/CTestTestfile.cmake" ] || { echo "run_fast_gate: no CTest configuration in $BUILD (build with --compile-tests)" >&2; exit 2; }
 if command -v nproc >/dev/null 2>&1; then ncpu=$(nproc); else ncpu=$(sysctl -n hw.ncpu); fi
 jobs=$(( ncpu / 2 )); [ "$jobs" -lt 1 ] && jobs=1
+python3 "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1
 mkdir -p "$BUILD/test_runs"
 LOG="$BUILD/test_runs/ctest_fast.log"
 # GATE_DECLARED went to yes in Phase 2 (2026-09-22): the fast area suites

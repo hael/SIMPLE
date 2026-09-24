@@ -29,13 +29,13 @@ itself and are recorded here so the area is closed.
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| gencorrs_fft | E | 98 | assertion | not run | generated | - | - | lib_fft (assertion-bearing) | modify | Hans, 2026-09-22: was a timing loop over a user stack with no assertion; now hermetic (generated images, fixed seed) and asserts gen_objfun_vals peaks: self at rotation 1 with cc 1, rotated copy at the applied step, unrelated image below 0.5; standalone deleted; tier lib_fft |
+| gencorrs_fft | E | 98 | assertion | not run | generated | - | - | lib_fft (assertion-bearing) | merge into unit_pftc_align2D3D | Hans, 2026-09-22: was a timing loop over a user stack with no assertion; now hermetic (generated images, fixed seed) and asserts gen_objfun_vals peaks: self at rotation 1 with cc 1, rotated copy at the applied step, unrelated image below 0.5; standalone deleted; tier lib_fft; Hans, 2026-09-24 (wrap-up): lib_fft was never built; `simple_polarft_corr_tester`, sub-suite `polar correlation` of unit_pftc_align2D3D, same checks; its seed was set before parameters%new, which reseeds, and is now set_fixed_seed(20260922) after it; the fft test category is gone |
 
 ## geometry
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| angres | E | 31 | assertion | not run | generated | - | - | lib_geometry (assertion-bearing) | modify | Hans, 2026-09-22: the print-only 500..20000 sweep became `simple_test_exec test=angres` with assertions against the recorded ladder (500/1000/2000/4000 within 2 %, monotone, n^-1/2 scaling); standalone deleted; tier lib_geometry |
+| angres | E | 31 | assertion | not run | generated | - | - | lib_geometry (assertion-bearing) | retire | Hans, 2026-09-22: the print-only 500..20000 sweep became `simple_test_exec test=angres` with assertions against the recorded ladder (500/1000/2000/4000 within 2 %, monotone, n^-1/2 scaling); standalone deleted; tier lib_geometry; Hans, 2026-09-24 (wrap-up: "a standard program rather than a test"): `simple_exec prg=measure_projspace_angres nspace=<n> [pgrp=] [moldiam=]` measures the angular resolution of the reference directions the 3D search uses (build_refspiral with the point group; largest third-nearest-neighbour angle over the symmetry-expanded set); the spiral ladder 500..20000 is a comment above `find_angres` (simple_oris_dists); the test route and the geometry test category are gone |
 
 ## highlevel
 
@@ -65,7 +65,7 @@ script inspects.
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| msk_routines | E | 120 | assertion | not run | generated | - | - | lib_masks (assertion-bearing) | modify | Hans, 2026-09-22: was a print-only run of every mask routine serially and in OpenMP loops that wrote three stacks; now asserts parallel == serial for the six 2D/3D routines with the coordinates memoised once outside the region (needs threads, so library tier); single-thread semantics went to the `masks` sub-suite of unit_image; standalone deleted |
+| msk_routines | E | 120 | assertion | not run | generated | - | - | lib_masks (assertion-bearing) | merge into unit_image | Hans, 2026-09-22: was a print-only run of every mask routine serially and in OpenMP loops that wrote three stacks; now asserts parallel == serial for the six 2D/3D routines with the coordinates memoised once outside the region (needs threads, so library tier); single-thread semantics went to the `masks` sub-suite of unit_image; standalone deleted; Hans, 2026-09-24 (wrap-up): lib_masks was never built; `test_masks_parallel_equals_serial` in the mask tester (`masks`, unit_image) on an explicit team of three (num_threads), independent of OMP_NUM_THREADS: 8 noise images, box 128 (2D) and 48 (3D), soft/softavg/hard in 2D and 3D equal the serial result |
 | nano_mask | E | 44 | none | not run | user-supplied | - | - | manual (needs user-supplied) | demote | Hans, 2026-09-22: manual; runs automask2D on a user stack (selected.spi by default) and asserts nothing; a hermetic version with generated blobs and pinned diameters/shifts is possible later; standalone deleted |
 | score_volume_shape | E | 35 | THROW_HARD | not run | user-supplied / vol1 | - | - | manual (needs user-supplied) | demote | Hans, 2026-09-22: manual diagnostic; `image_bin%vol_shape_descr` and `image%calc_3D_shape_descriptors` have no caller but this test and are kept for it |
 
@@ -325,3 +325,6 @@ unit_numerics and `project records` of unit_project.
 | nice (both routes) | 2026-09-24 | delete: posted to a nonexistent server, no check | - |
 | coarrays (standalone route) | 2026-09-24 | delete: a two-image sync check; the exec case runs the coarray path end to end | `coarrays` platform entry, `simple_test_exec test=coarrays` |
 | openmp_offload (standalone program) | 2026-09-24 | moved: library module behind simple_test_exec | `simple_test_exec test=openmp_offload` (platform) |
+| gencorrs_fft | 2026-09-24 | merge into unit_pftc_align2D3D: the lib_fft suite was never built | `polar correlation` (unit_pftc_align2D3D, `simple_polarft_corr_tester`) |
+| angres (exec route) | 2026-09-24 | retire: a program measures what the test printed | `simple_exec prg=measure_projspace_angres`; the ladder is a comment above `find_angres` |
+| msk_routines | 2026-09-24 | merge into unit_image: lib_masks was never built; an explicit team of three replaces the environment's | `masks` (unit_image), `test_masks_parallel_equals_serial` |

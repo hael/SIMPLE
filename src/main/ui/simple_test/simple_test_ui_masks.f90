@@ -4,7 +4,6 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('masks', 'Masks', 60)
-type(ui_program), target :: msk_routines
 type(ui_program), target :: nano_mask
 type(ui_program), target :: score_volume_shape
 
@@ -12,39 +11,9 @@ contains
 
     subroutine construct_test_masks_programs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call new_msk_routines(tsttab)
         call new_nano_mask(tsttab)
         call new_score_volume_shape(tsttab)
     end subroutine construct_test_masks_programs
-
-    subroutine new_msk_routines( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call msk_routines%new(&
-        &'msk_routines',&                      ! name
-        &'mask routines, parallel equals serial',& ! summary
-        &'checks that the 2D/3D hard, soft and softavg masks give the same result inside OpenMP loops as serially '//&
-        &'(needs threads; library tier)',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call msk_routines%add_input(UI_IO, )
-        ! parameter input/output
-        !call msk_routines%add_input(UI_IMG, )
-        ! <no additional inputs>
-        !call msk_routines%add_input(UI_PARM, )
-        ! search controls
-        !call msk_routines%add_input(UI_SRCH, )
-        ! filter controls
-        !call msk_routines%add_input(UI_FILT, )
-        ! mask controls
-        !call msk_routines%add_input(UI_MASK, )
-        ! computer controls
-        !call msk_routines%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('msk_routines', msk_routines, tsttab, UI_CATEGORY)
-    end subroutine new_msk_routines
 
     subroutine new_nano_mask( tsttab )
         class(ui_hash), intent(inout) :: tsttab

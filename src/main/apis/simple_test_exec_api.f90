@@ -8,8 +8,6 @@ use simple_ui_program,          only: ui_program
 use iso_fortran_env,            only: output_unit
 use simple_cmdline,             only: cmdline, cmdline_err
 use simple_test_exec_class,     only: exec_test_class_commander
-use simple_test_exec_fft,       only: exec_test_fft_commander
-use simple_test_exec_geometry,  only: exec_test_geometry_commander
 use simple_test_exec_highlevel, only: exec_test_highlevel_commander
 use simple_test_exec_io,        only: exec_test_io_commander
 use simple_test_exec_masks,     only: exec_test_masks_commander

@@ -25,8 +25,121 @@ contains
         call test_disc_and_cos_edge()
         call test_mask2D_semantics()
         call test_mask3D_semantics()
+        call test_masks_parallel_equals_serial()
         call unmemoize_mask_coords ! leave no module state behind
     end subroutine run_all_mask_tests
+
+    !---------------- the threaded path ----------------
+
+    !> the real-space mask routines inside an OpenMP loop give the serial result. The mask
+    !! coordinates are memoised in module variables keyed on the box and the routines stop inside
+    !! a parallel region when the memo does not match, so the threaded path (memoise once outside,
+    !! mask many inside) is a contract of its own. A team of three threads, whatever
+    !! OMP_NUM_THREADS says (was the msk_routines test program, which needed the environment)
+    subroutine test_masks_parallel_equals_serial()
+        integer, parameter :: NIMGS = 8, BOX2 = 128, BOX3 = 48, NTEAM = 3
+        real,    parameter :: SMPD = 1.0
+        type(image) :: stk(NIMGS), ref(NIMGS)
+        integer     :: i
+        write(*,'(A)') 'test_masks_parallel_equals_serial'
+        call check_2d('mask2D_soft',    1)
+        call check_2d('mask2D_softavg', 2)
+        call check_2d('mask2D_hard',    3)
+        call check_3d('mask3D_soft',    1)
+        call check_3d('mask3D_softavg', 2)
+        call check_3d('mask3D_hard',    3)
+        do i = 1,NIMGS
+            call stk(i)%kill
+            call ref(i)%kill
+        end do
+        call unmemoize_mask_coords
+
+      contains
+
+        subroutine fill( ldim )
+            integer, intent(in) :: ldim(3)
+            integer :: j
+            do j = 1,NIMGS
+                call stk(j)%new(ldim, SMPD)
+                call stk(j)%gauran(0.0, 1.0)
+            end do
+        end subroutine fill
+
+        subroutine mask_2d( img, which, mskrad )
+            type(image), intent(inout) :: img
+            integer,     intent(in)    :: which
+            real,        intent(in)    :: mskrad
+            select case(which)
+                case(1); call img%mask2D_soft(mskrad)
+                case(2); call img%mask2D_softavg(mskrad)
+                case(3); call img%mask2D_hard(mskrad)
+            end select
+        end subroutine mask_2d
+
+        subroutine mask_3d( img, which, mskrad )
+            type(image), intent(inout) :: img
+            integer,     intent(in)    :: which
+            real,        intent(in)    :: mskrad
+            select case(which)
+                case(1); call img%mask3D_soft(mskrad)
+                case(2); call img%mask3D_softavg(mskrad)
+                case(3); call img%mask3D_hard(mskrad)
+            end select
+        end subroutine mask_3d
+
+        subroutine check_2d( name, which )
+            character(len=*), intent(in) :: name
+            integer,          intent(in) :: which
+            real    :: mskrad, maxdiff
+            integer :: j
+            mskrad = real(BOX2)/3.0
+            call unmemoize_mask_coords
+            call fill([BOX2,BOX2,1])
+            do j = 1,NIMGS
+                call ref(j)%copy(stk(j))
+                call mask_2d(ref(j), which, mskrad)   ! serial reference
+            end do
+            call unmemoize_mask_coords
+            call stk(1)%memoize_mask_coords          ! once, outside the parallel region
+            !$omp parallel do num_threads(NTEAM) default(shared) private(j) schedule(static)
+            do j = 1,NIMGS
+                call mask_2d(stk(j), which, mskrad)
+            end do
+            !$omp end parallel do
+            maxdiff = 0.0
+            do j = 1,NIMGS
+                maxdiff = max(maxdiff, maxval(abs(stk(j)%get_rmat() - ref(j)%get_rmat())))
+            end do
+            call assert_real(0.0, maxdiff, 1.0e-6, name//': the threaded result equals the serial one')
+        end subroutine check_2d
+
+        subroutine check_3d( name, which )
+            character(len=*), intent(in) :: name
+            integer,          intent(in) :: which
+            real    :: mskrad, maxdiff
+            integer :: j
+            mskrad = real(BOX3)/3.0
+            call unmemoize_mask_coords
+            call fill([BOX3,BOX3,BOX3])
+            do j = 1,NIMGS
+                call ref(j)%copy(stk(j))
+                call mask_3d(ref(j), which, mskrad)
+            end do
+            call unmemoize_mask_coords
+            call stk(1)%memoize_mask_coords
+            !$omp parallel do num_threads(NTEAM) default(shared) private(j) schedule(static)
+            do j = 1,NIMGS
+                call mask_3d(stk(j), which, mskrad)
+            end do
+            !$omp end parallel do
+            maxdiff = 0.0
+            do j = 1,NIMGS
+                maxdiff = max(maxdiff, maxval(abs(stk(j)%get_rmat() - ref(j)%get_rmat())))
+            end do
+            call assert_real(0.0, maxdiff, 1.0e-6, name//': the threaded result equals the serial one')
+        end subroutine check_3d
+
+    end subroutine test_masks_parallel_equals_serial
 
     !---------------- bounds_from_mask3D ----------------
 

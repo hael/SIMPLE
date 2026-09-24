@@ -34,6 +34,11 @@ type, extends(commander_base) :: commander_vizoris
     procedure :: execute      => exec_vizoris
 end type commander_vizoris
 
+type, extends(commander_base) :: commander_measure_projspace_angres
+  contains
+    procedure :: execute      => exec_measure_projspace_angres
+end type commander_measure_projspace_angres
+
 type, extends(commander_base) :: commander_check_states
   contains
     procedure :: execute      => check_states
@@ -614,6 +619,75 @@ contains
         call o_prev%kill
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
+
+    !> the angular resolution of the projection directions the 3D searches use: nspace directions
+    !! built as the builder builds its search space (sym%build_refspiral for pgrp); for every
+    !! direction, the angle to its third-nearest neighbour among the other directions and all
+    !! their symmetry copies, so that neighbours across the border of the asymmetric unit count
+    !! (a direction's own symmetry copies are the same view and do not); the resolution is the
+    !! largest of these angles, the definition of oris%find_angres, which it equals in C1. With
+    !! moldiam, also the spatial resolution this angular step supports at the particle's rim
+    !! (resang). The cost is nspace**2 * nsym dot products (OpenMP).
+    subroutine exec_measure_projspace_angres( self, cline )
+        class(commander_measure_projspace_angres), intent(inout) :: self
+        class(cmdline),                            intent(inout) :: cline
+        type(parameters)  :: params
+        type(sym)         :: pgrpsym
+        type(oris)        :: eulspace
+        type(ori)         :: o, osym
+        real, allocatable :: normals(:,:), symnormals(:,:), dist3(:)
+        real              :: top3(3), c, angres
+        integer           :: n, nsym, i, j, k, isym
+        call params%new(cline)
+        n = params%nspace
+        if( n < 4 ) THROW_HARD('nspace must be at least 4; exec_measure_projspace_angres')
+        call pgrpsym%new(params%pgrp)
+        nsym = pgrpsym%get_nsym()
+        call eulspace%new(n, is_ptcl=.false.)
+        call pgrpsym%build_refspiral(eulspace)
+        allocate(normals(3,n), symnormals(3,n*nsym), dist3(n))
+        do i = 1,n
+            call eulspace%get_ori(i, o)
+            normals(:,i) = o%get_normal()
+            do isym = 1,nsym
+                call pgrpsym%apply(o, isym, osym)
+                symnormals(:,(i-1)*nsym+isym) = osym%get_normal()
+            enddo
+        enddo
+        !$omp parallel do default(shared) private(j,k,c,top3) schedule(static) proc_bind(close)
+        do j = 1,n
+            top3 = -2.   ! the three largest cosines, in descending order
+            do k = 1,n*nsym
+                if( (k-1)/nsym + 1 == j ) cycle
+                c = dot_product(normals(:,j), symnormals(:,k))
+                if( c > top3(3) )then
+                    if( c > top3(1) )then
+                        top3 = [c, top3(1), top3(2)]
+                    else if( c > top3(2) )then
+                        top3 = [top3(1), c, top3(2)]
+                    else
+                        top3(3) = c
+                    endif
+                endif
+            enddo
+            dist3(j) = acos(max(-1., min(1., top3(3))))
+        enddo
+        !$omp end parallel do
+        angres = rad2deg(maxval(dist3))
+        write(logfhandle,'(A,I8)')     '>>> PROJECTION DIRECTIONS:                 ', n
+        write(logfhandle,'(A,A)')      '>>> POINT GROUP:                           ', trim(params%pgrp)
+        write(logfhandle,'(A,F8.3)')   '>>> ANGULAR RESOLUTION (DEGREES):          ', angres
+        write(logfhandle,'(A,F8.3)')   '>>> MEAN THIRD-NEIGHBOUR ANGLE (DEGREES):  ', rad2deg(sum(dist3)/real(n))
+        if( cline%defined('moldiam') )then
+            write(logfhandle,'(A,F8.2)') '>>> RESOLUTION AT THE RIM OF MOLDIAM (A):  ', resang(angres, params%moldiam)
+        endif
+        call eulspace%kill
+        call o%kill
+        call osym%kill
+        call pgrpsym%kill
+        deallocate(normals, symnormals, dist3)
+        call simple_end('**** SIMPLE_MEASURE_PROJSPACE_ANGRES NORMAL STOP ****')
+    end subroutine exec_measure_projspace_angres
 
     subroutine check_states( self, cline )
         class(commander_check_states), intent(inout) :: self

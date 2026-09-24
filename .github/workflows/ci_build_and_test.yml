@@ -92,12 +92,9 @@ jobs:
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
-             export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="coarray"
-             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             echo "-------------------- TEST COARRAYS -------------------------"
-             simple_test_exec test=coarrays
+             cd build
+             echo "-------------------- TEST COARRAYS (platform) -------------------------"
+             ctest -R '^coarrays$' --no-tests=error --output-on-failure
 
   Build_and_Test:
     name: Build SIMPLE and Test 
@@ -138,17 +135,9 @@ jobs:
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
-             export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="local"
-             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             echo "-------------------- TEST ANGRES -------------------------"
-             simple_test_exec test=angres
-             echo "-------------------- TEST MASK ROUTINES (THREADED) -------------------------"
-             OMP_NUM_THREADS=8 simple_test_exec test=msk_routines
-             echo "-------------------- TEST POLAR CORRELATION -------------------------"
-             simple_test_exec test=gencorrs_fft
-             echo "-------------------- TEST PCG RECONSTRUCTION -------------------------"
-             simple_test_exec test=pcg_recon
-             echo "-------------------- TEST UNITS -------------------------"
-             simple_test_exec test=units
+             # the fast gate (ctest -L fast) already ran in the build step (compile_clean.sh --compile-tests)
+             cd build
+             echo "-------------------- PLATFORM TESTS -------------------------"
+             ctest -L platform --no-tests=error --output-on-failure
+             echo "-------------------- PCG RECONSTRUCTION -------------------------"
+             ctest -R '^pcg_recon$' --no-tests=error --output-on-failure

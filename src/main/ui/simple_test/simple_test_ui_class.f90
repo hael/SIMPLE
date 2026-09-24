@@ -192,7 +192,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_pftc_align2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_i/o, sigma2_state, class_average_registration)', '', .false., '')
+            &'One sub-suite of this area to run alone (polar_correlation, continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_i/o, sigma2_state, class_average_registration)', '', .false., '')
         call add_ui_program('unit_pftc_align2D3D', unit_pftc_align2D3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_pftc_align2D3D
 

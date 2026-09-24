@@ -2,33 +2,22 @@
 
 Date: 2026-09-22
 
-Status: in progress. Phases 0, 1 and 2 are complete (2026-09-22): the fast
-gate is seven `fast` area suites run by every `compile_*.sh --compile-tests`
-under a 30 s budget, at 3.3 s real on the reference Mac in Debug, with the
-process-count ratchet armed and every suite passing in both table orders.
-Phase 3 (the review of everything else) is under way: the geometry, fft,
-masks, io, numerics, stats and optimize batches and the segmentation
-category are done (section 9.7; optimize awaiting its first build). The tests written so
-far have found and fixed thirteen production defects (mask mirror
-asymmetry, disc padding count, Otsu bin edge, Otsu two-valued input,
-binarize(npix) count, ori_strlen_trim, the `selec` partition typo behind
-`median`, `reverse` of even double arrays, `norm_2`/`vabs` returning 0 on
-macOS through Accelerate's `snrm2`, the `indices_post` size of a
-descending `print_segment_json` window, the Nystroem kPCA feature and
-projection scaling, the non-convergent cosine pre-image, the residual BIC of
-the PPCA rank scan) and removed
-thirty-one dead routines and three unused optimisers. The eighth fast area
-suite, `unit_reconstruction`, and the first nightly library suite,
-`lib_reconstruction`, exist since 2026-09-23 (section 9.7), as do the
-ninth and tenth fast suites `unit_pftc_align2D3D` and
-`unit_cart_align3D` and the second library suite
-`lib_cart_align3D`, the eleventh fast suite `unit_heterogeneity` with
-the third library suite `lib_heterogeneity`, the twelfth fast suite
-`unit_parallel`, the thirteenth fast suite `unit_single` with the
-fourth library suite `lib_single`, and the fifth library suite
-`lib_stream`. This is a large
-project with four workstreams (section 1.1), delivered in slices that are
-each useful on their own.
+Status (2026-09-24): Phases 0 to 4, 6 and 7 are complete, and Phase 5 is
+assigned to Ruben (section 12). Every `compile_*.sh --compile-tests` build
+first checks that the CTest registrations, the test UI and the test routers
+agree, then runs the fast gate: thirteen `fast` area suites, about 5 s real
+on the reference Mac in Debug, under the 30 s budget and the process-count
+ratchet (`SIMPLE_CTEST_BUDGET` = 25: 13 fast, 5 library, 6 workflow,
+1 platform). The review of everything else (Phase 3) gave every identity a
+verdict and built the five nightly library suites (`lib_reconstruction`,
+`lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream`) as it
+went; `simple_test_exec` is the only test executable. The tests written by
+the review found and fixed the production defects recorded in section 9.7
+and removed the dead routines recorded there. What remains is Phase 5: the
+simulation-truth gates of the workflow entries and the nightly runner
+(`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`).
+This is a large project with four workstreams (section 1.1), delivered in
+slices that are each useful on their own.
 
 Validation level: static source inspection of SIMPLE, and of X's test system
 (`production/CMakeLists.txt`, AGENTS.md "Test admission" and "Test tiering",
@@ -357,7 +346,10 @@ Admission rules, all of them:
    Fixtures are generated in the test from a fixed seed, or committed to the
    repository and small.
 3. **It runs in-process** inside its area suite (section 6) on one OpenMP
-   thread, and returns on success. It does not `stop`, does not change the
+   thread, and returns on success. A sub-suite whose subject is a threaded
+   path opens its own small team with `num_threads` (the discrete stack
+   reader of `unit_core` and the masks of `unit_image` use three); the
+   entry's `OMP_NUM_THREADS` stays 1. It does not `stop`, does not change the
    working directory without restoring it, and does not leave global state
    (random-number generator, module variables, open units) that the next test
    in the suite can see.
@@ -382,13 +374,13 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 |---|---|---:|
 | `unit_core` | string (with comma-separated integer lists and ANSI formatting since the utils review), syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line (with a full processing line since the utils review) | 0.2 s |
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
-| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation (utils review) | 1.3 s (before the shift search moved out and the mask suites moved in) |
+| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks (with the threaded path on a team of three since the wrap-up), binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation (utils review) | 1.3 s (before the shift search moved out and the mask suites moved in) |
 | `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
 | `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve (with the collector's hard-gate rejection since the stream review), 2D search-space map I/O, motion gain (atoms moved to `unit_single`) | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
-| `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, class-average registration (utils review) — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
+| `unit_pftc_align2D3D` | polar correlation (gen_objfun_vals on generated images, since the wrap-up), continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, class-average registration (utils review) — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
 | `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | 4.5 s (Mac; 47.3 s in the first build, cut down, section 9.7) |
 | `unit_parallel` | qsys control, qsys environment — added by the parallel review (2026-09-23, section 9.7); distributed execution, scripts only, nothing submitted | to be measured |
@@ -442,21 +434,25 @@ Admission rules for a library suite member:
 4. it is registered with a `TIMEOUT` and the suite's total is recorded in the
    nightly summary, so growth is visible.
 
-Provisional suites, from the router areas and the standalone programs (to
-be settled by the review):
+Suites as built (2026-09-24). The provisional list drawn from the router
+areas before the review (`lib_fft`, `lib_geometry`, `lib_masks`,
+`lib_numerics`, `lib_optimize`, `lib_stats`, `lib_io`, `lib_project`,
+`lib_search`, `lib_parallel`) is superseded: the review sent the members of
+those areas to the fast area suites, to the suites below or to a program, or
+retired them (section 9.7). The last three, `gencorrs_fft`, `angres` and
+`msk_routines`, became the `polar correlation` sub-suite of
+`unit_pftc_align2D3D`, the program `measure_projspace_angres` and the
+threaded path of `masks` in `unit_image` (section 9.7, the wrap-up).
 
-| suite | drawn from |
+| suite | sub-suites |
 |---|---|
-| `lib_fft` | the `fft` area: FFT, Fourier-space operations, gencorrs, polar FTCC, rotations, expanded FT |
-| `lib_geometry` | `geometry`: symmetry, Euler sampling, uniform rotations, angular resolution |
-| `lib_masks` | `masks`: masking, envelopes, mask bounds, graphene, Otsu |
-| `lib_numerics` | `numerics`: linear algebra, eigensolvers, PCA, KPCA, clustering, random draws |
-| `lib_optimize` | `optimize`: L-BFGS-B, low-pass optimisation, shift search, LP limits |
-| `lib_stats` | `stats`: correlations, weighting, rank statistics, sigma estimation |
-| `lib_io` | `io`: image and stack I/O, MRC validation, STAR import/export, parallel I/O |
-| `lib_project` | `class` and `utils`: project files, orientation documents, binoris, serialization |
-| `lib_search` | the search-strategy and continuous-refinement suites (`continuous_inplane_*`, `pose_cont_refinement`, `continuous_3D_pcg_*`) once they run on generated data |
-| `lib_parallel` | `parallel`: OpenMP correctness with an explicit small team |
+| `lib_reconstruction` | PCG half-set |
+| `lib_cart_align3D` | pose 1JYX recovery |
+| `lib_heterogeneity` | flex PCA deconvolution 20k, flex PCG operator 64, flex PCG solve sweep |
+| `lib_single` | nanoparticle atoms, C-alpha molecules, pdb2mrc |
+| `lib_stream` | optics assignment, picking references, pick and extract |
+
+Their runtimes are recorded by the first night of the runner (Phase 5).
 
 Registration: one entry per suite, `LABELS library`, its own working
 directory, `OMP_NUM_THREADS` set explicitly (a suite may use a team, since
@@ -494,12 +490,24 @@ directory on the dedicated machine so a regression can be dated.
 
 Registration: one CTest entry per workflow, `LABELS workflow`,
 `RUN_SERIAL TRUE` (each owns the machine's OpenMP team and may start
-distributed workers), a long `TIMEOUT`, its own working directory. Expected
-members: `simulated_workflow` (both systems, both pickers),
-`single_workflow`, `mini_stream`, `stream_preproc` (the in-process stream
-stages are in `lib_stream`), `pcg_recon`,
-`pcg_frac_update`, `rec3D_backends`, `reproject`, and the nano workflows (`atoms_stats`,
-`detect_atoms`, `detect_calpha*`, `simulate_nanoparticle`).
+distributed workers), a long `TIMEOUT`, its own working directory. Members
+as registered (2026-09-24): `simulated_workflow_6vxx`,
+`simulated_workflow_1jxy`, `single_workflow`, `pcg_recon`,
+`simulate_particles` (which absorbed `reproject`) and `stream_preproc` (the
+in-process stream stages are in `lib_stream`). The review settled the rest
+of the original list: `mini_stream`, `pcg_frac_update` and `rec3D_backends`
+need user data and are manual; the nano workflows are sub-suites of
+`lib_single` (`nanoparticle atoms`, `C-alpha molecules`); the second picker
+of `simulated_workflow` is open. The truth gates and their floors are
+Phase 5, assigned to Ruben
+(`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`).
+Its map gate is specified there: the `abinitio3D` map is neither docked to
+the truth map nor necessarily of the right hand, so the gate makes the truth
+map with `pdb2mrc` on the same grid, docks the map to it with `dock_vols` at
+a low-pass of 15 to 20 A, keeps the hand (the map or its `mirror('x')`) that
+docks with the higher correlation, and takes the masked FSC at 0.143 against
+a declared floor; poses are compared after composing each recovered
+orientation with the docking rotation (and the mirror).
 
 #### 5.2.3 The nightly run
 
@@ -511,6 +519,14 @@ against floors, pass/fail) is archived into a dated directory on that
 machine and mailed or written where the team looks. The whole run must fit
 the night; a suite or workflow that grows past its share is reported by the
 summary, and trimming it is a reviewed change, as for the fast gate.
+
+Ruben designs and writes the runner (2026-09-24, the Phase 5 handover,
+part B): a locked, scheduled run of `./compile_clean.sh --compile-tests`
+on a known commit, then `ctest -L library`, `ctest -L workflow`, and
+`ctest -L platform` where the machine has the capability; a dated summary
+directory outside `build/` (which the compile scripts delete) with the
+status, times and `metrics.tsv` of every entry; a cumulative history file;
+and a short notice where the team looks.
 
 ### 5.3 Isolated and platform tests (`platform` label)
 
@@ -647,10 +663,11 @@ The area commander is what CTest registers; the focused names are what a
 developer types.
 
 For the extensive tier the area commanders are the library-suite commanders
-(`test=lib_fft`, ..., section 5.2.1), one per suite and the same fused shape
-as the fast ones, and the workflow commanders that exist
-(`simulated_workflow`, `single_workflow`, `mini_stream`, `stream_preproc`),
-one CTest entry each.
+(`test=lib_reconstruction`, ..., section 5.2.1), one per suite and the same
+fused shape as the fast ones (their tables are in
+`simple_commanders_test_class` beside the fast ones), and the workflow
+commanders (`simulated_workflow`, `single_workflow`, `pcg_recon`,
+`simulate_particles`, `preproc`), one CTest entry each (section 5.2.2).
 
 Per-test commander types are removed as their bodies migrate. The fourteen
 topic areas are a starting point; the inventory may split, merge or rename
@@ -725,7 +742,8 @@ capability is available.
    every `compile_*.sh --compile-tests` between build and install and by
    `make check`; `GATE_DECLARED` inside it is the Phase 2 switch. The fast
    suites run in-process from the build tree and need nothing from the
-   install tree.
+   install tree. Before ctest, the script runs the registry-consistency
+   check (item 6).
 
    `NJOBS` is the core count divided by two (tests are pinned to one thread
    but do I/O). `ctest_budget.py` reads the `ctest` output, fails if the
@@ -737,7 +755,7 @@ capability is available.
    something to fix. The `check` target runs the same thing by hand.
 3. **Registration by suite.** One `add_test` per fast area suite
    (`simple_test_exec test=unit_core`), per library suite
-   (`test=lib_fft`), per workflow gate, per platform case and per binary
+   (`test=lib_stream`), per workflow gate, per platform case and per binary
    smoke. Every registration sets `LABELS` (`fast`, `library`, `workflow`,
    `platform`), `TIMEOUT`, `WORKING_DIRECTORY` under `build/test_runs/<name>`
    (created at configure time) and an explicit `OMP_NUM_THREADS` (1 for the
@@ -757,7 +775,8 @@ capability is available.
    programs that have not migrated, but none of them is registered with
    CTest once Phase 1 lands (they are runnable by name and through
    `test_timing_run.sh`); CI keeps calling the not-yet-migrated ones by
-   name until Phase 7 switches it to labels.
+   name until Phase 7 switches it to labels. CI runs by label since
+   2026-09-24 (section 9.7, the wrap-up).
 6. **Registry consistency.** A configure-time or `check`-time script compares
    the CTest registrations with `simple_test_exec test=list` and fails on a
    registered selector that is not dispatchable, or on a selector the test UI
@@ -766,6 +785,18 @@ capability is available.
    selectors and platform cases whose capability is absent on this machine
    are dispatchable without being registered, by design. A generated common
    registry is a possible later improvement, not a prerequisite.
+   **Done 2026-09-24** as a static check of the source tree rather than of
+   `test=list`, so it needs no binary and runs before the gate:
+   `scripts/check_test_registry.py`, called by `run_fast_gate.sh` before
+   ctest (exit status 1 fails the gate). It fails when a `test=` selector in
+   `production/CMakeLists.txt` (with the `foreach` lists expanded) is not a
+   program of the test UI; when a program of the test UI has no router case
+   in `src/main/exec/simple_test_exec_*.f90`, or more than one; when a
+   router case is not a program of the test UI; when a program is defined
+   twice; and when an area or library suite (`unit_*`, `lib_*`, except the
+   umbrella `units`) is not registered. Workflow gates and platform cases
+   follow no naming convention, so their registration is not enforced;
+   their selectors are still checked for being dispatchable.
 7. **Install.** A `--compile-tests` install contains `simple_test_exec` and
    no standalone test binaries.
 
@@ -2180,6 +2211,82 @@ CI's test step lost its calls of `simple_test_install` (twice),
 route is empty. The unit_image UI list of sub-suites was stale (it named
 the moved shift search and missed five); it is complete.
 
+**The wrap-up (2026-09-24, Hans: "We can finish up the rest"; on the truth
+gates: the `abinitio3D` maps are neither docked to the reference volume nor
+necessarily of the right hand, so the gate involves docking and mirroring,
+which SIMPLE has but which must be specified; on `angres`: "we need
+something that actually measures the angular resolution of the projection
+directions used in the search", a standard program rather than a test,
+`measure_projspace_angres` with `nspace` given, with the tabulated values
+kept where they fit; the rest as proposed).** Three test programs were left
+in the fft, geometry and masks categories of `simple_test_exec`, all
+`modify` verdicts of 2026-09-22 waiting for library suites of the
+provisional list (section 5.2.1) that the review never built.
+
+`gencorrs_fft` is `simple_polarft_corr_tester`, sub-suite `polar
+correlation` of `unit_pftc_align2D3D`: three smooth zero-mean images of box
+64 go through the production polarisation path, and `gen_objfun_vals`
+(objfun cc) peaks at rotation 1 with correlation 1 for an image against
+itself, at the applied rotation (within one step, either sense) above 0.9
+for a rotated copy, and stays below 0.5 at every rotation for an unrelated
+image. Its seed was set before `parameters%new`, which reseeds through
+`seed_rnd`, so without `SIMPLE_SEED` the images came from `/dev/urandom`;
+it is `set_fixed_seed(20260922)` after `parameters%new` now, and its
+private copy of the seed formula is gone.
+
+`msk_routines` is `test_masks_parallel_equals_serial` in the mask tester
+(`masks`, `unit_image`): eight noise images, box 128 in 2D and 48 in 3D,
+are masked serially and then inside an OpenMP loop on an explicit team of
+three (`num_threads`), with the mask coordinates memoised once outside the
+region; the soft, soft-average and hard routines in 2D and 3D give the
+serial result. The program needed `OMP_NUM_THREADS`; the explicit team
+makes the check independent of the entry's one thread, as for the discrete
+stack reader of `unit_core` (admission rule 3 now says so).
+
+`angres` printed, and since 2026-09-22 asserted, `oris%find_angres` of a
+spiral of 500 to 20 000 directions. It is the program `simple_exec
+prg=measure_projspace_angres nspace=<n> [pgrp=<pg>] [moldiam=<A>]`
+(orientation processing, advanced visibility). It builds the reference
+directions as the 3D search does (`sym%build_refspiral` with `nspace` and
+the point group) and reports the largest angle from a direction to its
+third-nearest neighbour among the symmetry copies of the other directions
+(for C1 the measure of `find_angres`), the mean of that angle and, with
+`moldiam`, the resolution at the rim of the molecule (`resang`). It costs
+`nspace`^2 times the number of symmetry operations dot products on the
+threads given (4e8 at 20 000 directions in C1). The ladder of the original
+program (spiral, 500 to 20 000 in steps of 500) is a comment above
+`find_angres` in `simple_oris_dists`. The dead `nspace_commander` of
+`simple_commanders_refine3D` (no program, no caller) is removed.
+
+The fft and geometry categories of `simple_test_exec` are gone (commander,
+router and UI modules and their hooks, as utils before them); the masks
+category keeps the manual `nano_mask` and `score_volume_shape`. The UI
+visibility test asserts `nano_mask` in the masks category and
+`measure_projspace_angres` in orientation processing in place of the
+retired `angres`. CI runs by label and name: the test step runs
+`ctest -L platform` and `ctest -R '^pcg_recon$'` after the build step's
+fast gate, and the coarray job `ctest -R '^coarrays$'`, each with
+`--no-tests=error`. The registry-consistency check (section 7, item 6) is
+`scripts/check_test_registry.py`, run by `run_fast_gate.sh` before ctest.
+On this tree it finds 27 registered selectors, 37 test programs and 37
+router cases, consistent; on a scratch copy with an unregistered area
+suite, a renamed router case and so a program without one, it reports the
+three problems and exits with status 1. The code map is regenerated with
+`scripts/generate_codeoverview.pl`, which also restores two files the
+hand-kept map had missed and removes a duplicate entry. No CTest process is
+added or removed (budget 25).
+
+Phase 5 is Ruben's
+(`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`):
+the truth gates of each workflow entry, with the map gate specified as in
+section 5.2.2 (a same-grid `pdb2mrc` truth map, `dock_vols` at 15 to 20 A,
+the hand chosen by the docking correlation of the map and its mirror, the
+masked FSC at 0.143 against a declared floor, poses composed with the
+docking rotation and the mirror before `sym_dists`), a fix for the
+`NTHR = 4` constant of `simulated_workflow`, and the design and code of the
+nightly runner. Section 12 and section 16 record where every phase and
+criterion stands.
+
 ## 10. Fast-tier performance
 
 The 30 s budget will not be met by classification alone; the fast candidates
@@ -2202,8 +2309,9 @@ in descending order of wall time:
 - **No sleeps, polls or real timers.** Test scheduling and watchdog policies
   as state machines with injected time.
 - **One thread.** OpenMP teams inside a `ctest --parallel` run oversubscribe
-  the machine and make timings meaningless; parallel correctness is tested by
-  the `parallel` suite with an explicit small team.
+  the machine and make timings meaningless; parallel correctness is tested
+  inside the sub-suite of the code in question with an explicit small team
+  (`num_threads`), as the discrete stack reader and the masks do.
 - **Measure again.** `ctest_budget.py` keeps the per-entry table beside the
   log on every build; a suite that grows is seen when it grows, and the 30 s
   label total is what fails the gate.
@@ -2220,7 +2328,7 @@ state what the right answer is.
 simple_test_exec test=list
 simple_test_exec test=unit_core
 simple_test_exec test=unit_core suite=hash
-simple_test_exec test=lib_fft
+simple_test_exec test=lib_stream
 simple_test_exec test=simulated_workflow system=6vxx
 ```
 
@@ -2242,11 +2350,11 @@ CI, scripts, implementation notes and user instructions.
 | 0 | all | **Timing and failure-path inventory.** Build with `--compile-tests` in Debug and Release; run `scripts/test_timing_run.sh` in each (every standalone binary and every `simple_test_exec` case, each in its own directory under a timeout, single-threaded). Run `scripts/test_review_dossier.py --timing ...` to generate the dossiers and the inventory (section 8): proposed tier, failure path, run state and time, overlap candidates, fixtures, launchers, callers. Propose the grouped-module and commander map and the area review order. | Every identity has a dossier, a run state (a measured time where it could run; otherwise timed out, crashed, missing fixture, unsupported capability or manual) and a proposed tier. |
 | 1 | A | **Scaffolding and a provisional gate.** `ctest` after install in every `compile_*.sh --compile-tests`; `ctest_budget.py`; labels, timeouts, working directories, thread pinning. Register `units` as it is under the label `provisional`, not `fast`: it runs on every `--compile-tests` build and reports its time, but the budget is not enforced and nothing carries the `fast` label yet, because `units` still contains the socket, HTTP and child-process sub-suites that the fast admission rules exclude. Register the simulated workflows under `workflow` with their current checks. `SIMPLE_CTEST_BUDGET` is not yet set. | `compile_debug.sh --compile-tests` builds and runs `units` green; its per-sub-suite times are known; CI still passes. **Met 2026-09-22:** commit 8b7dfd4d7; `units` 17.5 s through the gate (Debug, 1 thread). |
 | 2 | C | **Split `units` into hermetic area suites, then declare the fast gate.** Reconcile the two routes into one implementation (the union of their sub-suites), move the sub-suite lists into the grouped modules of section 6.1, move `forked process` out to its own `platform` entry (decided, section 4.6) and confirm the remaining `unit_ipc` sub-suites are localhost-only and bounded. Register one entry per area suite (section 5.1 table); when every registered suite meets the admission rules, relabel them `fast`, drop the `provisional` entry, set `SIMPLE_CTEST_BUDGET` to the registered count, and turn on the 30 s check in `ctest_budget.py`. Shrink what is over budget. Remove the standalone `simple_test_units` and its CI call. | Every area suite runs in one process and meets the admission rules; the `fast` label is under 30 s with `ctest --parallel`; the budget ratchet is armed; a failure names its suite. **Landed 2026-09-22** (`simple_commanders_test_class` rewritten as area tables over a `unit_suite` type, `suite=` input, `SIMPLE_UNIT_ORDER=reverse`, `forked_process` under `platform`, `SIMPLE_CTEST_BUDGET=19`, `GATE_DECLARED=yes`). **Met 2026-09-22:** the `--compile-tests` build passed 7/7 in 3.3 s real; every suite also passed with `SIMPLE_UNIT_ORDER=reverse`, so no sub-suite leaks state into its neighbours in either direction. |
-| 3 | B | **Review everything else.** The other 149 identities, area by area (section 9): `demote` to a named library suite or the workflow gates, `keep` as manual, `merge`, `delete` or `retire`; the 53 two-route identities and 14 footprint clusters resolved to one implementation each; deletions applied with their retired-tests rows and coverage accounting. | Every identity has a verdict naming its destination; no pair or cluster retains two implementations of the same coverage. |
-| 4 | B + D | **Build the library suites.** Area by area: the survivors move into the grouped module, gain the assertions their verdicts require, and are registered as one `lib_<area>` entry under `library`; standalone binaries removed as each suite completes. The first suite (`lib_fft` or `lib_geometry`) is the pilot for the fused extensive shape. | Each library suite runs in one process nightly with a recorded time; its members' binaries are gone. |
-| 5 | D | **Simulation-truth gates and the nightly runner.** `simulated_workflow`, `single_workflow` and `mini_stream` compare against the generating model (FSC to the truth map, pose agreement) with declared floors; the nightly `ctest -L "library|workflow"` run and its archive on the dedicated machine. | The nightly run completes unattended and reports per-suite times and per-workflow metrics against floors. |
-| 6 | B | **Mother suites, platform and socket cases** with explicit isolation and launcher policy. | Parent suites launch `simple_test_exec` children with full accounting; platform cases skip or register predictably and cannot hang the fast gate. |
-| 7 | B | **Retire the glob.** Remove the standalone executable glob, switch CI to `ctest -L fast` plus the platform jobs, normalize documentation, delete stranded per-test commander types, routers and UI entries. | A clean `--compile-tests` build produces only `simple_test_exec`; registry consistency passes; CI uses no standalone Fortran test executable. |
+| 3 | B | **Review everything else.** The other 149 identities, area by area (section 9): `demote` to a named library suite or the workflow gates, `keep` as manual, `merge`, `delete` or `retire`; the 53 two-route identities and 14 footprint clusters resolved to one implementation each; deletions applied with their retired-tests rows and coverage accounting. | Every identity has a verdict naming its destination; no pair or cluster retains two implementations of the same coverage. **Met 2026-09-24:** all 92 identities of the inventory's area tables have a verdict with reviewer and date, and the retired-tests table has 135 rows (section 9.7, from the geometry batch to the wrap-up). |
+| 4 | B + D | **Build the library suites.** Area by area: the survivors move into the grouped module, gain the assertions their verdicts require, and are registered as one `lib_<area>` entry under `library`; standalone binaries removed as each suite completes. The first suite (`lib_fft` or `lib_geometry`) is the pilot for the fused extensive shape. | Each library suite runs in one process nightly with a recorded time; its members' binaries are gone. **Done within Phase 3, 2026-09-24:** the review built each library suite as it reviewed the area, so Phase 4 had no pass of its own: `lib_reconstruction`, `lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream` (section 5.2.1). The pilot named here never existed: the last members of `lib_fft`, `lib_geometry` and `lib_masks` became fast sub-suites and a program. Every standalone binary is gone. The recorded nightly time of each suite comes with the first night of the runner (Phase 5). |
+| 5 | D | **Simulation-truth gates and the nightly runner.** `simulated_workflow`, `single_workflow` and `mini_stream` compare against the generating model (FSC to the truth map, pose agreement) with declared floors; the nightly `ctest -L "library|workflow"` run and its archive on the dedicated machine. | The nightly run completes unattended and reports per-suite times and per-workflow metrics against floors. **Assigned to Ruben 2026-09-24** (Hans): the truth gates and the design and code of the nightly runner, `doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`. |
+| 6 | B | **Mother suites, platform and socket cases** with explicit isolation and launcher policy. | Parent suites launch `simple_test_exec` children with full accounting; platform cases skip or register predictably and cannot hang the fast gate. **Met by the review, 2026-09-24:** no mother suite is left (those that launched child cases were merged into in-process sub-suites or deleted, section 9.7); the platform entries (`forked_process`, and `coarrays`, `flex_gpu` and `openmp_offload` when CMake has the capability) carry their own label and timeout and are outside the fast gate; the socket role programs are deleted and the IPC socket tests in `unit_ipc` are bound to localhost. |
+| 7 | B | **Retire the glob.** Remove the standalone executable glob, switch CI to `ctest -L fast` plus the platform jobs, normalize documentation, delete stranded per-test commander types, routers and UI entries. | A clean `--compile-tests` build produces only `simple_test_exec`; registry consistency passes; CI uses no standalone Fortran test executable. **Met 2026-09-24:** the glob and `production/tests` went with the utils review; the stranded fft and geometry test categories and the dead `nspace_commander` went with the wrap-up; `scripts/check_test_registry.py` passes and runs on every `--compile-tests` build; CI runs `ctest` by label and name (section 9.7). |
 
 Complete a vertical area slice (baseline, extract, assert, shrink, route,
 switch callers, delete duplicate) before starting the next. Do not copy every
@@ -2324,7 +2432,8 @@ Compilation and runtime validation are user-run unless separately authorised.
 6. Test implementation modules contain no program units and no `stop`.
 7. No migrated test has a new dedicated commander type whose only purpose is
    to call one procedure.
-8. `BUILD_TESTS=OFF` source filtering excludes all test-only modules.
+8. `BUILD_TESTS=OFF` source filtering excludes all test-only modules (in
+   part, by design: section 16, criterion 8).
 9. `git diff --check` and non-compiling syntax diagnostics pass for edited
    files.
 
@@ -2352,9 +2461,10 @@ capability or fixture is absent; and wall time against the inventory.
 7. The nightly `library|workflow` run completes on the dedicated machine and
    its archive holds per-suite times and per-workflow metrics against
    declared floors.
-8. A `BUILD_TESTS=OFF` build contains no test executable or test-only object;
-   a `--compile-tests` install contains `simple_test_exec` and no standalone
-   `simple_test_*` binaries.
+8. A `BUILD_TESTS=OFF` build contains no test executable or test-only object
+   (in part, by design: section 16, criterion 8); a `--compile-tests`
+   install contains `simple_test_exec` and no standalone `simple_test_*`
+   binaries.
 
 ## 16. Acceptance criteria
 
@@ -2378,6 +2488,35 @@ The project is complete when:
 9. The process budget and the time budget are enforced on every build.
 10. Compilation and runtime checks not actually observed are listed as
     outstanding rather than claimed as passing.
+
+**Where the criteria stand (2026-09-24).**
+
+- *Met:* 1 (thirteen fast suites, about 5 s real on the reference Mac in
+  Debug, every one assertion-bearing); 3; 4 (section 12, Phase 3); 5 (CI by
+  label and name, documentation and handovers by `test=<id>`, no mother
+  suite left); 6; 7; 9 (`SIMPLE_CTEST_BUDGET` at configure time,
+  `ctest_budget.py` and the registry check on every `--compile-tests`
+  build).
+- *Open:* 2, the nightly run with the truth gates (Phase 5, Ruben).
+- *Not fully attainable, by design:* 8. `BUILD_TESTS=OFF` drops
+  `simple_test_exec` with its commanders, routers and API module, every
+  `*_tester` module (`src/CMakeLists.txt`) and every CTest registration
+  (`production/CMakeLists.txt`). Three kinds of test code stay in the
+  library: the test UI registry (`src/main/ui/simple_test`,
+  `simple_ui_test_group`), because `simple_ui` builds the test-program
+  table beside the production ones; `simple_test_utils` in `src/utils`;
+  and the white-box self-tests that stay inside production modules because
+  they read private components (for example `test_flex_pcg_operator` in
+  `simple_flex_pca_pcg`, section 9.7, heterogeneity). Separating them
+  would take a conditional-compilation layer around `simple_ui` and the
+  self-tests for little gain; no production executable has a test entry
+  point.
+- *Outstanding checks (criterion 10):* a build of this tree without
+  `--compile-tests` (the compile scripts then configure `BUILD_TESTS=OFF`),
+  to confirm that it links without the test-only sources (Hans); the
+  offload branch of `simple_openmp_offload_tester` in an offload build
+  (Cyril); the first night of the runner, with the runtimes of the library
+  and workflow entries (Ruben).
 
 ## 17. Non-goals
 

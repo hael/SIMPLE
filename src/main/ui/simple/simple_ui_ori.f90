@@ -8,6 +8,7 @@ type(ui_program), target :: make_oris
 type(ui_program), target :: oriops
 type(ui_program), target :: oristats
 type(ui_program), target :: vizoris
+type(ui_program), target :: measure_projspace_angres
 
 contains
 
@@ -17,6 +18,7 @@ contains
         call new_oriops(prgtab)
         call new_oristats(prgtab)
         call new_vizoris(prgtab)
+        call new_measure_projspace_angres(prgtab)
     end subroutine construct_ori_programs
 
 subroutine new_make_oris( prgtab )
@@ -240,5 +242,34 @@ subroutine new_make_oris( prgtab )
         ! add to ui_hash
         call add_ui_program('vizoris', vizoris, prgtab, UI_CATEGORY)
     end subroutine new_vizoris
+
+    subroutine new_measure_projspace_angres( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call measure_projspace_angres%new(&
+        &'measure_projspace_angres',&                                                        ! name
+        &'Angular resolution of the projection directions of the 3D search',&               ! summary
+        &'is a program for measuring the angular resolution of the nspace projection directions the 3D&
+        & searches use for point group pgrp: the largest angle from a direction to its third-nearest&
+        & neighbour, counting the symmetry copies of the other directions. With moldiam it also reports&
+        & the spatial resolution this angular step supports at the rim of the particle. nspace must be&
+        & even; the cost grows as nspace squared times the point-group order',&
+        &'simple_exec',&                                                                     ! executable
+        &.false., &                                                                          ! requires sp_project
+        &visibility=UI_VIS_ADVANCED)
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! parameter input/output
+        call measure_projspace_angres%add_input(UI_PARM, nspace, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call measure_projspace_angres%add_input(UI_PARM, pgrp, required_override=.false., &
+        &visibility=UI_VIS_STANDARD)
+        call measure_projspace_angres%add_input(UI_PARM, moldiam, &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call measure_projspace_angres%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('measure_projspace_angres', measure_projspace_angres, prgtab, UI_CATEGORY)
+    end subroutine new_measure_projspace_angres
 
 end module simple_ui_ori

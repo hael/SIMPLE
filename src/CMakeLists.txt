@@ -139,7 +139,6 @@ set_property(SOURCE ${SIMPLE_CONDITIONAL_BRANCH_SOURCES} APPEND
 # set does not reference them directly.
 set(SIMPLE_INTENTIONAL_HELPER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_class_sample_io.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/test/simple_commanders_test_fft.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/flex/simple_flex_projected_latent_model.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/image/simple_image.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_motion_align_hybrid.f90"
