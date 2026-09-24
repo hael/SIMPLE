@@ -11,6 +11,7 @@ from django.utils import timezone
 # local imports
 from ..helpers import *
 from ..models import JobModel, WorkspaceModel
+from .simple import SIMPLEProject
 
 
 class Workspace:
@@ -117,8 +118,9 @@ class Workspace:
         """
         Create a new workspace inside the given project.
 
-        Creates the hidden directory and symlink on disk, then writes the DB record.
-        The DB record is rolled back if filesystem operations fail.
+        Saves a DB record to allocate the workspace id, then creates the hidden
+        directory, initial workspace.simple project, and symlink on disk. The DB
+        record is rolled back if filesystem or project initialization operations fail.
         Returns True on success, False on any failure.
 
         unit tests: test_workspace_new
@@ -151,6 +153,9 @@ class Workspace:
         new_workspace_path = os.path.join(projectdir, new_workspace_dirc)
 
         if not ensure_directory(new_workspace_path):
+            workspacemodel.delete()
+            return False
+        if not SIMPLEProject(new_workspace_path).create():
             workspacemodel.delete()
             return False
         if not create_symlink(new_workspace_path, os.path.join(projectdir, new_workspace_link)):

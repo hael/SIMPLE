@@ -527,8 +527,7 @@ class SIMPLEProject:
     """
     Initialises a new SIMPLE project file (workspace.simple) in a directory.
 
-    Used when a workspace first needs to run a batch job, so downstream jobs
-    can copy a valid project file.
+    Used while creating a workspace so Batch starts with a valid project file.
     """
 
     cmd = ["simple_exec", "prg=new_project", "projname=workspace"]

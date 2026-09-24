@@ -1,9 +1,12 @@
+import os
 import tempfile
+from unittest.mock import patch
 
 from django.http  import HttpRequest
 from django.test  import TestCase
 from django.utils import timezone
 
+from ..data_structures import simple as simple_module
 from ..data_structures.project   import Project
 from ..data_structures.workspace import Workspace
 from ..models                    import JobModel
@@ -22,6 +25,14 @@ class WorkspaceTest(TestCase):
   test_workspace_desc = "test workspace description"
 
   def setUp(self):
+    simple_exec_patch = patch.object(
+      simple_module.subprocess,
+      "run",
+      side_effect=self._create_workspace_project,
+    )
+    self.simple_exec = simple_exec_patch.start()
+    self.addCleanup(simple_exec_patch.stop)
+
     project = ProjectModel.objects.create(
       name=self.test_project_name,
       desc=self.test_project_desc,
@@ -29,6 +40,12 @@ class WorkspaceTest(TestCase):
       date=timezone.now(),
     )
     WorkspaceModel.objects.create(proj=project)
+
+  @staticmethod
+  def _create_workspace_project(command, check):
+    workspace_dir = next(arg.removeprefix("dir=") for arg in command if arg.startswith("dir="))
+    with open(os.path.join(workspace_dir, "workspace.simple"), "w", encoding="utf-8"):
+      pass
 
   def test_workspace_init(self):
     # test init empty workspace
@@ -50,8 +67,28 @@ class WorkspaceTest(TestCase):
       project.new(request)
       assertProject(project, name=self.test_project_name, id=2)
       workspace = Workspace()
-      workspace.new(project, user=self.test_workspace_user)
+      self.assertTrue(workspace.new(project, user=self.test_workspace_user))
       assertWorkspace(workspace, id=2, user=self.test_workspace_user)
+      workspace_path = os.path.join(project.get_absdir(), ".workspace_2")
+      self.simple_exec.assert_called_once_with(
+        ["simple_exec", "prg=new_project", "projname=workspace", "dir=" + workspace_path],
+        check=True,
+      )
+      self.assertTrue(os.path.isfile(os.path.join(workspace_path, "workspace.simple")))
+
+  def test_workspace_new_fails_when_project_file_creation_fails(self):
+    self.simple_exec.side_effect = None
+    with tempfile.TemporaryDirectory() as tmpdirc:
+      request = HttpRequest()
+      request.POST["new_project_name"] = self.test_project_name
+      request.POST["new_project_dirc"] = tmpdirc
+      project = Project()
+      project.new(request)
+      workspace = Workspace()
+
+      self.assertFalse(workspace.new(project, user=self.test_workspace_user))
+      self.assertFalse(WorkspaceModel.objects.filter(id=2).exists())
+      self.assertFalse(os.path.lexists(os.path.join(project.get_absdir(), "ds_new_workspace_1")))
 
   def test_workspace_delete(self):
     # test delete workspace
