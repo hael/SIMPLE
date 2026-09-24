@@ -5,11 +5,15 @@
   oridist) and `volume_outputs` in context. Used by the streaming multistate zoom
   page (states=jobstats.state_volumes) and the non-streaming per-stage cls3D
   panel (states=<currently selected stage's states>, see _cls3D_viewer.html).
+  Pass `hide_header=True` to omit the "volume · state N" title bar (e.g. when
+  the including page already renders its own header).
 {% endcomment %}
 {% if states|length > 0 %}
+{% if not hide_header %}
 <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p data-volume-panel-title class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volume · state {{ states.0.state }}</p>
 </div>
+{% endif %}
 <div class="flex flex-row h-full w-full min-h-0">
     <div class="flex flex-1 min-h-0">
         {% if volume_outputs %}

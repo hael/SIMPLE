@@ -32,11 +32,11 @@
 </div>
 <div class="flex flex-row flex-1 h-full w-full overflow-hidden">
     {% include 'includes/_cls3D_state_selector.html' %}
-    <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+    <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext overflow-hidden">
         {% if "cls3D" in jobstats %}
             {% for stage in cls3d_stages %}
                 <div class="cls3dstagedetail flex flex-1 flex-col min-h-0{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
-                    {% include 'includes/_cls3D_state_detail.html' with states=stage.states volume_outputs=stage.volume_outputs volume_kinds=stage.volume_kinds %}
+                    {% include 'includes/_cls3D_state_detail.html' with states=stage.states volume_outputs=stage.volume_outputs volume_kinds=stage.volume_kinds hide_header=True %}
                 </div>
             {% endfor %}
         {% elif "state_volumes" in jobstats %}

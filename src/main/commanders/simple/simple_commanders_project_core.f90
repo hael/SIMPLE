@@ -875,12 +875,13 @@ contains
         type(parameters)                :: params
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
-        integer,            allocatable :: states(:), ptcls_in_state(:)
+        integer,            allocatable :: states(:), ptcls_in_state(:), orig_states3d(:)
         integer,            allocatable :: cavg_inds_sel(:), cavg_inds_desel(:)
         type(string)                    :: cls2D_selected_jpg, cls2D_deselected_jpg
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines, fnr, noris, i, nstks, noris_in_state
         integer                         :: state, xtiles_sel, ytiles_sel, xtiles_desel, ytiles_desel
+        integer                         :: s3d, maxs3d
         logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d, l_writestar
         class(oris), pointer :: pos => NULL()
         l_append     = .false.
@@ -1098,11 +1099,24 @@ contains
                     ! class averages
                     call spproj%os_cls3D%set_all('state', real(states))
                 endif
-            case(PTCL2D_SEG,PTCL3D_SEG)
+            case(PTCL2D_SEG)
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
                 if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
                 call spproj%map_ptcls_state_to_cls
+            case(PTCL3D_SEG)
+                orig_states3d = pos%get_all_asint('state')
+                call spproj%os_ptcl2D%set_all('state', real(states))
+                call spproj%os_ptcl3D%set_all('state', real(states))
+                if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
+                call spproj%map_ptcls_state_to_cls
+                ! remove os_out vols/fscs for 3D states left with no surviving particles
+                if( spproj%os_out%get_noris() > 0 .and. size(orig_states3d) == size(states) )then
+                    maxs3d = maxval(orig_states3d)
+                    do s3d = 1, maxs3d
+                        if( count(states == 1 .and. orig_states3d == s3d) == 0 ) call spproj%remove_state_artifacts_from_osout(s3d)
+                    enddo
+                endif
             case DEFAULT
                 THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
         end select        
@@ -1112,6 +1126,8 @@ contains
             call gui_comm%add_metadata(spproj, oritype='mic', selection=.true.)
         else if( params%oritype == 'cls2D') then
             call gui_comm%add_metadata(spproj, oritype='cls2D', stage=0, selection=.true.)
+        else if( params%oritype == 'ptcl3D') then
+            call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true.)
         endif
         if( l_writecls2d ) call spproj%cavgs2mrc()
         if( l_writestar ) then

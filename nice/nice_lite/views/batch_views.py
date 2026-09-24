@@ -799,6 +799,23 @@ def _deselected_mic_ids(request):
         raise ClassSelectionError("Selection data is missing or invalid.")
     return deselected_ids
 
+
+def _selected_states(request):
+    """Parse and validate the posted 'selected_states' JSON array of state numbers to keep."""
+    try:
+        selected_states = json.loads(request.POST.get("selected_states", ""))
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ClassSelectionError("Selection data is missing or invalid.") from error
+    if not isinstance(selected_states, list) or not selected_states:
+        raise ClassSelectionError("At least one state must remain selected.")
+    states = sorted({
+        state for state in selected_states
+        if isinstance(state, int) and not isinstance(state, bool) and state >= 1
+    })
+    if not states:
+        raise ClassSelectionError("Selection data is missing or invalid.")
+    return states
+
 def _manual_pick_box_coordinates(request):
     """Parse and validate manually-picked box centers posted as a JSON array of {x, y}."""
     try:
@@ -1299,6 +1316,49 @@ def view_batch_class_2D_selection(request, jobid):
             jobmodel.id,
         )
         messages.add_message(request, messages.ERROR, "failed to create classification selection job")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    return redirect("nice_lite:workspace")
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_batch_class_3D_selection(request, jobid):
+    """Create and launch a new cls3D state-selection batch job from the current selection."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_class_3D_selection",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    try:
+        selected_states = _selected_states(request)
+    except ClassSelectionError as error:
+        logger.warning(
+            "batch classification 3D selection failed for job %s: %s",
+            jobmodel.id,
+            error,
+        )
+        messages.add_message(request, messages.ERROR, f"selection failed: {error}")
+        return redirect("nice_lite:view_batch", jobid=jobmodel.id)
+
+    selectionjob = BatchJob()
+    project = Project(id=jobmodel.dset.proj.id)
+    workspace = Workspace(jobmodel.dset.id)
+    if not selectionjob.createStateSelection(
+        project,
+        workspace,
+        batch_job.get_result_project_path(),
+        selected_states,
+    ):
+        logger.warning(
+            "batch classification 3D selection job creation failed for job %s",
+            jobmodel.id,
+        )
+        messages.add_message(request, messages.ERROR, "failed to create state selection job")
         return redirect("nice_lite:view_batch", jobid=jobmodel.id)
 
     return redirect("nice_lite:workspace")

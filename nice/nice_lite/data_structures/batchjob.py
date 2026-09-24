@@ -1496,6 +1496,73 @@ class BatchJob(Job):
             parent_proj=parent_proj,
         )
 
+    def createStateSelection(self, project, workspace, parent_proj, selected_states):
+        """Create and launch a cls3D state-selection ('selection') batch job.
+
+        Unlike class/mic deselection, the 'selection' program takes the kept
+        states directly via its 'states' arg (comma-separated), so no deselfile
+        is needed here.
+        """
+        self.args = {}
+
+        workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
+        if workspacemodel is None:
+            logger.error("createStateSelection: workspace not found")
+            return False
+
+        self.disp = workspacemodel.jcnt + 1
+        self.pckg = "simple"
+        self.prog = "selection"
+        self.name = "state selection"
+        self.dirc = str(self.disp) + "_" + self.prog
+        workspace_dir = os.path.join(project.dirc, workspacemodel.dirc)
+        if not self._create_dir(workspace_dir):
+            logger.error("createStateSelection: failed to create workspace directory")
+            return False
+
+        job_dir = os.path.join(workspace_dir, self.dirc)
+        self.args["oritype"] = "ptcl3D"
+        sorted_states = sorted(selected_states)
+        if len(sorted_states) == 1:
+            # perform_states_selection requires a multi-state (len > 1) 'states' string.
+            self.args["state"] = sorted_states[0]
+        else:
+            self.args["states"] = ",".join(str(state) for state in sorted_states)
+
+        jobmodel = JobModel(
+            dset=workspacemodel,
+            cdat=timezone.now(),
+            disp=self.disp,
+            name=self.name,
+            desc="states " + ",".join(str(state) for state in sorted_states),
+            args=self.args,
+            dirc=self.dirc,
+            pckg=self.pckg,
+            prog=self.prog,
+            status="queued",
+            master_status="queued",
+            master_stats=self._metadata(),
+        )
+        jobmodel.save()
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
+
+        self.id = jobmodel.id
+        self.jobmodel = jobmodel
+        self.wspc = workspacemodel
+        self.status = "queued"
+        self.absdir = self.get_absdir()
+
+        simple = SIMPLEBatch(pckg=self.pckg)
+        return simple.start(
+            self.args,
+            job_dir,
+            workspace_dir,
+            self.prog,
+            self.id,
+            parent_proj=parent_proj,
+        )
+
     # ------------------------------------------------------------------
     # Updates / completion
     # ------------------------------------------------------------------

@@ -10,7 +10,11 @@
      .cls3dstagegroup tile groups AND .cls3dstagedetail detail panels (in
      _cls3D_viewer.html), both toggled by the "stage" select via
      selectCls3DStage(); that select is rendered in _cls3D_viewer.html's
-     header, not here.
+     header, not here. selectState() also toggles each tile's own
+     disabledbutton/checkmark (like cls2D); "save selection" posts the
+     surviving (non-disabled) states of the active stage group to
+     batch_cls3D_selection, which launches a `selection oritype=ptcl3D
+     states=...` job to keep only those states.
 {% endcomment %}
 <div class="flex w-min mx-[10px] flex-col h-full bg-streambar rounded-xl text-streamtext overflow-y-auto">
     {% if "cls3D" in jobstats %}
@@ -19,7 +23,8 @@
         <div class="cls3dstagegroup flex flex-wrap gap-2{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
             {% for state in stage.states %}
             <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
-                 class="flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
+                 class="relative flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
+                <span aria-hidden="true" class="statecheck absolute flex h-4 w-4 items-center justify-center rounded-full bg-streamring text-[9px] font-bold text-white" style="right:0.25rem;top:0.25rem">✓</span>
                 <p class="mt-1 w-full text-[9px] text-streamlabel">
                     <strong class="text-streamtext">state {{ state.state }}</strong>
                 </p>
@@ -34,6 +39,13 @@
             {% endfor %}
         </div>
         {% endfor %}
+    </div>
+    <div class="flex items-center justify-end gap-2 p-2 border-t border-streamline">
+        <form id="savebatchstateselection" method="POST" action="{% url 'nice_lite:batch_cls3D_selection' jobid %}">
+            {% csrf_token %}
+            <input type="hidden" id="selected_states" name="selected_states" value=""/>
+            <button class="selectionbutton" type="button" onclick="saveStateSelection(this)">save selection</button>
+        </form>
     </div>
     {% elif "state_volumes" in jobstats and jobstats.state_volumes|length > 0 %}
     <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
@@ -59,6 +71,19 @@
 <script>
     let currentStateNum = "1";
 
+    const getActiveCls3DStageGroup = () => {
+        const slider = document.getElementById("cls3d_state_slider");
+        if (!slider) return null;
+        return slider.querySelector(".cls3dstagegroup:not(.hidden)") || slider;
+    };
+
+    const updateStateSelectionMark = (element) => {
+        const check = element.querySelector(".statecheck");
+        const deselected = element.classList.contains("disabledbutton");
+        element.classList.toggle("opacity-40", deselected);
+        if (check) check.classList.toggle("hidden", deselected);
+    };
+
     const selectState = (element) => {
         currentStateNum = element.dataset.stateSelector;
         document.querySelectorAll("[data-state-selector]").forEach((el) => {
@@ -71,6 +96,8 @@
         document.querySelectorAll("[data-state-panel]").forEach((el) => {
             el.classList.toggle("hidden", el.dataset.statePanel != currentStateNum);
         });
+        element.classList.toggle("disabledbutton");
+        updateStateSelectionMark(element);
         const volumeScope = document.querySelector(".cls3dstagedetail:not(.hidden)") || document;
         const volumePanelTitle = volumeScope.querySelector("[data-volume-panel-title]");
         if (volumePanelTitle) volumePanelTitle.textContent = `volume · state ${currentStateNum}`;
@@ -92,6 +119,22 @@
         });
         // Re-sync the newly-visible stage's volume <select> to the current state/kind.
         if (typeof applyVolumeSelection === "function") applyVolumeSelection();
+    };
+
+    const saveStateSelection = (element) => {
+        const scope = getActiveCls3DStageGroup();
+        const tiles = scope ? scope.querySelectorAll("[data-state-selector]") : document.querySelectorAll("[data-state-selector]");
+        const selected = new Set();
+        for (const tile of tiles) {
+            if (!tile.classList.contains("disabledbutton")) {
+                selected.add(Number(tile.dataset.stateSelector));
+            }
+        }
+
+        const selectionField = document.getElementById("selected_states");
+        if (selectionField) selectionField.value = JSON.stringify(Array.from(selected));
+
+        element.form.submit();
     };
 </script>
 

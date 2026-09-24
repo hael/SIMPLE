@@ -2,9 +2,11 @@
 module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
-use simple_refine3D_fnames,   only: refine3D_state_vol_fname, refine3D_fsc_fname
-use simple_refine3D_stage_plan, only: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
+use simple_refine3D_fnames,                        only: refine3D_state_vol_fname, refine3D_fsc_fname
+use simple_refine3D_stage_plan,                    only: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
+use simple_gui_communicator,                       only: gui_communicator
+use simple_abinitio_utils,                         only: gen_ortho_reprojs4viz
 implicit none
 #include "simple_local_flags.inc"
 
@@ -51,6 +53,7 @@ contains
         type(cmdline)               :: cline_boot, cline_pass
         type(parameters)            :: params
         type(sp_project)            :: spproj
+        type(gui_communicator)      :: gui_comm
         type(string)                :: init_vol
         type(string)                :: pose_init_refs(1), pose_init_checkpoint(1)
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
@@ -132,6 +135,7 @@ contains
         endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
+        call gui_comm%new(params)
         l_ref_pose_init_requested = trim(params%ref_pose_init).eq.'cc'
         if( l_ref_pose_init_requested .and. .not. l_external_input )then
             THROW_HARD(WORKFLOW_LABEL//' ref_pose_init=cc requires an external vol1 input')
@@ -271,8 +275,14 @@ contains
         ! native box, project registration, final products and reprojections
         call calc_final_rec(params, spproj, params%projfile, cline, xrec3D, xbootstrap_rec3D, &
             &l_postprocess=.true., lp_snapshot=params%res_target)
+        call spproj%read_segment('cls3D',  params%projfile)
+        call spproj%read_segment('ptcl3D', params%projfile)
+        call spproj%read_segment('out',    params%projfile)
+        call gen_ortho_reprojs4viz(params, spproj)
+        call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true.)
         call spproj%kill
         call init_vol%kill
+        call gui_comm%kill()
 
     contains
 
