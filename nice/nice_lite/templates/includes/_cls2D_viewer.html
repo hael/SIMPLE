@@ -62,6 +62,13 @@
         return slider.querySelector(".cls2dstagegroup:not(.hidden)") || slider;
     };
 
+    const sortClsByResolution = (scope) => {
+        if (!scope) return;
+        const templates = Array.from(scope.querySelectorAll(".cls2dcontainer"));
+        templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
+        templates.forEach((item) => scope.appendChild(item));
+    };
+
     const updateSelectionBorder = (cls2D) => {
         const container = cls2D.closest(".cls2dcontainer");
         if (!container) return;
@@ -142,11 +149,7 @@
 
     const sortRes = () => {
         if (!currentMenuContainer) return;
-        const scope = getActiveClsScope();
-        if (!scope) return;
-        const templates = Array.from(scope.querySelectorAll(".cls2dcontainer"));
-        templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
-        templates.forEach((item) => scope.appendChild(item));
+        sortClsByResolution(getActiveClsScope());
         hideMenu();
     };
 
@@ -211,6 +214,12 @@
     };
 
     window.addEventListener("load", () => {
+        const slider = document.getElementById("accepted_cls2D_slider");
+        const stageGroups = slider
+            ? Array.from(slider.querySelectorAll(".cls2dstagegroup"))
+            : [];
+        const finalStage = stageGroups.at(-1);
+        sortClsByResolution(finalStage || slider);
         updateCounts();
     });
 </script>

@@ -11,6 +11,20 @@ class TemplateIntegrationTests(SimpleTestCase):
         template_path = base_dir / "templates" / relative_path
         return template_path.read_text(encoding="utf-8")
 
+    def test_shared_2d_class_view_sorts_final_stage_by_resolution_on_load(self):
+        viewer = self._read_template("includes/_cls2D_viewer.html")
+
+        self.assertIn("const sortClsByResolution = (scope) => {", viewer)
+        self.assertIn(
+            'templates.sort((a, b) => '
+            'getNumber(a, "res") - getNumber(b, "res"));',
+            viewer,
+        )
+        self.assertIn("sortClsByResolution(getActiveClsScope());", viewer)
+        self.assertIn("const finalStage = stageGroups.at(-1);", viewer)
+        self.assertIn("sortClsByResolution(finalStage || slider);", viewer)
+        self.assertNotIn("stageGroups.forEach(sortClsByResolution);", viewer)
+
     def test_zoom_log_template_uses_dataset_not_workspace_property(self):
         content = self._read_template("nice_stream/includes/_zoom_log_errors_parts_body.html")
         self.assertNotIn("panel.workspace", content)
