@@ -26,7 +26,6 @@ contains
     procedure          :: open => open_1
     procedure, private :: get_stack_info, clear_stack_cache
     procedure          :: read
-    procedure          :: does_exist
     procedure          :: kill
 end type dstack_io
 
@@ -138,11 +137,6 @@ contains
         endif
         self%ncache = 0
     end subroutine clear_stack_cache
-
-    pure logical function does_exist(self)
-        class(dstack_io), intent(in) :: self
-        does_exist = self%exists
-    end function does_exist
 
     subroutine kill( self )
         class(dstack_io), intent(inout) :: self

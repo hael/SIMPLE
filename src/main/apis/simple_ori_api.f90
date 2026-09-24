@@ -1,3 +1,4 @@
+!@descr: Aggregated API for the orientation modules
 module simple_ori_api
 !$ use omp_lib
 !$ use omp_lib_kinds

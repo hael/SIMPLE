@@ -1,3 +1,4 @@
+!@descr: volume assembly commander: restores the even, odd and merged state volumes from partial reconstructions
 module simple_commanders_rec_distr
 use simple_commanders_api
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, &

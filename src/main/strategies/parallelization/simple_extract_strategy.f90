@@ -1,3 +1,4 @@
+!@descr: extract execution strategies: shared memory and distributed master
 ! Strategy pattern for extract
 !
 ! Hook-less, strategy-heavy, no separate common module.

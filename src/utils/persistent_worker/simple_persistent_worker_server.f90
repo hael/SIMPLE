@@ -1,3 +1,4 @@
+!@descr: TCP accept-loop server that hands tasks to persistent SIMPLE worker processes in reply to their heartbeats
 !==============================================================================
 ! MODULE: simple_persistent_worker_server
 !

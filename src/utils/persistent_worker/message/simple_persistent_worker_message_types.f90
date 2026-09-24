@@ -1,3 +1,4 @@
+!@descr: message-type enumeration of the persistent-worker wire protocol, shared by server and workers
 !==============================================================================
 ! MODULE: simple_persistent_worker_message_types
 !

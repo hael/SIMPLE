@@ -1,3 +1,4 @@
+!@descr: ctf_estimate execution strategies: shared memory or worker, and distributed master
 ! object-oriented strategy pattern for ctf_estimate
 !
 ! Goals

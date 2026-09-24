@@ -21,8 +21,11 @@ contains
         endif
         dohp = abs(hplim) > TINY
         dolp = abs(lplim) > TINY
-        hplim_freq = self%fit%get_find(1,hplim)
-        lplim_freq = self%fit%get_find(1,lplim)
+        ! a limit of 0 switches its filter off; converting it would divide by zero (get_find)
+        hplim_freq = 0.
+        lplim_freq = 0.
+        if( dohp ) hplim_freq = self%fit%get_find(1,hplim)
+        if( dolp ) lplim_freq = self%fit%get_find(1,lplim)
         lims = self%fit%loop_lims(2)
         if( self%wthreads )then
             !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&

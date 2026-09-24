@@ -87,13 +87,14 @@ contains
                 call del_file(fname)
             endif
         endif
+        ! the name first: a new file returns early below, and its error messages name it
+        self%fname = fname
         if( .not. file_exists(fname) )then
             call self%clear_segments
             call open_local
             return
         endif
         call open_local
-        self%fname = fname
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then

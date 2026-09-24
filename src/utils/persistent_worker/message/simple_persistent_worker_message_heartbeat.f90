@@ -1,3 +1,4 @@
+!@descr: heartbeat message of the persistent-worker protocol: a worker reports liveness and thread load
 !==============================================================================
 ! MODULE: simple_persistent_worker_message_heartbeat
 !

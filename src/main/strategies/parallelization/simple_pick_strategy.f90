@@ -1,3 +1,4 @@
+!@descr: pick execution strategies (shared memory, distributed master) and the generation of picking references
 ! Strategy pattern for pick
 !
 ! Hook-less, strategy-heavy, no separate common module.

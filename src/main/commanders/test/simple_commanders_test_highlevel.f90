@@ -10,6 +10,7 @@ use simple_commanders_sim,          only: commander_simulate_particles, commande
 use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_abinitio,     only: commander_abinitio3D
+use simple_test_utils,              only: set_fixed_seed
 use simple_micproc,                 only: sample_filetab
 use simple_commanders_validate,     only: commander_mini_stream
 implicit none
@@ -817,10 +818,9 @@ subroutine exec_test_pcg_recon( self, cline )
     complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
     complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
     complex, allocatable    :: braw_full(:,:,:), braw_crop(:,:,:)
-    integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
+    integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters
     integer :: R, margin, lo, hi, ifrom, nb, nsym, nraw, nraw_total, ml_prior_npositive
     integer :: lims2_crop(2,2), lims3_crop(3,2), raw_lim, hraw, kraw, mraw
-    integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
     real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, rhs_err, kscale
     real    :: solution_err, solution_norm_ratio, energy_ratio
@@ -837,9 +837,7 @@ subroutine exec_test_pcg_recon( self, cline )
 
     ! ---- deterministic RNG seed: every probe below must be reproducible or a
     !      tolerance failure cannot be told from a different random draw ----
-    call random_seed(size=iseed_n)
-    allocate(iseed(iseed_n), source=42)
-    call random_seed(put=iseed)
+    call set_fixed_seed(42)
 
     ! ---- deterministic, asymmetric phantom (sum of off-centre Gaussian blobs).
     !      Asymmetric on purpose: a symmetric phantom hides orientation bugs. ----

@@ -1,3 +1,4 @@
+!@descr: execution of SINGLE trajectory commanders
 module single_exec_trajectory
 use simple_cmdline,                 only: cmdline
 use single_commanders_trajectory,   only: commander_import_trajectory, commander_graphene_subtr,&

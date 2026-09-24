@@ -134,8 +134,10 @@ contains
     end subroutine test_stack_io_copy
 
     ! the read buffer is refilled on demand: a buffer of three leaves a partial last window,
-    ! a buffer larger than the stack is clamped to it, and forward reads may skip windows
+    ! a buffer larger than the stack is clamped to it, forward reads may skip windows, and
+    ! backward and out-of-order reads reload the window that holds the image
     subroutine test_buffer_sizes_and_forward_skips()
+        integer, parameter :: OUT_OF_ORDER(7) = [4, 1, 5, 2, 3, 3, 1]
         type(stack_io) :: reader
         type(image)    :: img
         integer :: iimg
@@ -155,6 +157,20 @@ contains
         call reader%open(string(SOURCE_STACK),SMPD,'read',bufsz=1)
         call reader%read(NIMGS,img)
         call assert_pattern(img,NIMGS,'jump to the last image, buffer of one')
+        call reader%close
+        ! backward, buffer of two: 5 (partial window [5]), 4 and 3 ([3,4]), 2 and 1 ([1,2])
+        call reader%open(string(SOURCE_STACK),SMPD,'read',bufsz=BUFSZ)
+        do iimg = NIMGS,1,-1
+            call reader%read(iimg,img)
+            call assert_pattern(img,iimg,'backward read, buffer of two')
+        enddo
+        call reader%close
+        ! out of order, buffer of two: every window is left and re-entered
+        call reader%open(string(SOURCE_STACK),SMPD,'read',bufsz=BUFSZ)
+        do iimg = 1,size(OUT_OF_ORDER)
+            call reader%read(OUT_OF_ORDER(iimg),img)
+            call assert_pattern(img,OUT_OF_ORDER(iimg),'out-of-order read, buffer of two')
+        enddo
         call reader%close
         ! get_image re-extracts an image that is already in the buffer
         call reader%open(string(SOURCE_STACK),SMPD,'read',bufsz=BUFSZ)

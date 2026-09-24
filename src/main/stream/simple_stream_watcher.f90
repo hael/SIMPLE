@@ -31,8 +31,6 @@ type stream_watcher
     integer                      :: n_watch        = 0     !< number of times the folder has been watched
     logical                      :: exists         = .false.
 contains
-    ! getters
-    procedure          :: does_exist
     ! I/O
     procedure          :: write_checkpoint
     ! doers
@@ -107,11 +105,6 @@ contains
         self%ratehistory(1) = 0
         self%exists  = .true.
     end function constructor
-
-    logical function does_exist( self )
-        class(stream_watcher), intent(in) :: self
-        does_exist = self%exists
-    end function does_exist
 
     ! I/O
 

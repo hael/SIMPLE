@@ -1,3 +1,4 @@
+!@descr: execution of SINGLE 3D nanoparticle refinement commanders
 module single_exec_nano3D
 use simple_string,            only: string
 use simple_cmdline,           only: cmdline

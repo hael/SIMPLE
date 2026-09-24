@@ -1,3 +1,4 @@
+!@descr: stage schedule and per-stage refine3D configuration of ab initio 3D reconstruction
 submodule(simple_abinitio_utils) simple_abinitio_controller
 implicit none
 #include "simple_local_flags.inc"

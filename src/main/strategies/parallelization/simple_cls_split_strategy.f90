@@ -1,3 +1,4 @@
+!@descr: cls_split execution strategies: shared memory, distributed master and distributed worker
 module simple_cls_split_strategy
 use simple_core_module_api
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite

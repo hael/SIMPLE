@@ -121,24 +121,6 @@ contains
         endif
     end subroutine window_slim
 
-    module subroutine window_center( self_in, center, rad, self_out, outside )
-        class(image), intent(in)    :: self_in
-        integer,      intent(in)    :: center(:), rad
-        class(image), intent(inout) :: self_out
-        logical,      intent(out)   :: outside
-        integer :: coord(3), box
-        box = rad*2
-        if( self_in%is_3d() )then
-            coord = center - rad
-            if( any(coord < 1) )      THROW_HARD('Error! window is out of the image')
-            call window_slim(self_in, coord, box, self_out, outside)
-        else
-            coord(1:2) = center - rad
-            if( any(coord(1:2) < 1) ) THROW_HARD('Error! window is out of the image')
-            call window_slim(self_in, coord(1:2), box, self_out, outside)
-        endif
-    end subroutine window_center
-
     ! for re-generation of micrograph after convolutional PPCA
     module subroutine add_window( self, imgwin, coord, offset )
         class(image), intent(inout)   :: self

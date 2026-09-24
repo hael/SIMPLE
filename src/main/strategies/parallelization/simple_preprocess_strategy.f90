@@ -1,3 +1,4 @@
+!@descr: preprocess execution strategies: shared memory or worker, and distributed master
 ! object-oriented strategy pattern for preprocess
 !
 ! Goals

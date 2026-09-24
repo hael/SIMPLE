@@ -86,19 +86,6 @@ contains
         enddo
     end subroutine build_truth_volume
 
-    !> expand one scalar seed into the compiler's full seed vector
-    subroutine set_seed( base_seed )
-        integer, intent(in) :: base_seed
-        integer, allocatable :: seed(:)
-        integer :: i, n
-        call random_seed(size=n)
-        allocate(seed(n))
-        do i = 1, n
-            seed(i) = modulo(base_seed + 104729 * (i - 1), huge(0) - 1) + 1
-        enddo
-        call random_seed(put=seed)
-    end subroutine set_seed
-
     !> deterministic, non-overlapping even and odd orientation sets from one spiral
     subroutine build_disjoint_halves( nhalf, even_oris, odd_oris, even_ids, odd_ids )
         integer,              intent(in)    :: nhalf
@@ -159,7 +146,7 @@ contains
         call padded_projection%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD, wthreads=.false.)
         call projection%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call o%new(.false.)
-        call set_seed(seed)
+        call set_fixed_seed(seed)
         signal_power = 0._dp
         noise_power  = 0._dp
         do i = 1, nprojs

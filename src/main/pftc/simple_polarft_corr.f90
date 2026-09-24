@@ -9,65 +9,6 @@ real, parameter :: SHERRSQ = 0.00001
 
 contains
 
-    ! Benchmark for correlation calculation
-    ! Is not FFT-accelerated, does not rely on memoization, for reference only
-    module real function calc_corr_rot_shift(self, iref, iptcl, shvec, irot, kweight)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
-        real(sp),            intent(in)    :: shvec(2)
-        logical, optional,   intent(in)    :: kweight
-        complex(dp), pointer :: pft_ref(:,:), shmat(:,:), pft_rot_ref(:,:)
-        real(dp)    :: sqsumref, sqsumptcl, num
-        integer     :: i, k, ithr, ieo
-        logical     :: kw
-        kw = .true.
-        if( present(kweight) ) kw = kweight
-        calc_corr_rot_shift = 0.
-        i           = self%pinds(iptcl)
-        ithr        = omp_get_thread_num() + 1
-        pft_ref     => self%heap_vars(ithr)%pft_ref_8
-        pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
-        shmat       => self%heap_vars(ithr)%shmat_8
-        ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
-        pft_ref      = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-        call self%gen_shmat4aln_8(ithr, real(shvec,dp),shmat)
-        pft_ref = pft_ref * shmat(:,:self%kfromto(2))
-        call self%rotate_ref_8(pft_ref, irot, pft_rot_ref)
-        pft_rot_ref = pft_rot_ref * self%ctfmats(:,:self%kfromto(2),i)
-        select case(self%p_ptr%cc_objfun)
-        case(OBJFUN_CC)
-            sqsumref  = 0.d0
-            sqsumptcl = 0.d0
-            num       = 0.d0
-            do k = self%kfromto(1),self%kfromto(2)
-                if( kw )then
-                    sqsumptcl = sqsumptcl + real(k,dp) * real(sum(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i))),dp)
-                    sqsumref  = sqsumref  + real(k,dp) * real(sum(pft_rot_ref(:,k)       * conjg(pft_rot_ref(:,k))),dp)
-                    num       = num       + real(k,dp) * real(sum(pft_rot_ref(:,k)       * conjg(self%pfts_ptcls(:,k,i))),dp)
-                else
-                    sqsumptcl = sqsumptcl + real(sum(self%pfts_ptcls(:,k,i)              * conjg(self%pfts_ptcls(:,k,i))),dp)
-                    sqsumref  = sqsumref  + real(sum(pft_rot_ref(:,k)                    * conjg(pft_rot_ref(:,k))),dp)
-                    num       = num       + real(sum(pft_rot_ref(:,k)                    * conjg(self%pfts_ptcls(:,k,i))),dp)
-                endif
-            enddo
-            calc_corr_rot_shift = real(num/sqrt(sqsumref*sqsumptcl))
-        case(OBJFUN_EUCLID)
-            pft_rot_ref = pft_rot_ref - self%pfts_ptcls(:,:self%kfromto(2),i)
-            sqsumptcl = 0.d0
-            num       = 0.d0
-            do k = self%kfromto(1),self%kfromto(2)
-                if( kw )then
-                    sqsumptcl = sqsumptcl + (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(self%pfts_ptcls(:,k,i)),dp))
-                    num       = num       + (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(csq_fast(pft_rot_ref(:,k)))
-                else
-                    sqsumptcl = sqsumptcl + (1.d0 / self%sigma2_noise(k,iptcl))       * sum(real(csq_fast(self%pfts_ptcls(:,k,i)),dp))
-                    num       = num       + (1.d0 / self%sigma2_noise(k,iptcl))       * sum(csq_fast(pft_rot_ref(:,k)))
-                endif
-            end do
-            calc_corr_rot_shift = real(exp( -num / sqsumptcl ))
-        end select
-    end function calc_corr_rot_shift
-
     module subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl, irot

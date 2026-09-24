@@ -1,3 +1,4 @@
+!@descr: execution of SINGLE 2D nanoparticle analysis commanders
 module single_exec_nano2D
 use simple_cmdline,            only: cmdline
 use single_commanders_nano2D,  only: commander_analysis2D_nano, commander_center2D_nano, commander_cluster2D_nano

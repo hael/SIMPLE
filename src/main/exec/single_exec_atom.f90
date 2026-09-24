@@ -1,4 +1,4 @@
-!@descr:
+!@descr: execution of SINGLE atomic-model commanders
 module single_exec_atom
 use simple_cmdline,          only: cmdline
 use simple_commanders_atoms, only: commander_conv_atom_denoise, commander_atoms_stats, commander_atoms_register,&

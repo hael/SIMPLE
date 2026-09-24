@@ -1,3 +1,4 @@
+!@descr: denoise_project execution strategies: shared memory, distributed master and distributed worker
 module simple_denoise_project_strategy
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

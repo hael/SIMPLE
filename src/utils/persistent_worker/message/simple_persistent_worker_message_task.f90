@@ -1,3 +1,4 @@
+!@descr: task message of the persistent-worker protocol: a queued job request and the job dispatched to a worker
 !==============================================================================
 ! MODULE: simple_persistent_worker_message_task
 !

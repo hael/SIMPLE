@@ -1,3 +1,4 @@
+!@descr: gain-reference helpers: summed movie frames, normalised inverse average intensity and gain-reference previews
 module simple_motion_gain_helpers
 use simple_core_module_api
 use simple_image,           only: image

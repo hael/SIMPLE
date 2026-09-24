@@ -1,3 +1,4 @@
+!@descr: low-level POSIX socket helpers shared by the IPC TCP client and server (poll, accept, liveness)
 !==============================================================================
 ! MODULE: simple_ipc_tcp_socket_helpers
 !

@@ -1,3 +1,4 @@
+!@descr: calc_pspec execution strategies: shared memory, and every partition of the sigma2 bootstrap in one process
 module simple_calc_pspec_strategy
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

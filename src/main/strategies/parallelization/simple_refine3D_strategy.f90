@@ -1,3 +1,4 @@
+!@descr: refine3D execution strategies: shared memory and distributed master
 module simple_refine3D_strategy
 use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_core_module_api

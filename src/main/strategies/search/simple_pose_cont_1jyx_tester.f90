@@ -10,7 +10,6 @@
 ! reconstruction_fsc.tsv as the reviewable record. Nightly (lib_cart_align3D).
 module simple_pose_cont_1jyx_tester
 use ieee_arithmetic, only: ieee_is_finite
-use iso_fortran_env, only: int64
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 use simple_atoms, only: atoms
 use simple_cartesian_pose_refiner, only: right_increment_rotation
@@ -127,7 +126,7 @@ subroutine run_pose_cont_1jyx_reconstruction()
     ! generate the corresponding clean observations. Noise is added below from
     ! a separate deterministic stream because parameters%new reseeds SIMPLE.
     call truth_orientations%new(TEST_PARTICLES,is_ptcl=.true.)
-    call set_deterministic_seed(SIMULATION_SEED)
+    call set_fixed_seed(SIMULATION_SEED)
     call truth_orientations%rnd_oris(0.)
     call truth_orientations%rnd_ctf(TEST_KV,TEST_CS,TEST_FRACA,TEST_DEFOCUS, &
         &TEST_DFERR,TEST_ASTIGERR)
@@ -174,7 +173,7 @@ subroutine run_pose_cont_1jyx_reconstruction()
     ! Stage 3: retain the finite particle stack and construct controlled seeds.
     allocate(particles(TEST_BOX,TEST_BOX,TEST_PARTICLES))
     call particle_reader%new([TEST_BOX,TEST_BOX,1],TEST_SMPD,wthreads=.false.)
-    call set_deterministic_seed(NOISE_SEED)
+    call set_fixed_seed(NOISE_SEED)
     do i = 1, TEST_PARTICLES
         call particle_reader%read(string(PARTICLE_FILE),i)
         call particle_reader%add_gauran(TEST_SNR)
@@ -187,7 +186,7 @@ subroutine run_pose_cont_1jyx_reconstruction()
     allocate(truth_rotations(3,3,TEST_PARTICLES),truth_shifts(2,TEST_PARTICLES))
     allocate(initial_rotations(3,3,TEST_PARTICLES),terminal_rotations(3,3,TEST_PARTICLES))
     allocate(initial_shifts(2,TEST_PARTICLES),terminal_shifts(2,TEST_PARTICLES))
-    call set_deterministic_seed(PERTURBATION_SEED)
+    call set_fixed_seed(PERTURBATION_SEED)
     do i = 1, TEST_PARTICLES
         call truth_orientations%get_ori(i,truth_orientation)
         ctf_parameters(i) = truth_orientation%get_ctfvars()
@@ -568,22 +567,5 @@ pure real(dp) function centered_array_correlation(array_a,array_b) result(correl
     correlation = sum((real(array_a,dp)-mean_a)*(real(array_b,dp)-mean_b))/ &
         &max(denominator,epsilon(denominator))
 end function centered_array_correlation
-
-subroutine set_deterministic_seed(base_seed)
-    integer, intent(in) :: base_seed
-    integer, allocatable :: seed(:)
-    integer(int64) :: candidate, modulus
-    integer :: i, seed_size
-
-    call random_seed(size=seed_size)
-    allocate(seed(seed_size))
-    modulus = int(huge(0),int64)-1_int64
-    do i = 1, seed_size
-        candidate = int(base_seed,int64)+104729_int64*int(i-1,int64)
-        seed(i) = int(modulo(candidate,modulus))+1
-    enddo
-    call random_seed(put=seed)
-    deallocate(seed)
-end subroutine set_deterministic_seed
 
 end module simple_pose_cont_1jyx_tester

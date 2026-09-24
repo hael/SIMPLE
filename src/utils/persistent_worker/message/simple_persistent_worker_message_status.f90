@@ -1,3 +1,4 @@
+!@descr: status message of the persistent-worker protocol: the server reply to a heartbeat when no task is available or an error occurred
 !==============================================================================
 ! MODULE: simple_persistent_worker_message_status
 !

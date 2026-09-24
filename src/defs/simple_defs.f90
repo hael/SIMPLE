@@ -152,6 +152,7 @@ real,    parameter    :: AMSKLP_NANO               = 5.
 ! Graphene
 real,    parameter    :: GRAPHENE_BAND1            = 2.14           !< graphene band 1 for omission in score function
 real,    parameter    :: GRAPHENE_BAND2            = 1.23           !< graphene band 2 for omission in score function
+real,    parameter    :: GRAPHENE_BAND3            = 1.06           !< graphene band 3 (SINGLE graphene subtraction)
 ! Ice
 real,    parameter    :: ICE_BAND1                 = 3.7
 real,    parameter    :: ICE_BAND2                 = 1.23

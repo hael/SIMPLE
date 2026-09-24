@@ -434,8 +434,9 @@ contains
             call assert_real(proj%os_mic%get(1, 'dfy'), real(dval), 1.e-5, 'plot y is the plot key of the record')
         endif
         call json%destroy(root)
-        ! descending on dfx with a window: positions 2..5 of the descending order, the indices around
-        ! the window partition the rest (indices_post sized from the remapped window, 2026-09-23 fix)
+        ! descending on dfx with a window: positions 2..5 of the descending order; indices_pre and
+        ! indices_post are the records above and below the window as displayed, in display order
+        ! (the GUI's reading; they were the ascending head and tail, i.e. swapped, before 2026-09-25)
         call dump_json(proj, 'mic', fromto=[2,5], sort_key='dfx', sort_asc='no', hist='no', plot_key='')
         call json%parse(file=JSON_FILE, p=root)
         call assert_false(json%failed(), 'the descending-window JSON parses')
@@ -456,12 +457,20 @@ contains
         n = 0
         call json%get(root, 'indices_pre', ivec, found)
         call assert_true(found, 'descending window: indices_pre present')
-        if( found ) n = n + size(ivec)
+        if( found )then
+            n = n + size(ivec)
+            call assert_int(1, size(ivec), 'descending window: one record above the window')
+            if( size(ivec) == 1 ) call assert_int(order(NMICS), int(ivec(1)), 'descending window: the largest dfx is above the window')
+        endif
         call json%get(root, 'indices_post', ivec, found)
         call assert_true(found, 'descending window: indices_post present')
         if( found )then
             n = n + size(ivec)
-            call assert_int(1, size(ivec), 'descending window: one index after the remapped window')
+            call assert_int(2, size(ivec), 'descending window: two records below the window')
+            if( size(ivec) == 2 )then
+                call assert_int(order(2), int(ivec(1)), 'descending window: the second smallest dfx comes first below the window')
+                call assert_int(order(1), int(ivec(2)), 'descending window: the smallest dfx is last')
+            endif
         endif
         call assert_int(NMICS - 4, n, 'the indices outside the window account for the other records')
         call json%destroy(root)

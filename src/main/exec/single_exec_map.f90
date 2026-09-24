@@ -1,3 +1,4 @@
+!@descr: execution of SINGLE map-processing commanders
 module single_exec_map
 use simple_cmdline,                 only: cmdline
 use single_commanders_experimental, only: commander_tsegmaps_core_finder

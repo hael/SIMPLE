@@ -1,3 +1,4 @@
+!@descr: Aggregated API for the polar Fourier transform (pftc) modules
 module simple_pftc_api
 use simple_core_module_api
 use simple_fftw3

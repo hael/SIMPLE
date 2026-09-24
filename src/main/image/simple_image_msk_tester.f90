@@ -1,7 +1,7 @@
 !@descr: unit test routines for masks: mask bounds, graphene shells, real-space masks and binary images
 module simple_image_msk_tester
 use simple_test_utils ! assertions etc.
-use simple_defs       ! COSMSKHALFWIDTH, GRAPHENE_BAND1/2, TINY
+use simple_defs       ! COSMSKHALFWIDTH, GRAPHENE_BAND1/2/3, TINY
 use simple_image,     only: image, unmemoize_mask_coords
 use simple_image_bin, only: image_bin
 use simple_math,      only: bounds_from_mask3D
@@ -205,32 +205,50 @@ contains
 
     !---------------- graphene mask ----------------
 
-    ! the three shells nearest each graphene band are excluded, every other shell kept
+    ! the three shells nearest each band are excluded, every other shell kept; a band finer than
+    ! Nyquist is not in the spectrum and excludes nothing (it used to exclude the three highest
+    ! shells). The expected mask is built here by a brute-force nearest-shell search.
     subroutine test_graphene_mask()
         integer, parameter :: BOX = 160
-        real,    parameter :: SMPD = 0.358
-        real,    allocatable :: res(:), d(:)
-        logical, allocatable :: gmask(:), expected(:)
-        integer :: n, i, k, loc
+        real,    parameter :: SMPD = 0.358      ! Nyquist 0.716 A: all three bands inside
+        real,    parameter :: SMPD_COARSE = 0.7 ! Nyquist 1.4 A: only band 1 (2.14 A) inside
         write(*,'(A)') 'test_graphene_mask'
-        res   = get_resarr(BOX, SMPD)
-        gmask = calc_graphene_mask(BOX, SMPD)
-        n     = size(res)
-        call assert_int(n, size(gmask), 'graphene mask has one entry per resolution shell')
-        call assert_true(res(n) < GRAPHENE_BAND2, 'fixture: both graphene bands lie inside Nyquist')
-        allocate(expected(n), source=.true.)
-        allocate(d(n))
-        do k = 1,2
-            d = abs(res - merge(GRAPHENE_BAND1, GRAPHENE_BAND2, k == 1))
-            do i = 1,3
-                loc = minloc(d, dim=1)
-                expected(loc) = .false.
-                d(loc) = huge(1.0)
+        call check_bands(SMPD, [GRAPHENE_BAND1, GRAPHENE_BAND2], 6, 'two bands inside Nyquist')
+        call check_bands(SMPD, [GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHENE_BAND3], 9, 'three bands inside Nyquist')
+        call check_bands(SMPD_COARSE, [GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHENE_BAND3], 3, 'two bands beyond Nyquist')
+
+      contains
+
+        subroutine check_bands( smpd_here, bands, nexcluded, label )
+            real,             intent(in) :: smpd_here, bands(:)
+            integer,          intent(in) :: nexcluded
+            character(len=*), intent(in) :: label
+            real,    allocatable :: res(:), d(:)
+            logical, allocatable :: gmask(:), expected(:)
+            integer :: n, i, k, loc
+            res   = get_resarr(BOX, smpd_here)
+            gmask = calc_graphene_mask(BOX, smpd_here, bands)
+            n     = size(res)
+            call assert_int(n, size(gmask), label//': one mask entry per resolution shell')
+            allocate(expected(n), source=.true.)
+            allocate(d(n))
+            do k = 1,size(bands)
+                if( bands(k) < 2.*smpd_here ) cycle
+                d = abs(res - bands(k))
+                do i = 1,3
+                    loc = minloc(d, dim=1)
+                    expected(loc) = .false.
+                    d(loc) = huge(1.0)
+                end do
             end do
-        end do
-        call assert_int(6, count(.not. gmask),          'graphene mask excludes six shells')
-        call assert_true(all(gmask .eqv. expected),      'graphene mask excludes the three shells nearest each band')
-        deallocate(res, gmask, expected, d)
+            call assert_int(nexcluded, count(.not. gmask), label//': number of excluded shells')
+            call assert_true(all(gmask .eqv. expected),    label//': the three shells nearest each band inside Nyquist are excluded')
+            if( nexcluded < 3*size(bands) )then
+                call assert_true(all(gmask(n-2:n)),        label//': the highest shells are kept when a band lies beyond Nyquist')
+            endif
+            deallocate(res, gmask, expected, d)
+        end subroutine check_bands
+
     end subroutine test_graphene_mask
 
     !---------------- disc, transfer2bimg, cos_edge ----------------

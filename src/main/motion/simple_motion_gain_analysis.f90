@@ -1,3 +1,4 @@
+!@descr: gain-flip analysis: which flip of the gain reference matches the summed movie frames
 module simple_motion_gain_analysis
 use simple_core_module_api
 use simple_image, only: image

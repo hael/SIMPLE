@@ -10,7 +10,8 @@ EXCLUDED_DIR = os.path.join("src", "extlibs")
 def file_has_descr_header(filepath):
     """
     Returns True if the first non-empty line of the file
-    starts with '!@descr:', otherwise False.
+    starts with '!@descr:' followed by a description, otherwise False
+    (an empty tag names nothing in the code map).
     """
     try:
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
@@ -18,7 +19,7 @@ def file_has_descr_header(filepath):
                 stripped = line.strip()
                 if stripped == "":
                     continue
-                return stripped.startswith("!@descr:")
+                return stripped.startswith("!@descr:") and stripped[len("!@descr:"):].strip() != ""
     except Exception as e:
         print(f"Error reading {filepath}: {e}")
         return False
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     results, multiline = find_missing_descr(base_directory)
 
     if results:
-        print("Files missing '!@descr:' header:\n")
+        print("Files missing a '!@descr:' header (or with an empty one):\n")
         for path in results:
             print(path)
     if multiline:

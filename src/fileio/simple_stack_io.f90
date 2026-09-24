@@ -160,17 +160,11 @@ contains
         if( i >= self%fromp .and. i <= self%top )then
             ! the image is in buffer
         else
-            ! read buffer
-            do ! needed in case the first read is not in the start
-                if( self%fromp == 0 )then
-                    self%fromp = 1
-                    self%top   = self%bufsz
-                else
-                    self%fromp = self%top + 1
-                    self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
-                endif
-                if( i >= self%fromp .and. i <= self%top ) exit ! when we are within the bounds
-            end do
+            ! read the buffer window holding i: windows are [1,bufsz], [bufsz+1,2*bufsz], ..., the
+            ! last one partial, whatever the order of the reads (a backward read used to loop for
+            ! ever, because the window was only ever advanced)
+            self%fromp = ((i - 1) / self%bufsz) * self%bufsz + 1
+            self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
             bufsz = self%top - self%fromp + 1
             call self%ioimg%rSlices(self%fromp,self%top,self%rmat_ptr(:self%ldim(1),:self%ldim(2),:bufsz),is_mrc=.true.)
         endif

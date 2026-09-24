@@ -1,3 +1,4 @@
+!@descr: execution of SINGLE validation commanders
 module single_exec_validate
 use simple_cmdline,                 only: cmdline
 use single_commanders_experimental, only: commander_cavgsproc_nano, commander_cavgseoproc_nano, commander_ptclsproc_nano, commander_validate_cavgs_vs_model

@@ -1,6 +1,6 @@
+!@descr: unit tests for IPC TCP client/helpers/server split modules
 !==============================================================================
 ! MODULE: simple_ipc_tcp_socket_tester
-!@descr: unit tests for IPC TCP client/helpers/server split modules
 !
 ! PURPOSE:
 !   Unit tests for the split IPC TCP modules:

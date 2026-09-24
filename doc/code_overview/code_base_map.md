@@ -66,15 +66,15 @@
       - **abinitio/** — staged ab initio 2D and 3D workflow controllers, policies, and checkpoint helpers
         - `simple_abinitio2D_controller.f90` — utility routines for ab initio 2D cluster2D staging and limits
         - `simple_abinitio3D_split_checkpoint.f90` — reusable construction of the abinitio3D docked multi-state split checkpoint
-        - `simple_abinitio_controller.f90`
+        - `simple_abinitio_controller.f90` — stage schedule and per-stage refine3D configuration of ab initio 3D reconstruction
         - `simple_abinitio_utils.f90` — utilities for ab initio 3D reconstruction used by commanders_abinitio
       - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
         - `simple_commanders_api.f90` — API for the commanders
         - `simple_core_api.f90` — API for the core modules
         - `simple_exec_api.f90` — Aggregated public API for simple_exec
         - `simple_gui_metadata_api.f90` — Aggregated public API for gui metadata modules
-        - `simple_ori_api.f90`
-        - `simple_pftc_api.f90`
+        - `simple_ori_api.f90` — Aggregated API for the orientation modules
+        - `simple_pftc_api.f90` — Aggregated API for the polar Fourier transform (pftc) modules
         - `simple_pftc_srch_api.f90` — Facade pattern API to avoid circular dependencies involving polarft_calc
         - `simple_private_exec_api.f90` — Aggregated public API for simple_private_exec.
         - `simple_stream_api.f90` — Aggregated public API for stream_exec.
@@ -121,13 +121,13 @@
           - `simple_commanders_pick.f90` — for picking, extraction, and making picking references
           - `simple_commanders_postprocess_nu.f90` — NU-evidence nonuniform postprocessing (isolated from the standard postprocess path)
           - `simple_commanders_preprocess.f90` — for pre-processing (motion correction, CTF estimation etc.)
-          - `simple_commanders_prob.f90`
+          - `simple_commanders_prob.f90` — probability-table commanders of the 2D and 3D searches (prob_tab, prob_align and their neighbourhood variants)
           - `simple_commanders_project_cls.f90` — project commanders for dealing with 2D class-related things
           - `simple_commanders_project_core.f90` — commanders for operating on projects (spproject) and associated files, the core stuff
           - `simple_commanders_project_mov.f90` — project commanders for movie-related things
           - `simple_commanders_project_ptcl.f90` — project commanders for particle-related things
           - `simple_commanders_rec.f90` — 3D reconstruction and associated things
-          - `simple_commanders_rec_distr.f90`
+          - `simple_commanders_rec_distr.f90` — volume assembly commander: restores the even, odd and merged state volumes from partial reconstructions
           - `simple_commanders_refine3D.f90` — supporting 3D orientation search
           - `simple_commanders_relion.f90` — supporting interoperability with RELION
           - `simple_commanders_reproject.f90` — reprojection commanders
@@ -187,13 +187,13 @@
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
         - `simple_test_exec_stream.f90` — execution of the stream workflow test program (preproc)
-        - `single_exec_atom.f90`
-        - `single_exec_map.f90`
-        - `single_exec_nano2D.f90`
-        - `single_exec_nano3D.f90`
-        - `single_exec_trajectory.f90`
-        - `single_exec_tseries.f90`
-        - `single_exec_validate.f90`
+        - `single_exec_atom.f90` — execution of SINGLE atomic-model commanders
+        - `single_exec_map.f90` — execution of SINGLE map-processing commanders
+        - `single_exec_nano2D.f90` — execution of SINGLE 2D nanoparticle analysis commanders
+        - `single_exec_nano3D.f90` — execution of SINGLE 3D nanoparticle refinement commanders
+        - `single_exec_trajectory.f90` — execution of SINGLE trajectory commanders
+        - `single_exec_tseries.f90` — execution of SINGLE time-series commanders (import, motion correction, tracking, extraction)
+        - `single_exec_validate.f90` — execution of SINGLE validation commanders
       - **flex/**
         - `simple_flex_gpu.f90` — CUDA-C GPU path for the flex_pca insertion family (P1 of the polar/GPU plan)
         - `simple_flex_pca_crossfsc.f90` — versioned cross-fit-FSC artifact (flex_pca_crossfsc.bin): writer, reader, SSNR conversion, series restart
@@ -259,6 +259,7 @@
         - `simple_image_polar.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
         - `simple_image_seg.f90` — image segmentation related stuff to support masking
         - `simple_image_serialize_tester.f90` — unit tests for image serialisation (serialize, unserialize), the pixel vectors of PCA and denoising
+        - `simple_image_tester.f90` — unit tests for the image class and the Fourier projector (simple_image, simple_projector)
         - `simple_image_vis.f90` — for supporting visualization of images in various ways
         - `simple_memoize_ft_maps.f90` — Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly
         - `simple_projector.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
@@ -287,13 +288,14 @@
         - `simple_motion_correct.f90` — motion correction, dose-weighting and frame-weighting of direct electron detector movies
         - `simple_motion_correct_iter.f90` — iterator for motion_correct
         - `simple_motion_correct_utils.f90` — utility functions for motion correction
-        - `simple_motion_gain_analysis.f90`
-        - `simple_motion_gain_helpers.f90`
+        - `simple_motion_gain_analysis.f90` — gain-flip analysis: which flip of the gain reference matches the summed movie frames
+        - `simple_motion_gain_helpers.f90` — gain-reference helpers: summed movie frames, normalised inverse average intensity and gain-reference previews
         - `simple_motion_gain_tester.f90` — unit tests for motion gain helper and analyzer
         - `simple_motion_model.f90` — Motion correction polynomial model
         - `simple_motion_patched.f90` — patched-based anisotropic motion correction
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
+        - `simple_atoms_tester.f90` — unit tests for atomic models (simple_atoms): access, geometry, PDB I/O, density simulation and per-atom validation
         - `simple_calpha_finder.f90` — Buccaneer-inspired oriented target detection of alpha carbons in cryo-EM maps
         - `simple_calpha_finder_tester.f90` — unit tests for the C-alpha candidate search in density maps (simple_calpha_finder)
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
@@ -365,7 +367,7 @@
         - `simple_polarft_calc.f90` — polarft class complete interface
         - `simple_polarft_core.f90` — polarft class core submodule: object lifecycle etc.
         - `simple_polarft_corr.f90` — polarft class submodule for objective function evaluations
-        - `simple_polarft_corr_tester.f90` — unit tests of the polar-Fourier correlations (gen_objfun_vals) on generated images, through the production polarisation path
+        - `simple_polarft_corr_tester.f90` — unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc) on generated images, through the production polarisation path
         - `simple_polarft_ctf.f90` — polarft class submodule for dealing with CTF-related things
         - `simple_polarft_geom.f90` — polarft class submodule for geometry-related things: shift, rotate, mirror etc.
         - `simple_polarft_memo.f90` — polarft class submodule for memoization for performance
@@ -415,27 +417,27 @@
         - `simple_starproject_utils.f90` — starproject utilities
       - **strategies/** — object-oriented strategy pattern implementations
         - **parallelization/** — home of strategies for different parallelization modes (distributed, shared-memory etc.)
-          - `simple_calc_pspec_strategy.f90`
-          - `simple_cls_split_strategy.f90`
-          - `simple_cluster2D_strategy.f90`
-          - `simple_ctf_estimate_strategy.f90`
-          - `simple_denoise_project_strategy.f90`
-          - `simple_extract_strategy.f90`
+          - `simple_calc_pspec_strategy.f90` — calc_pspec execution strategies: shared memory, and every partition of the sigma2 bootstrap in one process
+          - `simple_cls_split_strategy.f90` — cls_split execution strategies: shared memory, distributed master and distributed worker
+          - `simple_cluster2D_strategy.f90` — cluster2D execution strategies: shared memory and distributed master
+          - `simple_ctf_estimate_strategy.f90` — ctf_estimate execution strategies: shared memory or worker, and distributed master
+          - `simple_denoise_project_strategy.f90` — denoise_project execution strategies: shared memory, distributed master and distributed worker
+          - `simple_extract_strategy.f90` — extract execution strategies: shared memory and distributed master
           - `simple_flex_pca_strategy.f90` — flex_pca execution strategies: shared memory, distributed master, distributed worker
-          - `simple_gen_pspecs_and_thumbs_strategy.f90`
-          - `simple_make_cavgs_strategy.f90`
-          - `simple_motion_correct_strategy.f90`
-          - `simple_pick_strategy.f90`
-          - `simple_preprocess_strategy.f90`
+          - `simple_gen_pspecs_and_thumbs_strategy.f90` — gen_pspecs_and_thumbs execution strategies: shared memory or worker, and distributed master
+          - `simple_make_cavgs_strategy.f90` — make_cavgs execution strategies: shared memory, distributed master and distributed worker
+          - `simple_motion_correct_strategy.f90` — motion_correct execution strategies: shared memory or worker, and distributed master
+          - `simple_pick_strategy.f90` — pick execution strategies (shared memory, distributed master) and the generation of picking references
+          - `simple_preprocess_strategy.f90` — preprocess execution strategies: shared memory or worker, and distributed master
           - `simple_rec3D_pcg_strategy.f90` — shared-memory production strategy body for kernel PCG reconstruct3D
-          - `simple_rec3D_strategy.f90`
+          - `simple_rec3D_strategy.f90` — reconstruct3D execution strategies (shared memory, kernel PCG, distributed master) and the reconstruction backend selector
           - `simple_rec3D_strategy_tester.f90` — unit test routines for the rec3D backend selector (simple_rec3D_strategy)
-          - `simple_reextract_strategy.f90`
-          - `simple_refine3D_strategy.f90`
+          - `simple_reextract_strategy.f90` — reextract execution strategies: shared memory and distributed master
+          - `simple_refine3D_strategy.f90` — refine3D execution strategies: shared memory and distributed master
         - **search/** — home of strategies for 2D and 3D orientation search
           - `simple_cavg_registration_tester.f90` — unit tests for class-average registration on the polar Fourier transform (match_imgs, match_imgs2ref)
           - `simple_corrmat.f90` — for calculation of correlation matrices
-          - `simple_eulspace_neigh_map.f90`
+          - `simple_eulspace_neigh_map.f90` — neighbourhoods of a subsampled projection-direction space within the full space, under the point group
           - `simple_matcher_2Dprep.f90` — common routines used by the high-level strategy 2D and 3D matchers
           - `simple_matcher_3Drec.f90` — Cartesian online/offline 3D reconstruction module
           - `simple_matcher_pftc_prep.f90` — reference preparation helpers for matcher workflows
@@ -448,7 +450,7 @@
           - `simple_pose_cont_refine3D_adapter_tester.f90` — unit tests for the pose_cont refine3D adapter (simple_pose_cont_refine3D_adapter, simple_strategy3D_pose_cont)
           - `simple_pose_cont_run_stats.f90` — thread-local accumulation and iteration reporting for pose_cont refinement
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
-          - `simple_srchspace_map.f90`
+          - `simple_srchspace_map.f90` — two-way map between a full search space and a subsampled one, nearest points in both directions
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
           - `simple_strategy2D_greedy.f90` — 2D strategy for exhaustive projection matching with greedy in-plane search
@@ -604,9 +606,9 @@
       - **comm/** — utilities for interprocess communication
         - `simple_http_post.f90` — libcurl-based HTTP POST client with response capture
         - `simple_http_post_tester.f90` — unit tests for simple_http_post against a loopback HTTP server (no network beyond localhost)
-        - `simple_ipc_tcp_socket_client.f90`
-        - `simple_ipc_tcp_socket_helpers.f90`
-        - `simple_ipc_tcp_socket_server.f90`
+        - `simple_ipc_tcp_socket_client.f90` — TCP client that sends a request and reads the reply from the first reachable server of a list
+        - `simple_ipc_tcp_socket_helpers.f90` — low-level POSIX socket helpers shared by the IPC TCP client and server (poll, accept, liveness)
+        - `simple_ipc_tcp_socket_server.f90` — TCP listener that owns the server socket and a listener thread, with request/reply helpers for accepted connections
         - `simple_ipc_tcp_socket_tester.f90` — unit tests for IPC TCP client/helpers/server split modules
         - `simple_stream_communicator.f90` — the abstract data type for the http communicator used in the stream
       - **filter/** — utilities for filtering and regularization
@@ -616,7 +618,7 @@
         - `simple_fsc.f90` — various Fourier Shell Correlation utilities
         - `simple_lpstages_tester.f90` — unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims) and the Butterworth kernel
         - `simple_opt_filter.f90` — optimization(search)-based filtering
-        - `simple_tent_smooth.f90`
+        - `simple_tent_smooth.f90` — separable tent (triangle) smoothing of 3D volumes by two passes of a sliding box mean
       - **gui/** — utilities for feeding information to the GUI
         - `simple_gui_assembler.f90` — Assembles GUI metadata objects into a compact JSON document and sends it to the NICE frontend
         - `simple_gui_assembler_tester.f90` — Unit tests for gui_assembler â lifecycle, hash suppression, and all assemble_stream_* procedures
@@ -667,16 +669,16 @@
         - `simple_stat_tester.f90` — unit test routines for the statistics utilities (simple_stat)
         - `simple_testfuns.f90` — provides 20 mathematical test functions for evaluating unconstrained optimization procedures
       - **persistent_worker/**
-        - `simple_persistent_worker_server.f90`
+        - `simple_persistent_worker_server.f90` — TCP accept-loop server that hands tasks to persistent SIMPLE worker processes in reply to their heartbeats
         - `simple_persistent_worker_server_tester.f90` — unit tests for simple_persistent_worker_server
         - **message/**
-          - `simple_persistent_worker_message_base.f90`
-          - `simple_persistent_worker_message_heartbeat.f90`
-          - `simple_persistent_worker_message_status.f90`
-          - `simple_persistent_worker_message_task.f90`
-          - `simple_persistent_worker_message_terminate.f90`
+          - `simple_persistent_worker_message_base.f90` — polymorphic base type of the persistent-worker wire messages
+          - `simple_persistent_worker_message_heartbeat.f90` — heartbeat message of the persistent-worker protocol: a worker reports liveness and thread load
+          - `simple_persistent_worker_message_status.f90` — status message of the persistent-worker protocol: the server reply to a heartbeat when no task is available or an error occurred
+          - `simple_persistent_worker_message_task.f90` — task message of the persistent-worker protocol: a queued job request and the job dispatched to a worker
+          - `simple_persistent_worker_message_terminate.f90` — terminate message of the persistent-worker protocol: the server orders a worker to shut down
           - `simple_persistent_worker_message_tester.f90` — unit tests for persistent-worker wire message modules
-          - `simple_persistent_worker_message_types.f90`
+          - `simple_persistent_worker_message_types.f90` — message-type enumeration of the persistent-worker wire protocol, shared by server and workers
       - **qsys/** — utilities for controlling queue systems in distributed computing environments
         - `simple_mem_estimator.f90` — job ram usage estimation
         - `simple_qsys_base.f90` — batch-processing manager - abstract interface

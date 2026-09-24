@@ -616,7 +616,7 @@ contains
 
             subroutine calculate_indices( seg_oris )
                 type(oris), intent(in)  :: seg_oris
-                integer,    allocatable :: order(:)
+                integer,    allocatable :: order(:), tmp_inds(:)
                 integer                 :: i
                 if( .not. fromto_present ) ffromto = [1,noris]
                 if( .not. sort_ascending)  ffromto = [noris - ffromto(2) + 1, noris - ffromto(1) + 1]
@@ -644,7 +644,18 @@ contains
                         end do
                     end if
                 end if
-                if(.not. sort_ascending) call reverse(indices)
+                if(.not. sort_ascending)then
+                    call reverse(indices)
+                    ! the GUI reads indices_pre/indices_post as the records above/below the window as
+                    ! displayed (NICE panelmicrographs.js, selectBelow/selectAbove); in a descending
+                    ! view those are the ascending tail and head, listed in display order (they were
+                    ! swapped before 2026-09-25)
+                    call move_alloc(indices_pre,  tmp_inds)
+                    call move_alloc(indices_post, indices_pre)
+                    call move_alloc(tmp_inds,     indices_post)
+                    if(allocated(indices_pre))  call reverse(indices_pre)
+                    if(allocated(indices_post)) call reverse(indices_post)
+                endif
             end subroutine calculate_indices
 
             subroutine add_fsc( iori_l )

@@ -1,3 +1,4 @@
+!@descr: reextract execution strategies: shared memory and distributed master
 ! Strategy pattern for reextract
 !
 ! Hook-less, strategy-heavy, unified workflow.

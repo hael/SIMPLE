@@ -380,7 +380,7 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
-| `unit_pftc_align2D3D` | polar correlation (gen_objfun_vals on generated images, since the wrap-up), continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, class-average registration (utils review) — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
+| `unit_pftc_align2D3D` | polar correlation (gen_objfun_vals and calc_frc on generated images, since the wrap-up and the open items), continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, class-average registration (utils review) — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
 | `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | 4.5 s (Mac; 47.3 s in the first build, cut down, section 9.7) |
 | `unit_parallel` | qsys control, qsys environment — added by the parallel review (2026-09-23, section 9.7); distributed execution, scripts only, nothing submitted | to be measured |
@@ -2287,6 +2287,96 @@ docking rotation and the mirror before `sym_dists`), a fix for the
 nightly runner. Section 12 and section 16 record where every phase and
 criterion stands.
 
+**The open items (2026-09-25, Hans: "Fix the remaining smaller open
+items"; on the pole/mirror pair of `build_refspiral` and the `XD_MAXIT`
+iteration cap: leave them).** The findings recorded as not acted on by the
+batches above, and the test gaps they left.
+
+Production defects, each pinned by a test. `calc_graphene_mask` excluded the
+three shells nearest each graphene band unconditionally, so a band beyond
+Nyquist cost the three highest shells; SINGLE's graphene subtraction had its
+own copy with a third band (`calc_3bands_mask`) and the same flaw. One routine
+now takes the bands (`calc_graphene_mask(box, smpd, bands)`, `GRAPHENE_BAND3`
+joined the other two in `simple_defs`), skips a band finer than 2*smpd, and the
+mask tester checks two bands, three bands and two bands beyond Nyquist;
+`image%pspec_graphene_mask`, its only other caller, had no caller and is gone.
+`image%bp` converted both limits with `get_find` before looking at them, so
+the common `bp(0., lp)` divided by zero (the flag, not a trap); only the
+limits in use are converted, and the image tester asserts that `bp(0., lp)`
+and `bp(hp, 0.)` raise no division by zero. `stack_io%read` only ever
+advanced its buffer window, so a backward read looped for ever; the window is
+now set to the block holding the image (the same windows a forward walk
+loads), and the stack I/O tester reads backward and out of order.
+`binoris%open` returned early on a new file before storing its name, so the
+errors of a first write named an empty file; the name is stored first (no
+test: it is private and only shows in messages). In a descending
+`print_segment_json` window `indices_pre` and `indices_post` were the
+ascending head and tail; NICE's micrograph panel reads them as the records
+above and below the window as displayed (`selectBelow`, `selectAbove` in
+`panelmicrographs.js`), so a descending view selected the wrong side. They
+are swapped and listed in display order, and the project tester checks their
+contents. `otsu` on a constant sample divided by zero in its range scaling;
+it now returns the value (everything background). `atoms%atom_validate` and
+`map_validate` cut the per-atom window one voxel off the atom (`ang2vox` is
+1-based and `window_slim` adds one to the corner); in a numpy emulation of
+`convolve` and the window mask, an atom correlated with its own simulated
+density at 0.35-0.44 before and 0.99 after, which the atoms tester now pins
+(above 0.95). Ruben's SINGLE handover has a note: his per-atom scores rise.
+
+Test gaps. The fast gate's `image` sub-suite was `test_image` inside
+`simple_image`: THROW_HARD checks, print-only filter, mask, rotation and
+binarisation parts (and a rotational average that ran only with more than two
+threads), and six image files left behind. It is `simple_image_tester`:
+construction and access, dimension checks and foreground statistics, the FFT
+round trip, `get_nyq`, the band-pass edges, `apply_filter`, the power spectrum
+of a plane wave, `shift` against both `shift2Dserial` forms and a circular
+shift, the autocorrelation's centre and shift invariance, `rtsq` (identity,
+quarter turn, a turn and back), `roavg` of a Gaussian and a square, `masscen`
+of pixels and voxels with and without a mask, `corr` of two Gaussians
+(closed form 0.967), bit-exact SPIDER and MRC round trips of stacks and a
+volume, and `fproject` against `fproject_serial` and across orientations of
+an isotropic volume, centred. That covers the image basics only the deleted
+`ptcl_center` named, except `window_center`, which had no caller and is gone.
+First build: 54 of 58 image checks; the failures were the test's. A rotation
+and its inverse and the rotational average of a Gaussian were compared over
+the whole box, where the circular closure of `rtsq` (the corners take in the
+opposite side) and the sharp disc edge dominate (a numpy emulation of `rtsq`
+gives 0.978 and 0.022); they are compared inside radius 20 and 30 (0.9999 and
+3e-5). `corr` of the two Gaussians was taken in a box of 64, where leaving out
+the indices with |h|**2 < 2 gives 0.959; it uses the box of 100 of the original
+`test_image` again (0.9672 emulated, closed form 0.9665). The run also fixed the
+conventions, now pinned: `shift(s)` gives out(x) = in(x + s), and `rtsq` by 90
+degrees gives out(i,j) = in(2c-j,i) about the centre c.
+`polarft_calc%rotate_ref_8` had no test: `calc_frc`, its production caller,
+now has to peak where the FFT path of `gen_objfun_vals` does for probes of
++60, -60 and 180 degrees, which put the peaks in each branch of the rotation
+(the identity, both halves of the in-plane range, the half turn);
+`calc_corr_rot_shift`, a benchmark copy with no caller, is gone. The
+`atoms` sub-suite was `test_atoms` inside `simple_atoms`, with private
+assertions that stopped at the first failure; it is `simple_atoms_tester`
+(access, geometry, a PDB round trip, the ANISOU columns, density simulation,
+`map_validate` and `atom_validate`), and what only the self-test called is
+removed: `cc_res` (its sum was never initialised), `find_masscen` (a copy of
+`get_geom_center`), `rotate`, `geometry_analysis_pdb`, `get_num`,
+`does_exist`, `print_atom`, `get_atom_corr`, plus the equally unused
+`does_exist` of `dstack_io` and `stream_watcher`.
+
+Seeds. `pose_cont_1jyx` and `pcg_halfset` carried private copies of the
+fixed-seed formula; they call `set_fixed_seed`, which draws the same numbers.
+`pcg_recon` put an all-42 seed; it is `set_fixed_seed(42)`, which draws
+different numbers, so it needs one run by hand (section 16). The polar
+correlation tester seeded before `parameters%new` (see the wrap-up); no
+private seeding is left in the tree.
+
+Headers. The 41 source files without a `!@descr:` line (and one with an empty
+tag) have one; `check_descr.py` now also rejects an empty tag. The code map is
+regenerated.
+
+Left open by decision: the jittered pole and its mirror mate in
+`build_refspiral` for d, o and i (the symmetry tester tolerates exactly that
+pair); the XD EM running to `XD_MAXIT` (needs measurements on real flex data
+before choosing acceleration or a looser tolerance).
+
 ## 10. Fast-tier performance
 
 The 30 s budget will not be met by classification alone; the fast candidates
@@ -2511,7 +2601,9 @@ The project is complete when:
   would take a conditional-compilation layer around `simple_ui` and the
   self-tests for little gain; no production executable has a test entry
   point.
-- *Outstanding checks (criterion 10):* a build of this tree without
+- *Outstanding checks (criterion 10):* one run of `simple_test_exec
+  test=pcg_recon`, whose seed changed on 2026-09-25 (Hans; it also gives
+  its runtime); a build of this tree without
   `--compile-tests` (the compile scripts then configure `BUILD_TESTS=OFF`),
   to confirm that it links without the test-only sources (Hans); the
   offload branch of `simple_openmp_offload_tester` in an offload build

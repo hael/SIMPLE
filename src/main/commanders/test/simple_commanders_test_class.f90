@@ -72,14 +72,14 @@ use simple_forked_process_tester,            only: run_all_forked_process_tests
 ! test procedures of core types
 use simple_imghead,                          only: test_imghead
 use simple_oris,                             only: test_oris
-use simple_image,                            only: test_image
+use simple_image_tester,                     only: run_all_image_tests
 use simple_ftiter,                           only: test_ftiter
 use simple_ftexp_shsrch,                     only: test_ftexp_shsrch, test_ftexp_shsrch2
 use simple_bspline_smoother,                 only: test_bspline_smoother, test_bspline_smoother_3d
 use simple_online_var,                       only: test_online_var
 use simple_aff_prop,                         only: test_aff_prop
 use simple_hclust,                           only: test_hclust
-use simple_atoms,                            only: test_atoms
+use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
@@ -279,7 +279,7 @@ contains
     subroutine suites_image( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'image',                suite_image)
+        call add_suite(s, n, 'image',                run_all_image_tests)
         call add_suite(s, n, 'image header',         test_imghead)
         call add_suite(s, n, 'Fourier iterator',     test_ftiter)
         call add_suite(s, n, 'B-spline smoother 2D', suite_bspline_2d)
@@ -389,7 +389,7 @@ contains
     subroutine suites_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'atoms',          test_atoms)
+        call add_suite(s, n, 'atoms',          run_all_atoms_tests)
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
     end subroutine suites_single
 
@@ -792,10 +792,6 @@ contains
     subroutine suite_orientation_data
         call test_oris(.false.)
     end subroutine suite_orientation_data
-
-    subroutine suite_image
-        call test_image(.false.)
-    end subroutine suite_image
 
     subroutine suite_bspline_2d
         call test_bspline_smoother([64,64,1], 1.0, 0.2)

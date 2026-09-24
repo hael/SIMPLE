@@ -1,3 +1,4 @@
+!@descr: reconstruct3D execution strategies (shared memory, kernel PCG, distributed master) and the reconstruction backend selector
 module simple_rec3D_strategy
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api

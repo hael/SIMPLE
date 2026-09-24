@@ -1,3 +1,4 @@
+!@descr: terminate message of the persistent-worker protocol: the server orders a worker to shut down
 !==============================================================================
 ! MODULE: simple_persistent_worker_message_terminate
 !

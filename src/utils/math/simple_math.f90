@@ -803,6 +803,12 @@ contains
         ! scale vecor
         old_range(1) = minval(x_copy)
         old_range(2) = maxval(x_copy)
+        if( .not. (old_range(2) > old_range(1)) )then
+            ! a constant sample is one class: the threshold is the value itself, so x > thresh
+            ! leaves everything in the background (the range scaling divided by zero before)
+            thresh = old_range(1)
+            return
+        endif
         sc = (MAX_VAL - MIN_VAL)/(old_range(2) - old_range(1))
         x_copy(:) = sc * x_copy(:) + MIN_VAL - sc * old_range(1)
         p = 0.

@@ -1,3 +1,4 @@
+!@descr: TCP client that sends a request and reads the reply from the first reachable server of a list
 !==============================================================================
 ! MODULE: simple_ipc_tcp_socket_client
 !

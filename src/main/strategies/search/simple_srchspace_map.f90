@@ -1,3 +1,4 @@
+!@descr: two-way map between a full search space and a subsampled one, nearest points in both directions
 module simple_srchspace_map
 use simple_error,         only: simple_exception
 use simple_srch_sort_loc, only: mask2inds

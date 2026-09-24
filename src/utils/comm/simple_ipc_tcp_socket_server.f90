@@ -1,3 +1,4 @@
+!@descr: TCP listener that owns the server socket and a listener thread, with request/reply helpers for accepted connections
 !==============================================================================
 ! MODULE: simple_ipc_tcp_socket_server
 !

@@ -1,3 +1,4 @@
+!@descr: separable tent (triangle) smoothing of 3D volumes by two passes of a sliding box mean
 ! Module: simple_tent_smooth
 !
 ! Applies a separable tent (triangle-shaped) smoothing filter to 3-D volumes.

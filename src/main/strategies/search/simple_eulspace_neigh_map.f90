@@ -1,3 +1,4 @@
+!@descr: neighbourhoods of a subsampled projection-direction space within the full space, under the point group
 module simple_eulspace_neigh_map
 use simple_core_module_api
 use simple_srchspace_map, only: srchspace_map

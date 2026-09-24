@@ -1,3 +1,4 @@
+!@descr: motion_correct execution strategies: shared memory or worker, and distributed master
 ! object-oriented strategy pattern for motion_correct
 !
 ! Goals

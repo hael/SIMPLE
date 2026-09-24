@@ -1,3 +1,4 @@
+!@descr: cluster2D execution strategies: shared memory and distributed master
 module simple_cluster2D_strategy
 use simple_core_module_api
 use simple_builder,     only: builder

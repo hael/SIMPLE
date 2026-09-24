@@ -1,3 +1,4 @@
+!@descr: gen_pspecs_and_thumbs execution strategies: shared memory or worker, and distributed master
 ! object-oriented strategy pattern for gen_pspecs_and_thumbs
 !
 ! Goals

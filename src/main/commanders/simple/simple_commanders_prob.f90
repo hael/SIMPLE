@@ -1,3 +1,4 @@
+!@descr: probability-table commanders of the 2D and 3D searches (prob_tab, prob_align and their neighbourhood variants)
 module simple_commanders_prob
 use simple_commanders_api
 use simple_pftc_srch_api

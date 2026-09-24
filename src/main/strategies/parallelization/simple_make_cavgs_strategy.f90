@@ -1,3 +1,4 @@
+!@descr: make_cavgs execution strategies: shared memory, distributed master and distributed worker
 module simple_make_cavgs_strategy
 use simple_core_module_api
 use simple_parameters, only: parameters

@@ -9,7 +9,6 @@ public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr
 private
 
 real, parameter :: angular_threshold = 3.0    ! Degrees
-real, parameter :: GRAPHENE_BAND3    = 1.06   ! Angstroms
 real, parameter :: REMOVAL_HWIDTH1 = 3.       ! pixels, obscuring half-width 1
 real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.) ! obscuring half-width 2
 real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
@@ -93,7 +92,7 @@ contains
         call filter_img%new([box,box,1],smpd)
         filter_img = 1.
         nyq        = pspec_img%get_nyq()
-        resmask    = calc_3bands_mask(box,smpd)
+        resmask    = calc_graphene_mask(box, smpd, [GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHENE_BAND3])
         do i = 1,box
             h = i-imgcen
             do j = 1,box
@@ -307,36 +306,6 @@ contains
             end subroutine obscure_peak
 
     end subroutine remove_lattices
-
-    !> \brief calculate logical mask filtering out the Graphene bands
-    function calc_3bands_mask( box, smpd ) result( mask )
-        integer, intent(in)  :: box
-        real,    intent(in)  :: smpd
-        real,    allocatable :: res(:), sqdiff_band(:)
-        logical, allocatable :: mask(:)
-        integer, parameter   :: NBANDS = 3
-        integer              :: loc(NBANDS), n, i
-        res = get_resarr( box, smpd )
-        n   = size(res)
-        allocate(mask(n), source=.true.)
-        allocate(sqdiff_band(n), source=(res - GRAPHENE_BAND1)**2.0)
-        loc = minnloc(sqdiff_band, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
-        end do
-        deallocate(sqdiff_band)
-        allocate(sqdiff_band(n), source=(res - GRAPHENE_BAND2)**2.0)
-        loc = minnloc(sqdiff_band, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
-        end do
-        deallocate(sqdiff_band)
-        allocate(sqdiff_band(n), source=(res - GRAPHENE_BAND3)**2.0)
-        loc = minnloc(sqdiff_band, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
-        end do
-    end function calc_3bands_mask
 
     ! DESTRUCTOR
 

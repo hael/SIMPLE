@@ -16,8 +16,8 @@ where each one lives now and what it has to check before it counts as a test.
 | `detect_calpha_molecules` | unchanged commander, run as sub-suite `C-alpha molecules` of `lib_single` | nightly |
 | `single_workflow` | unchanged commander, CTest entry `single_workflow` | nightly (`ctest -L workflow`) |
 
-`unit_single` also holds the `atoms` sub-suite (`test_atoms` in `simple_atoms`), which used to sit in
-`unit_project`. `simulate_nanoparticle` and `detect_atoms` were the first stages of `atoms_stats`,
+`unit_single` also holds the `atoms` sub-suite (`simple_atoms_tester` since 2026-09-25; it was
+`test_atoms` inside `simple_atoms`), which used to sit in `unit_project`. `simulate_nanoparticle` and `detect_atoms` were the first stages of `atoms_stats`,
 so they are no longer separate cases. Their stages still run, inside `atoms_stats`.
 
 Running them:
@@ -135,3 +135,20 @@ to them:
 
 These are the "simulation-truth gates" of Phase 5 of the plan. `single_workflow` can be the first
 workflow to have them.
+
+## Changed after this handover (2026-09-25)
+
+- `test_atoms` left `simple_atoms` for `src/main/nano/simple_atoms_tester.f90` (sub-suite `atoms`
+  of `unit_single`). Its checks accumulate instead of stopping at the first failure, the parts
+  that only ran (PDB I/O, ANISOU, density simulation, validation) now assert, and its PDB files
+  are removed.
+- `atom_validate` and `map_validate` cut their per-atom window one voxel off the atom: `ang2vox`
+  is 1-based and `window_slim` adds one to the corner, so the atom sat at voxel `atom_box/2`, not
+  at `atom_box/2+1` where `center_inbox` puts the simulated atom. The corner is now
+  `ang2vox - 1 - atom_box/2`. In a numpy emulation the correlation of an atom with its own
+  simulated density rises from 0.35-0.44 to 0.99, so the per-atom scores (and the beta column
+  they are written to) of both routines go up; `map_validate` compares two maps through the same
+  window, so its scores change only through the mask now being centred on the atom.
+- Routines only `test_atoms` called are removed: `cc_res` (its sum was never initialised),
+  `find_masscen` (a copy of `get_geom_center`), `rotate`, `geometry_analysis_pdb`, `get_num`,
+  `does_exist`, `print_atom` and `get_atom_corr`.

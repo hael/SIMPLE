@@ -26,26 +26,28 @@ contains
         calc_fourier_index = min(box/2,nint((real(box)*smpd)/res_here))
     end function calc_fourier_index
 
-    !> \brief calculate logical mask filtering out the Graphene bands
-    function calc_graphene_mask( box, smpd ) result( mask )
+    !> \brief logical mask over the resolution shells of get_resarr(box, smpd): .false. at the three
+    !! shells nearest each band (a resolution in Angstrom, e.g. the graphene bands) and .true.
+    !! elsewhere. A band finer than Nyquist (2*smpd) is not in the spectrum and masks nothing; it
+    !! used to mask the three highest shells instead (masks review, 2026-09-22; fixed 2026-09-25)
+    function calc_graphene_mask( box, smpd, bands ) result( mask )
         integer, intent(in)  :: box
-        real,    intent(in)  :: smpd
-        real,    allocatable :: res(:), sqdiff_band1(:), sqdiff_band2(:)
+        real,    intent(in)  :: smpd, bands(:)
+        integer, parameter   :: NSHELLS = 3
+        real,    allocatable :: res(:), sqdiff(:)
         logical, allocatable :: mask(:)
-        integer, parameter   :: NBANDS = 3
-        integer              :: loc(NBANDS), n, i
+        integer              :: loc(NSHELLS), n, i, iband
         res = get_resarr( box, smpd )
         n   = size(res)
-        allocate(sqdiff_band1(n), source=(res - GRAPHENE_BAND1)**2.0)
-        allocate(sqdiff_band2(n), source=(res - GRAPHENE_BAND2)**2.0)
         allocate(mask(n), source=.true.)
-        loc = minnloc(sqdiff_band1, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
-        end do
-        loc = minnloc(sqdiff_band2, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
+        allocate(sqdiff(n))
+        do iband = 1,size(bands)
+            if( bands(iband) < 2.*smpd ) cycle ! beyond Nyquist
+            sqdiff = (res - bands(iband))**2
+            loc    = minnloc(sqdiff, NSHELLS)
+            do i = 1,NSHELLS
+                mask(loc(i)) = .false.
+            end do
         end do
     end function calc_graphene_mask
     

@@ -184,7 +184,6 @@ type :: polarft_calc
     procedure, private :: allocate_memo_workspace, kill_memo_workspace
     procedure, private :: alloc_memo_ptcls, alloc_memo_refs
     ! ===== CORR: simple_polarft_corr.f90
-    procedure          :: calc_corr_rot_shift
     procedure          :: calc_frc
     procedure          :: gen_objfun_vals
     procedure          :: gen_best_objfun_val
@@ -642,14 +641,6 @@ interface
     end subroutine kill_memo_workspace
 
     ! ===== CORR  =====
-
-    module function calc_corr_rot_shift(self, iref, iptcl, shvec, irot, kweight) result(val)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
-        real(sp),            intent(in)    :: shvec(2)
-        logical, optional,   intent(in)    :: kweight
-        real :: val
-    end function calc_corr_rot_shift
 
     module subroutine calc_frc(self, iref, iptcl, irot, shvec, frc)
         class(polarft_calc), intent(inout) :: self

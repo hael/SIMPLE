@@ -1,3 +1,4 @@
+!@descr: execution of SINGLE time-series commanders (import, motion correction, tracking, extraction)
 module single_exec_tseries
 use simple_cmdline,               only: cmdline
 use single_commanders_trajectory, only: commander_track_particles_distr

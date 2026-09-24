@@ -1,3 +1,4 @@
+!@descr: polymorphic base type of the persistent-worker wire messages
 !==============================================================================
 ! MODULE: simple_persistent_worker_message_base
 !
