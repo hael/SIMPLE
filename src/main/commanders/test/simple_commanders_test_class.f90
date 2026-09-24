@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_test_utils,                       only: begin_test_suite, end_test_suite, reset_test_report, report_summary, &
     &set_fixed_seed
 ! core library tester modules
+use simple_ansi_ctrls_tester,                only: run_all_ansi_ctrls_tests
 use simple_string_tester,                    only: run_all_string_tests
 use simple_syslib_tester,                    only: run_all_syslib_tests
 use simple_fileio_tester,                    only: run_all_fileio_tests
@@ -80,6 +81,7 @@ use simple_online_var,                       only: test_online_var
 use simple_aff_prop,                         only: test_aff_prop
 use simple_hclust,                           only: test_hclust
 use simple_atoms_tester,                     only: run_all_atoms_tests
+use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
@@ -253,6 +255,7 @@ contains
     subroutine suites_core( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
+        call add_suite(s, n, 'ANSI formatting',      run_all_ansi_ctrls_tests)
         call add_suite(s, n, 'string',               run_all_string_tests)
         call add_suite(s, n, 'syslib',               run_all_syslib_tests)
         call add_suite(s, n, 'fileio',               run_all_fileio_tests)
@@ -365,7 +368,7 @@ contains
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
         call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
-        call add_suite(s, n, 'class-average registration', run_all_cavg_registration_tests)
+        call add_suite(s, n, 'cavg registration',          run_all_cavg_registration_tests)
     end subroutine suites_pftc_align2D3D
 
     !> the Cartesian (continuous) 3D registration: pose refiner, its refine3D adapter,
@@ -390,6 +393,7 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'atoms',          run_all_atoms_tests)
+        call add_suite(s, n, 'cif2mrc',        run_all_cif2mrc_tests)
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
     end subroutine suites_single
 
@@ -760,8 +764,8 @@ contains
         character(len=*), intent(in) :: name
         character(len=len(name))     :: id
         integer :: i
-        id = lowercase(name)
-        do i = 1, len(id)
+        id = lowercase(adjustl(trim(name)))
+        do i = 1, len_trim(id)
             if( id(i:i) == ' ' .or. id(i:i) == '-' ) id(i:i) = '_'
         end do
     end function suite_id

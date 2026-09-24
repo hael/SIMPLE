@@ -14,7 +14,7 @@ use simple_image,            only: image
 use simple_imgarr_utils,     only: dealloc_imgarr
 use simple_cmdline,          only: cmdline
 use simple_parameters,       only: parameters
-use simple_strategy2D_utils, only: match_imgs, match_imgs2ref
+use simple_strategy2D_utils, only: match_imgs, match_imgs2ref, rtsq_imgs
 use simple_test_utils
 implicit none
 private
@@ -31,16 +31,20 @@ contains
         integer, parameter :: NIMGS     = 5, BOX = 64
         real,    parameter :: SMPD      = 1.5
         real,    parameter :: CORR_TOL  = 0.95
+        real,    parameter :: SPATIAL_CORR_TOL = 0.90
         real,    parameter :: ANG_TOL   = 3.6   ! one polar step: mskdiam 48 A at 1.5 A is a radius of 16 px, 100 rotations
         real,    parameter :: SHIFT_TOL = 0.5   ! pixels
         type(inpl_struct), allocatable :: alg_info1(:), alg_info2(:,:)
-        type(image),       allocatable :: imgs_ref(:), imgs_targ(:)
+        type(inpl_struct) :: one_info(1)
+        type(image),       allocatable :: imgs_ref(:), imgs_targ(:), aligned(:)
+        type(image) :: one_aligned(1)
         type(parameters)   :: params
         type(cmdline)      :: cline
         real, allocatable  :: rmat(:,:,:)
-        real               :: rx, ry, ang, dang, shift_applied, shift_found
-        integer            :: i, x, y
+        real               :: rx, ry, ang, dang, shift_applied, shift_found, spatial_corr
+        integer            :: i, j, x, y
         character(len=1)   :: ci
+        character(len=128) :: message
         write(*,'(A)') 'test_rotated_copies'
         call cline%set('smpd',    SMPD)
         call cline%set('lp',      6.)
@@ -75,12 +79,32 @@ contains
         alg_info2 = match_imgs(params, params%hp, params%lp, params%trs, imgs_ref, imgs_targ)
         call assert_true(all(ieee_is_finite(alg_info2%corr)), 'match_imgs: every correlation is finite')
         call assert_true(all(alg_info2%corr >= CORR_TOL), 'match_imgs: every pair of rotated copies registers at 0.95 or more')
+        do i = 1, NIMGS
+            do j = 1, NIMGS
+                write(message,'(A,I0,A,I0,A,F7.4,A,F5.2)') 'match_imgs reference ', i, ', target ', j, &
+                    &' search correlation=', alg_info2(i,j)%corr, ', minimum=', CORR_TOL
+                call assert_true(alg_info2(i,j)%corr >= CORR_TOL, trim(message))
+                call one_aligned(1)%copy(imgs_targ(j))
+                one_info(1) = alg_info2(i,j)
+                call rtsq_imgs(1, one_info, one_aligned)
+                spatial_corr = imgs_ref(i)%real_corr(one_aligned(1))
+                write(message,'(A,I0,A,I0,A,F7.4,A,F5.2)') 'match_imgs reference ', i, ', target ', j, &
+                    &' pixel correlation=', spatial_corr, ', minimum=', SPATIAL_CORR_TOL
+                call assert_true(spatial_corr >= SPATIAL_CORR_TOL, trim(message))
+                call one_aligned(1)%kill
+            enddo
+        enddo
         ! rotated and shifted copies against the first: correlation, rotation and shift
         do i = 2, NIMGS
             call imgs_targ(i)%copy(imgs_ref(1))
             call imgs_targ(i)%rtsq(real(i - 1) * 30., 0.25 * real(i - 1), 0.25 * real(i - 1))
         enddo
         alg_info1 = match_imgs2ref(params, params%hp, params%lp, params%trs, imgs_ref(1), imgs_targ)
+        allocate(aligned(NIMGS))
+        do i = 1, NIMGS
+            call aligned(i)%copy(imgs_targ(i))
+        enddo
+        call rtsq_imgs(NIMGS, alg_info1, aligned)
         do i = 1, NIMGS
             write(ci,'(I1)') i
             call assert_true(ieee_is_finite(alg_info1(i)%corr) .and. alg_info1(i)%corr >= CORR_TOL, &
@@ -92,9 +116,14 @@ contains
             shift_found   = sqrt(alg_info1(i)%x**2 + alg_info1(i)%y**2)
             call assert_real(shift_applied, shift_found, SHIFT_TOL, 'match_imgs2ref: copy '//ci//' shift length within 0.5 px')
             call assert_false(alg_info1(i)%l_mirr, 'match_imgs2ref: copy '//ci//' is not taken for a mirror')
+            spatial_corr = imgs_ref(1)%real_corr(aligned(i))
+            write(message,'(A,I0,A,F7.4,A,F5.2)') 'match_imgs2ref target ', i, &
+                &' pixel correlation=', spatial_corr, ', minimum=', SPATIAL_CORR_TOL
+            call assert_true(spatial_corr >= SPATIAL_CORR_TOL, trim(message))
         enddo
         call dealloc_imgarr(imgs_ref)
         call dealloc_imgarr(imgs_targ)
+        call dealloc_imgarr(aligned)
         deallocate(alg_info1, alg_info2, rmat)
         call cline%kill
 

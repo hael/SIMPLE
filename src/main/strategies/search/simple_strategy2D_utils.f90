@@ -15,7 +15,7 @@ implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, id_junk, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
 public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset
-public :: match_imgs, match_imgs2ref
+public :: match_imgs, match_imgs2ref, rtsq_imgs
 public :: calc_cavg_pairwise_algninfo, calc_cavg_sigstats_components
 private
 #include "simple_local_flags.inc"
