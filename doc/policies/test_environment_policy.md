@@ -10,7 +10,7 @@ the test-environment refactoring of September 2026.
 The refactoring itself is documented in
 `doc/refactoring_notes/completed/uniform_test_environment_refactoring.md` (the plan and
 its batch records, section 9.7). Every test that existed before it is listed,
-with its review verdict, in `doc/code_overview/test_review_record.md`; the
+with its review verdict, in `doc/refactoring_notes/completed/test_review_record.md`; the
 full inventory, `doc/code_overview/test_inventory.md`, is generated from
 the sources and that record on every build and is not committed. This
 policy is the short version for day-to-day work; when the two disagree, fix
@@ -545,7 +545,7 @@ production executables.
 ## 8. What the refactoring deleted, and why
 
 The review gave every test identity in the inventory a verdict. The
-retired-tests table of `doc/code_overview/test_review_record.md` has one
+retired-tests table of `doc/refactoring_notes/completed/test_review_record.md` has one
 row per removed identity (136), with its reason and replacement. Most were
 not lost: 79 were merged into tester modules with real assertions, 10 were
 modified or moved, and 47 were deleted or retired outright. The reasons for

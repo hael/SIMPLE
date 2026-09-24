@@ -5,7 +5,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # Two generated records, rebuilt whenever their inputs change and not committed (.gitignore):
 # the code map (scripts/generate_codeoverview.pl) and the test inventory
 # (scripts/test_review_dossier.py, from the sources and the hand-written, committed review record
-# doc/code_overview/test_review_record.md).
+# doc/refactoring_notes/completed/test_review_record.md, the closed record of the test review).
 #  - Each is written in the build tree and copied into doc/ only when its content differs, so an
 #    unchanged record keeps its timestamp and nothing downstream reruns; a stamp in the build tree
 #    marks the run.
@@ -16,7 +16,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 #  - The inventory reads the documentation, the code map among it, so it waits for the map.
 set(SIMPLE_CODE_MAP       "${CMAKE_SOURCE_DIR}/doc/code_overview/code_base_map.md")
 set(SIMPLE_TEST_INVENTORY "${CMAKE_SOURCE_DIR}/doc/code_overview/test_inventory.md")
-set(SIMPLE_TEST_RECORD    "${CMAKE_SOURCE_DIR}/doc/code_overview/test_review_record.md")
+set(SIMPLE_TEST_RECORD    "${CMAKE_SOURCE_DIR}/doc/refactoring_notes/completed/test_review_record.md")
 set(SIMPLE_CODE_MAP_CMD "${PERL_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/generate_codeoverview.pl"
   --quiet --root "${CMAKE_SOURCE_DIR}" --out)
 set(SIMPLE_TEST_INVENTORY_CMD "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/test_review_dossier.py"

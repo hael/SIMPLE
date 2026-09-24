@@ -10,7 +10,7 @@ facts are out of date, and the current state is in the policy
 (`doc/policies/test_environment_policy.md`), the archived plan
 ([`uniform_test_environment_refactoring.md`](uniform_test_environment_refactoring.md))
 and the review record
-([`test_review_record.md`](../../code_overview/test_review_record.md)).
+([`test_review_record.md`](test_review_record.md)).
 
 | Recommendation | Outcome |
 |---|---|

@@ -2,9 +2,11 @@
 
 The hand-written part of the test inventory: the review verdict and note of each test identity
 (section 9 of `doc/refactoring_notes/completed/uniform_test_environment_refactoring.md`) and the retired-tests table, one row per
-test the refactoring removed. Edit here. `test_inventory.md` beside it is generated
-from the sources and this record on every build (`scripts/test_review_dossier.py`, target
-`generate_test_inventory`) and is not committed.
+test the refactoring removed. The record closed with the review (2026-09-25) and is not edited
+any more: a test deleted from now on is explained in its commit message (policy, section 4.5). The
+build still reads it: `doc/code_overview/test_inventory.md`, generated on every build and not
+committed (`scripts/test_review_dossier.py`, target `generate_test_inventory`), takes its verdict and
+note columns and its retired-tests table from here.
 
 ## Verdicts
 

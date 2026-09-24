@@ -372,9 +372,11 @@ one, and what runs when. It applies to every Fortran test in the repository
 and to everyone who adds, changes or removes one. It records the state after
 the test-environment refactoring of September 2026.</p>
 <p>The refactoring itself is documented in
-<code>doc/refactoring_notes/uniform_test_environment_refactoring.md</code> (the plan and
+<code>doc/refactoring_notes/completed/uniform_test_environment_refactoring.md</code> (the plan and
 its batch records, section 9.7). Every test that existed before it is listed,
-with its review verdict, in <code>doc/refactoring_notes/test_inventory.md</code>. This
+with its review verdict, in <code>doc/code_overview/test_review_record.md</code>; the
+full inventory, <code>doc/code_overview/test_inventory.md</code>, is generated from
+the sources and that record on every build and is not committed. This
 policy is the short version for day-to-day work; when the two disagree, fix
 the one that is wrong.</p>
 <h2 id="1-the-environment">1. The environment</h2>
@@ -440,7 +442,7 @@ checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.</p>
 <p><strong>Every entry</strong> runs in its own directory <code>build/test_runs/&lt;entry&gt;</code>, with its
 own <code>TIMEOUT</code>, an explicit <code>OMP_NUM_THREADS</code> (1 for the fast tier) and
-<code>SIMPLE_SEED=20260923</code> (section 5.2). Each suite writes a report,
+<code>SIMPLE_SEED=20260923</code>. Each suite writes a report,
 <code>SIMPLE_TEST_&lt;suite&gt;_&lt;date&gt;/simple_test_&lt;suite&gt;_report.txt</code>, with every check,
 every failure by name and the time of each sub-suite.</p>
 <h3 id="11-the-fast-area-suites">1.1 The fast area suites</h3>
@@ -456,23 +458,23 @@ tester module (section 4.1).</p>
 <tbody>
 <tr>
 <td><code>unit_core</code></td>
-<td>string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line</td>
+<td>ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line</td>
 </tr>
 <tr>
 <td><code>unit_ori</code></td>
-<td>orientation, orientation collection, symmetry, orientation data, Euler shift</td>
+<td>orientation, orientation collection, symmetry, Euler shift</td>
 </tr>
 <tr>
 <td><code>unit_image</code></td>
-<td>image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation</td>
+<td>image, image header, Fourier iterator, B-spline smoother, masks, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation</td>
 </tr>
 <tr>
 <td><code>unit_numerics</code></td>
-<td>online variance, random draws, affinity propagation, hierarchical clustering, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search (correlator and optimiser)</td>
+<td>online variance, random draws, affinity propagation, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search</td>
 </tr>
 <tr>
 <td><code>unit_project</code></td>
-<td>STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain</td>
+<td>STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain</td>
 </tr>
 <tr>
 <td><code>unit_ui</code></td>
@@ -488,7 +490,7 @@ tester module (section 4.1).</p>
 </tr>
 <tr>
 <td><code>unit_pftc_align2D3D</code></td>
-<td>polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, class-average registration</td>
+<td>polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, cavg registration</td>
 </tr>
 <tr>
 <td><code>unit_cart_align3D</code></td>
@@ -504,7 +506,7 @@ tester module (section 4.1).</p>
 </tr>
 <tr>
 <td><code>unit_single</code></td>
-<td>atoms, C-alpha finder</td>
+<td>atoms, cif2mrc, C-alpha finder</td>
 </tr>
 </tbody>
 </table>
@@ -595,6 +597,11 @@ hyphens written as underscores and commas and slashes dropped
 The selectors of each suite are listed in the description of its <code>suite=</code>
 input in the test UI (<code>src/main/ui/simple_test/simple_test_ui_class.f90</code>). To
 reproduce a CTest run by hand, export <code>SIMPLE_SEED=20260923</code> first.</p>
+<p><code>SIMPLE_UNIT_ORDER=reverse</code> is a diagnostic for the fused, in-process suites:
+it reverses the sub-suite table so a result that differs from the normal run
+exposes state leaked by one sub-suite into another. It does not reverse CTest
+entries and is not part of the normal build gate; use it after changing shared
+state, lifecycle or test-runner code.</p>
 <h2 id="2-what-a-test-is">2. What a test is</h2>
 <p>A test states something the code guarantees and fails when that guarantee is
 broken. If it cannot fail, it is not a test, whatever it is called and
@@ -623,8 +630,7 @@ not correlate with a window beside it.</li>
 <li><strong>Pins conventions.</strong> Sign, handedness, origin and index conventions are
 where SIMPLE's code breaks silently. When a test finds out which convention
 a routine follows, it asserts that convention.</li>
-<li><strong>Is reproducible</strong>: every draw it makes comes from a fixed seed
-(section 5.2).</li>
+<li><strong>Is reproducible</strong>: every draw it makes comes from a fixed seed.</li>
 </ul>
 <p>The review of September 2026 wrote tests to this standard for most of the
 library, and they found and fixed more than twenty-five production defects,
@@ -728,8 +734,13 @@ Nothing else.</p>
 <p><strong>Work on master; scratch in a worktree.</strong> SIMPLE practises extreme
 programming: everyone works on master and pushes to master, in small and
 frequent steps, so that everyone's work is integrated, built and tested
-every day. The fast gate runs on every build and a failed gate installs
-nothing, which is what makes this safe. Do not keep work on a branch in the
+every day. What makes this safe is the fast gate, and running it is up to
+you: <strong>before you push, build with <code>./compile_debug.sh --compile-tests</code> and
+let the gate pass.</strong> This is a strong recommendation, not a lock: nothing in
+Git or CI blocks a push, because sometimes a push only moves code to another
+machine (a cluster node, say). Then run the gate before the work counts as
+done. The nightly CI builds and gates master on Linux and macOS, in Debug and
+Release, and shows the next morning what slipped through. Do not keep work on a branch in the
 online repository: nobody checks it, it drifts away from master, and the
 merge gets harder every day it waits. A branch pushed to the online
 repository is the exception and needs a strong reason (for example a
@@ -788,7 +799,7 @@ raises the process budget. That is an owner decision.</li>
 molecules from the embedded models (<code>simple_molecule_data</code>, <code>pdb2mrc</code>);
 particles and movies from the simulation commanders.</li>
 <li>Seed every draw with <code>set_fixed_seed(&lt;n&gt;)</code>. Call it <strong>after</strong>
-<code>parameters%new</code>, which reseeds (section 5.2).</li>
+<code>parameters%new</code>, which reseeds.</li>
 <li>Keep them small and in memory. Write files only when file I/O is what the
 test is about; name them <code>tmp_&lt;tester&gt;_*</code> and delete them at the end of the
 test, also when a check failed.</li>
@@ -800,8 +811,13 @@ test, also when a check failed.</li>
 production module. It then takes an out-argument per check, and a tester
 asserts those by name (<code>test_flex_pcg_operator</code> in <code>simple_flex_pca_pcg</code> is
 the model). Every other self-test belongs in a tester module: the review
-moved <code>test_image</code>, <code>test_atoms</code>, the flex PCA, UI hash, cavg-quality and
-class-average registration self-tests out of their production modules.</p>
+moved the self-tests of <code>image</code>, <code>imghead</code>, <code>atoms</code>, <code>oris</code>, <code>ftiter</code>,
+<code>ftexp_shsrch</code>, <code>bspline_smoother</code>, <code>online_var</code> and <code>aff_prop</code>, the flex
+PCA, UI hash, cavg-quality and class-average registration self-tests out of
+their production modules, and deleted those of unused code (<code>hclust</code>,
+<code>srchspace_map2D_io</code>) and the dead ones (<code>CPlot2D</code>, <code>jpg</code>). The only self-tests
+left in production modules are this white-box one and the five <code>flex_gpu</code>
+tests of the GPU platform entry.</p>
 <h3 id="44-a-workflow-or-platform-test">4.4 A workflow or platform test</h3>
 <p>A test that runs a pipeline is a commander: its type and <code>exec_test_&lt;name&gt;</code>
 routine in <code>src/main/commanders/test/simple_commanders_test_&lt;area&gt;.f90</code>, a
@@ -819,14 +835,25 @@ one-line <code>!@descr:</code>.</li>
 <li><code>python3 scripts/check_test_registry.py . --verbose</code> — the CTest
 registrations, the test UI programs, the router cases and the <code>suite=</code>
 lists agree. The fast gate runs it on every build.</li>
-<li><code>cd scripts &amp;&amp; perl generate_codeoverview.pl</code> — regenerates the code map
-from the <code>!@descr:</code> lines.</li>
+<li>The default CMake build regenerates the test inventory and code-base map
+when their source inputs change.</li>
 <li><code>./compile_debug.sh --compile-tests</code> — the build and the gate.</li>
 <li><code>SIMPLE_UNIT_ORDER=reverse</code> on the area suite — the sub-suites do not
 depend on each other's state.</li>
 </ul>
 <p>When a test is deleted, the commit says why. When a test finds a defect, the
 defect is fixed in the same change and the test pins the fix.</p>
+<p>Two kinds of code need a check that is easy to leave out:</p>
+<ul>
+<li><strong>Threaded paths.</strong> The fast gate runs every suite on one OpenMP thread, so
+a routine with a threaded path gets a check that forces a team (the masks
+suite runs a team of three) and compares with the serial result. The
+nightly run repeats the fast tier on four threads.</li>
+<li><strong>Readers and writers.</strong> A file format is tested by round trips at the
+sizes where its layout changes: small, odd and non-square boxes and the
+sizes where a header or record length changes. The SPIDER header was wrong
+for every box below 43 and right for the 64-pixel boxes the tests used.</li>
+</ul>
 <h3 id="46-fortran-traps-seen-in-the-review">4.6 Fortran traps seen in the review</h3>
 <ul>
 <li>A dummy argument or local named like a module constant hides it, silently
@@ -836,6 +863,12 @@ defect is fixed in the same change and the test pins the fix.</p>
 <code>-Winteger-division</code> warning; write the value.</li>
 <li>Comparing whole images after an interpolating rotation includes the
 circular wrap of <code>rtsq</code> at the corners; compare inside the inscribed disc.</li>
+<li>An <code>rmat</code> pointer (<code>get_rmat_ptr</code>) is the padded array, with extra rows in
+the first dimension for the in-place FFT; bound it by <code>ldim</code>,
+<code>rmat(:ldim(1),:ldim(2),:ldim(3))</code>, before a whole-array expression. The
+unbounded pointer does not conform with a box-sized array: bounds checking
+stops on it, and without bounds checking it can pass by luck (the <code>cif2mrc</code>
+tester, 2026-09-25). <code>get_rmat()</code> returns a copy of the box.</li>
 </ul>
 <h2 id="5-library-support-for-tests">5. Library support for tests</h2>
 <h3 id="51-simpletestutils">5.1 <code>simple_test_utils</code></h3>
@@ -882,69 +915,6 @@ circular wrap of <code>rtsq</code> at the corners; compare inside the inscribed 
 <p>A failed assertion records its message, with expected and actual values, and
 the suite goes on: every check of a run is reported, not only the first
 failure.</p>
-<h3 id="52-seeds">5.2 Seeds</h3>
-<p><code>seed_rnd</code> (in <code>simple_rnd</code>, called by <code>parameters%new</code> and so by every
-commander) reads <code>/dev/urandom</code> in production. When the environment variable
-<code>SIMPLE_SEED</code> is set, it seeds from that integer instead, advanced by a fixed
-step per call, so successive commanders draw different but reproducible
-numbers and distributed workers inherit the seed. CTest sets
-<code>SIMPLE_SEED=20260923</code> for every entry. <code>set_fixed_seed(base)</code> (through
-<code>seed_rnd_fixed</code>) puts a fixed state and restarts that count. The suite runner
-calls <code>set_fixed_seed(20260923)</code> before every sub-suite, so a full run, a
-focused run (<code>suite=</code>) and a reversed run draw the same numbers in each
-sub-suite. A test that draws calls <code>set_fixed_seed</code> itself, after any
-<code>parameters%new</code>.</p>
-<h3 id="53-the-suite-runner-and-the-test-ui">5.3 The suite runner and the test UI</h3>
-<p><code>run_unit_suites</code> in <code>simple_commanders_test_class</code> runs a table of
-sub-suites in one process: it makes the dated report directory, reseeds
-before each sub-suite, honours <code>suite=</code> and <code>SIMPLE_UNIT_ORDER=reverse</code>,
-writes the report and exits non-zero when any check failed. The test UI
-(<code>src/main/ui/simple_test</code>) gives every test program its inputs, so tests
-read their arguments through the same <code>cmdline</code> and <code>parameters</code> as
-production.</p>
-<h3 id="54-cmake-and-scripts">5.4 CMake and scripts</h3>
-<table>
-<thead>
-<tr>
-<th>tool</th>
-<th>what it does</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>simple_add_test</code> (<code>production/CMakeLists.txt</code>)</td>
-<td>registers an entry with its label, timeout, threads, working directory, <code>SIMPLE_SEED</code> and environment</td>
-</tr>
-<tr>
-<td><code>SIMPLE_CTEST_BUDGET</code></td>
-<td>the process budget; configuration fails on a mismatch</td>
-</tr>
-<tr>
-<td><code>scripts/run_fast_gate.sh</code></td>
-<td>the build-time gate: registry check, <code>ctest -L fast</code>, budget check</td>
-</tr>
-<tr>
-<td><code>scripts/ctest_budget.py</code></td>
-<td>fails on a failed entry or more than 30 s, writes the timing table</td>
-</tr>
-<tr>
-<td><code>scripts/check_test_registry.py</code></td>
-<td>registrations, test UI, routers and <code>suite=</code> lists agree</td>
-</tr>
-<tr>
-<td><code>scripts/check_descr.py</code></td>
-<td>one-line <code>!@descr:</code> headers</td>
-</tr>
-<tr>
-<td><code>scripts/generate_codeoverview.pl</code></td>
-<td>the code map from the headers</td>
-</tr>
-<tr>
-<td><code>scripts/test_review_dossier.py</code>, <code>scripts/test_timing_run.sh</code></td>
-<td>the inventory and timing tools of the refactoring</td>
-</tr>
-</tbody>
-</table>
 <h2 id="6-the-nightly-suite">6. The nightly suite</h2>
 <h3 id="61-what-belongs-in-it">6.1 What belongs in it</h3>
 <ul>
@@ -1040,7 +1010,7 @@ and a suite runs many of them in one process. Program units are for
 production executables.</p>
 <h2 id="8-what-the-refactoring-deleted-and-why">8. What the refactoring deleted, and why</h2>
 <p>The review gave every test identity in the inventory a verdict. The
-retired-tests table of <code>doc/refactoring_notes/test_inventory.md</code> has one
+retired-tests table of <code>doc/code_overview/test_review_record.md</code> has one
 row per removed identity (136), with its reason and replacement. Most were
 not lost: 79 were merged into tester modules with real assertions, 10 were
 modified or moved, and 47 were deleted or retired outright. The reasons for
@@ -1145,7 +1115,7 @@ written as <code>sub-suite</code> (entry).</p>
 </tr>
 <tr>
 <td><code>cavg_registration</code></td>
-<td><code>class-average registration</code> (<code>unit_pftc_align2D3D</code>)</td>
+<td><code>cavg registration</code> (<code>unit_pftc_align2D3D</code>)</td>
 </tr>
 <tr>
 <td><code>cc_connectivity</code>, <code>image_bin</code></td>
@@ -1253,7 +1223,7 @@ written as <code>sub-suite</code> (entry).</p>
 </tr>
 <tr>
 <td><code>ft_expanded</code></td>
-<td><code>shift search, correlator</code> and <code>shift search, optimiser</code> (<code>unit_numerics</code>)</td>
+<td><code>shift search</code> (<code>unit_numerics</code>)</td>
 </tr>
 <tr>
 <td><code>gencorrs_fft</code></td>
