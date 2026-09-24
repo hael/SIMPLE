@@ -14,6 +14,8 @@
         {% csrf_token %}
         {% if job.status != "queued" and job.prog == "abinitio3D" %}
             <input type="hidden" name="volume_viewer" value="1">
+        {% elif job.status != "queued" and job.prog == "refine3D_auto" %}
+            <input type="hidden" name="volume_viewer" value="1">
         {% endif %}
     </form>
     {% if job.status == "running" %}

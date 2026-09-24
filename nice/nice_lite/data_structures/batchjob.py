@@ -58,6 +58,8 @@ class BatchJob(Job):
     PICK_DENOISED_THUMBNAIL_SUFFIX = "_den.jpg"
     PARTICLE_STACK_PROGRAMS = frozenset(("extract", "reextract"))
     MRC_STACK_PREVIEW_PROGRAMS = PARTICLE_STACK_PROGRAMS | frozenset(("reproject",))
+    # Programs whose commanders write jobstats["cls3D"] stage volume metadata via add_metadata(oritype='cls3D').
+    VOLUME_VIEWER_PROGRAMS = frozenset(("abinitio3D", "refine3D_auto"))
     IMPORT_MOVIE_EXTENSIONS = frozenset((
         ".mrc", ".mrcs", ".tif", ".tiff", ".eer",
     ))
@@ -696,8 +698,8 @@ class BatchJob(Job):
         }
 
     def get_volume_outputs(self):
-        """Return project-declared, owned ab initio 3D density volumes."""
-        if self.prog != "abinitio3D" or self.status != "finished":
+        """Return project-declared, owned final density volumes."""
+        if self.prog not in self.VOLUME_VIEWER_PROGRAMS or self.status != "finished":
             return []
 
         job_dir = self.get_safe_job_dir()
@@ -792,7 +794,7 @@ class BatchJob(Job):
         metadata (box/smpd/<kind>_min/<kind>_max) rather than re-opening each MRC
         file's header per request.
         """
-        if self.prog != "abinitio3D":
+        if self.prog not in self.VOLUME_VIEWER_PROGRAMS:
             return []
         cls3d = jobstats.get("cls3D") if isinstance(jobstats, dict) else None
         if not isinstance(cls3d, dict):

@@ -424,8 +424,8 @@ def _has_positive_dimensions(item, width_key="width", height_key="height"):
 
 
 def _public_volume_outputs(batch_job, jobmodel):
-    """Return browser-safe volume metadata for a finished ab initio 3D job."""
-    if jobmodel.status != "finished" or jobmodel.prog != "abinitio3D":
+    """Return browser-safe volume metadata for a finished job with volume outputs."""
+    if jobmodel.status != "finished" or jobmodel.prog not in BatchJob.VOLUME_VIEWER_PROGRAMS:
         return []
     return [
         {
@@ -935,7 +935,7 @@ def _batch_overview_context(
     arguments = _argument_rows(jobmodel)
     show_volume_viewer = (
         volume_viewer_requested
-        and jobmodel.prog == "abinitio3D"
+        and jobmodel.prog in BatchJob.VOLUME_VIEWER_PROGRAMS
         and jobmodel.status != "queued"
     )
     stage_volume_outputs = (
@@ -1049,7 +1049,7 @@ def view_batch_volume_data(request, jobid, volume_name):
     if (
         batch_job is None
         or jobmodel.status != "finished"
-        or jobmodel.prog != "abinitio3D"
+        or jobmodel.prog not in BatchJob.VOLUME_VIEWER_PROGRAMS
     ):
         return HttpResponse(status=404)
 
