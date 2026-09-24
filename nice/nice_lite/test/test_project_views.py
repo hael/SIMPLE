@@ -16,7 +16,7 @@ class ProjectViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
-    def test_create_project_redirects_to_index_shell(self):
+    def test_create_project_switches_to_new_project_and_workspace(self):
         request = self.factory.post(
             "/createproject",
             {
@@ -38,7 +38,10 @@ class ProjectViewTests(SimpleTestCase):
             response = project_views.view_create_project(request)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/")
+        self.assertEqual(
+            response["Location"],
+            "/?selected_project_id=11&selected_workspace_id=22",
+        )
         self.assertEqual(response.cookies["selected_project_id"].value, "11")
         self.assertEqual(response.cookies["selected_workspace_id"].value, "22")
 

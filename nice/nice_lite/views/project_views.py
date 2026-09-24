@@ -13,6 +13,7 @@ import shutil
 # django imports
 from django.contrib                 import messages
 from django.shortcuts               import redirect, render
+from django.urls                    import reverse
 from django.views.decorators.http   import require_GET, require_POST
 from django.contrib.auth.decorators import login_required
 
@@ -32,7 +33,7 @@ from ..helpers                   import clear_checksum_cookies, get_string, prin
 def view_create_project(request):
     """
     Create a new project with one empty workspace, set session cookies,
-    and redirect to the stream shell.
+    and redirect to the new selection in the stream shell.
     """
     response = redirect("nice_lite:index")
     username = request.user.username
@@ -68,6 +69,15 @@ def view_create_project(request):
         messages.add_message(request, messages.ERROR, "Failed to create new workspace")
         return response
 
+    response = redirect(
+        reverse(
+            "nice_lite:index",
+            query={
+                "selected_project_id": project.id,
+                "selected_workspace_id": workspace.id,
+            },
+        )
+    )
     response.set_cookie(key="selected_project_id", value=project.id)
     response.set_cookie(key="selected_workspace_id", value=workspace.id)
     clear_checksum_cookies(request, response)
