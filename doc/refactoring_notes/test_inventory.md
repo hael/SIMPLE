@@ -94,10 +94,10 @@ commander module and UI module of the category are gone. The coverage lives in t
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| coarrays | E+S | 50/11 | error stop | unsupported capability (not run) | generated | coarray | same name on both routes | platform (uses coarray) |  |  |
-| openacc | E+S | 27/50 | none | unsupported capability (not run) | none | openacc | same name on both routes | platform (uses openacc) |  |  |
-| openmp | E+S | 70/70 | none | not run | none | - | same name on both routes | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| simd | E+S | 62/61 | none | not run | none | - | same name on both routes | delete candidate (benchmark or timing tool without assertions) |  |  |
+| coarrays | E+S | 50/11 | error stop | unsupported capability (not run) | generated | coarray | same name on both routes | platform (uses coarray) | keep | Hans, 2026-09-23 (parallel): two tests under one name: the standalone sync check is the `coarrays` platform CTest entry (cafrun -np 2), the exec case is the coarray CI job's end-to-end run through qsys=coarray; its closing message claimed "Euler shift checks", it now says check_nptcls |
+| openacc | E+S | 27/50 | none | unsupported capability (not run) | none | openacc | same name on both routes | platform (uses openacc) | delete | Hans, 2026-09-23 (parallel): exec body commented out, standalone a 10^9-element saxpy timing without assertions; nothing in src uses OpenACC, so the `USE_OPENACC` option went too |
+| openmp | E+S | 70/70 | none | not run | none | - | same name on both routes | delete candidate (no failure path and fewer than 3 production calls) | delete | Hans, 2026-09-23 (parallel): demonstrated the `nowait` race of the OpenMP runtime, printed passed/failed, no SIMPLE code; dropped from CI |
+| simd | E+S | 62/61 | none | not run | none | - | same name on both routes | delete candidate (benchmark or timing tool without assertions) | delete | Hans, 2026-09-23 (parallel): `!$omp simd` timing without assertions; dropped from CI |
 
 ## single
 
@@ -164,8 +164,8 @@ unit_numerics and `project records` of unit_project.
 | pose_cont_refinement | S | 728 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_cart_align3D | Hans, 2026-09-23: `pose refiner` sub-suite (`simple_cartesian_pose_refiner_tester`); numerics and solver cases kept whole |
 | projdir_accumulator | S | 57 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_reconstruction | Hans, 2026-09-23 (singles I): `simple_classaverager_tester` (`class-average accumulator`): class averaging is 2D reconstruction |
 | project_merge | S | 6 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) | delete | Hans, 2026-09-23 (singles I): 6-line driver over `simple_project_merge_tester`, already the `project merge` sub-suite of unit_project; driver deleted |
-| qsys_ctrl | S | 484 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 16 production calls) | defer | Hans, 2026-09-23 (singles II): to the parallel-area batch, where the area's fast suite is decided (option a) |
-| qsys_env | S | 72 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) | defer | Hans, 2026-09-23 (singles II): to the parallel-area batch (option a) |
+| qsys_ctrl | S | 484 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 16 production calls) | merge into unit_parallel | Hans, 2026-09-23 (parallel): `simple_qsys_ctrl_tester` (`qsys control`) in the new twelfth fast suite; flag checks are assertions, the `.and.` that should have been `.or.` is gone, script contents and the restored job description are checked |
+| qsys_env | S | 72 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_parallel | Hans, 2026-09-23 (parallel): `simple_qsys_env_tester` (`qsys environment`); THROW_HARDs are assertions |
 | rec3D_backend | S | 55 | error stop | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_reconstruction | Hans, 2026-09-23: `rec3D backend` sub-suite (`simple_rec3D_strategy_tester`), all six factory branches pinned; standalone and CI line removed |
 | rnd_shuffle | S | 58 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_numerics | Hans, 2026-09-23 (singles I): `simple_rnd_tester` (`random draws`, replacing `multinomial random draw`): shuffle/partial_shuffle invariants and the multinomial draw asserted within four binomial SDs, fixed seeds |
 | search_gain_flips | S | 83 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) | delete | Hans, 2026-09-23 (singles II): movie-driven batch runner of the gain-flip analyser, which `motion gain` already tests; production runs it in stream preprocessing |
@@ -295,3 +295,8 @@ unit_numerics and `project records` of unit_project.
 | search_gain_flips | 2026-09-23 | delete: movie-driven runner, no assertions | `motion gain` (analyser batch updates) |
 | atomfit | 2026-09-23 | delete: needed a PDB fixture, no assertions; `atoms%fit_bfactors` (no caller) deleted with it | - |
 | stream_initial_analysis | 2026-09-23 | delete: commander smoke on a missing folder | - |
+| openacc | 2026-09-23 | delete: exec body commented out; standalone saxpy timing, no assertions; OpenACC unused in src | - |
+| openmp | 2026-09-23 | delete: OpenMP-runtime race demonstration, no assertions (was in CI) | - |
+| simd | 2026-09-23 | delete: simd timing, no assertions (was in CI) | - |
+| qsys_ctrl | 2026-09-23 | merge into unit_parallel: flag checks | `simple_qsys_ctrl_tester` (`qsys control`) |
+| qsys_env | 2026-09-23 | merge into unit_parallel: THROW_HARD checks | `simple_qsys_env_tester` (`qsys environment`) |

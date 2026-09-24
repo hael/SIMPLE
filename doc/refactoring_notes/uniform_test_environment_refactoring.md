@@ -22,8 +22,9 @@ suite, `unit_reconstruction`, and the first nightly library suite,
 `lib_reconstruction`, exist since 2026-09-23 (section 9.7), as do the
 ninth and tenth fast suites `unit_pftc_align2D3D` and
 `unit_cart_align3D` and the second library suite
-`lib_cart_align3D`, and the eleventh fast suite `unit_heterogeneity` with
-the third library suite `lib_heterogeneity`. This is a large
+`lib_cart_align3D`, the eleventh fast suite `unit_heterogeneity` with
+the third library suite `lib_heterogeneity`, and the twelfth fast suite
+`unit_parallel`. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -388,6 +389,7 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
 | `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | 4.5 s (Mac; 47.3 s in the first build, cut down, section 9.7) |
+| `unit_parallel` | qsys control, qsys environment — added by the parallel review (2026-09-23, section 9.7); distributed execution, scripts only, nothing submitted | to be measured |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1939,6 +1941,43 @@ output instead of by exit code (the one-word fix, `error stop`, is left
 to him). `qsys_ctrl` and `qsys_env` wait for the parallel-area batch
 (option a). Eight standalones deleted; the NU envelope algorithm note,
 the motion-gain policy and the code map follow.
+
+**parallel (2026-09-23, Hans: "agreed", and a `unit_parallel`).** Four
+identities on both routes plus the two deferred qsys programs. `coarrays`
+is two tests under one name and both stay: the standalone sync check is
+the `coarrays` platform CTest entry, the exec case is what the coarray CI
+job runs (`SIMPLE_QSYS=coarray`: simulated noise, `check_nptcls` over the
+partitions through the coarray backend); its closing line claimed
+"coarray Euler shift checks passed", it now says what ran. `openacc` (an
+exec body that was entirely commented out, a standalone saxpy timing on
+10^9 elements), `openmp` (the `nowait` race of the OpenMP runtime, printed
+passed/failed) and `simd` (a timing) asserted nothing and touched no
+SIMPLE code: deleted on both routes, `simple_test_openmp` and
+`simple_test_simd` dropped from the CI workflow, and, as nothing in `src`
+uses OpenACC, the `USE_OPENACC` option and its CMake block with them.
+`qsys_ctrl` and `qsys_env` are the twelfth fast suite, `unit_parallel`
+(Hans: useful for more later): `simple_qsys_ctrl_tester`
+(`qsys control`: the controller over the local backend, four partitions,
+two computing units, scripts only; the thirteen flag checks are
+assertions, the fresh-status check used `.and.` where it needed `.or.`,
+and the partition script's range, the restored job description and the
+multi-job script's contents are now checked) and `simple_qsys_env_tester`
+(`qsys environment`: the project-stored installation path is dropped and
+ignored, the executable resolves from the local `SIMPLE_PATH` of the CTest
+environment, an empty project gets 0-0:1:40). `SIMPLE_CTEST_BUDGET`
+27 -> 28. Also noted: CI runs `simple_test_exec test=units`, which stopped
+at the double `make_ui` from the in-plane batch until 5f3c705ce.
+The first build failed one check: the standalone's "the queue
+description keeps no `simple_path`" contradicts the policy of 9a87c12a8
+(executables come from the environment), under which `qsys_env%new`
+writes the runtime `SIMPLE_PATH` into the queue description on purpose
+and builds the executable path from it; the program had never run. The
+test now pins that the description carries the local `SIMPLE_PATH` and
+not the project's. The same run printed "SIMPLE_QSYS_PARTITION is not
+defined" from production: an optional variable read like a required one,
+in every run without a partition. `simple_getenv` gained `silent=` and
+the optional reads (`SIMPLE_QSYS_PARTITION`, `SIMPLE_EMAIL`, which has a
+default) in `qsys_env` and `update_compenv` use it.
 
 ## 10. Fast-tier performance
 

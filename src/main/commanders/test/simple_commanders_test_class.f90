@@ -44,6 +44,8 @@ use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
 use simple_ui_visibility_tester,             only: run_all_ui_visibility_tests
 use simple_rnd_tester,                       only: run_all_rnd_tests
 use simple_diff_map_graphs_tester,           only: run_all_diff_map_graphs_tests
+use simple_qsys_ctrl_tester,                 only: run_all_qsys_ctrl_tests
+use simple_qsys_env_tester,                  only: run_all_qsys_env_tests
 use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relations_tests
 use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
@@ -83,7 +85,7 @@ use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! The fast gate is eleven area suites, each one CTest entry under the label
+! The fast gate is twelve area suites, each one CTest entry under the label
 ! `fast` (doc/refactoring_notes/uniform_test_environment_refactoring.md,
 ! section 5.1). Every sub-suite in them makes assertions through
 ! simple_test_utils, needs no network beyond localhost, no download and no
@@ -170,6 +172,11 @@ type, extends(commander_base) :: commander_test_lib_cart_align3D
   contains
     procedure :: execute      => exec_test_lib_cart_align3D
 end type commander_test_lib_cart_align3D
+
+type, extends(commander_base) :: commander_test_unit_parallel
+  contains
+    procedure :: execute      => exec_test_unit_parallel
+end type commander_test_unit_parallel
 
 type, extends(commander_base) :: commander_test_unit_heterogeneity
   contains
@@ -344,6 +351,14 @@ contains
         call add_suite(s, n, 'pose 1JYX recovery', run_all_pose_cont_1jyx_tests)
     end subroutine suites_lib_cart_align3D
 
+    !> distributed execution: the job controller and the queue-system environment
+    subroutine suites_parallel( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'qsys control',     run_all_qsys_ctrl_tests)
+        call add_suite(s, n, 'qsys environment', run_all_qsys_env_tests)
+    end subroutine suites_parallel
+
     !> heterogeneity analysis (flex_pca): latent model, state weights, deconvolution and
     !! the PCG M-step operator
     subroutine suites_heterogeneity( s, n )
@@ -400,6 +415,7 @@ contains
         call suites_pftc_align2D3D(s, n)
         call suites_cart_align3D(s, n)
         call suites_heterogeneity(s, n)
+        call suites_parallel(s, n)
         call run_unit_suites('units', cline, s(1:n))
     end subroutine exec_test_units
 
@@ -512,6 +528,16 @@ contains
         call suites_lib_cart_align3D(s, n)
         call run_unit_suites('lib_cart_align3D', cline, s(1:n))
     end subroutine exec_test_lib_cart_align3D
+
+    subroutine exec_test_unit_parallel( self, cline )
+        class(commander_test_unit_parallel), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_parallel(s, n)
+        call run_unit_suites('unit_parallel', cline, s(1:n))
+    end subroutine exec_test_unit_parallel
 
     subroutine exec_test_unit_heterogeneity( self, cline )
         class(commander_test_unit_heterogeneity), intent(inout) :: self

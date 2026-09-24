@@ -67,7 +67,7 @@ May 21, 2026
 - This checkout requires CMake 3.25+ and GCC/GFortran 14+ in the active CMake path.
 - Required dependencies include FFTW3, TIFF/JPEG/ZLIB, libcurl; NICE work also needs the Python/Django web stack.
 - Defaults: `USE_OPENMP=ON`, `BUILD_TESTS=ON` (the `compile_*.sh` scripts pass `OFF`), `NICE=OFF`, local install prefix under `build/`.
-- Optional paths: `NICE=ON`, `USE_OPENMP_OFFLOAD=ON`, `USE_OPENACC`, `USE_COARRAYS`, `USE_MPI`.
+- Optional paths: `NICE=ON`, `USE_OPENMP_OFFLOAD=ON`, `USE_COARRAYS`, `USE_MPI`.
 
 ```bash
 mkdir build

@@ -18,14 +18,9 @@
       - `simple_test_coarrays.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
       - `simple_test_nice.f90`
-      - `simple_test_openacc.f90`
-      - `simple_test_openmp.f90`
       - `simple_test_openmp_offload.f90`
       - `simple_test_pdb2mrc.f90`
-      - `simple_test_qsys_ctrl.f90`
-      - `simple_test_qsys_env.f90`
       - `simple_test_serialize.f90`
-      - `simple_test_simd.f90`
       - `simple_test_socket_client.f90`
       - `simple_test_socket_io.f90`
       - `simple_test_socket_server.f90`
@@ -172,7 +167,7 @@
           - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate)
           - `simple_commanders_test_masks.f90` — for all masks tests
           - `simple_commanders_test_network.f90` — for all network tests
-          - `simple_commanders_test_parallel.f90` — for all parallel tests
+          - `simple_commanders_test_parallel.f90` — the coarray test through the job queue (qsys=coarray), run by the coarray CI job
           - `simple_commanders_test_single.f90` — tests for single
           - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
           - `simple_commanders_test_utils.f90` — for all utils tests
@@ -708,7 +703,9 @@
         - `simple_qsys_base.f90` — batch-processing manager - abstract interface
         - `simple_qsys_coarray.f90` — batch-processing manager - Fortran coarray launcher backend
         - `simple_qsys_ctrl.f90` — batch-processing manager - script generation, job scheduling, and persistent worker dispatch
+        - `simple_qsys_ctrl_tester.f90` — unit tests for the job controller of the queue systems (simple_qsys_ctrl) on the local backend
         - `simple_qsys_env.f90` — Queue-system execution environment with optional persistent worker dispatch
+        - `simple_qsys_env_tester.f90` — unit tests for the queue-system environment's installation-path policy (simple_qsys_env, sp_project%update_compenv)
         - `simple_qsys_factory.f90` — batch-processing manager - Factory class
         - `simple_qsys_funs.f90` — batch-processing manager - functions
         - `simple_qsys_local.f90` — batch-processing manager - Local system

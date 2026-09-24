@@ -85,7 +85,7 @@ contains
         end if
         call qdescr%set('qsys_name', qsys_name_here)
         ! User e-mail falls back to a placeholder when not configured.
-        env_var = simple_getenv('SIMPLE_EMAIL', iostat)
+        env_var = simple_getenv('SIMPLE_EMAIL', iostat, silent=.true.)
         if( iostat /= 0 ) env_var = 'my.name@uni.edu'
         call qdescr%set('user_email', env_var)
         call qdescr%set('time_per_image', string(TIME_PER_IMAGE_DEFAULT))
@@ -94,7 +94,7 @@ contains
         if( present(qsys_partition) ) then
             call qdescr%set('qsys_partition', qsys_partition)
         else
-            env_var = simple_getenv('SIMPLE_QSYS_PARTITION', iostat)
+            env_var = simple_getenv('SIMPLE_QSYS_PARTITION', iostat, silent=.true.)
             if( iostat == 0 ) call qdescr%set('qsys_partition', env_var)
         end if
         job_name = 'simple_'//params%prg%to_char()

@@ -247,7 +247,7 @@ contains
             if( iostat == 0 ) call self%compenv%set(1, 'qsys_name', env_var)
         endif
         if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment; update_compenv')
-        env_var = simple_getenv('SIMPLE_EMAIL', iostat)
+        env_var = simple_getenv('SIMPLE_EMAIL', iostat, silent=.true.)
         if( iostat/=0 ) env_var = 'my.name@uni.edu'
         ! get from command line
         call self%compenv%set(1, 'user_email', env_var)
@@ -279,7 +279,7 @@ contains
         if( cline%defined('qsys_partition') )then
             call self%compenv%set(1, 'qsys_partition', cline%get_carg('qsys_partition'))
         else
-            env_var = simple_getenv('SIMPLE_QSYS_PARTITION', iostat)
+            env_var = simple_getenv('SIMPLE_QSYS_PARTITION', iostat, silent=.true.)
             if( iostat == 0 ) call self%compenv%set(1, 'qsys_partition', env_var)
         endif
         if( cline%defined('qsys_qos') )then

@@ -111,24 +111,12 @@ if( USE_FLEX_CUDA )
 endif()
 
 # USE_FLEX_CUDA is the ONLY switch that compiles the flex .cu kernels. It is
-# independent of USE_OPENMP_OFFLOAD / USE_OPENACC / USE_CUDA: enabling any of
+# independent of USE_OPENMP_OFFLOAD / USE_CUDA: enabling either of
 # those does not pull in nvcc or the flex device code. Say so at configure time
 # so an unexpected CUDA build is visible rather than silent.
 if(NOT USE_FLEX_CUDA)
     message(STATUS
         "flex CUDA kernels: disabled (CPU only; -DUSE_FLEX_CUDA=ON to enable)")
-endif()
-
-# ------------------------------------------------------------------------------
-# OpenACC (optional, Fortran only, GNU)
-# ------------------------------------------------------------------------------
-if(USE_OPENACC)
-    if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-        message(FATAL_ERROR "OpenACC currently only wired for GFortran.")
-    endif()
-    add_compile_definitions(OPENACC)
-    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fopenacc>)
-    message(STATUS "OpenACC enabled (-fopenacc)")
 endif()
 
 # ------------------------------------------------------------------------------

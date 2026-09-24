@@ -359,16 +359,24 @@ contains
         if( opened ) flush(unit)
     end subroutine safe_flush
 
-    function simple_getenv( name , status )  result( envval )
+    !> the value of an environment variable, status as get_environment_variable (1: not defined). A
+    !! variable that may be absent (a partition, an e-mail address with a default) is read with
+    !! silent=.true., so that its absence is not reported as if it were missing
+    function simple_getenv( name , status, silent )  result( envval )
         character(len=*),  intent(in)  :: name
         integer,           intent(out) :: status
+        logical, optional, intent(in)  :: silent
         type(string)               :: envval
         character(len=XLONGSTRLEN) :: retval
         integer                    :: length
+        logical                    :: l_silent
+        l_silent = .false.
+        if( present(silent) ) l_silent = silent
         call get_environment_variable( trim(adjustl(name)), value=retval, length=length, status=status)
         if( status == -1 ) write(logfhandle,*) 'value string too short; simple_syslib :: simple_getenv_2'
         if( status ==  1 )then
-            write(logfhandle,*) 'environment variable: ', trim(adjustl(name)), ' is not defined; simple_syslib :: simple_getenv_'
+            if( .not. l_silent ) write(logfhandle,*) 'environment variable: ', trim(adjustl(name)), &
+                &' is not defined; simple_syslib :: simple_getenv_'
             envval = NIL
             return
         endif

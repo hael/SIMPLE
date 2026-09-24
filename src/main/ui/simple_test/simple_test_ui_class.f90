@@ -18,6 +18,7 @@ type(ui_program), target :: unit_pftc_align2D3D
 type(ui_program), target :: unit_cart_align3D
 type(ui_program), target :: lib_cart_align3D
 type(ui_program), target :: unit_heterogeneity
+type(ui_program), target :: unit_parallel
 type(ui_program), target :: lib_heterogeneity
 type(ui_program), target :: flex_gpu
 type(ui_program), target :: forked_process
@@ -41,6 +42,7 @@ contains
         call new_lib_cart_align3D(tsttab)
         call new_unit_heterogeneity(tsttab)
         call new_lib_heterogeneity(tsttab)
+        call new_unit_parallel(tsttab)
         call new_flex_gpu(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
@@ -211,6 +213,19 @@ contains
             &'One sub-suite of this suite to run alone (pose_1jyx_recovery)', '', .false., '')
         call add_ui_program('lib_cart_align3D', lib_cart_align3D, tsttab, UI_CATEGORY)
     end subroutine new_lib_cart_align3D
+
+    subroutine new_unit_parallel( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_parallel%new(&
+        &'unit_parallel',&
+        &'unit tests: distributed execution',&
+        &'is the fast-gate unit suite for distributed execution: the job controller on the local backend (scripts only, nothing submitted) and the installation-path policy of the queue-system environment',&
+        &'simple_test_exec',&
+        &.false.)
+        call unit_parallel%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (qsys_control, qsys_environment)', '', .false., '')
+        call add_ui_program('unit_parallel', unit_parallel, tsttab, UI_CATEGORY)
+    end subroutine new_unit_parallel
 
     subroutine new_unit_heterogeneity( tsttab )
         class(ui_hash), intent(inout) :: tsttab
