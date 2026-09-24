@@ -106,9 +106,13 @@ set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops ${ARCH_FLAG} -fPIC"
 
 # Debug flags for Fortran
 if(APPLE)
-    # GNU Fortran 16 on macOS can segfault in the debug runtime when
-    # runtime descriptor checks instrument C-interoperable FFTW-backed pointers.
-    set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fcheck=do,mem -Wuninitialized -Wunused -fPIC"
+    # GNU Fortran 16 on macOS can segfault in the debug runtime when runtime descriptor checks
+    # instrument C-interoperable FFTW-backed pointers (08aa2d5de dropped every check but do,mem).
+    # Bounds checking is back (2026-09-25): without it a non-conforming array expression in a
+    # tester passed on macOS and failed on Linux. Pointer, recursion and array-temps checks stay
+    # off here; if the macOS debug runtime crashes again, reduce the checks for the FFTW-pointer
+    # sources only (set_source_files_properties) rather than for the whole library.
+    set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fcheck=bounds,do,mem -Wuninitialized -Wunused -fPIC"
         CACHE STRING "Debug flags for Fortran" FORCE)
 else()
     set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fbounds-check -fcheck=all -Wuninitialized -Wunused -fPIC"

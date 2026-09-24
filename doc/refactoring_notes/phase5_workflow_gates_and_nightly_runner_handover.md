@@ -235,6 +235,9 @@ been observed is listed, not claimed). Record each here when it is made.
   its runtime (Hans).
 - One build without `--compile-tests` (`BUILD_TESTS=OFF`), to confirm it links without the
   test-only sources (Hans).
+- A macOS Debug `--compile-tests` build with bounds checking (`-fcheck=bounds,do,mem`, restored
+  2026-09-25): that the gfortran 16 debug runtime does not crash on the FFTW-backed pointers, and
+  that the fast gate passes (Hans, on the laptop).
 - The offload branch of `simple_openmp_offload_tester` in an offload build (Cyril).
 - The first night of the runner, with the runtimes of the library and workflow entries (Ruben;
   the exit of Part B).

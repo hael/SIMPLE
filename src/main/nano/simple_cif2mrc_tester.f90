@@ -32,7 +32,7 @@ contains
     subroutine run_all_cif2mrc_tests
         type(atoms) :: molecule
         type(image) :: volume
-        real, pointer :: density(:,:,:)
+        real, pointer :: rmat(:,:,:), density(:,:,:)
         real(dp), allocatable :: reference(:,:,:), error(:,:,:)
         real(dp) :: max_abs_error, rms_error, rel_sum_error, local_error
         real :: smpd_out
@@ -57,7 +57,9 @@ contains
             call assert_real(SMPD, smpd_out, 1.0e-6, 'cif2mrc preserves the requested sampling distance')
             call volume%new(ldim, smpd_out)
             call volume%read(string(MRC_FILE))
-            call volume%get_rmat_ptr(density)
+            ! the rmat pointer is the padded array (extra rows for the in-place FFT): bound it by ldim
+            call volume%get_rmat_ptr(rmat)
+            density => rmat(:ldim(1),:ldim(2),:ldim(3))
             call build_analytical_reference(ldim, reference)
             allocate(error(ldim(1), ldim(2), ldim(3)))
             error = abs(real(density, dp) - reference)

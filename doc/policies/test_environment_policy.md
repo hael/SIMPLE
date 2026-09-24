@@ -415,6 +415,12 @@ Two kinds of code need a check that is easy to leave out:
   `-Winteger-division` warning; write the value.
 - Comparing whole images after an interpolating rotation includes the
   circular wrap of `rtsq` at the corners; compare inside the inscribed disc.
+- An `rmat` pointer (`get_rmat_ptr`) is the padded array, with extra rows in
+  the first dimension for the in-place FFT; bound it by `ldim`,
+  `rmat(:ldim(1),:ldim(2),:ldim(3))`, before a whole-array expression. The
+  unbounded pointer does not conform with a box-sized array: bounds checking
+  stops on it, and without bounds checking it can pass by luck (the `cif2mrc`
+  tester, 2026-09-25). `get_rmat()` returns a copy of the box.
 
 ## 5. Library support for tests
 
