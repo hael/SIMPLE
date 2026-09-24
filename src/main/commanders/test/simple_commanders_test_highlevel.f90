@@ -738,7 +738,7 @@ subroutine exec_test_pcg_recon( self, cline )
     use simple_matcher_ptcl_io,   only: prep_rec_observation
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
-    integer,          parameter :: BOX = 24, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
+    integer,          parameter :: BOX = 32, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
     integer,          parameter :: BATCHSZ = 7          ! deliberately not a divisor of NPROJS
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
     real,             parameter :: CROP_SMPD = SMPD * real(BOX) / real(CROP_BOX)
@@ -771,11 +771,17 @@ subroutine exec_test_pcg_recon( self, cline )
     ! stage 13: the two backends' cropped observations differ only by the
     ! single-precision FFT round trips of the fused gridding route
     real,             parameter :: OBS_PARITY_RELTOL   = 1.0e-5
-    ! stage 14: window band 8..12 px on the 24 box (mask3D_soft clips the ramp
-    ! at the box edge); repeated output-space warm starts must not apply the
-    ! soft window more than once and shrink this band.
+    ! stage 14: window band = mask3D_soft's soft ramp (values in
+    ! [SUPPORT_BAND_LO,SUPPORT_BAND_HI]); repeated output-space warm starts
+    ! must not apply the soft window more than once and shrink this band.
+    ! SUPPORT_ITS matches production usage (maxits_pcg default 2, never above
+    ! ~5): the old 40-iteration budget ran the tiny hard-masked operator far
+    ! past where production ever takes it, into a near-null mode of P(H+lambda I)P
+    ! (PCG_STOP_INDEFINITE at iteration 24, residual still 1.6e-2) that a
+    ! realistic iteration count never reaches. BOX was also bumped from 24 so
+    ! the masked operator's boundary-to-interior ratio is less extreme.
     real,             parameter :: SUPPORT_MSKRAD = real(BOX)/2.0 - 2.0
-    integer,          parameter :: SUPPORT_ITS = 40, SUPPORT_NREP = 6
+    integer,          parameter :: SUPPORT_ITS = 5, SUPPORT_NREP = 6
     real,             parameter :: SUPPORT_RTOL = 1.0e-4
     real,             parameter :: SUPPORT_BAND_LO = 0.15, SUPPORT_BAND_HI = 0.85
     real,             parameter :: SUPPORT_STABILITY_FRAC = 0.9
