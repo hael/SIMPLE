@@ -1326,6 +1326,7 @@ contains
                     if(rjk2 > cutoffsq) cycle
                     do l = bbox(3,1),bbox(3,2)
                         r2 = rjk2 + (smpd*(xyz(3)-real(l-1)))**2.
+                        if( r2 > cutoffsq ) cycle
                         rmat(j,k,l) = rmat(j,k,l) + epot(r2,aterm,b)
                     enddo
                 enddo
