@@ -3,7 +3,7 @@ use simple_commanders_api
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_fsc_fname, &
     &refine3D_volassemble_bench_fname, refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
-    &refine3D_trail_rho_fname, refine3D_trail_manifest_fname
+    &refine3D_trail_rho_fname, refine3D_trail_manifest_fname, refine3D_cfar_summary_fname
 implicit none
 private
 public :: commander_volassemble, filter_pcg_nonuniform_maps
@@ -34,7 +34,7 @@ contains
         &sum_rec, state, numlen_part, &
         &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
-        &volname, eonames, res05, res0143, timings )
+        &volname, eonames, res05, res0143, cfar, timings )
         use simple_reconstructor, only: reconstructor, gridding_half_restore
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
             &write_halfmap_diagnostics, write_support_provenance
@@ -49,7 +49,7 @@ contains
         type(image),            intent(inout) :: vol_nu_base_even, vol_nu_base_odd
         type(image),            intent(inout) :: vol_nu_aux_even, vol_nu_aux_odd
         type(string),           intent(inout) :: volname, eonames(2)
-        real,                   intent(out)   :: res05, res0143
+        real,                   intent(out)   :: res05, res0143, cfar
         type(restore_timings_t), intent(inout) :: timings
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd
         type(string) :: fsc_txt_file, trail_fbody
@@ -374,6 +374,7 @@ contains
             endif
             res05      = pair_diagnostics%res_fsc05
             res0143    = pair_diagnostics%res_fsc0143
+            cfar       = pair_diagnostics%cfar
             fsc_txt_file = resolve_fsc_txt_fname()
             call write_halfmap_diagnostics(pair_diagnostics, params%box_crop, params%smpd_crop, fsc_txt_file)
             if( L_BENCH_GLOB ) timings%restore_eos_and_write_fsc = &
@@ -891,7 +892,7 @@ contains
         logical                       :: l_nonuniform_mode
         integer, allocatable          :: state_pops(:)
         logical, allocatable          :: l_state_dropped(:)
-        real, allocatable             :: res0143s(:), res05s(:)
+        real, allocatable             :: res0143s(:), res05s(:), cfars(:)
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:), realized_update_fracs(:)
         integer                       :: state, numlen_part
@@ -921,6 +922,7 @@ contains
         call collect_restore_timings()
         if( L_BENCH_GLOB ) t_upd_proj = tic()
         call update_project_resolution_metadata()
+        call write_cfars_txt()
         if( L_BENCH_GLOB ) rt_upd_proj = toc(t_upd_proj)
         if( L_BENCH_GLOB ) t_cleanup = tic()
         call cleanup_context()
@@ -962,9 +964,10 @@ contains
             call sum_rec%new_accumulator(params, build%spproj, expand=.false.)
             numlen_part       = max(1, params%numlen)
             l_nonuniform_mode = params%l_nonuniform
-            allocate(res0143s(params%nstates), res05s(params%nstates))
+            allocate(res0143s(params%nstates), res05s(params%nstates), cfars(params%nstates))
             res0143s = 0.
             res05s   = 0.
+            cfars    = 0.
             allocate(nu_align_lps(params%nstates))
             nu_align_lps = 0.
             allocate(update_frac_trail_recs(params%nstates))
@@ -1037,6 +1040,7 @@ contains
             params%vols_odd(state)  = refine3D_state_halfvol_fname(state, 'odd')
             res0143s(state)         = 0.
             res05s(state)           = 0.
+            cfars(state)            = 0.
         end subroutine carry_forward_dropped_state
 
         !> The realized fractions f (what the current partials actually contain)
@@ -1068,7 +1072,7 @@ contains
                 &update_frac_trail_recs(state), realized_update_fracs(state), &
                 &vol_prev_even, vol_prev_odd, vol_merged, &
                 &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
-                &volname, eonames, res05s(state), res0143s(state), restore_timings)
+                &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings)
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
             params%vols_odd(state)  = eonames(2)
@@ -1116,10 +1120,26 @@ contains
                         call build%spproj_field%set(iptcl, 'res05', res05s(istate))
                     endif
                 enddo
-            endif
+            endif 
             call update_project_nu_alignment_lowpass()
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         end subroutine update_project_resolution_metadata
+
+        subroutine write_cfars_txt()
+            type(string) :: fname
+            integer      :: funit, istate, io_stat
+            fname = refine3D_cfar_summary_fname(params%which_iter)
+            call fopen(funit, file=fname, status='REPLACE', action='WRITE', iostat=io_stat)
+            if( io_stat /= 0 )then
+                THROW_WARN('failed to write cFAR summary file: '//fname%to_char())
+                return
+            endif
+            do istate = 1, params%nstates
+                write(funit,'(A,I3,A,F8.4)') 'STATE ', istate, ' CFAR ', cfars(istate)
+            enddo
+            call fclose(funit)
+            call fname%kill
+        end subroutine write_cfars_txt
 
         subroutine update_project_nu_alignment_lowpass()
             logical :: l_included(params%nstates)
@@ -1187,6 +1207,7 @@ contains
             if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)
             if( allocated(res05s)                 ) deallocate(res05s)
+            if( allocated(cfars)                  ) deallocate(cfars)
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             if( allocated(realized_update_fracs)  ) deallocate(realized_update_fracs)

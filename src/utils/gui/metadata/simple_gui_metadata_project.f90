@@ -28,8 +28,8 @@ module simple_gui_metadata_project
   use json_kinds
   use json_module,                    only: json_core, json_value
   use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ, SHORTSTRLEN
-  use simple_defs_fname,              only: MRC_EXT, JPG_EXT, MOVTHUMB_FBODY, PPROC_SUFFIX, LP_SUFFIX, MIRR_SUFFIX
-  use simple_fileio,                  only: swap_suffix, file_exists, fname2format, file2rarr, add2fbody, get_fpath, simple_copy_file
+  use simple_defs_fname,              only: MRC_EXT, JPG_EXT, MOVTHUMB_FBODY, PPROC_SUFFIX, LP_SUFFIX, MIRR_SUFFIX, TXT_EXT
+  use simple_fileio,                  only: swap_suffix, file_exists, fname2format, file2rarr, add2fbody, get_fpath, simple_copy_file, fopen, fclose
   use simple_string,                  only: string
   use simple_error,                   only: simple_exception
   use simple_string_utils,            only: int2str, int2str_pad
@@ -50,7 +50,7 @@ module simple_gui_metadata_project
   use simple_motion_gain_helpers,     only: read_movies_and_sum_frames
   use simple_procimgstk,              only: random_selection_from_imgfile, bp_imgfile
   use simple_gui_utils,               only: mrc2jpeg_tiled
-  use simple_syslib,                  only: del_file, simple_abspath, simple_rename, get_process_id
+  use simple_syslib,                  only: del_file, simple_abspath, simple_rename, get_process_id, simple_list_files
   use simple_refine3D_fnames,         only: refine3D_oris_heatmap_fname
   use simple_linalg,                  only: rad2deg
 
@@ -542,7 +542,7 @@ contains
                             fsc_arr    = file2rarr(fsc_fname)
                             res_arr    = get_resarr(fsc_box, smpd3D)
                             call get_resolution(fsc_arr, res_arr, res05, res0143)
-                          !  call spproj%get_vol_cfar(cfar, istate3D)
+                            call read_state_cfar(get_fpath(volpath), istate3D, cfar)
                             l_have_fsc = .true.
                         end if
                     end if
@@ -774,5 +774,35 @@ contains
       nullify(json_ptr)
     end if
   end function jsonise_override
+
+  ! Parse this state's cFAR score from the latest CFAR_SUMMARY_ITER*.txt beside
+  ! the volume (written by simple_commanders_rec_distr's exec_volassemble).
+  subroutine read_state_cfar( voldir, state, cfar )
+    type(string), intent(in)  :: voldir
+    integer,      intent(in)  :: state
+    real,         intent(out) :: cfar
+    type(string), allocatable :: cfar_files(:)
+    character(len=LONGSTRLEN) :: buffer
+    character(len=32)         :: tag1, tag2
+    integer                   :: funit, io_stat, istate_read, nfiles
+    real                      :: cfar_read
+    cfar = 0.
+    call simple_list_files(voldir%to_char()//'CFAR_SUMMARY_ITER*'//TXT_EXT, cfar_files)
+    nfiles = size(cfar_files)
+    if( nfiles == 0 ) return
+    call fopen(funit, file=cfar_files(nfiles), status='OLD', action='READ', iostat=io_stat)
+    if( io_stat /= 0 ) return
+    do
+        read(funit, '(A)', iostat=io_stat) buffer
+        if( io_stat /= 0 ) exit
+        read(buffer, *, iostat=io_stat) tag1, istate_read, tag2, cfar_read
+        if( io_stat /= 0 ) cycle
+        if( istate_read == state ) then
+            cfar = cfar_read
+            exit
+        end if
+    end do
+    call fclose(funit)
+  end subroutine read_state_cfar
 
 end module simple_gui_metadata_project

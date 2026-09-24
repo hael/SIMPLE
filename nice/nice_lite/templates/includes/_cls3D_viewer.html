@@ -19,13 +19,23 @@
 {% endcomment %}
 <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
     <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">{{ panel_title }}</p>
+    {% if "cls3D" in jobstats %}
+    <div class="m-auto">
+        <label for="cls3d-stage-select" class="text-[10px] text-streamlabel px-2">stage</label>
+        <select id="cls3d-stage-select" class="text-[10px] text-streamlabel" onchange="selectCls3DStage(this)">
+            {% for stage in cls3d_stages %}
+                <option value="{{ stage.key }}"{% if forloop.last %} selected{% endif %}>{{ stage.key }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
 </div>
-<div class="flex flex-row flex-1 h-full w-full">
+<div class="flex flex-row flex-1 h-full w-full overflow-hidden">
     {% include 'includes/_cls3D_state_selector.html' %}
     <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
         {% if "cls3D" in jobstats %}
             {% for stage in cls3d_stages %}
-                <div class="cls3dstagedetail flex flex-1 flex-col h-full min-h-0{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
+                <div class="cls3dstagedetail flex flex-1 flex-col min-h-0{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
                     {% include 'includes/_cls3D_state_detail.html' with states=stage.states volume_outputs=stage.volume_outputs volume_kinds=stage.volume_kinds %}
                 </div>
             {% endfor %}

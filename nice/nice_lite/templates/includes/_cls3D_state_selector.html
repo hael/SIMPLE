@@ -8,22 +8,12 @@
      {key, states, volume_outputs, volume_kinds}, one entry per cls3D stage - see
      _batch_overview_context/_cls3d_stages in batch_views.py), grouped into
      .cls3dstagegroup tile groups AND .cls3dstagedetail detail panels (in
-     _cls3D_viewer.html), both toggled by the "stage" <select> via
-     selectCls3DStage().
+     _cls3D_viewer.html), both toggled by the "stage" select via
+     selectCls3DStage(); that select is rendered in _cls3D_viewer.html's
+     header, not here.
 {% endcomment %}
-<div class="flex w-min mx-[10px] flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline overflow-y-auto">
+<div class="flex w-min mx-[10px] flex-col h-full bg-streambar rounded-xl text-streamtext overflow-y-auto">
     {% if "cls3D" in jobstats %}
-    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-        <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">volumes</p>
-        <div class="m-auto">
-            <label for="cls3d-stage-select" class="text-[10px] text-streamlabel px-2">stage</label>
-            <select id="cls3d-stage-select" class="text-[10px] text-streamlabel" onchange="selectCls3DStage(this)">
-                {% for stage in cls3d_stages %}
-                    <option value="{{ stage.key }}"{% if forloop.last %} selected{% endif %}>{{ stage.key }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </div>
     <div id="cls3d_state_slider" class="flex flex-wrap gap-2 p-4">
         {% for stage in cls3d_stages %}
         <div class="cls3dstagegroup flex flex-wrap gap-2{% if not forloop.last %} hidden{% endif %}" data-stage="{{ stage.key }}">
@@ -33,6 +23,8 @@
                 <p class="mt-1 w-full text-[9px] text-streamlabel">
                     <strong class="text-streamtext">state {{ state.state }}</strong>
                 </p>
+                {% if state.pop %}<p class="w-full text-[9px] text-streamlabel">{{ state.pop }}</p>{% endif %}
+                {% if state.res0143 %}<p class="w-full text-[9px] text-streamlabel">{{ state.res0143|floatformat:1 }} Å</p>{% elif state.res05 %}<p class="w-full text-[9px] text-streamlabel">{{ state.res05|floatformat:1 }} Å</p>{% endif %}
                 {% if state.reprojtiles %}
                 <div class="flex w-full gap-1">
                     {% include 'includes/_reproj_tile.html' with tile=state.reprojtiles.0 state=state %}

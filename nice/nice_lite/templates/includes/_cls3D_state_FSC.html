@@ -1,6 +1,6 @@
 {% comment %}
   _cls3D_state_FSC.html — per-state FSC curve panel for the 3D volume viewer.
-  Requires `states` (state, fsc_invres, fsc_corr, res0143, res05) - callers must
+  Requires `states` (state, fsc_invres, fsc_corr, res0143, res05, cfar) - callers must
   pass it explicitly (e.g. `with states=jobstats.state_volumes`); a `default`
   filter fallback isn't used here since resolving a filter argument that
   references a wholly-absent dict key raises an uncaught VariableDoesNotExist.
@@ -11,11 +11,15 @@
     {% for state in states %}
     <div data-state-panel="{{ state.state }}" class="flex flex-col items-center rounded-md border border-streamline bg-streambg p-1 {% if state.state != 1 %}hidden{% endif %}">
         {% if state.fsc_invres %}
-        {% if state.res0143 or state.res05 %}
+        {% if state.res0143 or state.res05 or state.cfar %}
         <p class="w-full text-[9px] text-streamlabel">
             {% if state.res0143 %}<strong class="text-streamtext">{{ state.res0143|floatformat:1 }} Å</strong> @ 0.143{% endif %}
             {% if state.res0143 and state.res05 %}&middot;{% endif %}
             {% if state.res05 %}<strong class="text-streamtext">{{ state.res05|floatformat:1 }} Å</strong> @ 0.5{% endif %}
+            {% if state.cfar %}
+            {% if state.res0143 or state.res05 %}&middot;{% endif %}
+            cFAR <strong class="text-streamtext">{{ state.cfar|floatformat:2 }}</strong>
+            {% endif %}
         </p>
         {% endif %}
         <canvas class="fsc_chart" width="400" height="200"
