@@ -91,6 +91,31 @@ class FileBrowserViewTests(SimpleTestCase):
         self.assertIn('selectDir(this,', html)
         self.assertIn('selectBrowserEntry(element);\n            watchDouble += 1;', html)
 
+    def test_directory_selector_shows_files_without_file_selection_actions(self):
+        html = render_to_string(
+            "filebrowser.html",
+            {
+                "type": "dir",
+                "purpose": "external_input",
+                "path": "/tmp",
+                "parentdir": "/",
+                "error": False,
+                "errortext": "",
+                "files": ["movie.mrc"],
+                "dirs": ["movies"],
+            },
+        )
+
+        self.assertIn("movie.mrc", html)
+        self.assertRegex(
+            html,
+            r'class="[^"]*cursor-default[^"]*text-streamsubtle[^"]*"\s+disabled',
+        )
+        self.assertNotIn(
+            'onclick="selectFile(this, \'/tmp\', \'movie.mrc\', \'dir\')"',
+            html,
+        )
+
     def test_root_directory_entry_uses_single_leading_slash(self):
         html = render_to_string(
             "filebrowser.html",
