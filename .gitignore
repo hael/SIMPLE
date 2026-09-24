@@ -49,6 +49,7 @@ db.sqlite3
 __pycache__
 # Docs
 docs/
+/doc/code_overview/code_base_map.md
 /.vscode
 # Codex agent notes are local by default; force-add only deliberately shared files.
 /.codex

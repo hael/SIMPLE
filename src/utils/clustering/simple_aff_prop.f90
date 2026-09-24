@@ -3,7 +3,7 @@ module simple_aff_prop
 use simple_core_module_api
 implicit none
 
-public :: aff_prop, test_aff_prop
+public :: aff_prop
 private
 #include "simple_local_flags.inc"
 
@@ -14,11 +14,8 @@ type aff_prop
     integer              :: N                    !< nr of data entries
     real,    allocatable :: A(:,:), R(:,:)       !< A is affinities & R responsibilities
     real,    allocatable :: Aold(:,:), Rold(:,:)
-    real,    allocatable :: Rp(:,:), tmp(:)
-    real,    allocatable :: AS(:,:), dA(:)
+    real,    allocatable :: Rp(:,:), AS(:,:)
     real,    allocatable :: S(:,:)               !< private similarity matrix
-    real,    allocatable :: Y(:), Y2(:)          !< maxvals
-    integer, allocatable :: I(:), I2(:)          !< index arrays
     integer              :: maxits=500           !< maximum number of iterations
     real                 :: ftol=1e-9            !< fractional convergence tolerance score
     real                 :: lam=0.5              !< dampening factor
@@ -68,8 +65,7 @@ contains
         end do
         ! allocate
         allocate( self%A(N,N), self%R(N,N), self%Aold(N,N), self%Rp(N,N),&
-        self%Rold(N,N), self%AS(N,N), self%Y(N), self%Y2(N), self%tmp(N),&
-        self%I(N), self%I2(N), self%dA(N) )
+        self%Rold(N,N), self%AS(N,N) )
         self%exists = .true.
     end subroutine new
 
@@ -84,7 +80,7 @@ contains
         real, allocatable :: similarities(:)
         logical, allocatable :: exemplars(:), exemplars_prev(:)
         real              :: best, second, avail, colsum, val, pseudo, exemplar_tol, realmax
-        integer           :: i, j, k, ncls, nborder, fallback_center, nstable, best_idx, second_idx
+        integer           :: i, j, k, ncls, nborder, fallback_center, nstable, best_idx
         logical           :: converged, use_fallback_center
         ! initialize
         realmax   = huge(realmax)
@@ -97,12 +93,6 @@ contains
         self%Rp   = 0.
         self%Rold = 0.
         self%AS   = 0.
-        self%Y    = 0.
-        self%Y2   = 0.
-        self%tmp  = 0.
-        self%I    = 0
-        self%I2   = 0
-        self%dA   = 0.
         ! iterate
         do i=1,self%maxits
             !------------------------
@@ -116,28 +106,21 @@ contains
                 end do
             end do
             !$omp end parallel do
-            !$omp parallel do default(shared) private(j,k,best,second,best_idx,second_idx,val) schedule(static)
+            !$omp parallel do default(shared) private(j,k,best,second,best_idx,val) schedule(static)
             do j = 1, self%N
                 best_idx   = 1
-                second_idx = 1
                 best       = self%AS(j,1)
                 second     = -huge(second)
                 do k = 2, self%N
                     val = self%AS(j,k)
                     if( val > best )then
                         second     = best
-                        second_idx = best_idx
                         best       = val
                         best_idx   = k
                     else if( val > second )then
                         second     = val
-                        second_idx = k
                     endif
                 end do
-                self%I(j)  = best_idx
-                self%I2(j) = second_idx
-                self%Y(j)  = best
-                self%Y2(j) = second
                 do k = 1, self%N
                     if( k == best_idx )then
                         self%R(j,k) = self%S(j,k) - second
@@ -172,7 +155,6 @@ contains
                 do j = 1, self%N
                     if( j /= k ) colsum = colsum + self%Rp(j,k)
                 end do
-                self%tmp(k) = colsum
                 do j = 1, self%N
                     if( j == k )then
                         self%A(j,k) = colsum
@@ -297,101 +279,13 @@ contains
         val = real(h) / real(HASH_MOD)
     end function deterministic_tiebreak
 
-    ! UNIT TEST
-
-    !>  \brief  is the aff_prop unit test
-    subroutine test_aff_prop
-        real,    allocatable :: datavecs(:,:), centers_true(:,:)
-        type(aff_prop)       :: apcls
-        real,    allocatable :: simmat(:,:), simmat_ref(:,:)
-        real                 :: simsum, simsum2, pref
-        integer, allocatable :: centers(:), centers2(:), centers_main(:), labels(:), labels2(:), truth(:)
-        integer              :: i, j, k, ncls, nerr, ndet, nper, ntot, rep
-        write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
-#if defined(_WIN32)
-        nper = 8
-#else
-        nper = 12
-#endif
-        ntot = 3 * nper
-        allocate(datavecs(ntot,5), centers_true(3,5), truth(ntot), simmat(ntot,ntot), simmat_ref(ntot,ntot))
-        centers_true = 0.
-        centers_true(1,1:2) = [0.0, 0.0]
-        centers_true(2,1:2) = [7.0, 0.0]
-        centers_true(3,1:2) = [0.0, 7.0]
-        do k=1,3
-            do i=1,nper
-                j = (k - 1) * nper + i
-                truth(j) = k
-                datavecs(j,:) = centers_true(k,:)
-                datavecs(j,1) = datavecs(j,1) + 0.12 * real(mod(i - 1, 4))
-                datavecs(j,2) = datavecs(j,2) + 0.10 * real((i - 1) / 4)
-                datavecs(j,3) = 0.03 * real(mod(i, 3))
-            end do
-        end do
-        do i=1,ntot-1
-            simmat(i,i) = 0.
-            do j=i+1,ntot
-                simmat(i,j) = -sum((datavecs(i,:) - datavecs(j,:))**2)
-                simmat(j,i) = simmat(i,j)
-            end do
-        end do
-        simmat(ntot,ntot) = 0.
-        simmat_ref = simmat
-        pref = -1.0
-        call apcls%new(ntot, simmat, pref=pref, lam=0.7, maxits=1000)
-        call apcls%propagate(centers, labels, simsum)
-        ncls = size(centers)
-        centers_main = centers
-        nerr = 0
-        ndet = 0
-        if( maxval(abs(simmat - simmat_ref)) > 0. ) ndet = ndet + 1
-        do rep=1,5
-            call apcls%new(ntot, simmat_ref, pref=pref, lam=0.7, maxits=1000)
-            call apcls%propagate(centers2, labels2, simsum2)
-            if( size(centers2) /= size(centers) )then
-                ndet = ndet + 1
-            else
-                if( any(centers2 /= centers) ) ndet = ndet + 1
-            endif
-            if( size(labels2) /= size(labels) )then
-                ndet = ndet + 1
-            else
-                if( any(labels2 /= labels) ) ndet = ndet + 1
-            endif
-        end do
-        do i=1,ntot-1
-            do j=i+1,ntot
-                if( truth(i) == truth(j) )then
-                    if( labels(i) /= labels(j) ) nerr = nerr + 1
-                else
-                    if( labels(i) == labels(j) ) nerr = nerr + 1
-                endif
-            end do
-        end do
-        write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
-        write(logfhandle,*) 'NR OF ASSIGNMENT ERRORS:', nerr
-        write(logfhandle,*) 'NR OF DETERMINISM ERRORS:', ndet
-        write(logfhandle,*) 'CENTERS'
-        do i=1,size(centers_main)
-            write(logfhandle,*) datavecs(centers_main(i),:)
-        end do
-        if( ncls == 3 .and. nerr == 0 .and. ndet == 0 )then
-            write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
-        else
-            write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
-        endif
-        call apcls%kill
-    end subroutine test_aff_prop
-
     ! DESTRUCTOR
 
     subroutine kill( self )
         class(aff_prop), intent(inout) :: self
         if( self%exists )then
             deallocate( self%S, self%A, self%R, self%Aold, self%Rp,&
-            self%Rold, self%AS, self%Y, self%Y2, self%tmp, self%I,&
-            self%I2, self%dA )
+            self%Rold, self%AS )
             self%exists = .false.
         endif
     end subroutine kill

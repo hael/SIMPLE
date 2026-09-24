@@ -105,7 +105,8 @@ trailed_rho_eo  = (u/f) * current_partial_rho_eo  + (1 - u) * chain_rho_eo
   only, destination cleaned first and manifest copied last
   (`simple_refine3D_strategy.f90::carry_over_trail_rec_chains`).
 - The recurrence, override weighting, and bootstrap-normalization contracts are
-  covered by the deterministic `simple_test_exec prg=trail_rec_blend` test.
+  covered by the deterministic `trailing-reconstruction blend` sub-suite of the
+  fast gate (`simple_test_exec test=unit_image suite=trailing_reconstruction_blend`).
 
 The chain files become the previous artifact for the next iteration or stage.
 Their names deliberately avoid the `recvol_state` stem so partial-reconstruction

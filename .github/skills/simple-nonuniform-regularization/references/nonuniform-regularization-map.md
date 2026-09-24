@@ -177,22 +177,14 @@ product. Fallback matters before the first assembled nonuniform products exist.
 
 ## Tests and Manual Checks
 
-Standalone test driver:
-
-- `production/tests/simple_test_nu_filter.f90`
-
-Usage shape:
-
-```text
-simple_test_nu_filter even.mrc odd.mrc smpd mskdiam [out_even.mrc out_odd.mrc] [aux_even.mrc aux_odd.mrc aux_res]
-```
+The standalone drivers `simple_test_nu_filter` and `simple_test_nu_envmask`
+were deleted in September 2026 (they asserted nothing, or duplicated what
+`nu_filt3D` exercises; see `doc/policies/test_environment_policy.md`). Run the
+filter end to end with `simple_exec prg=nu_filt3D` on a refined half-map pair.
 
 For code changes, consider:
 
-- focused build/test of `simple_test_nu_filter`
-- building and running `simple_test_nu_envmask`; require both the production
-  absolute-margin regression and the internal scale-free diagnostic regression
-  to pass (scale-free evidence is not a `nu_filt3D` CLI parameter)
+- `simple_exec prg=nu_filt3D` before and after the change on the same maps
 - checking cleanup removes `nu_filter_cache_even_k_*.mrc` and
   `nu_filter_cache_odd_k_*.mrc`
 - checking nonuniform mode still falls back to regular references before

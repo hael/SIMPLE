@@ -24,7 +24,7 @@ contains
         call test_reallocate()
         call test_write_read_roundtrip()
         call test_rnd_oris_bounds()
-        ! call report_summary()
+        call test_assignment()
     end subroutine run_all_oris_tests
 
     !---------------------------------------------------------------
@@ -694,5 +694,33 @@ contains
         call assert_true(lims_ok, 'rnd_oris: Euler limits honoured and trs=0 gives zero shifts')
         call os%kill
     end subroutine test_rnd_oris_bounds
+
+    !---------------------------------------------------------------
+    ! 15. assignment (from the retired in-module test_oris)
+    !---------------------------------------------------------------
+    ! intrinsic assignment of an oris goes through the defined assignment of its ori components:
+    ! every field is copied and the copy is independent of the original
+    subroutine test_assignment()
+        type(oris) :: os, os2
+        integer    :: i, n
+        logical    :: same
+        write(*,'(A)') 'test_assignment'
+        n = 5
+        call os%new(n, .false.)
+        call os%rnd_oris(5.)
+        os2  = os
+        same = os2%get_noris() == n
+        do i = 1,n
+            if( any(abs(os2%get_euler(i) - os%get_euler(i)) > 0.) ) same = .false.
+            if( any(abs(os2%get_2Dshift(i) - os%get_2Dshift(i)) > 0.) ) same = .false.
+        end do
+        call assert_true(same, 'assignment copies every orientation and shift')
+        call os%set_euler(1, [11., 22., 33.])
+        call os%set_shift(1, [4., -4.])
+        call assert_true(any(abs(os2%get_euler(1) - [11., 22., 33.]) > 1.e-3), 'the copy keeps its angles when the original changes')
+        call assert_true(any(abs(os2%get_2Dshift(1) - [4., -4.]) > 1.e-3),     'the copy keeps its shift when the original changes')
+        call os%kill
+        call os2%kill
+    end subroutine test_assignment
 
 end module simple_oris_tester

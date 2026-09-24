@@ -108,5 +108,8 @@ construction.
 - Joint optimizer and acceptance guards: `src/main/pftc/simple_pftc_shsrch_grad.f90`.
 - 2D and 3D integration: `src/main/strategies/search/simple_strategy2D_srch.f90`,
   `src/main/strategies/search/simple_strategy3D_srch.f90`.
-- Validation harness: `production/tests/simple_test_continuous_inplane_rotation2D*.f90`.
+- Validation: the `continuous in-plane` and `refine3D in-plane state` sub-suites of
+  `simple_test_exec test=unit_pftc_align2D3D` (`simple_pftc_inplane_tester`,
+  `simple_strategy3D_inplane_tester`), which replaced the
+  `simple_test_continuous_inplane_rotation2D*` programs in September 2026.
 - Design note: `doc/implementation_notes/continuous_inplane_rotation_polar.md`.

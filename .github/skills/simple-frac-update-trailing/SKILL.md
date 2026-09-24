@@ -82,7 +82,8 @@ Then inspect the current code in this order:
   larger dimensions. For the trailing chain, a larger previous grid or a physical
   extent mismatch discards the set and re-seeds instead of failing the run.
 - The recurrence and `ufrac_trec` weighting contracts are covered by the
-  deterministic `simple_test_exec prg=trail_rec_blend` test.
+  deterministic `trailing-reconstruction blend` sub-suite of the fast gate
+  (`simple_test_exec test=unit_image suite=trailing_reconstruction_blend`).
 - When a stage boundary changes the next consumer's representation size, the
   prior stage must write the previous artifact in the next consumer's
   representation, not merely in its own search representation.

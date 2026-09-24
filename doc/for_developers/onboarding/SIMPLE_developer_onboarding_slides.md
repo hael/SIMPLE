@@ -85,7 +85,7 @@ cmake --install .
 - `compile_gui.sh`: NICE-enabled build.
 - `compile_conda.sh`: conda-provisioned GCC/GFortran, FFTW, TIFF, JPEG, Python, and CMake environment.
 - `compile_csbclust.sh`: module-based HPC build.
-- Every `compile_*.sh` skips test code (`simple_test_exec` and the programs in `production/tests`) unless given `--compile-tests` (CI passes it).
+- Every `compile_*.sh` skips test code (`simple_test_exec` and the `*_tester` modules) unless given `--compile-tests` (CI passes it); with it, the build runs the fast test gate before installing (`doc/policies/test_environment_policy.md`).
 - After install: source `build/add2.bashrc`, or add `build/bin`, `build/scripts`, and `SIMPLE_PATH` manually.
 
 # Wiki, CI, and Team Workflow
@@ -96,7 +96,7 @@ cmake --install .
 - Use local `/doc` for implementation-level guidance; use the wiki for project-level orientation.
 - Before changing scientific behavior, read the nearest policy or refactoring note.
 - For new command-line parameters, add typed support through `src/main/simple_parameters.f90` and downstream `params%...` usage.
-- Add or run the closest executable tests under `production/tests`.
+- Add or run the closest tests as described in `doc/policies/test_environment_policy.md`: `./compile_debug.sh --compile-tests` runs the fast gate; `simple_test_exec test=unit_<area> suite=<sub-suite>` runs one sub-suite.
 
 # Suggested First-Day Path
 

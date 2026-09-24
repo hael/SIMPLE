@@ -3,35 +3,28 @@ module simple_ftiter
 use simple_core_module_api
 implicit none
 
-public :: ftiter, test_ftiter
+public :: ftiter
 private
 #include "simple_local_flags.inc"
 
 type :: ftiter
     private
-    integer :: rlogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the real image's logical addresses
-    integer :: rlogi_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the real image's logical addresses
     integer :: clogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the complex image's logical addresses
     integer :: clogi_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the complex image's logical addresses
     integer :: clogi_lbounds_all(3)=[0,0,0] !<  In each dimension, the lower bound of the complex image's logical addresses,
                                             !! including redundant Friedel mates in the negative frequencies of the first dimension
     integer :: clogi_ubounds_all(3)=[0,0,0] !<  In each dimension, the upper bound of the complex image's logical addresses,
                                             !! including redundant Friedel mates in the negative frequencies of the first dimension
-    integer :: cphys_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the complex image's physical addresses
     integer :: ldim(3)=[1,1,1]              !< logical image dimensions
     integer :: lfnys(3)=0                   !< Nyqvist indices
     integer :: lhps(3)=0                    !< High-pass indices
-    integer :: llps(3)=0                    !< Low-pass indices
-    integer :: lims(3,2)=0                  !< Fourier index limits
     real    :: dsteps(3)=0.                 !< wavelengths of first components
     real    :: smpd=0.                      !< sampling distance (Angstroms per pixel)
   contains
     ! CONSTRUCTOR
     procedure :: new
-    ! SETTER
-    procedure :: set_hp
+    ! GETTERS
     procedure :: get_lhp
-    procedure :: get_llp
     procedure :: get_find
     procedure :: get_lfny
     procedure :: get_lp
@@ -45,9 +38,6 @@ type :: ftiter
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: comp_addr_logi
-    procedure, private :: comp_addr_phys_orig
-    ! TESTS
-    procedure, private :: test_addr
 end type ftiter
 
 interface ftiter
@@ -84,26 +74,20 @@ contains
             self%lfnys  = fdim(self%ldim(1))-1
             self%dsteps = (real(self%lfnys)*2.+1.)*self%smpd
         endif
-        self%llps   = self%lfnys ! default low-pass limits
         self%lhps   = 0          ! default high-pass limits
         ! determines dimensions
         do d=1,3
             if (is_even(self%ldim(d))) then
-                self%rlogi_lbounds(d)     = -self%ldim(d)/2
-                self%rlogi_ubounds(d)     =  self%ldim(d)/2-1
                 self%clogi_lbounds(d)     = -self%ldim(d)/2
                 self%clogi_ubounds(d)     =  self%ldim(d)/2-1
                 self%clogi_lbounds_all(d) =  self%clogi_lbounds(d)
                 self%clogi_ubounds_all(d) =  self%clogi_ubounds(d)
             else
-                self%rlogi_lbounds(d)     = -(self%ldim(d)-1)/2
-                self%rlogi_ubounds(d)     =  (self%ldim(d)-1)/2
                 self%clogi_lbounds(d)     = -(self%ldim(d)-1)/2
                 self%clogi_ubounds(d)     =  (self%ldim(d)-1)/2
                 self%clogi_lbounds_all(d) =  self%clogi_lbounds(d)
                 self%clogi_ubounds_all(d) =  self%clogi_ubounds(d)
             endif
-            self%cphys_ubounds(d) = self%ldim(d)
         enddo
         ! Exclude Friedel mates & adjusts limits in the first dimension
         self%clogi_lbounds(1) = 0
@@ -111,21 +95,12 @@ contains
         self%clogi_ubounds_all(1) =  self%clogi_ubounds(1)
         ! if the image is 2D, the 3rd dimension is special
         if(self%ldim(3) == 1)then
-            self%rlogi_lbounds(3) = 0
-            self%rlogi_ubounds(3) = 0
             self%clogi_lbounds(3) = 0
             self%clogi_ubounds(3) = 0
         endif
     end subroutine new
 
-    ! SETTERS/GETTERS
-
-    !>  \brief  is a setter
-    subroutine set_hp( self, hp )
-        class(ftiter), intent(inout) :: self
-        real,          intent(in)    :: hp
-        self%lhps = int(self%dsteps/hp)
-    end subroutine set_hp
+    ! GETTERS
 
     !>  \brief  is a getter
     pure function get_lhp( self, which ) result( hpl )
@@ -134,14 +109,6 @@ contains
         integer :: hpl
         hpl = self%lhps(which)
     end function get_lhp
-
-    !>  \brief  is a getter
-    pure function get_llp( self, which ) result( lpl )
-        class(ftiter), intent(in) :: self
-        integer,       intent(in) :: which
-        integer :: lpl
-        lpl = self%llps(which)
-    end function get_llp
 
     !>  \brief  is a getter
     pure function get_find( self, which, res ) result( ind )
@@ -191,18 +158,13 @@ contains
 
     pure subroutine reset( self )
         class(ftiter), intent(inout) :: self
-        self%rlogi_lbounds     = 0
-        self%rlogi_ubounds     = 0
         self%clogi_lbounds     = 0
         self%clogi_ubounds     = 0
         self%clogi_lbounds_all = 0
         self%clogi_ubounds_all = 0
-        self%cphys_ubounds     = 0
         self%ldim   = 1
         self%lfnys  = 0
         self%lhps   = 0
-        self%llps   = 0
-        self%lims   = 0
         self%dsteps = 0.0
         self%smpd   = 0.0
     end subroutine reset
@@ -226,21 +188,15 @@ contains
                         lims(3,1) = self%clogi_lbounds(3)
                         lims(3,2) = self%clogi_ubounds(3)
                     else
-                        lims(3,1) = self%lhps(3)
+                        ! symmetric, as in the second dimension: the half-space h >= 0 holds every l
                         lims(3,2) = dynfind( self%dsteps(3), lp_dyn, self%lfnys(3) )
+                        lims(3,1) = -lims(3,2)
                     endif
                 case DEFAULT
                     THROW_HARD('undefined mode')
             end select
         else
             select case(mode)
-                case(1) ! loop over physical addresses
-                    lims(1,1) = 1
-                    lims(1,2) = self%cphys_ubounds(1)
-                    lims(2,1) = 1
-                    lims(2,2) = self%ldim(2)
-                    lims(3,1) = 1
-                    lims(3,2) = self%ldim(3)
                 case(2) ! loop over logical addresses
                 ! (exluding redundant Friedel mates in
                 ! the negative frequencies of the 1st dimension)
@@ -265,33 +221,6 @@ contains
     end function loop_lims
 
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
-
-    !>  \brief  Convert logical address to physical address. Complex image.
-    function comp_addr_phys_orig(self,logi) result(phys)
-        class(ftiter), intent(in) :: self
-        integer,       intent(in) :: logi(3) !<  Logical address
-        integer :: phys(3) !<  Physical address
-        integer :: i
-        if (logi(1) .ge. 0) then
-            phys = logi + 1
-            ! The above is true except when in negative frequencies of
-            ! 2nd or 3rd dimension
-            do i=2,3
-                if (logi(i) .lt. 0) phys(i) = logi(i) + self%ldim(i) + 1
-            enddo
-        else
-            ! We are in the negative frequencies of the first dimensions,
-            ! which are not defined by the output of FFTW's fwd FT,
-            ! so we need to look for the Friedel mate in the positive frequencies
-            ! of the first dimension
-            phys = -logi + 1
-            ! The above is true except when in negative frequencies of
-            ! 2nd or 3rd dimension
-            do i=2,3
-                if (-logi(i) .lt. 0) phys(i) = -logi(i) + self%ldim(i) + 1
-            enddo
-        endif
-    end function comp_addr_phys_orig
 
     pure function comp_addr_phys1(self, logi) result(phys)
         class(ftiter), intent(in) :: self
@@ -337,7 +266,7 @@ contains
     end function comp_addr_phys3
 
     !> \brief Convert physical address to logical address. Complex image.
-    ! this is erroneous when h<0, used in the unit test but only there
+    !! The stored half-space has h >= 0, where this inverts comp_addr_phys
     pure function comp_addr_logi(self,i,j,k) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: i,j,k   !<  Physical address
@@ -363,64 +292,5 @@ contains
             target_to = 3
         endif
     end function dynfind
-
-    ! TESTS
-
-    subroutine test_ftiter
-        type(ftiter) :: fit
-        write(logfhandle,'(a)') '**info(simple_ftiter_unit_test): testing square dimensions'
-        call fit%new([100,100,100],2.)
-        call fit%test_addr
-        call fit%new([100,100,1],2.)
-        call fit%test_addr
-        write(logfhandle,'(a)') '**info(simple_ftiter_unit_test): testing non-square dimensions'
-        call fit%new([120,90,80],2.)
-        call fit%test_addr
-        call fit%new([120,90,1],2.)
-        call fit%test_addr
-         write(logfhandle,'(a)') 'SIMPLE_FTITER_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine test_ftiter
-
-    !>  \brief  Test the addressing of the FT'ed image for consistency
-    subroutine test_addr(self)
-        class(ftiter), intent(in) :: self
-        integer ::  i, j, k, logi(3), phys(3)
-        write(logfhandle,'(a)') '**info(test_addr): testing phys->logi->phys address conversion (scalar)'
-        do k=1,self%ldim(3)
-            do j=1,self%ldim(2) ! this could be: do j=1,self%cphys_ubounds(2)
-                do i=1,self%cphys_ubounds(1)
-                    logi = self%comp_addr_logi(i,j,k)
-                    phys = self%comp_addr_phys(logi(1),logi(2),logi(3))
-                    if (any([i,j,k] .ne. phys)) then
-                        THROW_HARD('failed complex phys->logi->phys address conversion test')
-                    endif
-                enddo
-            enddo
-        enddo
-        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy)'
-        do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
-            do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
-                do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
-                    phys = self%comp_addr_phys(i,j,k)
-                    logi = self%comp_addr_logi(phys(1),phys(2),phys(3))
-                    if (any([i,j,k] .ne. logi)) then
-                        THROW_HARD('failed complex logi->phys->logi address conversion test')
-                    endif
-                enddo
-            enddo
-        enddo
-        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy, scalar)'
-        do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
-            do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
-                do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
-                    phys = self%comp_addr_phys(i,j,k)
-                    logi = self%comp_addr_logi(phys(1),phys(2),phys(3))
-                    if (any([i,j,k] .ne. logi)) then
-                        THROW_HARD('failed complex logi->phys->logi address conversion test')
-                    endif
-                enddo
-            enddo
-        enddo
-    end subroutine test_addr
 
 end module simple_ftiter

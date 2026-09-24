@@ -70,16 +70,13 @@ use simple_http_post_tester,                 only: run_all_http_post_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
 use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
 use simple_forked_process_tester,            only: run_all_forked_process_tests
-! test procedures of core types
-use simple_imghead,                          only: test_imghead
-use simple_oris,                             only: test_oris
+use simple_imghead_tester,                   only: run_all_imghead_tests
 use simple_image_tester,                     only: run_all_image_tests
-use simple_ftiter,                           only: test_ftiter
-use simple_ftexp_shsrch,                     only: test_ftexp_shsrch, test_ftexp_shsrch2
-use simple_bspline_smoother,                 only: test_bspline_smoother, test_bspline_smoother_3d
-use simple_online_var,                       only: test_online_var
-use simple_aff_prop,                         only: test_aff_prop
-use simple_hclust,                           only: test_hclust
+use simple_ftiter_tester,                    only: run_all_ftiter_tests
+use simple_ftexp_shsrch_tester,              only: run_all_ftexp_shsrch_tests
+use simple_bspline_smoother_tester,          only: run_all_bspline_smoother_tests
+use simple_online_var_tester,                only: run_all_online_var_tests
+use simple_aff_prop_tester,                  only: run_all_aff_prop_tests
 use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
@@ -91,7 +88,6 @@ use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
 use simple_commanders_test_single,           only: commander_test_atoms_stats, commander_test_detect_calpha_molecules
-use simple_srchspace_map2D_io,               only: test_srchspace_map2D_io
 use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
@@ -275,7 +271,6 @@ contains
         call add_suite(s, n, 'orientation',            run_all_ori_tests)
         call add_suite(s, n, 'orientation collection', run_all_oris_tests)
         call add_suite(s, n, 'symmetry',               run_all_sym_tests)
-        call add_suite(s, n, 'orientation data',       suite_orientation_data)
         call add_suite(s, n, 'Euler shift',            test_euler_shift)
     end subroutine suites_ori
 
@@ -283,10 +278,9 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'image',                run_all_image_tests)
-        call add_suite(s, n, 'image header',         test_imghead)
-        call add_suite(s, n, 'Fourier iterator',     test_ftiter)
-        call add_suite(s, n, 'B-spline smoother 2D', suite_bspline_2d)
-        call add_suite(s, n, 'B-spline smoother 3D', suite_bspline_3d)
+        call add_suite(s, n, 'image header',         run_all_imghead_tests)
+        call add_suite(s, n, 'Fourier iterator',     run_all_ftiter_tests)
+        call add_suite(s, n, 'B-spline smoother',    run_all_bspline_smoother_tests)
         call add_suite(s, n, 'masks',                run_all_mask_tests)
         call add_suite(s, n, 'binary image',         run_all_image_bin_tests)
         call add_suite(s, n, 'segmentation',         run_all_segmentation_tests)
@@ -298,10 +292,9 @@ contains
     subroutine suites_numerics( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'online variance',         test_online_var)
+        call add_suite(s, n, 'online variance',         run_all_online_var_tests)
         call add_suite(s, n, 'random draws',            run_all_rnd_tests)
-        call add_suite(s, n, 'affinity propagation',    test_aff_prop)
-        call add_suite(s, n, 'hierarchical clustering', test_hclust)
+        call add_suite(s, n, 'affinity propagation',    run_all_aff_prop_tests)
         call add_suite(s, n, 'statistics',              run_all_stat_tests)
         call add_suite(s, n, 'linear algebra',          run_all_linalg_tests)
         call add_suite(s, n, 'Kaiser-Bessel kernel',    run_all_kbinterpol_tests)
@@ -313,8 +306,7 @@ contains
         call add_suite(s, n, 'optimisers',              run_all_opt_tests)
         call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
-        call add_suite(s, n, 'shift search, correlator', test_ftexp_shsrch)
-        call add_suite(s, n, 'shift search, optimiser',  test_ftexp_shsrch2)
+        call add_suite(s, n, 'shift search',            run_all_ftexp_shsrch_tests)
     end subroutine suites_numerics
 
     subroutine suites_project( s, n )
@@ -327,7 +319,6 @@ contains
         call add_suite(s, n, 'project merge',           run_all_project_merge_tests)
         call add_suite(s, n, 'class compatibility',     run_all_class_compatibility_tests)
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
-        call add_suite(s, n, '2D search-space map I/O', test_srchspace_map2D_io)
         call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
     end subroutine suites_project
 
@@ -759,14 +750,29 @@ contains
         call simple_end('**** SIMPLE_TEST_'//trim(label)//' NORMAL STOP ****')
     end subroutine run_unit_suites
 
-    !> command-line spelling of a sub-suite name: lowercase, spaces and hyphens as underscores
+    !> command-line spelling of a sub-suite name: lowercase, blanks and hyphens as underscores,
+    !! commas and slashes dropped ('search, sort, locate' -> search_sort_locate, 'stack I/O' ->
+    !! stack_io). Only the name up to its last non-blank counts: the stored names are character(32),
+    !! and converting their padding to underscores made suite= match nothing (fixed 2026-09-25);
+    !! scripts/check_test_registry.py applies the same rule to the lists in the test UI
     function suite_id( name ) result( id )
         character(len=*), intent(in) :: name
-        character(len=len(name))     :: id
-        integer :: i
-        id = lowercase(adjustl(trim(name)))
-        do i = 1, len_trim(id)
-            if( id(i:i) == ' ' .or. id(i:i) == '-' ) id(i:i) = '_'
+        character(len=len(name))     :: id, lname
+        integer :: i, j
+        lname = lowercase(adjustl(name))
+        id    = ''
+        j     = 0
+        do i = 1, len_trim(lname)
+            select case( lname(i:i) )
+                case( ',', '/' )
+                    cycle
+                case( ' ', '-' )
+                    j = j + 1
+                    id(j:j) = '_'
+                case default
+                    j = j + 1
+                    id(j:j) = lname(i:i)
+            end select
         end do
     end function suite_id
 
@@ -792,18 +798,6 @@ contains
         call xcalpha%execute(cline_here)
         call cline_here%kill
     end subroutine suite_calpha_molecules
-
-    subroutine suite_orientation_data
-        call test_oris(.false.)
-    end subroutine suite_orientation_data
-
-    subroutine suite_bspline_2d
-        call test_bspline_smoother([64,64,1], 1.0, 0.2)
-    end subroutine suite_bspline_2d
-
-    subroutine suite_bspline_3d
-        call test_bspline_smoother_3d([64,64,64], 1.0, 0.2)
-    end subroutine suite_bspline_3d
 
     subroutine suite_ui_json
         write(logfhandle,'(a)') 'VALIDATING UI JSON FILE:'

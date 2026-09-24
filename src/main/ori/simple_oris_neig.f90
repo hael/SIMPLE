@@ -83,23 +83,6 @@ contains
         end do
     end subroutine replace_with_closest
 
-    module function corr_oris( self1, self2 ) result( corr )
-        class(oris), intent(inout) :: self1, self2
-        real :: arr1(5), arr2(5), corr
-        integer :: i
-        corr = 0.
-        do i=1,self1%n
-            arr1(1:3) = self1%get_euler(i)
-            arr1(4)   = self1%get(i,'x')
-            arr1(5)   = self1%get(i,'y')
-            arr2(1:3) = self2%get_euler(i)
-            arr2(4)   = self2%get(i,'x')
-            arr2(5)   = self2%get(i,'y')
-            corr = corr+pearsn(arr1,arr2)
-        end do
-        corr = corr/real(self1%n)
-    end function corr_oris
-
     module subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(in)  :: self
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd

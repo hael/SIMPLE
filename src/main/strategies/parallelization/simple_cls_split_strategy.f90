@@ -5,13 +5,11 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_builder,                only: builder
 use simple_parameters,             only: parameters
 use simple_cmdline,                only: cmdline
-use simple_defs_fname,             only: SRCHSPACE_MAP_FNAME
 use simple_qsys_env,               only: qsys_env
 use simple_sp_project,             only: sp_project
 use simple_image,                  only: image
 use simple_image_msk,              only: automask2D
 use simple_classaverager,          only: transform_ptcls
-use simple_srchspace_map2D_io,     only: write_srchspace_map2D
 use simple_srch_sort_loc,          only: hpsort
 implicit none
 
@@ -1122,9 +1120,6 @@ contains
             call spproj%os_cls3D%set(i, 'accept',  1)
             call spproj%os_cls3D%set(i, 'state',   1)
         end do
-        if( nsplit > 0 )then
-            call write_srchspace_map2D(parent_of_subcls(1:nsplit), string(SRCHSPACE_MAP_FNAME))
-        endif
         call spproj%write(params%projfile)
     end subroutine apply_split_project_updates
 

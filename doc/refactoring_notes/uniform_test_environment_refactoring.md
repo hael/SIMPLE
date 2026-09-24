@@ -16,7 +16,9 @@ the review found and fixed the production defects recorded in section 9.7
 and removed the dead routines recorded there. What remains is Phase 5: the
 simulation-truth gates of the workflow entries and the nightly runner
 (`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`).
-This is a large project with four workstreams (section 1.1), delivered in
+The policy for day-to-day work (what a test is, where it goes, how to write
+it, what runs when, and where every old test went) is
+`doc/policies/test_environment_policy.md`. This is a large project with four workstreams (section 1.1), delivered in
 slices that are each useful on their own.
 
 Validation level: static source inspection of SIMPLE, and of X's test system
@@ -373,10 +375,10 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | suite | sub-suites of `units` | Debug, 1 thread (2026-09-22) |
 |---|---|---:|
 | `unit_core` | string (with comma-separated integer lists and ANSI formatting since the utils review), syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line (with a full processing line since the utils review) | 0.2 s |
-| `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
-| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks (with the threaded path on a team of three since the wrap-up), binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation (utils review) | 1.3 s (before the shift search moved out and the mask suites moved in) |
-| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
-| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve (with the collector's hard-gate rejection since the stream review), 2D search-space map I/O, motion gain (atoms moved to `unit_single`) | 0.7 s |
+| `unit_ori` | orientation, orientation collection, symmetry, Euler shift (orientation data retired 2026-09-25) | 1.2 s (3.6 s with symmetry) |
+| `unit_image` | image, image header, Fourier iterator, B-spline smoother (one sub-suite, 2D and 3D, since 2026-09-25), masks (with the threaded path on a team of three since the wrap-up), binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation (utils review) | 1.3 s (before the shift search moved out and the mask suites moved in) |
+| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), affinity propagation, statistics (weights), shift search (one sub-suite since 2026-09-25; hierarchical clustering retired with `hclust`), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
+| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve (with the collector's hard-gate rejection since the stream review), motion gain (2D search-space map I/O retired with the module 2026-09-25) (atoms moved to `unit_single`) | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
@@ -2377,6 +2379,120 @@ Left open by decision: the jittered pole and its mirror mate in
 pair); the XD EM running to `XD_MAXIT` (needs measurements on real flex data
 before choosing acceleration or a looser tolerance).
 
+**The policy (2026-09-25, Hans: a policy document for the new environment:
+what a test is and is not, where it goes and whether it is part of the build,
+how to implement one, why not standalone programs, the library support, what
+was deleted and where each old test is now, and what the nightly suite holds
+and how it is designed).** `doc/policies/test_environment_policy.md`. It also
+answers the question developers ask about scratch work: a local git worktree,
+a developer program, or a test; the test area is not a scratch area. Hans's
+emphasis: SIMPLE practises extreme programming, everyone works on and pushes
+to master, and a branch in the online repository needs a strong reason;
+scratch work lives in a git worktree on the developer's computer and is
+merged into master and pushed when it is good. Writing it found
+three things. `suite_id` turned the blank padding of the character(32)
+sub-suite names into underscores, so `suite=` matched no sub-suite at all
+since Phase 2; it now stops at the last non-blank, and drops commas and
+slashes (`search_sort_locate`, `stack_io`), still accepting the old spelling.
+The `suite=` lists in the test UI had drifted from the suite tables for
+`unit_core`, `unit_ori`, `unit_numerics` and `unit_project` (a third of the
+sub-suites missing), and `flex_gpu` had no list; they are complete, and
+`check_test_registry.py` now fails the gate when a list and its table differ
+(the old UI file gives six problems). Ruben fixed the same padding defect
+independently (0e4d441fe, trim and underscores only); the merge keeps the rule
+above, which also drops commas and slashes, with his `adjustl`, and the check
+caught his three new or renamed sub-suites (`ANSI formatting`, `cif2mrc`,
+`cavg registration`) missing from the UI lists, now added. The repository's agent skills
+(`.github/skills`) still described the `production/tests` glob; they, the
+onboarding slides and three policy and algorithm notes point to the policy
+now.
+
+**The SPIDER header (2026-09-25, first build of the policy batch: `unit_image`
+stopped in `test_file_roundtrip` with an index 33 above the bound 32 of the
+header array in `simple_imghead::read`).** `getLabbyt` returned the record
+length `lenbyt` (4*nx bytes) instead of the header length `labbyt` (labrec
+records of lenbyt, at least 1024 bytes). The reader allocated nx words and
+took 43 fields from them, so a SPIDER file with a box below 43 read past the
+array (a bounds-checked build stops, a release build reads heap memory into
+the fields from nx+1 on, below a box of 13 `labrec` itself); the writer wrote
+nx words, so a box below 43 lost the fields from nx+1 on, the pixel size among
+them. `getLabbyt` returns `labbyt`; the reader takes the 43 fields in one
+statement (a header is never shorter), the writer puts the whole header, the
+fields and then zeros, in one statement instead of one statement per word, and
+both check `iostat`. `get_spifile_info` read the header three times with the
+same unit settings, labelled native, big and little endian (the `convert=` had
+gone), and returned the label to two callers that dropped it; it reads once,
+and `conv` is gone, as are the unused `print_entire` of `read` and `pos` and
+`print_entire` of `read_tiff`. `starproject%check_stk_params` (the box of an
+imported stack) opened MRC and SPIDER stacks with an unset `status`, could not
+make a SPIDER header (`new` without dimensions throws) and left TIFF handles
+open; it calls `find_ldim_nptcls`. The in-module `test_imghead` (one box of
+120, dimensions only, a file left behind) is replaced by
+`simple_imghead_tester` (sub-suite `image header` of unit_image): the SPIDER
+header geometry for boxes 32, 120 and 300, round trips of two images and a
+volume with the file length, the pixel size, iform and maxim, a box-32 header
+reading a box-120 file, `find_ldim_nptcls` and `find_img_smpd` on SPIDER, and
+an MRC round trip. Budget unchanged (25).
+
+**The in-module self-tests (2026-09-25, Hans: is anything left of one test
+per class? Then do it now; `srchspace_map2D` can go; `hclust` and the jpg
+wrapper by the recommendations).** Eight production modules still held
+self-tests registered as fast-gate sub-suites; none used the assertion
+library, three (`online_var`, `aff_prop`, `hclust`) only printed their verdict
+and could not fail, the others stopped the whole area process at the first
+failure. Each is now a tester next to its module, pinning what the old test
+claimed, with independent expected values:
+`simple_online_var_tester` (closed-form means and sample variances, one and no
+samples, a 1e4 offset, the two-pass `moment`); `simple_aff_prop_tester` (the
+exemplars are the cluster medoids 7, 19, 31, found by brute force in the test
+and by a float32 numpy emulation for preferences -1 to -200; the true
+partition; simsum recomputed; preference 0 makes every point an exemplar and
+-1000 one cluster; restarts reproduce exactly; the input is untouched);
+`simple_ftiter_tester` (loop limits for even, odd and non-square boxes; the
+logical half maps one to one onto the half-complex array, `comp_addr_logi`
+inverts it, a negative h addresses its Friedel mate, the three forms agree,
+for six 2D and 3D boxes checked in a Python emulation; Nyquist and Angstrom
+conversions; the low-pass clamps); `simple_ftexp_shsrch_tester` (through the
+public `ospec` callbacks: the cost is lowest at the applied integer shift, the
+correlation there is 1, the fdf callback agrees, the gradient vanishes at the
+peak and matches central differences off it; `minimize` returns the applied
+sub-pixel shift within 0.05 px, which the old test never looked at);
+`simple_bspline_smoother_tester` (a cosine comes out scaled by the closed-form
+transfer function B**2/(B**2 + lambda R) of the quadratic B-spline and its
+gradient Gram kernel, 2D square and non-square and 3D at 32**3, which a numpy
+emulation of the code matches to 2e-7; Fourier input). `test_oris` repeated
+the oris tester with broken checks (a verdict never read, an assignment loop
+that compared x only, five files left behind); it goes with `corr_oris`, its
+only caller, and the oris tester checks deep-copy assignment. Sub-suites:
+`orientation data`, `hierarchical clustering` and `2D search-space map I/O`
+retired; `B-spline smoother 2D`/`3D` and `shift search, correlator`/`optimiser`
+are one sub-suite each.
+
+Defect: `ftiter%loop_lims` with a low-pass limit ran the third dimension of a
+volume from `lhps(3)` = 0, so `image%corr(..., lp_dyn)` on volumes
+(`symanalyzer`, `volcluster`) saw half of the half-space and
+`image%mul(..., lp)` left half of it unmultiplied; it is symmetric now, like the
+second dimension. `hclust` (unused since April) cut its tree at the first N-k
+merges in the order the chain found them, not the N-k lowest (0, 5, 100, 100.1,
+100.2 into three gave {0,5},{100},{100.1,100.2}); a restore from git has to fix
+that and keep the chain across merges (O(N**2)).
+
+Removed, no callers: `hclust` and the unreachable `hclust`, `hybrid` and
+`refine` branches of `cluster_dmat`; `srchspace_map2D_io`, its call in
+`cls_split` (the class-to-cluster map is also in the project's cls2D/cls3D
+`cluster` field) and `SRCHSPACE_MAP_FNAME`; `online_var` `add_2`, `reset_mean`,
+`serialize`, `unserialize`; `aff_prop` work arrays `Y`, `Y2`, `I`, `I2`, `tmp`,
+`dA`; `ftiter` `set_hp`, `get_llp`, `comp_addr_phys_orig`, the physical mode of
+`loop_lims` (its upper bound was `ldim(1)`, not the half-complex extent) and
+the fields nothing read; `bspline_smoother` `new(img)` and four unread fields;
+the dead `test_CPlot2D` and `test_jpg_export` (ImageMagick and a GUI resource
+path); the jpg wrapper keeps its writers (`writeJpg` for images and volumes,
+`write_rgb_jpeg`), its loaders, getters, setters, `montage`, the integer
+writer and the unused C interfaces (one bound to the wrong C name) go. The
+only self-tests left in production modules are `test_flex_pcg_operator`
+(white-box model) and the five `flex_gpu` tests of the GPU platform entry.
+Budget unchanged (25).
+
 ## 10. Fast-tier performance
 
 The 30 s budget will not be met by classification alone; the fast candidates
@@ -2440,7 +2556,7 @@ CI, scripts, implementation notes and user instructions.
 | 0 | all | **Timing and failure-path inventory.** Build with `--compile-tests` in Debug and Release; run `scripts/test_timing_run.sh` in each (every standalone binary and every `simple_test_exec` case, each in its own directory under a timeout, single-threaded). Run `scripts/test_review_dossier.py --timing ...` to generate the dossiers and the inventory (section 8): proposed tier, failure path, run state and time, overlap candidates, fixtures, launchers, callers. Propose the grouped-module and commander map and the area review order. | Every identity has a dossier, a run state (a measured time where it could run; otherwise timed out, crashed, missing fixture, unsupported capability or manual) and a proposed tier. |
 | 1 | A | **Scaffolding and a provisional gate.** `ctest` after install in every `compile_*.sh --compile-tests`; `ctest_budget.py`; labels, timeouts, working directories, thread pinning. Register `units` as it is under the label `provisional`, not `fast`: it runs on every `--compile-tests` build and reports its time, but the budget is not enforced and nothing carries the `fast` label yet, because `units` still contains the socket, HTTP and child-process sub-suites that the fast admission rules exclude. Register the simulated workflows under `workflow` with their current checks. `SIMPLE_CTEST_BUDGET` is not yet set. | `compile_debug.sh --compile-tests` builds and runs `units` green; its per-sub-suite times are known; CI still passes. **Met 2026-09-22:** commit 8b7dfd4d7; `units` 17.5 s through the gate (Debug, 1 thread). |
 | 2 | C | **Split `units` into hermetic area suites, then declare the fast gate.** Reconcile the two routes into one implementation (the union of their sub-suites), move the sub-suite lists into the grouped modules of section 6.1, move `forked process` out to its own `platform` entry (decided, section 4.6) and confirm the remaining `unit_ipc` sub-suites are localhost-only and bounded. Register one entry per area suite (section 5.1 table); when every registered suite meets the admission rules, relabel them `fast`, drop the `provisional` entry, set `SIMPLE_CTEST_BUDGET` to the registered count, and turn on the 30 s check in `ctest_budget.py`. Shrink what is over budget. Remove the standalone `simple_test_units` and its CI call. | Every area suite runs in one process and meets the admission rules; the `fast` label is under 30 s with `ctest --parallel`; the budget ratchet is armed; a failure names its suite. **Landed 2026-09-22** (`simple_commanders_test_class` rewritten as area tables over a `unit_suite` type, `suite=` input, `SIMPLE_UNIT_ORDER=reverse`, `forked_process` under `platform`, `SIMPLE_CTEST_BUDGET=19`, `GATE_DECLARED=yes`). **Met 2026-09-22:** the `--compile-tests` build passed 7/7 in 3.3 s real; every suite also passed with `SIMPLE_UNIT_ORDER=reverse`, so no sub-suite leaks state into its neighbours in either direction. |
-| 3 | B | **Review everything else.** The other 149 identities, area by area (section 9): `demote` to a named library suite or the workflow gates, `keep` as manual, `merge`, `delete` or `retire`; the 53 two-route identities and 14 footprint clusters resolved to one implementation each; deletions applied with their retired-tests rows and coverage accounting. | Every identity has a verdict naming its destination; no pair or cluster retains two implementations of the same coverage. **Met 2026-09-24:** all 92 identities of the inventory's area tables have a verdict with reviewer and date, and the retired-tests table has 135 rows (section 9.7, from the geometry batch to the wrap-up). |
+| 3 | B | **Review everything else.** The other 149 identities, area by area (section 9): `demote` to a named library suite or the workflow gates, `keep` as manual, `merge`, `delete` or `retire`; the 53 two-route identities and 14 footprint clusters resolved to one implementation each; deletions applied with their retired-tests rows and coverage accounting. | Every identity has a verdict naming its destination; no pair or cluster retains two implementations of the same coverage. **Met 2026-09-24:** all 92 identities of the inventory's area tables have a verdict with reviewer and date, and the retired-tests table has 136 rows (section 9.7, from the geometry batch to the wrap-up). |
 | 4 | B + D | **Build the library suites.** Area by area: the survivors move into the grouped module, gain the assertions their verdicts require, and are registered as one `lib_<area>` entry under `library`; standalone binaries removed as each suite completes. The first suite (`lib_fft` or `lib_geometry`) is the pilot for the fused extensive shape. | Each library suite runs in one process nightly with a recorded time; its members' binaries are gone. **Done within Phase 3, 2026-09-24:** the review built each library suite as it reviewed the area, so Phase 4 had no pass of its own: `lib_reconstruction`, `lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream` (section 5.2.1). The pilot named here never existed: the last members of `lib_fft`, `lib_geometry` and `lib_masks` became fast sub-suites and a program. Every standalone binary is gone. The recorded nightly time of each suite comes with the first night of the runner (Phase 5). |
 | 5 | D | **Simulation-truth gates and the nightly runner.** `simulated_workflow`, `single_workflow` and `mini_stream` compare against the generating model (FSC to the truth map, pose agreement) with declared floors; the nightly `ctest -L "library|workflow"` run and its archive on the dedicated machine. | The nightly run completes unattended and reports per-suite times and per-workflow metrics against floors. **Assigned to Ruben 2026-09-24** (Hans): the truth gates and the design and code of the nightly runner, `doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`. |
 | 6 | B | **Mother suites, platform and socket cases** with explicit isolation and launcher policy. | Parent suites launch `simple_test_exec` children with full accounting; platform cases skip or register predictably and cannot hang the fast gate. **Met by the review, 2026-09-24:** no mother suite is left (those that launched child cases were merged into in-process sub-suites or deleted, section 9.7); the platform entries (`forked_process`, and `coarrays`, `flex_gpu` and `openmp_offload` when CMake has the capability) carry their own label and timeout and are outside the fast gate; the socket role programs are deleted and the IPC socket tests in `unit_ipc` are bound to localhost. |

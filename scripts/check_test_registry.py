@@ -11,7 +11,11 @@ before the gate, so a --compile-tests build fails on a mismatch:
   * every program of the test UI has exactly one router case, and every router case is
     a program of the test UI;
   * every area suite (unit_<area>) and library suite (lib_<area>) of the test UI is
-    registered; `units`, the umbrella of the unit suites, is not, by design.
+    registered; `units`, the umbrella of the unit suites, is not, by design;
+  * every program that runs sub-suites (the tables of simple_commanders_test_class) lists
+    them, in table order, in the help of its suite= input in the test UI, spelled as the
+    runner matches them (suite_id: lower case, blanks and hyphens as underscores, commas
+    and slashes dropped); `units`, which runs every table, has no list.
 
 Programs that are neither suites nor registered (manual tools, the focused routes of
 lib_single) are allowed. Nothing is compiled or run.
@@ -74,14 +78,53 @@ def router_cases(exec_dir):
     return cases
 
 
+def suite_id(name):
+    """the selector of a sub-suite, as suite_id in simple_commanders_test_class"""
+    out = []
+    for ch in name.lower().rstrip():
+        if ch in ',/':
+            continue
+        out.append('_' if ch in ' -' else ch)
+    return ''.join(out)
+
+
+def suite_tables(class_text):
+    """sub-suite selectors per test program: the suites_<x> tables (unit_<area> runs
+    suites_<area>, lib_<area> runs suites_lib_<area>) and the add_suite calls made directly
+    in an exec_test_<program> routine"""
+    text = strip_fortran_comments(class_text)
+    add = r"add_suite\(\s*s\s*,\s*n\s*,\s*'([^']+)'"
+    programs = {}
+    for m in re.finditer(r'subroutine\s+suites_(\w+)\s*\((.*?)end\s+subroutine\s+suites_\1\b', text, re.S | re.I):
+        key = m.group(1)
+        prog = key if key.startswith('lib_') else 'unit_' + key
+        programs[prog] = [suite_id(x) for x in re.findall(add, m.group(2))]
+    for m in re.finditer(r'subroutine\s+exec_test_(\w+)\s*\((.*?)end\s+subroutine\s+exec_test_\1\b', text, re.S | re.I):
+        names = re.findall(add, m.group(2))
+        if names:
+            programs[m.group(1)] = [suite_id(x) for x in names]
+    return programs
+
+
+def ui_suite_lists(ui_dir):
+    """the sub-suites each test UI program lists in the help of its suite= input"""
+    lists = {}
+    for f in sorted(glob.glob(os.path.join(ui_dir, '*.f90'))):
+        text = strip_fortran_comments(read(f)).replace('&\n', '').replace('&', '')
+        for m in re.finditer(r"(\w+)%add_input\(\s*UI_PARM\s*,\s*'suite'.*?to run alone \(([^)]*)\)", text, re.S):
+            lists[m.group(1)] = [x.strip() for x in m.group(2).split(',') if x.strip()]
+    return lists
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     verbose = '--verbose' in sys.argv[1:]
     root = os.path.abspath(args[0] if args else os.path.join(os.path.dirname(__file__), '..'))
     cmake = os.path.join(root, 'production', 'CMakeLists.txt')
+    test_class = os.path.join(root, 'src', 'main', 'commanders', 'test', 'simple_commanders_test_class.f90')
     ui_dir = os.path.join(root, 'src', 'main', 'ui', 'simple_test')
     exec_dir = os.path.join(root, 'src', 'main', 'exec')
-    for p in (cmake, ui_dir, exec_dir):
+    for p in (cmake, ui_dir, exec_dir, test_class):
         if not os.path.exists(p):
             print('check_test_registry: missing %s' % p)
             return 2
@@ -107,14 +150,26 @@ def main():
     for name in sorted(progs):
         if SUITE_RE.match(name) and name not in UMBRELLA and name not in registered:
             problems.append("suite '%s' is in the test UI but not registered with CTest" % name)
+    tables = suite_tables(read(test_class))
+    ui_lists = ui_suite_lists(ui_dir)
+    for name in sorted(set(tables) | set(ui_lists)):
+        if name in UMBRELLA or name not in progs:
+            continue
+        if name not in ui_lists:
+            problems.append("test program '%s' runs sub-suites but its test UI has no suite= list" % name)
+        elif name not in tables:
+            problems.append("test program '%s' lists sub-suites in its test UI but runs no suite table" % name)
+        elif ui_lists[name] != tables[name]:
+            problems.append("test program '%s': the suite= list of the test UI (%s) is not the suite table (%s)"
+                            % (name, ', '.join(ui_lists[name]), ', '.join(tables[name])))
     if problems:
         print('check_test_registry: %d problem(s):' % len(problems))
         for p in problems:
             print('   ' + p)
         return 1
     if verbose:
-        print('check_test_registry: %d registered selectors, %d test programs, %d router cases: consistent'
-              % (len(registered), len(progs), len(cases)))
+        print('check_test_registry: %d registered selectors, %d test programs, %d router cases, '
+              '%d suite tables: consistent' % (len(registered), len(progs), len(cases), len(tables)))
     return 0
 
 

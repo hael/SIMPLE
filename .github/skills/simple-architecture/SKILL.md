@@ -41,20 +41,21 @@ The common pattern is:
 
 ## Tests
 
-- Every `production/tests/simple_test_*.f90` is auto-globbed into its own
-  executable; adding a test needs no CMake edit to build.
-- Acceptance is direct execution of the `simple_test_*` binaries (usually with
-  `key=value` args parsed via `parse_oldschool`), not CTest. CTest entries are
-  an automatic side effect of the same glob loop.
-- A test whose fixture requires an external reference volume (`vol1=`) must be
-  added to `VOL1_FIXTURE_TESTS` in `production/CMakeLists.txt`; that list
-  guards the auto-registration so the test is only registered with CTest when
-  `-DSIMPLE_TEST_VOL1=<path.mrc>` is supplied instead of appearing as a
-  guaranteed failure.
-- New validation fixtures should be modeled on
-  `simple_test_continuous_inplane_rotation2D_stage1_validation.f90`
-  (builder + pftc setup from a volume, FD gradient checks, PASS/FAIL lines,
-  `error stop` on failure).
+- Read `doc/policies/test_environment_policy.md` before adding, moving or
+  deleting a test. The standalone `production/tests` programs, their glob and
+  `VOL1_FIXTURE_TESTS` are gone (September 2026).
+- `simple_test_exec` is the only test executable (built with `--compile-tests`).
+  A unit test is a subroutine in a `simple_<thing>_tester.f90` module next to the
+  code it tests, asserting through `simple_test_utils`, registered with
+  `add_suite` in the `suites_<area>` table of
+  `src/main/commanders/test/simple_commanders_test_class.f90` and listed in the
+  area's `suite=` help in `src/main/ui/simple_test/simple_test_ui_class.f90`.
+- CTest registers one entry per suite (labels `fast`, `library`, `workflow`,
+  `platform`); `SIMPLE_CTEST_BUDGET` fixes their number. The 13 `fast` suites
+  run on every `compile_*.sh --compile-tests` build through
+  `scripts/run_fast_gate.sh` (registry check, 30 s budget); the rest run nightly.
+- A program that only runs commanders or prints results is not a test; use a
+  branch or a developer-visibility program.
 
 ## Working Style
 

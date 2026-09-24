@@ -371,9 +371,12 @@ capability combinations fail validation rather than silently reverting to the
 callback. The joint cc route is validated on nanoparticle data as well, so
 the nano 2D/3D workflows follow the `inpl_cont=yes` default.
 
-`simple_test_continuous_inplane_hybrid_grad` guards the hybrid route with an
-integer-grid score identity, finite-difference checks of all three derivative
-components, and construction of the production joint optimizer.
+The `continuous in-plane` sub-suite of the fast gate
+(`simple_test_exec test=unit_pftc_align2D3D`, `simple_pftc_inplane_tester`; it
+replaced `simple_test_continuous_inplane_hybrid_grad` in September 2026) guards
+the hybrid route with an integer-grid score identity, finite-difference checks
+of the derivative components, and construction of the production joint
+optimizer.
 
 Probability tables are pure legacy under both `inpl_cont` values: candidate
 scoring, shift-seed estimation, and per-candidate shift refinement use the

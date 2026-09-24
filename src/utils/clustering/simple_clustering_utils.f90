@@ -2,7 +2,6 @@
 module simple_clustering_utils
 use simple_kmedoids, only: kmedoids
 use simple_aff_prop, only: aff_prop
-use simple_hclust,   only: hclust
 use simple_stat,     only: calc_ap_pref
 use simple_core_module_api
 implicit none
@@ -23,9 +22,6 @@ contains
         real,    allocatable :: smat(:,:)
         type(kmedoids)       :: kmed
         type(aff_prop)       :: aprop
-        type(hclust)         :: hc
-        integer, allocatable :: merge_mat(:,:)
-        real,    allocatable :: height(:)
         integer :: n
         real    :: pref, simsum
         n = size(dmat, dim=1)
@@ -52,44 +48,6 @@ contains
                 call kmed%init
                 call kmed%cluster
                 allocate(labels(n), i_medoids(nclust), source=0)
-                call kmed%get_labels(labels)
-                call kmed%get_medoids(i_medoids)
-                call kmed%kill
-            case('hclust')
-                if( allocated(labels) ) deallocate(labels)
-                write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH HIERARCHICAL CLUSTERING'
-                if( nclust < 2 ) THROW_HARD('Invalid nclust input')
-                nclust = min(n, nclust)
-                allocate(labels(n), i_medoids(nclust), merge_mat(2,n-1), source=0)
-                allocate(height(n-1), source=0.)
-                call hc%new(n, dmat, LINK_AVERAGE)
-                call hc%cluster(merge_mat, height, labels, nclust)
-                call hc%get_medoids(labels, dmat, i_medoids)
-                call hc%kill
-                deallocate(merge_mat, height)
-            case('hybrid')
-                if( allocated(labels) ) deallocate(labels)
-                write(logfhandle,'(A)') '>>> PRE-CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
-                smat = dmat2smat(dmat)
-                pref = calc_ap_pref(smat, 'median')
-                if( present(ap_pref) ) pref = ap_pref
-                write(logfhandle,'(A,ES14.6)') '>>> AFFINITY PROPAGATION PREFERENCE: ', pref
-                call aprop%new(n, smat, pref=pref)
-                call aprop%propagate(i_medoids, labels, simsum)
-                call aprop%kill
-                nclust = size(i_medoids)
-                write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
-                call merge_if_necessary
-                write(logfhandle,'(A)') '>>> REFINING CLUSTERING WITH K-MEDOIDS'
-                call kmed%new(labels, dmat)
-                call kmed%cluster
-                call kmed%get_labels(labels)
-                call kmed%get_medoids(i_medoids)
-                call kmed%kill
-            case('refine') 
-                call kmed%new(labels, dmat)
-                call kmed%cluster
-                allocate(i_medoids(nclust))
                 call kmed%get_labels(labels)
                 call kmed%get_medoids(i_medoids)
                 call kmed%kill

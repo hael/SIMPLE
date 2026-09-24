@@ -4,7 +4,7 @@ use simple_ori_api
 use simple_ori, only: ori
 implicit none
 
-public :: oris, test_oris
+public :: oris
 private
 #include "simple_local_flags.inc"
 
@@ -256,7 +256,6 @@ type :: oris
     procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
     procedure          :: replace_with_closest
-    procedure          :: corr_oris
     procedure, private :: diststat_1, diststat_2
     generic            :: diststat => diststat_1, diststat_2
     procedure          :: overlap
@@ -1686,11 +1685,6 @@ interface
         class(oris), intent(in)    :: other
     end subroutine replace_with_closest
 
-    module function corr_oris( self1, self2 ) result( corr )
-        class(oris), intent(inout) :: self1, self2
-        real :: corr
-    end function corr_oris
-
     module subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(in)  :: self
         real,        intent(out) :: sumd, avgd, sdevd, mind, maxd
@@ -1708,114 +1702,5 @@ interface
     end function overlap
 
 end interface
-
-contains
-
-    ! Test subroutine remains in main module
-    subroutine test_oris( doprint )
-        logical, intent(in)  :: doprint
-        type(oris)           :: os, os2
-        real                 :: euls(3), corr, x, x2, y, y2
-        integer              :: i
-        integer, allocatable :: order(:)
-        logical              :: passed
-        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
-        os     = oris(100, is_ptcl=.false.)
-        os2    = oris(100, is_ptcl=.false.)
-        passed = .false.
-        if( os%get_noris() == 100 ) passed = .true.
-        if( .not. passed ) THROW_HARD('get_noris failed!')
-        passed = .false.
-        call os%set_euler(1, [1.,2.,3.])
-        euls   = os%get_euler(1)
-        if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.0001 ) passed = .true.
-        if( .not. passed ) THROW_HARD('get/set eulers failed!')
-        passed = .false.
-        call os%e1set(1,4.)
-        call os%e2set(1,5.)
-        call os%e3set(1,6.)
-        euls(1) = os%e1get(1)
-        euls(2) = os%e2get(1)
-        euls(3) = os%e3get(1)
-        if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.0001 ) passed = .true.
-        if( doprint )then
-            call os%rnd_oris(5.)
-            write(logfhandle,*) '********'
-            do i=1,100
-                call os%print(i)
-            end do
-            call os2%rnd_oris(5.)
-            write(logfhandle,*) '********'
-            do i=1,100
-                call os2%print(i)
-            end do
-        endif
-        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
-        os = oris(2, is_ptcl=.false.)
-        call os%rnd_oris(5.)
-        os2 = os
-        do i=1,2
-            x  = os%get(i,'x')
-            x2 = os2%get(i,'x')
-            passed = (abs(x-x2)<TINY)
-            if( passed )then
-                cycle
-            else
-                exit
-            endif
-            y      = os%get(i,'y')
-            y2     = os2%get(i,'y')
-            passed = (abs(y-y2)<TINY)
-            if( passed )then
-                cycle
-            else
-                exit
-            endif
-            passed = all((os%get_euler(i)-os2%get_euler(i))<TINY)
-            if( passed )then
-                cycle
-            else
-                exit
-            endif
-        end do
-        if( .not. passed ) THROW_HARD('assignment test failed!')
-        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing i/o'
-        passed = .false.
-        os  = oris(100, is_ptcl=.false.)
-        os2 = oris(100, is_ptcl=.false.)
-        call os%rnd_oris(5.)
-        call os%write(string('test_oris_rndoris.txt'))
-        call os2%read(string('test_oris_rndoris.txt'))
-        call os2%write(string('test_oris_rndoris_copy.txt'))
-        corr = os%corr_oris(os2)
-        if( corr > 0.99 ) passed = .true.
-        if( .not. passed ) THROW_HARD('read/write failed')
-        passed = .false.
-        call os%rnd_states(5)
-        call os%write(string('test_oris_rndoris_rndstates.txt'))
-        if( os%corr_oris(os2) > 0.99 ) passed = .true.
-        if( .not. passed ) THROW_HARD('statedoc read/write failed!')
-        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
-        passed = .false.
-        call os%rnd_lps()
-        call os%write(string('test_oris_rndoris_rndstates_rndlps.txt'))
-        call os%spiral
-        call os%write(string('test_oris_rndoris_rndstates_rndlps_spiral.txt'))
-        call os%rnd_corrs()
-        order = os%order()
-        if( doprint )then
-            do i=1,100
-                call os%print(order(i))
-            end do
-            write(logfhandle,*) 'median:', os%median('lp')
-        endif
-        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part4): testing destructor'
-        call os%kill
-        call os2%kill
-        os = oris(1000, is_ptcl=.false.)
-        call os%spiral
-        write(logfhandle,*) 'angres:      ', os%find_angres()
-        write(logfhandle,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine test_oris
 
 end module simple_oris

@@ -28,7 +28,7 @@ use simple_tifflib
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
-public :: test_imghead, find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info, get_mrc_minmax
+public :: find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info, get_mrc_minmax
 public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141
 private
 #include "simple_local_flags.inc"
@@ -351,28 +351,23 @@ contains
     end subroutine print_imghead
 
     !>  \brief  Read the header data from disk
-    subroutine read( self, lun, pos, print_entire )
+    subroutine read( self, lun, pos )
         class(ImgHead),            intent(inout) :: self
         integer,                   intent(in)    :: lun
         integer(kind=8), optional, intent(in)    :: pos
-        logical,         optional, intent(in)    :: print_entire
-        real(kind=4),           allocatable :: spihed(:)
-        integer(kind=8)    ::  ppos, i, cnt
+        real(kind=4)       :: spihed(CLOSE2THEANSWER)
+        integer(kind=8)    :: ppos
         integer            :: io_status
         character(len=512) :: io_message
         ppos = 1
         if( present(pos) ) ppos = pos
         select type( self )
             type is( SpiImgHead )
-                allocate(spihed(self%getLabbyt()/4))
-                cnt = 0
-                do i=ppos,ppos+self%getLabbyt()-1,4
-                    cnt = cnt+1
-                    read(unit=lun,pos=i) spihed(cnt)
-                    if( present(print_entire) )then
-                        write(logfhandle,*) i, spihed(cnt)
-                    endif
-                end do
+                ! the fields are the first CLOSE2THEANSWER words; a SPIDER header is never shorter
+                ! (labrec records of lenbyt bytes, at least 1024 bytes)
+                io_message = NIL
+                read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) spihed
+                call fileiochk(" simple_imghead::read SPIDER header, message "//trim(io_message),io_status)
                 self%nz       = spihed(1)
                 self%ny       = spihed(2)
                 self%irec     = spihed(3)
@@ -411,7 +406,6 @@ contains
                 self%mic      = spihed(41)
                 self%num      = spihed(42)
                 self%glonum   = spihed(43)
-                deallocate(spihed)
             type is( MrcImgHead )
                 io_message = NIL
                 read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
@@ -424,11 +418,9 @@ contains
     end subroutine read
 
     !>  \brief  Read the header data from disk
-    subroutine read_tiff( self, fname, pos, print_entire )
-        class(ImgHead),            intent(inout) :: self
-        class(string),             intent(in)    :: fname
-        integer(kind=8), optional, intent(in)    :: pos
-        logical,         optional, intent(in)    :: print_entire
+    subroutine read_tiff( self, fname )
+        class(ImgHead), intent(inout) :: self
+        class(string),  intent(in)    :: fname
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
         character(len=1) :: form
         integer          :: io_status
@@ -468,10 +460,9 @@ contains
         class(ImgHead),            intent(inout) :: self
         integer,                   intent(in)    :: lun
         integer(kind=8), optional, intent(in)    :: pos
-        integer(kind=8) :: ppos, i
-        integer         :: io_status, cnt
-        real(kind=4)    :: spihed(CLOSE2THEANSWER), zero
-        zero = 0.
+        real(kind=4), allocatable :: spihed(:)
+        integer(kind=8) :: ppos
+        integer         :: io_status, nwords
         if( self%exists )then
             ! all good
         else
@@ -481,7 +472,10 @@ contains
         if( present(pos) ) ppos = pos
         select type( self )
         type is( SpiImgHead )
-            spihed = 0.
+            ! the whole header, labbyt bytes: the fields, then zeros
+            nwords = self%getLabbyt()/4
+            if( nwords < CLOSE2THEANSWER ) THROW_HARD('SPIDER header shorter than its fields; write')
+            allocate(spihed(nwords), source=0.)
             spihed(1)  = self%nz
             spihed(2)  = self%ny
             spihed(3)  = self%irec
@@ -520,16 +514,8 @@ contains
             spihed(41) = self%mic
             spihed(42) = self%num
             spihed(43) = self%glonum
-            ! write
-            cnt = 0
-            do i=ppos,ppos+self%getLabbyt()-1,4
-                cnt = cnt+1
-                if( cnt > CLOSE2THEANSWER )then
-                    write(unit=lun,pos=i) zero
-                else
-                    write(unit=lun,pos=i) spihed(cnt)
-                endif
-            end do
+            write(unit=lun,pos=ppos,iostat=io_status) spihed
+            call fileiochk(" simple_imghead::write SPIDER header, unit "//int2str(lun),io_status)
         type is( MrcImgHead )
             call self%transfer_obj2byte_array
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
@@ -1145,14 +1131,14 @@ contains
         end select
     end function getLenbyt
 
-    !>  \brief  Return the record length in bytes
+    !>  \brief  Return the total number of bytes in the header
     function getLabbyt( self ) result( labbyt )
         class(ImgHead), intent(in) :: self
         integer :: labbyt
         labbyt = 0
         select type( self )
             type is( SpiImgHead )
-                labbyt = int(self%lenbyt)
+                labbyt = int(self%labbyt)
         end select
     end function getLabbyt
 
@@ -1350,44 +1336,30 @@ contains
     end subroutine get_mrc_minmax
 
     !>  \brief is for gettign a part of the info in a SPIDER image header
-    subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
-        class(string),                 intent(in)  :: fname
-        integer,                       intent(out) :: ldim(3), iform, maxim
-        real,                          intent(out) :: smpd
-        character(len=:), allocatable, intent(out) :: conv
-        logical,                       intent(in)  :: doprint
+    subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, doprint )
+        class(string), intent(in)  :: fname
+        integer,       intent(out) :: ldim(3), iform, maxim
+        real,          intent(out) :: smpd
+        logical,       intent(in)  :: doprint
         real    :: spihed(40)
-        integer :: filnum, cnt, i, ios
+        integer :: filnum, ios
         if( file_exists(fname) )then
             if( fname2format(fname) .eq. 'S' )then
-                if( allocated(conv) ) deallocate(conv)
                 call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
                 if(ios/=0)call fileiochk(" get_spifile_info fopen error "//fname%to_char(),ios)
-                call read_spihed
+                read(unit=filnum, pos=1, iostat=ios) spihed
+                call fileiochk(" get_spifile_info read error "//fname%to_char(),ios)
                 call fclose(filnum)
-                if( .not. any(ldim < 1) )then
-                    allocate(conv, source='NATIVE')
-                    call print_spihed
-                    return
-                endif
-                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//fname%to_char(),ios)
-                call read_spihed
-                call fclose(filnum)
-                if( .not. any(ldim < 1) )then
-                    allocate(conv, source='BIG_ENDIAN')
-                    call print_spihed
-                    return
-                endif
-                call fopen(filnum, status='OLD', action='READ', file=fname,&
-                &access='STREAM', iostat=ios)
-                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//fname%to_char(),ios)
-                call read_spihed
-                call fclose(filnum)
-                if( .not. any(ldim < 1) )then
-                    allocate(conv, source='LITTLE_ENDIAN')
-                    call print_spihed
-                    return
+                ldim  = int([spihed(12), spihed(2), spihed(1)])
+                iform = int(spihed(5))
+                maxim = int(spihed(26))
+                smpd  = spihed(38)
+                if( doprint .and. .not. any(ldim < 1) )then
+                    write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
+                    write(logfhandle,'(a,1x,i3)')    'Iform descriptor: ', iform
+                    write(logfhandle,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ',&
+                        spihed(26)
+                    write(logfhandle,'(a,1x,f7.3)')  'Pixel size: ', smpd
                 endif
             else
                 THROW_HARD(fname%to_char()//' is not a SPIDER file')
@@ -1395,32 +1367,6 @@ contains
         else
             THROW_HARD('file: '//fname%to_char()//' does not exist')
         endif
-
-        contains
-
-            subroutine read_spihed
-                cnt = 0
-                do i=1,40*4,4
-                    cnt = cnt+1
-                    read(unit=filnum ,pos=i) spihed(cnt)
-                end do
-                ldim  = int([spihed(12), spihed(2), spihed(1)])
-                iform = int(spihed(5))
-                maxim = int(spihed(26))
-                smpd  = spihed(38)
-            end subroutine
-
-            subroutine print_spihed
-                if( doprint )then
-                    write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)),&
-                        int(spihed(2)), int(spihed(1))
-                    write(logfhandle,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
-                    write(logfhandle,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ',&
-                        spihed(26)
-                    write(logfhandle,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
-                endif
-            end subroutine
-
     end subroutine get_spifile_info
 
     subroutine get_tiffile_info(fname, ldim, nptcls, smpd_here, doprint)
@@ -1480,11 +1426,10 @@ contains
         integer,                    intent(out) :: nptcls     !< number of particles
         logical,          optional, intent(in)  :: doprint    !< do print or not
         character(len=1), optional, intent(in)  :: formatchar !< input format
-        real                          :: smpd_ignore
-        integer                       :: iform
-        character(len=:), allocatable :: conv
-        character(len=1)              :: form
-        logical                       :: ddoprint
+        real             :: smpd_ignore
+        integer          :: iform
+        character(len=1) :: form
+        logical          :: ddoprint
         ddoprint = .false.
         if( present(doprint) ) ddoprint = doprint
         if( present(formatchar) )then
@@ -1498,7 +1443,7 @@ contains
                 call get_mrcfile_info(fname, ldim, form, smpd_ignore, ddoprint )
                 nptcls = ldim(3)
             case('S')
-               call get_spifile_info(fname, ldim, iform, nptcls, smpd_ignore, conv, ddoprint)
+               call get_spifile_info(fname, ldim, iform, nptcls, smpd_ignore, ddoprint)
             case('J','L')
                 call get_tiffile_info(fname, ldim, nptcls, smpd_ignore, ddoprint)
             case('K')
@@ -1512,10 +1457,9 @@ contains
     real function find_img_smpd( fname, formatchar ) result( smpd )
         class(string),              intent(in) :: fname      !< filename
         character(len=1), optional, intent(in) :: formatchar !< input format
-        integer                       :: ldim(3), nptcls, iform
-        character(len=:), allocatable :: conv
-        character(len=1)              :: form
-        logical                       :: doprint
+        integer          :: ldim(3), nptcls, iform
+        character(len=1) :: form
+        logical          :: doprint
         doprint = .false.
         if( present(formatchar) )then
             form = formatchar
@@ -1527,7 +1471,7 @@ contains
             case('M','F')
                 call get_mrcfile_info(fname, ldim, form, smpd, doprint )
             case('S')
-                call get_spifile_info(fname, ldim, iform, nptcls, smpd, conv, doprint)
+                call get_spifile_info(fname, ldim, iform, nptcls, smpd, doprint)
             case('J','L')
                 call get_tiffile_info(fname, ldim, nptcls, smpd, doprint)
             case('K')
@@ -1603,34 +1547,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill
-
-    subroutine test_imghead
-        class(ImgHead), allocatable :: hed, hed2
-        integer :: recsz, funit, ios
-        write(logfhandle,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
-        allocate(SpiImgHead :: hed, hed2 )
-        call hed%new([120,120,1])
-        call hed2%new([120,120,1])
-        recsz = 120*4
-        call fopen(funit,file=string('test_imghed.spi'),status='UNKNOWN',action='READWRITE',&
-             access='STREAM',iostat=ios)
-        if(ios/=0)call fileiochk("test_imghead fopen error",ios)
-        call hed%write(funit)
-        call hed2%read(funit)
-        call fclose(funit)
-        write(logfhandle,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
-        call hed%print_imghead
-        write(logfhandle,*) ''
-        write(logfhandle,*) '*************************************************'
-        write(logfhandle,*) ''
-        write(logfhandle,*) '>>> PRINTING HEADER THAT WAS READ FROM DISK'
-        call hed2%print_imghead
-        if( all(hed%getDims() == hed2%getDims()) )then
-            ! all good
-        else
-            THROW_HARD('test_imghed failed')
-        endif
-        write(logfhandle,'(a)') 'SIMPLE_IMGHEAD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine test_imghead
 
 end module simple_imghead

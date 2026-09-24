@@ -629,12 +629,9 @@ contains
     subroutine check_stk_params(self, spproj)
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
-        class(ImgHead),     allocatable   :: header
-        integer          :: i, fromp, top, funit, ios, ogid, stkbox, box
+        integer          :: i, fromp, top, ogid, stkbox, box, ldim(3), nstk_imgs
         real             :: foundval, detpix, mag
         type(string)     :: datapath
-        character(len=1) :: format_descriptor
-        character(len=7) :: stat_str
         do i = 1, spproj%os_stk%get_noris()
             fromp = spproj%os_stk%get_fromp(i)
             top   = spproj%os_stk%get_top(i)
@@ -668,34 +665,10 @@ contains
             end if
            if(spproj%os_stk%get_int(i, "box") == 0) then
                 datapath = spproj%os_stk%get_str(i, "stk")
-                format_descriptor = fname2format(datapath)
-                select case(format_descriptor)
-                    case ('M')
-                        allocate(MrcImgHead :: header)
-                        call header%new()
-                    case ('S')
-                        allocate(SpiImgHead :: header)
-                        call header%new()
-                    case ('J','L')
-                        allocate(TiffImgHead :: header)
-                        call header%new()
-                    case DEFAULT
-                        THROW_HARD('unsupported file format')
-                end select
                 if(file_exists(datapath)) then
-                    funit = 0
-                    select case(format_descriptor)
-                        case ('M','S')
-                            call fopen(funit,access='STREAM',file=datapath,action='READ',status=stat_str,iostat=ios)
-                            call fileiochk("imgfile::open_local fopen error: "//datapath%to_char(),ios)
-                            call header%read(funit)
-                            call fclose(funit)
-                        case('J','L')
-                            call header%read_tiff(datapath)
-                    end select
-                    call spproj%os_stk%set(i, "box", header%getDim(1))
+                    call find_ldim_nptcls(datapath, ldim, nstk_imgs)
+                    call spproj%os_stk%set(i, "box", ldim(1))
                 end if
-                if(allocated(header)) deallocate(header)
            end if
            ogid   = spproj%os_stk%get_int(i, 'ogid')
            stkbox = spproj%os_stk%get_int(i, 'box')

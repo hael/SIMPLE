@@ -95,7 +95,8 @@ Read:
 
 - `src/main/nu_filt/simple_nu_filter.f90`
 - `src/main/nu_filt/simple_nu_filter_*.f90`
-- `production/tests/simple_test_nu_filter.f90`
+- `simple_exec prg=nu_filt3D` on a refined map (the standalone `nu_filter` test
+  program was deleted: it asserted nothing; see `doc/policies/test_environment_policy.md`)
 - the implementation notes in [references/nonuniform-regularization-map.md](./references/nonuniform-regularization-map.md)
 
 Watch for mask-packed arrays, temporary full-volume buffers, disk-backed cache

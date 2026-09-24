@@ -75,7 +75,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_core%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (string, syslib, fileio, character_hash, hash, value_reference_hash, linked_list, record_list, command_line)', '', .false., '')
+            &'One sub-suite of this area to run alone (ansi_formatting, string, syslib, fileio, stack_io, class_sample_io, character_hash, hash, value_reference_hash, linked_list, record_list, command_line)', '', .false., '')
         call add_ui_program('unit_core', unit_core, tsttab, UI_CATEGORY)
     end subroutine new_unit_core
 
@@ -88,7 +88,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_ori%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (orientation, orientation_collection, orientation_data, euler_shift)', '', .false., '')
+            &'One sub-suite of this area to run alone (orientation, orientation_collection, symmetry, euler_shift)', '', .false., '')
         call add_ui_program('unit_ori', unit_ori, tsttab, UI_CATEGORY)
     end subroutine new_unit_ori
 
@@ -101,7 +101,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_image%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (image, image_header, fourier_iterator, b_spline_smoother_2d, b_spline_smoother_3d, masks, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
+            &'One sub-suite of this area to run alone (image, image_header, fourier_iterator, b_spline_smoother, masks, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
         call add_ui_program('unit_image', unit_image, tsttab, UI_CATEGORY)
     end subroutine new_unit_image
 
@@ -114,7 +114,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, cavg_quality_relations, diffusion_map_graphs)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -127,7 +127,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, project_merge, class_compatibility, particle_sieve, 2d_search_space_map_i/o, motion_gain)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -192,7 +192,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_pftc_align2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (polar_correlation, continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_i/o, sigma2_state, class_average_registration)', '', .false., '')
+            &'One sub-suite of this area to run alone (polar_correlation, continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_io, sigma2_state, cavg_registration)', '', .false., '')
         call add_ui_program('unit_pftc_align2D3D', unit_pftc_align2D3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_pftc_align2D3D
 
@@ -231,7 +231,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (atoms, c_alpha_finder)', '', .false., '')
+            &'One sub-suite of this area to run alone (atoms, cif2mrc, c_alpha_finder)', '', .false., '')
         call add_ui_program('unit_single', unit_single, tsttab, UI_CATEGORY)
     end subroutine new_unit_single
 
@@ -308,6 +308,8 @@ contains
         &'compares the CUDA-C flex insertion, coupled, banked, psample and E-step kernels with the CPU path; needs a USE_FLEX_CUDA build and a device, platform label',&
         &'simple_test_exec',&
         &.false.)
+        call flex_gpu%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (flex_gpu_insert, flex_gpu_coupled, flex_gpu_coupled_banked, flex_gpu_psample, flex_gpu_estep)', '', .false., '')
         call add_ui_program('flex_gpu', flex_gpu, tsttab, UI_CATEGORY)
     end subroutine new_flex_gpu
 
