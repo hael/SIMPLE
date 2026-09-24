@@ -103,6 +103,7 @@ urlpatterns = [
         name="batch_movie_thumbnail",
     ),
     path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
+    path("finishbatch",                        batch_views.view_batch_mark_finished,                name="finish_batch"),
     path("rerunbatch",                         batch_views.view_batch_rerun,                       name="clone_batch"),
     path("deletebatch",                        batch_views.view_batch_delete,                      name="delete_batch"),
     path("terminatebatch",                     batch_views.view_batch_terminate,                   name="terminate_batch"),

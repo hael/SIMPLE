@@ -1626,6 +1626,24 @@ def view_batch_stop(request):
 
 @login_required(login_url="/login")
 @require_POST
+def view_batch_mark_finished(request):
+    """Mark an owned queued or failed batch job as finished."""
+    batch_job, jobmodel = _get_accessible_batch_job(request, "mark_batch_finished")
+    if batch_job is None:
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+    elif request.POST.get("mark_finished") != "1":
+        messages.add_message(request, messages.ERROR, "batch finish confirmation is missing")
+    elif jobmodel.status not in BatchJob.MANUALLY_FINISHABLE_STATUSES:
+        messages.add_message(request, messages.ERROR, "batch job cannot be marked finished")
+    elif batch_job.markComplete(None, None):
+        messages.add_message(request, messages.INFO, "batch job marked finished successfully")
+    else:
+        messages.add_message(request, messages.ERROR, "failed to mark batch job finished")
+    return redirect("nice_lite:workspace")
+
+
+@login_required(login_url="/login")
+@require_POST
 def view_batch_rerun(request):
     """Open the job builder with an owned batch job selected, regardless of status."""
     batch_job, jobmodel = _get_accessible_batch_job(request, "rerun_batch")

@@ -95,6 +95,14 @@
             lastinteraction = Date.now();
           };
 
+          const markBatchJobFinished = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Mark batch job " + jobid + " as finished? This changes only its recorded status.")) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
           const deleteBatchJob = (button) => {
             const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
             if (confirm("Please confirm that you wish to permanently delete batch job " + jobid + ". This cannot be undone.")) {

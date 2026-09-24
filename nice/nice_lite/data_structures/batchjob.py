@@ -41,6 +41,7 @@ class BatchJob(Job):
     """Classic (non-stream) SIMPLE job attached to a workspace."""
 
     TERMINAL_STATUSES = frozenset(("finished", "failed", "stopped"))
+    MANUALLY_FINISHABLE_STATUSES = frozenset(("queued", "failed"))
     RERUNNABLE_STATUSES = TERMINAL_STATUSES
     DELETABLE_STATUSES = TERMINAL_STATUSES | frozenset(("queued",))
     LOG_FILES = (
@@ -1667,14 +1668,21 @@ class BatchJob(Job):
 
     def markComplete(self, project, workspace):
         del project, workspace
-        self.status = "finished"
-        jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is None:
-            return False
-        jobmodel.status = self.status
-        jobmodel.master_status = self.status
-        jobmodel.save()
-        return True
+        with transaction.atomic():
+            jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
+            if (
+                jobmodel is None
+                or jobmodel.status not in self.MANUALLY_FINISHABLE_STATUSES
+            ):
+                logger.error("mark complete: batch job cannot be marked finished")
+                return False
+
+            self.status = "finished"
+            jobmodel.status = self.status
+            jobmodel.master_status = self.status
+            jobmodel.master_update = {}
+            jobmodel.save(update_fields=("status", "master_status", "master_update"))
+            return True
 
     def updateStats(self, stats_json, project, workspace):
         del project, workspace

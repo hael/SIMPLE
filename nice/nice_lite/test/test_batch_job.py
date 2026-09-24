@@ -847,6 +847,52 @@ class BatchJobLifecycleTests(TestCase):
         self.assertFalse(stopped)
         killpg.assert_not_called()
 
+    def test_mark_complete_finishes_queued_and_failed_jobs(self):
+        for disp, status in enumerate(("queued", "failed"), start=1):
+            with self.subTest(status=status):
+                jobmodel = JobModel.objects.create(
+                    dset=self.workspace_model,
+                    cdat=timezone.now(),
+                    disp=disp,
+                    dirc=f"{disp}_import_movies",
+                    status=status,
+                    master_status=status,
+                    master_update={"terminate": True},
+                    master_stats={},
+                    pckg="simple",
+                    prog="import_movies",
+                )
+
+                marked = BatchJob(id=jobmodel.id).markComplete(None, None)
+
+                self.assertTrue(marked)
+                jobmodel.refresh_from_db()
+                self.assertEqual(jobmodel.status, "finished")
+                self.assertEqual(jobmodel.master_status, "finished")
+                self.assertEqual(jobmodel.master_update, {})
+
+    def test_mark_complete_rejects_other_job_statuses(self):
+        for disp, status in enumerate(("running", "finished", "stopped"), start=1):
+            with self.subTest(status=status):
+                jobmodel = JobModel.objects.create(
+                    dset=self.workspace_model,
+                    cdat=timezone.now(),
+                    disp=disp,
+                    dirc=f"{disp}_import_movies",
+                    status=status,
+                    master_status=status,
+                    master_stats={},
+                    pckg="simple",
+                    prog="import_movies",
+                )
+
+                marked = BatchJob(id=jobmodel.id).markComplete(None, None)
+
+                self.assertFalse(marked)
+                jobmodel.refresh_from_db()
+                self.assertEqual(jobmodel.status, status)
+                self.assertEqual(jobmodel.master_status, status)
+
     def test_late_heartbeat_does_not_resurrect_stopped_job(self):
         jobmodel = JobModel.objects.create(
             dset=self.workspace_model,

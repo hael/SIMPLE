@@ -1085,6 +1085,95 @@ class BatchViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         job.stop.assert_called_once_with()
 
+    def test_mark_finished_calls_batch_job_for_owned_queued_job(self):
+        job = Mock()
+        job.markComplete.return_value = True
+        jobmodel = SimpleNamespace(status="queued")
+        request = self.factory.post(
+            "/finishbatch",
+            {"selected_job_id": "7", "mark_finished": "1"},
+        )
+        request.user = _AuthUser()
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(job, jobmodel),
+            ),
+            patch.object(batch_views.messages, "add_message"),
+            patch.object(
+                batch_views,
+                "redirect",
+                return_value=HttpResponseRedirect("/workspace"),
+            ),
+        ):
+            response = batch_views.view_batch_mark_finished(
+                request
+            )
+
+        self.assertEqual(response.status_code, 302)
+        job.markComplete.assert_called_once_with(None, None)
+
+    def test_mark_finished_rejects_other_job_statuses(self):
+        for status in ("running", "finished", "stopped"):
+            with self.subTest(status=status):
+                job = Mock()
+                jobmodel = SimpleNamespace(status=status)
+                request = self.factory.post(
+                    "/finishbatch",
+                    {"selected_job_id": "7", "mark_finished": "1"},
+                )
+                request.user = _AuthUser()
+                with (
+                    patch.object(
+                        batch_views,
+                        "_get_accessible_batch_job",
+                        return_value=(job, jobmodel),
+                    ),
+                    patch.object(batch_views.messages, "add_message"),
+                    patch.object(
+                        batch_views,
+                        "redirect",
+                        return_value=HttpResponseRedirect("/workspace"),
+                    ),
+                ):
+                    response = batch_views.view_batch_mark_finished(
+                        request
+                    )
+
+                self.assertEqual(response.status_code, 302)
+                job.markComplete.assert_not_called()
+
+    def test_mark_finished_requires_explicit_confirmation_key(self):
+        job = Mock()
+        jobmodel = SimpleNamespace(status="queued")
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(job, jobmodel),
+            ),
+            patch.object(batch_views.messages, "add_message"),
+            patch.object(
+                batch_views,
+                "redirect",
+                return_value=HttpResponseRedirect("/workspace"),
+            ),
+        ):
+            response = batch_views.view_batch_mark_finished(
+                self._request("/finishbatch")
+            )
+
+        self.assertEqual(response.status_code, 302)
+        job.markComplete.assert_not_called()
+
+    def test_mark_finished_requires_post(self):
+        response = batch_views.view_batch_mark_finished(
+            self._get_request("/finishbatch")
+        )
+
+        self.assertEqual(response.status_code, 405)
+
     def test_rerun_requires_post(self):
         response = batch_views.view_batch_rerun(
             self._get_request("/rerunbatch")
