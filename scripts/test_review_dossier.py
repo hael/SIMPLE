@@ -3,7 +3,8 @@
 
 Phase 0 and section 9 of doc/refactoring_notes/uniform_test_environment_refactoring.md.
 
-Reads the tree (production/tests, src/main/commanders/test, the test UI and
+Reads the tree (production/tests -- gone since the utils review, the standalone
+programs are retired --, src/main/commanders/test, the test UI and
 routers, CI, scripts, doc) and optional timing runs from
 scripts/test_timing_run.sh, and writes
 

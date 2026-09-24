@@ -16,5 +16,4 @@ use simple_test_exec_masks,     only: exec_test_masks_commander
 use simple_test_exec_parallel,  only: exec_test_parallel_commander
 use simple_test_exec_single,    only: exec_test_single_commander
 use simple_test_exec_stream,    only: exec_test_stream_commander
-use simple_test_exec_utils,     only: exec_test_utils_commander
 end module simple_test_exec_api

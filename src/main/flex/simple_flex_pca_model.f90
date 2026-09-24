@@ -1343,33 +1343,6 @@ contains
         call flush(logfhandle)
     end subroutine apply_consensus_nu_filter
 
-
-    !> Coordinates table for the paired-merge delivery (par.7 step 3): the standard
-    !! flex_pca_coordinates.txt column layout -- consumers slice the latents as "everything
-    !! from column 6 on" -- with label 0 everywhere, because the state stage never ran.
-    subroutine write_merged_coordinates( build, pinds, z, resid_energy, resid_mean_energy )
-        type(builder), intent(inout) :: build
-        integer,       intent(in)    :: pinds(:)
-        real(dp),      intent(in)    :: z(:,:)
-        real(dp),      intent(in)    :: resid_energy(:), resid_mean_energy(:)
-        integer :: u, i, q
-        call del_file('flex_pca_coordinates.txt')
-        open(newunit=u,file='flex_pca_coordinates.txt',status='replace',action='write')
-        write(u,'(A)',advance='no') '# particle eo label residual mean_residual'
-        do q=1,size(z,2); write(u,'(A,I0)',advance='no') ' z',q; end do
-        write(u,*)
-        do i=1,size(pinds)
-            write(u,'(I10,1X,I1,1X,I4,2(1X,ES16.8))',advance='no') pinds(i), &
-                &build%spproj_field%get_eo(pinds(i)), 0, resid_energy(i), resid_mean_energy(i)
-            do q=1,size(z,2); write(u,'(1X,ES16.8)',advance='no') z(i,q); end do
-            write(u,*)
-        end do
-        close(u)
-        write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA MERGED coordinates written for ',size(pinds), &
-            &' particles (label=0: no state stage in the merge delivery)'
-        call flush(logfhandle)
-    end subroutine write_merged_coordinates
-
     subroutine write_covariance_tables( build, pinds, z, eigvals, prior_precision, weights, labels, &
         &targets, bandwidths, neff, resid_energy, resid_mean_energy, contrast )
         type(builder), intent(inout) :: build

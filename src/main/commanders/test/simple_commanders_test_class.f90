@@ -81,6 +81,10 @@ use simple_aff_prop,                         only: test_aff_prop
 use simple_hclust,                           only: test_hclust
 use simple_atoms,                            only: test_atoms
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
+use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
+use simple_image_serialize_tester,           only: run_all_image_serialize_tests
+use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
+use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
 use simple_commanders_test_single,           only: commander_test_atoms_stats, commander_test_detect_calpha_molecules
@@ -105,6 +109,9 @@ implicit none
 !                                    the build, label `platform`
 !   test=flex_gpu                    CUDA-C flex kernels against the CPU path:
 !                                    label `platform`, registered with USE_FLEX_CUDA
+!   test=openmp_offload              OpenMP target offload, cuFFT, cuBLAS on a device
+!                                    (nthr= device=): label `platform`, registered
+!                                    with USE_OPENMP_OFFLOAD
 !   test=lib_<area>                  a library suite of the nightly extensive
 !                                    tier (section 5.2.1): same shape, no
 !                                    30 s budget; lib_reconstruction is the first
@@ -213,6 +220,11 @@ type, extends(commander_base) :: commander_test_flex_gpu
     procedure :: execute      => exec_test_flex_gpu
 end type commander_test_flex_gpu
 
+type, extends(commander_base) :: commander_test_openmp_offload
+  contains
+    procedure :: execute      => exec_test_openmp_offload
+end type commander_test_openmp_offload
+
 type, extends(commander_base) :: commander_test_forked_process
   contains
     procedure :: execute      => exec_test_forked_process
@@ -276,6 +288,7 @@ contains
         call add_suite(s, n, 'segmentation',         run_all_segmentation_tests)
         call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
         call add_suite(s, n, 'CTF',                  run_all_ctf_tests)
+        call add_suite(s, n, 'image serialisation',  run_all_image_serialize_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )
@@ -350,6 +363,7 @@ contains
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
         call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
+        call add_suite(s, n, 'class-average registration', run_all_cavg_registration_tests)
     end subroutine suites_pftc_align2D3D
 
     !> the Cartesian (continuous) 3D registration: pose refiner, its refine3D adapter,
@@ -378,12 +392,14 @@ contains
     end subroutine suites_single
 
     !> nightly: Ruben's SINGLE pipelines, transferred as they were (they assert nothing yet;
-    !! doc/refactoring_notes/single_area_tests_handover.md says what they must pin)
+    !! doc/refactoring_notes/single_area_tests_handover.md says what they must pin), and pdb2mrc
+    !! of the built-in 6VXX and 1JYX models (asserting; from the utils review)
     subroutine suites_lib_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'nanoparticle atoms', suite_nanoparticle_atoms)
         call add_suite(s, n, 'C-alpha molecules',  suite_calpha_molecules)
+        call add_suite(s, n, 'pdb2mrc',            run_all_pdb2mrc_tests)
     end subroutine suites_lib_single
 
     !> nightly: the stream stages that run in-process, with the arguments the stream gives them
@@ -651,6 +667,16 @@ contains
         call add_suite(s, n, 'flex GPU estep',          test_flex_gpu_estep)
         call run_unit_suites('flex_gpu', cline, s(1:n))
     end subroutine exec_test_flex_gpu
+
+    !> OpenMP target offload on a device (Cyril's): setup, persistence, async, cuFFT against
+    !! FFTW, cuBLAS, the KB device forms; nthr= and device= on the command line; label `platform`,
+    !! registered with USE_OPENMP_OFFLOAD; a failed check stops through THROW_HARD
+    subroutine exec_test_openmp_offload( self, cline )
+        class(commander_test_openmp_offload), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        call run_openmp_offload_tests(cline)
+        call simple_end('**** SIMPLE_TEST_OPENMP_OFFLOAD NORMAL STOP ****')
+    end subroutine exec_test_openmp_offload
 
     subroutine exec_test_lib_reconstruction( self, cline )
         class(commander_test_lib_reconstruction), intent(inout) :: self

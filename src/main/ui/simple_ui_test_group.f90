@@ -10,7 +10,6 @@ use simple_test_ui_masks,    only: construct_test_masks_programs
 use simple_test_ui_parallel, only: construct_test_parallel_programs
 use simple_test_ui_single,   only: construct_test_single_programs
 use simple_test_ui_stream,   only: construct_test_stream_programs
-use simple_test_ui_utils,    only: construct_test_utils_programs
 implicit none
 
 public :: add_test_programs
@@ -29,7 +28,6 @@ contains
         call construct_test_parallel_programs(tsttab)
         call construct_test_single_programs(tsttab)
         call construct_test_stream_programs(tsttab)
-        call construct_test_utils_programs(tsttab)
     end subroutine add_test_programs
 
 end module simple_ui_test_group

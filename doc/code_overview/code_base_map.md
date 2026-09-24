@@ -11,17 +11,6 @@
     - `simple_stream.f90` — executes SIMPLE stream workflows
     - `simple_test_exec.f90` — executes SIMPLE tests workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
-    - **tests/** — home of executable unit tests
-      - `simple_test_ansi_colors.f90`
-      - `simple_test_cavg_registration.f90`
-      - `simple_test_cmdline.f90`
-      - `simple_test_coarrays.f90`
-      - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
-      - `simple_test_nice.f90`
-      - `simple_test_openmp_offload.f90`
-      - `simple_test_pdb2mrc.f90`
-      - `simple_test_serialize.f90`
-      - `simple_test_stringmatch.f90`
   - **scripts/** — home of scripts and code generators
     - **memory/**
     - **ui/**
@@ -165,7 +154,6 @@
           - `simple_commanders_test_parallel.f90` — the coarray test through the job queue (qsys=coarray), run by the coarray CI job
           - `simple_commanders_test_single.f90` — SINGLE (nanoparticle and atomic-model) test commanders: the atoms pipeline, the C-alpha benchmark and the SINGLE workflow
           - `simple_commanders_test_stream.f90` — stream preprocessing workflow test: simulated movies through the stream's preprocessing stage and its worker jobs
-          - `simple_commanders_test_utils.f90` — for all utils tests
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
         - `simple_ctf_tester.f90` — unit test routines for the contrast transfer function (simple_ctf)
@@ -203,7 +191,6 @@
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
         - `simple_test_exec_stream.f90` — execution of the stream workflow test program (preproc)
-        - `simple_test_exec_utils.f90` — execution of test utils processing commanders
         - `single_exec_atom.f90`
         - `single_exec_map.f90`
         - `single_exec_nano2D.f90`
@@ -270,6 +257,7 @@
         - `simple_image_io.f90` — for reading and writing images from/to disk
         - `simple_image_msk.f90` — extension of the image class to provide 2D/3D envelope and adaptive masking
         - `simple_image_msk_tester.f90` — unit test routines for masks: mask bounds, graphene shells, real-space masks and binary images
+        - `simple_image_serialize_tester.f90` — unit tests for image serialisation (serialize, unserialize), the pixel vectors of PCA and denoising
         - `simple_image_norm.f90` — image normalization routines
         - `simple_image_ops.f90` — operations on images not fitting elsewhere: noise, zero, background, CTF division etc.
         - `simple_gauran_tester.f90` — unit test routines for the Gaussian noise generators of simple_image (gauran, add_gauran)
@@ -312,6 +300,7 @@
         - `simple_calpha_finder.f90` — Buccaneer-inspired oriented target detection of alpha carbons in cryo-EM maps
         - `simple_calpha_finder_tester.f90` — unit tests for the C-alpha candidate search in density maps (simple_calpha_finder)
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
+        - `simple_pdb2mrc_tester.f90` — library tests of pdb2mrc (simple_atoms): density maps from the built-in 6VXX and 1JYX models
         - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building in SINGLE
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
         - `simple_tseries_graphene_subtr.f90` — graphene background subtraction in SINGLE
@@ -446,6 +435,7 @@
           - `simple_reextract_strategy.f90`
           - `simple_refine3D_strategy.f90`
         - **search/** — home of strategies for 2D and 3D orientation search
+          - `simple_cavg_registration_tester.f90` — unit tests for class-average registration on the polar Fourier transform (match_imgs, match_imgs2ref)
           - `simple_corrmat.f90` — for calculation of correlation matrices
           - `simple_eulspace_neigh_map.f90`
           - `simple_matcher_2Dprep.f90` — common routines used by the high-level strategy 2D and 3D matchers
@@ -568,7 +558,6 @@
           - `simple_test_ui_parallel.f90` — module defining the user interfaces for parallel test programs in the simple_test_exec suite
           - `simple_test_ui_single.f90` — module defining the user interfaces for single test programs in the simple_test_exec suite
           - `simple_test_ui_stream.f90` — module defining the user interface of the stream workflow test program (preproc) in the simple_test_exec suite
-          - `simple_test_ui_utils.f90` — module defining the user interfaces for utils programs in the simple_test_exec suite
         - **single/**
           - `single_ui_atom.f90` — module defining the user interfaces for atom-related programs in the single_exec suite
           - `single_ui_map.f90` — module defining the user interfaces for map-related programs in the single_exec suite
@@ -604,6 +593,7 @@
       - `simple_jiffys.f90` — jiffy = the time it takes light to travel one centimeter in vacuum
       - `simple_magic_boxes.f90` — box sizes optimised for FFTW perfomance
       - `simple_map_reduce.f90` — routines for distributed SIMPLE execution
+      - `simple_openmp_offload_tester.f90` — platform test of OpenMP target offload: device setup, persistence, async, cuFFT against FFTW, cuBLAS, KB device forms
       - `simple_memory_monitor.f90` — opt-in process memory telemetry for all SIMPLE commanders and processing phases
       - `simple_progress.f90` — job progress estimation
       - `simple_test_utils.f90` — reusable assertion, suite tracking, and reporting utilities for tests

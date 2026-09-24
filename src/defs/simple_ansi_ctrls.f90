@@ -25,7 +25,7 @@ character(len=*), parameter :: C_MARKED_YELLOW  = '43'
 character(len=*), parameter :: C_MARKED_BLUE    = '44'
 character(len=*), parameter :: C_MARKED_MAGENTA = '45'
 character(len=*), parameter :: C_MARKED_CYAN    = '46'
-character(len=*), parameter :: C_MARKED_WHITE   = '46'
+character(len=*), parameter :: C_MARKED_WHITE   = '47'
 character(len=*), parameter :: C_CLEAR          = C_START // '0' // C_END
 
 contains

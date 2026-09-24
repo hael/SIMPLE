@@ -11,7 +11,7 @@ use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_heterogeneity, commander_test_lib_heterogeneity, &
                                         commander_test_unit_parallel, commander_test_unit_single, commander_test_lib_single, &
                                         commander_test_lib_stream, &
-                                        commander_test_flex_gpu
+                                        commander_test_flex_gpu, commander_test_openmp_offload
 implicit none
 
 public :: exec_test_class_commander
@@ -37,6 +37,7 @@ type(commander_test_lib_single)          :: xlib_single
 type(commander_test_lib_stream)          :: xlib_stream
 type(commander_test_lib_heterogeneity)   :: xlib_heterogeneity
 type(commander_test_flex_gpu)            :: xflex_gpu
+type(commander_test_openmp_offload)      :: xopenmp_offload
 type(commander_test_forked_process) :: xforked_process
 
 contains
@@ -90,6 +91,8 @@ contains
                 call xlib_heterogeneity%execute(cline)
             case( 'flex_gpu' )
                 call xflex_gpu%execute(cline)
+            case( 'openmp_offload' )
+                call xopenmp_offload%execute(cline)
             case( 'forked_process' )
                 call xforked_process%execute(cline)
             case default

@@ -295,46 +295,31 @@ contains
         return
     end subroutine split_2
 
+    !> the integers of a comma-separated list; blanks around an entry and empty entries (a
+    !! trailing or doubled comma) are ignored
     function list_of_ints2arr( listofints ) result( iarr )
         character(len=*), intent(in) :: listofints
         integer, allocatable :: iarr(:)
-        character(len=:), allocatable :: str, before
-        integer :: index, cnt
-        str   = adjustl(trim(listofints))
-        index = scan(str, ',')
-        if( index == 0 )then
-            allocate(iarr(1), source=0)
-            iarr(1) = str2int(str)
-            return
-        endif
-        ! first, count commas
-        cnt = 0
-        do
-            index  = scan(str, ',')
-            if( index == 0 )             exit
-            if( index == len_trim(str) ) exit
-            cnt    = cnt + 1
-            before = adjustl(trim(str(1:index-1)))
-            str    = adjustl(str(index+1:))
+        integer :: i, first
+        allocate(iarr(0))
+        first = 1
+        do i = 1, len(listofints)
+            if( listofints(i:i) == ',' )then
+                call add_entry(first, i - 1)
+                first = i + 1
+            endif
         end do
-        ! allocate array
-        allocate(iarr(cnt + 1), source=0)
-        str = adjustl(trim(listofints))
-        cnt = 0
-        ! parse integers
-        do
-            cnt = cnt + 1
-            index = scan(str, ',')
-            if( index == 0 )then
-                str       = adjustl(str(index+1:))
-                iarr(cnt) = str2int(str)
-                exit
-            else
-                before    = adjustl(trim(str(1:index-1)))
-                iarr(cnt) = str2int(before)
-                str       = adjustl(str(index+1:))
-            endif    
-        end do
+        call add_entry(first, len(listofints))
+
+      contains
+
+        subroutine add_entry( ifirst, ilast )
+            integer, intent(in) :: ifirst, ilast
+            if( ilast < ifirst ) return
+            if( len_trim(listofints(ifirst:ilast)) == 0 ) return
+            iarr = [iarr, str2int(listofints(ifirst:ilast))]
+        end subroutine add_entry
+
     end function list_of_ints2arr
 
     !> \brief  removes punctuation (except comma) characters in string str

@@ -142,23 +142,13 @@ jobs:
              export SIMPLE_QSYS="local"
              export SIMPLE_PATH=$GITHUB_WORKSPACE/build
              export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             echo "-------------------- TEST INSTALL -------------------------"
-             simple_test_install 
              echo "-------------------- TEST ANGRES -------------------------"
              simple_test_exec test=angres
-             echo "-------------------- TEST ANSI COLORS -------------------------"
-             simple_test_ansi_colors
-             echo "-------------------- TEST INSTALL -------------------------"
-             simple_test_install
              echo "-------------------- TEST MASK ROUTINES (THREADED) -------------------------"
              OMP_NUM_THREADS=8 simple_test_exec test=msk_routines
              echo "-------------------- TEST POLAR CORRELATION -------------------------"
              simple_test_exec test=gencorrs_fft
              echo "-------------------- TEST PCG RECONSTRUCTION -------------------------"
              simple_test_exec test=pcg_recon
-             echo "-------------------- TEST SERIALIZE -------------------------"
-             simple_test_serialize
-             echo "-------------------- TEST STRINGMATCH -------------------------"
-             simple_test_stringmatch
              echo "-------------------- TEST UNITS -------------------------"
              simple_test_exec test=units

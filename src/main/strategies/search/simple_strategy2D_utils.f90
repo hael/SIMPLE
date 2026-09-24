@@ -15,7 +15,7 @@ implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, id_junk, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
 public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset
-public :: test_cavg_registration
+public :: match_imgs, match_imgs2ref
 public :: calc_cavg_pairwise_algninfo, calc_cavg_sigstats_components
 private
 #include "simple_local_flags.inc"
@@ -1078,71 +1078,5 @@ contains
         call bincavg%kill_bimg
         if( allocated(ccsz) ) deallocate(ccsz)
     end subroutine calc_cavg_offset
-
-    subroutine test_cavg_registration
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-        type(inpl_struct), allocatable :: alg_info1(:), alg_info2(:,:)
-        type(image),       allocatable :: imgs_ref(:), imgs_targ(:)
-        type(parameters)    :: params
-        type(cmdline)       :: cline
-        real, pointer       :: rmat(:,:,:)
-        integer             :: i, j, x, y
-        real                :: rx, ry
-        integer, parameter  :: NIMGS = 5, BOX = 64
-        real,    parameter  :: SMPD = 1.5, CORR_TOL = 0.95
-        call cline%set('smpd',  SMPD)
-        call cline%set('lp',      6.)
-        call cline%set('hp',     20.)
-        call cline%set('nthr',     1)
-        call cline%set('trs',      8.)
-        call cline%set('ctf',    'no')
-        call cline%set('objfun', 'cc')
-        call cline%set('box',      BOX)
-        call cline%set('mskdiam',  48.)
-        call params%new(cline)
-        allocate(imgs_ref(NIMGS), imgs_targ(NIMGS))
-        call imgs_ref(1)%new([BOX,BOX,1], SMPD)
-        call imgs_ref(1)%get_rmat_ptr(rmat)
-        do y = 1, BOX
-            ry = real(y - (BOX / 2 + 1))
-            do x = 1, BOX
-                rx = real(x - (BOX / 2 + 1))
-                rmat(x,y,1) = exp(-((rx - 8.)**2 + (ry + 6.)**2) / 18.) + &
-                    &0.7 * exp(-((rx + 7.)**2 + (ry - 4.)**2) / 32.) + &
-                    &0.4 * exp(-((rx - 2.)**2 + (ry - 10.)**2) / 8.)
-            enddo
-        enddo
-        call imgs_ref(1)%norm
-        call imgs_targ(1)%copy(imgs_ref(1))
-        do i = 2, NIMGS
-            call imgs_ref(i)%copy(imgs_ref(1))
-            call imgs_ref(i)%rtsq(real(i - 1) * 30., 0., 0.)
-            call imgs_targ(i)%copy(imgs_ref(i))
-        enddo
-        alg_info2 = match_imgs(params, params%hp, params%lp, params%trs, imgs_ref, imgs_targ)
-        do i = 1, NIMGS
-            do j = 1, NIMGS
-                if( .not.ieee_is_finite(alg_info2(i,j)%corr) .or. alg_info2(i,j)%corr < CORR_TOL )then
-                    THROW_HARD('MATCH_IMGS FAILED')
-                endif
-            enddo
-        enddo
-        do i = 2, NIMGS
-            call imgs_targ(i)%copy(imgs_ref(1))
-            call imgs_targ(i)%rtsq(real(i - 1) * 30., 0.25 * real(i - 1), 0.25 * real(i - 1))
-        enddo
-        alg_info1 = match_imgs2ref(params, params%hp, params%lp, params%trs, imgs_ref(1), imgs_targ)
-        do i = 1, NIMGS
-            write(logfhandle,'(A,I0,A,F8.4,A,2F8.3)') 'cavg_registration image ',i, &
-                &' corr=',alg_info1(i)%corr,' shift=',alg_info1(i)%x,alg_info1(i)%y
-            if( .not.ieee_is_finite(alg_info1(i)%corr) .or. alg_info1(i)%corr < CORR_TOL )then
-                THROW_HARD('MATCH_IMGS2REF FAILED')
-            endif
-        enddo
-        call dealloc_imgarr(imgs_ref)
-        call dealloc_imgarr(imgs_targ)
-        deallocate(alg_info1, alg_info2)
-        call cline%kill
-    end subroutine test_cavg_registration
 
 end module simple_strategy2D_utils

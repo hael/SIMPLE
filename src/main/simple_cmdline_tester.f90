@@ -22,6 +22,7 @@ contains
         call test_copy_and_assignment()
         call test_read_parsing()
         call test_gen_job_descr()
+        call test_read_line_typed_values()
         ! call report_summary()
     end subroutine run_all_cmdline_tests
 
@@ -220,5 +221,40 @@ contains
         call h%kill
         call s%kill
     end subroutine test_gen_job_descr
+
+    !-----------------------------------------
+    ! 9. a full processing line: typed values, path values, required keys, delete
+    !    (was the cmdline test program)
+    !-----------------------------------------
+    subroutine test_read_line_typed_values()
+        type(cmdline) :: cl
+        type(string)  :: sval
+        write(*,'(A)') 'test_read_line_typed_values'
+        call cl%read('projname=system_name smpd=1.3 cs=2.7 kv=300 fraca=0.1 total_dose=53 '//&
+            &'dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200')
+        call assert_int(11, cl%get_argcnt(), 'read: eleven key=value pairs')
+        call assert_real(1.3,   cl%get_rarg('smpd'),        1.e-6, 'read / get_rarg: smpd')
+        call assert_real(2.7,   cl%get_rarg('cs'),          1.e-6, 'read / get_rarg: cs')
+        call assert_real(0.1,   cl%get_rarg('fraca'),       1.e-6, 'read / get_rarg: fraca')
+        call assert_real(200.,  cl%get_rarg('moldiam_max'), 1.e-6, 'read / get_rarg: moldiam_max')
+        call assert_int(4,      cl%get_iarg('nparts'),             'read / get_iarg: nparts')
+        call assert_int(16,     cl%get_iarg('nthr'),               'read / get_iarg: nthr')
+        sval = cl%get_carg('projname')
+        call assert_string_eq('system_name', sval, 'read / get_carg: a name')
+        sval = cl%get_carg('dir_movies')
+        call assert_string_eq('/usr/local/data/movies', sval, 'read / get_carg: an absolute path')
+        sval = cl%get_carg('gainref')
+        call assert_string_eq('gainref.mrc', sval, 'read / get_carg: a file name')
+        ! check stops the program on a missing key: with every checkvar key present it returns
+        call cl%checkvar('projname', 1)
+        call cl%checkvar('smpd',     2)
+        call cl%checkvar('gainref',  3)
+        call cl%check()
+        call cl%delete('kv')
+        call assert_false(cl%defined('kv'), 'delete: kv is gone')
+        call assert_true(cl%defined('cs') .and. cl%defined('fraca'), 'delete: its neighbours stay')
+        call cl%kill()
+        call sval%kill
+    end subroutine test_read_line_typed_values
 
 end module simple_cmdline_tester

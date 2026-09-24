@@ -229,14 +229,14 @@ contains
     subroutine test_registered_test_programs()
         write(*,'(A)') 'test_registered_test_programs'
         call make_test_ui
+        call assert_registered_test_category('angres',         'geometry', 'Geometry',   30)
+        call assert_registered_test_category('preproc',        'stream',   'Stream',     130)
+        call assert_registered_test_category('lib_stream',     'class',    'Unit tests', 10)
+        call assert_registered_test_category('openmp_offload', 'class',    'Unit tests', 10)
+        ! the utils category went with its last test program (utils review)
         program_name = 'cavg_registration'
         call get_test_prg_ptr(program_name, registered_prg)
-        call assert_true(associated(registered_prg), 'cavg_registration test is registered')
-        if( associated(registered_prg) )then
-            call assert_char('utils', registered_prg%category%to_char(), 'cavg_registration test category')
-        endif
-        call assert_registered_test_category('preproc',    'stream', 'Stream',     130)
-        call assert_registered_test_category('lib_stream', 'class',  'Unit tests', 10)
+        call assert_false(associated(registered_prg), 'the retired cavg_registration test program is gone')
     end subroutine test_registered_test_programs
 
     !> the five CTF-fitting programs expose fit_phshift (binary, default no) with the phase-shift window

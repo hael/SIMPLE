@@ -129,6 +129,7 @@ set(SIMPLE_CONDITIONAL_BRANCH_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/pftc/simple_polarft_corr.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_openmpoffload.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_gpu_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_openmp_offload_tester.f90"
 )
 set_property(SOURCE ${SIMPLE_CONDITIONAL_BRANCH_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-unused-variable")

@@ -4,8 +4,9 @@
 # routes, each in its own directory under a timeout, and record wall time,
 # exit status and the tail of its output.
 #
-# Needs an installed --compile-tests build (build/bin holds simple_test_exec
-# and the standalone simple_test_* binaries). Nothing is compiled here.
+# Needs an installed --compile-tests build (build/bin holds simple_test_exec).
+# The standalone simple_test_* binaries were retired by the utils review (plan,
+# section 9.7), so the standalone route finds nothing. Nothing is compiled here.
 #
 # usage: scripts/test_timing_run.sh [--label NAME] [--timeout SECS] [--omp N]
 #                                   [--route standalone|exec|both] [--only a,b,c]

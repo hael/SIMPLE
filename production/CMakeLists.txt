@@ -32,8 +32,8 @@ set(SIMPLE_EXECUTABLES
     ${SIMPLE_WORKER_EXE}
 )
 
-# simple_test_exec is test code: built only with BUILD_TESTS=ON, like the
-# programs in tests/ (its library sources are filtered out in src/ otherwise).
+# simple_test_exec is the one test executable: built only with BUILD_TESTS=ON
+# (its library sources are filtered out in src/ otherwise).
 if(BUILD_TESTS)
     add_executable(${SIMPLE_TEST_EXE}
         "${CMAKE_CURRENT_SOURCE_DIR}/simple_test_exec.f90")
@@ -182,77 +182,6 @@ add_custom_target(audit_ui_defaults
 if(BUILD_TESTS)
   enable_testing()
 
-  # The standalone test programs under tests/ keep building and installing
-  # until their areas have migrated behind simple_test_exec (Phase 4-7), but
-  # they are no longer registered with CTest one process each: they are run
-  # by name, and by scripts/test_timing_run.sh for the Phase 0 inventory.
-  file(GLOB TEST_MAINS
-    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_*.[fF]90"
-  )
-  if(NOT USE_MPI)
-    list(FILTER TEST_MAINS EXCLUDE REGEX "mpi")
-  endif()
-  if(NOT USE_COARRAYS)
-    list(FILTER TEST_MAINS EXCLUDE REGEX "coarray|coarrays")
-  endif()
-  # The offload test declares data for mutually exclusive preprocessor
-  # branches; a CPU-only debug build sees the offload branch's data as unused.
-  set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_openmp_offload.f90"
-    PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable"
-  )
-  foreach(main_src IN LISTS TEST_MAINS)
-    get_filename_component(main_we "${main_src}" NAME_WE)         # simple_test_ft_expanded
-    string(REGEX REPLACE "^simple_test_" "" test_id "${main_we}") # ft_expanded
-    set(test_exe  "simple_test_${test_id}")
-    # Supporting sources for this test (e.g., simple_ft_expanded_tester.f90)
-    file(GLOB test_deps
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_${test_id}_*.[fF]90"
-    )
-    set(test_sources
-      "${CMAKE_CURRENT_SOURCE_DIR}/${main_src}"
-      ${test_deps}
-    )
-    list(REMOVE_DUPLICATES test_sources)
-    add_executable(${test_exe} ${test_sources})
-    set_target_properties(${test_exe} PROPERTIES
-      LINKER_LANGUAGE Fortran
-    )
-    if(USE_COARRAYS AND test_id STREQUAL "coarrays")
-      set_target_properties(${test_exe} PROPERTIES
-        Fortran_MODULE_DIRECTORY "${SIMPLE_COARRAY_MODULE_DIRECTORY}"
-      )
-      target_link_libraries(${test_exe}
-        PRIVATE
-          ${SIMPLE_COARRAYLIB}
-          ${SIMPLE_LIBRARIES}
-      )
-    else()
-      target_link_libraries(${test_exe}
-        PRIVATE
-          ${SIMPLELIB}
-          ${SIMPLE_LIBRARIES}
-      )
-    endif()
-    if( USE_OPENMP )
-      target_link_options(${test_exe} PUBLIC -fopenmp)
-    endif()
-    install(TARGETS ${test_exe}
-      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-    # Optional per-test data: tests/<prefix>*.txt
-    file(GLOB test_data
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/${main_we}*.txt"
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_${test_id}_*.txt"
-    )
-    if(test_data)
-      install(FILES ${test_data}
-        DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/${test_id}"
-      )
-    endif()
-  endforeach()
-
   # ---- registration helper -------------------------------------------------
   # simple_add_test(<name> <label> <timeout> <omp_threads> [RUN_SERIAL] COMMAND <args...>)
   # registers `simple_test_exec <args...>` (or the given launcher) with the
@@ -371,19 +300,21 @@ if(BUILD_TESTS)
     simple_add_test(flex_gpu platform 1200 1 RUN_SERIAL
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_gpu)
   endif()
-  if(USE_OPENMP_OFFLOAD AND TARGET simple_test_openmp_offload)
-    # OpenMP target offload, cuFFT against FFTW, cuBLAS, the KB device forms (Cyril's
-    # standalone, moved as it is); it stops with status 0 on a failed check, so the
-    # entry fails on its failure messages
+  if(USE_OPENMP_OFFLOAD)
+    # OpenMP target offload, cuFFT against FFTW, cuBLAS, the KB device forms (Cyril's,
+    # simple_openmp_offload_tester since the utils review); a failed check stops
+    # through THROW_HARD, and the entry also fails on its failure messages
     simple_add_test(openmp_offload platform 1200 8 RUN_SERIAL
-      COMMAND $<TARGET_FILE:simple_test_openmp_offload> nthr=8 device=0)
+      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=openmp_offload nthr=8 device=0)
     set_property(TEST openmp_offload APPEND PROPERTY ENVIRONMENT "OMP_TARGET_OFFLOAD=MANDATORY")
     set_tests_properties(openmp_offload PROPERTIES FAIL_REGULAR_EXPRESSION "Fatal error|FAIL: ")
   endif()
-  if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE AND TARGET simple_test_coarrays)
-    # the standalone program is the one linked against the coarray library
+  if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE)
+    # the production coarray path end to end: check_nptcls jobs on simulated noise
+    # through qsys=coarray, whose images are the coarray-linked simple_private_exec
+    # under cafrun (the standalone sync check was retired by the utils review)
     simple_add_test(coarrays platform 1200 1 RUN_SERIAL
-      COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:simple_test_coarrays>)
+      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=coarrays)
   endif()
 
   # ---- process budget -------------------------------------------------------

@@ -148,17 +148,13 @@ nice_local
 
 ## Testing the Build
 
-To ensure that SIMPLE has been correctly installed, we recommend running the application simple_test_install. It will perform elementary tests of the base components in the SIMPLE library. Execute the following in a separate terminal to ensure the environment variables have been correctly set:
+To check a build, compile it with the tests (`./compile_clean.sh --compile-tests`, which also runs the fast test gate at the end of the build) and run the unit tests. Execute the following in a separate terminal to ensure the environment variables have been correctly set:
 
 ```shell
-simple_test_install
+simple_test_exec test=units
 ```
 
-The program will create its own folder SIMPLE_TEST_INSTALL*date* where temporary files are stored. Upon succesful completion you should see
-
-    **** SIMPLE_TEST_INSTALL NORMAL STOP ****
-
-simple_test_install can be executed anywhere and the folder created can be safely removed. If any of the individual tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations and the gfortran version. If you still have issues, please file a help ticket on the webpage.
+It runs every fast unit-test suite in one process and creates its own folder SIMPLE_TEST_units_*date*, which holds the report (simple_test_units_report.txt) and any temporary files. It ends with a summary of the checks; if any check fails, the summary lists it and the program exits with a non-zero status. The folder can be safely removed. If you detect an error, please carefully check the SIMPLE and FFTW installations and the gfortran version. If you still have issues, please file a help ticket on the webpage.
 
 ## FFTW Installation
 

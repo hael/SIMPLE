@@ -45,7 +45,6 @@ type cmdline
     procedure          :: check
     procedure          :: printline
     procedure          :: read
-    procedure          :: writeline
     procedure          :: defined
     procedure          :: get_rarg
     procedure          :: get_iarg
@@ -710,34 +709,6 @@ contains
         enddo
     end subroutine read
 
-    !> \brief  for writing the command line to file
-    subroutine writeline( self, filename, tag )
-        class(cmdline),             intent(inout) :: self
-        class(string),              intent(in)    :: filename
-        character(len=*), optional, intent(in)    :: tag
-        integer :: i, parameters_fhandle, ok
-        if( file_exists(filename)) call del_file(filename)
-        call fopen(parameters_fhandle, file=filename, status='new', iostat=ok)
-        if( present(tag) )then
-            do i=1,self%argcnt
-                if( self%cmds(i)%defined .and. self%cmds(i)%carg%is_allocated() )then
-                    write(parameters_fhandle, '(RD,A,A,A,A,A)') self%cmds(i)%key%to_char(), ' ', self%cmds(i)%carg%to_char(), ' ', trim(tag)
-                else if( self%cmds(i)%defined )then
-                    write(parameters_fhandle, '(RD,A,F14.4,A)') self%cmds(i)%key%to_char(), self%cmds(i)%rarg, trim(tag)
-                endif
-            end do
-        else
-            do i=1,self%argcnt
-                if( self%cmds(i)%defined .and. self%cmds(i)%carg%is_allocated() )then
-                    write(parameters_fhandle, '(RD,A,A,A)') self%cmds(i)%key%to_char(), ' ', self%cmds(i)%carg%to_char()
-                else if( self%cmds(i)%defined )then
-                    write(parameters_fhandle, '(RD,A,F14.4,A)') self%cmds(i)%key%to_char(), self%cmds(i)%rarg
-                endif
-            end do
-        endif
-        call fclose(parameters_fhandle)
-    end subroutine writeline
-    
     !> \brief  for checking the existence of of arg
     function defined( self, key ) result( def )
         class(cmdline),   intent(in) :: self

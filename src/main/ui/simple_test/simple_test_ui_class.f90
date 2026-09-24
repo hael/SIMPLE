@@ -24,6 +24,7 @@ type(ui_program), target :: lib_single
 type(ui_program), target :: lib_stream
 type(ui_program), target :: lib_heterogeneity
 type(ui_program), target :: flex_gpu
+type(ui_program), target :: openmp_offload
 type(ui_program), target :: forked_process
 
 contains
@@ -50,6 +51,7 @@ contains
         call new_lib_single(tsttab)
         call new_lib_stream(tsttab)
         call new_flex_gpu(tsttab)
+        call new_openmp_offload(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
 
@@ -99,7 +101,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_image%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (image, image_header, fourier_iterator, fourier_shift_search, b_spline_smoother_2d, b_spline_smoother_3d)', '', .false., '')
+            &'One sub-suite of this area to run alone (image, image_header, fourier_iterator, b_spline_smoother_2d, b_spline_smoother_3d, masks, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
         call add_ui_program('unit_image', unit_image, tsttab, UI_CATEGORY)
     end subroutine new_unit_image
 
@@ -190,7 +192,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_pftc_align2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_i/o, sigma2_state)', '', .false., '')
+            &'One sub-suite of this area to run alone (continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_i/o, sigma2_state, class_average_registration)', '', .false., '')
         call add_ui_program('unit_pftc_align2D3D', unit_pftc_align2D3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_pftc_align2D3D
 
@@ -242,7 +244,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (nanoparticle_atoms, c_alpha_molecules)', '', .false., '')
+            &'One sub-suite of this suite to run alone (nanoparticle_atoms, c_alpha_molecules, pdb2mrc)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
 
@@ -308,6 +310,17 @@ contains
         &.false.)
         call add_ui_program('flex_gpu', flex_gpu, tsttab, UI_CATEGORY)
     end subroutine new_flex_gpu
+
+    subroutine new_openmp_offload( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call openmp_offload%new(&
+        &'openmp_offload',&
+        &'OpenMP target offload on a device',&
+        &'checks OpenMP target offload, data persistence and asynchronous execution, cuFFT against FFTW, cuBLAS and the KB device forms on device device= with nthr= host threads; needs a USE_OPENMP_OFFLOAD build and a device, platform label',&
+        &'simple_test_exec',&
+        &.false.)
+        call add_ui_program('openmp_offload', openmp_offload, tsttab, UI_CATEGORY)
+    end subroutine new_openmp_offload
 
     subroutine new_forked_process( tsttab )
         class(ui_hash), intent(inout) :: tsttab

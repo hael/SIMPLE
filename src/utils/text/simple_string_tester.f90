@@ -3,6 +3,8 @@ module simple_string_tester
 use simple_test_utils
 use simple_string
 use simple_defs
+use simple_string_utils, only: list_of_ints2arr
+use simple_ansi_ctrls
 implicit none
 private
 public :: run_all_string_tests
@@ -32,6 +34,8 @@ contains
         call test_readline_eof_behavior()
         call test_writeline_unallocated()
         call test_readfile()
+        call test_list_of_ints2arr()
+        call test_ansi_format_str()
         ! call report_summary()
     end subroutine run_all_string_tests
 
@@ -477,5 +481,54 @@ contains
         call assert_char(s_in%to_char(), s_out%to_char(), 'multiline content preserved')
         close(unit)
     end subroutine test_readfile
+
+    !---------------- comma-separated integer lists (simple_string_utils) ----------------
+
+    !> list_of_ints2arr, which reads state and class selections: blanks around an entry are
+    !! ignored, a single number is a list of one, and a trailing or doubled comma adds no entry
+    !! (a trailing comma wrote past the array before the utils review; was the stringmatch test)
+    subroutine test_list_of_ints2arr()
+        integer, allocatable :: inds(:)
+        write(*,'(A)') 'test_list_of_ints2arr'
+        inds = list_of_ints2arr(' 1,3,  5,7,15  ')
+        call assert_int(5, size(inds), 'list_of_ints2arr: five entries with blanks around them')
+        if( size(inds) == 5 ) call assert_true(all(inds == [1,3,5,7,15]), 'list_of_ints2arr: the values in order')
+        inds = list_of_ints2arr('4')
+        call assert_int(1, size(inds), 'list_of_ints2arr: a single number')
+        if( size(inds) == 1 ) call assert_int(4, inds(1), 'list_of_ints2arr: the single value')
+        inds = list_of_ints2arr('2,10')
+        call assert_int(2, size(inds), 'list_of_ints2arr: two entries without blanks')
+        if( size(inds) == 2 ) call assert_true(all(inds == [2,10]), 'list_of_ints2arr: the two values')
+        inds = list_of_ints2arr('1,2,')
+        call assert_int(2, size(inds), 'list_of_ints2arr: a trailing comma adds no entry')
+        if( size(inds) == 2 ) call assert_true(all(inds == [1,2]), 'list_of_ints2arr: values before a trailing comma')
+        inds = list_of_ints2arr('1,,2')
+        call assert_int(2, size(inds), 'list_of_ints2arr: a doubled comma adds no entry')
+        if( size(inds) == 2 ) call assert_true(all(inds == [1,2]), 'list_of_ints2arr: values around a doubled comma')
+    end subroutine test_list_of_ints2arr
+
+    !---------------- ANSI text formatting (simple_ansi_ctrls) ----------------
+
+    !> format_str wraps the text in ESC[<code>m ... ESC[0m, and the colour codes are the ANSI ones:
+    !! foreground 30-37 and background 40-47 for black, red, green, yellow, blue, magenta, cyan,
+    !! white (the white background was 46, cyan's, before the utils review; was the ansi_colors test)
+    subroutine test_ansi_format_str()
+        character(len=2), parameter :: FG(8) = [C_BLACK, C_RED, C_GREEN, C_YELLOW, C_BLUE, C_MAGENTA, C_CYAN, C_WHITE]
+        character(len=2), parameter :: BG(8) = [C_MARKED_BLACK, C_MARKED_RED, C_MARKED_GREEN, C_MARKED_YELLOW, &
+            &C_MARKED_BLUE, C_MARKED_MAGENTA, C_MARKED_CYAN, C_MARKED_WHITE]
+        character(len=2) :: code
+        integer          :: i
+        write(*,'(A)') 'test_ansi_format_str'
+        call assert_char(achar(27)//'[31m'//'Red'//achar(27)//'[0m', format_str('Red', C_RED), &
+            &'format_str: red text between the colour and the reset sequence')
+        call assert_char(achar(27)//'[1m'//'bold'//achar(27)//'[0m', format_str('bold', C_BOLD), &
+            &'format_str: bold text between the style and the reset sequence')
+        do i = 1, 8
+            write(code,'(I2)') 29 + i
+            call assert_char(code, FG(i), 'ANSI foreground code '//code)
+            write(code,'(I2)') 39 + i
+            call assert_char(code, BG(i), 'ANSI background code '//code)
+        enddo
+    end subroutine test_ansi_format_str
 
 end module simple_string_tester

@@ -380,19 +380,19 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 
 | suite | sub-suites of `units` | Debug, 1 thread (2026-09-22) |
 |---|---|---:|
-| `unit_core` | string, syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
+| `unit_core` | string (with comma-separated integer lists and ANSI formatting since the utils review), syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line (with a full processing line since the utils review) | 0.2 s |
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
-| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation | 1.3 s (before the shift search moved out and the mask suites moved in) |
+| `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation (utils review) | 1.3 s (before the shift search moved out and the mask suites moved in) |
 | `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
 | `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve (with the collector's hard-gate rejection since the stream review), 2D search-space map I/O, motion gain (atoms moved to `unit_single`) | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
-| `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
+| `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, class-average registration (utils review) — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
 | `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | 4.5 s (Mac; 47.3 s in the first build, cut down, section 9.7) |
 | `unit_parallel` | qsys control, qsys environment — added by the parallel review (2026-09-23, section 9.7); distributed execution, scripts only, nothing submitted | to be measured |
-| `unit_single` | atoms, C-alpha finder — added by the single review (2026-09-23, section 9.7); SINGLE (nanoparticles, atomic models); its nightly counterpart `lib_single` holds Ruben's pipelines | to be measured |
+| `unit_single` | atoms, C-alpha finder — added by the single review (2026-09-23, section 9.7); SINGLE (nanoparticles, atomic models); its nightly counterpart `lib_single` holds Ruben's pipelines and pdb2mrc of the built-in models | to be measured |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -751,7 +751,9 @@ capability is available.
    owner decision recorded here.
 5. **No more standalone executables.** The `simple_test_*.f90` glob, its
    per-program `add_executable`, `install` and `add_test` are removed at the
-   end of workstream B (Phase 7). Until then the glob keeps building the
+   end of workstream B (Phase 7). Done 2026-09-24 by the utils review
+   (section 9.7): `production/tests` is gone and `simple_test_exec` is the
+   only test executable. Until then the glob keeps building the
    programs that have not migrated, but none of them is registered with
    CTest once Phase 1 lands (they are runnable by name and through
    `test_timing_run.sh`); CI keeps calling the not-yet-migrated ones by
@@ -2106,7 +2108,77 @@ squared) were already in `linear algebra`; the sub-suite is gone, and
 slopes from -5 to 5 through near-flat and flat, intercepts from -10 to 10,
 slope and intercept within 1e-5 (the emulation gives 6e-8 at worst). r
 squared is not asserted there; the one production caller,
-`guinier_bfac`, uses only the slope.
+`guinier_bfac`, uses only the slope. The Linux build also warned that
+`write_merged_coordinates` in `simple_flex_pca_model` (the coordinates
+table of the paired-merge delivery, added 2026-09-17) is defined but never
+called; it is removed.
+
+**utils and the standalone programs (2026-09-24, Hans: "we still have a
+number of simple_test* executables other than simple_test_exec. They need to
+go and the tests they execute need to become part of the new
+environment"; verdicts: as proposed, apart from cif2mrc/cif2pdb "programs
+rather than tests", nice deleted, offload 11a).** Ten standalone programs
+were left in `production/tests`, eight of them with a `simple_test_exec`
+twin in the utils area, so the batch retires both. `production/tests`, the
+`simple_test_*.f90` glob with its per-program executables and installs, and
+the utils test category (commander, router and UI modules, and their
+hooks in `simple_test_exec`, the exec API and the test UI group) are gone;
+`simple_test_exec` is the only test executable. No CTest process is added
+or removed (budget 25).
+
+`ansi_colors` printed seven coloured words: `test_ansi_format_str` in the
+string tester (`string`, unit_core) asserts the escape sequences of
+`format_str` and the ANSI code table, which found `C_MARKED_WHITE` = 46,
+cyan's background; it is 47. `stringmatch` printed `list_of_ints2arr` of a
+list: `test_list_of_ints2arr` (same sub-suite) pins blanks, a single number,
+and trailing and doubled commas; for `1,2,` it sized the array for two
+entries and wrote a third past its end, and the routine is rewritten to
+skip empty entries (it reads the state and class selections of two
+commanders). `cmdline` mostly duplicated `command line`; its full
+processing line (typed, name and path values, checkvar/check, delete) is
+`test_read_line_typed_values` there, and `cmdline%writeline`, which only
+the test called, is removed. `serialize` displayed a masked square and
+checked nothing, while production (PCA denoising, stack operations, the
+nanoparticle tools) had no test of it: `simple_image_serialize_tester`
+(`image serialisation`, unit_image) pins the masked and full round trips,
+the column-major order and the zeros outside the mask.
+`cavg_registration` was a self-test inside `simple_strategy2D_utils`; it
+moved to `simple_cavg_registration_tester` (`class-average registration`,
+unit_pftc_align2D3D; `match_imgs` and `match_imgs2ref` are exported for it)
+with its correlation checks as assertions, plus the applied rotation
+within one polar step (either sign of e3) and the shift length within
+0.5 px. `pdb2mrc` is `simple_pdb2mrc_tester`, sub-suite `pdb2mrc` of the
+nightly `lib_single` (6VXX and 1JYX, default and explicit file names, the
+exec twin's checks as assertions).
+
+`cif2mrc` and `cif2pdb` downloaded 6VXX from RCSB (curl's status ignored)
+and ran the production programs of those names, checking nothing: runs of
+programs, not tests, and deleted. `nice` posted to an unresolvable
+"testserver" and slept 20 s: deleted. `install` ran `simple_test_units`,
+which no longer exists, so it checked nothing although CI ran it twice;
+deleted, and `doc/installation.md` now points to `simple_test_exec
+test=units`. The standalone `coarrays` only synchronised two images; the
+`coarrays` platform entry now runs `simple_test_exec test=coarrays`, the
+production coarray path end to end (qsys=coarray images of the
+coarray-linked `simple_private_exec` under cafrun). `openmp_offload`
+(Cyril's) is `simple_openmp_offload_tester` in `src/utils`, run as
+`simple_test_exec test=openmp_offload nthr=8 device=0` by the same
+platform entry (USE_OPENMP_OFFLOAD, `OMP_TARGET_OFFLOAD=MANDATORY`); its 65
+`stop`s, the text ones exiting with status 0, are THROW_HARD with the same
+text (the numeric CUDA/cuFFT codes in the message), and the entry keeps
+its failure-message pattern as a second net; built without offload it
+reports that it was skipped. Its source joins the
+conditional-branch sources that suppress unused-variable warnings. The
+offload branch compiles only in an offload build: Cyril should build it
+once.
+
+CI's test step lost its calls of `simple_test_install` (twice),
+`simple_test_ansi_colors`, `simple_test_serialize` and
+`simple_test_stringmatch`; the UI visibility test asserts `angres`,
+`openmp_offload` and that the retired `cavg_registration` program is gone;
+`test_timing_run.sh` and `test_review_dossier.py` note that the standalone
+route is empty. The unit_image UI list of sub-suites was stale (it named
+the moved shift search and missed five); it is complete.
 
 ## 10. Fast-tier performance
 
