@@ -30,7 +30,7 @@ use simple_math,              only: ceil_div, floor_div
 use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d
 use simple_flex_reconstructor_latent_ops, only: solve_coupled_basis_exp, pair_index, projected_model_kfromto
 use simple_flex_pca_util,     only: cov_env_int
-use simple_rnd,               only: gasdev
+use simple_rnd,               only: gasdev, seed_rnd_fixed
 use simple_parameters,        only: parameters
 use simple_imghead,           only: find_ldim_nptcls
 implicit none
@@ -2243,7 +2243,7 @@ contains
         c   = box/2 + 1
         twopi_n = 2.0_dp * PI / real(box,dp)
         allocate(locs(3,nsamples), wts(nsamples))
-        call fixed_seed(20260925)   ! reproducible sample positions, volume modulation and slices
+        call seed_rnd_fixed(20260925)   ! reproducible sample positions, volume modulation and slices
         do s = 1, nsamples
             locs(:,s) = (2.0*[ran3(), ran3(), ran3()] - 1.0) * (0.5*real(nyq))
             wts(s)    = 1.0
@@ -2512,18 +2512,6 @@ contains
         deallocate(locs, wts, u, hu, eu4, eu, ex, ey, ez)
 
     contains
-
-        subroutine fixed_seed( base_seed )
-            integer, intent(in) :: base_seed
-            integer, allocatable :: seed(:)
-            integer :: ii, nn
-            call random_seed(size=nn)
-            allocate(seed(nn))
-            do ii = 1, nn
-                seed(ii) = modulo(base_seed + 104729 * (ii - 1), huge(0) - 1) + 1
-            enddo
-            call random_seed(put=seed)
-        end subroutine fixed_seed
 
         !> separable exponentials of one sample position
         subroutine exps( p )

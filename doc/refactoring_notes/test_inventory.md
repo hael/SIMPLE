@@ -121,13 +121,13 @@ unit_numerics and `project records` of unit_project.
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| abinitio2D_stream | E | 133 | THROW_HARD | not run | committed | - | - | workflow (runs production commanders) |  |  |
-| assign_optics | E | 123 | THROW_HARD | not run | committed, user-supplied | - | pick_extract (31%, subset) | manual (needs user-supplied) |  |  |
-| gen_pickrefs | E | 98 | THROW_HARD | not run | committed | - | preproc (67%) | workflow (runs production commanders) |  |  |
-| master | E | 115 | THROW_HARD | not run | none | - | - | workflow (assertion-bearing) |  |  |
-| pick_extract | E | 130 | THROW_HARD | not run | committed, generated | - | assign_optics (31%, subset) | workflow (runs production commanders) |  |  |
-| preproc | E | 168 | assertion | not run | committed, generated, user-supplied | - | gen_pickrefs (67%) | manual (needs user-supplied) |  |  |
-| sieve_cavgs | E | 192 | THROW_HARD | not run | committed, generated | - | - | workflow (assertion-bearing) |  |  |
+| abinitio2D_stream | E | 133 | THROW_HARD | not run | committed | - | - | workflow (runs production commanders) | delete | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; one iteration of abinitio2D on 24 noise-free particles with a hand-written command line that is not the stream chunk's; counts and files only, no class separation; abinitio2D runs nightly in both simulated_workflow systems |
+| assign_optics | E | 123 | THROW_HARD | not run | committed, user-supplied | - | pick_extract (31%, subset) | manual (needs user-supplied) | merge into lib_stream | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; `optics assignment` of lib_stream (`simple_stream_tester`), THROW_HARDs as assertions; exact truth already (groups, populations, centroids); fixture generated (the dossier's user-supplied was `dir_target`, its overlap boilerplate); a minute (watcher LONGTIME 60 s) |
+| gen_pickrefs | E | 98 | THROW_HARD | not run | committed | - | preproc (67%) | workflow (runs production commanders) | merge into lib_stream | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; `picking references` of lib_stream, THROW_HARDs as assertions; counts and metadata only, the promised rotation, mirror and normalisation checks are for Ruben |
+| master | E | 115 | THROW_HARD | not run | none | - | - | workflow (assertion-bearing) | merge into forked_process | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; never started the master: `gui_assembler%assemble_stream_heartbeat` over seven live forks; `stream heartbeat` of the forked_process platform entry (`simple_gui_assembler_tester`); running and finished only |
+| pick_extract | E | 130 | THROW_HARD | not run | committed, generated | - | assign_optics (31%, subset) | workflow (runs production commanders) | merge into lib_stream | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; `pick and extract` of lib_stream, THROW_HARDs as assertions; `nboxes_max=3` caps the picks at the asserted count and the positions are never compared |
+| preproc | E | 168 | assertion | not run | committed, generated, user-supplied | - | gen_pickrefs (67%) | manual (needs user-supplied) | keep | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; stays the workflow entry `stream_preproc` (it submits jobs to the local queue); failure path is THROW_HARD (the dossier took its `assert_output_file` helper for an assertion); fixture generated (`dir_movies`); deletes the simulation truth it could be compared with |
+| sieve_cavgs | E | 192 | THROW_HARD | not run | committed, generated | - | - | workflow (assertion-bearing) | merge into unit_project | Hans, 2026-09-24 (stream): Ruben's; handover in `stream_area_tests_handover.md`; `test_collect_and_reject_hard_gates` of `simple_ptcl_sieve_tester` (`particle sieve`, fast gate); exact expectations |
 
 ## unassigned
 
@@ -307,3 +307,9 @@ unit_numerics and `project records` of unit_project.
 | detect_atoms | 2026-09-23 | merge into lib_single: a prefix of atoms_stats | `nanoparticle atoms` (lib_single) |
 | simulate_nanoparticle | 2026-09-23 | merge into lib_single: a prefix of atoms_stats | `nanoparticle atoms` (lib_single) |
 | detect_calpha | 2026-09-23 | merge into unit_single: exec case moved to a tester | `simple_calpha_finder_tester` (`C-alpha finder`) |
+| abinitio2D_stream | 2026-09-24 | delete: one abinitio2D iteration with a command line that is not the stream chunk's, no separation check; abinitio2D runs nightly in simulated_workflow | `simulated_workflow_6vxx`, `simulated_workflow_1jxy` |
+| assign_optics | 2026-09-24 | merge into lib_stream: exec case moved to a tester | `optics assignment` (lib_stream, `simple_stream_tester`) |
+| gen_pickrefs | 2026-09-24 | merge into lib_stream: exec case moved to a tester | `picking references` (lib_stream) |
+| pick_extract | 2026-09-24 | merge into lib_stream: exec case moved to a tester | `pick and extract` (lib_stream) |
+| sieve_cavgs | 2026-09-24 | merge into unit_project: exec case moved to the ptcl_sieve tester | `particle sieve` (unit_project), `test_collect_and_reject_hard_gates` |
+| master | 2026-09-24 | merge into forked_process: it tested the GUI heartbeat, not the master | `stream heartbeat` (forked_process platform entry, `simple_gui_assembler_tester`) |

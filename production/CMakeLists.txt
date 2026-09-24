@@ -258,8 +258,13 @@ if(BUILD_TESTS)
   # registers `simple_test_exec <args...>` (or the given launcher) with the
   # properties every entry must carry.
   set(SIMPLE_TEST_RUNS_DIR "${CMAKE_BINARY_DIR}/test_runs")
+  # SIMPLE_SEED makes seed_rnd (called by parameters%new, so by every commander)
+  # draw from a fixed seed instead of /dev/urandom; distributed workers inherit
+  # it, so the library and workflow entries are reproducible (plan, section 9.7,
+  # stream).
   set(SIMPLE_TEST_ENV
     "SIMPLE_PATH=${CMAKE_INSTALL_PREFIX}"
+    "SIMPLE_SEED=20260923"
     "SIMPLE_QSYS=local"
     "SIMPLE_EMAIL=test@localhost"
     "GFORTRAN_UNBUFFERED_ALL=y"
@@ -319,6 +324,12 @@ if(BUILD_TESTS)
   # (plan, section 9.7, single).
   simple_add_test(lib_single library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_single)
+  # lib_stream: the stream stages that run in-process, one thread, with the
+  # arguments the stream gives them (Ruben's stream tests): optics assignment
+  # (a minute: the stream watcher waits LONGTIME = 60 s), picking references,
+  # pick and extract. Review verdict 2026-09-24 (plan, section 9.7, stream).
+  simple_add_test(lib_stream library 1800 1
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
 
   # ---- workflow gates (nightly) --------------------------------------------
   # The simulated workflows with their current checks (completion, counts,
@@ -340,15 +351,18 @@ if(BUILD_TESTS)
   # Review verdict 2026-09-23 (plan, section 9.7, highlevel).
   simple_add_test(simulate_particles workflow 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulate_particles nthr=8)
-  foreach(_stream IN ITEMS preproc assign_optics gen_pickrefs pick_extract sieve_cavgs abinitio2D_stream master)
-    simple_add_test(stream_${_stream} workflow 3600 8 RUN_SERIAL
-      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=${_stream})
-  endforeach()
+  # stream preprocessing: five simulated movies through the stream's
+  # preprocessing stage, which submits its jobs to the local queue; the other
+  # stream stage tests moved to lib_stream, unit_project and forked_process,
+  # abinitio2D_stream was retired (plan, section 9.7, stream).
+  simple_add_test(stream_preproc workflow 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=preproc)
 
   # ---- platform cases -------------------------------------------------------
   # Own process, own launcher; not part of the build gate.
   # forked process: real child processes polled on a clock (12.9 s of it),
-  # excluded from the fast gate by decision (plan, section 4.6).
+  # excluded from the fast gate by decision (plan, section 4.6); its second
+  # sub-suite, stream heartbeat, forks the seven stream stages' children.
   simple_add_test(forked_process platform 300 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
   # Registered only when CMake has the capability and the launcher.
@@ -378,7 +392,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, flex_gpu, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 30)   # 13 fast + 1 platform + 12 workflow + 4 library
+  set(SIMPLE_CTEST_BUDGET 25)   # 13 fast + 1 platform + 6 workflow + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

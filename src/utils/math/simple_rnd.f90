@@ -5,7 +5,7 @@ use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 
-public :: seed_rnd, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
+public :: seed_rnd, seed_rnd_fixed, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
 public :: shuffle, partial_shuffle
 private
@@ -42,17 +42,32 @@ interface greedy_sampling
     module procedure greedy_sampling_2
 end interface
 
+integer :: nseed_rnd_calls = 0 ! seed_rnd calls under SIMPLE_SEED since the last seed_rnd_fixed
+
 contains
 
     !>  \brief  random seed
     !>  solution from https://stackoverflow.com/questions/34797938/random-number-generator-in-pgi-fortran-not-so-random
     !>  the old version was replaced because the bug described in the thread was observed with GCC and PGI
+    !>  When the environment variable SIMPLE_SEED holds an integer, the seed is fixed instead:
+    !>  SIMPLE_SEED advanced by 7919 for every earlier call since the last seed_rnd_fixed, so that
+    !>  successive commanders in one process draw different but reproducible numbers. The CTest
+    !>  entries set it; distributed workers inherit it. Calls from an OpenMP team take distinct
+    !>  counts, in no fixed order, so only a one-thread run is reproducible.
     subroutine seed_rnd
         use iso_fortran_env, only: int64
         integer, allocatable :: seed(:)
-        integer              :: i, n, istat, dt(8), pid
-        integer(int64)       :: t
+        integer              :: i, n, istat, dt(8), pid, icall
+        integer(int64)       :: t, base
         integer, parameter   :: un=703
+        if( simple_seed_base(base) )then
+            !$omp atomic capture
+            icall = nseed_rnd_calls
+            nseed_rnd_calls = nseed_rnd_calls + 1
+            !$omp end atomic
+            call put_fixed_seed(base + 7919_int64 * int(icall, int64))
+            return
+        endif
         call random_seed(size = n)
         allocate(seed(n))
         ! First try if the OS provides a random number generator
@@ -98,6 +113,45 @@ contains
         end function lcg
 
     end subroutine seed_rnd
+
+    !>  \brief  seeds the generator with a fixed state: element i of the seed is
+    !>  base + 104729 (i-1) wrapped into [1, huge-1]; it also restarts the SIMPLE_SEED count, so
+    !>  what seed_rnd draws next depends on this call only
+    subroutine seed_rnd_fixed( base )
+        use iso_fortran_env, only: int64
+        integer, intent(in) :: base
+        call put_fixed_seed(int(base, int64))
+        nseed_rnd_calls = 0
+    end subroutine seed_rnd_fixed
+
+    subroutine put_fixed_seed( base )
+        use iso_fortran_env, only: int64
+        integer(int64), intent(in) :: base
+        integer, allocatable :: seed(:)
+        integer :: i, n
+        call random_seed(size=n)
+        allocate(seed(n))
+        do i = 1, n
+            seed(i) = int(modulo(base + 104729_int64 * int(i - 1, int64), int(huge(0) - 1, int64)) + 1_int64)
+        enddo
+        call random_seed(put=seed)
+    end subroutine put_fixed_seed
+
+    !>  \brief  .true. with the base when SIMPLE_SEED is set; unset or empty leaves seed_rnd on
+    !>  /dev/urandom, anything that is not an integer stops with an error
+    logical function simple_seed_base( base )
+        use iso_fortran_env, only: int64
+        integer(int64), intent(out) :: base
+        character(len=64) :: val
+        integer           :: status, ios
+        simple_seed_base = .false.
+        base = 0_int64
+        call get_environment_variable('SIMPLE_SEED', value=val, status=status)
+        if( status /= 0 .or. len_trim(val) == 0 ) return
+        read(val, *, iostat=ios) base
+        if( ios /= 0 ) THROW_HARD('SIMPLE_SEED must be an integer: '//trim(val))
+        simple_seed_base = .true.
+    end function simple_seed_base
 
     !>  \brief  wrapper for the intrinsic Fortran random number generator
     function ran3( ) result( harvest )

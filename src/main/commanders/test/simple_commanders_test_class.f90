@@ -39,7 +39,7 @@ use simple_class_compatibility_tester,       only: run_all_class_compatibility_t
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
-use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
+use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests, run_stream_heartbeat_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
 use simple_ui_visibility_tester,             only: run_all_ui_visibility_tests
 use simple_rnd_tester,                       only: run_all_rnd_tests
@@ -81,13 +81,15 @@ use simple_aff_prop,                         only: test_aff_prop
 use simple_hclust,                           only: test_hclust
 use simple_atoms,                            only: test_atoms
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
+use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
+    &run_all_stream_pick_extract_tests
 use simple_commanders_test_single,           only: commander_test_atoms_stats, commander_test_detect_calpha_molecules
 use simple_srchspace_map2D_io,               only: test_srchspace_map2D_io
 use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! The fast gate is twelve area suites, each one CTest entry under the label
+! The fast gate is thirteen area suites, each one CTest entry under the label
 ! `fast` (doc/refactoring_notes/uniform_test_environment_refactoring.md,
 ! section 5.1). Every sub-suite in them makes assertions through
 ! simple_test_utils, needs no network beyond localhost, no download and no
@@ -98,8 +100,9 @@ implicit none
 !                                    lowercase, spaces as underscores)
 !   test=units                       every area suite in sequence: a developer
 !                                    convenience, not the gate CTest runs
-!   test=forked_process              real child processes, clock polling:
-!                                    excluded from the build, label `platform`
+!   test=forked_process              real child processes, clock polling (forked
+!                                    process, stream heartbeat): excluded from
+!                                    the build, label `platform`
 !   test=flex_gpu                    CUDA-C flex kernels against the CPU path:
 !                                    label `platform`, registered with USE_FLEX_CUDA
 !   test=lib_<area>                  a library suite of the nightly extensive
@@ -184,6 +187,11 @@ type, extends(commander_base) :: commander_test_lib_single
   contains
     procedure :: execute      => exec_test_lib_single
 end type commander_test_lib_single
+
+type, extends(commander_base) :: commander_test_lib_stream
+  contains
+    procedure :: execute      => exec_test_lib_stream
+end type commander_test_lib_stream
 
 type, extends(commander_base) :: commander_test_unit_parallel
   contains
@@ -275,7 +283,6 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'online variance',         test_online_var)
         call add_suite(s, n, 'random draws',            run_all_rnd_tests)
-        call add_suite(s, n, 'straight-line fit',       test_fit_line)
         call add_suite(s, n, 'affinity propagation',    test_aff_prop)
         call add_suite(s, n, 'hierarchical clustering', test_hclust)
         call add_suite(s, n, 'statistics',              run_all_stat_tests)
@@ -362,7 +369,6 @@ contains
         call add_suite(s, n, 'pose 1JYX recovery', run_all_pose_cont_1jyx_tests)
     end subroutine suites_lib_cart_align3D
 
-    !> distributed execution: the job controller and the queue-system environment
     !> SINGLE (nanoparticles, atomic models): the atoms module and the C-alpha candidate search
     subroutine suites_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
@@ -380,6 +386,18 @@ contains
         call add_suite(s, n, 'C-alpha molecules',  suite_calpha_molecules)
     end subroutine suites_lib_single
 
+    !> nightly: the stream stages that run in-process, with the arguments the stream gives them
+    !! (Ruben's stream tests; optics assignment waits a minute for the stream watcher);
+    !! doc/refactoring_notes/stream_area_tests_handover.md says what they should pin beyond counts
+    subroutine suites_lib_stream( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'optics assignment',  run_all_stream_optics_tests)
+        call add_suite(s, n, 'picking references', run_all_stream_pickrefs_tests)
+        call add_suite(s, n, 'pick and extract',   run_all_stream_pick_extract_tests)
+    end subroutine suites_lib_stream
+
+    !> distributed execution: the job controller and the queue-system environment
     subroutine suites_parallel( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
@@ -578,6 +596,16 @@ contains
         call run_unit_suites('lib_single', cline, s(1:n))
     end subroutine exec_test_lib_single
 
+    subroutine exec_test_lib_stream( self, cline )
+        class(commander_test_lib_stream), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_lib_stream(s, n)
+        call run_unit_suites('lib_stream', cline, s(1:n))
+    end subroutine exec_test_lib_stream
+
     subroutine exec_test_unit_parallel( self, cline )
         class(commander_test_unit_parallel), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -637,10 +665,11 @@ contains
     subroutine exec_test_forked_process( self, cline )
         class(commander_test_forked_process), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(unit_suite) :: s(1)
+        type(unit_suite) :: s(2)
         integer :: n
         n = 0
-        call add_suite(s, n, 'forked process', run_all_forked_process_tests)
+        call add_suite(s, n, 'forked process',   run_all_forked_process_tests)
+        call add_suite(s, n, 'stream heartbeat', run_stream_heartbeat_tests)
         call run_unit_suites('forked_process', cline, s(1:n))
     end subroutine exec_test_forked_process
 
@@ -660,9 +689,6 @@ contains
         character(len=32)     :: order_env
         logical               :: test_failed, l_reverse
         integer               :: i, isuite, nrun, iostat
-        ! a fixed seed: every run of a suite draws the same numbers (tests that draw still seed
-        ! themselves, so that suite=<name> and SIMPLE_UNIT_ORDER=reverse draw the same too)
-        call set_fixed_seed(20260923)
         call date_and_time(date=datestr)
         folder = 'SIMPLE_TEST_'//trim(label)//'_'//datestr
         call simple_getcwd(original_cwd)
@@ -685,6 +711,10 @@ contains
             if( only_suite%strlen_trim() > 0 )then
                 if( .not. (only_suite == suite_id(suites(isuite)%name)) ) cycle
             endif
+            ! every sub-suite starts from one fixed seed, so the full run, a focused run
+            ! (suite=<name>) and a reversed run draw the same numbers in it; the seed also restarts
+            ! the SIMPLE_SEED count of seed_rnd, which production code calls (parameters%new)
+            call set_fixed_seed(20260923)
             call begin_test_suite(trim(suites(isuite)%name))
             call suites(isuite)%run()
             call end_test_suite
@@ -774,30 +804,5 @@ contains
             if( doshift ) THROW_HARD('euler shifting does not work!')
         end do
     end subroutine test_euler_shift
-
-    subroutine test_fit_line
-        real    :: slope, intercept, datavec(100,2), corr, x
-        integer :: i, j
-        do i=1,10000
-            ! generate the line
-            slope = 5.*ran3()
-            if( ran3() < 0.5 ) slope = -slope
-            intercept = 10.*ran3()
-            if( ran3() < 0.5 ) intercept = -intercept
-            ! generate the data
-            x = -1.
-            do j=1,100
-                datavec(j,1) = x
-                datavec(j,2) = slope*datavec(j,1)+intercept
-                x = x+0.02
-            end do
-            ! fit the data
-            call fit_straight_line(100, datavec, slope, intercept, corr)
-            if( corr < 0.9999 )then
-                THROW_HARD('fit_straight_line failed!')
-            endif
-        end do
-        write(logfhandle,'(a)') 'FIT_STRAIGHT_LINE UNIT TEST COMPLETED ;-)'
-    end subroutine test_fit_line
 
 end module simple_commanders_test_class

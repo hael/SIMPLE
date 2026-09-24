@@ -3,6 +3,7 @@ module simple_test_utils
 use, intrinsic :: iso_fortran_env, only: output_unit
 use simple_string, only: string
 use simple_defs,   only: dp, STDLEN, longer
+use simple_rnd,    only: seed_rnd_fixed
 implicit none
 private
 
@@ -35,17 +36,11 @@ type(test_failure),      allocatable :: failures(:)
 contains
 
     !> seed the intrinsic generator with a fixed state, seed(i) = base_seed + 104729 (i-1) wrapped into
-    !! [1, huge-1], so every run draws the same numbers (seed_rnd reads /dev/urandom)
+    !! [1, huge-1], so every run draws the same numbers (seed_rnd reads /dev/urandom unless SIMPLE_SEED
+    !! is set); simple_rnd%seed_rnd_fixed holds the formula and restarts the SIMPLE_SEED count
     subroutine set_fixed_seed( base_seed )
         integer, intent(in) :: base_seed
-        integer, allocatable :: seed(:)
-        integer :: i, n
-        call random_seed(size=n)
-        allocate(seed(n))
-        do i = 1, n
-            seed(i) = modulo(base_seed + 104729 * (i - 1), huge(0) - 1) + 1
-        enddo
-        call random_seed(put=seed)
+        call seed_rnd_fixed(base_seed)
     end subroutine set_fixed_seed
 
     subroutine reset_test_report( filename )

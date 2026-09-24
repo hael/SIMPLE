@@ -1,21 +1,13 @@
-!@descr: execution of stream test programs
+!@descr: execution of the stream workflow test program (preproc)
 module simple_test_exec_stream
 use simple_cmdline,                only: cmdline
-use simple_commanders_test_stream, only: commander_test_abinitio2D_stream, commander_test_assign_optics, &
-    &commander_test_gen_pickrefs, commander_test_master, commander_test_pick_extract, commander_test_preproc, &
-    &commander_test_sieve_cavgs
+use simple_commanders_test_stream, only: commander_test_preproc
 implicit none
 
 public :: exec_test_stream_commander
 private
 
-type(commander_test_abinitio2D_stream) :: xabinitio2D_stream
-type(commander_test_assign_optics)     :: xassign_optics
-type(commander_test_gen_pickrefs)      :: xgen_pickrefs
-type(commander_test_master)            :: xmaster
-type(commander_test_pick_extract)      :: xpick_extract
-type(commander_test_preproc)           :: xpreproc
-type(commander_test_sieve_cavgs)       :: xsieve_cavgs
+type(commander_test_preproc) :: xpreproc
 
 contains
 
@@ -29,20 +21,8 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case( trim(which) )
-            case( 'master' )
-                call xmaster%execute(cline)
             case( 'preproc' )
                 call xpreproc%execute(cline)
-            case( 'assign_optics' )
-                call xassign_optics%execute(cline)
-            case( 'gen_pickrefs' )
-                call xgen_pickrefs%execute(cline)
-            case( 'pick_extract' )
-                call xpick_extract%execute(cline)
-            case( 'sieve_cavgs' )
-                call xsieve_cavgs%execute(cline)
-            case( 'abinitio2D_stream' )
-                call xabinitio2D_stream%execute(cline)
             case default
                 l_did_execute = .false.
         end select

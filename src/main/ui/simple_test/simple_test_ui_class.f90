@@ -21,6 +21,7 @@ type(ui_program), target :: unit_heterogeneity
 type(ui_program), target :: unit_parallel
 type(ui_program), target :: unit_single
 type(ui_program), target :: lib_single
+type(ui_program), target :: lib_stream
 type(ui_program), target :: lib_heterogeneity
 type(ui_program), target :: flex_gpu
 type(ui_program), target :: forked_process
@@ -47,6 +48,7 @@ contains
         call new_unit_parallel(tsttab)
         call new_unit_single(tsttab)
         call new_lib_single(tsttab)
+        call new_lib_stream(tsttab)
         call new_flex_gpu(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
@@ -110,7 +112,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, straight_line_fit, affinity_propagation, hierarchical_clustering, cavg_quality_relations, diffusion_map_graphs)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, cavg_quality_relations, diffusion_map_graphs)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -118,8 +120,8 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call unit_project%new(&
         &'unit_project',&
-        &'unit tests: projects, STAR files, class compatibility, sieving, motion gain, atoms',&
-        &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving, motion gain, atoms',&
+        &'unit tests: projects, STAR files, class compatibility, sieving, motion gain',&
+        &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving, motion gain',&
         &'simple_test_exec',&
         &.false.)
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
@@ -244,6 +246,19 @@ contains
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
 
+    subroutine new_lib_stream( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call lib_stream%new(&
+        &'lib_stream',&
+        &'library tests: in-process stream stages',&
+        &'is the nightly library suite for the stream stages that run in-process: optics assignment on two beam-shift clusters, picking-reference generation and reference picking with extraction on a synthetic micrograph',&
+        &'simple_test_exec',&
+        &.false.)
+        call lib_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract)', '', .false., '')
+        call add_ui_program('lib_stream', lib_stream, tsttab, UI_CATEGORY)
+    end subroutine new_lib_stream
+
     subroutine new_unit_parallel( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call unit_parallel%new(&
@@ -299,9 +314,11 @@ contains
         call forked_process%new(&
         &'forked_process',&
         &'unit tests of forked child processes',&
-        &'exercises real child processes with clock-based polling; not part of the build gate, run under the platform label',&
+        &'exercises real child processes with clock-based polling (the forked-process lifecycle and the stream heartbeat); not part of the build gate, run under the platform label',&
         &'simple_test_exec',&
         &.false.)
+        call forked_process%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (forked_process, stream_heartbeat)', '', .false., '')
         call add_ui_program('forked_process', forked_process, tsttab, UI_CATEGORY)
     end subroutine new_forked_process
 

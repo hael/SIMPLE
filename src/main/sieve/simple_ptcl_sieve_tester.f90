@@ -6,6 +6,7 @@ use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 use simple_ptcl_sieve, only: ptcl_sieve
 use simple_sp_project, only: sp_project
+use simple_image,      only: image
 use simple_rec_list,   only: rec_list
 use simple_string,     only: string
 use simple_defs_fname, only: METADATA_EXT, ABINITIO2D_FINISHED
@@ -23,6 +24,7 @@ contains
         call test_single_pass_ignores_incomplete_fine()
         call test_new_accepts_tuning_overrides()
         call test_cycle_empty_project_list()
+        call test_collect_and_reject_hard_gates()
     end subroutine run_all_ptcl_sieve_tests
 
     subroutine test_new_kill_and_empty_queries()
@@ -217,6 +219,181 @@ contains
         call sieve%kill()
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_cycle_empty_project_list
+
+    !> collect_and_reject on one completed coarse chunk, single pass, without the learned model:
+    !! a class average with a strong centred component passes the hard gates, a blank one is
+    !! rejected, and the selection reaches the particles, the sentinels, the exported project,
+    !! the previews and the latest-product metadata (Ruben's stream test sieve_cavgs, moved here
+    !! by the stream review, plan section 9.7)
+    subroutine test_collect_and_reject_hard_gates()
+        character(len=*), parameter :: CHUNK_STEM = 'chunk_coarse_1'
+        character(len=*), parameter :: CAVG_STACK = 'cavgs_iter001'//MRC_EXT
+        real,             parameter :: SMPD       = 2.0
+        integer,          parameter :: CAVG_BOX   = 64
+        integer,          parameter :: NCLASSES   = 2
+        integer,          parameter :: NPARTICLES = 8
+        integer,          parameter :: NPER_CLASS = NPARTICLES / NCLASSES
+        type(ptcl_sieve)     :: sieve
+        type(parameters)     :: params_sieve
+        type(cmdline)        :: cline_sieve
+        type(image)          :: cavg_good, cavg_bad, feature
+        type(sp_project)     :: chunk_project, result
+        type(string)         :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, cavg_path
+        type(string)         :: completed_projfile, rejection_reason, latest_jpeg, latest_stk
+        type(string)         :: selected_jpeg, rejected_jpeg, reasons_jpeg, reasons_key
+        integer, allocatable :: latest_inds(:), latest_pops(:), latest_selection(:)
+        real,    allocatable :: latest_res(:)
+        integer              :: i, icls, ldim(3), nimages, xtiles, ytiles
+        logical              :: has_latest
+
+        write(*,'(A)') 'test_collect_and_reject_hard_gates'
+
+        call setup_workspace(string('collect_reject'), ws_dir, cwd_saved)
+        completed_path = filepath(ws_dir, 'completed')
+        chunk_dir      = filepath(ws_dir, 'chunks_coarse')
+        call simple_mkdir(chunk_dir)
+        chunk_dir      = filepath(chunk_dir, CHUNK_STEM)
+        call simple_mkdir(chunk_dir)
+        chunk_projfile = filepath(chunk_dir, CHUNK_STEM//METADATA_EXT)
+        cavg_path      = filepath(chunk_dir, CAVG_STACK)
+
+        ! class 1: a strong centred square on weak noise; class 2: blank (no component)
+        call cavg_good%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
+        call cavg_good%gauran(0., 0.02)
+        call feature%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
+        call feature%square(8)
+        call feature%mul(5.)
+        call cavg_good%add(feature)
+        call cavg_good%write(cavg_path, 1, del_if_exists=.true.)
+        call cavg_bad%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
+        call cavg_bad%zero()
+        call cavg_bad%write(cavg_path, 2)
+        call feature%kill()
+        call cavg_good%kill()
+        call cavg_bad%kill()
+
+        ! a completed coarse abinitio2D chunk awaiting rejection
+        call chunk_project%os_mic%new(1, is_ptcl=.false.)
+        call chunk_project%os_mic%set_state(1, 1)
+        call chunk_project%os_mic%set(1, 'imgkind', 'mic')
+        call chunk_project%os_mic%set(1, 'nptcls',  NPARTICLES)
+        call chunk_project%os_mic%set(1, 'smpd',    SMPD)
+        call chunk_project%os_ptcl2D%new(NPARTICLES, is_ptcl=.true.)
+        do i = 1, NPARTICLES
+            icls = 1 + (i - 1) / NPER_CLASS
+            call chunk_project%os_ptcl2D%set_class(i, icls)
+            call chunk_project%os_ptcl2D%set_state(i, 1)
+            call chunk_project%os_ptcl2D%set_stkind(i, 1)
+            call chunk_project%os_ptcl2D%set(i, 'indstk', i)
+        enddo
+        chunk_project%os_ptcl3D = chunk_project%os_ptcl2D
+        call chunk_project%add_cavgs2os_out(cavg_path, SMPD, imgkind='cavg')
+        do icls = 1, NCLASSES
+            call chunk_project%os_cls2D%set_class(icls, icls)
+            call chunk_project%os_cls2D%set_state(icls, 1)
+            call chunk_project%os_cls2D%set(icls, 'pop',  NPER_CLASS)
+            call chunk_project%os_cls2D%set(icls, 'res',  10.0)
+            call chunk_project%os_cls2D%set(icls, 'corr', 0.9)
+        enddo
+        chunk_project%os_cls3D = chunk_project%os_cls2D
+        call chunk_project%update_projinfo(chunk_projfile)
+
+        ! the production collector in coarse-only mode; the learned model is off, so only the
+        ! deterministic hard gates decide
+        call cline_sieve%set('prg',            'sieve_cavgs')
+        call cline_sieve%set('projfile',       chunk_projfile)
+        call cline_sieve%set('dir_target',     ws_dir)
+        call cline_sieve%set('ncls',           NCLASSES)
+        call cline_sieve%set('nptcls_per_cls', NPER_CLASS)
+        call cline_sieve%set('nchunksperset',  1)
+        call cline_sieve%set('nchunks',        1)
+        call cline_sieve%set('nparts',         1)
+        call cline_sieve%set('nthr',           1)
+        call cline_sieve%set('nptcls_coarse',  NPARTICLES)
+        call cline_sieve%set('ncls_coarse',    NCLASSES)
+        call cline_sieve%set('box_coarse',     CAVG_BOX)
+        call cline_sieve%set('nsample_coarse', NPARTICLES)
+        call cline_sieve%set('lpstart',        20.0)
+        call cline_sieve%set('lpstop_coarse',  15.0)
+        call cline_sieve%set('mskdiam',        80.0)
+        call cline_sieve%set('single_pass',    'yes')
+        call cline_sieve%set('use_model',      'no')
+        call cline_sieve%set('qsys_name',      'local')
+        call cline_sieve%set('walltime',       60)
+        call cline_sieve%set('mkdir',          'no')
+        call chunk_project%update_compenv(cline_sieve)
+        call chunk_project%write(chunk_projfile)
+        call chunk_project%kill()
+        call simple_touch(filepath(chunk_dir, ABINITIO2D_FINISHED))
+        call params_sieve%new(cline_sieve)
+        call sieve%new(params_sieve, completed_path)
+        call sieve%collect_and_reject()
+
+        ! the collector's counters
+        call assert_int(1,          sieve%get_n_chunks_coarse(),         'the completed coarse chunk is imported')
+        call assert_int(NPER_CLASS, sieve%get_n_coarse_accepted_ptcls(), 'coarse accepted particles = the class that passes')
+        call assert_int(NPER_CLASS, sieve%get_n_coarse_rejected_ptcls(), 'coarse rejected particles = the blank class')
+        call assert_int(NPER_CLASS, sieve%get_n_accepted_ptcls(),        'final accepted particles')
+        call assert_int(NPER_CLASS, sieve%get_n_rejected_ptcls(),        'final rejected particles')
+        call assert_int(NPARTICLES, sieve%get_n_total_particles(),       'total particles')
+        call assert_int(1,          sieve%get_n_accepted_micrographs(),  'accepted micrographs')
+        call assert_true(sieve%get_finished(),                           'the coarse-only sieve finishes')
+        call assert_true(file_exists(filepath(chunk_dir, 'REJECTION_FINISHED')), 'the rejection sentinel exists')
+        call assert_true(file_exists(filepath(chunk_dir, 'COMPLETE')),           'the completion sentinel exists')
+
+        ! the selection in the chunk project, mapped to the particles
+        call result%read(chunk_projfile)
+        call assert_true(all(result%os_cls2D%get_all_asint('state') == [1, 0]), 'class 1 selected, class 2 rejected')
+        call assert_int(NPER_CLASS, result%os_ptcl2D%count_state_gt_zero(), 'the selection reaches the 2D particles')
+        call assert_int(NPER_CLASS, result%os_ptcl3D%count_state_gt_zero(), 'the selection reaches the 3D particles')
+        ! the orientation reader splits character values at blanks, so the round-tripped part of
+        ! the reason is its tier prefix
+        rejection_reason = result%os_cls2D%get_str(2, 'rejection_reason')
+        call assert_true(rejection_reason%has_substr('coarse_reject'), 'the rejected class records the coarse rejection')
+        call result%kill()
+
+        ! the exported project and the previews
+        completed_projfile = filepath(completed_path, CHUNK_STEM//METADATA_EXT)
+        selected_jpeg      = filepath(chunk_dir, CHUNK_STEM//'_selected'//JPG_EXT)
+        rejected_jpeg      = filepath(chunk_dir, CHUNK_STEM//'_rejected'//JPG_EXT)
+        reasons_jpeg       = filepath(chunk_dir, CHUNK_STEM//'_all_reasons'//JPG_EXT)
+        reasons_key        = reasons_jpeg//'.key.txt'
+        call assert_true(file_exists(completed_projfile), 'the chunk project is exported to the completed directory')
+        call assert_true(file_exists(selected_jpeg),      'the selected-classes preview exists')
+        call assert_true(file_exists(rejected_jpeg),      'the rejected-classes preview exists')
+        call assert_true(file_exists(reasons_jpeg),       'the rejection-reason report exists')
+        call assert_true(file_exists(reasons_key),        'the rejection-reason key exists')
+
+        ! the latest product the GUI shows
+        has_latest = sieve%get_latest(latest_inds, latest_pops, latest_res, latest_jpeg, latest_stk, &
+            &xtiles, ytiles, latest_selection)
+        call assert_true(has_latest, 'the latest class-average product is available')
+        if( has_latest )then
+            call assert_int(NCLASSES, size(latest_inds), 'latest product: two classes')
+            if( size(latest_inds) == NCLASSES )then
+                call assert_true(all(latest_inds      == [1, 2]),                 'latest product: class indices')
+                call assert_true(all(latest_pops      == [NPER_CLASS, NPER_CLASS]), 'latest product: populations')
+                call assert_true(all(latest_selection == [1, 0]),                 'latest product: selection')
+                call assert_true(all(abs(latest_res - 10.0) <= 0.01),             'latest product: resolutions')
+            endif
+            call assert_true(xtiles * ytiles >= NCLASSES, 'latest product: the preview tiles hold every class')
+            call assert_true(file_exists(latest_jpeg), 'latest product: the preview exists')
+            call assert_true(file_exists(latest_stk),  'latest product: the retained stack exists')
+            if( file_exists(latest_stk) )then
+                call find_ldim_nptcls(latest_stk, ldim, nimages)
+                call assert_int(NCLASSES, nimages, 'latest product: the retained stack holds every class')
+                call assert_true(all(ldim(1:2) == [CAVG_BOX, CAVG_BOX]), 'latest product: the retained stack keeps the box')
+            endif
+        endif
+
+        if( allocated(latest_inds)      ) deallocate(latest_inds)
+        if( allocated(latest_pops)      ) deallocate(latest_pops)
+        if( allocated(latest_res)       ) deallocate(latest_res)
+        if( allocated(latest_selection) ) deallocate(latest_selection)
+        call sieve%kill()
+        call cline_sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_collect_and_reject_hard_gates
 
     subroutine init_test_params(params, single_pass, lpstart, lpstop_coarse, lpstop_fine, box_coarse, box_fine, &
                                 nsample_coarse, nsample_fine, ncls_coarse, ncls_fine)

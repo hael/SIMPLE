@@ -164,7 +164,7 @@
           - `simple_commanders_test_masks.f90` — for all masks tests
           - `simple_commanders_test_parallel.f90` — the coarray test through the job queue (qsys=coarray), run by the coarray CI job
           - `simple_commanders_test_single.f90` — SINGLE (nanoparticle and atomic-model) test commanders: the atoms pipeline, the C-alpha benchmark and the SINGLE workflow
-          - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
+          - `simple_commanders_test_stream.f90` — stream preprocessing workflow test: simulated movies through the stream's preprocessing stage and its worker jobs
           - `simple_commanders_test_utils.f90` — for all utils tests
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
@@ -202,7 +202,7 @@
         - `simple_test_exec_masks.f90` — execution of test masks processing commanders
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
-        - `simple_test_exec_stream.f90` — execution of stream test programs
+        - `simple_test_exec_stream.f90` — execution of the stream workflow test program (preproc)
         - `simple_test_exec_utils.f90` — execution of test utils processing commanders
         - `single_exec_atom.f90`
         - `single_exec_map.f90`
@@ -514,6 +514,7 @@
         - `simple_stream_p07_abinitio3D_multistate.f90` — stream pipeline stage 7 â multistate 3D reconstruction/refinement of pooled particles
         - `simple_stream_pool2D_utils.f90` — utilities for running the pool 2D refinement
         - `simple_stream_state.f90` — global stream master pipe descriptors for IPC
+        - `simple_stream_tester.f90` — library tests of the in-process stream stages: optics assignment, picking references, pick and extract
         - `simple_stream_utils.f90` — various stream utilities
         - `simple_stream_watcher.f90` — movie watcher for stream processing
       - **ui/**
@@ -566,7 +567,7 @@
           - `simple_test_ui_masks.f90` — module defining the user interfaces for masks test programs in the simple_test_exec suite
           - `simple_test_ui_parallel.f90` — module defining the user interfaces for parallel test programs in the simple_test_exec suite
           - `simple_test_ui_single.f90` — module defining the user interfaces for single test programs in the simple_test_exec suite
-          - `simple_test_ui_stream.f90` — module defining the user interfaces for stream test programs in the simple_test_exec suite
+          - `simple_test_ui_stream.f90` — module defining the user interface of the stream workflow test program (preproc) in the simple_test_exec suite
           - `simple_test_ui_utils.f90` — module defining the user interfaces for utils programs in the simple_test_exec suite
         - **single/**
           - `single_ui_atom.f90` — module defining the user interfaces for atom-related programs in the single_exec suite

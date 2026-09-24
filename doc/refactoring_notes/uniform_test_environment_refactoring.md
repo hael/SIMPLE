@@ -24,8 +24,9 @@ ninth and tenth fast suites `unit_pftc_align2D3D` and
 `unit_cart_align3D` and the second library suite
 `lib_cart_align3D`, the eleventh fast suite `unit_heterogeneity` with
 the third library suite `lib_heterogeneity`, the twelfth fast suite
-`unit_parallel`, and the thirteenth fast suite `unit_single` with the
-fourth library suite `lib_single`. This is a large
+`unit_parallel`, the thirteenth fast suite `unit_single` with the
+fourth library suite `lib_single`, and the fifth library suite
+`lib_stream`. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -382,8 +383,8 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_core` | string, syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
 | `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation | 1.3 s (before the shift search moved out and the mask suites moved in) |
-| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
-| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain (atoms moved to `unit_single`) | 0.7 s |
+| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
+| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve (with the collector's hard-gate rejection since the stream review), 2D search-space map I/O, motion gain (atoms moved to `unit_single`) | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
@@ -434,7 +435,10 @@ Admission rules for a library suite member:
    boxes, but it must finish;
 3. it is deterministic across runs on one machine (declared seed) and
    restores the working directory and any module state it changes, since it
-   shares a process with its suite;
+   shares a process with its suite; CTest sets `SIMPLE_SEED` for every
+   entry, which fixes the seed `seed_rnd` draws from (`parameters%new` calls
+   it, so every commander does), and the runner reseeds before every
+   sub-suite (section 9.7, stream);
 4. it is registered with a `TIMEOUT` and the suite's total is recorded in the
    nightly summary, so growth is visible.
 
@@ -465,7 +469,7 @@ that needs them is a workflow gate.
 
 The workflow gates are the simulated workflows, gated on the truth they were
 simulated from. Today `simulated_workflow`, `single_workflow`, `mini_stream`
-and the stream suite check that the pipeline completes: files exist,
+and `stream_preproc` check that the pipeline completes: files exist,
 counts match, the heartbeat is well-formed, `abinitio2D` produced classes.
 They do not compare the result with the model that generated the data. Since
 the data comes from embedded atomic coordinates (6VXX, 1JYX) with known
@@ -492,7 +496,8 @@ Registration: one CTest entry per workflow, `LABELS workflow`,
 `RUN_SERIAL TRUE` (each owns the machine's OpenMP team and may start
 distributed workers), a long `TIMEOUT`, its own working directory. Expected
 members: `simulated_workflow` (both systems, both pickers),
-`single_workflow`, `mini_stream`, the stream suite, `pcg_recon`,
+`single_workflow`, `mini_stream`, `stream_preproc` (the in-process stream
+stages are in `lib_stream`), `pcg_recon`,
 `pcg_frac_update`, `rec3D_backends`, `reproject`, and the nano workflows (`atoms_stats`,
 `detect_atoms`, `detect_calpha*`, `simulate_nanoparticle`).
 
@@ -644,7 +649,7 @@ developer types.
 For the extensive tier the area commanders are the library-suite commanders
 (`test=lib_fft`, ..., section 5.2.1), one per suite and the same fused shape
 as the fast ones, and the workflow commanders that exist
-(`simulated_workflow`, `single_workflow`, `mini_stream`, the stream suite),
+(`simulated_workflow`, `single_workflow`, `mini_stream`, `stream_preproc`),
 one CTest entry each.
 
 Per-test commander types are removed as their bodies migrate. The fourteen
@@ -2018,6 +2023,90 @@ required keys); it now passes `smpd=0.358`, for Ruben to confirm. And
 every stage of `atoms_stats` and `single_workflow` ran with `nthr=40`
 (module constant), whatever the entry's 8 threads; they take
 `params%nthr`. `SIMPLE_CTEST_BUDGET` 28 -> 30.
+
+**stream (2026-09-24, Hans: "go" on the eleven proposals).** The seven
+stream cases are Ruben's (2026-08-25/26) and were seven nightly workflow
+entries. Unlike the SINGLE cases they checked real things through
+THROW_HARD; the review moved each to the area of what it tests and turned
+its checks into assertions (same conditions, same messages; reads that
+depend on a missing file are skipped; the fixture directory, which every
+run used to leave behind, is removed when every check passed).
+`doc/refactoring_notes/stream_area_tests_handover.md` tells Ruben what
+they should pin beyond counts and files.
+
+`sieve_cavgs` tested `ptcl_sieve%collect_and_reject`: it is
+`test_collect_and_reject_hard_gates` of `simple_ptcl_sieve_tester`, so in
+the fast gate (`unit_project`, `particle sieve`): two class averages of
+64², one kept, one blank and rejected, exact expectations.
+
+`assign_optics` (the stream's p02 stage, exact truth: two beam-shift
+clusters, populations 2 and 3, centroids to 0.01), `gen_pickrefs`
+(`make_pickrefs`: counts and diameter metadata) and `pick_extract` (three
+copies of a reference picked and extracted) are the sub-suites `optics
+assignment`, `picking references` and `pick and extract` of the new fifth
+library suite `lib_stream` (`simple_stream_tester`, one thread). Optics
+assignment takes a minute: the production watcher imports a project only
+once it is `LONGTIME` = 60 s old. The inventory's "manual (needs
+user-supplied)" for it and for preproc was a dossier artefact
+(`dir_target`, `dir_movies`); both generate their fixtures. `pick_extract`
+sets `nboxes_max=3`, the number it asserts, so over-picking cannot fail it
+and the positions are never compared (handover).
+
+`master` never started the stream master: it tested
+`gui_assembler%assemble_stream_heartbeat` over seven live forked children,
+running and finished only. It is `run_stream_heartbeat_tests` of
+`simple_gui_assembler_tester` (whose header had said the heartbeat was
+untestable there), sub-suite `stream heartbeat` of the `forked_process`
+platform entry beside the forked-process lifecycle tests.
+
+`preproc` submits its jobs to the local queue, so it stays the workflow
+entry `stream_preproc`; `simple_commanders_test_stream` keeps only it. It deletes `simulate_movie_params.txt` and the optimal average, the
+truth it could be compared with (handover).
+
+`abinitio2D_stream` is retired: it ran `abinitio2D` for one iteration on 24
+noise-free particles with a hand-written command line that differs from the
+one the stream's chunk code builds (`cls_init`, `rank_cavgs`, `chunk`,
+`objfun`, `refine`), checked counts and files but not that the two particle
+families separate, and `abinitio2D` runs nightly in both
+`simulated_workflow` systems.
+
+Seeds. `parameters%new` calls `seed_rnd`, which read `/dev/urandom`, so
+every test that runs a commander drew unseeded numbers from its first
+commander on (the movie simulator's noise and positions, class
+initialisation; `lib_single` and the workflow entries alike). `seed_rnd`
+now honours the environment variable `SIMPLE_SEED`: set, the seed is that
+integer advanced by 7919 per call since the last fixed seed, so successive
+commanders in one process draw different but reproducible numbers, and
+distributed workers inherit it; unset or empty, production is unchanged;
+not an integer, it stops. `seed_rnd_fixed` in `simple_rnd` holds the
+fixed-seed formula (`set_fixed_seed` of `simple_test_utils` and the flex
+PCG self-test's private copy call it) and restarts the count. CTest sets
+`SIMPLE_SEED=20260923` for every entry, and `run_unit_suites` reseeds
+before every sub-suite instead of once per process, so a full run, a
+focused run (`suite=<name>`) and a reversed run draw the same numbers in
+each sub-suite. The project-records tests called `seed_rnd` themselves (a
+non-reproducible fast test); they take a fixed seed.
+
+Tidy: the unit_project UI text still listed atoms; the router comment
+said twelve fast suites; the distributed-execution comment had landed on
+`suites_single`. `SIMPLE_CTEST_BUDGET` 30 -> 25 (13 fast + 1 platform +
+6 workflow + 5 library).
+
+First build: 12/13 in 5.0 s; `unit_numerics` stopped in `straight-line
+fit` (THROW_HARD, so the rest of the suite did not run). The reseeding
+moved the draws it starts from, and the test was flaky by construction:
+10 000 random exact lines, slope 5·U with a random sign, and r squared
+required at or above 0.9999. For a near-flat line r squared is 0/0 in
+single precision; a float32 emulation of the fit puts r squared below
+0.9999 for |slope| under about 5e-6·|intercept|, about one draw in
+200 000, so about one seed in twenty failed. The closed forms of
+`fit_straight_line` (exact line, perturbed line with its analytic r
+squared) were already in `linear algebra`; the sub-suite is gone, and
+`linear algebra` gained `test_fit_straight_line_recovery`: 35 exact lines,
+slopes from -5 to 5 through near-flat and flat, intercepts from -10 to 10,
+slope and intercept within 1e-5 (the emulation gives 6e-8 at worst). r
+squared is not asserted there; the one production caller,
+`guinier_bfac`, uses only the slope.
 
 ## 10. Fast-tier performance
 

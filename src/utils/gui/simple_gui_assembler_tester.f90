@@ -11,15 +11,16 @@
 !   Where the assembled JSON is fully deterministic (no live timestamps) the
 !   test verifies an FNV-1a hash of the serialised output; otherwise it checks
 !   only that the output is non-empty.
-!   Note: assemble_stream_heartbeat is not tested here because it requires
-!   live forked child processes.
+!   assemble_stream_heartbeat needs live forked child processes, so its test
+!   has its own entry point and runs in the forked_process platform entry.
 !
-! ENTRY POINT:
-!   run_all_gui_assembler_tests() — run every test in this module
+! ENTRY POINTS:
+!   run_all_gui_assembler_tests() — the unit_ui tests
+!   run_stream_heartbeat_tests()  — the stream heartbeat over seven live children
 !
 ! DEPENDENCIES:
 !   simple_gui_metadata_api, simple_gui_assembler, simple_test_utils,
-!   simple_string, simple_sp_project, simple_syslib
+!   simple_string, simple_sp_project, simple_syslib, simple_forked_process, unix
 !==============================================================================
 module simple_gui_assembler_tester
   use simple_gui_metadata_api, only: gui_metadata_stream_preprocess,                      &
@@ -56,15 +57,25 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_VOL3D_TYPE,                             &
                                      sprite_sheet_pos
   use simple_gui_metadata_api, only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
+  use simple_gui_metadata_api, only: CK, json_core, json_value
+  use simple_forked_process,   only: forked_process, FORK_POLL_TIME
+  use unix,                    only: c_usleep
   use simple_gui_assembler,    only: gui_assembler
   use simple_sp_project,       only: sp_project
   use simple_test_utils,       only: assert_true, assert_char, assert_int
   use simple_string,           only: string
   implicit none
 
-public :: run_all_gui_assembler_tests
+public :: run_all_gui_assembler_tests, run_stream_heartbeat_tests
 private
 #include "simple_local_flags.inc"
+
+! the stream heartbeat: the job id and the sections every payload carries
+integer,           parameter :: HEARTBEAT_JOB_ID  = 42
+integer,           parameter :: NHEARTBEAT_STAGES = 9
+character(len=24), parameter :: HEARTBEAT_STAGES(NHEARTBEAT_STAGES) = [character(len=24) :: &
+  &'preprocessing', 'assign_optics', 'initial_picking', 'opening2D', 'reference_picking', &
+  &'particle_sieving', 'pool2D', 'abinitio3D_multistate', 'master']
 
 contains
 
@@ -540,5 +551,124 @@ contains
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
   end subroutine test_project
+
+  !---------------- stream heartbeat (live forked children) ----------------
+
+  ! Run the stream-heartbeat tests. They fork seven real child processes, so they
+  ! are registered in the forked_process platform entry, not in unit_ui.
+  subroutine run_stream_heartbeat_tests()
+    write(*,'(A)') '**** running all stream heartbeat tests ****'
+    call test_stream_heartbeat_lifecycle()
+  end subroutine run_stream_heartbeat_tests
+
+  ! The stream master's heartbeat section over seven live children running the
+  ! finite default fork worker (initial_picking and opening2D share one process,
+  ! as in the master): while they run, every stage and the master report
+  ! 'running' with a pid and a start time and no stop time; after SIGTERM, all
+  ! report 'finished' with a stop time. Ruben's stream test `master`, moved here
+  ! by the stream review (plan, section 9.7); it never started the master itself.
+  subroutine test_stream_heartbeat_lifecycle()
+    type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
+    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate
+    type(gui_assembler)  :: assembler
+    type(string)         :: running_heartbeat, finished_heartbeat
+    integer              :: rc
+    write(*,'(A)') 'test_stream_heartbeat_lifecycle'
+#if defined(_WIN32)
+    write(*,'(A)') 'skipped: forked processes are unavailable on Windows'
+#else
+    call assembler%new(HEARTBEAT_JOB_ID)
+    call fork_preprocess%start(           name=string('TEST_HEARTBEAT_PREPROCESS'))
+    call fork_assign_optics%start(        name=string('TEST_HEARTBEAT_ASSIGN_OPTICS'))
+    call fork_opening2D%start(            name=string('TEST_HEARTBEAT_OPENING2D'))
+    call fork_reference_picking%start(    name=string('TEST_HEARTBEAT_REFERENCE_PICKING'))
+    call fork_particle_sieving%start(     name=string('TEST_HEARTBEAT_PARTICLE_SIEVING'))
+    call fork_pool2D%start(               name=string('TEST_HEARTBEAT_POOL2D'))
+    call fork_abinitio3D_multistate%start(name=string('TEST_HEARTBEAT_ABINITIO3D_MULTISTATE'))
+    rc = c_usleep(FORK_POLL_TIME * 5)
+    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
+      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate)
+    running_heartbeat = assembler%to_string()
+    call fork_preprocess%terminate()
+    call fork_assign_optics%terminate()
+    call fork_opening2D%terminate()
+    call fork_reference_picking%terminate()
+    call fork_particle_sieving%terminate()
+    call fork_pool2D%terminate()
+    call fork_abinitio3D_multistate%terminate()
+    call fork_preprocess%await_final_status()
+    call fork_assign_optics%await_final_status()
+    call fork_opening2D%await_final_status()
+    call fork_reference_picking%await_final_status()
+    call fork_particle_sieving%await_final_status()
+    call fork_pool2D%await_final_status()
+    call fork_abinitio3D_multistate%await_final_status()
+    call assembler%set_stoptime()
+    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
+      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate)
+    finished_heartbeat = assembler%to_string()
+    call assembler%kill()
+    call assert_char('', heartbeat_mismatch(running_heartbeat, 'running'), &
+      &'running heartbeat: every stage and the master running, with pid and start time, no stop time')
+    call assert_char('', heartbeat_mismatch(finished_heartbeat, 'finished'), &
+      &'finished heartbeat: every stage and the master finished, with pid, start and stop time')
+#endif
+  end subroutine test_stream_heartbeat_lifecycle
+
+  ! '' when the payload carries the job id and, for every stage and the master,
+  ! the expected status, a positive pid and start time, and a stop time that is 0
+  ! while running and positive once finished; otherwise the first field that does not
+  function heartbeat_mismatch( payload, expected_status ) result( what )
+    type(string),     intent(in)  :: payload
+    character(len=*), intent(in)  :: expected_status
+    character(len=:), allocatable :: what
+    type(json_core)               :: json
+    type(json_value), pointer     :: root
+    character(kind=CK,len=:), allocatable :: actual_status
+    character(len=:),         allocatable :: path
+    integer :: i, job_id, pid, starttime, stoptime
+    logical :: found
+    nullify(root)
+    call json%initialize()
+    call json%parse(root, payload%to_char())
+    if( json%failed() .or. .not. associated(root) )then
+      what = 'the payload does not parse'
+      if( associated(root) ) call json%destroy(root)
+      return
+    endif
+    what = ''
+    call json%get(root, 'jobid', job_id, found)
+    if( .not. found )then
+      what = 'jobid missing'
+    else if( job_id /= HEARTBEAT_JOB_ID )then
+      what = 'jobid'
+    endif
+    do i = 1, NHEARTBEAT_STAGES
+      if( len(what) > 0 ) exit
+      path = 'stream_heartbeat.'//trim(HEARTBEAT_STAGES(i))
+      call json%get(root, path//'.status', actual_status, found)
+      if( .not. found )then
+        what = path//'.status missing'
+      else if( actual_status /= expected_status )then
+        what = path//'.status '//actual_status
+      endif
+      if( len(what) > 0 ) exit
+      call json%get(root, path//'.pid', pid, found)
+      if( .not. found .or. pid <= 0 ) what = path//'.pid'
+      if( len(what) > 0 ) exit
+      call json%get(root, path//'.starttime', starttime, found)
+      if( .not. found .or. starttime <= 0 ) what = path//'.starttime'
+      if( len(what) > 0 ) exit
+      call json%get(root, path//'.stoptime', stoptime, found)
+      if( .not. found )then
+        what = path//'.stoptime missing'
+      else if( expected_status == 'running' .and. stoptime /= 0 )then
+        what = path//'.stoptime set while running'
+      else if( expected_status == 'finished' .and. stoptime <= 0 )then
+        what = path//'.stoptime not set when finished'
+      endif
+    enddo
+    call json%destroy(root)
+  end function heartbeat_mismatch
 
 end module simple_gui_assembler_tester

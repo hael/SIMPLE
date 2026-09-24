@@ -5,7 +5,7 @@
 ! (merge_algndocs) and the GUI's JSON view of a segment (print_segment_json: windows, sorting, histogram and
 ! plot blocks, absent optionals).
 module simple_sp_project_tester
-use simple_core_module_api   ! string, oris, ctfparams, del_file, filepath, syslib, PI, ran3, seed_rnd, logfhandle
+use simple_core_module_api   ! string, oris, ctfparams, del_file, filepath, syslib, PI, ran3, logfhandle
 use simple_test_utils        ! assertions etc.
 use simple_sp_project,       only: sp_project
 use simple_binoris_io,       only: binwrite_oritab
@@ -31,7 +31,7 @@ contains
 
     subroutine run_all_sp_project_tests()
         write(*,'(A)') '**** running all project record tests ****'
-        call seed_rnd
+        call set_fixed_seed(20260924)   ! the round-trip records are random draws; seed_rnd read /dev/urandom
         call test_phase_records()
         call test_phase_serialisation()
         call test_write_read_roundtrip()

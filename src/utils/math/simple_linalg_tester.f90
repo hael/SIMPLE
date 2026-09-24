@@ -39,6 +39,7 @@ contains
         call test_svdfit_polynomial()
         call test_svd_multifit_plane()
         call test_fit_straight_line()
+        call test_fit_straight_line_recovery()
         call test_plane_fits()
         call test_vector_helpers()
         call test_gemm_tn()
@@ -272,6 +273,39 @@ contains
         call assert_real(1.95758, slope,  1.e-4, 'fit_straight_line: slope of the perturbed line (161.5 / 82.5)')
         call assert_real(1.23333, intercept, 1.e-4, 'fit_straight_line: intercept of the perturbed line (12 - slope * 5.5)')
     end subroutine test_fit_straight_line
+
+    !> 35 exact lines on 100 points of x in [-1, 1) (single precision, as a caller hands them in),
+    !! slopes from -5 to 5 through near-flat and flat, intercepts from -10 to 10: slope and intercept
+    !! come back within 1e-5 (a float32 emulation of the fit gives 6e-8 at worst). r squared is not
+    !! asserted: for a near-flat line it is 0/0 in single precision (below 0.9999 for |slope| under
+    !! about 5e-6 |intercept|), and the one production caller (guinier_bfac) uses only the slope.
+    !! Replaces the unit_numerics sub-suite `straight-line fit`, which drew 10 000 random lines and
+    !! required r squared >= 0.9999, so it failed for about one seed in twenty.
+    subroutine test_fit_straight_line_recovery()
+        integer, parameter :: NPTS = 100
+        real,    parameter :: SLOPES(7)     = [-5., -0.5, -1.e-5, 0., 1.e-5, 0.5, 5.]
+        real,    parameter :: INTERCEPTS(5) = [-10., -1., 0., 3., 10.]
+        real    :: datavec(NPTS,2), slope, intercept, corr, x, err_slope, err_intercept
+        integer :: i, j, k
+        write(*,'(A)') 'test_fit_straight_line_recovery'
+        err_slope     = 0.
+        err_intercept = 0.
+        do i = 1,size(SLOPES)
+            do j = 1,size(INTERCEPTS)
+                x = -1.
+                do k = 1,NPTS
+                    datavec(k,1) = x
+                    datavec(k,2) = SLOPES(i) * x + INTERCEPTS(j)
+                    x = x + 0.02
+                enddo
+                call fit_straight_line(NPTS, datavec, slope, intercept, corr)
+                err_slope     = max(err_slope,     abs(slope     - SLOPES(i)))
+                err_intercept = max(err_intercept, abs(intercept - INTERCEPTS(j)))
+            enddo
+        enddo
+        call assert_real(0., err_slope,     1.e-5, 'fit_straight_line: slope of 35 exact lines, steep to flat')
+        call assert_real(0., err_intercept, 1.e-5, 'fit_straight_line: intercept of 35 exact lines, steep to flat')
+    end subroutine test_fit_straight_line_recovery
 
     subroutine test_plane_fits()
         integer, parameter :: NPTS = 9

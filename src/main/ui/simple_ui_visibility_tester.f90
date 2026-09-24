@@ -235,13 +235,8 @@ contains
         if( associated(registered_prg) )then
             call assert_char('utils', registered_prg%category%to_char(), 'cavg_registration test category')
         endif
-        call assert_registered_test_category('abinitio2D_stream', 'stream', 'Stream', 130)
-        call assert_registered_test_category('assign_optics',     'stream', 'Stream', 130)
-        call assert_registered_test_category('gen_pickrefs',      'stream', 'Stream', 130)
-        call assert_registered_test_category('master',            'stream', 'Stream', 130)
-        call assert_registered_test_category('pick_extract',      'stream', 'Stream', 130)
-        call assert_registered_test_category('preproc',           'stream', 'Stream', 130)
-        call assert_registered_test_category('sieve_cavgs',       'stream', 'Stream', 130)
+        call assert_registered_test_category('preproc',    'stream', 'Stream',     130)
+        call assert_registered_test_category('lib_stream', 'class',  'Unit tests', 10)
     end subroutine test_registered_test_programs
 
     !> the five CTF-fitting programs expose fit_phshift (binary, default no) with the phase-shift window
