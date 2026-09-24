@@ -93,7 +93,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! The fast gate is thirteen area suites, each one CTest entry under the label
-! `fast` (doc/refactoring_notes/uniform_test_environment_refactoring.md,
+! `fast` (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md,
 ! section 5.1). Every sub-suite in them makes assertions through
 ! simple_test_utils, needs no network beyond localhost, no download and no
 ! user-supplied data, and runs on one OpenMP thread.

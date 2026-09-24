@@ -2,12 +2,26 @@
 
 Date: 2026-09-24
 
-Status: assessment, for the owner. It does not replace the living design
-record of the test refactor,
-[`uniform_test_environment_refactoring.md`](uniform_test_environment_refactoring.md),
-or the generated [`test_inventory.md`](test_inventory.md); it reads them,
-together with the build and CI configuration, against what current software
-practice expects of a test suite, and names the gaps worth closing.
+Status (2026-09-25): **closed.** Every recommendation was either carried out,
+handed to the document that already plans it, or dropped with a reason (table
+below), and the note moved to `completed/`. Sections 1 to 4 are kept as written
+on 2026-09-24, the morning before the test review finished; several of their
+facts are out of date, and the current state is in the policy
+(`doc/policies/test_environment_policy.md`), the archived plan
+([`uniform_test_environment_refactoring.md`](uniform_test_environment_refactoring.md))
+and the review record
+([`test_review_record.md`](../../code_overview/test_review_record.md)).
+
+| Recommendation | Outcome |
+|---|---|
+| 1. Fast gate on every push | Not enforced, by decision (Hans): a push sometimes only moves code to a cluster machine. Running the gate before a push is a strong recommendation in the policy (section 3.4) and `AGENTS.md`; the nightly CI gates master on Linux and macOS in Debug (`compile_debug.sh`, `compile_gui.sh`) and Release (`compile_clean.sh`), all with `--compile-tests`. The hand-kept CI test list went with Phase 7: CI runs `ctest` by label and name. |
+| 2. Simulation-truth floors | Phase 5, Ruben: `doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`. |
+| 3. Bounds checking on macOS Debug, FP traps | Linux Debug builds, the developers' and the nightly CI's, run `-fcheck=all`; the SPIDER header defect was caught by a bounds-checked build. macOS keeps the reduced checks until someone isolates, on a Mac, which gfortran 16 descriptor check crashes on the FFTW-backed pointers. FP traps and signalling-NaN initialisation are an opt-in: `./compile_debug.sh --traps` (`SIMPLE_DEBUG_TRAPS`), for a diagnostic run. |
+| 4. Warnings visible | `-w` removed from the Release Fortran flags (vendored sources keep their own). Warnings-as-errors: not before the warnings in a Release build have been seen and cleared. |
+| 5. Test rules where contributors read them | The policy; a Tests section in `AGENTS.md`; a pointer in `.github/copilot-instructions.md`; the architecture skill points to the policy. |
+| 6. Coverage once | In the Phase 5 handover: an optional weekly instrumented build of the fast and library tiers with a `gcovr` summary in the nightly archive, as a report. |
+| 7. Generative tests | Round trips at the sizes where a file layout changes: a rule in the policy (section 4.5) and `test_file_roundtrip_sizes` in `simple_image_tester` (MRC and SPIDER, odd, small and non-square images, stacks and volumes). Corruption fuzzing of the readers: dropped for now; the readers' inputs are SIMPLE's own and the common external formats, and the defect that prompted the rule was found by a round trip at a small box. Property tests: done where the invariants are natural (symmetry groups, rotations, address maps, transfer functions). |
+| Parallel correctness (section 2) | A rule in the policy (section 4.5): a threaded path gets a check that forces a team; the Phase 5 runner repeats the fast tier on four threads each night. |
 
 Validation level: static inspection only. Read for this assessment:
 `.github/workflows/ci_build_and_test.yml`, `CMakeLists.txt`,

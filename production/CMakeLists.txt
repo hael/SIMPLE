@@ -163,7 +163,7 @@ add_custom_target(audit_ui_defaults
 )
 
 # ------------------------------------------------------------------------------
-# Tests  (doc/refactoring_notes/uniform_test_environment_refactoring.md)
+# Tests  (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md)
 # ------------------------------------------------------------------------------
 # Two gates behind one front door, simple_test_exec:
 #   fast         runs on every --compile-tests build under a 30 s budget

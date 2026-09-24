@@ -2,7 +2,7 @@
 
 Hans, 2026-09-23. Your six SINGLE test programs (`simple_test_exec test=...` in
 `src/main/commanders/test/simple_commanders_test_single.f90`) have been moved into the
-two-tier test environment (plan: `doc/refactoring_notes/uniform_test_environment_refactoring.md`,
+two-tier test environment (plan: `doc/refactoring_notes/completed/uniform_test_environment_refactoring.md`,
 section 9.7, "single"). They were moved as they were. Only one of them checked anything
 beyond "it did not crash", so most of them pass whatever the code does. This note says
 where each one lives now and what it has to check before it counts as a test.

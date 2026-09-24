@@ -50,6 +50,10 @@ cleanup behavior.
   checks that do not compile code. Tell the user that compilation and runtime tests were
   left for them.
 
+- Tests follow `doc/policies/test_environment_policy.md`: a test can fail, lives in a
+  `simple_<thing>_tester.f90` next to the code it tests, and runs through `simple_test_exec`;
+  see the Tests section of `AGENTS.md`.
+
 ## Instruction And Skill Maintenance
 
 - Propose small, incremental updates to `.github/instructions/` and `.github/skills/`

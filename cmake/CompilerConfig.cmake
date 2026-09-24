@@ -100,7 +100,8 @@ string(APPEND CMAKE_Fortran_FLAGS
 #-O3 -march=native -fopenmp -fopt-info-vec-optimized -fopt-info-vec-missed
 # inspect vectorization reports: -qopt-report, -fopt-info-vec
 # -ffast-math is unsafe, causes bugs
-set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -w -funroll-loops ${ARCH_FLAG} -fPIC" 
+# No -w: Release shows the same warnings as Debug (vendored sources keep their own -w)
+set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops ${ARCH_FLAG} -fPIC"
     CACHE STRING "Release flags for Fortran" FORCE)
 
 # Debug flags for Fortran
@@ -112,6 +113,14 @@ if(APPLE)
 else()
     set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fbounds-check -fcheck=all -Wuninitialized -Wunused -fPIC"
         CACHE STRING "Debug flags for Fortran" FORCE)
+endif()
+
+# Opt-in floating-point diagnostics for a Debug build (./compile_debug.sh --traps): stop on an
+# invalid operation, a division by zero or an overflow, and start every real as a signalling NaN,
+# so that a real used before it is set stops at its first use
+option(SIMPLE_DEBUG_TRAPS "Debug build: trap invalid, zero and overflow; initialise reals to signalling NaN" OFF)
+if(SIMPLE_DEBUG_TRAPS)
+    string(APPEND CMAKE_Fortran_FLAGS_DEBUG " -ffpe-trap=invalid,zero,overflow -finit-real=snan")
 endif()
 
 # ------------------------------------------------------------------------------

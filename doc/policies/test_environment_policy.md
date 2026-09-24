@@ -8,9 +8,11 @@ and to everyone who adds, changes or removes one. It records the state after
 the test-environment refactoring of September 2026.
 
 The refactoring itself is documented in
-`doc/refactoring_notes/uniform_test_environment_refactoring.md` (the plan and
+`doc/refactoring_notes/completed/uniform_test_environment_refactoring.md` (the plan and
 its batch records, section 9.7). Every test that existed before it is listed,
-with its review verdict, in `doc/refactoring_notes/test_inventory.md`. This
+with its review verdict, in `doc/code_overview/test_review_record.md`; the
+full inventory, `doc/code_overview/test_inventory.md`, is generated from
+the sources and that record on every build and is not committed. This
 policy is the short version for day-to-day work; when the two disagree, fix
 the one that is wrong.
 
@@ -271,8 +273,13 @@ Nothing else.
 **Work on master; scratch in a worktree.** SIMPLE practises extreme
 programming: everyone works on master and pushes to master, in small and
 frequent steps, so that everyone's work is integrated, built and tested
-every day. The fast gate runs on every build and a failed gate installs
-nothing, which is what makes this safe. Do not keep work on a branch in the
+every day. What makes this safe is the fast gate, and running it is up to
+you: **before you push, build with `./compile_debug.sh --compile-tests` and
+let the gate pass.** This is a strong recommendation, not a lock: nothing in
+Git or CI blocks a push, because sometimes a push only moves code to another
+machine (a cluster node, say). Then run the gate before the work counts as
+done. The nightly CI builds and gates master on Linux and macOS, in Debug and
+Release, and shows the next morning what slipped through. Do not keep work on a branch in the
 online repository: nobody checks it, it drifts away from master, and the
 merge gets harder every day it waits. A branch pushed to the online
 repository is the exception and needs a strong reason (for example a
@@ -387,6 +394,17 @@ Before asking for a build:
 
 When a test is deleted, the commit says why. When a test finds a defect, the
 defect is fixed in the same change and the test pins the fix.
+
+Two kinds of code need a check that is easy to leave out:
+
+- **Threaded paths.** The fast gate runs every suite on one OpenMP thread, so
+  a routine with a threaded path gets a check that forces a team (the masks
+  suite runs a team of three) and compares with the serial result. The
+  nightly run repeats the fast tier on four threads.
+- **Readers and writers.** A file format is tested by round trips at the
+  sizes where its layout changes: small, odd and non-square boxes and the
+  sizes where a header or record length changes. The SPIDER header was wrong
+  for every box below 43 and right for the 64-pixel boxes the tests used.
 
 ### 4.6 Fortran traps seen in the review
 
@@ -521,7 +539,7 @@ production executables.
 ## 8. What the refactoring deleted, and why
 
 The review gave every test identity in the inventory a verdict. The
-retired-tests table of `doc/refactoring_notes/test_inventory.md` has one
+retired-tests table of `doc/code_overview/test_review_record.md` has one
 row per removed identity (136), with its reason and replacement. Most were
 not lost: 79 were merged into tester modules with real assertions, 10 were
 modified or moved, and 47 were deleted or retired outright. The reasons for

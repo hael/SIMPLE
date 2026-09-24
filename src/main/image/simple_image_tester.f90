@@ -44,6 +44,7 @@ contains
         call test_masscen()
         call test_corr()
         call test_file_roundtrip()
+        call test_file_roundtrip_sizes()
         call test_fproject()
     end subroutine run_all_image_tests
 
@@ -540,6 +541,74 @@ contains
         end subroutine del_all
 
     end subroutine test_file_roundtrip
+
+    ! round trips at the sizes where a file layout changes (policy, section 4.5): a SPIDER header is
+    ! labrec records of 4*nx bytes and at least 1024 bytes, so boxes below 13 and below 43 and boxes
+    ! above 256 lay it out differently (it was wrong for every box below 43 until 2026-09-25, while
+    ! the tests used 64); odd and non-square images and volumes, stacks of three, in both formats.
+    ! The pixel values are integers below 2**24, exact in single precision and distinct per pixel
+    ! and per image, so a transposition or a swapped image shows
+    subroutine test_file_roundtrip_sizes()
+        integer, parameter :: N2 = 6, N3 = 3, NSTK = 3
+        integer, parameter :: DIMS2(2,N2) = reshape([5,5, 13,13, 42,42, 43,43, 43,17, 257,9], [2,N2])
+        integer, parameter :: DIMS3(3,N3) = reshape([5,5,5, 13,17,5, 43,43,43], [3,N3])
+        character(len=4), parameter :: EXTS(2) = ['.mrc', '.spi']
+        type(image) :: img, back
+        character(len=:), allocatable :: fname, tag
+        integer :: id, ie, i, ldim(3)
+        logical :: ok
+        write(*,'(A)') 'test_file_roundtrip_sizes'
+        do ie = 1,size(EXTS)
+            fname = 'tmp_image_tester_sizes'//EXTS(ie)
+            do id = 1,N2
+                ldim = [DIMS2(1,id), DIMS2(2,id), 1]
+                tag  = EXTS(ie)//' '//int2str(ldim(1))//'x'//int2str(ldim(2))
+                call del_file(fname)
+                call img%new(ldim, SMPD, wthreads=.false.)
+                call back%new(ldim, SMPD, wthreads=.false.)
+                do i = 1,NSTK
+                    call img%set_rmat(pattern(ldim, i), .false.)
+                    call img%write(string(fname), i)
+                end do
+                ok = .true.
+                do i = 1,NSTK
+                    call back%read(string(fname), i)
+                    if( any(back%get_rmat() /= pattern(ldim, i)) ) ok = .false.
+                end do
+                call assert_true(ok, tag//': a stack of three images reads back exactly')
+            end do
+            do id = 1,N3
+                ldim = DIMS3(:,id)
+                tag  = EXTS(ie)//' '//int2str(ldim(1))//'x'//int2str(ldim(2))//'x'//int2str(ldim(3))
+                call del_file(fname)
+                call img%new(ldim, SMPD, wthreads=.false.)
+                call back%new(ldim, SMPD, wthreads=.false.)
+                call img%set_rmat(pattern(ldim, 1), .false.)
+                call img%write(string(fname))
+                call back%read(string(fname))
+                call assert_true(all(back%get_rmat() == pattern(ldim, 1)), tag//': a volume reads back exactly')
+            end do
+            call del_file(fname)
+        end do
+        call img%kill
+        call back%kill
+
+      contains
+
+        function pattern( ldim, iimg ) result( p )
+            integer, intent(in) :: ldim(3), iimg
+            real    :: p(ldim(1),ldim(2),ldim(3))
+            integer :: i, j, k
+            do k = 1,ldim(3)
+                do j = 1,ldim(2)
+                    do i = 1,ldim(1)
+                        p(i,j,k) = real(i + 1000*j + 100000*k + 1000000*iimg)
+                    end do
+                end do
+            end do
+        end function pattern
+
+    end subroutine test_file_roundtrip_sizes
 
     !---------------- Fourier projector ----------------
 

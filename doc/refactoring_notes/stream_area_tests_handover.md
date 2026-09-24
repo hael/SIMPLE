@@ -2,7 +2,7 @@
 
 Hans, 2026-09-24. Your seven stream test programs (`simple_test_exec test=...` in
 `src/main/commanders/test/simple_commanders_test_stream.f90`) have been moved into the
-two-tier test environment (plan: `doc/refactoring_notes/uniform_test_environment_refactoring.md`,
+two-tier test environment (plan: `doc/refactoring_notes/completed/uniform_test_environment_refactoring.md`,
 section 9.7, "stream"). Unlike the SINGLE tests, these already checked real things, and two of
 them (optics assignment and the sieve) check exact truth. The move kept every check: each
 `THROW_HARD` became an assertion with the same condition and message. This note says where each

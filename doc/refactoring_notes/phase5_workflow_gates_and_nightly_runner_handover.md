@@ -1,7 +1,11 @@
 # Phase 5 of the test environment: handover to Ruben
 
+Since 2026-09-25 this is the live document of the test environment: the plan is archived
+(`doc/refactoring_notes/completed/`), Phase 5 and the checks below are what is left of it, and
+the day-to-day rules are `doc/policies/test_environment_policy.md`.
+
 Hans, 2026-09-24. Phase 5 of the test-environment plan is yours
-(`doc/refactoring_notes/uniform_test_environment_refactoring.md`: section 12, Phase 5;
+(`doc/refactoring_notes/completed/uniform_test_environment_refactoring.md`: section 12, Phase 5;
 section 5.2.2 on the workflow gates; section 5.2.3 on the nightly run). It has two parts:
 
 - **Part A:** turn the simulated workflows into gates on the truth they were simulated from.
@@ -171,6 +175,16 @@ Requirements, from plan section 5.2.3 and what the entries need:
    - Then run `ctest -L workflow`; the workflow entries are `RUN_SERIAL`, so each owns the
      machine.
    - Add `ctest -L platform` where the machine has the capability.
+   - Repeat the fast tier threaded, outside CTest: its `fast` entries pin `OMP_NUM_THREADS=1`
+     in their CTest environment, which a variable set in the shell does not override. For each
+     `unit_<area>` (`ctest -N -L fast` lists them), in a scratch directory with the environment
+     the entries get (`SIMPLE_PATH`, `SIMPLE_SEED=20260923`):
+     `OMP_NUM_THREADS=4 SIMPLE_UNIT_ORDER=reverse simple_test_exec test=unit_<area>`; a nonzero
+     exit fails the night. The unit suites take their thread count from the environment, so
+     this is the only run that exercises the threaded paths of the fast suites (seconds).
+   - Optional, weekly rather than nightly: an instrumented build (`--coverage`) of the fast and
+     library tiers with a `gcovr` summary in the archive, as a report and not a gate; it shows
+     which production modules no test reaches.
    - Keep ctest's per-entry status and time: `--output-junit` in recent CMake, or parse the log
      as `scripts/ctest_budget.py` does for the fast gate.
 4. **The summary.**
@@ -193,10 +207,10 @@ Requirements, from plan section 5.2.3 and what the entries need:
    - The runner script(s) in `scripts/`, for example `nightly_run.sh` plus a summary writer.
    - A short install note: machine, schedule, where the archive lives, how to run a night by
      hand.
-   - Section 5.2.3 of the plan updated with what was built.
+   - What was built, recorded in this handover (the plan is archived and no longer updated).
    - After the first complete night, the measured runtimes of every library and workflow entry,
-     entered in the plan: the section 5.1/5.2 tables and the "to be measured" rows in the test
-     inventory.
+     recorded here; the generated test inventory shows run times when the dossier script is given
+     the night's timing file (`--timing`).
 
 ## What is still weak in the nightly tier (from the earlier handovers)
 
@@ -209,6 +223,21 @@ Requirements, from plan section 5.2.3 and what the entries need:
 
 These are not Phase 5 proper. The runner will run them every night from now on, which is the
 reason to close them early.
+
+## Outstanding checks, carried over from the plan
+
+The plan closed with these observations still to make (its section 16, criterion 10: what has not
+been observed is listed, not claimed). Record each here when it is made.
+
+- A green `./compile_debug.sh --compile-tests` build of the tree with the in-module self-test
+  batch and the build-time code map and test inventory (Hans).
+- One `simple_test_exec test=pcg_recon`: its seed changed on 2026-09-25, and the run also gives
+  its runtime (Hans).
+- One build without `--compile-tests` (`BUILD_TESTS=OFF`), to confirm it links without the
+  test-only sources (Hans).
+- The offload branch of `simple_openmp_offload_tester` in an offload build (Cyril).
+- The first night of the runner, with the runtimes of the library and workflow entries (Ruben;
+  the exit of Part B).
 
 ## Who to ask
 

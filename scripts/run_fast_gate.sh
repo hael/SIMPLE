@@ -9,7 +9,7 @@
 # scripts/ctest_budget.py. What is printed is ctest's own report, as in X;
 # the budget checker is silent when the gate passes within budget and speaks
 # only when an entry failed or the run went over 30 s (Phase 2 of
-# doc/refactoring_notes/uniform_test_environment_refactoring.md, 2026-09-22).
+# doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, 2026-09-22).
 # The per-entry timing table is always written beside the log
 # (ctest_fast.log.timing.txt), so a suite that grows is visible from build to
 # build. Exit status is the budget checker's.

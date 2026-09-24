@@ -36,6 +36,21 @@ Branch-context files are local development memory and may describe work that is 
 - Update the single note as the design is reviewed and implemented; rely on Git
   history instead of retaining redundant companion notes.
 
+## Tests
+
+- The rules are `doc/policies/test_environment_policy.md`. A test can fail: it ends in
+  `simple_test_utils` assertions whose failure reaches the exit status. A program that only runs,
+  prints or wraps commanders is not a test.
+- A unit test is a `simple_<thing>_tester.f90` next to the code it tests, registered as a
+  sub-suite of an area suite; `simple_test_exec` is the only test executable. No standalone test
+  programs and no scratch programs in a test area: scratch work lives in a local git worktree.
+- Expected values come from outside the code under test (closed forms, brute force, an emulation);
+  seeds are fixed; tests leave no files behind.
+- `./compile_debug.sh --compile-tests` builds and runs the fast gate (under 30 s). Running it
+  before a push to master is strongly recommended, not enforced: a push that only moves code to
+  another machine may skip it (policy, section 3.4). `python3 scripts/check_test_registry.py . --verbose` and
+  `python3 scripts/check_descr.py .` check the registrations and file headers without compiling.
+
 ## Git and Validation
 
 - Preserve unrelated user changes.

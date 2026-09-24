@@ -1,6 +1,6 @@
 #!/bin/bash
 # scripts/test_timing_run.sh — Phase 0 of doc/refactoring_notes/
-# uniform_test_environment_refactoring.md: run every Fortran test on both
+# doc/refactoring_notes/completed/uniform_test_environment_refactoring.md: run every Fortran test on both
 # routes, each in its own directory under a timeout, and record wall time,
 # exit status and the tail of its output.
 #

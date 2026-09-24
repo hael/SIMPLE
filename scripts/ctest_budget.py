@@ -3,7 +3,7 @@
 
 Reads the stdout of a `ctest -L fast` run (tee it to a file; see
 scripts/run_fast_gate.sh) and checks the one rule of section 5.1 of
-doc/refactoring_notes/uniform_test_environment_refactoring.md: the whole run
+doc/refactoring_notes/completed/uniform_test_environment_refactoring.md: the whole run
 finishes within --budget seconds of real time ("Total Test time (real)" as
 ctest reports it). Any failed entry also fails the check.
 

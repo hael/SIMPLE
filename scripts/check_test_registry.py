@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check_test_registry.py -- the CTest registrations, the test UI and the test routers agree.
 
-Registry consistency (doc/refactoring_notes/uniform_test_environment_refactoring.md,
+Registry consistency (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md,
 section 7, item 6). A static check of the source tree, run by scripts/run_fast_gate.sh
 before the gate, so a --compile-tests build fails on a mismatch:
 

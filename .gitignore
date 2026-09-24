@@ -50,6 +50,7 @@ __pycache__
 # Docs
 docs/
 /doc/code_overview/code_base_map.md
+/doc/code_overview/test_inventory.md
 /.vscode
 # Codex agent notes are local by default; force-add only deliberately shared files.
 /.codex

@@ -28,6 +28,7 @@ my $out                = '../doc/code_overview/code_base_map.md';
 my $file_scan_lines    = 40;
 my @exts               = ('f90', 'F90');
 my $include_nonfortran = 0;
+my $quiet              = 0;   # --quiet: no summary (the build's generate_codebase_map target)
 my @exclude_dirs_user  = ('extlibs');
 # Only include these top-level directories (relative to repo root)
 my %ALLOWED_TOP_DIRS = map { $_ => 1 } qw(src production scripts);
@@ -39,6 +40,7 @@ GetOptions(
   'ext=s@'              => \@exts,
   'include-nonfortran!' => \$include_nonfortran,
   'exclude-dir=s@'      => \@exclude_dirs_user,
+  'quiet!'              => \$quiet,
 ) or die "Error parsing arguments\n";
 
 $root = abs_path($root) // die "Cannot resolve root path\n";
@@ -312,7 +314,9 @@ my $dir_count  = scalar(keys %dirs);
 my $file_count = 0;
 $file_count += scalar(@{ $files_by_dir{$_} }) for keys %files_by_dir;
 
-print "Wrote: $out\n";
-print "Directories: $dir_count\n";
-print "Listed files: $file_count\n";
+unless ($quiet) {
+  print "Wrote: $out\n";
+  print "Directories: $dir_count\n";
+  print "Listed files: $file_count\n";
+}
 
