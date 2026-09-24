@@ -305,9 +305,17 @@ The implementation was built and the following focused checks passed on
   (since 2026-09-23 the `project records` sub-suite of `simple_test_exec test=unit_project`;
   the executable is gone)
 - `simple_test_phshift_star`: RELION degree/radian contract
+  (since 2026-09-23 `test_relion_phase_shift` in the `STAR project` sub-suite of
+  `simple_test_exec test=unit_project`; the executable is gone)
 - `simple_test_phshift_policy`: all five fitting-program UI contracts
+  (since 2026-09-23 `test_phshift_contract` in the `UI visibility` sub-suite of
+  `simple_test_exec test=unit_ui`; the executable is gone)
 - `simple_test_project_merge`: project assembly and validation behavior
+  (the `project merge` sub-suite of `simple_test_exec test=unit_project`; the
+  duplicate executable is gone since 2026-09-23)
 - `simple_test_projdir_accumulator`: unchanged reconstruction accumulation contract
+  (since 2026-09-23 the `class-average accumulator` sub-suite of
+  `simple_test_exec test=unit_reconstruction`; the executable is gone)
 
 The broad pre-existing `simple_test_starfile` executable was not a clean
 acceptance gate because of unrelated legacy failures and nondeterministic
@@ -342,10 +350,10 @@ executables are:
 ```text
 build/production/simple_test_exec test=unit_image    (CTF sub-suite)
 build/production/simple_test_exec test=unit_project  (project records sub-suite)
-build/production/simple_test_phshift_star
-build/production/simple_test_phshift_policy
-build/production/simple_test_project_merge
-build/production/simple_test_projdir_accumulator
+build/production/simple_test_exec test=unit_project  suite=star_project
+build/production/simple_test_exec test=unit_ui       suite=ui_visibility
+build/production/simple_test_exec test=unit_project  suite=project_merge
+build/production/simple_test_exec test=unit_reconstruction suite=class_average_accumulator
 ```
 
 Before inspecting experimental results, record the quantitative tolerances to

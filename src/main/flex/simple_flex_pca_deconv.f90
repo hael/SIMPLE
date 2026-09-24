@@ -347,7 +347,7 @@ contains
         real(dp), intent(inout) :: mu(d,nk), Sig(d,d,nk), pik(nk)
         real(dp), intent(out)   :: ll
         real(dp), allocatable :: sw(:,:), sb(:,:,:), sBB(:,:,:,:)
-        real(dp) :: Lk(d,d,nk), RSk(d,d,nk), yk(d,nk), b(d), Bk(d,d), logp(nk), lmax, lse, rk(nk)
+        real(dp) :: Lk(d,d,nk), RSk(d,d,nk), yk(d,nk), b(d), Bk(d,d), logp(nk), lmax, lse, rk(nk), zi(d)
         real(dp) :: ll_prev, ridge, trc
         integer  :: it, i, k, ithr, nthr, q
         logical  :: okk(nk)
@@ -362,12 +362,13 @@ contains
         do it = 1, XD_MAXIT
             sw = 0.d0; sb = 0.d0; sBB = 0.d0
             ll = 0.d0
-            !$omp parallel do default(shared) private(i,k,ithr,Lk,RSk,yk,b,Bk,logp,lmax,lse,rk,okk) &
+            !$omp parallel do default(shared) private(i,k,ithr,Lk,RSk,yk,b,Bk,logp,lmax,lse,rk,okk,zi) &
             !$omp& schedule(static) reduction(+:ll)
             do i = 1, n
                 ithr = omp_get_thread_num() + 1
+                zi   = z(i,:)                ! the row is strided in z(n,d)
                 do k = 1, nk
-                    call component_factor(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, &
+                    call component_factor(zi, R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, &
                         &logp(k), Lk(:,:,k), RSk(:,:,k), yk(:,k), okk(k))
                     logp(k) = logp(k) + log(max(pik(k), XD_PI_MIN))
                     if( .not. okk(k) ) logp(k) = -huge(0.d0)/2
@@ -408,14 +409,15 @@ contains
     function xd_loglik( z, R, Nz, n, d, nk, mu, Sig, pik ) result( ll )
         integer,  intent(in) :: n, d, nk
         real(dp), intent(in) :: z(n,d), R(d,d,n), Nz(d,d,n), mu(d,nk), Sig(d,d,nk), pik(nk)
-        real(dp) :: ll, logp(nk), lmax, L(d,d), RS(d,d), y(d)
+        real(dp) :: ll, logp(nk), lmax, L(d,d), RS(d,d), y(d), zi(d)
         integer  :: i, k
         logical  :: ok
         ll = 0.d0
-        !$omp parallel do default(shared) private(i,k,logp,lmax,L,RS,y,ok) schedule(static) reduction(+:ll)
+        !$omp parallel do default(shared) private(i,k,logp,lmax,L,RS,y,ok,zi) schedule(static) reduction(+:ll)
         do i = 1, n
+            zi = z(i,:)
             do k = 1, nk
-                call component_factor(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), L, RS, y, ok)
+                call component_factor(zi, R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), L, RS, y, ok)
                 logp(k) = logp(k) + log(max(pik(k), XD_PI_MIN))
                 if( .not. ok ) logp(k) = -huge(0.d0)/2
             end do
@@ -431,13 +433,14 @@ contains
         real(dp), intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), mu(d,nk), Sig(d,d,nk), pik(nk)
         real(dp), intent(out) :: xhat(n,d), xcov(d,d,n)
         real(dp), optional, intent(out) :: resp(n,nk)
-        real(dp) :: L(d,d), RS(d,d), y(d), b(d,nk), Bk(d,d,nk), logp(nk), lmax, lse, rk(nk)
+        real(dp) :: L(d,d), RS(d,d), y(d), b(d,nk), Bk(d,d,nk), logp(nk), lmax, lse, rk(nk), zi(d)
         integer  :: i, k
         logical  :: ok
-        !$omp parallel do default(shared) private(i,k,L,RS,y,b,Bk,logp,lmax,lse,rk,ok) schedule(static)
+        !$omp parallel do default(shared) private(i,k,L,RS,y,b,Bk,logp,lmax,lse,rk,ok,zi) schedule(static)
         do i = 1, n
+            zi = z(i,:)
             do k = 1, nk
-                call component_factor(z(i,:), R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), L, RS, y, ok)
+                call component_factor(zi, R(:,:,i), Nz(:,:,i), mu(:,k), Sig(:,:,k), d, logp(k), L, RS, y, ok)
                 logp(k) = logp(k) + log(max(pik(k), XD_PI_MIN))
                 if( .not. ok ) logp(k) = -huge(0.d0)/2
                 call component_moments(L, RS, y, mu(:,k), Sig(:,:,k), d, b(:,k), Bk(:,:,k))

@@ -1,13 +1,20 @@
-!@descr: unit test routines for stack_io: buffered contiguous MRC stack reading and writing, float32 and float16
+!@descr: unit test routines for stack_io and dstack_io: buffered and discrete MRC stack reading and writing, float32, int16 and float16
+! The discrete reader (simple_discrete_stack_io) opens a window of stacks and reads them
+! concurrently, one OpenMP thread per open stack (three, also in the one-thread gate: the
+! concurrent reads are the point). The float16 checks pin the rounding of values that are not
+! representable (round half to even), the bit patterns on disk, the image layer's mode
+! inheritance and header statistics, and the subnormal and signed-zero boundaries.
 module simple_stack_io_tester
 use, intrinsic :: iso_c_binding, only: c_float
+use, intrinsic :: iso_fortran_env, only: int16, int32
 use simple_test_utils ! assertions etc.
 use simple_string,       only: string
 use simple_string_utils, only: int2str
 use simple_syslib,       only: del_file, file_exists
 use simple_image,        only: image
 use simple_stack_io,     only: stack_io
-use simple_imghead,      only: MrcImgHead, MRC_MODE_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141
+use simple_discrete_stack_io, only: dstack_io
+use simple_imghead,      only: MrcImgHead, MRC_MODE_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141, find_ldim_nptcls
 implicit none
 private
 public :: run_all_stack_io_tests
@@ -28,6 +35,11 @@ character(len=*), parameter :: IMAGE_COPY    = 'tmp_stack_io_image_copy.mrc'
 character(len=*), parameter :: STACK_COPY    = 'tmp_stack_io_stack_copy.mrc'
 character(len=*), parameter :: FLOAT16_STACK = 'tmp_stack_io_float16.mrc'
 character(len=*), parameter :: CHUNK_STACK   = 'tmp_stack_io_float16_chunked.mrc'
+character(len=*), parameter :: ROUND_STACK   = 'tmp_stack_io_float16_rounding.mrc'
+character(len=*), parameter :: F16_IMAGE     = 'tmp_stack_io_float16_image.mrc'
+character(len=*), parameter :: F16_BOUNDS    = 'tmp_stack_io_float16_boundaries.mrc'
+! discrete reads: twelve stacks of four images, three stacks open and read concurrently
+integer, parameter :: DSTK_NSTKS = 12, DSTK_NIMGS = 4, DSTK_WINDOW = 3
 
 contains
 
@@ -41,6 +53,11 @@ contains
         call test_float32_header()
         call test_float16_header_and_roundtrip()
         call test_float16_chunked_roundtrip()
+        call test_float16_rounding_and_payload()
+        call test_float16_image_roundtrip()
+        call test_float16_encoder_boundaries()
+        call test_dstack_parallel_read_float32()
+        call test_dstack_parallel_read_int16()
         call cleanup()
     end subroutine run_all_stack_io_tests
 
@@ -207,6 +224,195 @@ contains
         call actual%kill
     end subroutine test_float16_chunked_roundtrip
 
+
+    !> values that float16 cannot hold are rounded half to even; the bits on disk are the IEEE half encodings
+    subroutine test_float16_rounding_and_payload()
+        integer, parameter :: NTEST_IMGS = 5
+        type(stack_io) :: writer, reader
+        type(image)    :: source, actual, expected_img
+        real(kind=c_float), pointer :: actual_rmat(:,:,:) => null(), expected_rmat(:,:,:) => null()
+        integer :: iimg
+        write(*,'(A)') 'test_float16_rounding_and_payload'
+        call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call expected_img%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call writer%open(string(ROUND_STACK),SMPD,'write',box=BOX,bufsz=2,wfloat16=.true.)
+        do iimg = 1,NTEST_IMGS
+            call set_f16_rounding_pattern(source,iimg,quantized=.false.)
+            call writer%write(iimg,source)
+        enddo
+        call writer%close
+        call assert_mrc_header(string(ROUND_STACK), MRC_MODE_FLOAT16, 2, 'float16 rounding stack', ldim=[BOX,BOX,NTEST_IMGS])
+        call assert_f16_payload(string(ROUND_STACK), 'float16 rounding stack')
+        call reader%open(string(ROUND_STACK),SMPD,'read',bufsz=3)
+        call assert_int(NTEST_IMGS, reader%get_nptcls(), 'float16 rounding stack: image count')
+        do iimg = 1,NTEST_IMGS
+            call reader%read(iimg,actual)
+            call set_f16_rounding_pattern(expected_img,iimg,quantized=.true.)
+            call actual%get_rmat_ptr(actual_rmat)
+            call expected_img%get_rmat_ptr(expected_rmat)
+            call assert_true(maxval(abs(actual_rmat(1:BOX,1:BOX,1)-expected_rmat(1:BOX,1:BOX,1))) <= TOL, &
+                &'float16 rounding stack: image '//int2str(iimg)//' reads back rounded half to even')
+        enddo
+        call reader%close
+        call source%kill
+        call actual%kill
+        call expected_img%kill
+    end subroutine test_float16_rounding_and_payload
+
+    !> the image layer: float16 on the first write, inherited by the next, kept by a header-statistics update
+    subroutine test_float16_image_roundtrip()
+        type(image) :: source, actual, expected_img
+        real(kind=c_float), pointer :: actual_rmat(:,:,:) => null(), expected_rmat(:,:,:) => null()
+        real    :: stats(4)
+        integer :: iimg
+        write(*,'(A)') 'test_float16_image_roundtrip'
+        call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call expected_img%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        do iimg = 1,2
+            call set_f16_rounding_pattern(source,iimg,quantized=.false.)
+            if( iimg == 1 )then
+                call source%write(string(F16_IMAGE),iimg,del_if_exists=.true.,wfloat16=.true.)
+            else
+                call source%write(string(F16_IMAGE),iimg)
+            endif
+        enddo
+        do iimg = 1,2
+            call actual%read(string(F16_IMAGE),iimg)
+            call set_f16_rounding_pattern(expected_img,iimg,quantized=.true.)
+            call actual%get_rmat_ptr(actual_rmat)
+            call expected_img%get_rmat_ptr(expected_rmat)
+            call assert_true(maxval(abs(actual_rmat(1:BOX,1:BOX,1)-expected_rmat(1:BOX,1:BOX,1))) <= TOL, &
+                &'float16 image: image '//int2str(iimg)//' round trip, the second write inheriting the mode')
+        enddo
+        stats = [-1.0,65504.0,0.0,1.0]
+        call source%update_header_stats(string(F16_IMAGE),stats)
+        call assert_mrc_header(string(F16_IMAGE), MRC_MODE_FLOAT16, 2, 'float16 image after a statistics update', &
+            &ldim=[BOX,BOX,2])
+        call assert_f16_payload(string(F16_IMAGE), 'float16 image')
+        call source%kill
+        call actual%kill
+        call expected_img%kill
+    end subroutine test_float16_image_roundtrip
+
+    !> subnormals are exact, half the smallest subnormal rounds to a signed zero, 3/2 of it to twice it
+    subroutine test_float16_encoder_boundaries()
+        integer(int32), parameter :: EXPECTED_BITS(8) = [1_int32,32769_int32,256_int32,33024_int32, &
+            &0_int32,32768_int32,2_int32,32770_int32]
+        type(image) :: source, actual
+        real(kind=c_float), pointer :: pixels(:,:,:) => null(), actual_pixels(:,:,:) => null()
+        integer(int32) :: bits(8)
+        write(*,'(A)') 'test_float16_encoder_boundaries'
+        call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call source%get_rmat_ptr(pixels)
+        pixels = 1.0_c_float
+        pixels(1,1,1) = 2.0_c_float**(-24)
+        pixels(2,1,1) = -2.0_c_float**(-24)
+        pixels(3,1,1) = 2.0_c_float**(-16)
+        pixels(4,1,1) = -2.0_c_float**(-16)
+        pixels(5,1,1) = 2.0_c_float**(-25)
+        pixels(6,1,1) = -2.0_c_float**(-25)
+        pixels(7,1,1) = 3.0_c_float*2.0_c_float**(-25)
+        pixels(8,1,1) = -3.0_c_float*2.0_c_float**(-25)
+        call source%write(string(F16_BOUNDS),1,del_if_exists=.true.,wfloat16=.true.)
+        call read_f16_first_row(string(F16_BOUNDS), bits)
+        call assert_true(all(bits == EXPECTED_BITS), 'float16 boundaries: subnormal, underflow and sign bits on disk')
+        call actual%read(string(F16_BOUNDS),1)
+        call actual%get_rmat_ptr(actual_pixels)
+        pixels(5,1,1) = 0.0_c_float
+        pixels(6,1,1) = -0.0_c_float
+        pixels(7,1,1) = 2.0_c_float**(-23)
+        pixels(8,1,1) = -2.0_c_float**(-23)
+        call assert_true(all(actual_pixels(1:BOX,1:BOX,1) == pixels(1:BOX,1:BOX,1)), &
+            &'float16 boundaries: zero and subnormal values decode exactly')
+        call assert_true(transfer(actual_pixels(6,1,1),0_int32) == not(huge(0_int32)), &
+            &'float16 boundaries: negative zero keeps its sign')
+        call source%kill
+        call actual%kill
+    end subroutine test_float16_encoder_boundaries
+
+    !---------------- discrete stack reads ----------------
+
+    !> float32 stacks, three open and read concurrently through dstack_io
+    subroutine test_dstack_parallel_read_float32()
+        type(string) :: stknames(DSTK_NSTKS)
+        type(image)  :: img
+        real(kind=c_float), pointer :: rmat(:,:,:) => null()
+        integer :: istk, iimg
+        write(*,'(A)') 'test_dstack_parallel_read_float32'
+        call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
+        do istk = 1,DSTK_NSTKS
+            stknames(istk) = 'tmp_dstack_io_f32_'//int2str(istk)//'.mrc'
+            do iimg = 1,DSTK_NIMGS
+                call img%get_rmat_ptr(rmat)
+                rmat = real(100*istk + iimg, kind=c_float)
+                call img%write(stknames(istk), iimg, del_if_exists=(iimg == 1))
+            enddo
+        enddo
+        call img%kill
+        call read_stacks_concurrently(stknames, 'float32 discrete read')
+    end subroutine test_dstack_parallel_read_float32
+
+    !> 16-bit integer stacks (MRC mode 1) through the same concurrent reader
+    subroutine test_dstack_parallel_read_int16()
+        type(string) :: stknames(DSTK_NSTKS)
+        integer :: istk
+        write(*,'(A)') 'test_dstack_parallel_read_int16'
+        do istk = 1,DSTK_NSTKS
+            stknames(istk) = 'tmp_dstack_io_i16_'//int2str(istk)//'.mrc'
+            call write_int16_stack(stknames(istk), istk)
+        enddo
+        call read_stacks_concurrently(stknames, 'int16 discrete read')
+    end subroutine test_dstack_parallel_read_int16
+
+    !> opens DSTK_WINDOW stacks at a time, reads their images on one thread per stack, checks
+    !! every image (constant 100*istk + iimg) and deletes the stacks
+    subroutine read_stacks_concurrently( stknames, label )
+        type(string),     intent(inout) :: stknames(DSTK_NSTKS)
+        character(len=*), intent(in)    :: label
+        type(dstack_io) :: dstkios(DSTK_WINDOW)
+        type(image)     :: read_imgs(DSTK_NSTKS,DSTK_NIMGS)
+        real(kind=c_float), pointer :: rmat(:,:,:) => null()
+        integer :: istk, iimg, ldim(3), nptcls, stk_from, stk_to, iopen, nopen, nwrong
+        do stk_from = 1,DSTK_NSTKS,DSTK_WINDOW
+            stk_to = min(stk_from + DSTK_WINDOW - 1, DSTK_NSTKS)
+            nopen  = stk_to - stk_from + 1
+            do iopen = 1,nopen
+                istk = stk_from + iopen - 1
+                call find_ldim_nptcls(stknames(istk), ldim, nptcls)
+                call dstkios(iopen)%new(SMPD, BOX)
+                call dstkios(iopen)%cache_stack_info(stknames(istk), ldim, nptcls)
+                call dstkios(iopen)%open(stknames(istk))
+                do iimg = 1,DSTK_NIMGS
+                    call read_imgs(istk,iimg)%new([BOX,BOX,1], SMPD, wthreads=.false.)
+                enddo
+            enddo
+            !$omp parallel do default(shared) private(iopen,istk,iimg) schedule(static) proc_bind(close) num_threads(DSTK_WINDOW)
+            do iopen = 1,nopen
+                istk = stk_from + iopen - 1
+                do iimg = 1,DSTK_NIMGS
+                    call dstkios(iopen)%read(stknames(istk), iimg, read_imgs(istk,iimg))
+                enddo
+            enddo
+            !$omp end parallel do
+            do iopen = 1,nopen
+                call dstkios(iopen)%kill
+            enddo
+        enddo
+        nwrong = 0
+        do istk = 1,DSTK_NSTKS
+            do iimg = 1,DSTK_NIMGS
+                call read_imgs(istk,iimg)%get_rmat_ptr(rmat)
+                if( maxval(abs(rmat(1:BOX,1:BOX,1) - real(100*istk + iimg))) > 1.e-6 ) nwrong = nwrong + 1
+                call read_imgs(istk,iimg)%kill
+            enddo
+            call del_file(stknames(istk))
+        enddo
+        call assert_int(0, nwrong, label//': every image of every stack reads back as written')
+    end subroutine read_stacks_concurrently
+
     !---------------- helpers ----------------
 
     subroutine create_synthetic_stack(fname)
@@ -322,12 +528,103 @@ contains
         call header%kill
     end subroutine assert_mrc_header
 
+    !> image index as background; first row: exactly representable values (as in fill_pattern), and at
+    !! 9 and 10 values float16 cannot hold: 1 + 2^-11 lies halfway and rounds to even (1), 1.0006 rounds to
+    !! 1 + 2^-10; quantized=.true. gives what must be read back
+    subroutine set_f16_rounding_pattern(img,iimg,quantized)
+        type(image), intent(inout) :: img
+        integer,     intent(in)    :: iimg
+        logical,     intent(in)    :: quantized
+        real(kind=c_float), pointer :: pixels(:,:,:) => null()
+        call img%get_rmat_ptr(pixels)
+        pixels = real(iimg,kind=c_float)
+        pixels(1,1,1)  = 2.0_c_float
+        pixels(2,1,1)  = -2.0_c_float
+        pixels(3,1,1)  = 1.0_c_float
+        pixels(4,1,1)  = -1.0_c_float
+        pixels(5,1,1)  = 0.5_c_float
+        pixels(6,1,1)  = 0.333251953125_c_float
+        pixels(7,1,1)  = 6.103515625e-5_c_float
+        pixels(8,1,1)  = 65504.0_c_float
+        pixels(11,1,1) = 0.0_c_float
+        pixels(12,1,1) = -0.0_c_float
+        if( quantized )then
+            pixels(9,1,1)  = 1.0_c_float
+            pixels(10,1,1) = 1.0009765625_c_float
+        else
+            pixels(9,1,1)  = 1.00048828125_c_float
+            pixels(10,1,1) = 1.0006_c_float
+        endif
+    end subroutine set_f16_rounding_pattern
+
+    !> the first row of the rounding pattern as IEEE half-precision bit patterns on disk
+    subroutine assert_f16_payload(fname, label)
+        class(string),    intent(in) :: fname
+        character(len=*), intent(in) :: label
+        integer(int32), parameter :: EXPECTED_BITS(12) = [16384_int32,49152_int32,15360_int32,48128_int32, &
+            &14336_int32,13653_int32,1024_int32,31743_int32,15360_int32,15361_int32,0_int32,32768_int32]
+        integer(int32) :: bits(12)
+        call read_f16_first_row(fname, bits)
+        call assert_true(all(bits == EXPECTED_BITS), label//': half-precision bit patterns on disk')
+    end subroutine assert_f16_payload
+
+    !> the leading pixels of the first image of a float16 MRC file as unsigned 16-bit patterns
+    subroutine read_f16_first_row(fname, bits)
+        class(string),  intent(in)  :: fname
+        integer(int32), intent(out) :: bits(:)
+        integer(int16) :: plane(BOX,BOX)
+        integer :: funit, io_stat, ipixel
+        bits = -1
+        open(newunit=funit,file=fname%to_char(),access='stream',form='unformatted',action='read',status='old',iostat=io_stat)
+        call assert_int(0, io_stat, fname%to_char()//': opens for the payload check')
+        if( io_stat /= 0 ) return
+        read(unit=funit,pos=MRC_HEADER_NBYTES+1,iostat=io_stat) plane
+        close(funit)
+        call assert_int(0, io_stat, fname%to_char()//': first image payload readable')
+        if( io_stat /= 0 ) return
+        do ipixel = 1,size(bits)
+            bits(ipixel) = iand(int(plane(ipixel,1),int32),65535_int32)
+        enddo
+    end subroutine read_f16_first_row
+
+    !> a mode-1 (int16) MRC stack of DSTK_NIMGS constant images 100*istk + iimg, written by hand
+    subroutine write_int16_stack(stkname, istk)
+        class(string), intent(in) :: stkname
+        integer,       intent(in) :: istk
+        type(MrcImgHead) :: header
+        integer(int16) :: plane(BOX,BOX)
+        integer :: funit, io_stat, iimg
+        integer(kind=8) :: first_byte, image_nbytes
+        call header%new([BOX,BOX,DSTK_NIMGS])
+        call header%setMode(1)
+        call header%setPixSz(SMPD)
+        call header%setMinPixVal(real(100*istk + 1))
+        call header%setMaxPixVal(real(100*istk + DSTK_NIMGS))
+        call header%setMean(real(100*istk) + real(DSTK_NIMGS + 1) / 2.)
+        open(newunit=funit, file=stkname%to_char(), access='stream', form='unformatted', &
+            &action='readwrite', status='replace', iostat=io_stat)
+        call assert_int(0, io_stat, 'int16 test stack opens for writing')
+        if( io_stat /= 0 ) return
+        call header%write(funit)
+        first_byte   = int(header%firstDataByte(),kind=8)
+        image_nbytes = int(BOX * BOX * 2,kind=8)
+        do iimg = 1,DSTK_NIMGS
+            plane = int(100*istk + iimg, int16)
+            write(unit=funit, pos=first_byte + int(iimg - 1,kind=8) * image_nbytes, iostat=io_stat) plane
+        enddo
+        close(funit)
+        call header%kill
+    end subroutine write_int16_stack
+
     subroutine cleanup()
         call del_file(string(SOURCE_STACK))
         call del_file(string(IMAGE_COPY))
         call del_file(string(STACK_COPY))
         call del_file(string(FLOAT16_STACK))
         call del_file(string(CHUNK_STACK))
+        call del_file(string(ROUND_STACK))
+        call del_file(string(F16_IMAGE))
+        call del_file(string(F16_BOUNDS))
     end subroutine cleanup
 
 end module simple_stack_io_tester

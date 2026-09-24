@@ -41,6 +41,12 @@ use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
 use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
+use simple_ui_visibility_tester,             only: run_all_ui_visibility_tests
+use simple_rnd_tester,                       only: run_all_rnd_tests
+use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relations_tests
+use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
+use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
+use simple_classaverager_tester,             only: run_all_classaverager_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
 use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
@@ -248,7 +254,7 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'online variance',         test_online_var)
-        call add_suite(s, n, 'multinomial random draw', test_multinomal)
+        call add_suite(s, n, 'random draws',            run_all_rnd_tests)
         call add_suite(s, n, 'straight-line fit',       test_fit_line)
         call add_suite(s, n, 'affinity propagation',    test_aff_prop)
         call add_suite(s, n, 'hierarchical clustering', test_hclust)
@@ -258,6 +264,7 @@ contains
         call add_suite(s, n, 'search, sort, locate',    run_all_srch_sort_loc_tests)
         call add_suite(s, n, 'decay schedules',         run_all_decay_funs_tests)
         call add_suite(s, n, 'PCA',                     run_all_pca_tests)
+        call add_suite(s, n, 'cavg quality relations',  run_all_cavg_quality_relations_tests)
         call add_suite(s, n, 'optimisers',              run_all_opt_tests)
         call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
@@ -287,6 +294,7 @@ contains
         call add_suite(s, n, 'GUI metadata',  run_all_gui_metadata_tests)
         call add_suite(s, n, 'GUI assembler', run_all_gui_assembler_tests)
         call add_suite(s, n, 'UI hash',       run_all_ui_hash_tests)
+        call add_suite(s, n, 'UI visibility', run_all_ui_visibility_tests)
     end subroutine suites_ui
 
     subroutine suites_ipc( s, n )
@@ -302,16 +310,19 @@ contains
     subroutine suites_reconstruction( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'rec3D backend',     run_all_rec3D_strategy_tests)
-        call add_suite(s, n, 'observation noise', run_all_gauran_tests)
+        call add_suite(s, n, 'rec3D backend',             run_all_rec3D_strategy_tests)
+        call add_suite(s, n, 'observation noise',         run_all_gauran_tests)
+        call add_suite(s, n, 'class-average accumulator', run_all_classaverager_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches
     subroutine suites_pftc_align2D3D( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'continuous in-plane',     run_all_pftc_inplane_tests)
-        call add_suite(s, n, 'refine3D in-plane state', run_all_strategy3D_inplane_tests)
+        call add_suite(s, n, 'continuous in-plane',      run_all_pftc_inplane_tests)
+        call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
+        call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
+        call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
     end subroutine suites_pftc_align2D3D
 
     !> the Cartesian (continuous) 3D registration: pose refiner, its refine3D adapter,
@@ -645,33 +656,6 @@ contains
     end subroutine suite_ui_json
 
     ! ---- local sub-suites (formerly contained in exec_test_units) -----------------
-
-    subroutine test_multinomal
-        integer :: i, irnd
-        real :: pvec(10), prob
-        call set_fixed_seed(20260926)
-        pvec(1) = 0.8
-        do i=2,10
-            pvec(i) = 0.2/9.
-        end do
-        write(logfhandle,*) 'this should be one:', sum(pvec)
-        prob=0.
-        do i=1,1000
-            if( multinomal(pvec) == 1 ) prob = prob+1.
-        end do
-        prob = prob/1000.
-        write(logfhandle,*) 'this should be 0.8:', prob
-        pvec = 0.1
-        write(logfhandle,*) 'this should be one:', sum(pvec)
-        prob=0.
-        do i=1,1000
-            irnd = multinomal(pvec)
-            if( irnd == 1 ) prob = prob+1.
-        end do
-        prob = prob/1000.
-        write(logfhandle,*) 'this should be 0.1:', prob
-        write(logfhandle,'(a)') 'SIMPLE_RND: MULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
-    end subroutine test_multinomal
 
     subroutine test_euler_shift
         type(ori) :: o

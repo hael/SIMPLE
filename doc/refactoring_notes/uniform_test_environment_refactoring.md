@@ -377,17 +377,17 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 
 | suite | sub-suites of `units` | Debug, 1 thread (2026-09-22) |
 |---|---|---:|
-| `unit_core` | string, syslib, fileio, character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
+| `unit_core` | string, syslib, fileio, stack I/O (with the discrete reader, three threads, since the singles review), character hash, hash, value-reference hash, linked list, record list, command line | 0.2 s |
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
 | `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation | 1.3 s (before the shift search moved out and the mask suites moved in) |
-| `unit_numerics` | online variance, multinomial random draw, straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser) — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
-| `unit_project` | STAR file, project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
-| `unit_ui` | UI JSON, GUI metadata, GUI assembler | 0.2 s |
+| `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
+| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
+| `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
-| `unit_reconstruction` | rec3D backend, observation noise — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
-| `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
+| `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
+| `unit_pftc_align2D3D` | continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state — added by the inplane review (2026-09-23, section 9.7); registration on the polar Fourier transform, shared by the 2D and 3D searches | 0.4 s |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
-| `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | to be measured (first build 47.3 s, cut down, section 9.7) |
+| `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | 4.5 s (Mac; 47.3 s in the first build, cut down, section 9.7) |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1849,6 +1849,64 @@ instead of `seed_rnd`, `test_multinomal` too, and the DE and simplex tests
 seed themselves. Production code that calls `seed_rnd` (for example
 `simple_ftexp_shsrch`, `simple_parameters_phases`) still re-seeds from
 `/dev/urandom` for whatever runs after it.
+
+**Linux follow-up (after db50811a6).** The bounds-checked Linux gate
+stopped `flex PCG operator` in (C) at `rho_t` index -5: the test's 1x
+gridding density is laid out on the h >= 0 half (`rho_lb(1) =
+-(iwinsz+1)`), but the rotated central-slice samples cover both halves, so
+on the Mac, without bounds checks, every sample with h < 0 was added in
+front of the array. A defect of the test since it was written; a sample
+with h < 0 now counts at its Friedel mate, as the reconstructor's `rho_exp`
+does. The same run printed `-fcheck=array-temps` warnings for the strided
+row `z(i,:)` handed to `component_factor` in `xd_fit`, `xd_loglik` and
+`xd_posterior`; the row is now copied once per particle.
+
+**singles I (2026-09-23, Hans: verdicts 1-11).** Thirteen of the
+twenty-four unassigned standalones, to the areas of their machinery; no
+new area (Hans: "no new area"). Three were duplicate drivers of gate
+sub-suites (`gui_assembler`, `gui_metadata`, `project_merge`) and are
+deleted; `multinomal`'s standalone had gone in the stats batch and its row
+is closed. `rnd_shuffle` and the multinomial draw form
+`simple_rnd_tester` (`random draws`, unit_numerics, replacing
+`multinomial random draw`, which printed frequencies): the shuffle
+invariants and the draw asserted at a fixed seed within four binomial
+standard deviations (1000 draws: +-0.05 at p = 0.8, +-0.04 at p = 0.1),
+and an entry of probability zero is never drawn. `phshift_star` is
+`test_relion_phase_shift` in the `STAR project` tester. `ui_visibility`
+(about 170 assertions in a program body) is `simple_ui_visibility_tester`
+(`UI visibility`, unit_ui, six tests), and `phshift_policy`'s error stops
+are its `test_phshift_contract`; the registrations it pins were
+spot-checked against the current UI (every named program exists, the
+category descriptors and the three category counts match).
+`discrete_stack_io` joined `stack I/O` (unit_core): the concurrent
+`dstack_io` reads of twelve float32 and twelve int16 stacks with three
+threads (option a: the concurrency is the point, milliseconds), and the
+float16 rounding (half to even), bit patterns on disk, image-layer mode
+inheritance and statistics update, and subnormal/signed-zero boundaries
+that the tester did not cover yet; its THROW_HARDs are assertions.
+`sigma2_state` is `simple_sigma2_state_tester` (`sigma2 state`) and
+`eul_prob_tab2D_io` is `simple_eul_prob_tab2D_tester`
+(`2D probability table I/O`), both in unit_pftc_align2D3D (option a for
+sigma2: the likelihood objective consumes it). `projdir_accumulator` is
+`simple_classaverager_tester` (`class-average accumulator`,
+unit_reconstruction: class averaging is 2D reconstruction).
+`cavg_quality_relations` was an 8-line driver over a self-test inside
+`simple_cavg_quality_relations`; the test left the module for
+`simple_cavg_quality_relations_tester` (`cavg quality relations`,
+unit_numerics) and `calculate_promoted_feature` became public for it.
+Twelve standalone files deleted; the phase-shift policy (section 9 and
+10.1) and the GUI onboarding note name the sub-suites. Coverage
+accounting: every assertion of the twelve programs is carried over, the
+error stops and THROW_HARDs as assertions; nothing is lost. The first
+build stopped `unit_ui` in `UI visibility`: `make_ui` had already run in
+`UI JSON`, and a second build aborts because `add_ui_program` refuses a
+key that is already registered ("Key: export_relion already in ui_hash").
+The standalone had been the only builder in its process; `units` has
+the same double build (UI JSON, then `refine3D in-plane state`) and
+could not have run past it. `make_ui` and `make_test_ui` now build
+their table once per process and return on a second call; the duplicate
+guard in `add_ui_program` stays, it catches two programs registering one
+key. The other ten fast suites passed in that build (gate 5.0 s).
 
 ## 10. Fast-tier performance
 

@@ -104,7 +104,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, multinomial_random_draw, straight_line_fit, affinity_propagation, hierarchical_clustering)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, straight_line_fit, affinity_propagation, hierarchical_clustering, cavg_quality_relations)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -130,7 +130,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_ui%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (ui_json, gui_metadata, gui_assembler)', '', .false., '')
+            &'One sub-suite of this area to run alone (ui_json, gui_metadata, gui_assembler, ui_hash, ui_visibility)', '', .false., '')
         call add_ui_program('unit_ui', unit_ui, tsttab, UI_CATEGORY)
     end subroutine new_unit_ui
 
@@ -156,7 +156,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_accumulator)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 
@@ -182,7 +182,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_pftc_align2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (continuous_in_plane, refine3d_in_plane_state)', '', .false., '')
+            &'One sub-suite of this area to run alone (continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_i/o, sigma2_state)', '', .false., '')
         call add_ui_program('unit_pftc_align2D3D', unit_pftc_align2D3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_pftc_align2D3D
 

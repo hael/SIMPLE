@@ -14,16 +14,11 @@
     - **tests/** — home of executable unit tests
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
-      - `simple_test_cavg_quality_relations.f90`
       - `simple_test_cavg_registration.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
       - `simple_test_create_gain.f90`
       - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
-      - `simple_test_discrete_stack_io.f90`
-      - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
-      - `simple_test_gui_assembler.f90`
-      - `simple_test_gui_metadata.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
       - `simple_test_nice.f90`
       - `simple_test_nu_envmask.f90`
@@ -33,23 +28,16 @@
       - `simple_test_openmp_offload.f90`
       - `simple_test_pdb2mrc.f90`
       - `simple_test_phase_rand_fsc.f90`
-      - `simple_test_phshift_policy.f90`
-      - `simple_test_phshift_star.f90`
-      - `simple_test_projdir_accumulator.f90`
-      - `simple_test_project_merge.f90`
       - `simple_test_qsys_ctrl.f90`
       - `simple_test_qsys_env.f90`
-      - `simple_test_rnd_shuffle.f90`
       - `simple_test_search_gain_flips.f90`
       - `simple_test_serialize.f90`
-      - `simple_test_sigma2_state.f90` — validates canonical sigma2 transactions, grouping and recovery guards
       - `simple_test_simd.f90`
       - `simple_test_socket_client.f90`
       - `simple_test_socket_io.f90`
       - `simple_test_socket_server.f90`
       - `simple_test_stream_initial_analysis.f90` — smoke test that invokes stream p03 initial analysis commander
       - `simple_test_stringmatch.f90`
-      - `simple_test_ui_visibility.f90`
       - `test_socket_comm_distr.f90`
   - **scripts/** — home of scripts and code generators
     - **memory/**
@@ -89,7 +77,7 @@
       - `simple_sigma2_state_file.f90` — versioned binary persistence and transaction primitives for canonical sigma2 state
       - `simple_srchspace_map2D_io.f90` — for storing search-space maps on disk
       - `simple_stack_io.f90` — This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes
-      - `simple_stack_io_tester.f90` — unit test routines for stack_io: buffered contiguous MRC stack reading and writing, float32 and float16
+      - `simple_stack_io_tester.f90` — unit test routines for stack_io and dstack_io: buffered and discrete MRC stack reading and writing, float32, int16 and float16
       - `simple_syslib.f90` — System utilities & POSIX/OS wrappers
       - `simple_syslib_tester.f90` — unit tests for the syslib module
       - `simple_tifflib.f90` — Fortran wrapper for libtiff, edited from Unblur
@@ -127,6 +115,7 @@
         - `simple_cavg_quality_learn.f90` — learn-mode training-table reader and model search for class-average quality
         - `simple_cavg_quality_model.f90` — instantiable class-average quality decision model
         - `simple_cavg_quality_relations.f90` — one promoted pairwise-neighbour feature for class-average quality
+        - `simple_cavg_quality_relations_tester.f90` — unit tests for the promoted pairwise-neighbour feature of class-average quality (simple_cavg_quality_relations)
         - `simple_cavg_quality_stats.f90` — binary classification statistics for class-average quality analysis
         - `simple_cavg_quality_types.f90` — shared types for class-average quality analysis
       - **class/** — class-oriented abstract data types, mainly averagers
@@ -134,6 +123,7 @@
         - `simple_class_compatibility_tester.f90` — unit test routines for the class_compatibility support model
         - `simple_class_frcs.f90` — for Fourier Ring Correlation bookkeeping for class averages in memory and on disk
         - `simple_classaverager.f90` — Types and interfaces for production of Cartesian class averages
+        - `simple_classaverager_tester.f90` — unit tests for the class averager's Fourier 2D accumulator: padded splat and compact export (simple_classaverager)
         - `simple_classaverager_core.f90` — Implementations of core types and routines underpinning cavg restoration
         - `simple_classaverager_restore.f90` — Routines to perform the classes restoration and processing
       - **commanders/** — object-oriented command pattern implementations
@@ -443,6 +433,7 @@
         - `simple_euclid_sigma2.f90` — the abstract data type for sigma2 used when objfun=euclid
         - `simple_sigma2_bootstrap.f90` — single owner of the sigma2 bootstrap for work that has alignments (or
         - `simple_sigma2_state.f90` — canonical per-particle sigma2 state validation, reduction and transactional consolidation
+        - `simple_sigma2_state_tester.f90` — unit tests for the canonical sigma2 state files: transactions, grouping and recovery guards (simple_sigma2_state, simple_sigma2_state_file)
       - **star/** — home of modules for star file and star project handling
         - `simple_relion.f90` — for interoperability with RELION
         - `simple_starfile.f90` — STAR file I/O â writes optics, micrograph, and 2D-particle tables for RELION-compatible STAR files.
@@ -518,6 +509,7 @@
           - **probabilistic/** — probabilistic 2D and 3D search strategies, candidate stores, and assignment tables
             - `simple_eul_prob_tab.f90` — the core probability table routines used for probabilistic 3D search
             - `simple_eul_prob_tab2D.f90` — 2D probability table routines for multi-reference class assignment with probabilistic sampling
+            - `simple_eul_prob_tab2D_tester.f90` — unit tests for the streamed 2D probability tables: dense and sparse merge and assignment (simple_eul_prob_tab2D)
             - `simple_eul_prob_tab_neigh.f90` — neighborhood extension of probabilistic 3D search table.
             - `simple_eul_prob_tab_utils.f90` — shared utility routines for probabilistic alignment tables
             - `simple_strategy2D_prob.f90` — 2D strategy for probabilistic class assignment (precomputed by prob_align2D/prob_tab2D)
@@ -557,6 +549,7 @@
         - `simple_ui_test_group.f90` — aggregates SIMPLE TEST ui program constructors
         - `simple_ui_utils.f90` — module defining utility procedures for the simple_ui modules
         - `simple_ui_visibility.f90` — typed visibility levels for command-descriptor presentation
+        - `simple_ui_visibility_tester.f90` — unit tests for the UI visibility levels, descriptors and registered program contracts (simple_ui_visibility, simple_ui_program, simple_ui)
         - **simple/**
           - `simple_ui_abinitio3D.f90` — module defining the user interfaces for ab initio 3D reconstruction programs in the simple_exec suite
           - `simple_ui_cavgproc.f90` — module defining the user interfaces for class average processing programs in the simple_exec suite
@@ -700,6 +693,7 @@
         - `simple_online_var.f90` — online moments estimation
         - `simple_ran_tabu.f90` — routines for generation of directed random numbers
         - `simple_rnd.f90` — random number generation module
+        - `simple_rnd_tester.f90` — unit tests for the random draws of simple_rnd (shuffle, partial_shuffle, multinomal)
         - `simple_srch_sort_loc.f90` — searching ordered tables, sorting, locate etc.
         - `simple_srch_sort_loc_tester.f90` — unit test routines for simple_srch_sort_loc (sorting, searching, locating, selection, ordering)
         - `simple_stat.f90` — statistics utility functions

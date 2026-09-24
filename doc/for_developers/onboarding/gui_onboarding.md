@@ -72,7 +72,7 @@ Start with these files and directories:
 | GUI assembler | `src/utils/gui/simple_gui_assembler.f90` | Newer stream-side JSON assembly with change detection. |
 | Stream communicator | `src/utils/comm/simple_stream_communicator.f90` | HTTP communicator used by stream stages. |
 | Legacy NICE comm | `src/utils/gui/simple_nice.f90` | Older socket/thread communication object used by several batch commanders. |
-| GUI tests | `production/tests/simple_test_gui_metadata.f90` and `production/tests/simple_test_gui_assembler.f90` | Fortran-side GUI metadata tests. |
+| GUI tests | `src/utils/gui/metadata/simple_gui_metadata_tester.f90` and `src/utils/gui/simple_gui_assembler_tester.f90` | Fortran-side GUI metadata tests: the `GUI metadata` and `GUI assembler` sub-suites of `simple_test_exec test=unit_ui`. |
 | Django tests | `nice/nice_lite/test/` | Existing model and data-structure tests. |
 
 Also inspect `nice/nice_lite_dev/`. It appears to contain newer stream-facing

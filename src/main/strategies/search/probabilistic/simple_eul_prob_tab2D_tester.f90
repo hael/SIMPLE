@@ -1,5 +1,9 @@
-!@descr: validates streamed dense/sparse 2D probability-table merge and assignment
-program simple_test_eul_prob_tab2D_io
+!@descr: unit tests for the streamed 2D probability tables: dense and sparse merge and assignment (simple_eul_prob_tab2D)
+! A worker's candidate stream (header, particle indices, seed-shift table, candidates) is written
+! by hand for three particles and two classes, merged into the global table, assigned and
+! written; the assignment file must give each particle its best class, distance, in-plane
+! index, peak count and fraction: dense (refine=prob) and sparse (refine=prob_snhc).
+module simple_eul_prob_tab2D_tester
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_builder,            only: builder
@@ -7,30 +11,35 @@ use simple_parameters,         only: parameters
 use simple_eul_prob_tab2D,     only: eul_prob_tab2D
 use simple_eul_prob_tab_utils, only: prob_candidate, write_seed_shift_table
 use simple_type_defs,          only: ptcl_ref
+use simple_test_utils
 implicit none
+private
+public :: run_all_eul_prob_tab2D_tests
 #include "simple_local_flags.inc"
 
 type(parameters), target :: params
 type(builder),    target :: build
 type(eul_prob_tab2D)     :: table
 integer, parameter :: NPTCLS = 3, NCLASSES = 2
-integer :: pinds(NPTCLS)
-
-pinds = [10,20,30]
-params%ncls         = NCLASSES
-params%npeaks_inpl  = NCLASSES
-params%l_doshift    = .false.
-
-call test_dense_stream
-call test_sparse_stream
-call table%kill
-call simple_end('**** SIMPLE_EUL_PROB_TAB2D_IO TEST NORMAL STOP ****')
+integer :: pinds(NPTCLS) = [10,20,30]   ! project indices of the three particles
 
 contains
 
-    subroutine test_dense_stream
+    subroutine run_all_eul_prob_tab2D_tests()
+        write(*,'(A)') '**** running all 2D probability table tests ****'
+        params%ncls         = NCLASSES
+        params%npeaks_inpl  = NCLASSES
+        params%l_doshift    = .false.
+        call test_dense_stream()
+        call test_sparse_stream()
+        call table%kill
+    end subroutine run_all_eul_prob_tab2D_tests
+
+    !> refine=prob: every particle carries a candidate per class; the smaller distance wins
+    subroutine test_dense_stream()
         type(prob_candidate) :: candidates(6)
         integer :: particle_indices(6)
+        write(*,'(A)') 'test_dense_stream'
         params%refine = 'prob'
         call set_candidate(candidates(1),1,0.1)
         call set_candidate(candidates(2),2,0.9)
@@ -51,9 +60,11 @@ contains
         call del_file('prob2d_dense_assignment.dat')
     end subroutine test_dense_stream
 
-    subroutine test_sparse_stream
+    !> refine=prob_snhc: the stream carries only the evaluated candidates, one or two per particle
+    subroutine test_sparse_stream()
         type(prob_candidate) :: candidates(4)
         integer :: particle_indices(4)
+        write(*,'(A)') 'test_sparse_stream'
         params%refine = 'prob_snhc'
         call set_candidate(candidates(1),1,0.1)
         call set_candidate(candidates(2),2,0.2)
@@ -95,7 +106,7 @@ contains
         chunk_n = size(candidates)
         header = [int(NCLASSES,int64),int(NPTCLS,int64),int(chunk_n,int64),1_int64]
         call fopen(funit,string(fname),access='STREAM',action='WRITE',status='REPLACE',iostat=io_stat)
-        call fileiochk('simple_test_eul_prob_tab2D_io; write stream '//fname,io_stat)
+        call fileiochk('simple_eul_prob_tab2D_tester; write stream '//fname,io_stat)
         write(funit,pos=1) header
         addr = sizeof(header) + 1
         write(funit,pos=addr) pinds
@@ -116,21 +127,23 @@ contains
         integer,          intent(in) :: expected_npeaks(NPTCLS)
         real,             intent(in) :: expected_fracs(NPTCLS)
         type(ptcl_ref) :: assignments(NPTCLS)
-        integer :: funit, io_stat, nptcls_file, i
+        integer :: funit, io_stat, nptcls_file
         call fopen(funit,string(fname),access='STREAM',action='READ',status='OLD',iostat=io_stat)
-        call fileiochk('simple_test_eul_prob_tab2D_io; read assignment '//fname,io_stat)
+        call fileiochk('simple_eul_prob_tab2D_tester; read assignment '//fname,io_stat)
         read(funit,pos=1) nptcls_file
-        if( nptcls_file /= NPTCLS ) THROW_HARD('2D probability assignment particle-count mismatch')
+        call assert_int(NPTCLS, nptcls_file, fname//': particle count')
+        if( nptcls_file /= NPTCLS )then
+            call fclose(funit)
+            return
+        endif
         read(funit,pos=sizeof(nptcls_file)+1) assignments
         call fclose(funit)
-        do i = 1,NPTCLS
-            if( assignments(i)%pind /= pinds(i) ) THROW_HARD('2D probability assignment particle mismatch')
-            if( assignments(i)%icls /= expected_classes(i) ) THROW_HARD('2D probability assignment class mismatch')
-            if( abs(assignments(i)%dist-expected_dists(i)) > 1.e-6 ) THROW_HARD('2D probability assignment distance mismatch')
-            if( assignments(i)%inpl /= expected_classes(i) ) THROW_HARD('2D probability assignment in-plane mismatch')
-            if( assignments(i)%npeaks /= expected_npeaks(i) ) THROW_HARD('2D probability assignment peak-count mismatch')
-            if( abs(assignments(i)%frac-expected_fracs(i)) > 1.e-6 ) THROW_HARD('2D probability assignment fraction mismatch')
-        enddo
+        call assert_true(all(assignments(:)%pind == pinds), fname//': particle indices')
+        call assert_true(all(assignments(:)%icls == expected_classes), fname//': best class per particle')
+        call assert_true(all(abs(assignments(:)%dist - expected_dists) <= 1.e-6), fname//': distance of the best class')
+        call assert_true(all(assignments(:)%inpl == expected_classes), fname//': in-plane index of the best class')
+        call assert_true(all(assignments(:)%npeaks == expected_npeaks), fname//': peak count')
+        call assert_true(all(abs(assignments(:)%frac - expected_fracs) <= 1.e-6), fname//': evaluated fraction')
     end subroutine assert_assignment
 
-end program simple_test_eul_prob_tab2D_io
+end module simple_eul_prob_tab2D_tester

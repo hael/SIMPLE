@@ -1,5 +1,11 @@
-!@descr: validates canonical sigma2 transactions, grouping and recovery guards
-program simple_test_sigma2_state
+!@descr: unit tests for the canonical sigma2 state files: transactions, grouping and recovery guards (simple_sigma2_state, simple_sigma2_state_file)
+! The noise-power spectra of the likelihood objective live in one committed file per lineage,
+! updated through a candidate that local ranges are merged into, groups reduced in and that is
+! published by commit. Pinned: global and per-stack grouping end to end, the checksum-free
+! version-one particle layout, rejection of missing and overlapping ranges and of a truncated
+! candidate without touching the committed file, generation-scoped paths and the prepared
+! update, and the reduction skipping a record with a non-positive shell.
+module simple_sigma2_state_tester
 use, intrinsic :: iso_fortran_env, only: int8, int32, int64, real32
 use simple_string,            only: string
 use simple_syslib,            only: del_file, file_exists
@@ -12,19 +18,24 @@ use simple_sigma2_state,      only: sigma2_state_layout_digest, sigma2_state_mer
     &sigma2_state_reduce_groups, sigma2_state_validate_identity, sigma2_state_validate_science, &
     &sigma2_state_candidate_path, sigma2_state_commit, sigma2_state_prepare_update, &
     &sigma2_state_range_path, sigma2_state_next_generation
+use simple_test_utils
 implicit none
-
-call exercise_policy('global', SIGMA2_GROUP_GLOBAL, 1, 4)
-call exercise_policy('group',  SIGMA2_GROUP_STACK,  2, 8)
-call exercise_checksum_free_particle_io()
-call exercise_recovery_guards()
-call exercise_update_preparation()
-call exercise_invalid_record_skip()
-write(*,'(A)') 'SIMPLE_TEST_SIGMA2_STATE NORMAL STOP'
+private
+public :: run_all_sigma2_state_tests
 
 contains
 
-    subroutine exercise_policy(prefix, grouping, ngroups, nptcls)
+    subroutine run_all_sigma2_state_tests()
+        write(*,'(A)') '**** running all sigma2 state tests ****'
+        call test_policy('global', SIGMA2_GROUP_GLOBAL, 1, 4)
+        call test_policy('group',  SIGMA2_GROUP_STACK,  2, 8)
+        call test_checksum_free_particle_io()
+        call test_recovery_guards()
+        call test_update_preparation()
+        call test_invalid_record_skip()
+    end subroutine run_all_sigma2_state_tests
+
+    subroutine test_policy(prefix, grouping, ngroups, nptcls)
         character(len=*), intent(in) :: prefix
         integer(int32),   intent(in) :: grouping
         integer,          intent(in) :: ngroups, nptcls
@@ -36,6 +47,7 @@ contains
         character(len=128) :: candidate, committed, message
         integer(int64) :: digest, prefix_digest
         integer :: i, status, midpoint
+        write(*,'(A)') 'test_policy '//trim(prefix)
         candidate = trim(prefix)//'_sigma2_state.next'
         committed = trim(prefix)//'_sigma2_state.bin'
         ranges(1) = trim(prefix)//'_range_1.bin'
@@ -92,9 +104,9 @@ contains
         call require(file_exists(committed), 'committed sigma2 state published')
         call require(.not. file_exists(candidate), 'candidate consumed by publication')
         call cleanup(candidate, committed, ranges(1)%to_char(), ranges(2)%to_char())
-    end subroutine exercise_policy
+    end subroutine test_policy
 
-    subroutine exercise_checksum_free_particle_io()
+    subroutine test_checksum_free_particle_io()
         type(sigma2_state_header) :: header
         type(string) :: range_path
         real(real32), allocatable :: loaded(:,:)
@@ -110,6 +122,7 @@ contains
         character(len=*), parameter :: CANDIDATE = 'checksum_free_sigma2_state.next'
         character(len=*), parameter :: COMMITTED = 'checksum_free_sigma2_state.bin'
         character(len=*), parameter :: RANGE = 'checksum_free_sigma2_range.bin'
+        write(*,'(A)') 'test_checksum_free_particle_io'
         call del_file(CANDIDATE)
         call del_file(COMMITTED)
         call del_file(RANGE)
@@ -177,9 +190,9 @@ contains
         call del_file(COMMITTED)
         call del_file(RANGE)
         call range_path%kill
-    end subroutine exercise_checksum_free_particle_io
+    end subroutine test_checksum_free_particle_io
 
-    subroutine exercise_recovery_guards()
+    subroutine test_recovery_guards()
         type(sigma2_state_header) :: header, committed_header
         type(string) :: ranges(2)
         real(real32) :: spectra(3,4)
@@ -190,6 +203,7 @@ contains
         character(len=128) :: message
         character(len=*), parameter :: CANDIDATE='guard_sigma2_state.next'
         character(len=*), parameter :: COMMITTED='guard_sigma2_state.bin'
+        write(*,'(A)') 'test_recovery_guards'
         ranges(1) = 'guard_range_1.bin'
         ranges(2) = 'guard_range_2.bin'
         call cleanup(CANDIDATE, COMMITTED, ranges(1)%to_char(), ranges(2)%to_char())
@@ -250,9 +264,9 @@ contains
         call assert_committed_generation(COMMITTED, committed_header%generation)
         call assert_file_unchanged(COMMITTED, committed_bytes)
         call cleanup(CANDIDATE, COMMITTED, ranges(1)%to_char(), ranges(2)%to_char())
-    end subroutine exercise_recovery_guards
+    end subroutine test_recovery_guards
 
-    subroutine exercise_update_preparation()
+    subroutine test_update_preparation()
         type(sigma2_state_header) :: header
         type(string) :: candidate_path, range_path
         real(real32) :: spectra(3,4)
@@ -262,6 +276,7 @@ contains
         integer(int64) :: next_gen
         character(len=128) :: message
         character(len=*), parameter :: COMMITTED = 'sigma2_state.bin'
+        write(*,'(A)') 'test_update_preparation'
         candidate_path = sigma2_state_candidate_path(COMMITTED, 1_int64)
         range_path = sigma2_state_range_path(COMMITTED, 1_int64, 2, 3)
         call del_file(COMMITTED)
@@ -308,12 +323,12 @@ contains
         call del_file(COMMITTED)
         call del_file(candidate_path)
         call del_file(range_path)
-    end subroutine exercise_update_preparation
+    end subroutine test_update_preparation
 
     !> an active record with a non-positive shell is skipped by the
     !! reduction (with a warning) instead of aborting; the grouped model
     !! is the mean of the valid records and commit-time validation agrees
-    subroutine exercise_invalid_record_skip()
+    subroutine test_invalid_record_skip()
         type(sigma2_state_header) :: header
         type(string) :: candidate_path, range_path
         real(real32), allocatable :: stored(:,:,:)
@@ -323,6 +338,7 @@ contains
         integer(int64), parameter :: DIGEST = 1231_int64
         character(len=128) :: message
         character(len=*), parameter :: COMMITTED = 'skip_sigma2_state.bin'
+        write(*,'(A)') 'test_invalid_record_skip'
         candidate_path = sigma2_state_candidate_path(COMMITTED, 1_int64)
         range_path     = sigma2_state_range_path(COMMITTED, 1_int64, 1, 1)
         call del_file(COMMITTED)
@@ -360,7 +376,7 @@ contains
         call del_file(COMMITTED)
         call del_file(candidate_path)
         call del_file(range_path)
-    end subroutine exercise_invalid_record_skip
+    end subroutine test_invalid_record_skip
 
     subroutine assert_committed_generation(path, expected)
         character(len=*), intent(in) :: path
@@ -430,22 +446,17 @@ contains
         call del_file(path1); call del_file(path2); call del_file(path3); call del_file(path4)
     end subroutine cleanup
 
+    !> a state operation returns status 0; on failure its own message names what went wrong
     subroutine require_ok(status, message)
         integer,          intent(in) :: status
         character(len=*), intent(in) :: message
-        if( status /= 0 )then
-            write(*,'(A)') trim(message)
-            error stop 'canonical sigma2 state operation failed'
-        endif
+        call assert_int(0, status, 'sigma2 state operation succeeds: '//trim(message))
     end subroutine require_ok
 
     subroutine require(condition, message)
         logical,          intent(in) :: condition
         character(len=*), intent(in) :: message
-        if( .not. condition )then
-            write(*,'(A)') trim(message)
-            error stop 'canonical sigma2 state assertion failed'
-        endif
+        call assert_true(condition, message)
     end subroutine require
 
-end program simple_test_sigma2_state
+end module simple_sigma2_state_tester

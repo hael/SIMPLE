@@ -135,7 +135,7 @@ unit_numerics and `project records` of unit_project.
 |---|---|---|---|---|---|---|---|---|---|---|
 | atomfit | S | 12 | none | not run | committed | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
 | cartesian_fourier | S | 874 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_cart_align3D | Hans, 2026-09-23: `Cartesian Fourier` sub-suite (`simple_cartesian_fourier_tester`); the child-process driver dropped, all checks kept |
-| cavg_quality_relations | S | 8 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| cavg_quality_relations | S | 8 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_numerics | Hans, 2026-09-23 (singles I): the self-test left `simple_cavg_quality_relations` for `simple_cavg_quality_relations_tester` (`cavg quality relations`); `calculate_promoted_feature` exported; no new area |
 | continuous_3D_pcg_reconstruction | S | 1645 | assertion | not run | committed, generated | - | - | lib_? (assertion-bearing) | modify | Hans, 2026-09-23: split into `observation noise` (unit_reconstruction, `simple_gauran_tester`) and `PCG half-set` (lib_reconstruction, `simple_pcg_halfset_tester`, in-process, no MRC output); the twelve standalone files are deleted (Retired tests) |
 | continuous_inplane_cc_grad | S | 231 | error stop | not run | user-supplied | - | continuous_inplane_hybrid_grad (67%); continuous_inplane_rotation2D_stage1_validation (54%) | manual (needs user-supplied) | merge into unit_pftc_align2D3D | Hans, 2026-09-23: `continuous in-plane` sub-suite (`simple_pftc_inplane_tester`), hermetic phantom instead of vol1; grid identity, FD gradient, degenerate-denominator penalty kept |
 | continuous_inplane_hybrid_grad | S | 208 | error stop | not run | user-supplied | - | continuous_inplane_cc_grad (67%); continuous_inplane_rotation2D_stage1_validation (52%) | manual (needs user-supplied) | merge into unit_pftc_align2D3D | Hans, 2026-09-23: as `continuous_inplane_cc_grad`; capability flags, grid identity, FD gradient kept |
@@ -146,32 +146,32 @@ unit_numerics and `project records` of unit_project.
 | continuous_inplane_rotation2D_stage1_validation | S | 517 | error stop | not run | committed, user-supplied | - | continuous_inplane_cc_grad (54%); continuous_inplane_hybrid_grad (52%); continuous_inplane_rotation2D_route_identity (55%) | manual (needs user-supplied) | merge into unit_pftc_align2D3D | Hans, 2026-09-23: parity, FD gradient, stress scan (thinned), recovery and the band-edge fixtures in `continuous in-plane`; the aliasing experiment was print-only |
 | create_gain | S | 91 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | diff_map_graphs | S | 93 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 10 production calls) |  |  |
-| discrete_stack_io | S | 376 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| eul_prob_tab2D_io | S | 136 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| discrete_stack_io | S | 376 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_core | Hans, 2026-09-23 (singles I): into `simple_stack_io_tester` (`stack I/O`): concurrent dstack_io reads (float32, int16; three threads, option a), float16 rounding, payload bits, image layer, encoder boundaries; THROW_HARDs now assertions |
+| eul_prob_tab2D_io | S | 136 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_pftc_align2D3D | Hans, 2026-09-23 (singles I): `simple_eul_prob_tab2D_tester` (`2D probability table I/O`); THROW_HARDs now assertions |
 | flex_gpu | S | 12 | none | unsupported capability (not run) | none | cuda | - | platform (uses cuda) | keep | Hans, 2026-09-23: platform; `test=flex_gpu` through simple_test_exec with the five CPU-vs-CUDA routines as sub-suites, registered with USE_FLEX_CUDA only; standalone deleted |
 | flex_pca | S | 23 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 6 production calls) | merge into unit_heterogeneity | Hans, 2026-09-23: `flex PCA` sub-suite (`simple_flex_pca_tester`); the six self-tests moved out of the production modules with assertions and fixed seeds; the deconvolution runs on 4 000 particles in the gate and on 20 000 as `flex PCA deconvolution 20k` in lib_heterogeneity (first gate 47.3 s, section 9.7) |
 | flex_pcg | S | 17 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) | modify | Hans, 2026-09-23: `flex PCG operator` (box 32, baseline solve) in unit_heterogeneity, `flex PCG operator 64` and `flex PCG solve sweep` (box 32, every clean solve asserted) in lib_heterogeneity (`simple_flex_pcg_tester`), (A)-(D) asserted by name; the white-box routine stays in simple_flex_pca_pcg with a fixed seed; debug runs and their `loc_fixed` argument dropped |
-| gui_assembler | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| gui_metadata | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
-| multinomal | S | 24 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
+| gui_assembler | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) | delete | Hans, 2026-09-23 (singles I): 8-line driver over `simple_gui_assembler_tester`, already the `GUI assembler` sub-suite of unit_ui; driver deleted |
+| gui_metadata | S | 8 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) | delete | Hans, 2026-09-23 (singles I): 8-line driver over `simple_gui_metadata_tester`, already the `GUI metadata` sub-suite of unit_ui; driver deleted |
+| multinomal | S | 24 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) | retire | Hans, 2026-09-23 (singles I): the standalone went in the stats batch (d3558fece), the row was not closed; the draw is now asserted in `random draws` (unit_numerics) |
 | nu_envmask | S | 360 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | nu_filter | S | 105 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | openmp_offload | S | 1137 | none | unsupported capability (not run) | none / device nthr | cuda, offload | - | platform (uses cuda, offload) |  |  |
 | phase_rand_fsc | S | 68 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| phshift_policy | S | 73 | assertion | not run | none | - | continuous_inplane_refine3D (12%, subset); ui_visibility (28%, subset) | lib_? (assertion-bearing) |  |  |
-| phshift_star | S | 35 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| phshift_policy | S | 73 | assertion | not run | none | - | continuous_inplane_refine3D (12%, subset); ui_visibility (28%, subset) | lib_? (assertion-bearing) | merge into unit_ui | Hans, 2026-09-23 (singles I): `test_phshift_contract` in `simple_ui_visibility_tester`, the error stops now assertions |
+| phshift_star | S | 35 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_project | Hans, 2026-09-23 (singles I): `test_relion_phase_shift` in `simple_starproject_tester` (`STAR project`) |
 | pose_cont_refine3D_adapter | S | 977 | assertion | not run | committed, generated | - | - | workflow (runs production commanders) | modify | Hans, 2026-09-23: the adapter case became the `pose adapter` sub-suite of unit_cart_align3D (`simple_pose_cont_refine3D_adapter_tester`); the 1jyx_reconstruction case became `pose 1JYX recovery` in lib_cart_align3D (`simple_pose_cont_1jyx_tester`, nightly, keeps its volumes and TSVs) |
 | pose_cont_refinement | S | 728 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_cart_align3D | Hans, 2026-09-23: `pose refiner` sub-suite (`simple_cartesian_pose_refiner_tester`); numerics and solver cases kept whole |
-| projdir_accumulator | S | 57 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| project_merge | S | 6 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) |  |  |
+| projdir_accumulator | S | 57 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_reconstruction | Hans, 2026-09-23 (singles I): `simple_classaverager_tester` (`class-average accumulator`): class averaging is 2D reconstruction |
+| project_merge | S | 6 | none | not run | none | - | - | delete candidate (no failure path and fewer than 3 production calls) | delete | Hans, 2026-09-23 (singles I): 6-line driver over `simple_project_merge_tester`, already the `project merge` sub-suite of unit_project; driver deleted |
 | qsys_ctrl | S | 484 | none | not run | none | - | - | lib_? (needs assertion) or delete (no failure path; 16 production calls) |  |  |
 | qsys_env | S | 72 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
 | rec3D_backend | S | 55 | error stop | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_reconstruction | Hans, 2026-09-23: `rec3D backend` sub-suite (`simple_rec3D_strategy_tester`), all six factory branches pinned; standalone and CI line removed |
-| rnd_shuffle | S | 58 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| rnd_shuffle | S | 58 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_numerics | Hans, 2026-09-23 (singles I): `simple_rnd_tester` (`random draws`, replacing `multinomial random draw`): shuffle/partial_shuffle invariants and the multinomial draw asserted within four binomial SDs, fixed seeds |
 | search_gain_flips | S | 83 | THROW_HARD | not run | none | - | - | lib_? (assertion-bearing) |  |  |
-| sigma2_state | S | 451 | assertion | not run | none | - | - | lib_? (assertion-bearing) |  |  |
+| sigma2_state | S | 451 | assertion | not run | none | - | - | lib_? (assertion-bearing) | merge into unit_pftc_align2D3D | Hans, 2026-09-23 (singles I): `simple_sigma2_state_tester` (`sigma2 state`; option a, the likelihood objective consumes it); require/error stop now assertions |
 | stream_initial_analysis | S | 22 | none | not run | none | - | - | workflow (needs assertion) (runs production commanders but checks nothing) |  |  |
-| ui_visibility | S | 428 | assertion | not run | committed | - | phshift_policy (28%, subset) | lib_? (assertion-bearing) |  |  |
+| ui_visibility | S | 428 | assertion | not run | committed | - | phshift_policy (28%, subset) | lib_? (assertion-bearing) | merge into unit_ui | Hans, 2026-09-23 (singles I): `simple_ui_visibility_tester` (`UI visibility`), six tests from the program body |
 
 ## utils
 
@@ -275,3 +275,15 @@ unit_numerics and `project records` of unit_project.
 | flex_pca (standalone) | 2026-09-23 | merge into unit_heterogeneity: driver over six THROW_HARD self-tests embedded in production modules | `simple_flex_pca_tester` (`flex PCA`) |
 | flex_pcg (standalone) | 2026-09-23 | modify: driver over the white-box operator self-test, three ignored debug runs | `simple_flex_pcg_tester` (`flex PCG operator`, fast and nightly) |
 | flex_gpu (standalone) | 2026-09-23 | keep, rerouted: the same five routines behind `simple_test_exec test=flex_gpu` | platform entry `flex_gpu` (USE_FLEX_CUDA) |
+| gui_assembler (standalone) | 2026-09-23 | delete: duplicate driver of a gate sub-suite | `GUI assembler` (unit_ui) |
+| gui_metadata (standalone) | 2026-09-23 | delete: duplicate driver of a gate sub-suite | `GUI metadata` (unit_ui) |
+| project_merge (standalone) | 2026-09-23 | delete: duplicate driver of a gate sub-suite | `project merge` (unit_project) |
+| rnd_shuffle | 2026-09-23 | merge into unit_numerics: seven assertions, /dev/urandom seed | `simple_rnd_tester` (`random draws`) |
+| phshift_star | 2026-09-23 | merge into unit_project: four assertions on the RELION phase-shift contract | `test_relion_phase_shift` in `STAR project` |
+| ui_visibility | 2026-09-23 | merge into unit_ui: about 170 assertions in a program body | `simple_ui_visibility_tester` (`UI visibility`) |
+| phshift_policy | 2026-09-23 | merge into unit_ui: error-stop checks of five UI contracts | `test_phshift_contract` in `UI visibility` |
+| discrete_stack_io | 2026-09-23 | merge into unit_core: THROW_HARD checks | `stack I/O` (`simple_stack_io_tester`) |
+| sigma2_state | 2026-09-23 | merge into unit_pftc_align2D3D: error-stop checks | `simple_sigma2_state_tester` (`sigma2 state`) |
+| eul_prob_tab2D_io | 2026-09-23 | merge into unit_pftc_align2D3D: THROW_HARD checks | `simple_eul_prob_tab2D_tester` (`2D probability table I/O`) |
+| projdir_accumulator | 2026-09-23 | merge into unit_reconstruction: five assertions | `simple_classaverager_tester` (`class-average accumulator`) |
+| cavg_quality_relations | 2026-09-23 | merge into unit_numerics: driver over a self-test embedded in production | `simple_cavg_quality_relations_tester` (`cavg quality relations`) |

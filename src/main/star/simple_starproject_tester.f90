@@ -21,6 +21,7 @@ use simple_starproject
 use simple_starproject_utils
 use simple_string
 use simple_test_utils
+use simple_type_defs, only: canonical_phshift
 implicit none
 
 private
@@ -55,6 +56,7 @@ contains
         call test_relion_write_corrected_micrographs_star()
         call test_relion_write_micrographs_star()
         call test_relion_write_particles2D_star()
+        call test_relion_phase_shift()
         write(*,'(A)') "**** Completed PART 2/4 (simple_relion tests) ****"
         write(*,'(A)') "**** Running OpenMP tests (Part 3/4) ****"
         call test_large_particle_table_export()
@@ -71,6 +73,26 @@ contains
         call omp_set_num_threads(nthr_orig)
         ! the caller reports and fails the run (simple_test_utils counters are process-wide)
     end subroutine run_all_starproject_tests
+
+    !> STAR stores rlnPhaseShift in degrees, SIMPLE the CTF phase in radians, with one factor for the
+    !! micrograph, particle-2D and particle-3D maps. RELION does not constrain rlnPhaseShift to [0,180):
+    !! its aberration fit can move a constant gamma offset into that column, and folding such a value at
+    !! pi would negate the transfer function relative to what RELION computes from the same STAR file
+    subroutine test_relion_phase_shift()
+        real, parameter :: PHASE_DEG = 45., BEYOND_PI_DEG = 250.
+        real :: phase_internal, phase_exported
+        write(*,'(A)') 'test_relion_phase_shift'
+        phase_internal = PHASE_DEG * RELION_PHASE_DEG2RAD
+        call assert_real(PI/4., phase_internal, 1.e-6, 'RELION phase-shift import converts degrees to SIMPLE radians')
+        phase_exported = phase_internal / RELION_PHASE_DEG2RAD
+        call assert_real(PHASE_DEG, phase_exported, 1.e-6, 'RELION phase-shift export converts SIMPLE radians to degrees')
+        phase_internal = canonical_phshift(BEYOND_PI_DEG * RELION_PHASE_DEG2RAD)
+        call assert_real(BEYOND_PI_DEG * RELION_PHASE_DEG2RAD, phase_internal, 1.e-6, &
+            &'a RELION phase shift beyond 180 degrees is not folded on import')
+        phase_exported = phase_internal / RELION_PHASE_DEG2RAD
+        call assert_real(BEYOND_PI_DEG, phase_exported, 1.e-4, &
+            &'a phase shift beyond 180 degrees round-trips back to RELION degrees')
+    end subroutine test_relion_phase_shift
 
     !=======================================================================
     !  TEST ENVIRONMENT HELPERS

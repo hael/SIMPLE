@@ -2436,6 +2436,9 @@ contains
                 else
                     call scatter_pairs_nowrap(op, i0, w, [1.0], 1.0, kacc)
                 endif
+                ! the 1x density lives on the h >= 0 half (rho_lb(1) = -(iwinsz+1)), as the reconstructor's
+                ! rho_exp does: a sample with h < 0 is counted at its Friedel mate
+                if( loc(1) < 0.0 ) loc = -loc
                 i0 = nint(loc) - iwinsz
                 call op%kbwin%apod_mat_3d_fast(loc, iwinsz, wdim, w)
                 do dk = 1, wdim

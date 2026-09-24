@@ -33,7 +33,11 @@ contains
     
     ! public class methods
 
+    !> builds the program table once per process; a second call is a no-op (add_ui_program refuses a key
+    !! that is already registered, so a rebuild stopped the run: unit_ui builds the UI in `UI JSON` and
+    !! again in `UI visibility`, and `units` in `refine3D in-plane state` too)
     subroutine make_ui
+        if( allocated(prgnames) ) return
         call set_ui_params
         ! SIMPLE PROGRAMS
         call add_simple_programs(prgtab)
@@ -46,7 +50,9 @@ contains
         call validate_ui_presentation
     end subroutine make_ui
 
+    !> builds the test-program table once per process; a second call is a no-op, as for make_ui
     subroutine make_test_ui
+        if( allocated(tstnames) ) return
         call set_ui_params
         ! SIMPLE TEST PROGRAMS
         call add_test_programs(tsttab)
