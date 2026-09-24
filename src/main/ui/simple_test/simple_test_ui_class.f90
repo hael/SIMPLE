@@ -19,6 +19,8 @@ type(ui_program), target :: unit_cart_align3D
 type(ui_program), target :: lib_cart_align3D
 type(ui_program), target :: unit_heterogeneity
 type(ui_program), target :: unit_parallel
+type(ui_program), target :: unit_single
+type(ui_program), target :: lib_single
 type(ui_program), target :: lib_heterogeneity
 type(ui_program), target :: flex_gpu
 type(ui_program), target :: forked_process
@@ -43,6 +45,8 @@ contains
         call new_unit_heterogeneity(tsttab)
         call new_lib_heterogeneity(tsttab)
         call new_unit_parallel(tsttab)
+        call new_unit_single(tsttab)
+        call new_lib_single(tsttab)
         call new_flex_gpu(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
@@ -119,7 +123,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, project_merge, class_compatibility, particle_sieve, 2d_search_space_map_i/o, motion_gain, atoms)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, project_merge, class_compatibility, particle_sieve, 2d_search_space_map_i/o, motion_gain)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -213,6 +217,32 @@ contains
             &'One sub-suite of this suite to run alone (pose_1jyx_recovery)', '', .false., '')
         call add_ui_program('lib_cart_align3D', lib_cart_align3D, tsttab, UI_CATEGORY)
     end subroutine new_lib_cart_align3D
+
+    subroutine new_unit_single( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_single%new(&
+        &'unit_single',&
+        &'unit tests: SINGLE (nanoparticles, atomic models)',&
+        &'is the fast-gate unit suite for SINGLE: the atoms module and the C-alpha candidate search on a synthetic three-residue map',&
+        &'simple_test_exec',&
+        &.false.)
+        call unit_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (atoms, c_alpha_finder)', '', .false., '')
+        call add_ui_program('unit_single', unit_single, tsttab, UI_CATEGORY)
+    end subroutine new_unit_single
+
+    subroutine new_lib_single( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call lib_single%new(&
+        &'lib_single',&
+        &'library tests: SINGLE pipelines',&
+        &'is the nightly library suite for SINGLE: the Pt nanoparticle atoms pipeline (simulate, detect, statistics) and the C-alpha benchmark on the built-in 6VXX and 1JYX models',&
+        &'simple_test_exec',&
+        &.false.)
+        call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (nanoparticle_atoms, c_alpha_molecules)', '', .false., '')
+        call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
+    end subroutine new_lib_single
 
     subroutine new_unit_parallel( tsttab )
         class(ui_hash), intent(inout) :: tsttab

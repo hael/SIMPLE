@@ -5,10 +5,7 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('single', 'SINGLE', 110)
 type(ui_program), target :: atoms_stats
-type(ui_program), target :: detect_atoms
-type(ui_program), target :: detect_calpha
 type(ui_program), target :: detect_calpha_molecules
-type(ui_program), target :: simulate_nanoparticle
 type(ui_program), target :: single_workflow 
 
 contains
@@ -16,10 +13,7 @@ contains
     subroutine construct_test_single_programs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call new_atoms_stats(tsttab)
-        call new_detect_atoms(tsttab)
-        call new_detect_calpha(tsttab)
         call new_detect_calpha_molecules(tsttab)
-        call new_simulate_nanoparticle(tsttab)
         call new_single_workflow(tsttab)
     end subroutine construct_test_single_programs
 
@@ -53,47 +47,6 @@ subroutine new_atoms_stats( tsttab )
         call add_ui_program('atoms_stats', atoms_stats, tsttab, UI_CATEGORY)
     end subroutine new_atoms_stats
 
-    subroutine new_detect_atoms( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call detect_atoms%new(&
-        &'detect_atoms',&                            ! name
-        &'test program for atom detection',&
-        &'is a test program for atom detection',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call detect_atoms%add_input(UI_IO, )
-        ! parameter input/output
-        call detect_atoms%add_input(UI_PARM, smpd,    required_override=.true.)
-        !call detect_atoms%add_input(UI_IMG, )
-        ! <no additional inputs>
-        !call detect_atoms%add_input(UI_PARM, )
-        ! search controls
-        !call detect_atoms%add_input(UI_SRCH, )
-        ! filter controls
-        call detect_atoms%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
-        !call detect_atoms%add_input(UI_FILT, )
-        ! mask controls
-        call detect_atoms%add_input(UI_MASK, mskdiam, required_override=.false.)
-        ! computer controls
-        !call detect_atoms%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('detect_atoms', detect_atoms, tsttab, UI_CATEGORY)
-    end subroutine new_detect_atoms
-
-    subroutine new_detect_calpha(tsttab)
-        class(ui_hash), intent(inout) :: tsttab
-        call detect_calpha%new(&
-        &'detect_calpha',&
-        &'Synthetic built-in C-alpha target and FFT-search test',&
-        &'Builds three analytic backbone sites in memory and checks recovered peak coordinates.',&
-        &'simple_test_exec',&
-        &.false.)
-        call add_ui_program('detect_calpha', detect_calpha, tsttab, UI_CATEGORY)
-    end subroutine new_detect_calpha
-
     subroutine new_detect_calpha_molecules(tsttab)
         class(ui_hash), intent(inout) :: tsttab
         call detect_calpha_molecules%new(&
@@ -112,38 +65,6 @@ subroutine new_atoms_stats( tsttab )
         call detect_calpha_molecules%add_input(UI_COMP, nthr)
         call add_ui_program('detect_calpha_molecules', detect_calpha_molecules, tsttab, UI_CATEGORY)
     end subroutine new_detect_calpha_molecules
-
-    subroutine new_simulate_nanoparticle( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call simulate_nanoparticle%new(&
-        &'simulate_nanoparticle',&                            ! name
-        &'test program for simulating nanoparticle',&
-        &'is a test program for simulating nanoparticle',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call simulate_nanoparticle%add_input(UI_IO, )
-        ! parameter input/output
-        call simulate_nanoparticle%add_input(UI_PARM, smpd,    required_override=.true.)
-        !call simulate_nanoparticle%add_input(UI_IMG, )
-        ! <no additional inputs>
-        !call simulate_nanoparticle%add_input(UI_PARM, )
-        ! search controls
-        !call simulate_nanoparticle%add_input(UI_SRCH, )
-        ! filter controls
-        call simulate_nanoparticle%add_input(UI_FILT, 'element', 'str', 'Atom element or crystal selector', &
-            &'Atom element or compound crystal selector', &
-            &'e.g. Pt, CdSeW (wurtzite), CdSeZ (zincblende), CdSeR (rocksalt)', .true., '')
-        !call simulate_nanoparticle%add_input(UI_FILT, )
-        ! mask controls
-        !call simulate_nanoparticle%add_input(UI_MASK, )
-        ! computer controls
-        !call simulate_nanoparticle%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, tsttab, UI_CATEGORY)
-    end subroutine new_simulate_nanoparticle
 
     subroutine new_single_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab

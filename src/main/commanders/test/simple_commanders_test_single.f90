@@ -1,4 +1,4 @@
-!@descr: tests for single 
+!@descr: SINGLE (nanoparticle and atomic-model) test commanders: the atoms pipeline, the C-alpha benchmark and the SINGLE workflow
 module simple_commanders_test_single
 use simple_commanders_api
 #include "simple_local_flags.inc"
@@ -8,25 +8,10 @@ type, extends(commander_base) :: commander_test_atoms_stats
     procedure :: execute      => exec_test_atoms_stats
 end type commander_test_atoms_stats
 
-type, extends(commander_base) :: commander_test_detect_atoms
-  contains
-    procedure :: execute      => exec_test_detect_atoms
-end type commander_test_detect_atoms
-
-type, extends(commander_base) :: commander_test_detect_calpha
-  contains
-    procedure :: execute      => exec_test_detect_calpha
-end type commander_test_detect_calpha
-
 type, extends(commander_base) :: commander_test_detect_calpha_molecules
   contains
     procedure :: execute      => exec_test_detect_calpha_molecules
 end type commander_test_detect_calpha_molecules
-
-type, extends(commander_base) :: commander_test_simulate_nanoparticle
-  contains
-    procedure :: execute      => exec_test_simulate_nanoparticle
-end type commander_test_simulate_nanoparticle
 
 type, extends(commander_base) :: commander_test_single_workflow
   contains
@@ -35,7 +20,6 @@ end type commander_test_single_workflow
 
 integer, parameter :: BOX          = 160
 integer, parameter :: MOLDIAM      = 20
-integer, parameter :: NTHR         = 40
 
 contains
 
@@ -57,13 +41,13 @@ subroutine exec_test_atoms_stats( self, cline )
     call cline_sim%set('smpd',                 params%smpd)
     call cline_sim%set('moldiam',                  MOLDIAM)
     call cline_sim%set('element',           params%element)
-    call cline_sim%set('nthr',                        NTHR)
+    call cline_sim%set('nthr',                 params%nthr)
     call xsim_nptcl%execute(cline_sim)
     call cline_detat%set('prg',             'detect_atoms')
     call cline_detat%set('vol1',              'outvol.mrc')
     call cline_detat%set('smpd',               params%smpd)
     call cline_detat%set('element',         params%element)
-    call cline_detat%set('nthr',                      NTHR)
+    call cline_detat%set('nthr',                      params%nthr)
     call xdetat%execute(cline_detat)
     call cline_atstats%set('prg',             'atoms_stats')
     call cline_atstats%set('vol1',             'outvol.mrc')
@@ -71,109 +55,10 @@ subroutine exec_test_atoms_stats( self, cline )
     call cline_atstats%set('pdbfile',     'outvol_ATMS.pdb')
     call cline_atstats%set('smpd',              params%smpd)
     call cline_atstats%set('element',        params%element)
-    call cline_atstats%set('nthr',                     NTHR)
+    call cline_atstats%set('nthr',                     params%nthr)
     call xatstats%execute(cline_atstats)
     call simple_end('**** SIMPLE_TEST_ATOMS_STATS NORMAL STOP ****')
 end subroutine exec_test_atoms_stats
-
-subroutine exec_test_detect_atoms( self, cline )
-    use simple_commanders_atoms, only: commander_detect_atoms
-    use simple_commanders_sim,   only: commander_simulate_nanoparticle
-    class(commander_test_detect_atoms), intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
-    type(cmdline)                         :: cline_sim, cline_detat
-    type(parameters)                      :: params
-    type(commander_simulate_nanoparticle) :: xsim_nptcl
-    type(commander_detect_atoms)          :: xdetat
-    write(logfhandle,'(a)') '>>> TEST_DETECT_ATOMS:'
-    call params%new(cline)
-    call cline_sim%set('prg',      'simulate_nanoparticle')
-    call cline_sim%set('box',                          BOX)
-    call cline_sim%set('smpd',                 params%smpd)
-    call cline_sim%set('moldiam',                  MOLDIAM)
-    call cline_sim%set('element',           params%element)
-    call cline_sim%set('nthr',                        NTHR)
-    call xsim_nptcl%execute(cline_sim)
-    call cline_detat%set('prg',             'detect_atoms')
-    call cline_detat%set('vol1',              'outvol.mrc')
-    call cline_detat%set('smpd',               params%smpd)
-    call cline_detat%set('element',         params%element)
-    call cline_detat%set('nthr',                      NTHR)
-    call xdetat%execute(cline_detat)
-    call simple_end('**** SIMPLE_TEST_DETECT_ATOMS NORMAL STOP ****')
-end subroutine exec_test_detect_atoms
-
-subroutine exec_test_detect_calpha( self, cline )
-    use simple_atoms,         only: atoms
-    use simple_calpha_finder, only: calpha_finder
-    class(commander_test_detect_calpha), intent(inout) :: self
-    class(cmdline),                      intent(inout) :: cline
-    character(len=*), parameter :: PDB_FILE = 'test_calpha_candidates.pdb'
-    character(len=*), parameter :: CSV_FILE = 'test_calpha_candidates.csv'
-    character(len=*), parameter :: MRC_FILE = 'test_calpha_scores.mrc'
-    integer,          parameter :: TEST_BOX = 32, NRES = 3
-    type(image)         :: workvol
-    type(atoms)         :: candidates
-    type(calpha_finder) :: finder
-    real(kind=c_float), pointer :: density(:,:,:)
-    real    :: centers(3,NRES), atom_sites(3,3), amplitudes(3), rotation(3,3)
-    real    :: xyz(3), site(3), delta(3), distance, closest
-    integer :: ldim(3), ires, iatom, ix, iy, iz
-
-    write(logfhandle,'(A)') '>>> TEST_DETECT_CALPHA:'
-    ldim            = [TEST_BOX,TEST_BOX,TEST_BOX]
-    centers(:,1)    = [8.,8.,8.]
-    centers(:,2)    = [16.,16.,16.]
-    centers(:,3)    = [24.,24.,24.]
-    atom_sites(:,1) = [0.,0.,0.]
-    atom_sites(:,2) = [1.458*cos(111.2*PI/180.), 1.458*sin(111.2*PI/180.), 0.]
-    atom_sites(:,3) = [1.525,0.,0.]
-    amplitudes      = [1.25,1.0,1.0]
-    rotation(:,1)   = [0.,1.,0.]
-    rotation(:,2)   = [-0.5,0.,sqrt(0.75)]
-    rotation(:,3)   = [sqrt(0.75),0.,0.5]
-    call workvol%new(ldim, 1.0)
-    call workvol%get_rmat_ptr(density)
-    density         = 0.
-    do ires         = 1, NRES
-        do iatom = 1, size(atom_sites,2)
-            site = centers(:,ires) + matmul(rotation, atom_sites(:,iatom))
-            do iz = 1, TEST_BOX
-                do iy = 1, TEST_BOX
-                    do ix = 1, TEST_BOX
-                        xyz = real([ix,iy,iz] - 1)
-                        delta = xyz - site
-                        density(ix,iy,iz) = density(ix,iy,iz) + amplitudes(iatom) * &
-                            exp(-0.5 * sum(delta * delta) / 0.85**2)
-                    enddo
-                enddo
-            enddo
-        enddo
-    enddo
-
-    call finder%new(1.0, 4.0)
-    call finder%search(workvol, 180.0, 10, 0.5, string(PDB_FILE), string(MRC_FILE))
-    if(nlines(string(PDB_FILE)) == 0) THROW_HARD('TEST_DETECT_CALPHA FAILED: no candidates')
-    call candidates%new(string(PDB_FILE))
-    closest = huge(1.)
-    do iatom = 1, candidates%get_n()
-        do ires = 1, NRES
-            distance = sqrt(sum((candidates%get_coord(iatom) - centers(:,ires))**2))
-            closest  = min(closest, distance)
-        enddo
-    enddo
-    if( closest > 1.5 ) THROW_HARD('TEST_DETECT_CALPHA FAILED: peak is displaced')
-
-    call candidates%kill()
-    call finder%kill()
-    call workvol%kill()
-    if(file_exists(PDB_FILE)) call del_file(PDB_FILE)
-    if(file_exists(CSV_FILE)) call del_file(CSV_FILE)
-    if(file_exists(MRC_FILE)) call del_file(MRC_FILE)
-    write(logfhandle,'(A,F7.3,A)') '>>> TEST_DETECT_CALPHA: PASS (closest peak ', closest, ' A)'
-    call simple_end('**** SIMPLE_TEST_DETECT_CALPHA NORMAL STOP ****')
-
-end subroutine exec_test_detect_calpha
 
 subroutine exec_test_detect_calpha_molecules( self, cline )
     use simple_atoms,         only: atoms
@@ -304,25 +189,6 @@ contains
 
 end subroutine exec_test_detect_calpha_molecules
 
-subroutine exec_test_simulate_nanoparticle( self, cline )
-    use simple_commanders_sim, only: commander_simulate_nanoparticle
-    class(commander_test_simulate_nanoparticle), intent(inout) :: self
-    class(cmdline),                              intent(inout) :: cline
-    type(cmdline)                         :: cline_sim
-    type(parameters)                      :: params
-    type(commander_simulate_nanoparticle) :: xsim_nptcl
-    write(logfhandle,'(a)') '>>> TEST_SIMULATE_NANOPARTICLE:'
-    call params%new(cline)
-    call cline_sim%set('prg',      'simulate_nanoparticle')
-    call cline_sim%set('box',                          BOX)
-    call cline_sim%set('smpd',                 params%smpd)
-    call cline_sim%set('moldiam',                  MOLDIAM)
-    call cline_sim%set('element',           params%element)
-    call cline_sim%set('nthr',                        NTHR)
-    call xsim_nptcl%execute(cline_sim)
-    call simple_end('**** SIMPLE_TEST_SIMULATE_NANOPARTICLE NORMAL STOP ****')
-end subroutine exec_test_simulate_nanoparticle
-
 subroutine exec_test_single_workflow( self, cline )
     use single_commanders_nano2D,       only: commander_analysis2D_nano
     use simple_commanders_sim,          only: commander_simulate_nanoparticle
@@ -382,7 +248,7 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_sim%set('smpd',                          params%smpd)
     call cline_sim%set('moldiam',                           MOLDIAM)
     call cline_sim%set('element',                    params%element)
-    call cline_sim%set('nthr',                                 NTHR)
+    call cline_sim%set('nthr',                          params%nthr)
     call xsim_nptcl%execute(cline_sim)
     call return_to_project_dir
 
@@ -395,7 +261,7 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_reproject%set('oritab',            TRAJECTORY_ORITAB)
     call cline_reproject%set('mskdiam',                          20)
     call cline_reproject%set('outstk',            REPROJECTIONS_STK)
-    call cline_reproject%set('nthr',                           NTHR)
+    call cline_reproject%set('nthr',                    params%nthr)
     call xreproject%execute(cline_reproject)
     call return_to_project_dir
 
@@ -406,7 +272,7 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_trajectory%set('outstk',              TRAJECTORY_STK)
     call cline_trajectory%set('smpd',                   params%smpd)
     call cline_trajectory%set('snr',                 TRAJECTORY_SNR)
-    call cline_trajectory%set('nthr',                          NTHR)
+    call cline_trajectory%set('nthr',                   params%nthr)
     call xtrajectory%execute(cline_trajectory)
     call return_to_project_dir
 
@@ -416,7 +282,7 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_denoise%set('stk',              trajectory%to_char())
     call cline_denoise%set('outstk',                   DENOISED_STK)
     call cline_denoise%set('smpd',                      params%smpd)
-    call cline_denoise%set('nthr',                             NTHR)
+    call cline_denoise%set('nthr',                      params%nthr)
     call xdenoise%execute(cline_denoise)
     call return_to_project_dir
 
@@ -435,7 +301,7 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_an2Dnano%set('mkdir',                           'no')
     call cline_an2Dnano%set('projfile',          projfile%to_char())
     call cline_an2Dnano%set('element',               params%element)
-    call cline_an2Dnano%set('nthr',                            NTHR)
+    call cline_an2Dnano%set('nthr',                     params%nthr)
     call xan2Dnano%execute(cline_an2Dnano)
     if( .not. file_exists(startvol) ) THROW_HARD('analysis2D_nano did not generate '//startvol%to_char())
     call return_to_project_dir
@@ -445,7 +311,7 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_aref3Dnano%set('vol1',            startvol%to_char())
     call cline_aref3Dnano%set('smpd',                   params%smpd)
     call cline_aref3Dnano%set('element',             params%element)
-    call cline_aref3Dnano%set('nthr',                          NTHR)
+    call cline_aref3Dnano%set('nthr',                   params%nthr)
     call cline_aref3Dnano%set('pgrp',                          'c1')
     call cline_aref3Dnano%set('lp',                             1.5)  
     call cline_aref3Dnano%set('mskdiam',                   MASKDIAM)

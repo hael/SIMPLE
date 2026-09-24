@@ -163,7 +163,7 @@
           - `simple_commanders_test_io.f90` — input/output tests run by hand on user data (mrc2jpeg, mrc_validate)
           - `simple_commanders_test_masks.f90` — for all masks tests
           - `simple_commanders_test_parallel.f90` — the coarray test through the job queue (qsys=coarray), run by the coarray CI job
-          - `simple_commanders_test_single.f90` — tests for single
+          - `simple_commanders_test_single.f90` — SINGLE (nanoparticle and atomic-model) test commanders: the atoms pipeline, the C-alpha benchmark and the SINGLE workflow
           - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
           - `simple_commanders_test_utils.f90` — for all utils tests
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
@@ -310,6 +310,7 @@
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
         - `simple_calpha_finder.f90` — Buccaneer-inspired oriented target detection of alpha carbons in cryo-EM maps
+        - `simple_calpha_finder_tester.f90` — unit tests for the C-alpha candidate search in density maps (simple_calpha_finder)
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
         - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building in SINGLE
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates

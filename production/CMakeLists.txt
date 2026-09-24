@@ -283,13 +283,13 @@ if(BUILD_TESTS)
   endfunction()
 
   # ---- the fast gate ------------------------------------------------------
-  # Twelve area suites over the unit tests, one process each, label `fast`;
+  # Thirteen area suites over the unit tests, one process each, label `fast`;
   # every sub-suite asserts through simple_test_utils, is localhost-only and
   # runs on one thread (plan, section 5.1). `units` runs all of them in one
   # process as a developer convenience and is not registered: the entries
   # below are the gate. Measured 2026-09-22 (Debug, 1 thread): the seven
   # together about 4 s; the longest, unit_image and unit_ori, about 1.3 s.
-  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction pftc_align2D3D cart_align3D heterogeneity parallel)
+  foreach(_area IN ITEMS core ori image numerics project ui ipc reconstruction pftc_align2D3D cart_align3D heterogeneity parallel single)
     simple_add_test(unit_${_area} fast 120 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
   endforeach()
@@ -313,6 +313,12 @@ if(BUILD_TESTS)
   # Review verdict 2026-09-23 (plan, section 9.7, heterogeneity).
   simple_add_test(lib_heterogeneity library 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_heterogeneity)
+  # lib_single: Ruben's SINGLE pipelines transferred as they were (Pt nanoparticle
+  # atoms pipeline, C-alpha benchmark on 6VXX/1JYX); they assert nothing yet, see
+  # doc/refactoring_notes/single_area_tests_handover.md. Review verdict 2026-09-23
+  # (plan, section 9.7, single).
+  simple_add_test(lib_single library 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_single)
 
   # ---- workflow gates (nightly) --------------------------------------------
   # The simulated workflows with their current checks (completion, counts,
@@ -326,7 +332,7 @@ if(BUILD_TESTS)
   simple_add_test(simulated_workflow_1jxy workflow 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow system=1jxy)
   simple_add_test(single_workflow workflow 7200 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow element=Pt)
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow smpd=0.358 element=Pt)
   simple_add_test(pcg_recon workflow 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
   # reproject + simulate_particles on the embedded 6VXX volume; the only
@@ -372,7 +378,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, flex_gpu, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 28)   # 12 fast + 1 platform + 12 workflow + 3 library
+  set(SIMPLE_CTEST_BUDGET 30)   # 13 fast + 1 platform + 12 workflow + 4 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

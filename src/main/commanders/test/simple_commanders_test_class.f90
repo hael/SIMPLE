@@ -80,6 +80,8 @@ use simple_online_var,                       only: test_online_var
 use simple_aff_prop,                         only: test_aff_prop
 use simple_hclust,                           only: test_hclust
 use simple_atoms,                            only: test_atoms
+use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
+use simple_commanders_test_single,           only: commander_test_atoms_stats, commander_test_detect_calpha_molecules
 use simple_srchspace_map2D_io,               only: test_srchspace_map2D_io
 use simple_ui,                               only: validate_ui_json
 implicit none
@@ -172,6 +174,16 @@ type, extends(commander_base) :: commander_test_lib_cart_align3D
   contains
     procedure :: execute      => exec_test_lib_cart_align3D
 end type commander_test_lib_cart_align3D
+
+type, extends(commander_base) :: commander_test_unit_single
+  contains
+    procedure :: execute      => exec_test_unit_single
+end type commander_test_unit_single
+
+type, extends(commander_base) :: commander_test_lib_single
+  contains
+    procedure :: execute      => exec_test_lib_single
+end type commander_test_lib_single
 
 type, extends(commander_base) :: commander_test_unit_parallel
   contains
@@ -293,7 +305,6 @@ contains
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
         call add_suite(s, n, '2D search-space map I/O', test_srchspace_map2D_io)
         call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
-        call add_suite(s, n, 'atoms',                   test_atoms)
     end subroutine suites_project
 
     subroutine suites_ui( s, n )
@@ -352,6 +363,23 @@ contains
     end subroutine suites_lib_cart_align3D
 
     !> distributed execution: the job controller and the queue-system environment
+    !> SINGLE (nanoparticles, atomic models): the atoms module and the C-alpha candidate search
+    subroutine suites_single( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'atoms',          test_atoms)
+        call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
+    end subroutine suites_single
+
+    !> nightly: Ruben's SINGLE pipelines, transferred as they were (they assert nothing yet;
+    !! doc/refactoring_notes/single_area_tests_handover.md says what they must pin)
+    subroutine suites_lib_single( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'nanoparticle atoms', suite_nanoparticle_atoms)
+        call add_suite(s, n, 'C-alpha molecules',  suite_calpha_molecules)
+    end subroutine suites_lib_single
+
     subroutine suites_parallel( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
@@ -416,6 +444,7 @@ contains
         call suites_cart_align3D(s, n)
         call suites_heterogeneity(s, n)
         call suites_parallel(s, n)
+        call suites_single(s, n)
         call run_unit_suites('units', cline, s(1:n))
     end subroutine exec_test_units
 
@@ -528,6 +557,26 @@ contains
         call suites_lib_cart_align3D(s, n)
         call run_unit_suites('lib_cart_align3D', cline, s(1:n))
     end subroutine exec_test_lib_cart_align3D
+
+    subroutine exec_test_unit_single( self, cline )
+        class(commander_test_unit_single), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_single(s, n)
+        call run_unit_suites('unit_single', cline, s(1:n))
+    end subroutine exec_test_unit_single
+
+    subroutine exec_test_lib_single( self, cline )
+        class(commander_test_lib_single), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_lib_single(s, n)
+        call run_unit_suites('lib_single', cline, s(1:n))
+    end subroutine exec_test_lib_single
 
     subroutine exec_test_unit_parallel( self, cline )
         class(commander_test_unit_parallel), intent(inout) :: self
@@ -660,6 +709,27 @@ contains
     end function suite_id
 
     ! ---- wrappers for test procedures that take arguments -----------------------
+
+    !> the SINGLE atoms pipeline (simulate a Pt nanoparticle, detect its atoms, atom statistics) with
+    !! the command line `simple_test_exec test=atoms_stats smpd=0.358 element=Pt` would give it
+    subroutine suite_nanoparticle_atoms
+        type(commander_test_atoms_stats) :: xatoms_stats
+        type(cmdline) :: cline_here
+        call cline_here%set('prg',     'atoms_stats')
+        call cline_here%set('smpd',    0.358)
+        call cline_here%set('element', 'Pt')
+        call xatoms_stats%execute(cline_here)
+        call cline_here%kill
+    end subroutine suite_nanoparticle_atoms
+
+    !> the C-alpha benchmark on the built-in 6VXX and 1JYX models at its default settings
+    subroutine suite_calpha_molecules
+        type(commander_test_detect_calpha_molecules) :: xcalpha
+        type(cmdline) :: cline_here
+        call cline_here%set('prg', 'detect_calpha_molecules')
+        call xcalpha%execute(cline_here)
+        call cline_here%kill
+    end subroutine suite_calpha_molecules
 
     subroutine suite_orientation_data
         call test_oris(.false.)

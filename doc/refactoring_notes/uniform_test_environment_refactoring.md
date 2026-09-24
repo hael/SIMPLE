@@ -23,8 +23,9 @@ suite, `unit_reconstruction`, and the first nightly library suite,
 ninth and tenth fast suites `unit_pftc_align2D3D` and
 `unit_cart_align3D` and the second library suite
 `lib_cart_align3D`, the eleventh fast suite `unit_heterogeneity` with
-the third library suite `lib_heterogeneity`, and the twelfth fast suite
-`unit_parallel`. This is a large
+the third library suite `lib_heterogeneity`, the twelfth fast suite
+`unit_parallel`, and the thirteenth fast suite `unit_single` with the
+fourth library suite `lib_single`. This is a large
 project with four workstreams (section 1.1), delivered in slices that are
 each useful on their own.
 
@@ -382,7 +383,7 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_ori` | orientation, orientation collection, symmetry, orientation data, Euler shift | 1.2 s (3.6 s with symmetry) |
 | `unit_image` | image, image header, Fourier iterator, B-spline smoother 2D and 3D, masks, binary image, segmentation | 1.3 s (before the shift search moved out and the mask suites moved in) |
 | `unit_numerics` | online variance, random draws (shuffles and the multinomial draw, asserting since the singles review), straight-line fit, affinity propagation, hierarchical clustering, statistics (weights), shift search (correlator; 0.30 s after the trim) and shift search (optimiser), cavg quality relations, diffusion-map graphs — the ft_expanded shift search is a motion-correction optimiser, not an image test (Hans, 2026-09-22) | 0.1 s before the additions |
-| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain, atoms | 0.7 s |
+| `unit_project` | STAR file, STAR project (with the RELION phase-shift contract), project merge, class compatibility, particle sieve, 2D search-space map I/O, motion gain (atoms moved to `unit_single`) | 0.7 s |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility | 0.2 s |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker server, persistent worker message — localhost only, bounded; `forked process` is excluded by decision and goes to `platform` | 0.6 s |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator — added by the reconstruction review (2026-09-23, section 9.7); `pcg_recon` joins once its one-thread time is known | 0.9 s |
@@ -390,6 +391,7 @@ along these lines, to be settled by the Phase 0 timing of each sub-suite:
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter — added by the pose review (2026-09-23, section 9.7); the Cartesian (continuous) 3D registration; its nightly counterpart `lib_cart_align3D` holds the 1JYX recovery gate | 0.1 s |
 | `unit_heterogeneity` | flex PCA (deconvolution of 4 000 particles), flex PCG operator (box 32, baseline solve) — added by the heterogeneity review (2026-09-23, section 9.7); its nightly counterpart `lib_heterogeneity` runs the deconvolution on 20 000 particles, the operator at box 64 and the solve sweep; `flex_gpu` is the CUDA platform entry | 4.5 s (Mac; 47.3 s in the first build, cut down, section 9.7) |
 | `unit_parallel` | qsys control, qsys environment — added by the parallel review (2026-09-23, section 9.7); distributed execution, scripts only, nothing submitted | to be measured |
+| `unit_single` | atoms, C-alpha finder — added by the single review (2026-09-23, section 9.7); SINGLE (nanoparticles, atomic models); its nightly counterpart `lib_single` holds Ruben's pipelines | to be measured |
 
 Measured through the gate on 2026-09-22 (Debug, `ctest -j12`, one thread
 per entry): all seven pass, **3.3 s real**, 12.9 processor-seconds;
@@ -1995,6 +1997,27 @@ four tests on both routes, the network test category
 built (without the `simple_` prefix the CMake glob does not see it).
 `network` is no longer a `simple_test_exec` category. `nice` waits for
 the utils batch.
+
+**single (2026-09-23, Hans: "Ruben's code: transfer it, and instruct him").**
+The six SINGLE cases are Ruben's; they moved as they were and
+`doc/refactoring_notes/single_area_tests_handover.md` tells him, test by
+test, what they have to assert. `detect_calpha` (the only one with a
+failure path) is `simple_calpha_finder_tester`, sub-suite `C-alpha finder`
+of the new thirteenth fast suite `unit_single`, which also takes the
+`atoms` sub-suite from unit_project (the atoms module is SINGLE's).
+`simulate_nanoparticle` and `detect_atoms` were prefixes of `atoms_stats`
+and are retired; the pipeline runs nightly as `nanoparticle atoms`
+(Pt, smpd 0.358) and `detect_calpha_molecules` as `C-alpha molecules`,
+both in the new fourth library suite `lib_single`, through their
+unchanged commanders; neither asserts anything yet (the report shows
+them "completed"). Two defects fixed on the way: the CTest entry
+`single_workflow` passed only `element=Pt`, so the required `smpd` was
+missing, `simple_cmdline%parse` printed the usage and stopped with status
+0, and the entry "passed" without running (no other registered entry has
+required keys); it now passes `smpd=0.358`, for Ruben to confirm. And
+every stage of `atoms_stats` and `single_workflow` ran with `nthr=40`
+(module constant), whatever the entry's 8 threads; they take
+`params%nthr`. `SIMPLE_CTEST_BUDGET` 28 -> 30.
 
 ## 10. Fast-tier performance
 

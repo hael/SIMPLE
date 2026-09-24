@@ -9,7 +9,7 @@ use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_pftc_align2D3D, &
                                         commander_test_unit_cart_align3D, commander_test_lib_cart_align3D, &
                                         commander_test_unit_heterogeneity, commander_test_lib_heterogeneity, &
-                                        commander_test_unit_parallel, &
+                                        commander_test_unit_parallel, commander_test_unit_single, commander_test_lib_single, &
                                         commander_test_flex_gpu
 implicit none
 
@@ -31,6 +31,8 @@ type(commander_test_unit_cart_align3D)   :: xunit_cart_align3D
 type(commander_test_lib_cart_align3D)    :: xlib_cart_align3D
 type(commander_test_unit_heterogeneity)  :: xunit_heterogeneity
 type(commander_test_unit_parallel)       :: xunit_parallel
+type(commander_test_unit_single)         :: xunit_single
+type(commander_test_lib_single)          :: xlib_single
 type(commander_test_lib_heterogeneity)   :: xlib_heterogeneity
 type(commander_test_flex_gpu)            :: xflex_gpu
 type(commander_test_forked_process) :: xforked_process
@@ -76,6 +78,10 @@ contains
                 call xunit_heterogeneity%execute(cline)
             case( 'unit_parallel' )
                 call xunit_parallel%execute(cline)
+            case( 'unit_single' )
+                call xunit_single%execute(cline)
+            case( 'lib_single' )
+                call xlib_single%execute(cline)
             case( 'lib_heterogeneity' )
                 call xlib_heterogeneity%execute(cline)
             case( 'flex_gpu' )

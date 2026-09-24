@@ -103,12 +103,12 @@ commander module and UI module of the category are gone. The coverage lives in t
 
 | test | routes | lines | failure path | run state / time | fixtures / args | launcher | overlap | proposed tier | verdict | note |
 |---|---|---|---|---|---|---|---|---|---|---|
-| atoms_stats | E | 36 | none | not run | committed, generated / element | - | - | workflow (needs assertion) (runs production commanders but checks nothing) |  |  |
-| detect_atoms | E | 26 | none | not run | generated / element | - | - | workflow (needs assertion) (runs production commanders but checks nothing) |  |  |
-| detect_calpha | E | 71 | THROW_HARD | not run | committed | - | - | workflow (assertion-bearing) |  |  |
-| detect_calpha_molecules | E | 128 | THROW_HARD | not run | committed, generated | - | - | workflow (assertion-bearing) |  |  |
-| simulate_nanoparticle | E | 18 | none | not run | generated / element | - | - | workflow (needs assertion) (runs production commanders but checks nothing) |  |  |
-| single_workflow | E | 149 | THROW_HARD | not run | committed, generated / element | - | - | workflow (runs production commanders) |  |  |
+| atoms_stats | E | 36 | none | not run | committed, generated / element | - | - | workflow (needs assertion) (runs production commanders but checks nothing) | modify | Hans, 2026-09-23 (single): Ruben's; transferred as it was, handover in `single_area_tests_handover.md`; the pipeline (simulate, detect_atoms, atoms_stats) is `nanoparticle atoms` of lib_single; asserts nothing yet; nthr from params (was 40) |
+| detect_atoms | E | 26 | none | not run | generated / element | - | - | workflow (needs assertion) (runs production commanders but checks nothing) | merge into lib_single | Hans, 2026-09-23 (single): Ruben's; transferred as it was, handover in `single_area_tests_handover.md`; a prefix of atoms_stats; its stages run in `nanoparticle atoms` |
+| detect_calpha | E | 71 | THROW_HARD | not run | committed | - | - | workflow (assertion-bearing) | merge into unit_single | Hans, 2026-09-23 (single): Ruben's; transferred as it was, handover in `single_area_tests_handover.md`; `simple_calpha_finder_tester` (`C-alpha finder`), THROW_HARDs as assertions, checks still weak |
+| detect_calpha_molecules | E | 128 | THROW_HARD | not run | committed, generated | - | - | workflow (assertion-bearing) | modify | Hans, 2026-09-23 (single): Ruben's; transferred as it was, handover in `single_area_tests_handover.md`; `C-alpha molecules` of lib_single; needs recall/precision floors |
+| simulate_nanoparticle | E | 18 | none | not run | generated / element | - | - | workflow (needs assertion) (runs production commanders but checks nothing) | merge into lib_single | Hans, 2026-09-23 (single): Ruben's; transferred as it was, handover in `single_area_tests_handover.md`; a prefix of atoms_stats; its stage runs in `nanoparticle atoms` |
+| single_workflow | E | 149 | THROW_HARD | not run | committed, generated / element | - | - | workflow (runs production commanders) | keep | Hans, 2026-09-23 (single): Ruben's; transferred as it was, handover in `single_area_tests_handover.md`; workflow entry; it passed only element=Pt, so the missing required smpd made it print usage and stop with status 0 (never ran); now smpd=0.358; nthr from params (was 40) |
 
 ## stats
 
@@ -304,3 +304,6 @@ unit_numerics and `project records` of unit_project.
 | socket_comm_distr | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |
 | socket_io | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |
 | socket_server | 2026-09-23 | delete: socket role program, no assertions; the socket modules it drove had no production caller | `IPC TCP socket` (unit_ipc) tests the live transport |
+| detect_atoms | 2026-09-23 | merge into lib_single: a prefix of atoms_stats | `nanoparticle atoms` (lib_single) |
+| simulate_nanoparticle | 2026-09-23 | merge into lib_single: a prefix of atoms_stats | `nanoparticle atoms` (lib_single) |
+| detect_calpha | 2026-09-23 | merge into unit_single: exec case moved to a tester | `simple_calpha_finder_tester` (`C-alpha finder`) |
