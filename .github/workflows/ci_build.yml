@@ -1,4 +1,4 @@
-name: Build SIMPLE & Run Tests (Linux/MacOS)
+name: Build SIMPLE (Linux/MacOS)
 
 on:
   schedule:
