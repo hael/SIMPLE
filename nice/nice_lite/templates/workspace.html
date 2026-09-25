@@ -95,6 +95,11 @@
         <iframe id="job_builder_iframe" name="job_builder_iframe" src="{{ job_builder_url }}" height="100%" class="w-[600px] z-2{% if not job_builder_url %} hidden{% endif %}"></iframe>
     </div>
 
+{% endif %}
+
+{% include 'messages.html' with messages_above_footer=True %}
+
+{% if current_workspace_id != 0 %}
     <!-- Workspace details footer (natural flow — no fixed positioning) -->
     <div class="bg-streambar border-t border-streamline px-6 py-3 flex-shrink-0">
         <div class="flex items-start justify-between gap-8">
@@ -195,8 +200,6 @@
     </div>
 
 {% endif %}
-
-{% include 'messages.html' %}
 
 <script>
     {% if job_builder_url %}

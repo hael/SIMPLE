@@ -1,5 +1,5 @@
 {% if messages %}
-  <ul id="message_alert" class="messages absolute bg-nice4header w-full bottom-0">
+  <ul id="message_alert" class="messages bg-nice4header w-full{% if messages_above_footer %} flex-shrink-0{% else %} absolute bottom-0{% endif %}">
     {% for message in messages %}
       <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
     {% endfor %}

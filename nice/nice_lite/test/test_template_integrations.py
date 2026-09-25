@@ -94,10 +94,19 @@ class TemplateIntegrationTests(SimpleTestCase):
 
     def test_browser_messages_remain_visible(self):
         content = self._read_template("messages.html")
+        workspace = self._read_template("workspace.html")
 
         self.assertIn('id="message_alert"', content)
+        self.assertIn("{% if messages_above_footer %} flex-shrink-0", content)
+        self.assertIn("{% else %} absolute bottom-0{% endif %}", content)
         self.assertNotIn("setTimeout", content)
         self.assertNotIn('style.display="none"', content)
+        message_include = "{% include 'messages.html' with messages_above_footer=True %}"
+        self.assertIn(message_include, workspace)
+        self.assertLess(
+            workspace.index(message_include),
+            workspace.index("<!-- Workspace details footer"),
+        )
 
     def test_jobbuilder_submits_to_named_workspace_iframe(self):
         jobbuilder = self._read_template("jobbuilder.html")
