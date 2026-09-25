@@ -1,13 +1,13 @@
-!@descr: execution of the stream workflow test program (preproc)
+!@descr: execution of the stream preprocessing workflow test program
 module simple_test_exec_stream
 use simple_cmdline,                only: cmdline
-use simple_commanders_test_stream, only: commander_test_preproc
+use simple_commanders_test_stream, only: commander_test_stream_preproc
 implicit none
 
 public :: exec_test_stream_commander
 private
 
-type(commander_test_preproc) :: xpreproc
+type(commander_test_stream_preproc) :: xstream_preproc
 
 contains
 
@@ -21,8 +21,8 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case( trim(which) )
-            case( 'preproc' )
-                call xpreproc%execute(cline)
+            case( 'stream_preproc' )
+                call xstream_preproc%execute(cline)
             case default
                 l_did_execute = .false.
         end select

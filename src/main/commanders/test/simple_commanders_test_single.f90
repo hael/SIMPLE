@@ -1,17 +1,12 @@
-!@descr: SINGLE (nanoparticle and atomic-model) test commanders: the atoms pipeline, the C-alpha benchmark and the SINGLE workflow
+!@descr: SINGLE test commanders: the nanoparticle atoms pipeline and the SINGLE workflow
 module simple_commanders_test_single
 use simple_commanders_api
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_test_atoms_stats
+type, extends(commander_base) :: commander_test_single_atoms_stats
   contains
-    procedure :: execute      => exec_test_atoms_stats
-end type commander_test_atoms_stats
-
-type, extends(commander_base) :: commander_test_detect_calpha_molecules
-  contains
-    procedure :: execute      => exec_test_detect_calpha_molecules
-end type commander_test_detect_calpha_molecules
+    procedure :: execute      => exec_test_single_atoms_stats
+end type commander_test_single_atoms_stats
 
 type, extends(commander_base) :: commander_test_single_workflow
   contains
@@ -23,18 +18,20 @@ integer, parameter :: MOLDIAM      = 20
 
 contains
 
-subroutine exec_test_atoms_stats( self, cline )
+subroutine exec_test_single_atoms_stats( self, cline )
     use simple_commanders_atoms, only: commander_detect_atoms
     use simple_commanders_sim,   only: commander_simulate_nanoparticle
     use simple_commanders_atoms, only: commander_atoms_stats
-    class(commander_test_atoms_stats), intent(inout) :: self
-    class(cmdline),                    intent(inout) :: cline
+    class(commander_test_single_atoms_stats), intent(inout) :: self
+    class(cmdline),                           intent(inout) :: cline
     type(cmdline)                         :: cline_sim, cline_detat, cline_atstats
     type(parameters)                      :: params
     type(commander_simulate_nanoparticle) :: xsim_nptcl
     type(commander_detect_atoms)          :: xdetat
     type(commander_atoms_stats)           :: xatstats
-    write(logfhandle,'(a)') '>>> TEST_ATOMS_STATS:'
+    write(logfhandle,'(a)') '>>> TEST_SINGLE_ATOMS_STATS:'
+    if( .not. cline%defined('smpd') )    call cline%set('smpd', 0.358)
+    if( .not. cline%defined('element') ) call cline%set('element', 'Pt')
     call params%new(cline)
     call cline_sim%set('prg',      'simulate_nanoparticle')
     call cline_sim%set('box',                          BOX)
@@ -57,137 +54,8 @@ subroutine exec_test_atoms_stats( self, cline )
     call cline_atstats%set('element',        params%element)
     call cline_atstats%set('nthr',                     params%nthr)
     call xatstats%execute(cline_atstats)
-    call simple_end('**** SIMPLE_TEST_ATOMS_STATS NORMAL STOP ****')
-end subroutine exec_test_atoms_stats
-
-subroutine exec_test_detect_calpha_molecules( self, cline )
-    use simple_atoms,         only: atoms
-    use simple_calpha_finder, only: calpha_finder
-    use simple_image_msk,     only: image_msk
-    use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
-    class(commander_test_detect_calpha_molecules), intent(inout) :: self
-    class(cmdline),                                intent(inout) :: cline
-    type(parameters)    :: params
-    type(molecule_data) :: mol
-
-    if( .not.cline%defined('smpd') )    call cline%set('smpd', 1.3)
-    if( .not.cline%defined('angstep') ) call cline%set('angstep', 45)
-    if( .not.cline%defined('thres') )   call cline%set('thres', 0.25)
-    call params%new(cline)
-
-    write(logfhandle,'(A)') '>>> C-ALPHA MOLECULE BENCHMARK:'
-    write(logfhandle,'(A,F6.2,A,I0,A,F6.3)') '    smpd=', params%smpd, &
-        ' A, angstep=', params%angstep, ' degrees, threshold=', params%thres
-    mol = sars_cov2_spkgp_6vxx()
-    call evaluate_molecule('6VXX', mol, 2916, params%smpd, params%angstep, params%thres)
-    mol = betagal_1jyx()
-    call evaluate_molecule('1JYX', mol, 4044, params%smpd, params%angstep, params%thres)
-    call simple_end('**** SIMPLE_TEST_DETECT_CALPHA_MOLECULES NORMAL STOP ****')
-
-contains
-
-    subroutine evaluate_molecule( label, molecule_data_in, expected_truth, smpd, angstep, threshold )
-        character(len=*),    intent(in) :: label
-        type(molecule_data), intent(in) :: molecule_data_in
-        integer,             intent(in) :: expected_truth, angstep
-        real,                intent(in) :: smpd, threshold
-        real, parameter      :: MATCH_RADIUS = 2.0
-        type(atoms)          :: molecule, candidates
-        type(calpha_finder)  :: finder
-        type(image_msk)      :: density_mask
-        type(image)          :: workvol
-        type(string)         :: source_file, truth_file, vol_file, candidate_file, score_file
-        real, allocatable    :: truth_xyz(:,:)
-        logical, allocatable :: truth_matched(:)
-        real    :: delta(3), best_distance_sq, recall, precision
-        real    :: recall_top_n, precision_top_n
-        integer :: ldim(3), iatom, itruth, ipred, ntruth, npred, nmatched, best_truth, nsections
-        integer :: top_n_count, nmatched_top_n
-
-        source_file    = trim(label)//'.pdb'
-        truth_file     = trim(label)//'_calpha_truth.pdb'
-        vol_file       = trim(label)//'_calpha_input.mrc'
-        candidate_file = trim(label)//'_calpha_candidates.pdb'
-        score_file     = trim(label)//'_calpha_scores.mrc'
-        call molecule%pdb2mrc(pdbfile=source_file, volfile=vol_file, smpd=smpd, &
-            center_pdb=.true., pdb_out=truth_file, mol=molecule_data_in)
-        call find_ldim_nptcls(vol_file, ldim, nsections)
-
-        ntruth = 0
-        do iatom = 1, molecule%get_n()
-            if(molecule%get_name(iatom) == ' CA ' .and. molecule%get_element(iatom) == 'C ') &
-                ntruth = ntruth + 1
-        enddo
-        if(ntruth /= expected_truth) THROW_HARD('Unexpected built-in C-alpha count')
-        allocate(truth_xyz(3,ntruth), source=0.)
-        allocate(truth_matched(ntruth), source=.false.)
-        itruth = 0
-        do iatom = 1, molecule%get_n()
-            if(molecule%get_name(iatom) /= ' CA ' .or. molecule%get_element(iatom) /= 'C ') cycle
-            itruth = itruth + 1
-            truth_xyz(:,itruth) = molecule%get_coord(iatom)
-        enddo
-
-        call workvol%new(ldim, smpd)
-        call workvol%read(vol_file)
-        call density_mask%automask3D(params, workvol, l_tight=.false., l_report=.false.)
-        call density_mask%write(string(trim(label)//'_calpha_mask.mrc'))
-        call finder%new(smpd, 4.0)
-        call finder%search(workvol, real(angstep), 2 * ntruth, threshold, candidate_file, score_file, &
-            search_mask=density_mask)
-
-        npred = 0
-        if(nlines(candidate_file) > 0)then
-            call candidates%new(candidate_file)
-            npred = candidates%get_n()
-        endif
-        nmatched       = 0
-        nmatched_top_n = 0
-        top_n_count = min(ntruth, npred)
-        do ipred = 1, npred
-            best_truth       = 0
-            best_distance_sq = huge(1.)
-            do itruth = 1, ntruth
-                if(truth_matched(itruth)) cycle
-                delta = candidates%get_coord(ipred) - truth_xyz(:,itruth)
-                if(sum(delta * delta) < best_distance_sq)then
-                    best_distance_sq = sum(delta * delta)
-                    best_truth       = itruth
-                endif
-            enddo
-            if(best_truth > 0 .and. best_distance_sq <= MATCH_RADIUS**2)then
-                truth_matched(best_truth) = .true.
-                nmatched                  = nmatched + 1
-            endif
-            if(ipred == top_n_count) nmatched_top_n = nmatched
-        enddo
-        recall_top_n    = real(nmatched_top_n) / real(ntruth)
-        precision_top_n = 0.
-        if(top_n_count > 0) precision_top_n = real(nmatched_top_n) / real(top_n_count)
-        recall    = real(nmatched) / real(ntruth)
-        precision = 0.
-        if(npred > 0) precision = real(nmatched) / real(npred)
-
-        write(logfhandle,'(A,A)') '>>> ', trim(label)
-        write(logfhandle,'(A,I0,A,I0)') '    truth=', ntruth, ', candidate cap=', 2 * ntruth
-        write(logfhandle,'(A,I0,A,I0,A,F7.3,A,F7.3)') '    top-N: predicted=', top_n_count, &
-            ', matched=', nmatched_top_n, ', recall=', recall_top_n, ', precision=', precision_top_n
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.3,A,F7.3)') '    top-2N: predicted=', npred, &
-            ', matched=', nmatched, ', missed=', ntruth - nmatched, ', recall=', recall, &
-            ', precision=', precision
-        write(logfhandle,'(A,3(I0,1X))') '    map dimensions=', ldim
-        write(logfhandle,'(A,A)') '    candidates: ', candidate_file%to_char()
-        write(logfhandle,'(A,A)') '    score volume: ', score_file%to_char()
-
-        if(npred > 0) call candidates%kill()
-        call finder%kill()
-        call density_mask%kill()
-        call workvol%kill()
-        call molecule%kill()
-        deallocate(truth_xyz, truth_matched)
-    end subroutine evaluate_molecule
-
-end subroutine exec_test_detect_calpha_molecules
+    call simple_end('**** SIMPLE_TEST_SINGLE_ATOMS_STATS NORMAL STOP ****')
+end subroutine exec_test_single_atoms_stats
 
 subroutine exec_test_single_workflow( self, cline )
     use single_commanders_nano2D,       only: commander_analysis2D_nano
@@ -228,6 +96,8 @@ subroutine exec_test_single_workflow( self, cline )
     integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
+    if( .not. cline%defined('smpd') )    call cline%set('smpd', 0.358)
+    if( .not. cline%defined('element') ) call cline%set('element', 'Pt')
     projname = 'test_single_workflow'
     call params%new(cline)
     projfile = projname%to_char()//'.simple'

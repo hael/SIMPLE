@@ -4,15 +4,87 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! COSMSKHALFWIDTH, GRAPHENE_BAND1/2/3, TINY
 use simple_image,     only: image, unmemoize_mask_coords
 use simple_image_bin, only: image_bin
+use simple_image_msk, only: automask2D
+use simple_parameters,only: parameters
+use simple_syslib,    only: del_file
 use simple_math,      only: bounds_from_mask3D
 use simple_math_ft,   only: get_resarr, calc_graphene_mask
 implicit none
 private
-public :: run_all_mask_tests, run_all_image_bin_tests
+public :: run_all_mask_tests, run_all_nano_mask_tests, run_all_image_bin_tests
 
 real, parameter :: EPS = 1.0e-5
 
 contains
+
+    !==================================================================
+    ! sub-suite 'nano mask'
+    !==================================================================
+
+    subroutine run_all_nano_mask_tests()
+        integer, parameter :: NIMGS = 3, BOX = 96, CENTRE = BOX / 2 + 1
+        integer, parameter :: NGROW = 2, WINSZ = 1, EDGE = 4
+        integer, parameter :: RADII(NIMGS) = [10, 14, 18]
+        integer, parameter :: OFFSETS(2,NIMGS) = reshape([0, 0, 5, -3, -6, 4], [2,NIMGS])
+        real,    parameter :: SMPD = 1.0
+        type(parameters) :: params
+        type(image)      :: imgs(NIMGS)
+        real, allocatable :: diams(:), shifts(:,:), mask(:,:,:)
+        real :: mask_centre(3), expected_diam
+        integer :: i, x, y
+
+        call cleanup_nano_mask_files
+        params%amsklp  = 8.0
+        params%automsk = 'no'
+        params%msk     = 40.0
+        params%part    = 1
+        do i = 1, NIMGS
+            call imgs(i)%new([BOX, BOX, 1], SMPD, wthreads=.false.)
+            imgs(i) = 0.0
+            do y = 1, BOX
+                do x = 1, BOX
+                    if( (x - CENTRE - OFFSETS(1,i))**2 + (y - CENTRE - OFFSETS(2,i))**2 <= RADII(i)**2 )then
+                        call imgs(i)%set([x, y, 1], 1.0)
+                    endif
+                end do
+            end do
+        end do
+
+        call automask2D(params, imgs, NGROW, WINSZ, EDGE, diams, shifts, verbose=.false.)
+        call assert_int(NIMGS, size(diams), 'nano_mask returns one diameter per image')
+        call assert_int(NIMGS, size(shifts,1), 'nano_mask returns one shift per image')
+        call assert_int(2, size(shifts,2), 'nano_mask returns two coordinates per shift')
+        do i = 1, NIMGS
+            expected_diam = 2.0 * real(RADII(i) + NGROW) * SMPD
+            call assert_real(expected_diam, diams(i), 4.0, 'nano_mask recovers disc diameter')
+            call assert_real(real(OFFSETS(1,i)), shifts(i,1), 1.5, 'nano_mask recovers horizontal offset')
+            call assert_real(real(OFFSETS(2,i)), shifts(i,2), 1.5, 'nano_mask recovers vertical offset')
+            mask = imgs(i)%get_rmat()
+            call assert_true(minval(mask) >= 0.0 .and. maxval(mask) <= 1.0, 'nano_mask values remain within [0,1]')
+            call assert_real(1.0, mask(CENTRE + OFFSETS(1,i), CENTRE + OFFSETS(2,i), 1), 1.e-6, &
+                &'nano_mask keeps the detected object centre')
+            call assert_real(0.0, mask(1,1,1), 1.e-6, 'nano_mask excludes the far corner')
+            call imgs(i)%masscen(mask_centre)
+            call assert_real(shifts(i,1), mask_centre(1), 0.75, 'nano_mask soft-mask centre agrees with reported x shift')
+            call assert_real(shifts(i,2), mask_centre(2), 0.75, 'nano_mask soft-mask centre agrees with reported y shift')
+        end do
+        call assert_true(all(diams(2:NIMGS) > diams(1:NIMGS-1)), &
+            &'nano_mask recovered diameters preserve the input size ordering')
+
+        do i = 1, NIMGS
+            call imgs(i)%kill
+        end do
+        if( allocated(diams)  ) deallocate(diams)
+        if( allocated(shifts) ) deallocate(shifts)
+        if( allocated(mask)   ) deallocate(mask)
+        call unmemoize_mask_coords
+        call cleanup_nano_mask_files
+    end subroutine run_all_nano_mask_tests
+
+    subroutine cleanup_nano_mask_files()
+        call del_file('binarized_automask2D.mrc')
+        call del_file('masks_automask2D.mrc')
+    end subroutine cleanup_nano_mask_files
 
     !==================================================================
     ! sub-suite 'masks'

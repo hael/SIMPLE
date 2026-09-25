@@ -33,7 +33,7 @@ labels.
 | `fast` | 13 area suites `unit_<area>` | every `compile_*.sh --compile-tests` build, before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `workflow` | 6 workflow gates | nightly | simulated pipelines that start `simple_exec` and workers, checked against the model they were simulated from |
-| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, or nightly where the machine has the capability | tests that need child processes, a launcher or a device |
+| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh --compile-tests` | tests that need child processes, a launcher or a device; `coarrays` is a two-image integer-transfer smoke |
 
 The fast tier is the build-time gate; the other three labels make up the
 extensive tier, which runs overnight.
@@ -46,6 +46,10 @@ fails the build when an entry fails or the gate takes more than 30 s of real
 time. A failed gate installs nothing. The per-entry timings are kept in
 `build/test_runs/ctest_fast.log.timing.txt`; the gate takes about 5 s on the
 reference Mac in Debug.
+
+`compile_coarrays.sh --compile-tests` additionally runs the capability-gated
+`coarrays` CTest entry after the fast gate and before installation. A failed
+two-image smoke test therefore prevents a coarray build from being installed.
 
 **The process budget.** The number of CTest entries is fixed in
 `SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 25: 13 fast,
@@ -69,7 +73,7 @@ tester module (section 4.1).
 |---|---|
 | `unit_core` | ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
-| `unit_image` | image, image header, Fourier iterator, B-spline smoother, masks, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
+| `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
 | `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
@@ -91,7 +95,7 @@ convenience and deliberately not a CTest entry.
 | `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 5 000 simulated 1JYX particles refined by the Cartesian pose refiner |
 | `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
-| `lib_single` | library | nanoparticle atoms, C-alpha molecules, pdb2mrc |
+| `lib_single` | library | nanoparticle atoms, pdb2mrc |
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
 | `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | workflow | simulated movies through import, motion correction, CTF, picking, extraction, `abinitio2D`, `abinitio3D` |
 | `single_workflow` | workflow | the SINGLE pipeline on a simulated Pt nanoparticle |
@@ -103,11 +107,15 @@ convenience and deliberately not a CTest entry.
 
 A few programs are reachable through `simple_test_exec` but are not CTest
 entries, because they need data a user supplies: `mini_stream`,
-`pcg_frac_update`, `rec3D_backends`, `mrc2jpeg`, `mrc_validate`, `nano_mask`
-and `score_volume_shape`. `atoms_stats` and `detect_calpha_molecules` are the
-by-hand routes of two `lib_single` sub-suites. No new program joins this list
+`pcg_frac_update` and `rec3D_backends`.
+`single_atoms_stats` is the high-level route of the `lib_single` nanoparticle-atoms
+sub-suite. No new program joins this list
 without a reason: a diagnostic that runs on a user's data is a developer
 program (section 3.4), not a test.
+
+For any suite-based entry, print its accepted sub-suite identifiers without
+running tests using `simple_test_exec test=<entry> suite=list`; for example,
+`simple_test_exec test=unit_image suite=list`.
 
 ### 1.4 Running tests
 
@@ -189,7 +197,8 @@ expected value at 0.99 and the defect at 0.4).
   simulated from, against declared floors.
 - **A benchmark or a timing loop.** Timings are not assertions; a benchmark
   is a developer program or stays in a local worktree.
-- **A conversion or a utility** (`mrc2jpeg`, `cif2mrc`): a program.
+- **A conversion or utility invocation that only produces output**: a program. The underlying
+  conversion can be a unit test when it generates its own input and quantitatively verifies the output.
 - **An experiment on downloaded or user data**: a local worktree, or a
   developer program if the team needs it again.
 - **A demonstration** (sampling pictures, gnuplot windows, printed tables to
@@ -575,7 +584,7 @@ written as `sub-suite` (entry).
 | `ansi_colors` | `string` (`unit_core`) |
 | `assign_optics` | `optics assignment` (`lib_stream`) |
 | `atomfit` | deleted, with `atoms%fit_bfactors`, which nothing called |
-| `atoms_stats` | `nanoparticle atoms` (`lib_single`); `simple_test_exec test=atoms_stats` by hand |
+| `atoms_stats` | `nanoparticle atoms` (`lib_single`); high-level route `simple_test_exec test=single_atoms_stats` |
 | `binoris`, `binoris_io`, `inside_write` | `binoris` (`unit_project`) |
 | `binoris_test`, `binoris_io_test` | deleted (empty stubs); see `binoris` |
 | `bounds_from_mask3D`, `bounds_from_mask3D_test`, `graphene_mask`, `mask`, `msk_routines` | `masks` (`unit_image`) |
@@ -587,7 +596,7 @@ written as `sub-suite` (entry).
 | `class_sample`, `class_sample_test` | `class sample I/O` (`unit_core`) |
 | `clustering` | deleted; it called `affinity propagation` (`unit_numerics`) |
 | `cmdline` | `command line` (`unit_core`) |
-| `coarrays` | the platform entry `coarrays` (`simple_test_exec test=coarrays`) |
+| `coarrays` | the capability-gated platform entry `coarrays`; two images transfer one known integer |
 | `continuous_3D_pcg_reconstruction` | `observation noise` (`unit_reconstruction`) and `PCG half-set` (`lib_reconstruction`) |
 | `continuous_inplane_cc_grad`, `continuous_inplane_hybrid_grad`, `continuous_inplane_rotation2D_stage1_validation`, `continuous_inplane_rotation2D_route_identity` | `continuous in-plane` (`unit_pftc_align2D3D`) |
 | `continuous_inplane_refine3D` | `refine3D in-plane state` and `continuous in-plane` (`unit_pftc_align2D3D`) |
@@ -597,7 +606,7 @@ written as `sub-suite` (entry).
 | `ctf`, `ctf_test` | `CTF` (`unit_image`) |
 | `detect_atoms`, `simulate_nanoparticle` | `nanoparticle atoms` (`lib_single`) |
 | `detect_calpha` | `C-alpha finder` (`unit_single`) |
-| `detect_calpha_molecules` | `C-alpha molecules` (`lib_single`); `simple_test_exec test=detect_calpha_molecules` by hand |
+| `detect_calpha_molecules` | deleted; quantitative synthetic coverage remains in `C-alpha finder` (`unit_single`) |
 | `diff_map_graphs` | `diffusion-map graphs` (`unit_numerics`) |
 | `discrete_stack_io`, `stack_io` | `stack I/O` (`unit_core`) |
 | `eigh`, `eigh_test` | `linear algebra` (`unit_numerics`) |
@@ -621,9 +630,10 @@ written as `sub-suite` (entry).
 | `master` | `stream heartbeat` (`forked_process`) |
 | `maxnloc`, `maxnloc_test` | `search, sort, locate` (`unit_numerics`) |
 | `mini_stream` | `simple_test_exec test=mini_stream`, by hand (needs a user's movies) |
-| `mrc2jpeg`, `mrc_validate` | by hand, `simple_test_exec test=mrc2jpeg`, `test=mrc_validate` |
+| `mrc2jpeg`, `mrc_validate` | `mrc2jpeg`, `mrc validate` (`unit_image`) |
 | `multinomal_test`, `rnd_shuffle` | `random draws` (`unit_numerics`) |
-| `nano_mask`, `score_volume_shape` | by hand, `simple_test_exec test=nano_mask`, `test=score_volume_shape` |
+| `nano_mask` | `nano mask` (`unit_image`) |
+| `score_volume_shape` | `volume shape` (`unit_image`) |
 | `neigh`, `sym`, `sym_test` | `symmetry` (`unit_ori`) |
 | `nice` | deleted |
 | `nu_envmask`, `nu_filter` | deleted; `simple_exec prg=nu_filt3D` |
@@ -644,7 +654,7 @@ written as `sub-suite` (entry).
 | `pick_extract` | `pick and extract` (`lib_stream`) |
 | `pose_cont_refine3D_adapter` | `pose adapter` (`unit_cart_align3D`) and `pose 1JYX recovery` (`lib_cart_align3D`) |
 | `pose_cont_refinement` | `pose refiner` (`unit_cart_align3D`) |
-| `preproc` | the workflow entry `stream_preproc` |
+| `preproc` | the high-level workflow entry `stream_preproc` |
 | `project_merge` | `project merge` (`unit_project`) |
 | `projdir_accumulator` | `class-average accumulator` (`unit_reconstruction`) |
 | `qsys_ctrl`, `qsys_env` | `qsys control`, `qsys environment` (`unit_parallel`) |

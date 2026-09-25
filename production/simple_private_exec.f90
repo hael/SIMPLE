@@ -2,7 +2,7 @@
 program simple_private_exec
 use simple_cmdline,             only: cmdline_err
 use simple_defs,                only: STDLEN
-use simple_private_exec_driver, only: run_private_exec_from_command_line, run_coarray_direct
+use simple_private_exec_driver, only: run_private_exec_from_command_line, run_coarray_direct, run_coarray_smoke
 implicit none
 #include "simple_local_flags.inc"
 
@@ -11,7 +11,9 @@ integer               :: cmdstat, cmdlen
 
 call get_command_argument(1, xarg, cmdlen, cmdstat)
 if( cmdstat /= 0 ) call cmdline_err(cmdstat, cmdlen, xarg, 0)
-if( trim(xarg) == '--coarray' )then
+if( trim(xarg) == '--coarray-smoke' )then
+    call run_coarray_smoke
+else if( trim(xarg) == '--coarray' )then
     call run_coarray_direct
 else
     call run_private_exec_from_command_line

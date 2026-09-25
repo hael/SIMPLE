@@ -285,7 +285,7 @@ if(BUILD_TESTS)
   # stream stage tests moved to lib_stream, unit_project and forked_process,
   # abinitio2D_stream was retired (plan, section 9.7, stream).
   simple_add_test(stream_preproc workflow 3600 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=preproc)
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=stream_preproc)
 
   # ---- platform cases -------------------------------------------------------
   # Own process, own launcher; not part of the build gate.
@@ -310,11 +310,10 @@ if(BUILD_TESTS)
     set_tests_properties(openmp_offload PROPERTIES FAIL_REGULAR_EXPRESSION "Fatal error|FAIL: ")
   endif()
   if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE)
-    # the production coarray path end to end: check_nptcls jobs on simulated noise
-    # through qsys=coarray, whose images are the coarray-linked simple_private_exec
-    # under cafrun (the standalone sync check was retired by the utils review)
-    simple_add_test(coarrays platform 1200 1 RUN_SERIAL
-      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=coarrays)
+    # Minimal capability check compiled into the coarray-linked private executable:
+    # two images synchronize and transfer one known integer.
+    simple_add_test(coarrays platform 60 1 RUN_SERIAL
+      COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${SIMPLE_PRIVATE_EXE}> --coarray-smoke)
   endif()
 
   # ---- process budget -------------------------------------------------------

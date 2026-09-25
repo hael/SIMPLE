@@ -5,7 +5,7 @@ use simple_syslib, only: redirect_stdout_stderr, restore_stdout_stderr
 use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
 implicit none
 private
-public :: run_private_exec_from_command_line, run_private_exec_line, run_coarray_direct
+public :: run_private_exec_from_command_line, run_private_exec_line, run_coarray_direct, run_coarray_smoke
 #include "simple_local_flags.inc"
 
 logical, save :: private_exec_ui_ready = .false.
@@ -110,6 +110,29 @@ contains
         THROW_HARD('simple_private_exec --coarray requires a USE_COARRAYS build')
 #endif
     end subroutine run_coarray_direct
+
+    !> Minimal two-image coarray check: image 1 writes a known integer to image 2,
+    !! and image 1 verifies the result reported by image 2 after synchronization.
+    subroutine run_coarray_smoke
+#ifdef USE_COARRAYS
+        integer, save :: received[*]
+        logical, save :: image_passed[*]
+        if( num_images() /= 2 ) error stop 'coarray smoke requires exactly two images'
+        received     = this_image()
+        image_passed = .true.
+        sync all
+        if( this_image() == 1 ) received[2] = 42
+        sync all
+        if( this_image() == 2 ) image_passed = received == 42
+        sync all
+        if( this_image() == 1 ) image_passed = received == 1 .and. image_passed[2]
+        sync all
+        if( .not. image_passed[1] ) error stop 'coarray integer transfer failed'
+        if( this_image() == 1 ) write(*,'(A)') 'PASS: coarray two-image integer transfer'
+#else
+        error stop 'coarray smoke requires a USE_COARRAYS build'
+#endif
+    end subroutine run_coarray_smoke
 
 #ifdef USE_COARRAYS
     subroutine declare_coarray_part_finished( ipart, from_part, to_part, part_finished )

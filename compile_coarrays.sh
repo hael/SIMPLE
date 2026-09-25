@@ -14,9 +14,14 @@ mkdir build
 cd build
 cmake -DBUILD_TESTS=${BUILD_TESTS} .. -D USE_COARRAYS=ON
 make -j || exit $?
-# With --compile-tests, the build-time test gate (scripts/run_fast_gate.sh) runs
-# between build and install, as in X: a failed gate is a failed build and
-# nothing is installed; its status is the script's status.
-if [ "$BUILD_TESTS" = ON ]; then "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?; fi
+# With --compile-tests, run both the ordinary fast gate and the capability-gated
+# two-image coarray smoke before installation. Either failure prevents install.
+if [ "$BUILD_TESTS" = ON ]; then
+    "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?
+    if [ "${GATE_RC:-0}" = 0 ]; then
+        echo "-------------------- COARRAY SMOKE TEST --------------------"
+        ctest -R '^coarrays$' --no-tests=error --output-on-failure || GATE_RC=$?
+    fi
+fi
 [ "${GATE_RC:-0}" = 0 ] && { make install || exit $?; }
 exit ${GATE_RC:-0}

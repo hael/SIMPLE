@@ -230,14 +230,24 @@ contains
     subroutine test_registered_test_programs()
         write(*,'(A)') 'test_registered_test_programs'
         call make_test_ui
-        call assert_registered_test_category('nano_mask',      'masks',    'Masks',      60)
-        call assert_registered_test_category('preproc',        'stream',   'Stream',     130)
+        call assert_registered_test_category('single_atoms_stats','highlevel','High-level tests', 40)
+        call assert_registered_test_category('single_workflow','highlevel','High-level tests', 40)
+        call assert_registered_test_category('stream_preproc', 'highlevel','High-level tests', 40)
         call assert_registered_test_category('lib_stream',     'class',    'Unit tests', 10)
         call assert_registered_test_category('openmp_offload', 'class',    'Unit tests', 10)
         ! the utils category went with its last test program (utils review)
         program_name = 'cavg_registration'
         call get_test_prg_ptr(program_name, registered_prg)
         call assert_false(associated(registered_prg), 'the retired cavg_registration test program is gone')
+        program_name = 'nano_mask'
+        call get_test_prg_ptr(program_name, registered_prg)
+        call assert_false(associated(registered_prg), 'the retired nano_mask test program is gone')
+        program_name = 'score_volume_shape'
+        call get_test_prg_ptr(program_name, registered_prg)
+        call assert_false(associated(registered_prg), 'the retired score_volume_shape test program is gone')
+        program_name = 'detect_calpha_molecules'
+        call get_test_prg_ptr(program_name, registered_prg)
+        call assert_false(associated(registered_prg), 'the retired detect_calpha_molecules test program is gone')
     end subroutine test_registered_test_programs
 
     !> the five CTF-fitting programs expose fit_phshift (binary, default no) with the phase-shift window

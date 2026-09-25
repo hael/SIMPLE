@@ -90,12 +90,6 @@ jobs:
         run: |
              ./compile_coarrays.sh --compile-tests
 
-      - name: Test SIMPLE (Linux/MacOS)
-        run: |
-             cd build
-             echo "-------------------- TEST COARRAYS (platform) -------------------------"
-             ctest -R '^coarrays$' --no-tests=error --output-on-failure
-
   Build_and_Test:
     name: Build SIMPLE and Test 
     runs-on: ${{ matrix.os }}

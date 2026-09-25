@@ -27,7 +27,7 @@ use simple_decay_funs_tester,                only: run_all_decay_funs_tests
 use simple_pca_tester,                       only: run_all_pca_tests
 use simple_opt_tester,                       only: run_all_opt_tests
 use simple_lpstages_tester,                  only: run_all_lpstages_tests
-use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_image_bin_tests
+use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_nano_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_accum_blend_tester,               only: run_all_accum_blend_tests
 use simple_ctf_tester,                       only: run_all_ctf_tests
@@ -73,6 +73,9 @@ use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_ser
 use simple_forked_process_tester,            only: run_all_forked_process_tests
 use simple_imghead_tester,                   only: run_all_imghead_tests
 use simple_image_tester,                     only: run_all_image_tests
+use simple_jpg_tester,                       only: run_all_mrc2jpeg_tests
+use simple_mrc_validate_tester,              only: run_all_mrc_validate_tests
+use simple_volume_shape_tester,              only: run_all_volume_shape_tests
 use simple_ftiter_tester,                    only: run_all_ftiter_tests
 use simple_ftexp_shsrch_tester,              only: run_all_ftexp_shsrch_tests
 use simple_bspline_smoother_tester,          only: run_all_bspline_smoother_tests
@@ -88,7 +91,7 @@ use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
-use simple_commanders_test_single,           only: commander_test_atoms_stats, commander_test_detect_calpha_molecules
+use simple_commanders_test_single,           only: commander_test_single_atoms_stats
 use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
@@ -241,7 +244,7 @@ type :: unit_suite
     procedure(no_arg_test), pointer, nopass :: run => null()
 end type unit_suite
 
-integer, parameter :: MAX_SUITES = 128   ! `units` registers 63 sub-suites (2026-09-23)
+integer, parameter :: MAX_SUITES = 128   ! `units` registers 66 sub-suites (2026-09-25)
 
 contains
 
@@ -279,10 +282,14 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'image',                run_all_image_tests)
+        call add_suite(s, n, 'mrc2jpeg',             run_all_mrc2jpeg_tests)
+        call add_suite(s, n, 'mrc validate',          run_all_mrc_validate_tests)
         call add_suite(s, n, 'image header',         run_all_imghead_tests)
         call add_suite(s, n, 'Fourier iterator',     run_all_ftiter_tests)
         call add_suite(s, n, 'B-spline smoother',    run_all_bspline_smoother_tests)
         call add_suite(s, n, 'masks',                run_all_mask_tests)
+        call add_suite(s, n, 'nano mask',            run_all_nano_mask_tests)
+        call add_suite(s, n, 'volume shape',         run_all_volume_shape_tests)
         call add_suite(s, n, 'binary image',         run_all_image_bin_tests)
         call add_suite(s, n, 'segmentation',         run_all_segmentation_tests)
         call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
@@ -390,14 +397,13 @@ contains
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
     end subroutine suites_single
 
-    !> nightly: Ruben's SINGLE pipelines, transferred as they were (they assert nothing yet;
-    !! doc/refactoring_notes/single_area_tests_handover.md says what they must pin), and pdb2mrc
-    !! of the built-in 6VXX and 1JYX models (asserting; from the utils review)
+    !> nightly: Ruben's nanoparticle atoms pipeline, transferred as it was (it asserts nothing yet;
+    !! doc/refactoring_notes/single_area_tests_handover.md says what it must pin), and asserting
+    !! pdb2mrc coverage of the built-in 6VXX and 1JYX models
     subroutine suites_lib_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'nanoparticle atoms', suite_nanoparticle_atoms)
-        call add_suite(s, n, 'C-alpha molecules',  suite_calpha_molecules)
         call add_suite(s, n, 'pdb2mrc',            run_all_pdb2mrc_tests)
     end subroutine suites_lib_single
 
@@ -703,7 +709,8 @@ contains
     !> Runs the sub-suites of one area in this process, in its own dated
     !! directory, accumulating failures through simple_test_utils; exits
     !! non-zero if any check failed. `suite=<name>` (from the command line)
-    !! runs one sub-suite; SIMPLE_UNIT_ORDER=reverse walks the table backwards.
+    !! runs one sub-suite, and `suite=list` prints the accepted names without
+    !! starting a test run; SIMPLE_UNIT_ORDER=reverse walks the table backwards.
     subroutine run_unit_suites( label, cline, suites )
         character(len=*), intent(in)    :: label
         class(cmdline),   intent(inout) :: cline
@@ -714,6 +721,18 @@ contains
         character(len=32)     :: order_env
         logical               :: test_failed, l_reverse
         integer               :: i, isuite, nrun, iostat
+        only_suite = ''
+        if( cline%defined('suite') )then
+            only_suite = cline%get_carg('suite')
+            only_suite = suite_id(only_suite%to_char())
+        endif
+        if( only_suite == 'list' )then
+            write(logfhandle,'(A)') 'Available suites for '//trim(label)//':'
+            do i = 1, size(suites)
+                write(logfhandle,'(A)') '  '//trim(suite_id(suites(i)%name))
+            end do
+            return
+        endif
         call date_and_time(date=datestr)
         folder = 'SIMPLE_TEST_'//trim(label)//'_'//datestr
         call simple_getcwd(original_cwd)
@@ -721,11 +740,6 @@ contains
         call simple_mkdir(folder)
         call simple_chdir(folder)
         call reset_test_report(report_file%to_char())
-        only_suite = ''
-        if( cline%defined('suite') )then
-            only_suite = cline%get_carg('suite')
-            only_suite = suite_id(only_suite%to_char())
-        endif
         ! an optional developer switch: read directly so that an unset variable is silent
         call get_environment_variable('SIMPLE_UNIT_ORDER', value=order_env, status=iostat)
         l_reverse = iostat == 0 .and. trim(order_env) == 'reverse'
@@ -747,7 +761,7 @@ contains
         end do
         call report_summary(failed=test_failed)
         call simple_chdir(original_cwd%to_char())
-        if( nrun == 0 ) THROW_HARD('no sub-suite '//only_suite%to_char()//' in '//trim(label)//'; the names are listed by test=list')
+        if( nrun == 0 ) THROW_HARD('no sub-suite '//only_suite%to_char()//' in '//trim(label)//'; use suite=list')
         if( test_failed ) error stop 1
         call simple_end('**** SIMPLE_TEST_'//trim(label)//' NORMAL STOP ****')
     end subroutine run_unit_suites
@@ -781,25 +795,16 @@ contains
     ! ---- wrappers for test procedures that take arguments -----------------------
 
     !> the SINGLE atoms pipeline (simulate a Pt nanoparticle, detect its atoms, atom statistics) with
-    !! the command line `simple_test_exec test=atoms_stats smpd=0.358 element=Pt` would give it
+    !! the command line `simple_test_exec test=single_atoms_stats smpd=0.358 element=Pt` would give it
     subroutine suite_nanoparticle_atoms
-        type(commander_test_atoms_stats) :: xatoms_stats
+        type(commander_test_single_atoms_stats) :: xatoms_stats
         type(cmdline) :: cline_here
-        call cline_here%set('prg',     'atoms_stats')
+        call cline_here%set('prg',     'single_atoms_stats')
         call cline_here%set('smpd',    0.358)
         call cline_here%set('element', 'Pt')
         call xatoms_stats%execute(cline_here)
         call cline_here%kill
     end subroutine suite_nanoparticle_atoms
-
-    !> the C-alpha benchmark on the built-in 6VXX and 1JYX models at its default settings
-    subroutine suite_calpha_molecules
-        type(commander_test_detect_calpha_molecules) :: xcalpha
-        type(cmdline) :: cline_here
-        call cline_here%set('prg', 'detect_calpha_molecules')
-        call xcalpha%execute(cline_here)
-        call cline_here%kill
-    end subroutine suite_calpha_molecules
 
     subroutine suite_ui_json
         write(logfhandle,'(a)') 'VALIDATING UI JSON FILE:'

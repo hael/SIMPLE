@@ -12,7 +12,7 @@ where each one lives now and what it has to check before it counts as a test.
 | was | now | runs |
 |---|---|---|
 | `detect_calpha` | `src/main/nano/simple_calpha_finder_tester.f90`, sub-suite `C-alpha finder` of `unit_single` | fast gate, every `--compile-tests` build |
-| `simulate_nanoparticle`, `detect_atoms`, `atoms_stats` | one pipeline, `exec_test_atoms_stats`, run as sub-suite `nanoparticle atoms` of `lib_single` | nightly (`ctest -L library`) |
+| `simulate_nanoparticle`, `detect_atoms`, `atoms_stats` | one pipeline, `exec_test_single_atoms_stats`, run as sub-suite `nanoparticle atoms` of `lib_single` | nightly (`ctest -L library`) |
 | `detect_calpha_molecules` | unchanged commander, run as sub-suite `C-alpha molecules` of `lib_single` | nightly |
 | `single_workflow` | unchanged commander, CTest entry `single_workflow` | nightly (`ctest -L workflow`) |
 
@@ -26,7 +26,7 @@ Running them:
 simple_test_exec test=unit_single                          # both fast sub-suites
 simple_test_exec test=unit_single suite=c_alpha_finder     # one sub-suite
 simple_test_exec test=lib_single suite=nanoparticle_atoms  # the nanoparticle pipeline
-simple_test_exec test=atoms_stats smpd=0.358 element=Pt    # the same pipeline by hand
+simple_test_exec test=single_atoms_stats smpd=0.358 element=Pt # the same pipeline from High-level tests
 simple_test_exec test=detect_calpha_molecules [smpd= angstep= thres=]
 simple_test_exec test=single_workflow smpd=0.358 element=Pt
 ```
@@ -83,7 +83,7 @@ truth is known exactly, so this test can be strict:
 5. Optionally, orientation independence: apply a different `rotation` to the residues and
    require the same recovery. It is cheap at 32³.
 
-### `nanoparticle atoms` (nightly, `exec_test_atoms_stats`)
+### `nanoparticle atoms` (nightly, `exec_test_single_atoms_stats`)
 
 Today it simulates a Pt nanoparticle (box 160, diameter 20 Å), runs `detect_atoms` and
 `atoms_stats`, and checks nothing. The simulation writes its own ground truth

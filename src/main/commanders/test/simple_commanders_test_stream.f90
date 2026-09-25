@@ -12,18 +12,18 @@ use simple_commanders_sim, only: commander_simulate_movie
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_test_preproc
+type, extends(commander_base) :: commander_test_stream_preproc
   contains
-    procedure :: execute => exec_test_preproc
-end type commander_test_preproc
+    procedure :: execute => exec_test_stream_preproc
+end type commander_test_stream_preproc
 
 contains
 
-subroutine exec_test_preproc( self, cline )
+subroutine exec_test_stream_preproc( self, cline )
     use simple_stream_p01_preprocess_new, only: stream_p01_preprocess
     use simple_ui,                        only: make_ui
     use, intrinsic :: ieee_arithmetic,    only: ieee_is_finite
-    class(commander_test_preproc), intent(inout) :: self
+    class(commander_test_stream_preproc), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
     character(len=*), parameter :: MOVIE_FILE      = 'simulate_movie.mrc'
     character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
@@ -186,6 +186,6 @@ subroutine exec_test_preproc( self, cline )
         if( .not. file_exists(fname) ) THROW_HARD('TEST_PREPROC FAILED: missing '//key//' output file')
     end subroutine assert_output_file
 
-end subroutine exec_test_preproc
+end subroutine exec_test_stream_preproc
 
 end module simple_commanders_test_stream

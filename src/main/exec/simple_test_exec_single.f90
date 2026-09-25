@@ -1,16 +1,14 @@
 !@descr: execution of test single processing commanders
 module simple_test_exec_single
 use simple_cmdline,                only: cmdline
-use simple_commanders_test_single, only: commander_test_atoms_stats, commander_test_detect_calpha_molecules, &
-    commander_test_single_workflow
+use simple_commanders_test_single, only: commander_test_single_atoms_stats, commander_test_single_workflow
 implicit none
 
 public :: exec_test_single_commander
 private
 
-type(commander_test_atoms_stats)           :: xatoms_stats
-type(commander_test_detect_calpha_molecules) :: xdetect_calpha_molecules
-type(commander_test_single_workflow)       :: xsingle_workflow
+type(commander_test_single_atoms_stats) :: xsingle_atoms_stats
+type(commander_test_single_workflow)    :: xsingle_workflow
 
 contains
 
@@ -23,10 +21,8 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(which))
-            case( 'atoms_stats' )
-                call xatoms_stats%execute(cline)
-            case( 'detect_calpha_molecules' )
-                call xdetect_calpha_molecules%execute(cline)
+            case( 'single_atoms_stats' )
+                call xsingle_atoms_stats%execute(cline)
             case( 'single_workflow' )
                 call xsingle_workflow%execute(cline)
             case default

@@ -101,7 +101,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_image%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (image, image_header, fourier_iterator, b_spline_smoother, masks, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
+            &'One sub-suite of this area to run alone (image, mrc2jpeg, mrc_validate, image_header, fourier_iterator, b_spline_smoother, masks, nano_mask, volume_shape, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
         call add_ui_program('unit_image', unit_image, tsttab, UI_CATEGORY)
     end subroutine new_unit_image
 
@@ -240,11 +240,11 @@ contains
         call lib_single%new(&
         &'lib_single',&
         &'library tests: SINGLE pipelines',&
-        &'is the nightly library suite for SINGLE: the Pt nanoparticle atoms pipeline (simulate, detect, statistics) and the C-alpha benchmark on the built-in 6VXX and 1JYX models',&
+        &'is the nightly library suite for SINGLE: the Pt nanoparticle atoms pipeline (simulate, detect, statistics) and pdb2mrc coverage of the built-in 6VXX and 1JYX models',&
         &'simple_test_exec',&
         &.false.)
         call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (nanoparticle_atoms, c_alpha_molecules, pdb2mrc)', '', .false., '')
+            &'One sub-suite of this suite to run alone (nanoparticle_atoms, pdb2mrc)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
 

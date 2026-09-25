@@ -3,13 +3,16 @@ module simple_test_ui_highlevel
 use simple_ui_modules
 implicit none
 
-type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('highlevel', 'High-Level', 40)
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('highlevel', 'High-level tests', 40)
 type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
+type(ui_program), target :: single_atoms_stats
+type(ui_program), target :: single_workflow
+type(ui_program), target :: stream_preproc
 
 contains
 
@@ -21,17 +24,23 @@ contains
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
         call new_rec3D_backends(tsttab)
+        call new_single_atoms_stats(tsttab)
+        call new_single_workflow(tsttab)
+        call new_stream_preproc(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('HIGH-LEVEL:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('High-level tests:', C_UNDERLINED)
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
         write(logfhandle,'(A)') rec3D_backends%name%to_char()
+        write(logfhandle,'(A)') single_atoms_stats%name%to_char()
+        write(logfhandle,'(A)') single_workflow%name%to_char()
+        write(logfhandle,'(A)') stream_preproc%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -203,5 +212,43 @@ contains
         call rec3D_backends%add_input(UI_COMP, nthr)
         call add_ui_program('rec3D_backends', rec3D_backends, tsttab, UI_CATEGORY)
     end subroutine new_rec3D_backends
+
+    subroutine new_single_atoms_stats( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call single_atoms_stats%new(&
+        &'single_atoms_stats',&
+        &'SINGLE nanoparticle atom statistics',&
+        &'simulates a nanoparticle, detects its atoms, and calculates atom statistics',&
+        &'simple_test_exec',&
+        &.false.)
+        call single_atoms_stats%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
+        &'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms{0.358}', .false., 0.358)
+        call single_atoms_stats%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', &
+        &'Atom element name: Au, Pt etc.', 'atom composition{Pt}', .false., 'Pt')
+        call add_ui_program('single_atoms_stats', single_atoms_stats, tsttab, UI_CATEGORY)
+    end subroutine new_single_atoms_stats
+
+    subroutine new_single_workflow( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call single_workflow%new(&
+        &'single_workflow',&
+        &'single workflow',&
+        &'is a test program for single workflow',&
+        &'simple_test_exec',&
+        &.false.)
+        call single_workflow%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
+        &'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms{0.358}', .false., 0.358)
+        call single_workflow%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', &
+        &'Atom element name: Au, Pt etc.', 'atom composition{Pt}', .false., 'Pt')
+        call add_ui_program('single_workflow', single_workflow, tsttab, UI_CATEGORY)
+    end subroutine new_single_workflow
+
+    subroutine new_stream_preproc( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call stream_preproc%new('stream_preproc', 'stream-preproc', &
+            &'generates five synthetic movies and validates streaming motion-correction and CTF outputs', &
+            &'simple_test_exec', .false.)
+        call add_ui_program('stream_preproc', stream_preproc, tsttab, UI_CATEGORY)
+    end subroutine new_stream_preproc
 
 end module simple_test_ui_highlevel

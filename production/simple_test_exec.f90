@@ -47,9 +47,6 @@ l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed
 call exec_test_class_commander(    trim(prg), cline, l_silent, l_did_execute)
 call exec_test_highlevel_commander(trim(prg), cline, l_silent, l_did_execute)
-call exec_test_io_commander(       trim(prg), cline, l_silent, l_did_execute)
-call exec_test_masks_commander(    trim(prg), cline, l_silent, l_did_execute)
-call exec_test_parallel_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_single_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_test_stream_commander(   trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then

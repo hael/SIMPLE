@@ -9,9 +9,6 @@ use iso_fortran_env,            only: output_unit
 use simple_cmdline,             only: cmdline, cmdline_err
 use simple_test_exec_class,     only: exec_test_class_commander
 use simple_test_exec_highlevel, only: exec_test_highlevel_commander
-use simple_test_exec_io,        only: exec_test_io_commander
-use simple_test_exec_masks,     only: exec_test_masks_commander
-use simple_test_exec_parallel,  only: exec_test_parallel_commander
 use simple_test_exec_single,    only: exec_test_single_commander
 use simple_test_exec_stream,    only: exec_test_stream_commander
 end module simple_test_exec_api
