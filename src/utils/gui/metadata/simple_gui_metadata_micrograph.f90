@@ -9,7 +9,7 @@
 !     ctfres      — CTF resolution estimate (Angstroms)
 !     i/i_max     — micrograph index within the current batch
 !     xdim/ydim   — micrograph dimensions in pixels
-!     coordinates — up to 1500 particle box centres (int16 x/y pairs)
+!     coordinates — up to 5000 particle box centres (int16 x/y pairs)
 !   Provides set/get for scalar fields, set_coordinate/clear_coordinates for
 !   the coordinate array, and a jsonise override that emits all fields plus
 !   an optional "boxes" array when coordinates are present.
@@ -42,8 +42,8 @@ type, extends( gui_metadata_base ) :: gui_metadata_micrograph
   integer                   :: xdim          = 0     ! micrograph width in pixels
   integer                   :: ydim          = 0     ! micrograph height in pixels
   integer                   :: n_coordinates = 0     ! number of populated coordinate entries
-  integer(kind=2)           :: x_coordinates(1500)   ! particle box centre x (int16, limits transfer size)
-  integer(kind=2)           :: y_coordinates(1500)   ! particle box centre y (int16, limits transfer size)
+  integer(kind=2)           :: x_coordinates(5000)   ! particle box centre x (int16, limits transfer size)
+  integer(kind=2)           :: y_coordinates(5000)   ! particle box centre y (int16, limits transfer size)
 contains
   procedure :: set
   procedure :: set_coordinate

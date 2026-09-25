@@ -34,7 +34,7 @@
 !   commander_extract, commander_abinitio2D, commander_shape_rank_cavgs
 !==============================================================================
 module simple_stream_p03_initial_analysis
-use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
+use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
 use simple_stream_state,          only: ipc_pipe_initial_analysis_in, ipc_pipe_initial_analysis_out
@@ -53,15 +53,18 @@ use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_C
 use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
+use simple_image_bin,             only: image_bin
 use simple_projfile_utils,        only: merge_selected_project_files
 use simple_procimgstk,            only: scale_imgfile
 use simple_fileio,                only: swap_suffix
 use simple_defs,                  only: MSK_EXP_FAC, BOX_EXP_FAC, COSMSKHALFWIDTH, CWD_GLOB
-use simple_defs_fname,            only: DIR_PICKER, DIR_EXTRACT
+use simple_defs_fname,            only: DIR_PICKER, DIR_EXTRACT, STREAM_DESELECTED_REFS
 use simple_defs_stream,           only: DIR_STREAM
 use simple_abinitio_utils,        only: abinitio_rec_fbody
+use simple_gui_metadata_utils,    only: max_metadata_size
 use simple_ptcl_sieve,            only: ptcl_sieve
-use simple_class_compatibility,         only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
+use simple_class_compatibility,   only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
+use simple_imghead,                only: get_mrc_minmax
 use simple_gui_metadata_api
 
 implicit none
@@ -88,6 +91,7 @@ contains
         integer,                   parameter       :: NSTATES3D = 3                 ! number of classes for abinitio3D
         integer,                   parameter       :: NSTAGES3D = 4                 ! number of stages for abinitio3D
         character(len=:),          allocatable     :: meta_buffer                   ! serialised GUI metadata message
+        character(len=:),          allocatable     :: update_pending
         integer,                   allocatable     :: cycle_plan(:)                 ! tracks which steps of the opening2D plan have been completed
         integer,                   allocatable     :: cycle_plan_status(:)          ! tracks the status of each step of the opening2D plan
         logical,                   allocatable     :: accepted_bins(:)
@@ -132,9 +136,11 @@ contains
         integer                                    :: iextract
         integer                                    :: imic
         integer                                    :: n_extract_done
+        integer                                    :: update_expected_len
         logical                                    :: l_sieve_init
         real                                       :: mskdiam                ! mask diameter (A) for reference-based picking, set by segdiampick_mics; 0 until known
         real                                       :: smpd_stk               ! pixel size of the cavgs stack
+        update_expected_len = -1
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         ! validate required args and apply defaults
         if( .not. cline%defined('dir_target')     ) THROW_HARD('DIR_TARGET must be defined!')
@@ -192,7 +198,7 @@ contains
         ! movie watcher init
         project_buff = stream_watcher(LONGTIME, simple_abspath(params%dir_target//'/'//DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! Main loop
-        do
+        main_loop: do
             ! emergency exit
             if( n_cycles > size(NMICS_PLAN) ) THROW_HARD('>>> ERROR: exceeded maximum number of opening2D cycles'//' ('//int2str(size(NMICS_PLAN))//')')
             ! import new projects from the watcher; add to project_list and history
@@ -411,10 +417,10 @@ contains
                 end if
                 ! cycle 1 stage 4: evaluate class average quality and reestimate mask and box sizes
                 if( cycle_plan(n_cycles) == 4 ) then
+                    vis_cycle = 1
                     call send_meta2D(string('evaluating class average quality'), box_in_pix, vis_cycle)
                     call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
                     call run_cavg_quality_selection_2(spproj, cycle_projfile, string('quality_selection/init'), cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
-                    vis_cycle = vis_cycle + 1
                     n_cycles  = n_cycles + 1
                 end if
 
@@ -452,10 +458,10 @@ contains
                 end if
                 ! cycle 2 stage 3: evaluate class average quality and reestimate mask and box sizes
                 if( cycle_plan(n_cycles) == 3 ) then
+                    vis_cycle = 2
                     call send_meta2D(string('evaluating class average quality'), box_in_pix, vis_cycle)
                     call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
                     call run_cavg_quality_selection_2(spproj_all, cycle_projfile, string('quality_selection'), cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
-                    vis_cycle = vis_cycle + 1
                     cycle_plan(n_cycles)        = 4
                     cycle_plan_status(n_cycles) = 0
                 end if
@@ -464,7 +470,7 @@ contains
                     call send_meta2D(string('balancing classes'), box_in_pix, vis_cycle)
                     call balance_classes(spproj_all, cycle_projfile, string('balance_classes/all')) ! balance class populations before final abinitio2D, to improve quality of top classes and thus picking references
                     cycle_plan(n_cycles)        = 5
-                    cycle_plan_status(n_cycles) = 0 
+                    cycle_plan_status(n_cycles) = 0
                 end if
                 ! cycle 2 stage 5: abinitio3D and reproject
                 if( cycle_plan(n_cycles) == 5 ) then
@@ -481,14 +487,26 @@ contains
                             call send_meta(string('complete'))
                             cycle_plan(n_cycles)        = 6
                             cycle_plan_status(n_cycles) = 0
-                            exit
+                            exit main_loop
                         end if
                     end if
                 end if
             end if
 
+            ! update params; drain all currently buffered messages, not just one
+            do while( receive_from_initial_analysis_out_pipe(meta_buffer) )
+                if( allocated(meta_buffer) ) then
+                    ! deserialise buffer into meta_update
+                    meta_update = transfer(meta_buffer, meta_update)
+                    if( meta_update%get_pickrefs_cycle() > 0 .and. meta_update%get_pickrefs_selection_length() > 0 ) then
+                        call save_pickrefs_selection(meta_update%get_pickrefs_selection(), meta_update%get_pickrefs_cycle())
+                        exit main_loop
+                    endif
+                endif
+            enddo
+
             call sleep(WAITTIME)
-        end do
+        end do main_loop
 
         call send_meta2D(string('terminating'), box_for_extract, vis_cycle)
         if( allocated(projects)  ) deallocate(projects)
@@ -627,7 +645,6 @@ contains
                 integer,             intent(in) :: mskdiam_in
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
-                call spproj_inout%write(string("test.simple"))
             end subroutine finish_abinitio2D
 
             ! Locate the highest-numbered restart output directory created under the
@@ -715,9 +732,15 @@ contains
                 integer                  :: ldim_new(3)           ! reprojection box dimensions after Fourier rescaling
                 integer                  :: nvols, nuniq, i_cls3d, proj_here
                 integer                  :: xtiles_local, ytiles_local ! sprite-sheet grid dims for picking refs
+                integer                  :: ldim_selrefs(3), nselrefs  ! actual picking-reference stack dimensions/count
                 integer :: ivol, bestvol, i                          ! volume loop index and best-population volume id
                 real    :: vol_smpd
+                real    :: minval3D, maxval3D                     ! MRC header min/max for the chosen volume
                 real    :: smpd_part                              ! particle-stack sampling distance (target)
+                type(image)     :: vol_shape                       ! per-state volume for shape-descriptor diagnostics
+                type(image_bin) :: mskvol_shape                    ! binarized mask volume for shape-descriptor diagnostics
+                type(gui_metadata_vol3D) :: meta_vol3D_local        ! chosen-volume metadata sent to the GUI
+                type(string)             :: reprojpath_abs, volpath_abs, empty_path
                 call simple_getcwd(cwd)
 
                 call simple_chdir(outdir)
@@ -733,6 +756,21 @@ contains
                 else
                     call spproj_inout%read(cluster_projfile) ! read the project with abinitio3D output
                 endif
+
+                ! shape-descriptor diagnostics for every reconstructed state volume with nonzero population
+                do ivol = 1, NSTATES3D
+                    if( spproj_inout%os_cls3D%get_pop(ivol, 'state') == 0 ) cycle
+                    volpath = string('recvol_state'//int2str_pad(ivol,2)//MRC_EXT)
+                    if( .not. file_exists(volpath) ) cycle
+                    call find_ldim_nptcls(volpath, ldim, nuniq)
+                    call vol_shape%new(ldim, find_img_smpd(volpath))
+                    call vol_shape%read(volpath)
+                    write(logfhandle,'(A,I0)') '>>> VOLUME SHAPE DESCRIPTORS FOR STATE=', ivol
+                    call mskvol_shape%vol_shape_descr(vol_shape, 20.0, real(mskdiam_in))
+                    call mskvol_shape%kill_bimg
+                    call vol_shape%kill
+                enddo
+
                 if( spproj_inout%os_cls3D%isthere('state') .and. spproj_inout%os_cls3D%isthere('proj') ) then
                     states = spproj_inout%os_cls3D%get_all_asint('state')
                     projs  = spproj_inout%os_cls3D%get_all_asint('proj')
@@ -786,6 +824,24 @@ contains
                 call cline_reproject%printline()
                 call xreproject%execute(cline_reproject)
                 call mrc2jpeg_tiled(string('reprojs.mrcs'), string('reprojs'//JPG_EXT), n_xtiles=xtiles_local, n_ytiles=ytiles_local)
+                ! send the chosen volume's metadata to the GUI (no FSC/postprocessed products at this stage)
+                call meta_vol3D_local%new(GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE)
+                volpath_abs = simple_abspath(volpath)
+                empty_path  = string('')
+                if( final_dir%strlen() > 0 )then
+                    reprojpath_abs = cwd//'/'//outdir//'/'//final_dir//'/reprojs'//JPG_EXT
+                else
+                    reprojpath_abs = cwd//'/'//outdir//'/reprojs'//JPG_EXT
+                endif
+                call meta_vol3D_local%set(reprojpath_abs, volpath_abs, empty_path, empty_path, empty_path, &
+                    &bestvol, ldim(1), vol_smpd, 1, 1)
+                ! MRC header min/max, read once here so GUI consumers don't need to reopen the volume file per request
+                call get_mrc_minmax(volpath, minval3D, maxval3D)
+                call meta_vol3D_local%set_minmax('volpath', minval3D, maxval3D)
+                if( meta_vol3D_local%assigned() ) then
+                    call meta_vol3D_local%serialise(meta_buffer)
+                    call send_to_initial_analysis_in_pipe(meta_buffer)
+                endif
                 ! rescale reprojections to the particle sampling/box and write as selected references
                 smpd_part   = spproj_inout%os_stk%get(1, 'smpd')
                 ldim_new(1) = round2even(real(ldim(1)) * vol_smpd / smpd_part)
@@ -794,7 +850,8 @@ contains
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> RESCALING AND CLIPPING REPROJECTIONS TO ', ldim_new(1), ' PIXEL BOX (', ldim_clip(1), ' A) FOR PICKING REFERENCES'
                 call scale_imgfile( string('reprojs.mrcs'), string('selected_references.mrcs'), vol_smpd, ldim_new, smpd_part)
                 call simple_copy_file(string('selected_references.mrcs'), cwd//'/selected_references.mrcs') ! copy selected references to subdir for partitioning
-                allocate(cavg_inds_local(10))
+                call find_ldim_nptcls(string('selected_references.mrcs'), ldim_selrefs, nselrefs)
+                allocate(cavg_inds_local(nselrefs))
                 do i=1, size(cavg_inds_local)
                     cavg_inds_local(i) = i
                 enddo
@@ -805,6 +862,7 @@ contains
                     call send_selected_pickrefs(cwd//'/'//outdir//'/reprojs'//JPG_EXT, size(cavg_inds_local), &
                                 cavg_inds_local, cwd//'/'//outdir//'/reprojs.mrcs', xtiles_local, ytiles_local)
                 endif
+
                 if( allocated(states)          ) deallocate(states)
                 if( allocated(projs)           ) deallocate(projs)
                 if( allocated(cavg_inds_local) ) deallocate(cavg_inds_local)
@@ -1308,6 +1366,51 @@ contains
                 write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
             end subroutine write_quality_stack
 
+            ! Write the GUI-selected picking references (1-based indices into the cavgs pool
+            ! of the requested cycle: cycle=1 -> spproj (cycle-1 cavgs), cycle=2 -> spproj_all
+            ! (cycle-2 cavgs)) to STREAM_DESELECTED_REFS.
+            subroutine save_pickrefs_selection( selection, cycle )
+                integer, intent(in)      :: selection(:)
+                integer, intent(in)      :: cycle
+                type(image), allocatable :: cavg_imgs_sel(:)
+                integer,     allocatable :: states_sel(:)
+                integer,     allocatable :: cavg_inds_sel(:)
+                type(sp_project)         :: spproj_tmp
+                type(string)             :: cavgsstk_dummy, cwd_sel
+                real                     :: smpd_dummy
+                integer                  :: ncls_pool, icls, xtiles_sel, ytiles_sel
+                ! guard against a not-yet-populated cavgs stack (os_out) for the requested cycle
+                call simple_getcwd(cwd_sel)
+                if( cycle == 1 ) then
+                    call spproj_tmp%read(cwd_sel//'/'//string(DIR_STREAM)//'init/init'//METADATA_EXT)             
+                else
+                    call spproj_tmp%read(cwd_sel//'/'//string(DIR_STREAM)//'all/all'//METADATA_EXT)             
+                endif
+                call spproj_tmp%get_cavgs_stk(cavgsstk_dummy, ncls_pool, smpd_dummy, fail=.false.)
+                if( ncls_pool <= 0 ) then
+                    write(logfhandle,'(A,I0)') '>>> WARNING: no class averages available for pickrefs selection, cycle=', cycle
+                    return
+                endif
+                allocate(states_sel(ncls_pool), source=0)
+                do icls = 1, size(selection)
+                    if( selection(icls) >= 1 .and. selection(icls) <= ncls_pool ) states_sel(selection(icls)) = 1
+                enddo
+                cavg_imgs_sel = read_cavgs_into_imgarr(spproj_tmp)
+                ! use a filename distinct from finish_abinitio3D's own 'selected_references.mrcs/.jpg'
+                ! output, otherwise this overwrites it with a differently-sized sprite sheet and any
+                ! tile coordinates the GUI cached from the original sheet end up pointing at the wrong image
+                call write_quality_stack(string(STREAM_DESELECTED_REFS//MRC_EXT), cavg_imgs_sel, states_sel, ncls_pool, selected=.true.)
+                call mrc2jpeg_tiled(string(STREAM_DESELECTED_REFS//MRC_EXT), string(STREAM_DESELECTED_REFS//JPG_EXT), n_xtiles=xtiles_sel, n_ytiles=ytiles_sel)
+                ! cavg_inds_sel indexes the compacted stack written above (sequential 1..n), not the pool
+                allocate(cavg_inds_sel(count(states_sel > 0)))
+                cavg_inds_sel = [(icls, icls=1,size(cavg_inds_sel))]
+                call send_selected_pickrefs(simple_abspath(string(STREAM_DESELECTED_REFS//JPG_EXT)), size(cavg_inds_sel), &
+                                cavg_inds_sel, simple_abspath(string(STREAM_DESELECTED_REFS//MRC_EXT)), xtiles_sel, ytiles_sel)
+                call dealloc_imgarr(cavg_imgs_sel)
+                call spproj_tmp%kill()
+                deallocate(states_sel, cavg_inds_sel)
+            end subroutine save_pickrefs_selection
+
             ! Broadcast initial-picking progress to the GUI.
             ! Uses the total imported/extracted counts tracked across the whole
             ! run (project_list/extracted_project_list), not just the counts
@@ -1637,6 +1740,68 @@ contains
 
                 if( allocated(cbuf) ) deallocate(cbuf)
             end subroutine send_to_initial_analysis_in_pipe
+
+            logical function receive_from_initial_analysis_out_pipe(buffer)
+                character(len=:), allocatable, intent(inout) :: buffer
+                character(kind=c_char), allocatable, target  :: raw(:)
+                character(len=:), allocatable                :: chunk
+                integer(c_int), target                       :: msg_len_c
+                integer                                      :: header_bytes
+                integer                                      :: nread, ibyte, err_no, max_meta_bytes
+
+                receive_from_initial_analysis_out_pipe = .false.
+                if( allocated(buffer) ) deallocate(buffer)
+                header_bytes = sizeof(msg_len_c)
+                max_meta_bytes = max_metadata_size()
+                allocate(raw(max_meta_bytes))
+
+                nread = int(c_read(ipc_pipe_initial_analysis_out(1), c_loc(raw(1)), int(size(raw), c_size_t)))
+                if( nread < 0 ) then
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) return
+                    return
+                endif
+                if( nread > 0 ) then
+                    allocate(character(len=nread) :: chunk)
+                    do ibyte = 1, nread
+                        chunk(ibyte:ibyte) = transfer(raw(ibyte), 'a')
+                    end do
+                    if( allocated(update_pending) ) then
+                        update_pending = update_pending // chunk
+                    else
+                        allocate(character(len=nread) :: update_pending)
+                        update_pending = chunk
+                    endif
+                endif
+
+                if( update_expected_len < 0 ) then
+                    if( .not.allocated(update_pending) ) return
+                    if( len(update_pending) < header_bytes ) return
+                    msg_len_c = transfer(update_pending(1:header_bytes), msg_len_c)
+                    update_expected_len = int(msg_len_c)
+                    if( update_expected_len <= 0 .or. update_expected_len > max_meta_bytes ) then
+                        THROW_HARD('invalid framed metadata length read from initial_analysis_out pipe')
+                    endif
+                    if( len(update_pending) == header_bytes ) then
+                        deallocate(update_pending)
+                    else
+                        update_pending = update_pending(header_bytes + 1:)
+                    endif
+                endif
+
+                if( .not.allocated(update_pending) ) return
+                if( len(update_pending) < update_expected_len ) return
+
+                allocate(character(len=update_expected_len) :: buffer)
+                buffer = update_pending(1:update_expected_len)
+                if( len(update_pending) == update_expected_len ) then
+                    deallocate(update_pending)
+                else
+                    update_pending = update_pending(update_expected_len + 1:)
+                endif
+                update_expected_len = -1
+                receive_from_initial_analysis_out_pipe = .true.
+            end function receive_from_initial_analysis_out_pipe
 
     end subroutine exec_stream_p03_initial_analysis
 

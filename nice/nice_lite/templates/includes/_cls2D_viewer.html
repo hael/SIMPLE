@@ -5,7 +5,9 @@
   page-level globals `lastinteraction`, `getNumber`, `updateSelectionBorder`,
   `updateCounts` (declared in the including page's own script).
   Params: panel_title (str); mask (bool, optional) forwarded to
-  _cls2D_selection_element.html to draw the mask-diameter overlay.
+  _cls2D_selection_element.html to draw the mask-diameter overlay;
+  pick_with_selection (bool, optional) and cycle (int, optional) forwarded
+  to _cls2D_selection_report.html.
   Owns the JS for tile toggling and the selection context menu (contrast/
   brightness/scale, sort, select-above/below); only one panel instance is
   ever rendered per page.
@@ -44,7 +46,7 @@
     </div>
 </div>
 <div class="flex items-center justify-end gap-2 mt-3 p-2 border-t border-streamline">
-  {% include 'includes/_cls2D_selection_report.html' %}
+  {% include 'includes/_cls2D_selection_report.html' with pick_with_selection=pick_with_selection cycle=cycle %}
 </div>
 <script>
     let currentMenuContainer = null;

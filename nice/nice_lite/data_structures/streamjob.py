@@ -165,26 +165,27 @@ class StreamJob(Job):
         self.jobmodel.generate_pickrefs_stats = generate_pickrefs_stats
         self.jobmodel.save()
 
-    def select_pickrefs(self, final_selection):
-        """Write the user's pickref selection into master_update for the job to consume."""
+    def select_pickrefs(self, selection, cycle=None):
+        """Write the user's selected class indices into master_update for the job to consume."""
         if self.jobmodel is None:
             print_error("jobmodel is none")
             return False
         
-        if isinstance(final_selection, str):
+        if isinstance(selection, str):
             try:
-                final_selection = json.loads(final_selection)
+                selection = json.loads(selection)
             except (TypeError, ValueError, json.JSONDecodeError):
-                print_error("select_pickrefs: invalid final_selection JSON payload")
+                print_error("select_pickrefs: invalid selection JSON payload")
                 return False
 
-        if not isinstance(final_selection, list):
-            print_error("select_pickrefs: final_selection must be a list")
+        if not isinstance(selection, list) or not all(isinstance(idx, int) and not isinstance(idx, bool) for idx in selection):
+            print_error("select_pickrefs: selection must be a list of integers")
             return False
 
         master_update = self.jobmodel.master_update
-        master_update["pickrefs_selection"] = [int(sublist[0]) for sublist in final_selection if isinstance(sublist, (list, tuple)) and len(sublist) > 0]
-        master_update["pickrefs_clusters"]  = [int(sublist[1]) for sublist in final_selection if isinstance(sublist, (list, tuple)) and len(sublist) > 1]
+        master_update["pickrefs_selection"] = selection
+        if cycle is not None:
+            master_update["pickrefs_cycle"] = cycle
         self.jobmodel.master_update = master_update
         stats = self.jobmodel.generate_pickrefs_stats
         stats["user_input"] = False
@@ -262,7 +263,7 @@ class StreamJob(Job):
                     # clear pending user inputs once the stage is no longer running
                     master_update.pop("increase_nmics",     None)
                     master_update.pop("pickrefs_selection", None)
-                    master_update.pop("pickrefs_clusters",  None)
+                    master_update.pop("pickrefs_cycle",  None)
             if "reference_picking" in heartbeat:
                 status, _ = analyse_heartbeat(heartbeat["reference_picking"])
                 self.jobmodel.reference_picking_status = status
@@ -416,6 +417,8 @@ class StreamJob(Job):
         if restart_generate_pickrefs:
             master_update.pop("terminate_opening2D", None)
             master_update["restart_opening2D"] = True
+            master_update.pop("pickrefs_selection", None)
+            master_update.pop("pickrefs_cycle", None)
         if restart_reference_picking:
             master_update.pop("terminate_reference_picking", None)
             master_update["restart_reference_picking"] = True

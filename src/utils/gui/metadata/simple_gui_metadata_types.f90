@@ -50,6 +50,7 @@ enum, bind(c)
   enumerator :: GUI_METADATA_STREAM_OPENING2D_TYPE             ! 23
   enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE       ! 24
   enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE ! 25
+  enumerator :: GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE       ! 26
   ! reference picking stage
   enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE            ! 26
   enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE ! 27

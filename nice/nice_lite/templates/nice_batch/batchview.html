@@ -60,7 +60,7 @@
 
     <!-- Sub-bar: back link + stream title -->
     {% url 'nice_lite:workspace' as back_url %}
-    {% include 'includes/_nav_header.html' with back_url=back_url displayid=disp name=name desc=desc job_type='batch' %}
+    {% include 'includes/_nav_header.html' with back_url=back_url displayid=disp name=prog desc=desc job_type='batch' %}
 
     <div class="flex flex-row flex-1 overflow-hidden">
         <!-- left nav: switch between overview and conditionally available data panels -->

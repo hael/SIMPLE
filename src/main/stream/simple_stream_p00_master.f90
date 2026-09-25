@@ -239,6 +239,7 @@ contains
         type(gui_metadata_micrograph),   allocatable :: meta_initial_picking_micrographs(:)
         type(gui_metadata_micrograph),   allocatable :: meta_reference_picking_micrographs(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_opening2D_cavgs2D(:), meta_opening2D_final_cavgs2D(:)
+        type(gui_metadata_vol3D)                     :: meta_opening2D_vol3D ! single chosen volume for the opening2D stage
         type(gui_metadata_cavg2D),       allocatable :: meta_reference_picking_cavgs2D(:), meta_pool2D_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_pool2D_snapshot_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_particle_sieving_cavgs2D(:), meta_particle_sieving_ref_cavgs2D(:)
@@ -394,7 +395,7 @@ contains
             call assembler%assemble_stream_initial_picking(meta_initial_picking, meta_initial_picking_micrographs)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
-            call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D)
+            call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D, meta_opening2D_vol3D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_reference_picking(meta_reference_picking, meta_reference_picking_micrographs, meta_reference_picking_cavgs2D)
@@ -514,8 +515,8 @@ contains
                         if(l_found) call meta_update%set_increase_nmics(i_val)
                         call json%get(json_response_ptr, 'pickrefs_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_pickrefs_selection(i_arr)
-                        call json%get(json_response_ptr, 'pickrefs_clusters', i_arr, l_found)
-                        if(l_found) call meta_update%set_pickrefs_clusters(i_arr)
+                        call json%get(json_response_ptr, 'pickrefs_cycle', i_val, l_found)
+                        if(l_found) call meta_update%set_pickrefs_cycle(i_val)
                         call json%get(json_response_ptr, 'ref_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_sieverefs_selection(i_arr)
                         call json%get(json_response_ptr, 'mskdiam2D', r_val, l_found)
@@ -786,6 +787,8 @@ contains
                                     meta_initial_picking = transfer(my_buffer, meta_initial_picking)
                                 case( GUI_METADATA_STREAM_OPENING2D_TYPE )
                                     meta_opening2D = transfer(my_buffer, meta_opening2D)
+                                case( GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE )
+                                    meta_opening2D_vol3D = transfer(my_buffer, meta_opening2D_vol3D)
                                 case( GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE )
                                     meta_reference_picking = transfer(my_buffer, meta_reference_picking)
                                 case( GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE )
@@ -1290,6 +1293,8 @@ contains
             ! opening2D
             call meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
             if( .not.meta_opening2D%initialized() ) THROW_HARD('failed to initialise opening2D metadata')
+            call meta_opening2D_vol3D%new(GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE)
+            if( .not.meta_opening2D_vol3D%initialized() ) THROW_HARD('failed to initialise opening2D vol3D metadata')
             ! opening2D cavgs2D - allocated on receive
         end subroutine init_metadata_opening2D
 
@@ -1447,10 +1452,10 @@ contains
             ! pipe never reports EPIPE and would otherwise silently fill up
             if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_preprocess_out(2), buffer, 'preprocess', tx_state(1))
             if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_pool2D_out(2), buffer, 'pool2D', tx_state(6))
+            if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer, 'initial_analysis', tx_state(3))
             ! The following are commented out because they dont currently receive update messages
             ! if( fork_abinitio3D_multistate%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_abinitio3D_multstate_out(2), buffer, 'abinitio3D_multistate', tx_state(7))
             ! if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_assign_optics_out(2), buffer, 'assign_optics', tx_state(2))
-            ! if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer, 'initial_analysis', tx_state(3))
             ! if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_refpick_out(2), buffer, 'reference_picking', tx_state(4))
             ! if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_sieve_cavgs_out(2), buffer, 'particle_sieving', tx_state(5))
         end subroutine send_update_to_stage_pipes

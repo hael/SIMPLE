@@ -120,6 +120,13 @@ def _present_volume_kinds(volume_outputs):
     return [{"key": key, "label": label} for key, label in _VOLUME_KINDS if key in present]
 
 
+def _single_volume_outputs(volume):
+    """Return Mol*-ready metadata for a single volume dict (see _state_volume_outputs)."""
+    if not isinstance(volume, dict):
+        return []
+    return _state_volume_outputs({"state_volumes": [volume]})
+
+
 def _is_workspace_accessible(workspace_obj, username=None):
     """Return True when workspace resolves and belongs to the authenticated user."""
     if workspace_obj is None:
@@ -901,9 +908,11 @@ def view_stream_generate_pickrefs_zoom(request):
         "desc": jobmodel.desc,
         "jobstats": stats,
         "status": jobmodel.generate_pickrefs_status,
+        "volume_outputs": _single_volume_outputs(stats.get("volume")),
         "log": [],
         "error": "",
     }
+    context["volume_kinds"] = _present_volume_kinds(context["volume_outputs"])
 
     logfile = os.path.join(jobdir, logfile)
     errfile = os.path.join(jobdir, errfile)
@@ -1427,12 +1436,13 @@ def view_stream_select_pickrefs(request):
         return redirect("nice_lite:workspace")
 
     jobid = jobmodel.id
-    raw_selection = request.POST.get("final_selection", "")
+    raw_selection = request.POST.get("selection", "")
     if not raw_selection:
-        print_error("select_pickrefs: final_selection missing")
+        print_error("select_pickrefs: selection missing")
         return redirect("nice_lite:view_stream", jobid=jobid)
-    final_selection = raw_selection
-    if not streamjob.select_pickrefs(final_selection):
+    cycle = get_integer(request.POST, "cycle", silent=True)
+    # select_pickrefs expects a JSON list of per-class [flag] entries, not CSV ints.
+    if not streamjob.select_pickrefs(raw_selection, cycle):
         print_error(f"select_pickrefs: failed for job {jobid}")
     return redirect("nice_lite:view_stream", jobid=jobid)
 

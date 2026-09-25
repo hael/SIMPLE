@@ -52,40 +52,26 @@
         </div>
 
         <!-- Selected references gallery -->
-        {% if "final_cls2D" in jobstats and jobstats.final_cls2D|length > 0 %}
-            <div class="flex flex-col px-4 pt-2 flex-shrink-0">
+        {% if "selected_pickrefs" in jobstats and jobstats.selected_pickrefs|length > 0 %}
+            <div class="flex flex-col px-4 pt-2 flex-1">
                 <span class="text-[10px] text-streamlabel mb-2">selected references</span>
                 <div class="flex items-center gap-1">
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
-                    <div class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
-                        <div id="picking_references_final" class="grid grid-flow-col grid-rows-3 gap-[2px]">
-                            {% for template in jobstats.final_cls2D %}
-                                <div class="snap-center picktemplatecontainer rounded bg-black relative"
-                                     oncontextmenu="showMenu(this, event)"
-                                     data-res="{{ template.res|floatformat:1 }}"
-                                     data-pop="{{ template.pop }}"
+                    <div class="flex flex-row flex-1 scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                        <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
+                            {% for cls2D in jobstats.selected_pickrefs %}
+                                <div class="snap-center sieveclscontainer"
+                                    data-pop="{{ cls2D.pop }}"
+                                    data-res="{{ cls2D.res|floatformat:1 }}"
                                     >
-                                    {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
-                                        <canvas class="mskcanvas z-1 absolute" height="60" width="60"
-                                                data-mskscale="{{ jobstats.mskscale }}"
-                                                data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
-                                    {% endif %}
-                                    <div data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}"
-                                         style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
-                                         class="picktemplate h-[60px] w-[60px] rounded m-auto"></div>
+                                    <div oncontextmenu="showMenu(this, event)"
+                                        data-idx="{{ cls2D.idx }}"
+                                        style="background:url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
+                                        class="sievecls h-[66px] w-[66px] rounded m-[2px]"></div>
                                 </div>
                             {% endfor %}
-                        </div>
-
-                        <!-- Context menu -->
-                        <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
-                            <div name="selectmenubox"
-                                 class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
-                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
-                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
-                            </div>
                         </div>
                     </div>
 
@@ -103,8 +89,8 @@
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
-                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
-                        <div id="picking_references_available" class="grid grid-flow-col grid-rows-3 gap-[2px]">
+                    <div class="flex flex-row overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+                        <div id="picking_references_available" class="grid grid-flow-col grid-rows-3">
                             {% for template in jobstats.latest_cls2D %}
                                 <div class="snap-center picktemplatecontainer rounded bg-black"
                                      data-res="{{ template.res|floatformat:1 }}"

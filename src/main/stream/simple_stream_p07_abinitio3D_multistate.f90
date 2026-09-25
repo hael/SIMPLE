@@ -55,7 +55,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter       :: NSTATES3D  = 3                 ! number of classes for abinitio3D
-integer, parameter       :: NSTAGES3D  = 1!5                 ! number of stages for abinitio3D
+integer, parameter       :: NSTAGES3D  = 5                 ! number of stages for abinitio3D
 
 type, extends(commander_base) :: stream_p07_abinitio3D_multistate
   contains

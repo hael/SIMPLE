@@ -906,7 +906,7 @@ contains
   !---------------- stream update ----------------
 
   ! Verify that each stream-update threshold field can be set and retrieved independently,
-  ! including pickrefs_selection, sieverefs_selection, and the snapshot2D compound field.
+  ! including pickrefs_selection, pickrefs_cycle, sieverefs_selection, and the snapshot2D compound field.
   subroutine test_set_get_stream_update()
     type(gui_metadata_stream_update) :: meta
     integer,          allocatable    :: sel_out(:)
@@ -935,6 +935,10 @@ contains
     call assert_int(sel_out(2),    0,   'pickrefs_selection(2) correct')
     call assert_int(sel_out(6),    1,   'pickrefs_selection(6) correct')
     deallocate(sel_out)
+    ! pickrefs_cycle
+    call assert_int(meta%get_pickrefs_cycle(), 0, 'pickrefs_cycle zero before set')
+    call meta%set_pickrefs_cycle(3)
+    call assert_int(meta%get_pickrefs_cycle(), 3, 'pickrefs_cycle set/get correctly')
     ! sieverefs_selection
     call assert_int(meta%get_sieverefs_selection_length(), 0, 'sieverefs_selection_length zero before set')
     call meta%set_sieverefs_selection([3, 7, 42, 100])

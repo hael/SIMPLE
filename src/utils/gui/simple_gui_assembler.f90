@@ -24,7 +24,11 @@
 !     assemble_stream_optics_assignment() — write optics-assignment section
 !     assemble_stream_initial_picking()    — write initial-picking section
 !     assemble_stream_reference_picking()  — write reference-picking section
-!     assemble_stream_opening2D()          — write 2D-classification section
+!     assemble_stream_opening2D()          — write 2D-classification section,
+!                                             including an optional single 'volume'
+!                                             object (gui_metadata_vol3D) for the
+!                                             abinitio3D_cavgs volume chosen for
+!                                             picking references
 !     assemble_stream_particle_sieving()   — write particle-sieving section
 !     assemble_stream_pool2D()             — write pool-2D section
 !     assemble_stream_abinitio3D_multistate() — write multistate abinitio3D section,
@@ -509,14 +513,18 @@ contains
   end subroutine assemble_stream_reference_picking
 
   ! Write the opening2D (2D classification) section, including any cavgs2D.
+  ! meta_vol3D, when present and assigned, holds the metadata for the single
+  ! abinitio3D_cavgs volume chosen for reprojection/picking references and is
+  ! embedded as a nested 'volume' object (no FSC/postprocessed fields at this stage).
   ! The whole section (header + cavgs2D) is suppressed when its hash matches
   ! the previously sent hash.
-  subroutine assemble_stream_opening2D( self, meta_opening2D, meta_latest_cavgs2D, meta_selected_pickrefs )
+  subroutine assemble_stream_opening2D( self, meta_opening2D, meta_latest_cavgs2D, meta_selected_pickrefs, meta_vol3D )
     class(gui_assembler),                   intent(inout) :: self
     type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:), meta_selected_pickrefs(:)
     type(gui_metadata_stream_opening2D),    intent(inout) :: meta_opening2D
+    type(gui_metadata_vol3D), optional,     intent(inout) :: meta_vol3D
     character(kind=CK,len=:),               allocatable   :: buffer
-    type(json_value),                       pointer       :: json_ptr, json_cavgs2D_ptr, json_pickrefs_ptr
+    type(json_value),                       pointer       :: json_ptr, json_cavgs2D_ptr, json_pickrefs_ptr, json_vol3D_ptr
     type(string)                                          :: str, hash
     logical                                               :: l_add
     integer                                               :: i_cls2D
@@ -524,6 +532,15 @@ contains
     json_ptr => meta_opening2D%jsonise()
     if( .not. associated(json_ptr) ) return
     call self%json%rename(json_ptr, 'opening2D')
+    if( present(meta_vol3D) ) then
+      if( meta_vol3D%assigned() ) then
+        json_vol3D_ptr => meta_vol3D%jsonise()
+        if( associated(json_vol3D_ptr) ) then
+          call self%json%rename(json_vol3D_ptr, 'volume')
+          call self%json%add(json_ptr, json_vol3D_ptr)
+        endif
+      endif
+    endif
     if( allocated(meta_selected_pickrefs) ) then
       call self%json%create_array(json_pickrefs_ptr, 'selected_pickrefs')
       l_add = .false.

@@ -947,6 +947,7 @@ def _batch_overview_context(
         "disp"   : jobmodel.disp,
         "name"   : jobmodel.name,
         "desc"   : jobmodel.desc,
+        "prog"   : jobmodel.prog,
         "proj"   : jobmodel.dset.proj.name,
         "dset"   : jobmodel.dset.name,
         "args"   : jobmodel.args,

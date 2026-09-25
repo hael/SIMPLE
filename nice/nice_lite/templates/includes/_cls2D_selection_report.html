@@ -3,9 +3,14 @@
   invert-selection controls, and the running/finished footer actions (mask
   diameter, snapshot particle set, final particle set) for the cls2D panel.
   Expects `jobstats`, `status`, `jobid` in context.
+  Params: pick_with_selection (bool, optional) — shows a standalone "pick
+  with selection" button in place of the running/finished particle-set
+  actions; posts the per-class selection flags to select_pickrefs. cycle
+  (int, optional) — posted alongside the selection when pick_with_selection
+  is set.
   Owns the JS for selection bookkeeping and the footer actions (updateCounts,
-  selectAll, deselectAll, invertSelection, selectCls, selectClsFinal); only
-  one instance is ever rendered per page.
+  selectAll, deselectAll, invertSelection, selectCls, selectClsFinal,
+  pickWithSelection); only one instance is ever rendered per page.
 {% endcomment %}
 {% if "cls2D" in jobstats or "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
     <div class="flex flex-1 flex-row gap-2">
@@ -27,7 +32,15 @@
 {% if "cls2D" in jobstats %}
     {% include 'includes/_cls2D_mask_controls.html' with batch_mode=True %}
 {% endif %}
-{% if status == "running" %}
+{% if pick_with_selection %}
+    <form method="POST" action="{% url 'nice_lite:select_pickrefs' %}">
+        {% csrf_token %}
+        <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+        <input name="cycle" value="{{ cycle }}" type="hidden"/>
+        <input type="hidden" id="pickrefs_final_selection" name="selection" value=""/>
+        <button type="button" onclick="pickWithSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">pick with selection</button>
+    </form>
+{% elif status == "running" %}
     {% if jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
         {% include 'includes/_cls2D_mask_controls.html' %}
         <form method="POST" action="{% url 'nice_lite:snapshot_stream_classification_2D' %}">
@@ -166,6 +179,30 @@
             const psetsIframe = window.parent?.document?.querySelector("#psets_iframe");
             if (psetsIframe) psetsIframe.src = psetsIframe.src;
         }, 1500);
+    };
+
+    const pickWithSelection = (element) => {
+        if (!confirm("Please confirm that you wish to pick using the current selection. This will override auto generation of picking references")) return;
+
+        const selection = [];
+        for (const cls2D of document.getElementsByClassName("cls2D")) {
+            const idx = getNumber(cls2D, "idx");
+            if (!cls2D.classList.contains("disabledbutton")) {
+                selection.push(idx);
+            }
+        }
+
+        const selectionField = document.getElementById("pickrefs_final_selection");
+        if (selectionField) selectionField.value = JSON.stringify(selection);
+
+        const loadinggauze = document.getElementById("loadinggauze");
+        if (loadinggauze) {
+            loadinggauze.innerHTML = "picking with selection ...";
+            loadinggauze.classList.remove("hidden");
+            loadinggauze.style.opacity = "1";
+        }
+
+        element.form.submit();
     };
 
     const saveClsSelection = (element) => {

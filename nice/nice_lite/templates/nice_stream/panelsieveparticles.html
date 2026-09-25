@@ -79,15 +79,6 @@
                                 {% endif %}
                             {% endfor %}
                         </div>
-
-                        <!-- Context menu -->
-                        <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
-                            <div name="selectmenubox"
-                                 class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
-                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
-                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
-                            </div>
-                        </div>
                     </div>
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
