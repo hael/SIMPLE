@@ -29,12 +29,12 @@ distributed HPC environments.
 ------------------------------------------------------------------------
 
 ## 🏗️  Build Status
-[![Build SIMPLE & Run Tests (Linux/MacOS)](https://github.com/hael/SIMPLE/actions/workflows/ci_build_and_test.yml/badge.svg)](https://github.com/hael/SIMPLE/actions/workflows/ci_build_and_test.yml) 
+[![Build SIMPLE)](https://github.com/hael/SIMPLE/actions/workflows/ci_build.yml/badge.svg?branch=master)](https://github.com/hael/SIMPLE/actions/workflows/ci_build.yml)
 
 ------------------------------------------------------------------------
 
 ## 🧪  Test Status
-[![Run SIMPLE Test Suite](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/test_suite.yml/badge.svg)](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/test_suite.yml)
+[![Test SIMPLE](https://github.com/hael/SIMPLE/actions/workflows/ci_test.yml/badge.svg?branch=master)](https://github.com/hael/SIMPLE/actions/workflows/ci_test.yml)
 
 ------------------------------------------------------------------------
 

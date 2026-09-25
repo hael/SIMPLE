@@ -18,7 +18,7 @@ implicit none
 
 type, extends(commander_base) :: commander_test_mini_stream
   contains
-    procedure :: execute      => exec_test_mini_stream
+    procedure :: execute      => exec_test_mini_stream_quantitative
 end type commander_test_mini_stream
 
 type, extends(commander_base) :: commander_test_simulate_particles
@@ -67,7 +67,7 @@ end type backends_run_summary
 
 contains
 
-subroutine exec_test_mini_stream( self, cline )
+subroutine exec_test_mini_stream_legacy( self, cline )
     class(commander_test_mini_stream),  intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
     real,         parameter       :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
@@ -208,32 +208,335 @@ subroutine exec_test_mini_stream( self, cline )
         call simple_chdir(output_dir)
     enddo
     call simple_end('**** SIMPLE_TEST_MINI_STREAM_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_mini_stream
+end subroutine exec_test_mini_stream_legacy
 
-!> Hermetic simulation smoke: one embedded 6VXX volume, reprojected (nspace
-!  projections) and turned into CTF-affected particles (NPTCLS_SIM), with the
-!  stack and orientation-file bookkeeping of both commanders checked. Registered
-!  under the workflow label; simulate_movie is covered by simulated_workflow.
+subroutine exec_test_mini_stream_quantitative( self, cline )
+    use simple_atoms,         only: atoms
+    use simple_imghead, only: find_ldim_nptcls
+    use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_oris,   only: oris
+    use simple_string_utils,  only: lowercase
+    use simple_ui,     only: make_ui
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    class(commander_test_mini_stream), intent(inout) :: self
+    class(cmdline),                    intent(inout) :: cline
+    character(len=*), parameter :: MOVIE_FILE     = 'simulate_movie.mrc'
+    character(len=*), parameter :: OPTIMAL_FILE   = 'optimal_movie_average.mrc'
+    character(len=*), parameter :: PARAMS_FILE    = 'simulate_movie_params.txt'
+    character(len=*), parameter :: FILETAB_FILE   = 'mini_stream_micrographs.txt'
+    character(len=*), parameter :: PROJFILE       = 'mini_stream.simple'
+    real,             parameter :: SMPD            = 1.3
+    real,             parameter :: CS              = 2.7
+    real,             parameter :: KV              = 300.0
+    real,             parameter :: FRACA           = 0.1
+    real,             parameter :: DEFOCUS_TOL     = 0.10
+    ! First deterministic 6VXX run recovered 22/48 = 0.458; retain a
+    ! 0.058 absolute margin while still detecting a substantial regression.
+    real,             parameter :: PICK_RECALL_MIN = 0.40
+    real,             parameter :: PICK_RATIO_MAX  = 1.50
+    real,             parameter :: MAX_AREA_FRACTION = 0.30
+    real,             parameter :: MSKDIAM         = 180.0
+    integer,          parameter :: PARTICLE_BOX    = 192
+    integer,          parameter :: MICROGRAPH_BOX_6VXX = 1024
+    integer,          parameter :: MICROGRAPH_BOX_1JXY = 1280
+    integer,          parameter :: NPARTICLES      = 8
+    integer,          parameter :: NMICROGRAPHS    = 6
+    integer,          parameter :: NFRAMES         = 8
+    type(commander_reproject)      :: xreproject
+    type(commander_simulate_movie) :: xsim_movie
+    type(commander_mini_stream)    :: xmini_stream
+    type(cmdline)                  :: cline_reproj, cline_sim, cline_mini
+    type(atoms)                    :: molecule
+    type(molecule_data)            :: mol
+    type(image)                    :: cavg
+    type(oris)                     :: truth
+    type(sp_project)               :: result
+    type(string)                   :: cwd_saved, fixture_root, mini_dir
+    type(string)                   :: particle_stack_path, filetab_path, project_path
+    type(string)                   :: movie_name, params_name, value, cavg_stack
+    type(string)                   :: requested_suite, system_name, vol_file, pgrp
+    type(string)                   :: movie_paths(NMICROGRAPHS), params_paths(NMICROGRAPHS)
+    integer, allocatable           :: classes(:), populations(:), shape_ranks(:)
+    integer                       :: i, imic, isuite, rank, status, ldim(3), nimages, micrograph_box
+    integer                       :: npicked, nclasses, ncavgs, nranked, expected_particles
+    real                          :: dfx, dfy, truth_dfx, truth_dfy, defocus_error
+    real                          :: pick_ratio, cavg_smpd, cavg_variance, area_fraction
+
+    call make_ui
+    call set_fixed_seed(20260925)
+    call simple_getcwd(cwd_saved)
+    requested_suite = ''
+    if( cline%defined('suite') )then
+        requested_suite = cline%get_carg('suite')
+        requested_suite = lowercase(requested_suite%to_char())
+    endif
+    if( requested_suite == 'list' )then
+        write(logfhandle,'(a)') 'Available suites for mini_stream:'
+        write(logfhandle,'(a)') '  6vxx'
+        write(logfhandle,'(a)') '  1jxy'
+        return
+    endif
+    if( requested_suite%strlen_trim() > 0 .and. requested_suite /= '6vxx' .and. requested_suite /= '1jxy' )&
+        &THROW_HARD('no sub-suite '//requested_suite%to_char()//' in mini_stream; use suite=list')
+
+    do isuite = 1, 2
+        if( isuite == 1 )then
+            system_name = '6vxx'
+            vol_file    = '6VXX.mrc'
+            pgrp        = 'c3'
+            micrograph_box = MICROGRAPH_BOX_6VXX
+        else
+            system_name = '1jxy'
+            vol_file    = '1JXY.mrc'
+            pgrp        = 'c1'
+            micrograph_box = MICROGRAPH_BOX_1JXY
+        endif
+        if( requested_suite%strlen_trim() > 0 .and. requested_suite /= system_name ) cycle
+        write(logfhandle,'(a)') '---- TEST SUITE: mini_stream '//system_name%to_char()//' ----'
+        call set_fixed_seed(20260925 + isuite)
+        fixture_root = filepath(cwd_saved, 'test_mini_stream_'//system_name%to_char()//'_'//int2str(get_process_id()))
+    if( dir_exists(fixture_root) ) THROW_HARD('TEST_MINI_STREAM FAILED: fixture directory already exists')
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_MINI_STREAM FAILED: could not enter fixture directory')
+
+    select case(system_name%to_char())
+        case('6vxx')
+            mol = sars_cov2_spkgp_6vxx()
+        case('1jxy')
+            ! SIMPLE's embedded provider follows the underlying 1JYX PDB identifier.
+            mol = betagal_1jyx()
+    end select
+    call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true., &
+        &vol_dim=[PARTICLE_BOX, PARTICLE_BOX, PARTICLE_BOX])
+    call molecule%kill()
+    call cline_reproj%set('prg',      'reproject')
+    call cline_reproj%set('mkdir',           'no')
+    call cline_reproj%set('vol1',        vol_file)
+    call cline_reproj%set('outstk', 'mini_stream_particles.mrcs')
+    call cline_reproj%set('smpd',            SMPD)
+    call cline_reproj%set('pgrp',            pgrp)
+    call cline_reproj%set('mskdiam',      MSKDIAM)
+    call cline_reproj%set('nspace',    NPARTICLES)
+    call cline_reproj%set('nthr',               1)
+    call xreproject%execute(cline_reproj)
+    call cline_reproj%kill()
+    particle_stack_path = simple_abspath(string('mini_stream_particles.mrcs'))
+    if( .not. file_exists(particle_stack_path) )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: molecular reprojections were not created')
+    call find_ldim_nptcls(particle_stack_path, ldim, nimages)
+    if( nimages /= NPARTICLES )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: molecular reprojection count is incorrect')
+    if( any(ldim(1:2) /= [PARTICLE_BOX, PARTICLE_BOX]) )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: molecular reprojection dimensions are incorrect')
+    area_fraction = real(NPARTICLES * ldim(1) * ldim(2)) / real(micrograph_box * micrograph_box)
+    write(logfhandle,'(a,f7.3,a,f7.3)') '>>> TEST_MINI_STREAM particle area fraction ', area_fraction, &
+        &'; maximum ', MAX_AREA_FRACTION
+    if( area_fraction > MAX_AREA_FRACTION )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: simulated micrograph is too densely occupied')
+
+    write(logfhandle,'(a,a,a,i0,a)') '>>> TEST_MINI_STREAM ', system_name%to_char(), ': generating ', &
+        &NMICROGRAPHS, ' synthetic micrographs'
+    do i = 1, NMICROGRAPHS
+        call cline_sim%set('prg',       'simulate_movie')
+        call cline_sim%set('stk',       particle_stack_path)
+        call cline_sim%set('xdim',      micrograph_box)
+        call cline_sim%set('ydim',      micrograph_box)
+        call cline_sim%set('nframes',   NFRAMES)
+        call cline_sim%set('smpd',      SMPD)
+        call cline_sim%set('snr',       0.5)
+        call cline_sim%set('kv',        KV)
+        call cline_sim%set('cs',        CS)
+        call cline_sim%set('fraca',     FRACA)
+        call cline_sim%set('defocus',   1.5 + 0.25 * real(i - 1))
+        call cline_sim%set('trs',       1.0)
+        call cline_sim%set('nthr',      1)
+        if( i == 1 )then
+            call cline_sim%set('mkdir',   'yes')
+            call cline_sim%set('dir_exec','simulate_micrographs')
+        else
+            call cline_sim%set('mkdir',   'no')
+        endif
+        call xsim_movie%execute(cline_sim)
+        movie_name  = 'synthetic_micrograph_'//int2str_pad(i, 3)//MRC_EXT
+        params_name = 'synthetic_micrograph_truth_'//int2str_pad(i, 3)//TXT_EXT
+        call simple_rename(OPTIMAL_FILE, movie_name)
+        call simple_rename(PARAMS_FILE, params_name)
+        if( file_exists(MOVIE_FILE) ) call del_file(MOVIE_FILE)
+        movie_paths(i)  = simple_abspath(movie_name)
+        params_paths(i) = simple_abspath(params_name)
+        call cline_sim%kill
+    enddo
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_MINI_STREAM FAILED: could not leave simulation directory')
+    filetab_path = filepath(fixture_root, FILETAB_FILE)
+    call write_filetable(filetab_path, movie_paths)
+
+    call cline_mini%set('prg',            'mini_stream')
+    call cline_mini%set('mkdir',                  'yes')
+    call cline_mini%set('filetab',        filetab_path)
+    call cline_mini%set('smpd',                   SMPD)
+    call cline_mini%set('fraca',                 FRACA)
+    call cline_mini%set('kv',                       KV)
+    call cline_mini%set('cs',                       CS)
+    call cline_mini%set('moldiam_max',         MSKDIAM)
+    call cline_mini%set('pcontrast',            'black')
+    call cline_mini%set('pick_roi',                'no')
+    call cline_mini%set('ncls',                       2)
+    call cline_mini%set('nptcls_per_cls',             10)
+    call cline_mini%set('pspecsz',                   256)
+    call cline_mini%set('nparts',                       1)
+    call cline_mini%set('nthr',                         1)
+    call xmini_stream%execute(cline_mini)
+    call simple_getcwd(mini_dir)
+    project_path = filepath(mini_dir, PROJFILE)
+    if( .not. file_exists(project_path) ) THROW_HARD('TEST_MINI_STREAM FAILED: project was not created')
+    call result%read(project_path)
+
+    if( result%os_mic%get_noris() /= NMICROGRAPHS )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: project has an unexpected number of micrographs')
+    do i = 1, result%os_mic%get_noris()
+        call result%os_mic%getter(i, 'intg', value)
+        imic = find_simulation(value)
+        if( imic == 0 ) THROW_HARD('TEST_MINI_STREAM FAILED: micrograph cannot be matched to simulation truth')
+        call truth%new(1, is_ptcl=.false.)
+        call truth%read(params_paths(imic))
+        dfx       = result%os_mic%get_dfx(i)
+        dfy       = result%os_mic%get_dfy(i)
+        truth_dfx = truth%get_dfx(1)
+        truth_dfy = truth%get_dfy(1)
+        defocus_error = min(max(abs(dfx - truth_dfx), abs(dfy - truth_dfy)), &
+            &max(abs(dfx - truth_dfy), abs(dfy - truth_dfx)))
+        write(logfhandle,'(a,i0,a,f7.3,a,f7.3)') '>>> TEST_MINI_STREAM micrograph ', imic, &
+            &': defocus max error ', defocus_error, ' um; limit ', DEFOCUS_TOL
+        if( defocus_error > DEFOCUS_TOL )&
+            &THROW_HARD('TEST_MINI_STREAM FAILED: CTF defocus error exceeds 0.10 um')
+        call truth%kill
+    enddo
+
+    expected_particles = NMICROGRAPHS * NPARTICLES
+    npicked = result%os_ptcl2D%get_noris()
+    pick_ratio = real(npicked) / real(expected_particles)
+    write(logfhandle,'(a,i0,a,i0,a,f7.3)') '>>> TEST_MINI_STREAM particles picked ', npicked, &
+        &'; placed ', expected_particles, '; ratio ', pick_ratio
+    if( pick_ratio < PICK_RECALL_MIN ) THROW_HARD('TEST_MINI_STREAM FAILED: fewer than 40 percent of placed particles were picked')
+    if( pick_ratio > PICK_RATIO_MAX ) THROW_HARD('TEST_MINI_STREAM FAILED: pick count exceeds 150 percent of placed particles')
+    if( result%os_ptcl3D%get_noris() /= npicked )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: 2D and 3D particle counts differ')
+
+    nclasses = result%os_cls2D%get_noris()
+    if( nclasses < 1 ) THROW_HARD('TEST_MINI_STREAM FAILED: abinitio2D produced no classes')
+    classes = result%os_ptcl2D%get_all_asint('class')
+    if( size(classes) /= npicked .or. any(classes < 1) .or. any(classes > nclasses) )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: particle class assignments are incomplete or invalid')
+    populations = result%os_cls2D%get_all_asint('pop')
+    if( size(populations) /= nclasses .or. any(populations < 0) )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: class populations are incomplete or invalid')
+    do i = 1, nclasses
+        if( populations(i) /= count(classes == i) )&
+            &THROW_HARD('TEST_MINI_STREAM FAILED: class populations disagree with particle assignments')
+    enddo
+    if( sum(populations) /= npicked )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: class populations do not account for all particles')
+    if( .not. result%os_cls2D%isthere('shape_rank') )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: shape-ranking output is absent')
+    shape_ranks = result%os_cls2D%get_all_asint('shape_rank')
+    if( any(shape_ranks < 0) .or. any(shape_ranks > nclasses) )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: shape ranks are outside the valid range')
+    if( any((shape_ranks > 0) .and. (populations == 0)) )&
+        &THROW_HARD('TEST_MINI_STREAM FAILED: an empty class received a shape rank')
+    nranked = count(shape_ranks > 0)
+    do rank = 1, nranked
+        if( count(shape_ranks == rank) /= 1 )&
+            &THROW_HARD('TEST_MINI_STREAM FAILED: positive shape ranks are not contiguous and unique')
+    enddo
+    write(logfhandle,'(a,i0,a,i0)') '>>> TEST_MINI_STREAM quantitatively consistent classes ', nclasses, &
+        &'; class averages passing shape-quality selection ', nranked
+
+    call result%get_cavgs_stk(cavg_stack, ncavgs, cavg_smpd)
+    if( ncavgs /= nclasses ) THROW_HARD('TEST_MINI_STREAM FAILED: class-average stack count differs from project classes')
+    call find_ldim_nptcls(cavg_stack, ldim, nimages)
+    if( nimages /= nclasses ) THROW_HARD('TEST_MINI_STREAM FAILED: class-average file has an unexpected image count')
+    call cavg%new([ldim(1), ldim(2), 1], cavg_smpd, wthreads=.false.)
+    do i = 1, nimages
+        call cavg%read(cavg_stack, i)
+        cavg_variance = cavg%variance()
+        write(logfhandle,'(a,i0,a,i0,a,es12.4)') '>>> TEST_MINI_STREAM class ', i, &
+            &' population ', populations(i), '; variance ', cavg_variance
+        if( .not. ieee_is_finite(cavg_variance) )&
+            &THROW_HARD('TEST_MINI_STREAM FAILED: class average contains non-finite data')
+        if( populations(i) > 0 .and. cavg_variance <= TINY )&
+            &THROW_HARD('TEST_MINI_STREAM FAILED: populated class average is constant')
+    enddo
+    call cavg%kill
+    call result%kill
+    call cline_mini%kill
+    call simple_chdir(cwd_saved, status)
+    if( status /= 0 ) THROW_HARD('TEST_MINI_STREAM FAILED: could not restore original directory')
+    write(logfhandle,'(a,a,a,i0,a,i0,a,i0,a)') 'PASS: mini_stream ', system_name%to_char(), ' validated ', &
+        &NMICROGRAPHS, ' micrographs, ', npicked, ' particles, and ', nclasses, ' classes'
+    enddo
+    call simple_end('**** SIMPLE_TEST_MINI_STREAM WORKFLOW NORMAL STOP ****')
+
+  contains
+
+    integer function find_simulation( micrograph_path ) result(ind)
+        type(string), intent(in) :: micrograph_path
+        type(string) :: observed_name, truth_name
+        integer :: isim
+        ind = 0
+        observed_name = basename(micrograph_path)
+        do isim = 1, NMICROGRAPHS
+            truth_name = basename(movie_paths(isim))
+            if( trim(observed_name%to_char()) == trim(truth_name%to_char()) )then
+                ind = isim
+                return
+            endif
+        enddo
+    end function find_simulation
+
+end subroutine exec_test_mini_stream_quantitative
+
+!> Hermetic quantitative validation: one embedded 6VXX volume is reprojected
+!! and turned into CTF-affected particles. Counts, dimensions, sampling, image
+!! variance, orientation diversity, shifts, and CTF metadata are checked.
 subroutine exec_test_simulate_particles( self, cline )
     use simple_atoms,         only: atoms
     use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
     use simple_imghead,       only: find_ldim_nptcls, find_img_smpd
+    use simple_oris,          only: oris
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_simulate_particles), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    real,    parameter                  :: SMPD       = 1.3
-    real,    parameter                  :: MSKDIAM    = 180.
-    integer, parameter                  :: NSPACE     = 100
-    integer, parameter                  :: NPTCLS_SIM = 200
+    real,    parameter                  :: SMPD        = 1.3
+    real,    parameter                  :: MSKDIAM     = 180.
+    real,    parameter                  :: KV          = 300.0
+    real,    parameter                  :: CS          = 2.7
+    real,    parameter                  :: FRACA       = 0.1
+    real,    parameter                  :: DEFOCUS     = 2.0
+    real,    parameter                  :: DFERR       = 0.2
+    real,    parameter                  :: ASTIGERR    = 0.05
+    real,    parameter                  :: SHIFT_LIMIT = 2.0
+    integer, parameter                  :: NSPACE      = 100
+    integer, parameter                  :: NPTCLS_SIM  = 200
     type(cmdline)                       :: cline_reproj, cline_sim
     type(parameters)                    :: params
     type(commander_reproject)           :: xreproject
     type(commander_simulate_particles)  :: xsim_ptcls
     type(atoms)                         :: molecule
     type(molecule_data)                 :: mol
-    type(string)                        :: vol_file
-    integer                             :: ldim(3), nvols
-    real                                :: smpd_vol
+    type(image)                         :: volume
+    type(string)                        :: vol_file, cwd_saved, fixture_root
+    integer                             :: ldim(3), nsections, status
+    real                                :: smpd_vol, volume_variance
     logical                             :: all_ok
+    call set_fixed_seed(20260925)
+    call simple_getcwd(cwd_saved)
+    fixture_root = filepath(cwd_saved, 'test_simulate_particles_'//int2str(get_process_id()))
+    if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: could not enter fixture directory')
     call params%new(cline)
     all_ok   = .true.
     vol_file = '6VXX.mrc'
@@ -243,9 +546,10 @@ subroutine exec_test_simulate_particles( self, cline )
     call molecule%pdb2mrc(smpd=SMPD, volfile=vol_file, mol=mol, center_pdb=.true.)
     call molecule%kill()
     if( .not. file_exists(vol_file) ) THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: volume not generated')
-    call find_ldim_nptcls(vol_file, ldim, nvols)
+    call find_ldim_nptcls(vol_file, ldim, nsections)
     smpd_vol = find_img_smpd(vol_file)
-    write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_vol
+    write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2,a,i0)') '    volume dims = [', ldim(1), ',', ldim(2), ',', &
+        &ldim(3), ' ], smpd = ', smpd_vol, ', sections = ', nsections
     if( ldim(1) /= ldim(2) .or. ldim(1) /= ldim(3) .or. ldim(1) < 1 )then
         write(logfhandle,'(a)') '    FAIL: volume is not a cube'
         all_ok = .false.
@@ -253,6 +557,17 @@ subroutine exec_test_simulate_particles( self, cline )
     if( abs(smpd_vol - SMPD) > 0.01 )then
         write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: volume smpd mismatch, expected ', SMPD, ' got ', smpd_vol
         all_ok = .false.
+    endif
+    if( all(ldim > 0) )then
+        call volume%new(ldim, smpd_vol, wthreads=.false.)
+        call volume%read(vol_file)
+        volume_variance = volume%variance()
+        write(logfhandle,'(a,es12.4)') '    volume variance = ', volume_variance
+        if( .not. ieee_is_finite(volume_variance) .or. volume_variance <= TINY )then
+            write(logfhandle,'(a)') '    FAIL: volume contains invalid or constant density'
+            all_ok = .false.
+        endif
+        call volume%kill
     endif
     ! ---- reproject ----
     write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES: reproject'
@@ -278,14 +593,24 @@ subroutine exec_test_simulate_particles( self, cline )
     call cline_sim%set('pgrp',      'c1')
     call cline_sim%set('snr',       0.01)
     call cline_sim%set('ctf',       'yes')
-    call cline_sim%set('sherr',     0.0)
-    call cline_sim%set('even',      'on')
+    call cline_sim%set('kv',         KV)
+    call cline_sim%set('cs',         CS)
+    call cline_sim%set('fraca',      FRACA)
+    call cline_sim%set('defocus',    DEFOCUS)
+    call cline_sim%set('dferr',      DFERR)
+    call cline_sim%set('astigerr',   ASTIGERR)
+    call cline_sim%set('trs',        SHIFT_LIMIT)
+    call cline_sim%set('even',       'yes')
     call xsim_ptcls%execute(cline_sim)
     call cline_sim%kill()
     call check_stack(string('simulated_particles.mrc'), NPTCLS_SIM, 'particle')
-    call check_oris(string('simulated_oris'//trim(TXT_EXT)), NPTCLS_SIM, 'particle')
+    call check_oris(string('simulated_oris'//trim(TXT_EXT)), NPTCLS_SIM, 'particle', check_ctf=.true.)
     ! ---- final verdict ----
+    call simple_chdir(cwd_saved, status)
+    if( status /= 0 ) THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: could not restore original directory')
     if( all_ok )then
+        write(logfhandle,'(a,i0,a,i0,a)') 'PASS: simulate_particles validated ', NSPACE, &
+            &' reprojections and ', NPTCLS_SIM, ' CTF-affected particles'
         call simple_end('**** SIMPLE_TEST_SIMULATE_PARTICLES NORMAL STOP ****')
     else
         THROW_HARD('TEST_SIMULATE_PARTICLES FAILED')
@@ -298,8 +623,9 @@ subroutine exec_test_simulate_particles( self, cline )
         type(string),     intent(in) :: fname
         integer,          intent(in) :: nexpected
         character(len=*), intent(in) :: what
-        integer :: ldim_stk(3), nimgs
-        real    :: smpd_stk
+        type(image) :: img
+        integer :: iimg, ldim_stk(3), nimgs
+        real    :: img_variance, max_variance, min_variance, smpd_stk
         write(logfhandle,'(a)') '>>> CHECK: '//what//' stack '//fname%to_char()
         if( .not. file_exists(fname) )then
             write(logfhandle,'(a)') '    FAIL: '//fname%to_char()//' not found'
@@ -308,7 +634,8 @@ subroutine exec_test_simulate_particles( self, cline )
         endif
         call find_ldim_nptcls(fname, ldim_stk, nimgs)
         smpd_stk = find_img_smpd(fname)
-        write(logfhandle,'(a,i6,a,i4,a,i4,a,f6.2)') '    images: ', nimgs, ', box: ', ldim_stk(1), ' x ', ldim_stk(2), ', smpd: ', smpd_stk
+        write(logfhandle,'(a,i6,a,i4,a,i4,a,f6.2)') '    images: ', nimgs, ', box: ', &
+            &ldim_stk(1), ' x ', ldim_stk(2), ', smpd: ', smpd_stk
         if( nimgs /= nexpected )then
             write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', nexpected, ' images, got ', nimgs
             all_ok = .false.
@@ -317,18 +644,47 @@ subroutine exec_test_simulate_particles( self, cline )
             write(logfhandle,'(a)') '    FAIL: invalid box dimensions'
             all_ok = .false.
         endif
+        if( any(ldim_stk(1:2) /= ldim(1:2)) )then
+            write(logfhandle,'(a)') '    FAIL: stack box differs from the source volume'
+            all_ok = .false.
+        endif
         if( abs(smpd_stk - SMPD) > 0.01 )then
             write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', SMPD, ' got ', smpd_stk
             all_ok = .false.
         endif
+        if( nimgs < 1 .or. ldim_stk(1) < 1 .or. ldim_stk(2) < 1 ) return
+        call img%new([ldim_stk(1), ldim_stk(2), 1], smpd_stk, wthreads=.false.)
+        min_variance = huge(1.0)
+        max_variance = 0.0
+        do iimg = 1, nimgs
+            call img%read(fname, iimg)
+            img_variance = img%variance()
+            if( .not. ieee_is_finite(img_variance) .or. img_variance <= TINY )then
+                write(logfhandle,'(a,i0,a,es12.4)') '    FAIL: image ', iimg, &
+                    &' has invalid or zero variance ', img_variance
+                all_ok = .false.
+            else
+                min_variance = min(min_variance, img_variance)
+                max_variance = max(max_variance, img_variance)
+            endif
+        enddo
+        call img%kill
+        write(logfhandle,'(a,es12.4,a,es12.4)') '    image variance range: ', min_variance, ' to ', max_variance
     end subroutine check_stack
 
-    !> the orientation file exists with one record per image
-    subroutine check_oris( fname, nexpected, what )
+    !> The orientation table has one valid record per image. Particle metadata
+    !! additionally has bounded CTF parameters and shifts matching the fixture.
+    subroutine check_oris( fname, nexpected, what, check_ctf )
         type(string),     intent(in) :: fname
         integer,          intent(in) :: nexpected
         character(len=*), intent(in) :: what
+        logical, optional, intent(in) :: check_ctf
+        type(oris) :: metadata
+        integer, allocatable :: states(:)
+        real,    allocatable :: dfx(:), dfy(:), e1(:), e2(:), e3(:), xs(:), ys(:)
+        real,    allocatable :: kvs(:), css(:), fracas(:)
         integer :: nrecs
+        logical :: inspect_ctf
         write(logfhandle,'(a)') '>>> CHECK: '//what//' orientations '//fname%to_char()
         if( .not. file_exists(fname) )then
             write(logfhandle,'(a)') '    FAIL: '//fname%to_char()//' not found'
@@ -336,19 +692,108 @@ subroutine exec_test_simulate_particles( self, cline )
             return
         endif
         nrecs = nlines(fname)
+        write(logfhandle,'(a,i0)') '    orientation records: ', nrecs
         if( nrecs /= nexpected )then
             write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', nexpected, ' records, got ', nrecs
             all_ok = .false.
         endif
+        if( nrecs < 1 )then
+            return
+        endif
+        call metadata%new(nrecs, is_ptcl=.true.)
+        call metadata%read(fname)
+        states = metadata%get_all_asint('state')
+        if( any(states /= 1) )then
+            write(logfhandle,'(a,i0)') '    FAIL: inactive orientation records: ', count(states /= 1)
+            all_ok = .false.
+        endif
+        if( metadata%isthere('e1') .and. metadata%isthere('e2') .and. metadata%isthere('e3') )then
+            e1 = metadata%get_all('e1')
+            e2 = metadata%get_all('e2')
+            e3 = metadata%get_all('e3')
+            if( any(.not. ieee_is_finite(e1)) .or. any(.not. ieee_is_finite(e2)) .or. &
+                &any(.not. ieee_is_finite(e3)) )then
+                write(logfhandle,'(a)') '    FAIL: Euler angles contain non-finite values'
+                all_ok = .false.
+            endif
+            if( maxval(e2) - minval(e2) < 10.0 )then
+                write(logfhandle,'(a)') '    FAIL: projection directions lack angular diversity'
+                all_ok = .false.
+            endif
+        else
+            write(logfhandle,'(a)') '    FAIL: orientation table lacks Euler angles'
+            all_ok = .false.
+        endif
+        inspect_ctf = .false.
+        if( present(check_ctf) ) inspect_ctf = check_ctf
+        if( inspect_ctf )then
+            if( metadata%isthere('dfx') .and. metadata%isthere('dfy') )then
+                dfx = metadata%get_all('dfx')
+                dfy = metadata%get_all('dfy')
+                write(logfhandle,'(a,f7.3,a,f7.3)') '    dfx range: ', minval(dfx), ' to ', maxval(dfx)
+                if( any(.not. ieee_is_finite(dfx)) .or. any(abs(dfx - DEFOCUS) > DFERR + 1.e-4) )then
+                    write(logfhandle,'(a)') '    FAIL: dfx lies outside the requested defocus interval'
+                    all_ok = .false.
+                endif
+                if( maxval(dfx) - minval(dfx) <= TINY )then
+                    write(logfhandle,'(a)') '    FAIL: requested defocus variation was not generated'
+                    all_ok = .false.
+                endif
+                if( any(.not. ieee_is_finite(dfy)) .or. any(abs(dfy - dfx) > ASTIGERR + 1.e-4) )then
+                    write(logfhandle,'(a)') '    FAIL: dfy lies outside the requested astigmatism interval'
+                    all_ok = .false.
+                endif
+                if( maxval(abs(dfy - dfx)) <= TINY )then
+                    write(logfhandle,'(a)') '    FAIL: requested astigmatism variation was not generated'
+                    all_ok = .false.
+                endif
+            else
+                write(logfhandle,'(a)') '    FAIL: particle orientations lack CTF defocus values'
+                all_ok = .false.
+            endif
+            if( metadata%isthere('kv') .and. metadata%isthere('cs') .and. metadata%isthere('fraca') )then
+                kvs    = metadata%get_all('kv')
+                css    = metadata%get_all('cs')
+                fracas = metadata%get_all('fraca')
+                if( any(abs(kvs - KV) > 0.01) .or. any(abs(css - CS) > 0.01) .or. &
+                    &any(abs(fracas - FRACA) > 1.e-4) )then
+                    write(logfhandle,'(a)') '    FAIL: particle CTF constants differ from their inputs'
+                    all_ok = .false.
+                endif
+            else
+                write(logfhandle,'(a)') '    FAIL: particle orientations lack CTF constants'
+                all_ok = .false.
+            endif
+            if( metadata%isthere('x') .and. metadata%isthere('y') )then
+                xs = metadata%get_all('x')
+                ys = metadata%get_all('y')
+                if( any(.not. ieee_is_finite(xs)) .or. any(.not. ieee_is_finite(ys)) .or. &
+                    &any(abs(xs) > SHIFT_LIMIT + 1.e-4) .or. any(abs(ys) > SHIFT_LIMIT + 1.e-4) )then
+                    write(logfhandle,'(a)') '    FAIL: particle shifts exceed the requested limit'
+                    all_ok = .false.
+                endif
+                if( max(maxval(abs(xs)), maxval(abs(ys))) <= TINY )then
+                    write(logfhandle,'(a)') '    FAIL: requested particle shifts were not generated'
+                    all_ok = .false.
+                endif
+            else
+                write(logfhandle,'(a)') '    FAIL: particle orientations lack shifts'
+                all_ok = .false.
+            endif
+        endif
+        call metadata%kill
     end subroutine check_oris
 
 end subroutine exec_test_simulate_particles
 
 subroutine exec_test_simulated_workflow( self, cline )
     use simple_atoms,         only: atoms
+    use simple_dock_vols,     only: dock_vols
     use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_refine3D_fnames, only: refine3D_state_vol_fname
     use simple_string_utils,  only: lowercase
     use simple_ui,            only: make_ui
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
     character(len=*), parameter :: PROJNAME       = 'simulated_workflow'
@@ -379,6 +824,10 @@ subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: NMOVIES        = 10
     integer,          parameter :: EXTRACT_BOX    = 192
     integer,          parameter :: NTHR           = 4
+    real,             parameter :: MIN_VOL_CORR   = 0.20
+    real,             parameter :: MAX_FSC0143    = 40.0
+    real,             parameter :: DOCK_HP        = 100.0
+    real,             parameter :: DOCK_LP        = 20.0
     type(cmdline)                       :: cline_projection, cline_sim_mov, cline_new_project
     type(cmdline)                       :: cline_import_movies, cline_mot_corr, cline_ctf_est
     type(cmdline)                       :: cline_pick, cline_extract, cline_abinitio2D, cline_abinitio3D
@@ -399,19 +848,28 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
     type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
+    type(string)                        :: truth_volume, abinitio_dir, final_volume
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, proj_inds(NPER_MOVIE), projection_order(NPROJS), ldim(3), nprojs_stk
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
     real                                :: pickref_smpd, pickref_width
+    real                                :: volume_corr, volume_fsc0143
     integer                             :: rnd_defocus
+    logical                             :: volume_ok
 
     ! The test executable initializes only the test UI.  Directly invoked SIMPLE
     ! commanders need the regular UI metadata to implement mkdir=yes correctly.
     call make_ui
-    if( .not. cline%defined('system') ) THROW_HARD('The system keyword is required; expected 6vxx or 1jxy')
-    system_name = cline%get_carg('system')
+    if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=6vxx or suite=1jxy')
+    system_name = cline%get_carg('suite')
     system_name = lowercase(system_name%to_char())
+    if( system_name == 'list' )then
+        write(logfhandle,'(a)') 'Available suites for simulated_workflow:'
+        write(logfhandle,'(a)') '  6vxx'
+        write(logfhandle,'(a)') '  1jxy'
+        return
+    endif
     workflow_picker = 'segdiam'
     if( cline%defined('picker') ) workflow_picker = cline%get_carg('picker')
     workflow_picker = lowercase(workflow_picker%to_char())
@@ -430,7 +888,7 @@ subroutine exec_test_simulated_workflow( self, cline )
             reproj_file = 'reprojs_1JXY.mrcs'
             pgrp        = 'c1'
         case default
-            THROW_HARD('Unsupported simulated-workflow system: '//system_name%to_char()//'; expected 6vxx or 1jxy')
+            THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
     test_workdir = 'test_simulated_workflow_'//system_name%to_char()
     call simple_getcwd(cwd_root)
@@ -456,8 +914,10 @@ subroutine exec_test_simulated_workflow( self, cline )
             ! SIMPLE's embedded provider uses the underlying 1JYX PDB identifier.
             mol = betagal_1jyx()
     end select
-    call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true.)
+    call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true., &
+        &vol_dim=[EXTRACT_BOX, EXTRACT_BOX, EXTRACT_BOX])
     call molecule%kill()
+    truth_volume = simple_abspath(vol_file)
     call simple_chdir(workflow_root, status)
     if( status /= 0 ) THROW_HARD('Could not leave the volume-generation directory')
 
@@ -666,10 +1126,17 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
     call cline_abinitio3D%set('nthr',                       NTHR)
     call xabinitio3D%execute(cline_abinitio3D)
+    call simple_getcwd(abinitio_dir)
     call cline_abinitio3D%kill()
+    final_volume = filepath(abinitio_dir, refine3D_state_vol_fname(1))
+    call validate_reconstructed_volume(truth_volume, final_volume, SMPD, EXTRACT_BOX, MSKDIAM, &
+        &MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, volume_ok)
 
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('Could not restore the original working directory')
+    if( .not. volume_ok ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: final-volume validation failed')
+    write(logfhandle,'(a,a,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', system_name%to_char(), &
+        &' whole-volume correlation=', volume_corr, ', FSC=0.143 at ', volume_fsc0143, ' A'
     call simple_end('**** SIMPLE_TEST_SIMULATED_WORKFLOW NORMAL STOP ****')
 
   contains
@@ -683,6 +1150,132 @@ subroutine exec_test_simulated_workflow( self, cline )
         call simple_chdir(trim(workflow_root_path), status)
         if( status /= 0 ) THROW_HARD('Could not leave simulated workflow stage: '//stage)
     end subroutine return_to_stage_root
+
+    subroutine validate_reconstructed_volume( truth_fname, reconstruction_fname, expected_smpd, expected_box, &
+        &mask_diameter, min_corr, max_fsc0143, corr, fsc0143, passed )
+        type(string), intent(in) :: truth_fname, reconstruction_fname
+        real,         intent(in) :: expected_smpd, mask_diameter, min_corr, max_fsc0143
+        integer,      intent(in) :: expected_box
+        real,         intent(out) :: corr, fsc0143
+        logical,      intent(out) :: passed
+        character(len=*), parameter :: TRUTH_COMPARE = 'workflow_truth_compare.mrc'
+        character(len=*), parameter :: RECON_MIRROR  = 'workflow_reconstruction_mirror.mrc'
+        character(len=*), parameter :: DOCKED_DIRECT = 'workflow_reconstruction_docked.mrc'
+        character(len=*), parameter :: DOCKED_MIRROR = 'workflow_reconstruction_mirror_docked.mrc'
+        type(dock_vols) :: docker
+        type(image)     :: truth, reconstruction
+        type(string)    :: selected_reconstruction
+        real, allocatable :: fsc(:), resolutions(:)
+        integer :: truth_ldim(3), reconstruction_ldim(3), nsections, nyq
+        real    :: truth_smpd, reconstruction_smpd, direct_cc, mirror_cc
+        real    :: eulers(3), shifts(3), fsc05, mask_radius
+
+        passed  = .false.
+        corr    = 0.0
+        fsc0143 = 0.0
+        if( .not. file_exists(truth_fname) )then
+            write(logfhandle,'(a)') '    FAIL: simulated truth volume was not generated'
+            return
+        endif
+        if( .not. file_exists(reconstruction_fname) )then
+            write(logfhandle,'(a,a)') '    FAIL: final reconstruction was not generated: ', &
+                &reconstruction_fname%to_char()
+            return
+        endif
+        call find_ldim_nptcls(truth_fname, truth_ldim, nsections)
+        truth_smpd = find_img_smpd(truth_fname)
+        call find_ldim_nptcls(reconstruction_fname, reconstruction_ldim, nsections)
+        reconstruction_smpd = find_img_smpd(reconstruction_fname)
+        write(logfhandle,'(a,3(i0,1x),a,f7.3)') '>>> Simulated truth dimensions/sampling: ', truth_ldim, &
+            &' / ', truth_smpd
+        write(logfhandle,'(a,3(i0,1x),a,f7.3)') '>>> Final volume dimensions/sampling:    ', reconstruction_ldim, &
+            &' / ', reconstruction_smpd
+        if( any(reconstruction_ldim /= [expected_box, expected_box, expected_box]) )then
+            write(logfhandle,'(a,i0)') '    FAIL: final volume does not have the expected cubic box ', expected_box
+            return
+        endif
+        if( abs(reconstruction_smpd - expected_smpd) > 0.01 )then
+            write(logfhandle,'(a,f7.3)') '    FAIL: final volume has incorrect sampling; expected ', expected_smpd
+            return
+        endif
+        if( any(truth_ldim /= reconstruction_ldim) )then
+            write(logfhandle,'(a)') '    FAIL: simulated truth and final volume dimensions do not match'
+            return
+        endif
+        if( abs(truth_smpd - reconstruction_smpd) > 0.01 )then
+            write(logfhandle,'(a)') '    FAIL: simulated truth and final volume sampling do not match'
+            return
+        endif
+
+        call truth%new(truth_ldim, truth_smpd, wthreads=.false.)
+        call truth%read(truth_fname)
+        call truth%write(string(TRUTH_COMPARE))
+        call reconstruction%new(reconstruction_ldim, reconstruction_smpd, wthreads=.false.)
+        call reconstruction%read(reconstruction_fname)
+        call reconstruction%mirror('x')
+        call reconstruction%write(string(RECON_MIRROR))
+        call reconstruction%kill
+
+        ! Ab-initio maps have an arbitrary orientation and handedness.  Search
+        ! both hands and score only after putting the best one in the truth frame.
+        call docker%new(string(TRUTH_COMPARE), reconstruction_fname, reconstruction_smpd, &
+            &DOCK_HP, DOCK_LP, mask_diameter)
+        call docker%srch()
+        call docker%get_dock_info(eulers, shifts, direct_cc)
+        call docker%rotate_target(reconstruction_fname, string(DOCKED_DIRECT))
+        call docker%kill()
+        call docker%new(string(TRUTH_COMPARE), string(RECON_MIRROR), reconstruction_smpd, &
+            &DOCK_HP, DOCK_LP, mask_diameter)
+        call docker%srch()
+        call docker%get_dock_info(eulers, shifts, mirror_cc)
+        call docker%rotate_target(string(RECON_MIRROR), string(DOCKED_MIRROR))
+        call docker%kill()
+        if( direct_cc >= mirror_cc )then
+            selected_reconstruction = DOCKED_DIRECT
+        else
+            selected_reconstruction = DOCKED_MIRROR
+        endif
+        write(logfhandle,'(a,f7.4,a,f7.4)') '>>> Docking correlation: direct=', direct_cc, ', mirrored=', mirror_cc
+
+        call reconstruction%new(reconstruction_ldim, reconstruction_smpd, wthreads=.false.)
+        call reconstruction%read(selected_reconstruction)
+        corr = truth%real_corr(reconstruction)
+        write(logfhandle,'(a,f7.4,a,f7.4)') '>>> Registered whole-volume Pearson correlation: ', corr, &
+            &'; minimum ', min_corr
+        if( .not. ieee_is_finite(corr) .or. corr < min_corr )then
+            write(logfhandle,'(a)') '    FAIL: final-volume Pearson correlation is below the required minimum'
+            call truth%kill
+            call reconstruction%kill
+            return
+        endif
+
+        mask_radius = 0.5 * mask_diameter / reconstruction_smpd
+        call truth%mask3D_soft(mask_radius, backgr=0.0)
+        call reconstruction%mask3D_soft(mask_radius, backgr=0.0)
+        call truth%fft()
+        call reconstruction%fft()
+        nyq = truth%get_filtsz()
+        allocate(fsc(nyq), source=0.0)
+        call truth%fsc(reconstruction, fsc)
+        resolutions = truth%get_res()
+        if( any(.not. ieee_is_finite(fsc)) )then
+            write(logfhandle,'(a)') '    FAIL: final-volume FSC contains non-finite values'
+            call truth%kill
+            call reconstruction%kill
+            deallocate(fsc, resolutions)
+            return
+        endif
+        call get_resolution(fsc, resolutions, fsc05, fsc0143)
+        if( fsc05 > 0.0 )   fsc05   = max(fsc05,   2.0 * reconstruction_smpd)
+        if( fsc0143 > 0.0 ) fsc0143 = max(fsc0143, 2.0 * reconstruction_smpd)
+        write(logfhandle,'(a,f7.2,a,f7.2,a,f7.2,a)') '>>> Masked truth FSC: 0.500 at ', fsc05, &
+            &' A; 0.143 at ', fsc0143, ' A; maximum ', max_fsc0143, ' A'
+        passed = ieee_is_finite(fsc0143) .and. fsc0143 > 0.0 .and. fsc0143 <= max_fsc0143
+        if( .not. passed ) write(logfhandle,'(a)') '    FAIL: final-volume FSC resolution is outside the accepted range'
+        call truth%kill
+        call reconstruction%kill
+        deallocate(fsc, resolutions)
+    end subroutine validate_reconstructed_volume
 
 end subroutine exec_test_simulated_workflow
 

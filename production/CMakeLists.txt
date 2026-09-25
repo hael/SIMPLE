@@ -169,7 +169,7 @@ add_custom_target(audit_ui_defaults
 #   fast         runs on every compile_*.sh build under a 30 s budget
 #                (Phase 2 declares it; until then `provisional` stands in)
 #   library      nightly, one process per coherent part of the library
-#   workflow     nightly, the simulated workflows gated on simulation truth
+#   highlevel    only by explicit CTest command; long simulated workflows
 #   platform     coarray/MPI/GPU/socket/child-process cases, own launcher
 # Every registration has a label, a timeout, its own working directory under
 # build/test_runs/<name>, an explicit OMP_NUM_THREADS and the environment the
@@ -189,7 +189,7 @@ if(BUILD_TESTS)
   set(SIMPLE_TEST_RUNS_DIR "${CMAKE_BINARY_DIR}/test_runs")
   # SIMPLE_SEED makes seed_rnd (called by parameters%new, so by every commander)
   # draw from a fixed seed instead of /dev/urandom; distributed workers inherit
-  # it, so the library and workflow entries are reproducible (plan, section 9.7,
+  # it, so the library and high-level entries are reproducible (plan, section 9.7,
   # stream).
   set(SIMPLE_TEST_ENV
     "SIMPLE_PATH=${CMAKE_INSTALL_PREFIX}"
@@ -247,10 +247,8 @@ if(BUILD_TESTS)
   # Review verdict 2026-09-23 (plan, section 9.7, heterogeneity).
   simple_add_test(lib_heterogeneity library 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_heterogeneity)
-  # lib_single: Ruben's SINGLE pipelines transferred as they were (Pt nanoparticle
-  # atoms pipeline, C-alpha benchmark on 6VXX/1JYX); they assert nothing yet, see
-  # doc/refactoring_notes/single_area_tests_handover.md. Review verdict 2026-09-23
-  # (plan, section 9.7, single).
+  # lib_single: in-process pdb2mrc coverage of the built-in molecular models.
+  # The longer nanoparticle atom-statistics pipeline is an explicit highlevel entry.
   simple_add_test(lib_single library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_single)
   # lib_stream: the stream stages that run in-process, one thread, with the
@@ -260,31 +258,39 @@ if(BUILD_TESTS)
   simple_add_test(lib_stream library 1800 1
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
 
-  # ---- workflow gates (nightly) --------------------------------------------
-  # The simulated workflows with their current checks (completion, counts,
-  # heartbeat); simulation-truth floors are Phase 5. Each owns the machine:
-  # RUN_SERIAL, an OpenMP team, and it may start simple_exec /
-  # simple_private_exec workers, hence PATH and SIMPLE_PATH above. Only the
-  # workflows known to run unattended with generated data are registered;
-  # the rest join by review verdict (plan, section 9).
-  simple_add_test(simulated_workflow_6vxx workflow 7200 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow system=6vxx)
-  simple_add_test(simulated_workflow_1jxy workflow 7200 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow system=1jxy)
-  simple_add_test(single_workflow workflow 7200 8 RUN_SERIAL
+  # ---- high-level gates (explicit CTest runs only) --------------------------
+  # These workflows use generated data and quantitative output gates. The
+  # simulated suites and single workflow register the final map to known truth
+  # and check dimensions, sampling, whole-volume correlation, and masked FSC.
+  # Each owns the machine: RUN_SERIAL, an OpenMP team, and it may start
+  # simple_exec / simple_private_exec workers, hence PATH and SIMPLE_PATH above.
+  # These entries are deliberately excluded from scripts/run_fast_gate.sh,
+  # which selects only the `fast` label during compilation/installation. Run
+  # them explicitly with: ctest -L highlevel --output-on-failure
+  simple_add_test(mini_stream_6vxx highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=6vxx)
+  simple_add_test(mini_stream_1jxy highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=1jxy)
+  simple_add_test(simulated_workflow_6vxx highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=6vxx)
+  simple_add_test(simulated_workflow_1jxy highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
+  simple_add_test(single_workflow highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow smpd=0.358 element=Pt)
-  simple_add_test(pcg_recon workflow 3600 8 RUN_SERIAL
+  simple_add_test(pcg_recon highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
   # reproject + simulate_particles on the embedded 6VXX volume; the only
-  # nightly run of either commander (simulated_workflow uses simulate_movie).
+  # explicit high-level run of either commander (simulated_workflow uses simulate_movie).
   # Review verdict 2026-09-23 (plan, section 9.7, highlevel).
-  simple_add_test(simulate_particles workflow 3600 8 RUN_SERIAL
+  simple_add_test(simulate_particles highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulate_particles nthr=8)
+  simple_add_test(single_atoms_stats highlevel 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
   # stream preprocessing: five simulated movies through the stream's
   # preprocessing stage, which submits its jobs to the local queue; the other
   # stream stage tests moved to lib_stream, unit_project and forked_process,
   # abinitio2D_stream was retired (plan, section 9.7, stream).
-  simple_add_test(stream_preproc workflow 3600 8 RUN_SERIAL
+  simple_add_test(stream_preproc highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=stream_preproc)
 
   # ---- platform cases -------------------------------------------------------
@@ -322,7 +328,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, flex_gpu, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 25)   # 13 fast + 1 platform + 6 workflow + 5 library
+  set(SIMPLE_CTEST_BUDGET 28)   # 13 fast + 1 platform + 9 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

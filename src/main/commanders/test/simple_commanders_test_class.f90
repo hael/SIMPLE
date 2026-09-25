@@ -91,7 +91,6 @@ use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
-use simple_commanders_test_single,           only: commander_test_single_atoms_stats
 use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
@@ -397,14 +396,11 @@ contains
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
     end subroutine suites_single
 
-    !> nightly: Ruben's nanoparticle atoms pipeline, transferred as it was (it asserts nothing yet;
-    !! doc/refactoring_notes/single_area_tests_handover.md says what it must pin), and asserting
-    !! pdb2mrc coverage of the built-in 6VXX and 1JYX models
+    !> nightly pdb2mrc coverage of the built-in 6VXX and 1JYX models
     subroutine suites_lib_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'nanoparticle atoms', suite_nanoparticle_atoms)
-        call add_suite(s, n, 'pdb2mrc',            run_all_pdb2mrc_tests)
+        call add_suite(s, n, 'pdb2mrc', run_all_pdb2mrc_tests)
     end subroutine suites_lib_single
 
     !> nightly: the stream stages that run in-process, with the arguments the stream gives them
@@ -793,18 +789,6 @@ contains
     end function suite_id
 
     ! ---- wrappers for test procedures that take arguments -----------------------
-
-    !> the SINGLE atoms pipeline (simulate a Pt nanoparticle, detect its atoms, atom statistics) with
-    !! the command line `simple_test_exec test=single_atoms_stats smpd=0.358 element=Pt` would give it
-    subroutine suite_nanoparticle_atoms
-        type(commander_test_single_atoms_stats) :: xatoms_stats
-        type(cmdline) :: cline_here
-        call cline_here%set('prg',     'single_atoms_stats')
-        call cline_here%set('smpd',    0.358)
-        call cline_here%set('element', 'Pt')
-        call xatoms_stats%execute(cline_here)
-        call cline_here%kill
-    end subroutine suite_nanoparticle_atoms
 
     subroutine suite_ui_json
         write(logfhandle,'(a)') 'VALIDATING UI JSON FILE:'

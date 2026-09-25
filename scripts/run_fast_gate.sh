@@ -4,7 +4,8 @@
 #
 #   scripts/run_fast_gate.sh [BUILD_DIR]        (default: build)
 #
-# Runs `ctest -L "fast|provisional"` in BUILD_DIR with half the cores, tees
+# Runs only `ctest -L "fast|provisional"` in BUILD_DIR with half the cores; the
+# long `highlevel` label is intentionally excluded and must be requested explicitly. Tees
 # the output to BUILD_DIR/test_runs/ctest_fast.log and hands it to
 # scripts/ctest_budget.py. What is printed is ctest's own report, as in X;
 # the budget checker is silent when the gate passes within budget and speaks

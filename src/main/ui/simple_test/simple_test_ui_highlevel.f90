@@ -49,11 +49,15 @@ contains
         ! PROGRAM SPECIFICATION
         call mini_stream%new(&
         &'mini_stream',&                       ! name
-        &'mini_stream',&                       ! descr_short
-        &'is a test program for mini_stream',&
+        &'validate mini-stream with the embedded 6VXX and 1JXY systems',&
+        &'runs molecular 6VXX and 1JXY suites and validates CTF recovery, picking, extraction, '//&
+        &'abinitio2D class averages, and shape ranking',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
+        call mini_stream%add_input(UI_PARM, 'suite', 'str', 'Run one molecular suite', &
+            &'Choose 6vxx or 1jxy for a focused run; use list to print the accepted names', &
+            &'', .false., '')
         ! image input/output
         !call mini_stream%add_input(UI_IO, )
         ! parameter input/output
@@ -77,8 +81,9 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_particles%new(&
         &'simulate_particles',&                     ! name
-        &'reproject and simulate particles from an embedded volume',&  ! descr_short
-        &'is a hermetic smoke of reproject and simulate_particles on the embedded 6VXX volume',&
+        &'quantitatively validate particle simulation from embedded 6VXX',&
+        &'checks volume and stack metadata, every image variance, orientation diversity, shifts, '//&
+        &'and CTF parameter bounds against deterministic inputs',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
         ! add to ui_hash
@@ -90,17 +95,16 @@ contains
         ! PROGRAM SPECIFICATION
         call simulated_workflow%new(&
         &'simulated_workflow',&                          ! name
-        &'self-contained simulated workflow test',&      ! descr_short
-        &'is a self-contained simulated workflow test',&
+        &'validate simulated workflows for embedded 6VXX and 1JXY systems',&
+        &'runs one molecular suite through preprocessing and initial-model reconstruction, then validates the final volume',&
         &'simple_test_exec',&                            ! executable
         &.false.)                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call simulated_workflow%add_input(UI_IO, )
         ! parameter input/output
-        call simulated_workflow%add_input(UI_PARM, 'system', 'multi', 'Embedded molecular system', &
-            &'Embedded coordinates used to generate the simulated data(6vxx|1jxy)','', .true., '', &
-        &choices=ui_choices([character(len=4) :: '6vxx', '1jxy']))
+        call simulated_workflow%add_input(UI_PARM, 'suite', 'str', 'Run one molecular suite', &
+            &'Choose 6vxx or 1jxy; use list to print the accepted names', '', .true., '')
         call simulated_workflow%add_input(UI_PARM, 'picker', 'multi', 'Picker under test', &
             &'Particle picker used by the simulated workflow(segdiam|new){segdiam}','', .false., 'segdiam', &
         &choices=ui_choices([character(len=7) :: 'segdiam', 'new']))
@@ -218,7 +222,7 @@ contains
         call single_atoms_stats%new(&
         &'single_atoms_stats',&
         &'SINGLE nanoparticle atom statistics',&
-        &'simulates a nanoparticle, detects its atoms, and calculates atom statistics',&
+        &'validates atom detection and statistics against a simulated nanoparticle',&
         &'simple_test_exec',&
         &.false.)
         call single_atoms_stats%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
@@ -232,8 +236,8 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call single_workflow%new(&
         &'single_workflow',&
-        &'single workflow',&
-        &'is a test program for single workflow',&
+        &'quantitatively validate the SINGLE reconstruction workflow',&
+        &'runs the simulated nanoparticle pipeline and validates the final map against the known truth',&
         &'simple_test_exec',&
         &.false.)
         call single_workflow%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &

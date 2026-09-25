@@ -68,7 +68,7 @@ ISOLATING = {'coarray', 'mpi', 'offload', 'openacc', 'cuda'}
 LIB_SUITE = {'fft': 'lib_fft', 'geometry': 'lib_geometry', 'masks': 'lib_masks', 'numerics': 'lib_numerics',
              'optimize': 'lib_optimize', 'stats': 'lib_stats', 'io': 'lib_io', 'class': 'lib_project',
              'utils': 'lib_project', 'parallel': 'lib_parallel', 'network': 'lib_project',
-             'highlevel': 'workflow', 'single': 'workflow', 'stream': 'workflow'}
+             'highlevel': 'highlevel', 'single': 'highlevel', 'stream': 'highlevel'}
 BENCH = re.compile(r'benchmark|\btic\(|\btoc\(|timing|speed|throughput|elapsed', re.I)
 WORKFLOW = re.compile(r'%execute\s*\(', re.I)
 

@@ -105,7 +105,11 @@ contains
         ! 2D analysis
         call spproj%read(string(PROJFILE_MINI_STREAM))
         nptcls = spproj%os_ptcl2D%get_noris()
-        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
+        if( cline%defined('ncls') )then
+            ncls = min(NCLS_MAX, max(1, params%ncls))
+        else
+            ncls = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
+        endif
         call cline_abinitio2D%set('prg',                'abinitio2D')
         call cline_abinitio2D%set('mkdir',                      'no')
         call cline_abinitio2D%set('ncls',                       ncls)

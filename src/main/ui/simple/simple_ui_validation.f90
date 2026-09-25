@@ -120,6 +120,8 @@ subroutine new_check_refpick( prgtab )
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call mini_stream%add_input(UI_SRCH, ncls, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call mini_stream%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200., &
         &visibility=UI_VIS_ADVANCED)
         call mini_stream%add_input(UI_SRCH, pick_roi, &

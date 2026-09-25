@@ -239,12 +239,12 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call lib_single%new(&
         &'lib_single',&
-        &'library tests: SINGLE pipelines',&
-        &'is the nightly library suite for SINGLE: the Pt nanoparticle atoms pipeline (simulate, detect, statistics) and pdb2mrc coverage of the built-in 6VXX and 1JYX models',&
+        &'library tests: SINGLE molecular models',&
+        &'is the nightly library suite for pdb2mrc coverage of the built-in 6VXX and 1JYX models',&
         &'simple_test_exec',&
         &.false.)
         call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (nanoparticle_atoms, pdb2mrc)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pdb2mrc)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
 

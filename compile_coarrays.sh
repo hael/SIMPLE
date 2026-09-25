@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tests are built by default (simple_test_exec and the *_tester modules) and the fast
 # gate runs before installation; --exclude-tests builds the library and executables only.
+# High-level tests are registered but run only by an explicit `ctest -L highlevel`.
 BUILD_TESTS=ON
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 for arg in "$@"; do

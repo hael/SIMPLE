@@ -1,4 +1,4 @@
-simulated_workflow	system=6vxx
+simulated_workflow	suite=6vxx
 single_workflow	element=Pt
 atoms_stats	element=Pt
 detect_atoms	element=Pt

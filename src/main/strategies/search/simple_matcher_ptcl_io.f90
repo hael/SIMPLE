@@ -21,12 +21,14 @@ end interface read_imgbatch
 
 type(stack_io) :: stkio_r
 
-! Per-stack dimensions, memoized by stack index for the lifetime of the process.
+! Per-stack dimensions, memoized by stack index and filename.
 ! The physical MRC header stays the source of truth -- os_stk's 'box' is never
 ! repaired and 'nptcls_stk' may hold a project range count rather than the real
-! image count, so trusting either would risk wrong record offsets after a stack is
-! replaced. Memoizing just removes the repeated open+header read per batch.
+! image count, so trusting either would risk wrong record offsets. Including the
+! filename prevents cache reuse when successive workflows have the same number
+! of stack rows but refer to different physical files.
 integer, allocatable :: memo_ldim(:,:), memo_nptcls(:)
+type(string), allocatable :: memo_stknames(:)
 
 contains
 
@@ -50,12 +52,14 @@ contains
             if( .not. allocated(memo_nptcls) )then
                 allocate(memo_ldim(3,nstks), source=0)
                 allocate(memo_nptcls(nstks), source=0)
+                allocate(memo_stknames(nstks))
             endif
             if( stkind > nstks )then
                 call find_ldim_nptcls(stkname, ldim, nptcls)
             else
-                if( memo_nptcls(stkind) < 1 )then
+                if( memo_nptcls(stkind) < 1 .or. memo_stknames(stkind) /= stkname )then
                     call find_ldim_nptcls(stkname, memo_ldim(:,stkind), memo_nptcls(stkind))
+                    memo_stknames(stkind) = stkname
                 endif
                 ldim   = memo_ldim(:,stkind)
                 nptcls = memo_nptcls(stkind)
@@ -72,6 +76,7 @@ contains
     subroutine forget_stk_dims
         if( allocated(memo_ldim)   ) deallocate(memo_ldim)
         if( allocated(memo_nptcls) ) deallocate(memo_nptcls)
+        if( allocated(memo_stknames) ) deallocate(memo_stknames)
     end subroutine forget_stk_dims
 
     subroutine prepimgbatch( params, build, batchsz, box, smpd )

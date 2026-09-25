@@ -4,6 +4,8 @@
 #   ./compile_clean.sh                  library, executables and tests; the fast
 #                                       test gate runs before installation (default)
 #   ./compile_clean.sh --exclude-tests  library and executables only, no gate
+# High-level tests are registered but never run here; invoke them explicitly
+# after building with: (cd build && ctest -L highlevel --output-on-failure)
 #
 # The test code adds ~210 s of compile CPU; --exclude-tests skips it when only
 # the executables are needed.

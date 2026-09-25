@@ -2,7 +2,7 @@
 !        Tables are written to a staging file (<fname>.tmp) and atomically renamed on complete().
 !        Parallel writers partition rows across OpenMP threads using an unequal-batch schedule; each
 !        thread builds its sub-table independently and flushes in file order via !$omp ordered.
-!        String fields are read inside !$omp critical regions to protect non-thread-safe oris accessors.
+!        String fields are read, converted, and stored inside !$omp critical regions.
 module simple_starfile
     use simple_core_module_api
     use simple_starfile_wrappers
@@ -162,12 +162,12 @@ contains
                 if( optics_oris%isthere(igrp, 'fraca') ) call starfile_table__setValue_double(part_table, EMDL_CTF_Q0,           real(optics_oris%get(igrp, 'fraca'), dp))
                 if( optics_oris%isthere(igrp, 'opcx')  ) call starfile_table__setValue_double(part_table, SMPL_OPTICS_CENTROIDX, real(optics_oris%get(igrp, 'opcx'),  dp))
                 if( optics_oris%isthere(igrp, 'opcy')  ) call starfile_table__setValue_double(part_table, SMPL_OPTICS_CENTROIDY, real(optics_oris%get(igrp, 'opcy'),  dp))
-                ! strings — get_static is not thread-safe; guard with critical
+                ! Keep the complete string-wrapper operation thread-safe.
                 if( optics_oris%isthere(igrp, 'ogname') ) then
                     !$omp critical
                     call optics_oris%get_static(igrp, 'ogname', str_ogname)
-                    !$omp end critical
                     call starfile_table__setValue_string(part_table, EMDL_IMAGE_OPTICS_GROUP_NAME, trim(str_ogname))
+                    !$omp end critical
                 end if
             end do
             ! Flush this partition in file order; skip if no objects were added
@@ -274,14 +274,13 @@ contains
                 if( mics_oris%isthere(imic, 'ctfres' ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_MAXRES,        real(mics_oris%get(imic, 'ctfres' ),          dp))
                 if( mics_oris%isthere(imic, 'icefrac') ) call starfile_table__setValue_double(part_table, SMPL_ICE_FRAC,          real(mics_oris%get(imic, 'icefrac'),          dp))
                 if( mics_oris%isthere(imic, 'astig'  ) ) call starfile_table__setValue_double(part_table, SMPL_ASTIGMATISM,       real(mics_oris%get(imic, 'astig'  ),          dp))
-                ! strings — get_static is not thread-safe; guard with critical
+                ! Keep the complete string-wrapper operation thread-safe.
                 !$omp critical
                 call mics_oris%get_static(imic, 'movie',       str_movie)
                 call mics_oris%get_static(imic, 'intg',        str_intg)
                 call mics_oris%get_static(imic, 'mc_starfile', str_mc_starfile)
                 call mics_oris%get_static(imic, 'boxfile',     str_boxfile)
                 call mics_oris%get_static(imic, 'ctfjpg',      str_ctfjpg)
-                !$omp end critical
                 str_intg        = get_relative_path_here(str_intg)
                 str_mc_starfile = get_relative_path_here(str_mc_starfile)
                 str_boxfile     = get_relative_path_here(str_boxfile)
@@ -291,6 +290,7 @@ contains
                 if( mics_oris%isthere(imic, 'mc_starfile') ) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_METADATA_NAME, trim(str_mc_starfile))
                 if( mics_oris%isthere(imic, 'boxfile'    ) ) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_COORDINATES,   trim(str_boxfile))
                 if( mics_oris%isthere(imic, 'ctfjpg'     ) ) call starfile_table__setValue_string(part_table, EMDL_CTF_PSPEC,                trim(str_ctfjpg))
+                !$omp end critical
             end do
             ! Flush this partition in file order; skip if no objects were added
             !$omp ordered
@@ -447,7 +447,8 @@ contains
     ! write_ptcl2D_table_parallel: parallel version of write_ptcl2D_table.
     ! Row range is split across omp_get_max_threads() partitions; each thread
     ! builds its own sub-table independently and flushes in file order via
-    ! !$omp ordered.  get_static calls are protected by !$omp critical.
+    ! !$omp ordered. String extraction, construction, and storage are protected
+    ! because their Fortran/C wrappers use temporary allocatable strings.
     ! -------------------------------------------------------------------------
     subroutine write_ptcl2D_table_parallel( self, ptcl2d_oris, stk_oris, mics_oris )
         class(starfile),       intent(inout) :: self
@@ -522,14 +523,14 @@ contains
                 if( ptcl2d_oris%isthere(iptcl, 'ypos'   ) ) call starfile_table__setValue_double(part_table, EMDL_IMAGE_COORD_Y,            real(ptcl2d_oris%get(iptcl, 'ypos'   ) + half_boxsize,  dp))
                 if( ptcl2d_oris%isthere(iptcl, 'x'      ) ) call starfile_table__setValue_double(part_table, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'x'      ),                 dp))
                 if( ptcl2d_oris%isthere(iptcl, 'y'      ) ) call starfile_table__setValue_double(part_table, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'y'      ),                 dp))
-                ! strings — get_static is not thread-safe; guard with critical
+                ! Keep the complete string-wrapper operation thread-safe.
                 if( indstk > 0 ) then
                     if( stk_oris%isthere(stkind, 'stk') ) then
                         !$omp critical
                         call stk_oris%get_static(stkind, 'stk', str_stk)
                         str_stk = get_relative_path_here(str_stk)
-                        !$omp end critical
                         call starfile_table__setValue_string(part_table, EMDL_IMAGE_NAME, int2str(indstk) // '@' // trim(str_stk))
+                        !$omp end critical
                         if( present(mics_oris) ) then
                             ! micrograph name available when stk 1:1 maps to mics
                             if( stk_oris%get_noris() == mics_oris%get_noris() ) then
@@ -538,11 +539,11 @@ contains
                                 if( mics_oris%isthere(stkind, 'intg') ) then
                                     call mics_oris%get_static(stkind, 'intg', micname)
                                 end if
-                                !$omp end critical
                                 if( len_trim(micname) > 0 ) then
                                     micname = get_relative_path_here(micname)
                                     call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME, trim(micname))
                                 end if
+                                !$omp end critical
                             end if
                         end if
                     end if

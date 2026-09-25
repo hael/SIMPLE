@@ -33,11 +33,11 @@ labels.
 |---|---|---|---|
 | `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `workflow` | 6 workflow gates | nightly | simulated pipelines that start `simple_exec` and workers, checked against the model they were simulated from |
+| `highlevel` | 9 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent 6VXX/1JXY suites |
 | `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is a two-image integer-transfer smoke |
 
-The fast tier is the build-time gate; the other three labels make up the
-extensive tier, which runs overnight.
+The fast tier is the build-time gate. Library and supported platform tests may
+run overnight; high-level tests run only when explicitly selected with CTest.
 
 **The fast gate is part of the build.** Every `compile_*.sh` build
 runs `scripts/run_fast_gate.sh` between `make` and `make install`. It first
@@ -55,8 +55,8 @@ and skips the gate, for when only the executables are needed.
 two-image smoke test therefore prevents a coarray build from being installed.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 25: 13 fast,
-5 library, 6 workflow, 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 28: 13 fast,
+5 library, 9 highlevel, 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -91,28 +91,28 @@ tester module (section 4.1).
 `simple_test_exec test=units` runs all thirteen in one process. It is a
 convenience and deliberately not a CTest entry.
 
-### 1.2 The nightly entries
+### 1.2 Long-running CTest entries
 
 | entry | label | what it runs |
 |---|---|---|
 | `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 5 000 simulated 1JYX particles refined by the Cartesian pose refiner |
 | `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
-| `lib_single` | library | nanoparticle atoms, pdb2mrc |
+| `lib_single` | library | pdb2mrc coverage of the built-in molecular models |
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
-| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | workflow | simulated movies through import, motion correction, CTF, picking, extraction, `abinitio2D`, `abinitio3D` |
-| `single_workflow` | workflow | the SINGLE pipeline on a simulated Pt nanoparticle |
-| `pcg_recon` | workflow | 14 gated stages of the PCG reconstruction operator |
-| `simulate_particles` | workflow | `reproject` and `simulate_particles` on the embedded 6VXX volume |
-| `stream_preproc` | workflow | five simulated movies through the stream's preprocessing stage and its worker jobs |
+| `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
+| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `abinitio2D`, `abinitio3D` |
+| `single_workflow` | highlevel | the SINGLE pipeline on a simulated Pt nanoparticle |
+| `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
+| `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
+| `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
+| `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 
 ### 1.3 Programs that are not registered
 
 A few programs are reachable through `simple_test_exec` but are not CTest
-entries, because they need data a user supplies: `mini_stream`,
-`pcg_frac_update` and `rec3D_backends`.
-`single_atoms_stats` is the high-level route of the `lib_single` nanoparticle-atoms
-sub-suite. No new program joins this list
+entries because they need data a user supplies: `pcg_frac_update` and
+`rec3D_backends`. No new program joins this list
 without a reason: a diagnostic that runs on a user's data is a developer
 program (section 3.4), not a test.
 
@@ -130,6 +130,7 @@ simple_test_exec test=unit_image suite=masks            # one sub-suite of it
 SIMPLE_UNIT_ORDER=reverse simple_test_exec test=units   # the sub-suites in reverse order
 cd build && ctest -L fast --output-on-failure           # the gate by hand
 cd build && ctest -L library                            # a nightly tier by hand
+cd build && ctest -L highlevel --output-on-failure      # long tests, explicit only
 ```
 
 The `suite=` selector is the sub-suite name in lower case, with blanks and
@@ -227,7 +228,7 @@ Answer these in order.
      section 3.2. This is the default: most tests of the library belong here.
    - **library** (`lib_<area>`) when it is hermetic and deterministic and runs
      in-process, but needs realistic sizes and minutes.
-   - **workflow** when it runs a pipeline that starts `simple_exec` or
+   - **highlevel** when it runs a pipeline that starts `simple_exec` or
      distributed workers, on simulated data, and is gated against the
      simulation truth (section 6).
    - **platform** when it needs child processes, a launcher (`cafrun`,
@@ -510,8 +511,8 @@ does the following on the dedicated machine:
 2. Builds a known commit with `./compile_clean.sh`, which
    also runs the fast gate. A failed gate stops the night.
 3. Runs `ctest -L library` (the library suites may run side by side), then
-   `ctest -L workflow` (each workflow entry owns the machine), then
-   `ctest -L platform` where the machine has the capability.
+   `ctest -L platform` where the machine has the capability. High-level tests
+   are excluded and run only by an explicit `ctest -L highlevel` command.
 4. Writes a dated summary outside `build/` with the commit, host, compiler,
    the status and time of every entry, every metric against its floor, and
    the tail of every failing log. It appends to a history file, so that a
