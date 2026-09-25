@@ -837,7 +837,7 @@ contains
         if( present(ang_stop) ) aang_stop = ang_stop
         avgs_rmat = 0._dp
         rotated   = 0.
-        !$omp parallel do schedule(static) default(shared) private(irot,ithr) proc_bind(close)
+        !$omp parallel do num_threads(nthr_glob) schedule(static) default(shared) private(irot,ithr) proc_bind(close)
         do irot = 0 + angstep,aang_stop,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
