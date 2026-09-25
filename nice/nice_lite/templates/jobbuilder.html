@@ -259,7 +259,7 @@
                              onclick="showSimpleProgramConfig('{{ program.prg }}')"
                              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSimpleProgramConfig('{{ program.prg }}'); }">
                             <span class="min-w-0">
-                                <span class="block text-xs font-medium text-streamtext">{{ program.disp }}</span>
+                                <span class="block text-xs font-medium text-streamtext" data-batch-commander-label data-friendly-name="{{ program.disp }}" data-commander-name="{{ program.prg }}">{{ program.disp }}</span>
                                 <span class="block text-[11px] text-streamsubtle">{{ program.desc }}</span>
                             </span>
                         </div>
@@ -484,7 +484,7 @@
                              onclick="showSingleProgramConfig('{{ program.prg }}')"
                              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSingleProgramConfig('{{ program.prg }}'); }">
                             <span class="min-w-0">
-                                <span class="block text-xs font-medium text-streamtext">{{ program.disp }}</span>
+                                <span class="block text-xs font-medium text-streamtext" data-batch-commander-label data-friendly-name="{{ program.disp }}" data-commander-name="{{ program.prg }}">{{ program.disp }}</span>
                                 <span class="block text-[11px] text-streamsubtle">{{ program.desc }}</span>
                             </span>
                         </div>
@@ -974,15 +974,22 @@
 
         function selectBatchVisibilityMode(mode, persist = true) {
             const allowedTiers = BATCH_VISIBILITY_TIERS[mode] || BATCH_VISIBILITY_TIERS.standard;
-            const showArgumentNames = mode === "developer";
+            const showDeveloperNames = mode === "developer";
 
             currentVisibilityMode = mode;
             updateStreamVisibility(mode);
+            document.querySelectorAll("[data-batch-commander-label]").forEach((label) => {
+                label.textContent = showDeveloperNames
+                    ? label.dataset.commanderName
+                    : label.dataset.friendlyName;
+            });
             document.querySelectorAll("[data-batch-argument-label]").forEach((label) => {
-                label.textContent = showArgumentNames
+                label.textContent = showDeveloperNames
                     ? label.dataset.argumentKey
                     : label.dataset.friendlyLabel;
             });
+            updateSelectedProgramTitle("simple", selectedSimpleProgramKey);
+            updateSelectedProgramTitle("single", selectedSingleProgramKey);
             document.querySelectorAll("[data-batch-field-visibility]").forEach((field) => {
                 field.classList.toggle("hidden", !allowedTiers.includes(field.dataset.batchFieldVisibility));
             });
@@ -1097,21 +1104,25 @@
             if (noResults) noResults.classList.toggle("hidden", visiblePrograms !== 0);
         }
 
+        function updateSelectedProgramTitle(packageName, programKey) {
+            if (!programKey) return;
+            const title = document.getElementById(packageName + "_program_title");
+            const selectedItem = document.querySelector("[data-" + packageName + "-program-key='" + programKey + "']");
+            if (!title || !selectedItem) return;
+            const label = selectedItem.querySelector("[data-batch-commander-label]");
+            title.textContent = label ? label.textContent : programKey;
+        }
+
         function showSimpleProgramConfig(programKey) {
             selectedSimpleProgramKey = programKey;
             setBatchFeedback("simple", "");
             const selectorPanel = document.getElementById("simple_selector_panel");
             const configPanel = document.getElementById("simple_config_panel");
             const startButton = document.getElementById("simple_batch_start");
-            const title = document.getElementById("simple_program_title");
-            const selectedItem = document.querySelector("[data-simple-program-key='" + programKey + "']");
             if (selectorPanel) selectorPanel.classList.add("hidden");
             if (configPanel) configPanel.classList.remove("hidden");
             if (startButton) startButton.classList.remove("hidden");
-            if (title && selectedItem) {
-                const text = selectedItem.querySelector(".text-streamtext");
-                title.textContent = text ? text.textContent : programKey;
-            }
+            updateSelectedProgramTitle("simple", programKey);
             const configs = document.querySelectorAll(".simple-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
             const active = document.getElementById("batch_form_simple_" + programKey);
@@ -1161,15 +1172,10 @@
             const selectorPanel = document.getElementById("single_selector_panel");
             const configPanel = document.getElementById("single_config_panel");
             const startButton = document.getElementById("single_batch_start");
-            const title = document.getElementById("single_program_title");
-            const selectedItem = document.querySelector("[data-single-program-key='" + programKey + "']");
             if (selectorPanel) selectorPanel.classList.add("hidden");
             if (configPanel) configPanel.classList.remove("hidden");
             if (startButton) startButton.classList.remove("hidden");
-            if (title && selectedItem) {
-                const text = selectedItem.querySelector(".text-streamtext");
-                title.textContent = text ? text.textContent : programKey;
-            }
+            updateSelectedProgramTitle("single", programKey);
             const configs = document.querySelectorAll(".single-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
             const active = document.getElementById("batch_form_single_" + programKey);

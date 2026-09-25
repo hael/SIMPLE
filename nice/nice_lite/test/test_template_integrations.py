@@ -313,7 +313,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertGreaterEqual(jobbuilder.count('absolute right-2'), 2)
         self.assertIn('program.classList.toggle("hidden", !matches)', jobbuilder)
 
-    def test_batch_argument_label_toggle_is_shared_persistent_and_batch_only(self):
+    def test_batch_developer_mode_uses_commander_and_argument_names(self):
         jobbuilder = self._read_template("jobbuilder.html")
         context = {
             "stream_user_inputs": [{
@@ -321,10 +321,10 @@ class TemplateIntegrationTests(SimpleTestCase):
                 "keytype": "int",
                 "label": "Stream thread count",
             }],
-            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_programs": [{"prg": "simple_demo", "disp": "Friendly SIMPLE", "desc": ""}],
             "simple_program_inputs": [{
-                "prg": "demo",
-                "disp": "Demo",
+                "prg": "simple_demo",
+                "disp": "Friendly SIMPLE",
                 "sections": [{
                     "name": "compute",
                     "inputs": [{
@@ -334,10 +334,10 @@ class TemplateIntegrationTests(SimpleTestCase):
                     }],
                 }],
             }],
-            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_programs": [{"prg": "single_demo", "disp": "Friendly SINGLE", "desc": ""}],
             "single_program_inputs": [{
-                "prg": "demo",
-                "disp": "Demo",
+                "prg": "single_demo",
+                "disp": "Friendly SINGLE",
                 "sections": [{
                     "name": "input_output",
                     "inputs": [{
@@ -351,23 +351,26 @@ class TemplateIntegrationTests(SimpleTestCase):
         }
         rendered = render_to_string("jobbuilder.html", context)
 
-        self.assertEqual(jobbuilder.count('id="batch_argument_label_control"'), 1)
-        self.assertEqual(jobbuilder.count('id="batch_argument_label_toggle"'), 1)
+        self.assertEqual(jobbuilder.count('id="batch_visibility_control"'), 1)
         self.assertLess(
-            jobbuilder.index('id="batch_argument_label_control"'),
+            jobbuilder.index('id="batch_visibility_control"'),
             jobbuilder.index('id="tab_stream"'),
         )
-        self.assertIn('type="checkbox" role="switch"', jobbuilder)
-        self.assertNotRegex(
-            jobbuilder,
-            r'id="batch_argument_label_toggle"[^>]*\bchecked\b',
-        )
-        self.assertIn('>command line arguments</span>', jobbuilder)
-        self.assertIn('aria-label="show command-line argument names"', jobbuilder)
         self.assertIn(
-            'for="field_nthr">Stream thread count</label>',
+            'data-batch-commander-label data-friendly-name="Friendly SIMPLE" '
+            'data-commander-name="simple_demo">Friendly SIMPLE</span>',
             rendered,
         )
+        self.assertIn(
+            'data-batch-commander-label data-friendly-name="Friendly SINGLE" '
+            'data-commander-name="single_demo">Friendly SINGLE</span>',
+            rendered,
+        )
+        self.assertEqual(
+            rendered.count('<span class="block text-xs font-medium text-streamtext" data-batch-commander-label'),
+            2,
+        )
+        self.assertIn('for="field_nthr">Stream thread count</label>', rendered)
         self.assertIn(
             'data-friendly-label="Number of threads" data-argument-key="nthr">Number of threads</span>',
             rendered,
@@ -378,15 +381,14 @@ class TemplateIntegrationTests(SimpleTestCase):
         )
         self.assertEqual(rendered.count('>input project</label>'), 2)
         self.assertEqual(rendered.count("<span data-batch-argument-label"), 2)
-        self.assertIn(
-            'window.localStorage.getItem(BATCH_ARGUMENT_LABEL_STORAGE_KEY) === "arguments"',
-            jobbuilder,
-        )
-        self.assertIn('showArgumentNames ? "arguments" : "friendly"', jobbuilder)
-        self.assertIn(
-            'batchArgumentLabelControl.classList.toggle("hidden", tabName === "stream");',
-            jobbuilder,
-        )
+        self.assertIn('const showDeveloperNames = mode === "developer";', jobbuilder)
+        self.assertIn('document.querySelectorAll("[data-batch-commander-label]")', jobbuilder)
+        self.assertIn('? label.dataset.commanderName', jobbuilder)
+        self.assertIn(': label.dataset.friendlyName;', jobbuilder)
+        self.assertIn('? label.dataset.argumentKey', jobbuilder)
+        self.assertIn(': label.dataset.friendlyLabel;', jobbuilder)
+        self.assertIn('updateSelectedProgramTitle("simple", selectedSimpleProgramKey);', jobbuilder)
+        self.assertIn('updateSelectedProgramTitle("single", selectedSingleProgramKey);', jobbuilder)
 
     def test_batch_tabs_restore_selected_commanders(self):
         jobbuilder = self._read_template("jobbuilder.html")
