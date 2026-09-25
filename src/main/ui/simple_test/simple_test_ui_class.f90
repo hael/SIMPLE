@@ -122,12 +122,12 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call unit_project%new(&
         &'unit_project',&
-        &'unit tests: projects, STAR files, class compatibility, sieving, motion gain',&
-        &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving, motion gain',&
+        &'unit tests: projects, STAR files, class compatibility, sieving, motion gain, motion model',&
+        &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving, motion gain, motion model',&
         &'simple_test_exec',&
         &.false.)
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 

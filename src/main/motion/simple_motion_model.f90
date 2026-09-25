@@ -381,9 +381,9 @@ contains
             call starfile_table__setValue_int(table, EMDL_MICROGRAPH_EER_GROUPING,       self%eer_fraction)
         endif
         call starfile_table__setValue_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION,   motion_model_version)
-        ! if( motion_model_version == 1 )then
-        !     call starfile_table__setValue_int(table, SMPL_MOVIE_FRAME_ALIGN,             self%fixed_frame)
-        ! endif
+        if( motion_model_version==1 .and. trim(self%p_ptr%extractfrommov).eq.'yes')then
+            call starfile_table__setValue_int(table, SMPL_MOVIE_FRAME_ALIGN,             self%fixed_frame)
+        endif
         call starfile_table__write_ofile(table)
         ! stage drift
         call starfile_table__clear(table)

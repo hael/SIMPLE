@@ -39,6 +39,7 @@ use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
+use simple_motion_model_tester,              only: run_all_motion_model_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
 use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests, run_stream_heartbeat_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
@@ -320,6 +321,7 @@ contains
         call add_suite(s, n, 'class compatibility',     run_all_class_compatibility_tests)
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
         call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
+        call add_suite(s, n, 'motion model',            run_all_motion_model_tests)
     end subroutine suites_project
 
     subroutine suites_ui( s, n )

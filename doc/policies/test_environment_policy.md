@@ -71,7 +71,7 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, image header, Fourier iterator, B-spline smoother, masks, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
-| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain |
+| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator |
