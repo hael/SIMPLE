@@ -208,6 +208,9 @@ contains
         real,    allocatable   :: arr(:), means(:), peak_ts(:), frac_peaks(:)
         integer, allocatable :: labels(:)
         integer :: iq, n_fg, nvals, ind, loc(1), cnt
+        ! return immediately if there are not enough elements to quantize
+        ! the input threshold is left untouched
+        if( n < NQUANTA ) return
         ! quantize with sortmeans
         allocate(means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA))
         means  = 0.

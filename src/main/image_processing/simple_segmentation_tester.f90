@@ -390,8 +390,8 @@ contains
     ! 200 background scores in [0,1) and 20 peaks in [5,6): every variant must
     ! separate the peaks, and the count-based variants return exactly their count
     subroutine test_detect_peak_thres()
-        integer, parameter :: NBG = 200, NPK = 20, N = NBG + NPK
-        real    :: x(N), t, t1, t2, t3
+        integer, parameter :: NBG = 200, NPK = 20, N = NBG + NPK, NSPARSE = 4
+        real    :: x(N), x_sparse(NSPARSE), t, t1, t2, t3, t_sparse
         integer :: i
         write(*,'(A)') 'test_detect_peak_thres'
         do i = 1,NBG
@@ -422,6 +422,11 @@ contains
         call assert_true(t1 >= t2 .and. t2 >= t3,  'refine_peak_thres_sortmeans: level 1 to 3 admits more peaks')
         call assert_true(any(abs(x - t1) < 1.0e-6) .and. any(abs(x - t3) < 1.0e-6),&
             &'refine_peak_thres_sortmeans: thresholds are data values')
+        ! fewer scores than quantization classes: retain the incoming threshold
+        x_sparse = [0.1, 0.2, 0.8, 0.9]
+        t_sparse = 0.5
+        call refine_peak_thres_sortmeans(NSPARSE, 2, x_sparse, t_sparse)
+        call assert_real(0.5, t_sparse, 0., 'refine_peak_thres_sortmeans: sparse input retains the threshold')
     end subroutine test_detect_peak_thres
 
     !==================================================================
