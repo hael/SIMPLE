@@ -78,7 +78,7 @@ class BatchJob(Job):
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
         self.disp = 0
-        self.prnt = 0
+        self.parent = 0
         self.name = ""
         self.dirc = ""
         self.cdat = ""
@@ -123,7 +123,7 @@ class BatchJob(Job):
         self.disp = self.jobmodel.disp
         self.prog = self.jobmodel.prog
         self.pckg = self.jobmodel.pckg
-        self.prnt = self.jobmodel.parent
+        self.parent = self.jobmodel.parent
         self.status = self.jobmodel.status
         self.source = metadata.get("source")
         self.absdir = self.get_absdir()
@@ -1203,11 +1203,25 @@ class BatchJob(Job):
             self.name = prog.replace("_", " ")
         self.desc = description if isinstance(description, str) else ""
         self.args = dict(args)
+        parent_key = {
+            "batch_job": "batch_job_id",
+            "stream_snapshot": "stream_job_id",
+        }.get(source.get("type")) if isinstance(source, dict) else None
+        self.parent = source.get(parent_key, 0) if parent_key is not None else 0
+        if not isinstance(self.parent, int) or isinstance(self.parent, bool) or self.parent < 0:
+            logger.error("new: invalid parent job")
+            return False
 
         # Reserve the display counter under a row lock so two near-simultaneous
         # Start clicks cannot choose the same job directory.
         with transaction.atomic():
             locked_workspace = WorkspaceModel.objects.select_for_update().get(pk=workspacemodel.pk)
+            if self.parent > 0 and not JobModel.objects.filter(
+                id=self.parent,
+                dset=locked_workspace,
+            ).exists():
+                logger.error("new: parent job is unavailable")
+                return False
             self.disp = locked_workspace.jcnt + 1
             self.dirc = f"{self.disp}_{prog}"
             jobmodel = JobModel(
@@ -1220,6 +1234,7 @@ class BatchJob(Job):
                 dirc=self.dirc,
                 pckg=pckg,
                 prog=prog,
+                parent=self.parent,
                 status="queued",
                 master_status="queued",
                 master_stats=self._metadata(
@@ -1310,7 +1325,7 @@ class BatchJob(Job):
 
     def linkParticleSetFinal(self, project, workspace, set_proj, set_desel):
         self.args = {}
-        self.prnt = 0
+        self.parent = 0
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
@@ -1340,7 +1355,7 @@ class BatchJob(Job):
             prog=self.prog,
             status="queued",
             master_status="queued",
-            parent=self.prnt,
+            parent=self.parent,
             master_stats=self._metadata(),
         )
         jobmodel.save()

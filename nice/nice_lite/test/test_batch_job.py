@@ -1140,9 +1140,20 @@ class BatchJobLifecycleTests(TestCase):
         start.assert_not_called()
 
     def test_new_launches_from_explicit_stream_snapshot_and_records_source(self):
+        stream_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_simple_stream",
+            status="running",
+            pckg="simple_stream",
+            prog="stream",
+        )
+        self.workspace_model.jcnt = 1
+        self.workspace_model.save(update_fields=("jcnt",))
         snapshot_dir = os.path.join(
             self.workspace_dir,
-            "2_simple_stream",
+            "1_simple_stream",
             "classification_2D",
             "snapshots",
             "snapshot_1",
@@ -1153,7 +1164,7 @@ class BatchJobLifecycleTests(TestCase):
             pass
         source = {
             "type": "stream_snapshot",
-            "stream_job_id": 12,
+            "stream_job_id": stream_job.id,
             "particle_set_id": 1,
             "filename": "snapshot_1.simple",
         }
@@ -1176,13 +1187,14 @@ class BatchJobLifecycleTests(TestCase):
         self.assertTrue(created)
         start.assert_called_once_with(
             {"nthr": "8"},
-            os.path.join(self.workspace_dir, "1_cluster2D"),
+            os.path.join(self.workspace_dir, "2_cluster2D"),
             self.workspace_dir,
             "cluster2D",
             job.id,
             parent_proj=snapshot_path,
         )
         jobmodel = JobModel.objects.get(id=job.id)
+        self.assertEqual(jobmodel.parent, stream_job.id)
         self.assertEqual(jobmodel.master_stats["source"], source)
         self.assertEqual(BatchJob(id=job.id).source, source)
 
