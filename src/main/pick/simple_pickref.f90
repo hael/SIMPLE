@@ -89,6 +89,7 @@ contains
         class(pickref),           intent(inout) :: self
         class(pickref), optional, intent(inout) :: self_refine
         integer, allocatable :: pos(:,:)
+        if( present(self_refine) ) call self_refine%setup_iterators
         if( self%l_roi )then
             call flag_ice(mic_raw, self%l_mic_mask)
             call flag_amorphous_carbon(self%mic_roi, self%l_mic_mask)
@@ -110,7 +111,6 @@ contains
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
-            call self_refine%setup_iterators
             call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
             call self_refine%distance_filter
             call self_refine%limit_nboxes
@@ -517,7 +517,7 @@ contains
         get_maxdiam = self%maxdiam
     end function get_maxdiam
 
-    pure function get_nboxes( self ) result( nboxes )
+    pure elemental function get_nboxes( self ) result( nboxes )
         class(pickref), intent(in) :: self
         integer :: nboxes
         nboxes = self%npeaks

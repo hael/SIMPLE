@@ -226,6 +226,7 @@ contains
             end select
         endif
         ! Effective picking
+        nptcls = 0
         if( l_competitive )then
             ! competitive picking
             allocate(comprefp_refine(nmoldiams))
@@ -243,12 +244,16 @@ contains
                 call comprefp_refine(i)%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1)
                 call refp%refpick(comprefp_refine(i))
             enddo
-            ! merge
-            call multiref_merge(nmoldiams, comprefp_refine(:), sel)
-            ! output
-            maxdiam = (1.0 + BOX_EXP_FAC ) * moldiams(sel)
-            box     = find_larger_magic_box(round2even(maxdiam / smpd))
-            call comprefp_refine(1)%report_boxfile(box, smpd, boxfile, nptcls)
+            if( any(comprefp_refine(:)%get_nboxes() > 0) )then
+                ! merge
+                call multiref_merge(nmoldiams, comprefp_refine(:), sel)
+                if( sel > 0 ) then
+                    ! output
+                    maxdiam = (1.0 + BOX_EXP_FAC ) * moldiams(sel)
+                    box     = find_larger_magic_box(round2even(maxdiam / smpd))
+                    call comprefp_refine(1)%report_boxfile(box, smpd, boxfile, nptcls)
+                endif
+            endif
             do i = 1,nmoldiams
                 call comprefp_refine(i)%kill
             enddo
