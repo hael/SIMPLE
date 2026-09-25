@@ -3,7 +3,7 @@
 
 Registry consistency (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md,
 section 7, item 6). A static check of the source tree, run by scripts/run_fast_gate.sh
-before the gate, so a --compile-tests build fails on a mismatch:
+before the gate, so a build with tests fails on a mismatch:
 
   * every selector production/CMakeLists.txt registers (test=<id>) is a program of the
     test UI (src/main/ui/simple_test) with exactly one router case (src/main/exec/

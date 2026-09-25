@@ -166,7 +166,7 @@ add_custom_target(audit_ui_defaults
 # Tests  (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md)
 # ------------------------------------------------------------------------------
 # Two gates behind one front door, simple_test_exec:
-#   fast         runs on every --compile-tests build under a 30 s budget
+#   fast         runs on every compile_*.sh build under a 30 s budget
 #                (Phase 2 declares it; until then `provisional` stands in)
 #   library      nightly, one process per coherent part of the library
 #   workflow     nightly, the simulated workflows gated on simulation truth

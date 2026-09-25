@@ -12,7 +12,7 @@ test lives now, what changed, and what each one should check beyond counts and f
 
 | was | now | runs |
 |---|---|---|
-| `sieve_cavgs` | `test_collect_and_reject_hard_gates` in `src/main/sieve/simple_ptcl_sieve_tester.f90`, sub-suite `particle sieve` of `unit_project` | fast gate, every `--compile-tests` build |
+| `sieve_cavgs` | `test_collect_and_reject_hard_gates` in `src/main/sieve/simple_ptcl_sieve_tester.f90`, sub-suite `particle sieve` of `unit_project` | fast gate, every build with tests |
 | `assign_optics` | `src/main/stream/simple_stream_tester.f90`, sub-suite `optics assignment` of `lib_stream` | nightly (`ctest -L library`) |
 | `gen_pickrefs` | same module, sub-suite `picking references` of `lib_stream` | nightly |
 | `pick_extract` | same module, sub-suite `pick and extract` of `lib_stream` | nightly |

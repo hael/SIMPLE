@@ -148,7 +148,7 @@ nice_local
 
 ## Testing the Build
 
-To check a build, compile it with the tests (`./compile_clean.sh --compile-tests`, which also runs the fast test gate at the end of the build) and run the unit tests. Execute the following in a separate terminal to ensure the environment variables have been correctly set:
+To check a build, compile it with the tests (the default: `./compile_clean.sh` also runs the fast test gate at the end of the build; `--exclude-tests` skips both) and run the unit tests. Execute the following in a separate terminal to ensure the environment variables have been correctly set:
 
 ```shell
 simple_test_exec test=units

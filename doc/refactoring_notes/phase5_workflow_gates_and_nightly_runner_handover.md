@@ -26,7 +26,7 @@ numbers.
 
 | label | entries | run by |
 |---|---|---|
-| `fast` | 13 area suites `unit_<area>`, about 5 s together | every `compile_*.sh --compile-tests` build (`scripts/run_fast_gate.sh`) |
+| `fast` | 13 area suites `unit_<area>`, about 5 s together | every `compile_*.sh` build (`scripts/run_fast_gate.sh`) |
 | `library` | `lib_reconstruction`, `lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream` | nobody yet: the nightly run |
 | `workflow` | `simulated_workflow_6vxx`, `simulated_workflow_1jxy`, `single_workflow`, `pcg_recon`, `simulate_particles`, `stream_preproc` | nobody yet: the nightly run |
 | `platform` | `forked_process`, plus `coarrays`, `flex_gpu` and `openmp_offload` when the build has the capability | by hand, or by the nightly run where the machine has the capability |
@@ -166,7 +166,7 @@ Requirements, from plan section 5.2.3 and what the entries need:
    two runs never overlap, and with a clear failure when the machine or checkout isn't in the
    expected state.
 2. **A clean build of a known commit.**
-   - Fetch, check out the branch to test, and run `./compile_clean.sh --compile-tests`, which
+   - Fetch, check out the branch to test, and run `./compile_clean.sh`, which
      builds and then runs the fast gate. A failed gate stops the night and is the first line of
      the report.
    - Record the commit, host, compiler version (`gfortran --version`) and CMake options.
@@ -229,13 +229,13 @@ reason to close them early.
 The plan closed with these observations still to make (its section 16, criterion 10: what has not
 been observed is listed, not claimed). Record each here when it is made.
 
-- A green `./compile_debug.sh --compile-tests` build of the tree with the in-module self-test
+- A green `./compile_debug.sh` build of the tree with the in-module self-test
   batch and the build-time code map and test inventory (Hans).
 - One `simple_test_exec test=pcg_recon`: its seed changed on 2026-09-25, and the run also gives
   its runtime (Hans).
-- One build without `--compile-tests` (`BUILD_TESTS=OFF`), to confirm it links without the
+- One build with `--exclude-tests` (`BUILD_TESTS=OFF`), to confirm it links without the
   test-only sources (Hans).
-- A macOS Debug `--compile-tests` build with bounds checking (`-fcheck=bounds,do,mem`, restored
+- A macOS Debug build with bounds checking (`-fcheck=bounds,do,mem`, restored
   2026-09-25): that the gfortran 16 debug runtime does not crash on the FFTW-backed pointers, and
   that the fast gate passes (Hans, on the laptop).
 - The offload branch of `simple_openmp_offload_tester` in an offload build (Cyril).

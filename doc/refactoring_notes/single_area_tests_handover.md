@@ -11,7 +11,7 @@ where each one lives now and what it has to check before it counts as a test.
 
 | was | now | runs |
 |---|---|---|
-| `detect_calpha` | `src/main/nano/simple_calpha_finder_tester.f90`, sub-suite `C-alpha finder` of `unit_single` | fast gate, every `--compile-tests` build |
+| `detect_calpha` | `src/main/nano/simple_calpha_finder_tester.f90`, sub-suite `C-alpha finder` of `unit_single` | fast gate, every build with tests |
 | `simulate_nanoparticle`, `detect_atoms`, `atoms_stats` | one pipeline, `exec_test_single_atoms_stats`, run as sub-suite `nanoparticle atoms` of `lib_single` | nightly (`ctest -L library`) |
 | `detect_calpha_molecules` | unchanged commander, run as sub-suite `C-alpha molecules` of `lib_single` | nightly |
 | `single_workflow` | unchanged commander, CTest entry `single_workflow` | nightly (`ctest -L workflow`) |

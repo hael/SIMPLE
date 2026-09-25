@@ -18,8 +18,9 @@ the one that is wrong.
 
 ## 1. The environment
 
-SIMPLE has one test executable, `simple_test_exec`, built when the code is
-compiled with `--compile-tests` (CMake option `BUILD_TESTS=ON`). Every test is
+SIMPLE has one test executable, `simple_test_exec`, built by every
+`compile_*.sh` unless it is given `--exclude-tests` (CMake option
+`BUILD_TESTS`, default ON). Every test is
 a procedure inside the library, not a program of its own, and every test is
 reached through `simple_test_exec test=<name>`. `simple_test_exec test=list`
 lists what exists.
@@ -30,24 +31,26 @@ labels.
 
 | label | entries | when | what |
 |---|---|---|---|
-| `fast` | 13 area suites `unit_<area>` | every `compile_*.sh --compile-tests` build, before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
+| `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `workflow` | 6 workflow gates | nightly | simulated pipelines that start `simple_exec` and workers, checked against the model they were simulated from |
-| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh --compile-tests` | tests that need child processes, a launcher or a device; `coarrays` is a two-image integer-transfer smoke |
+| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is a two-image integer-transfer smoke |
 
 The fast tier is the build-time gate; the other three labels make up the
 extensive tier, which runs overnight.
 
-**The fast gate is part of the build.** Every `compile_*.sh --compile-tests`
+**The fast gate is part of the build.** Every `compile_*.sh` build
 runs `scripts/run_fast_gate.sh` between `make` and `make install`. It first
 runs `scripts/check_test_registry.py` (section 4.5), then
 `ctest -L fast` with half the cores, then `scripts/ctest_budget.py`, which
 fails the build when an entry fails or the gate takes more than 30 s of real
 time. A failed gate installs nothing. The per-entry timings are kept in
 `build/test_runs/ctest_fast.log.timing.txt`; the gate takes about 5 s on the
-reference Mac in Debug.
+reference Mac in Debug. Tests are on by default in every compile script;
+`--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only
+and skips the gate, for when only the executables are needed.
 
-`compile_coarrays.sh --compile-tests` additionally runs the capability-gated
+`compile_coarrays.sh` additionally runs the capability-gated
 `coarrays` CTest entry after the fast gate and before installation. A failed
 two-image smoke test therefore prevents a coarray build from being installed.
 
@@ -120,7 +123,7 @@ running tests using `simple_test_exec test=<entry> suite=list`; for example,
 ### 1.4 Running tests
 
 ```text
-./compile_debug.sh --compile-tests                      # build, run the fast gate, install
+./compile_debug.sh                                      # build, run the fast gate, install
 simple_test_exec test=list                              # every test program
 simple_test_exec test=unit_image                        # one area suite
 simple_test_exec test=unit_image suite=masks            # one sub-suite of it
@@ -283,7 +286,7 @@ Nothing else.
 programming: everyone works on master and pushes to master, in small and
 frequent steps, so that everyone's work is integrated, built and tested
 every day. What makes this safe is the fast gate, and running it is up to
-you: **before you push, build with `./compile_debug.sh --compile-tests` and
+you: **before you push, build with `./compile_debug.sh` and
 let the gate pass.** This is a strong recommendation, not a lock: nothing in
 Git or CI blocks a push, because sometimes a push only moves code to another
 machine (a cluster node, say). Then run the gate before the work counts as
@@ -305,7 +308,7 @@ nowhere, remove it.
 ```sh
 # a scratch branch with its own checkout beside the main one
 git worktree add -b scratch/nu_probe ../SIMPLE-nu_probe master
-cd ../SIMPLE-nu_probe && ./compile_debug.sh --compile-tests
+cd ../SIMPLE-nu_probe && ./compile_debug.sh
 # ... develop, build, run the tests ...
 # what should stay: merge into master in the main checkout and push
 cd ../SIMPLE && git pull && git merge scratch/nu_probe && git push
@@ -397,7 +400,7 @@ Before asking for a build:
   lists agree. The fast gate runs it on every build.
 - The default CMake build regenerates the test inventory and code-base map
   when their source inputs change.
-- `./compile_debug.sh --compile-tests` — the build and the gate.
+- `./compile_debug.sh` — the build and the gate.
 - `SIMPLE_UNIT_ORDER=reverse` on the area suite — the sub-suites do not
   depend on each other's state.
 
@@ -504,7 +507,7 @@ The runner (Phase 5 of the plan, designed and written by Ruben:
 does the following on the dedicated machine:
 
 1. Takes a lock, so two runs never overlap.
-2. Builds a known commit with `./compile_clean.sh --compile-tests`, which
+2. Builds a known commit with `./compile_clean.sh`, which
    also runs the fast gate. A failed gate stops the night.
 3. Runs `ctest -L library` (the library suites may run side by side), then
    `ctest -L workflow` (each workflow entry owns the machine), then

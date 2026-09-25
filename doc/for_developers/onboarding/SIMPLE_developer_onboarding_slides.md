@@ -66,7 +66,7 @@ May 21, 2026
 - Current checkout is CMake-first: root `CMakeLists.txt` is the entry point and exports `compile_commands.json`.
 - This checkout requires CMake 3.25+ and GCC/GFortran 14+ in the active CMake path.
 - Required dependencies include FFTW3, TIFF/JPEG/ZLIB, libcurl; NICE work also needs the Python/Django web stack.
-- Defaults: `USE_OPENMP=ON`, `BUILD_TESTS=ON` (the `compile_*.sh` scripts pass `OFF`), `NICE=OFF`, local install prefix under `build/`.
+- Defaults: `USE_OPENMP=ON`, `BUILD_TESTS=ON` (also the `compile_*.sh` default; `--exclude-tests` passes `OFF`), `NICE=OFF`, local install prefix under `build/`.
 - Optional paths: `NICE=ON`, `USE_OPENMP_OFFLOAD=ON`, `USE_COARRAYS`, `USE_MPI`.
 
 ```bash
@@ -85,7 +85,7 @@ cmake --install .
 - `compile_gui.sh`: NICE-enabled build.
 - `compile_conda.sh`: conda-provisioned GCC/GFortran, FFTW, TIFF, JPEG, Python, and CMake environment.
 - `compile_csbclust.sh`: module-based HPC build.
-- Every `compile_*.sh` skips test code (`simple_test_exec` and the `*_tester` modules) unless given `--compile-tests` (CI passes it); with it, the build runs the fast test gate before installing (`doc/policies/test_environment_policy.md`).
+- Every `compile_*.sh` builds the test code (`simple_test_exec` and the `*_tester` modules) and runs the fast test gate before installing (`doc/policies/test_environment_policy.md`); `--exclude-tests` skips both.
 - After install: source `build/add2.bashrc`, or add `build/bin`, `build/scripts`, and `SIMPLE_PATH` manually.
 
 # Wiki, CI, and Team Workflow
@@ -96,7 +96,7 @@ cmake --install .
 - Use local `/doc` for implementation-level guidance; use the wiki for project-level orientation.
 - Before changing scientific behavior, read the nearest policy or refactoring note.
 - For new command-line parameters, add typed support through `src/main/simple_parameters.f90` and downstream `params%...` usage.
-- Add or run the closest tests as described in `doc/policies/test_environment_policy.md`: `./compile_debug.sh --compile-tests` runs the fast gate; `simple_test_exec test=unit_<area> suite=<sub-suite>` runs one sub-suite.
+- Add or run the closest tests as described in `doc/policies/test_environment_policy.md`: `./compile_debug.sh` runs the fast gate; `simple_test_exec test=unit_<area> suite=<sub-suite>` runs one sub-suite.
 
 # Suggested First-Day Path
 

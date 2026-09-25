@@ -1,6 +1,6 @@
 #!/bin/bash
-# scripts/run_fast_gate.sh — run the build-time test gate on a --compile-tests
-# build and check it against the budget.
+# scripts/run_fast_gate.sh — run the build-time test gate on a build with tests
+# (BUILD_TESTS=ON) and check it against the budget.
 #
 #   scripts/run_fast_gate.sh [BUILD_DIR]        (default: build)
 #
@@ -18,15 +18,15 @@
 # registrations, the test UI and the test routers agree (plan, section 7);
 # a mismatch fails the gate with status 1 before any test runs.
 #
-# Called by every compile_*.sh between `make` and `make install` when
-# --compile-tests is given (a failed gate installs nothing), and by
+# Called by every compile_*.sh between `make` and `make install` unless
+# --exclude-tests is given (a failed gate installs nothing), and by
 # `make check`. The fast suites run in-process from the build tree and need
 # nothing from the install tree.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${1:-$ROOT/build}"
 case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
-[ -f "$BUILD/CTestTestfile.cmake" ] || { echo "run_fast_gate: no CTest configuration in $BUILD (build with --compile-tests)" >&2; exit 2; }
+[ -f "$BUILD/CTestTestfile.cmake" ] || { echo "run_fast_gate: no CTest configuration in $BUILD (built with --exclude-tests? rebuild without it)" >&2; exit 2; }
 if command -v nproc >/dev/null 2>&1; then ncpu=$(nproc); else ncpu=$(sysctl -n hw.ncpu); fi
 jobs=$(( ncpu / 2 )); [ "$jobs" -lt 1 ] && jobs=1
 python3 "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1

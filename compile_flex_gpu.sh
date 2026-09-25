@@ -12,13 +12,14 @@
 #   NVCC=/usr/local/cuda/bin/nvcc CUDA_HOST=/usr/bin/g++ ./compile_flex_gpu.sh
 # CUDA_ARCH defaults to 'native' (whatever card is in this machine); set it to
 # cross-build for another card, e.g. CUDA_ARCH=75.
-# Test code (simple_test_exec and production/tests) is skipped unless --compile-tests is given.
-BUILD_TESTS=OFF
+# Tests are built by default (simple_test_exec and the *_tester modules) and the fast
+# gate runs before installation; --exclude-tests builds the library and executables only.
+BUILD_TESTS=ON
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 for arg in "$@"; do
     case "$arg" in
-        --compile-tests) BUILD_TESTS=ON ;;
-        -h|--help) echo "usage: $(basename "$0") [--compile-tests]"; exit 0 ;;
+        --exclude-tests) BUILD_TESTS=OFF ;;
+        -h|--help) echo "usage: $(basename "$0") [--exclude-tests]"; exit 0 ;;
         *) echo "$(basename "$0"): unknown option: $arg (see --help)" >&2; exit 1 ;;
     esac
 done
@@ -30,8 +31,8 @@ cmake -DBUILD_TESTS=${BUILD_TESTS} .. -DUSE_FLEX_CUDA=ON \
     ${CUDA_HOST:+-DCMAKE_CUDA_HOST_COMPILER=$CUDA_HOST} \
     ${CUDA_ARCH:+-DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCH}
 make -j16 || exit $?
-# With --compile-tests, the build-time test gate (scripts/run_fast_gate.sh) runs
-# between build and install, as in X: a failed gate is a failed build and
+# Unless --exclude-tests is given, the build-time test gate (scripts/run_fast_gate.sh)
+# runs between build and install, as in X: a failed gate is a failed build and
 # nothing is installed; its status is the script's status.
 if [ "$BUILD_TESTS" = ON ]; then "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?; fi
 [ "${GATE_RC:-0}" = 0 ] && { make install || exit $?; }

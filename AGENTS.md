@@ -46,7 +46,8 @@ Branch-context files are local development memory and may describe work that is 
   programs and no scratch programs in a test area: scratch work lives in a local git worktree.
 - Expected values come from outside the code under test (closed forms, brute force, an emulation);
   seeds are fixed; tests leave no files behind.
-- `./compile_debug.sh --compile-tests` builds and runs the fast gate (under 30 s). Running it
+- `./compile_debug.sh` builds and runs the fast gate (under 30 s); every `compile_*.sh` builds the
+  tests and runs the gate unless given `--exclude-tests`. Running it
   before a push to master is strongly recommended, not enforced: a push that only moves code to
   another machine may skip it (policy, section 3.4). `python3 scripts/check_test_registry.py . --verbose` and
   `python3 scripts/check_descr.py .` check the registrations and file headers without compiling.

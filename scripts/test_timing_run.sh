@@ -4,7 +4,7 @@
 # routes, each in its own directory under a timeout, and record wall time,
 # exit status and the tail of its output.
 #
-# Needs an installed --compile-tests build (build/bin holds simple_test_exec).
+# Needs an installed build with tests (build/bin holds simple_test_exec).
 # The standalone simple_test_* binaries were retired by the utils review (plan,
 # section 9.7), so the standalone route finds nothing. Nothing is compiled here.
 #
@@ -47,7 +47,7 @@ while [ $# -gt 0 ]; do
         *) echo "test_timing_run: unknown option $1" >&2; exit 1 ;;
     esac
 done
-[ -x "$BIN/simple_test_exec" ] || { echo "test_timing_run: $BIN/simple_test_exec not found; build with --compile-tests first" >&2; exit 1; }
+[ -x "$BIN/simple_test_exec" ] || { echo "test_timing_run: $BIN/simple_test_exec not found; build without --exclude-tests first" >&2; exit 1; }
 
 OUT="$ROOT/build_test_runs/$label"
 mkdir -p "$OUT"

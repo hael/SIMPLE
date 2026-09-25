@@ -46,11 +46,11 @@ jobs:
              
       - name: Build SIMPLE in debug mode (Linux/MacOS)
         run: |
-             ./compile_debug.sh --compile-tests
+             ./compile_debug.sh
 
       - name: Build SIMPLE GUI  (Linux/MacOS)
         run: |
-             ./compile_gui.sh --compile-tests
+             ./compile_gui.sh
 
   Build_coarray:
     name: Build SIMPLE with coarrays
@@ -88,7 +88,7 @@ jobs:
 
       - name: Build SIMPLE with coarrays (Linux/MacOS)
         run: |
-             ./compile_coarrays.sh --compile-tests
+             ./compile_coarrays.sh
 
   Build_and_Test:
     name: Build SIMPLE and Test 
@@ -125,11 +125,11 @@ jobs:
              
       - name: Install SIMPLE (Linux/MacOS)
         run: |
-             ./compile_clean.sh --compile-tests
+             ./compile_clean.sh
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
-             # the fast gate (ctest -L fast) already ran in the build step (compile_clean.sh --compile-tests)
+             # the fast gate (ctest -L fast) already ran in the build step (compile_clean.sh)
              cd build
              echo "-------------------- PLATFORM TESTS -------------------------"
              ctest -L platform --no-tests=error --output-on-failure
