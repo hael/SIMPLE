@@ -409,6 +409,7 @@
                                                         </button>
                                                     {% elif input.keytype == "file" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" data-path-input
+                                                               {% if input.key == "vol1" %}data-artifact-drop-type="volume3D"{% elif input.key == "stk" or input.key == "pickrefs" %}data-artifact-drop-type="particles"{% endif %}
                                                                {% if input.required %}required{% endif %}
                                                                {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -633,6 +634,7 @@
                                                         </button>
                                                     {% elif input.keytype == "file" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" data-path-input
+                                                               {% if input.key == "vol1" %}data-artifact-drop-type="volume3D"{% elif input.key == "stk" or input.key == "pickrefs" %}data-artifact-drop-type="particles"{% endif %}
                                                                {% if input.required %}required{% endif %}
                                                                {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -739,12 +741,43 @@
 
         const BATCH_PROJECT_DRAG_TYPE = "application/x-nice-batch-project";
 
+        function getDroppedJobArtifact(dataTransfer) {
+            if (!dataTransfer) return null;
+            const payload = (
+                dataTransfer.getData("application/json")
+                || dataTransfer.getData("text/plain")
+            );
+            if (!payload) return null;
+            try {
+                const artifact = JSON.parse(payload);
+                if (
+                    !artifact
+                    || typeof artifact.dataType !== "string"
+                    || typeof artifact.path !== "string"
+                    || !artifact.path.trim()
+                ) return null;
+                return artifact;
+            } catch (error) {
+                return null;
+            }
+        }
+
         document.addEventListener("dragover", function(event) {
             const input = event.target;
-            if (
+            const transferTypes = Array.from(event.dataTransfer?.types || []);
+            const acceptsJobArtifact = (
                 input instanceof HTMLInputElement
+                && input.matches("[data-artifact-drop-type]")
+                && (
+                    transferTypes.includes("application/json")
+                    || transferTypes.includes("text/plain")
+                )
+            );
+            if (
+                acceptsJobArtifact
+                || (input instanceof HTMLInputElement
                 && input.matches("[data-batch-project-drop-target]")
-                && Array.from(event.dataTransfer?.types || []).includes(BATCH_PROJECT_DRAG_TYPE)
+                && transferTypes.includes(BATCH_PROJECT_DRAG_TYPE))
             ) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
@@ -754,6 +787,14 @@
         document.addEventListener("drop", function(event) {
             const input = event.target;
             if (!(input instanceof HTMLInputElement) || !input.matches("[data-path-input]")) return;
+            const artifact = getDroppedJobArtifact(event.dataTransfer);
+            if (artifact) {
+                event.preventDefault();
+                if (input.dataset.artifactDropType === artifact.dataType) {
+                    applyDroppedFilePath(input, artifact.path);
+                }
+                return;
+            }
             const batchProjectPath = input.matches("[data-batch-project-drop-target]")
                 ? event.dataTransfer.getData(BATCH_PROJECT_DRAG_TYPE)
                 : "";

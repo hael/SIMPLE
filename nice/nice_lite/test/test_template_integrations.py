@@ -929,6 +929,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('source.closest(".artifact-drag-row [draggable=\'true\']")', jobs)
         self.assertIn('event.dataTransfer.setData(BATCH_PROJECT_DRAG_TYPE, projectPath);', jobs)
         self.assertIn('event.dataTransfer.setData("application/json", payload);', jobs)
+        self.assertIn('event.dataTransfer.setData("text/plain", payload);', jobs)
         self.assertIn('const isJobBuilderActive = () => {', jobs)
         self.assertIn('card.draggable = active;', jobs)
         self.assertIn('card.classList.toggle("cursor-pointer", !active);', jobs)
@@ -953,6 +954,41 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(artifact_row.count(" title="), 6)
         self.assertEqual(artifact_row.count(" aria-label="), 6)
         self.assertNotIn("group-hover:", artifact_row)
+
+    def test_scale_volume_and_reproject_stack_icons_carry_owned_output_paths(self):
+        scale_output = render_to_string(
+            "includes/_artifact_drag_row.html",
+            {"job": {
+                "id": 7,
+                "artifact_drag_paths": {"volume3D": "/workspace/7_scale/outvol.mrc"},
+            }},
+        )
+        reproject_output = render_to_string(
+            "includes/_artifact_drag_row.html",
+            {"job": {
+                "id": 8,
+                "artifact_drag_paths": {"particles": "/workspace/8_reproject/reprojs.mrcs"},
+            }},
+        )
+
+        self.assertIn('data-artifact-path="/workspace/7_scale/outvol.mrc" ondragstart="dragArtifact(event, \'7\', \'volume3D\')"', scale_output)
+        self.assertNotIn('data-artifact-path="/workspace/7_scale/outvol.mrc" ondragstart="dragArtifact(event, \'7\', \'particles\')"', scale_output)
+        self.assertIn('data-artifact-path="/workspace/8_reproject/reprojs.mrcs" ondragstart="dragArtifact(event, \'8\', \'particles\')"', reproject_output)
+
+    def test_job_builder_accepts_typed_volume_and_particle_stack_drops(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertEqual(jobbuilder.count('data-artifact-drop-type="volume3D"'), 2)
+        self.assertEqual(jobbuilder.count('data-artifact-drop-type="particles"'), 2)
+        self.assertEqual(
+            jobbuilder.count('input.key == "stk" or input.key == "pickrefs"'),
+            2,
+        )
+        self.assertIn('function getDroppedJobArtifact(dataTransfer)', jobbuilder)
+        self.assertIn('dataTransfer.getData("application/json")', jobbuilder)
+        self.assertIn('dataTransfer.getData("text/plain")', jobbuilder)
+        self.assertIn('input.dataset.artifactDropType === artifact.dataType', jobbuilder)
+        self.assertIn('applyDroppedFilePath(input, artifact.path);', jobbuilder)
 
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")

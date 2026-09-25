@@ -131,12 +131,13 @@
             lastinteraction = Date.now();
           };
 
-          // Drag source for the per-stream data-type icon row. No drop target is
-          // wired up yet — this just carries {jobId, dataType} for future use.
+          // Drag source for the per-job data-type icon row. Output paths are
+          // attached only to icons backed by an existing finished-job artifact.
           // Uses a scaled-up, detached clone of the icon's SVG as the drag image
           // so the icon itself is clearly visible next to the cursor while dragging.
           const dragArtifact = (event, jobId, dataType) => {
-            const payload = JSON.stringify({ jobId, dataType });
+            const path = event.currentTarget.dataset.artifactPath || "";
+            const payload = JSON.stringify({ jobId, dataType, path });
             event.dataTransfer.setData("application/json", payload);
             event.dataTransfer.setData("text/plain", payload);
             event.dataTransfer.effectAllowed = "copy";

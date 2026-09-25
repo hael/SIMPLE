@@ -167,6 +167,67 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         for unavailable in jobs[1:]:
             self.assertEqual(unavailable.batch_project_drag_path, "")
 
+    def test_workspace_jobs_annotates_finished_scale_and_reproject_outputs(self):
+        def job(job_id, prog, args, **overrides):
+            values = {
+                "id": job_id,
+                "pckg": "simple",
+                "prog": prog,
+                "status": "finished",
+                "dirc": f"{job_id}_{prog}",
+                "args": args,
+            }
+            values.update(overrides)
+            return SimpleNamespace(**values)
+
+        with tempfile.TemporaryDirectory() as workspace_dir:
+            scale = job(1, "scale", {
+                "vol1": "/data/input.mrc",
+                "outvol": "scaled-volume.mrc",
+            })
+            reproject = job(2, "reproject", {
+                "vol1": "/data/input.mrc",
+                "outstk": "custom-projections.mrcs",
+            })
+            stack_scale = job(3, "scale", {"stk": "/data/input.mrcs"})
+            unfinished = job(
+                4,
+                "reproject",
+                {"vol1": "/data/input.mrc"},
+                status="running",
+            )
+            for current_job in (scale, reproject, stack_scale, unfinished):
+                os.mkdir(os.path.join(workspace_dir, current_job.dirc))
+            scale_output = os.path.join(workspace_dir, scale.dirc, "scaled-volume.mrc")
+            reproject_output = os.path.join(
+                workspace_dir,
+                reproject.dirc,
+                "custom-projections.mrcs",
+            )
+            with open(scale_output, "wb") as output_file:
+                output_file.write(b"volume")
+            with open(reproject_output, "wb") as output_file:
+                output_file.write(b"stack")
+
+            jobs = [scale, reproject, stack_scale, unfinished]
+            sources = workspace_views._annotate_batch_artifact_drag_paths(
+                jobs,
+                workspace_dir,
+            )
+
+        self.assertEqual(sources, [
+            (1, "volume3D", os.path.realpath(scale_output)),
+            (2, "particles", os.path.realpath(reproject_output)),
+        ])
+        self.assertEqual(scale.artifact_drag_paths, {
+            "volume3D": os.path.realpath(scale_output),
+        })
+        self.assertEqual(reproject.artifact_drag_paths, {
+            "particles": os.path.realpath(reproject_output),
+        })
+        self.assertEqual(stack_scale.artifact_drag_paths, {})
+        self.assertEqual(unfinished.artifact_drag_paths, {})
+
 
 class WorkspaceJobRefreshTests(SimpleTestCase):
     def setUp(self):

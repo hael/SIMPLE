@@ -146,6 +146,43 @@ def _annotate_batch_project_drag_paths(jobs, workspace_dir):
     return sources
 
 
+def _annotate_batch_artifact_drag_paths(jobs, workspace_dir):
+    """Attach existing Scale/Reproject output paths to their footer icons."""
+    sources = []
+    for jobmodel in jobs:
+        artifact_paths = {}
+        jobmodel.artifact_drag_paths = artifact_paths
+        if (
+            not isinstance(workspace_dir, str)
+            or jobmodel.pckg != "simple"
+            or jobmodel.status != "finished"
+            or not isinstance(jobmodel.dirc, str)
+        ):
+            continue
+
+        args = jobmodel.args if isinstance(jobmodel.args, dict) else {}
+        if jobmodel.prog == "scale" and str(args.get("vol1", "")).strip():
+            data_type = "volume3D"
+            output_name = str(args.get("outvol", "")).strip() or "outvol.mrc"
+        elif jobmodel.prog == "reproject":
+            data_type = "particles"
+            output_name = str(args.get("outstk", "")).strip() or "reprojs.mrcs"
+        else:
+            continue
+
+        job_dir = os.path.join(workspace_dir, jobmodel.dirc)
+        output_path = os.path.realpath(
+            output_name if os.path.isabs(output_name)
+            else os.path.join(job_dir, output_name)
+        )
+        if not os.path.isfile(output_path):
+            continue
+
+        artifact_paths[data_type] = output_path
+        sources.append((jobmodel.id, data_type, output_path))
+    return sources
+
+
 def _class_selection_job_builder_url(request, project_id, workspace_id):
     """Return a one-time selection-builder URL requested by the batch output."""
     if request.GET.get("class_selection") != "1":
@@ -274,6 +311,10 @@ def view_workspace_jobs(request):
     batch_project_sources = []
     if template == "jobs_cards.html":
         batch_project_sources = _annotate_batch_project_drag_paths(
+            jobs,
+            workspace_obj.get_absdir(),
+        )
+        _annotate_batch_artifact_drag_paths(
             jobs,
             workspace_obj.get_absdir(),
         )
