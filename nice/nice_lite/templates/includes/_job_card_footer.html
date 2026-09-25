@@ -9,6 +9,7 @@
 {% if card_type == "batch" %}
 <!-- Footer: stop · mark finished · clone · delete -->
 <div class="relative z-20 mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 pointer-events-none">
+    {% include 'includes/_artifact_drag_row.html' %}
     <!-- View -->
     <form method="GET" action="{% if job.prog == 'manualpick' %}{% url 'nice_lite:view_batch_manual_picker' job.id %}{% else %}{% url 'nice_lite:view_batch' job.id %}{% endif %}" target="_parent" class="viewform hidden">
         {% csrf_token %}
@@ -78,7 +79,8 @@
 </div>
 {% else %}
 <!-- Footer: view · restart · clone · delete/terminate -->
-<div class="mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 cursor-default">
+<div class="relative mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 cursor-default">
+    {% include 'includes/_artifact_drag_row.html' %}
 
     <!-- View -->
     <form method="GET" action="{% url 'nice_lite:view_stream' job.id %}" target="_parent" class="viewform hidden">

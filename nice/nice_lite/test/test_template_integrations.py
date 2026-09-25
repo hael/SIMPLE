@@ -925,6 +925,26 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('card.classList.toggle("cursor-pointer", !active);', jobs)
         self.assertIn('card.classList.toggle("cursor-grab", active);', jobs)
 
+    def test_job_builder_artifact_icons_overlay_only_job_card_footers(self):
+        stream_card = self._read_template("nice_stream/includes/_stream_card.html")
+        batch_card = self._read_template("nice_batch/includes/_batch_card.html")
+        footer = self._read_template("includes/_job_card_footer.html")
+        artifact_row = self._read_template("includes/_artifact_drag_row.html")
+
+        self.assertNotIn("artifact-drag-row", stream_card)
+        self.assertNotIn("artifact-drag-row", batch_card)
+        self.assertEqual(
+            footer.count("{% include 'includes/_artifact_drag_row.html' %}"),
+            2,
+        )
+        self.assertIn(
+            'class="artifact-drag-row hidden absolute inset-0',
+            artifact_row,
+        )
+        self.assertEqual(artifact_row.count(" title="), 6)
+        self.assertEqual(artifact_row.count(" aria-label="), 6)
+        self.assertNotIn("group-hover:", artifact_row)
+
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")
 
