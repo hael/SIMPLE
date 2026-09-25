@@ -43,7 +43,7 @@ contains
         class(string),              intent(in)    :: moviename, fbody, dir_out
         class(string),    optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
-        type(string) :: fbody_here, ext, star_fname, poly_fname
+        type(string) :: fbody_here, ext, star_fname, poly_fname, model_fname
         real         :: goodnessoffit(2), scale, bfac_here, bid
         integer      :: ldim(3), ldim_thumb(3), nxpatch, nypatch
         logical      :: patch_success, l_tseries
@@ -73,9 +73,10 @@ contains
             fbody_here = get_fbody(fbody_here, ext)
         endif
         ! shifts & star output
-        patched_shift_fname   = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
-        star_fname            = dir_out%to_char()//fbody_here%to_char()//STAR_EXT
-        poly_fname            = dir_out%to_char()//fbody_here%to_char()//'.poly'
+        patched_shift_fname = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
+        star_fname          = dir_out%to_char()//fbody_here%to_char()//STAR_EXT
+        poly_fname          = dir_out%to_char()//fbody_here%to_char()//'.poly'
+        model_fname         = dir_out%to_char()//fbody_here%to_char()//'.mmodel'
         ! isotropic ones
         self%moviename_intg   = dir_out%to_char()//fbody_here%to_char()//INTGMOV_SUFFIX//MRC_EXT
         self%moviename_forctf = dir_out%to_char()//fbody_here%to_char()//FORCTF_SUFFIX//MRC_EXT
@@ -91,7 +92,7 @@ contains
         call calc_npatches(params, self%moviename, ctfvars%smpd, cline, orientation)
         motion_correct_with_patched = (params%mcpatch.eq.'yes') .and. (params%nxpatch*params%nypatch > 1)
         bid = 0.0
-        ! ALIGNEMENT
+        ! ALIGNMENT
         if( trim(params%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
         ! b-factors for alignment
         bfac_here = -1.
@@ -153,10 +154,10 @@ contains
         else
             call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
         endif
-        ! STAR output
+        ! STAR & model output
         if( .not. l_tseries )then
             call motion_correct_write_poly(poly_fname)
-            call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
+            call motion_correct_write_docs(star_fname, model_fname, patch_success)
             call motion_correct_calc_bid(patch_success, bid)
         endif
         ! generate power-spectra
@@ -197,6 +198,7 @@ contains
             call orientation%set('movie',       simple_abspath(self%moviename))
             call orientation%set('forctf',      simple_abspath(self%moviename_forctf))
             call orientation%set('mc_starfile', simple_abspath(star_fname))
+            call orientation%set('mcmodel',     simple_abspath(model_fname))
             call orientation%set('bid',         bid)
         endif
         call orientation%set('intg',    simple_abspath(self%moviename_intg))
@@ -204,6 +206,11 @@ contains
         call orientation%set('imgkind', 'mic')
         if( motion_correct_with_patched ) call orientation%set('mceps', simple_abspath(patched_shift_fname))
         call motion_correct_kill_common
+        call fbody_here%kill
+        call ext%kill
+        call star_fname%kill
+        call poly_fname%kill
+        call model_fname%kill
     end subroutine iterate
 
     subroutine calc_npatches( params, moviename, smpd, cline, o )

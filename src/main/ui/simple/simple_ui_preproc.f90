@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('prepr
 type(ui_program), target :: assign_optics_groups
 type(ui_program), target :: ctf_estimate
 type(ui_program), target :: extract
+type(ui_program), target :: refine_motion_model
 type(ui_program), target :: gen_pspecs_and_thumbs
 type(ui_program), target :: motion_correct
 type(ui_program), target :: particle_sieving
@@ -22,6 +23,7 @@ contains
         call new_assign_optics_groups(prgtab)
         call new_ctf_estimate(prgtab)
         call new_extract(prgtab)
+        call new_refine_motion_model(prgtab)
         call new_gen_pspecs_and_thumbs(prgtab)
         call new_motion_correct(prgtab)
         call new_particle_sieving(prgtab)
@@ -31,7 +33,7 @@ contains
         call new_fractionate_movies(prgtab)
     end subroutine construct_preproc_programs
 
-subroutine new_assign_optics_groups( prgtab )
+    subroutine new_assign_optics_groups( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call assign_optics_groups%new(&
@@ -163,6 +165,46 @@ subroutine new_assign_optics_groups( prgtab )
         ! add to ui_hash
         call add_ui_program('extract', extract, prgtab, UI_CATEGORY)
     end subroutine new_extract
+
+    subroutine new_refine_motion_model( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call refine_motion_model%new(&
+        &'refine_motion_model', &                                                         ! name
+        &'Perform reference based refinement of the model derived from blind motion correction',& ! summary
+        &'is a program for refining a motion model',& ! descr long
+        &'simple_exec',&                                                        ! executable
+        &.true., &
+        &visibility=UI_VIS_STANDARD, display_name='Refine Motion Model') ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call refine_motion_model%add_input(UI_PARM, box,     required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, pcontrast, &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, backgr_subtr, &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, 'wfloat16', 'binary', 'Write float16 particle stacks', &
+        &'Write re-extracted particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="refine3D", visibility=UI_VIS_ADVANCED)
+        ! <no additional inputs>
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call refine_motion_model%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call refine_motion_model%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('refine_motion_model', refine_motion_model, prgtab, UI_CATEGORY)
+    end subroutine new_refine_motion_model
 
     subroutine new_gen_pspecs_and_thumbs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

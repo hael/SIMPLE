@@ -8,6 +8,7 @@ use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_parameters,           only: parameters
 use simple_motion_correct_utils, only: correct_gain, calc_eer_fraction
+use simple_motion_model,         only: motion_model
 implicit none
 
 ! Stage drift
@@ -17,10 +18,8 @@ public :: motion_correct_iso_kill
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
 public :: motion_correct_with_patched
 ! Common & convenience
-public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname, motion_correct_write_poly
-public :: motion_correct_write2star, motion_correct_calc_bid
-! Utils
-public :: motion_correct_get_ref_frame
+public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
+public :: motion_correct_write_poly, motion_correct_calc_bid, motion_correct_write_docs
 private
 #include "simple_local_flags.inc"
 
@@ -51,6 +50,7 @@ integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension o
 integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
 integer :: eer_fraction   = 0                             !< number of EER frames within a movie fraction
 real    :: total_dose     = 0.                            !< total dose in e/A2
+real    :: dose_per_frame = 0.                            !< dose per frame in e/A2
 real    :: hp             = 0.                            !< high-pass limit
 real    :: lp             = 0.                            !< low-pass limit
 real    :: smpd           = 0.                            !< sampling distance
@@ -66,6 +66,9 @@ logical, parameter :: FITSHIFTS        = .true.
 
 ! paramaters instance pointer
 class(parameters), pointer :: p_ptr => null()
+
+! Motion model instance
+type(motion_model) :: mmodel
 
 ! benchmarking
 logical                 :: L_BENCH = .false.
@@ -86,7 +89,7 @@ contains
         type(image),               intent(inout) :: movie_sum
         class(string), optional,   intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
-        real     :: dimo4, dose_per_frame
+        real     :: dimo4
         integer  :: shp(3), iframe, n_eer_frames
         p_ptr => params
         smpd       = ctfvars%smpd ! un-scaled pixel size
@@ -135,6 +138,7 @@ contains
         endif
         ldim(3) = 1
         ! dose weighting prep
+        dose_per_frame = 0.
         if( p_ptr%l_dose_weight )then
             kV = ctfvars%kv
             dose_per_frame = total_dose / real(nframes)
@@ -254,6 +258,10 @@ contains
         call movie_sum%ifft
         if( l_BENCH ) rt_fft_clip = toc(t_fft_clip)
         deallocate(movie_frames)
+        ! deformation model object
+        call mmodel%new(p_ptr, movie_stack_fname, ldim_orig, smpd, movie_frames_scaled,&
+            &total_nframes, fixed_frame, kv, dose_per_frame,eer_fraction, gain=gainref)
+        call mmodel%set_outlier_coords(pos_outliers)
         if( L_BENCH )then
             print *,'t_fft_clip: ',rt_fft_clip
             print *,'t_cure:     ',rt_cure
@@ -295,7 +303,6 @@ contains
         call hybrid_srch%get_opt_shifts(opt_shifts)
         call hybrid_srch%get_shifts_toplot(shifts_toplot)
         call hybrid_srch%kill
-        ! end if
         if( corr < 0. )then
            write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
            THROW_WARN('OPTIMAL CORRELATION < 0.0')
@@ -310,6 +317,9 @@ contains
             case DEFAULT
                 ! using central frame
         end select
+        ! add weights and shifts to motion model
+        call mmodel%set_frameweights(frameweights)
+        call mmodel%set_drift_offsets(shifts_toplot(:,1), shifts_toplot(:,2))
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
@@ -392,6 +402,13 @@ contains
         endif
     end subroutine motion_correct_calc_bid
 
+    subroutine motion_correct_write_docs( star_fname, bin_fname, write_poly )
+        use simple_motion_model, only: motion_model
+        class(string), intent(in) :: star_fname, bin_fname
+        logical,       intent(in) :: write_poly
+        call mmodel%write(star_fname, bin_fname, write_poly)
+    end subroutine motion_correct_write_docs
+
     ! write polynomial coefficients
     subroutine motion_correct_write_poly( fname )
         class(string),  intent(in) :: fname
@@ -403,129 +420,6 @@ contains
             deallocate(polycoeffs)
         endif
     end subroutine motion_correct_write_poly
-
-    ! Write iso/aniso-tropic shifts
-    subroutine motion_correct_write2star( mc_starfile_fname, moviename, writepoly, gainref_fname )
-        use simple_starfile_wrappers
-        class(string),           intent(in) :: mc_starfile_fname, moviename
-        logical,                 intent(in) :: writepoly
-        class(string), optional, intent(in) :: gainref_fname
-        real(dp),     allocatable :: poly_coeffs(:)
-        type(starfile_table_type) :: mc_starfile
-        type(string) :: moviename_abs
-        real(dp)     :: dpscale
-        real         :: shift(2), doseperframe
-        integer      :: i,iframe, npoly, ndeadpixels, motion_model
-        dpscale = real(p_ptr%scale_movies,dp)
-        motion_model = 0
-        if( writepoly )then
-            motion_model = 1
-            npoly        = size(patched_polyn,1)
-            poly_coeffs  = patched_polyn
-            if( do_scale ) poly_coeffs = poly_coeffs / dpscale
-        endif
-        call starfile_table__new(mc_starfile)
-        call starfile_table__open_ofile(mc_starfile, mc_starfile_fname%to_char())
-        ! global fields
-        call starfile_table__addObject(mc_starfile)
-        call starfile_table__setIsList(mc_starfile, .true.)
-        call starfile_table__setname(mc_starfile, "general")
-        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_X, ldim_orig(1))
-        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Y, ldim_orig(2))
-        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, total_nframes)
-        moviename_abs = simple_abspath(moviename)
-        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, moviename_abs%to_char())
-        if (present(gainref_fname)) then
-            call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, gainref_fname%to_char())
-        end if
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.d0/dpscale)
-        if( l_eer )then
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(eer%get_smpd_out(),dp))
-        else
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(smpd,dp))
-        endif
-        doseperframe = 0.
-        if( p_ptr%l_dose_weight ) doseperframe = p_ptr%total_dose / real(total_nframes)
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doseperframe, dp))
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
-        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(p_ptr%kv, dp))
-        call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
-        if( l_eer )then
-            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_EER_UPSAMPLING, p_ptr%eer_upsampling)
-            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_EER_GROUPING, eer_fraction)
-        endif
-        call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, motion_model)
-        if( writepoly .and. trim(p_ptr%extractfrommov).eq.'yes' )then
-            call starfile_table__setValue_int(mc_starfile, SMPL_MOVIE_FRAME_ALIGN, fixed_frame)
-        endif
-        call starfile_table__write_ofile(mc_starfile)
-        ! isotropic shifts
-        call starfile_table__clear(mc_starfile)
-        call starfile_table__setIsList(mc_starfile, .false.)
-        call starfile_table__setName(mc_starfile, "global_shift")
-        do iframe = 1, total_nframes
-            call starfile_table__addObject(mc_starfile)
-            call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-            if( iframe <= nframes )then
-                shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
-                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1),dp)/dpscale)
-                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2),dp)/dpscale)
-                call starfile_table__setValue_double(mc_starfile, SMPL_MOVIE_FRAME_WEIGHT, real(frameweights(iframe),dp))
-            else
-                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, -9999.0d0)
-                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, -9999.0d0)
-                call starfile_table__setValue_double(mc_starfile, SMPL_MOVIE_FRAME_WEIGHT, 0d0)
-            endif
-        enddo
-        call starfile_table__write_ofile(mc_starfile)
-        if( writepoly )then
-            ! anisotropic shifts
-            call starfile_table__clear(mc_starfile)
-            call starfile_table__setIsList(mc_starfile, .false.)
-            call starfile_table__setName(mc_starfile, "local_motion_model")
-            do iframe = 1, npoly
-                call starfile_table__addObject(mc_starfile)
-                call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, iframe-1)
-                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, poly_coeffs(iframe))
-            end do
-            call starfile_table__write_ofile(mc_starfile)
-        endif
-        ! Defects & hot pixels
-        if( allocated(pos_outliers) )then
-            call starfile_table__clear(mc_starfile)
-            call starfile_table__setIsList(mc_starfile, .false.)
-            call starfile_table__setName(mc_starfile, "hot_pixels")
-            ndeadpixels = size(pos_outliers,dim=2)
-            do i = 1, ndeadpixels
-                call starfile_table__addObject(mc_starfile)
-                call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_X, real(pos_outliers(1,i)-1,dp))
-                call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_y, real(pos_outliers(2,i)-1,dp))
-            end do
-            call starfile_table__write_ofile(mc_starfile)
-        endif
-        !! Patches shifts,  Unused for now
-        ! if( writepoly )then
-        !     call starfile_table__clear(mc_starfile)
-        !     call starfile_table__setIsList(mc_starfile, .false.)
-        !     call starfile_table__setName(mc_starfile, "local_shift")
-        !     do i = 1, p_ptr%nxpatch
-        !         do j = 1, p_ptr%nypatch
-        !             do iframe = 1, nframes
-        !                 call starfile_table__addObject(mc_starfile)
-        !                 call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-        !                 call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_X, patched_centers(i,j,1)/dpscale)
-        !                 call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_Y, patched_centers(i,j,2)/dpscale)
-        !                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, patched_shifts(1,iframe,i,j)/dpscale)
-        !                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, patched_shifts(2,iframe,i,j)/dpscale)
-        !             enddo
-        !         enddo
-        !     enddo
-        !     call starfile_table__write_ofile(mc_starfile)
-        ! endif
-        call starfile_table__close_ofile(mc_starfile)
-        call starfile_table__delete(mc_starfile)
-        call moviename_abs%kill
-    end subroutine motion_correct_write2star
 
     subroutine motion_correct_iso_kill
         if (allocated(opt_shifts)) deallocate(opt_shifts)
@@ -541,8 +435,9 @@ contains
         real,              intent(in)  :: bfac, rmsd_threshold
         integer,           intent(in)  :: npatch(2)
         real,              intent(out) :: rmsd(2)     !< whether polynomial fitting was within threshold
-        integer :: iframe
+        integer :: iframe, polysz
         if( l_BENCH ) t_patched = tic()
+        call mmodel%add_patches(npatch(1), npatch(2))
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
             call movie_frames_scaled(iframe)%ifft
@@ -559,6 +454,9 @@ contains
         call motion_patch%correct(hp, movie_frames_scaled, patched_shift_fname, global_shifts=shifts_toplot)
         rmsd = motion_patch%get_polyfit_rmsd()
         call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
+        call mmodel%set_local_offsets(real(patched_shifts(1,:,:,:)), real(patched_shifts(2,:,:,:)))
+        polysz = size(patched_polyn,1)/2
+        call mmodel%set_model_coeffs(patched_polyn(1:polysz), patched_polyn(polysz+1:2*polysz))
         ! end if
         if( L_BENCH )then
             rt_patched = toc(t_patched)
@@ -691,15 +589,12 @@ contains
             deallocate(movie_frames_scaled)
         endif
         call ftexp_transfmat_kill
+        dose_per_frame = 0.
         call eer%kill
-        l_eer = .false.
+        l_eer        = .false.
+        eer_fraction = 0
+        call mmodel%kill
     end subroutine motion_correct_kill_common
-
-    ! PUBLIC UTILITY METHODS
-
-    integer function motion_correct_get_ref_frame()
-        motion_correct_get_ref_frame = fixed_frame
-    end function motion_correct_get_ref_frame
 
     ! COMMON PRIVATE UTILITY METHODS
 

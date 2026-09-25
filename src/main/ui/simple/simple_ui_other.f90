@@ -15,7 +15,7 @@ contains
         call new_sigma2_convert(prgtab)
     end subroutine construct_other_programs
 
-subroutine new_cif2pdb( prgtab )
+    subroutine new_cif2pdb( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call cif2pdb%new(&
         &'cif2pdb',&                                       ! name

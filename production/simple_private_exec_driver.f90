@@ -184,6 +184,7 @@ contains
         type(commander_extract)                 :: xextract
         type(commander_reextract)               :: xreextract
         type(commander_motion_correct)          :: xmotion_correct
+        type(commander_refine_motion_model)    :: xrefine_motion_model
         type(commander_gen_pspecs_and_thumbs)   :: xgen_pspecs_and_thumbs
         type(commander_ctf_estimate)            :: xctf_estimate
         type(commander_pick_extract)            :: xpick_extract
@@ -265,6 +266,8 @@ contains
                 call xreextract%execute(cline)
             case( 'motion_correct' )
                 call xmotion_correct%execute(cline)
+            case( 'refine_motion_model' )
+                call xrefine_motion_model%execute(cline)
             case( 'gen_pspecs_and_thumbs' )
                 call xgen_pspecs_and_thumbs%execute(cline)
             case( 'ctf_estimate' )

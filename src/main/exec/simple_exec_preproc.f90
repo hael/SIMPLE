@@ -3,6 +3,7 @@ module simple_exec_preproc
 use simple_cmdline,                only: cmdline
 use simple_commanders_starproject, only: commander_assign_optics_groups
 use simple_commanders_pick,        only: commander_pick, commander_extract, commander_reextract
+use simple_commanders_motion,      only: commander_refine_motion_model
 use simple_commanders_preprocess,  only: commander_preprocess, commander_motion_correct,&
 commander_gen_pspecs_and_thumbs, commander_ctf_estimate
 implicit none
@@ -15,6 +16,7 @@ type(commander_ctf_estimate)          :: xctf_estimate
 type(commander_extract)               :: xextract
 type(commander_gen_pspecs_and_thumbs) :: xgen_pspecs_and_thumbs
 type(commander_motion_correct)        :: xmotion_correct
+type(commander_refine_motion_model)  :: xrefine_motion_model
 type(commander_pick)                  :: xpick
 type(commander_preprocess)            :: xpreprocess
 type(commander_reextract)             :: xreextract
@@ -40,6 +42,8 @@ contains
                 call xgen_pspecs_and_thumbs%execute(cline)
             case( 'motion_correct' )
                 call xmotion_correct%execute(cline)
+            case( 'refine_motion_model' )
+                call xrefine_motion_model%execute(cline)
             case( 'pick' )
                 call xpick%execute(cline)
             case( 'preprocess' )
