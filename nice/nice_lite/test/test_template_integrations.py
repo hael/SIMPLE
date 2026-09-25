@@ -254,6 +254,11 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('window.setTimeout(function()', jobbuilder)
         self.assertIn('const insertedPath = fileUriToPath(input.value);', jobbuilder)
         self.assertIn('input.dispatchEvent(new Event("input", {bubbles: true}));', jobbuilder)
+        self.assertEqual(jobbuilder.count(" data-batch-project-drop-target"), 2)
+        self.assertIn('const BATCH_PROJECT_DRAG_TYPE = "application/x-nice-batch-project";', jobbuilder)
+        self.assertIn('input.matches("[data-batch-project-drop-target]")', jobbuilder)
+        self.assertIn('event.dataTransfer.getData(BATCH_PROJECT_DRAG_TYPE)', jobbuilder)
+        self.assertIn('applyDroppedFilePath(input, batchProjectPath);', jobbuilder)
 
     def test_new_project_back_button_closes_form_in_parent_shell(self):
         newproject = self._read_template("newproject.html")
@@ -870,6 +875,46 @@ class TemplateIntegrationTests(SimpleTestCase):
             {"job": job},
         )
         self.assertNotIn('name="volume_viewer"', other_output)
+
+    def test_finished_batch_card_with_workspace_project_is_draggable(self):
+        project_path = "/workspace/7_abinitio2D/workspace.simple"
+        job = {
+            "id": 7,
+            "disp": 7,
+            "name": "Create 2D Class Averages",
+            "dirc": "7_abinitio2D",
+            "args": {},
+            "pckg": "simple",
+            "prog": "abinitio2D",
+            "master_stats": {},
+            "status": "finished",
+            "batch_project_drag_path": project_path,
+        }
+
+        rendered = render_to_string(
+            "nice_batch/includes/_batch_card.html",
+            {"job": job},
+        )
+
+        self.assertIn('draggable="true"', rendered)
+        self.assertIn(f'data-batch-project-path="{project_path}"', rendered)
+        self.assertIn('ondragstart="dragBatchProject(event)"', rendered)
+
+        job["batch_project_drag_path"] = ""
+        unavailable = render_to_string(
+            "nice_batch/includes/_batch_card.html",
+            {"job": job},
+        )
+        self.assertNotIn('data-batch-project-path=', unavailable)
+        self.assertNotIn('ondragstart="dragBatchProject(event)"', unavailable)
+
+    def test_job_card_project_drag_keeps_artifact_payload_separate(self):
+        jobs = self._read_template("jobs_cards.html")
+
+        self.assertIn('const dragBatchProject = (event) => {', jobs)
+        self.assertIn('source.closest(".artifact-drag-row [draggable=\'true\']")', jobs)
+        self.assertIn('event.dataTransfer.setData(BATCH_PROJECT_DRAG_TYPE, projectPath);', jobs)
+        self.assertIn('event.dataTransfer.setData("application/json", payload);', jobs)
 
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")

@@ -111,6 +111,26 @@
             lastinteraction = Date.now();
           };
 
+          const BATCH_PROJECT_DRAG_TYPE = "application/x-nice-batch-project";
+
+          const dragBatchProject = (event) => {
+            const source = event.target instanceof Element ? event.target : null;
+            if (source && source.closest(".artifact-drag-row [draggable='true']")) return;
+            if (source && source.closest("button, input, textarea, select, a, form")) {
+              event.preventDefault();
+              return;
+            }
+
+            const projectPath = event.currentTarget.dataset.batchProjectPath || "";
+            if (!event.dataTransfer || !projectPath) {
+              event.preventDefault();
+              return;
+            }
+            event.dataTransfer.setData(BATCH_PROJECT_DRAG_TYPE, projectPath);
+            event.dataTransfer.effectAllowed = "copy";
+            lastinteraction = Date.now();
+          };
+
           // Drag source for the per-stream data-type icon row. No drop target is
           // wired up yet — this just carries {jobId, dataType} for future use.
           // Uses a scaled-up, detached clone of the icon's SVG as the drag image

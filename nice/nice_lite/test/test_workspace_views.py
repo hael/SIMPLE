@@ -59,7 +59,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         request = self.factory.get("/workspacejobs")
         request.user = _AuthUser()
 
-        fake_workspace = SimpleNamespace(id=1)
+        fake_workspace = SimpleNamespace(id=1, get_absdir=lambda: "/workspace")
         fake_queryset = _FakeQueryset([{"id": 1, "status": "running"}])
 
         with patch.object(workspace_views, "get_workspace_id", return_value=1), patch.object(workspace_views, "get_project_id", return_value=2), patch.object(workspace_views, "Workspace", return_value=fake_workspace), patch.object(workspace_views, "_is_workspace_accessible", return_value=True), patch.object(workspace_views.JobModel.objects, "filter", return_value=fake_queryset), patch.object(workspace_views, "render", return_value=HttpResponse("jobs")) as mock_render, patch.object(workspace_views, "_normalize_latest_cls2d") as mock_normalize:
@@ -79,6 +79,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         checksum_payload = {
             "jobs": payload,
             "template": "jobs_cards.html",
+            "batch_project_sources": [],
         }
         checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -86,7 +87,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         request.user = _AuthUser()
         request.COOKIES["workspace_jobs_checksum"] = checksum
 
-        fake_workspace = SimpleNamespace(id=1)
+        fake_workspace = SimpleNamespace(id=1, get_absdir=lambda: "/workspace")
         fake_queryset = _FakeQueryset(payload)
 
         with patch.object(workspace_views, "get_workspace_id", return_value=1), patch.object(workspace_views, "get_project_id", return_value=2), patch.object(workspace_views, "Workspace", return_value=fake_workspace), patch.object(workspace_views, "_is_workspace_accessible", return_value=True), patch.object(workspace_views.JobModel.objects, "filter", return_value=fake_queryset), patch.object(workspace_views, "render") as mock_render, patch.object(workspace_views, "_normalize_latest_cls2d") as mock_normalize:
@@ -101,6 +102,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         checksum_payload = {
             "jobs": payload,
             "template": "jobs_cards.html",
+            "batch_project_sources": [],
         }
         checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -108,7 +110,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         request.user = _AuthUser()
         request.COOKIES["workspace_jobs_checksum"] = checksum
 
-        fake_workspace = SimpleNamespace(id=1)
+        fake_workspace = SimpleNamespace(id=1, get_absdir=lambda: "/workspace")
         fake_queryset = _FakeQueryset(payload)
 
         with patch.object(workspace_views, "get_workspace_id", return_value=1), patch.object(workspace_views, "get_project_id", return_value=2), patch.object(workspace_views, "Workspace", return_value=fake_workspace), patch.object(workspace_views, "_is_workspace_accessible", return_value=True), patch.object(workspace_views.JobModel.objects, "filter", return_value=fake_queryset), patch.object(workspace_views, "render", return_value=HttpResponse("jobs")) as mock_render, patch.object(workspace_views, "_normalize_latest_cls2d") as mock_normalize:
@@ -122,6 +124,48 @@ class WorkspaceJobsViewTests(SimpleTestCase):
             {"jobs": fake_queryset},
         )
         mock_normalize.assert_called_once_with(fake_queryset)
+
+    def test_workspace_jobs_annotates_only_finished_batch_projects(self):
+        def job(job_id, **overrides):
+            values = {
+                "id": job_id,
+                "disp": job_id,
+                "name": f"job {job_id}",
+                "pckg": "simple",
+                "prog": "demo",
+                "status": "finished",
+                "dirc": f"{job_id}_job",
+            }
+            values.update(overrides)
+            return SimpleNamespace(**values)
+
+        with tempfile.TemporaryDirectory() as workspace_dir:
+            finished_dir = os.path.join(workspace_dir, "1_import_movies")
+            running_dir = os.path.join(workspace_dir, "2_preprocess")
+            os.mkdir(finished_dir)
+            os.mkdir(running_dir)
+            finished_project = os.path.join(finished_dir, "workspace.simple")
+            with open(finished_project, "w", encoding="utf-8"):
+                pass
+            with open(os.path.join(running_dir, "workspace.simple"), "w", encoding="utf-8"):
+                pass
+
+            finished = job(1, dirc="1_import_movies")
+            running = job(2, status="running", dirc="2_preprocess")
+            stream = job(3, pckg="stream")
+            missing = job(4, pckg="single", dirc="4_missing")
+            unsafe = job(5, dirc="../outside")
+            jobs = [finished, running, stream, missing, unsafe]
+
+            sources = workspace_views._annotate_batch_project_drag_paths(
+                jobs,
+                workspace_dir,
+            )
+
+        self.assertEqual(sources, [(1, os.path.realpath(finished_project))])
+        self.assertEqual(finished.batch_project_drag_path, os.path.realpath(finished_project))
+        for unavailable in jobs[1:]:
+            self.assertEqual(unavailable.batch_project_drag_path, "")
 
 
 class WorkspaceJobRefreshTests(SimpleTestCase):

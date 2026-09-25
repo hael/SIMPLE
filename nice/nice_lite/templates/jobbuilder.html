@@ -292,7 +292,7 @@
                         <label class="text-xs font-bold text-streamtext whitespace-nowrap"
                                for="simple_batch_project_file">input project</label>
                         <div class="relative flex items-center">
-                            <input id="simple_batch_project_file" type="text" data-path-input
+                            <input id="simple_batch_project_file" type="text" data-path-input data-batch-project-drop-target
                                    value="{{ default_batch_project_file }}"
                                    data-required-extension=".simple"
                                    title="select a .simple project file"
@@ -517,7 +517,7 @@
                         <label class="text-xs font-bold text-streamtext whitespace-nowrap"
                                for="single_batch_project_file">input project</label>
                         <div class="relative flex items-center">
-                            <input id="single_batch_project_file" type="text" data-path-input
+                            <input id="single_batch_project_file" type="text" data-path-input data-batch-project-drop-target
                                    value="{{ default_batch_project_file }}"
                                    data-required-extension=".simple"
                                    title="select a .simple project file"
@@ -737,9 +737,32 @@
             input.dispatchEvent(new Event("change", {bubbles: true}));
         }
 
+        const BATCH_PROJECT_DRAG_TYPE = "application/x-nice-batch-project";
+
+        document.addEventListener("dragover", function(event) {
+            const input = event.target;
+            if (
+                input instanceof HTMLInputElement
+                && input.matches("[data-batch-project-drop-target]")
+                && Array.from(event.dataTransfer?.types || []).includes(BATCH_PROJECT_DRAG_TYPE)
+            ) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+            }
+        });
+
         document.addEventListener("drop", function(event) {
             const input = event.target;
             if (!(input instanceof HTMLInputElement) || !input.matches("[data-path-input]")) return;
+            const batchProjectPath = input.matches("[data-batch-project-drop-target]")
+                ? event.dataTransfer.getData(BATCH_PROJECT_DRAG_TYPE)
+                : "";
+            if (batchProjectPath) {
+                event.preventDefault();
+                applyDroppedFilePath(input, batchProjectPath);
+                return;
+            }
+
             const path = getDroppedFilePath(event.dataTransfer);
             if (path === null) {
                 // Some browsers expose only an opaque Files payload during

@@ -132,6 +132,20 @@ def _normalize_latest_cls2d(jobs):
                 stats["latest_cls2D"] = sorted(latest, key=lambda entry: entry.get("res", 0) if isinstance(entry, dict) else 0, reverse=False)
 
 
+def _annotate_batch_project_drag_paths(jobs, workspace_dir):
+    """Attach validated project paths to draggable finished batch cards."""
+    from .job_builder_views import _batch_job_source
+
+    sources = []
+    for jobmodel in jobs:
+        source = _batch_job_source(jobmodel, workspace_dir)
+        project_path = source["path"] if source is not None else ""
+        jobmodel.batch_project_drag_path = project_path or ""
+        if project_path:
+            sources.append((jobmodel.id, project_path))
+    return sources
+
+
 def _class_selection_job_builder_url(request, project_id, workspace_id):
     """Return a one-time selection-builder URL requested by the batch output."""
     if request.GET.get("class_selection") != "1":
@@ -257,12 +271,20 @@ def view_workspace_jobs(request):
         return render(request, template, {"jobs": []})
 
     jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
+    batch_project_sources = []
+    if template == "jobs_cards.html":
+        batch_project_sources = _annotate_batch_project_drag_paths(
+            jobs,
+            workspace_obj.get_absdir(),
+        )
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
-    # Include the template name so switching view modes always forces a redraw.
+    # Include the template name and draggable project availability so switching
+    # view modes or adding/removing a result project always forces a redraw.
     checksum_payload = {
         "jobs": list(jobs.values()),
         "template": template,
+        "batch_project_sources": batch_project_sources,
     }
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
