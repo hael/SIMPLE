@@ -2866,12 +2866,10 @@ contains
         result%final_rel_residual_m = -1.0
         if( n_done > 0 ) result%final_rel_residual = hist(n_done)
         if( n_done > 0 ) result%final_rel_residual_m = mnorm_hist(n_done)
-        if( n_done > 0 )then
-            allocate(result%rel_residual_history(n_done), source=hist(1:n_done))
-            allocate(result%rel_update_history(n_done), source=update_hist(1:n_done))
-            allocate(result%preconditioned_residual_history(n_done), source=mnorm_hist(1:n_done))
-            allocate(result%iteration_seconds(n_done), source=iteration_times(1:n_done))
-        endif
+        allocate(result%rel_residual_history(n_done), source=hist(1:n_done))
+        allocate(result%rel_update_history(n_done), source=update_hist(1:n_done))
+        allocate(result%preconditioned_residual_history(n_done), source=mnorm_hist(1:n_done))
+        allocate(result%iteration_seconds(n_done), source=iteration_times(1:n_done))
         if( present(niters) ) niters = n_done
         if( present(rel_res_hist) ) allocate(rel_res_hist(n_done), source=hist(1:n_done))
         if( present(outcome) ) outcome = result

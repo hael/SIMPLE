@@ -60,6 +60,7 @@ contains
             endif
             l_fixed_projection = trim(self%s%p_ptr%multivol_mode) == 'input_oris_fixed' .and. &
                 &trim(self%s%p_ptr%refine) == 'prob_state'
+            fixed_euler = 0.0
             if( l_fixed_projection ) fixed_euler = self%s%b_ptr%spproj_field%get_euler(self%s%iptcl)
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)

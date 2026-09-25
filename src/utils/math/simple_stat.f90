@@ -1255,7 +1255,7 @@ contains
                 smask(i,j) = .true.
             end do
         end do
-        tmp     = pack(smat, mask=smask)
+        allocate(tmp, source=pack(smat, mask=smask))
         tmp_min = minval(tmp)
         tmp_max = maxval(tmp)
         select case(trim(mode))
