@@ -48,6 +48,7 @@ type, extends(image) :: image_bin
     procedure          :: grow_bins
     procedure          :: max_dist
     procedure          :: apply_mask
+    procedure          :: vol_shape_descr
     
     ! MORPHOLOGICAL OPERATIONS
     procedure          :: dilate
@@ -554,6 +555,49 @@ contains
         self%bimat_is_set = .true.
         call self%update_img_rmat
     end subroutine cc2bin
+
+    subroutine vol_shape_descr( self, vol, lp, msk )
+        class(image_bin), intent(inout) :: self
+        class(image), intent(in)        :: vol
+        real, intent(in)                :: lp, msk
+        integer, allocatable :: cc_sz(:)
+        real, allocatable    :: vals(:)
+        real, pointer        :: rmat(:,:,:)
+        type(image_bin)      :: vol_ccs
+        real                 :: ecc, aniso, asph, acyl, rg_sq, threshold, threshold_first
+        integer              :: ldim(3)
+        call self%new_bimg(vol%get_ldim(), vol%get_smpd())
+        call vol_ccs%new_bimg(vol%get_ldim(), vol%get_smpd())
+        call self%copy(vol)
+        call self%bp(0., lp)
+        ldim = self%get_ldim()
+        call self%get_rmat_ptr(rmat)
+        vals = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
+        call otsu(size(vals), vals, threshold_first)
+        vals = pack(vals, vals > threshold_first)
+        call otsu(size(vals), vals, threshold)
+        if( count(rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= threshold) < ldim(1) ) threshold = threshold_first
+        where( rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= threshold )
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 1.
+        elsewhere
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
+        end where
+        nullify(rmat)
+        call self%set_imat
+        call self%write(string('vol_binarized.mrc'))
+        call self%calc_3D_shape_descriptors(msk, ecc, aniso, asph, acyl, rg_sq)
+        call self%find_ccs(vol_ccs, update_imat=.true.)
+        cc_sz = vol_ccs%size_ccs()
+        write(logfhandle,'(A,F7.2)') '>>> Eccentricity          : ', ecc
+        write(logfhandle,'(A,F7.2)') '>>> Anisotropy            : ', aniso
+        write(logfhandle,'(A,F7.2)') '>>> Asphericity           : ', asph
+        write(logfhandle,'(A,F7.2)') '>>> Acylindricity         : ', acyl
+        write(logfhandle,'(A,F7.2)') '>>> Radius of gyration^2  : ', rg_sq
+        write(logfhandle,'(A,I7)')   '>>> Connected component(s): ', size(cc_sz)
+        call vol_ccs%write_bimg(string('vol_cc.mrc'))
+        call vol_ccs%kill_bimg
+        if( allocated(cc_sz) ) deallocate(cc_sz)
+    end subroutine vol_shape_descr
 
     ! MORPHOLOGICAL OPERATIONS
 
