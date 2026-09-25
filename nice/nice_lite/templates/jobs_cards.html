@@ -184,6 +184,15 @@
             document.querySelectorAll(".artifact-drag-row").forEach((el) => {
               el.classList.toggle("hidden", !active);
             });
+
+            document.querySelectorAll("[data-batch-project-path]").forEach((card) => {
+              card.draggable = active;
+              card.classList.toggle("cursor-pointer", !active);
+              card.classList.toggle("cursor-grab", active);
+              card.classList.toggle("active:cursor-grabbing", active);
+              if (active) card.setAttribute("title", "drag to input project");
+              else card.removeAttribute("title");
+            });
           };
 
           syncArtifactRows();

@@ -876,7 +876,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         )
         self.assertNotIn('name="volume_viewer"', other_output)
 
-    def test_finished_batch_card_with_workspace_project_is_draggable(self):
+    def test_finished_batch_card_defers_drag_state_until_builder_is_open(self):
         project_path = "/workspace/7_abinitio2D/workspace.simple"
         job = {
             "id": 7,
@@ -895,8 +895,11 @@ class TemplateIntegrationTests(SimpleTestCase):
             "nice_batch/includes/_batch_card.html",
             {"job": job},
         )
+        opening_tag = rendered.split(">", 1)[0]
 
-        self.assertIn('draggable="true"', rendered)
+        self.assertIn("cursor cursor-pointer", opening_tag)
+        self.assertNotIn("cursor-grab", opening_tag)
+        self.assertNotIn("draggable=", opening_tag)
         self.assertIn(f'data-batch-project-path="{project_path}"', rendered)
         self.assertIn('ondragstart="dragBatchProject(event)"', rendered)
 
@@ -915,6 +918,10 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('source.closest(".artifact-drag-row [draggable=\'true\']")', jobs)
         self.assertIn('event.dataTransfer.setData(BATCH_PROJECT_DRAG_TYPE, projectPath);', jobs)
         self.assertIn('event.dataTransfer.setData("application/json", payload);', jobs)
+        self.assertIn('const isJobBuilderActive = () => {', jobs)
+        self.assertIn('card.draggable = active;', jobs)
+        self.assertIn('card.classList.toggle("cursor-pointer", !active);', jobs)
+        self.assertIn('card.classList.toggle("cursor-grab", active);', jobs)
 
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")

@@ -5,8 +5,8 @@
   avoiding repeated dict key lookups per template render.
 {% endcomment %}
 {% load humanize %}
-<div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor {% if job.batch_project_drag_path %}cursor-grab active:cursor-grabbing{% else %}cursor-pointer{% endif %}"
-    {% if job.batch_project_drag_path %}draggable="true" data-batch-project-path="{{ job.batch_project_drag_path }}" title="drag to input project" ondragstart="dragBatchProject(event)"{% endif %}
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-pointer"
+    {% if job.batch_project_drag_path %}data-batch-project-path="{{ job.batch_project_drag_path }}" ondragstart="dragBatchProject(event)"{% endif %}
     onclick="this.querySelector('form.viewform').submit();">
 
     <!-- Header: status dot · stream name · open-detail button -->
