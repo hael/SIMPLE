@@ -734,17 +734,38 @@ contains
     subroutine multiref_merge( np, pickers, pickind )
         integer,        intent(in)    :: np
         class(pickref), intent(inout) :: pickers(np)
-        integer,        intent(inout) :: pickind
+        integer,        intent(out)   :: pickind
         integer              :: nx, ny, ioff, joff, ipick, c, cmax
         real,    allocatable :: scores(:,:)
         integer, allocatable :: map(:,:)
-        nx = pickers(1)%nx_offset
-        ny = pickers(1)%ny_offset
+        pickind = 0
+        if( np < 1 ) return
+        if( .not. pickers(1)%exists ) return
+        do ipick = 1,np
+            if( .not. pickers(ipick)%exists ) cycle
+            if( .not. allocated(pickers(ipick)%box_scores) ) call pickers(ipick)%setup_iterators
+        enddo
+        nx = size(pickers(1)%box_scores, dim=1)
+        ny = size(pickers(1)%box_scores, dim=2)
+        if( nx == 0 .or. ny == 0 )then
+            pickers(1)%npeaks = 0
+            pickers(1)%t      = 0.
+            return
+        endif
+        do ipick = 1,np
+            if( .not. pickers(ipick)%exists ) cycle
+            if( any(shape(pickers(ipick)%box_scores) /= [nx,ny]) )then
+                write(logfhandle,'(a,5(i0,1x))') 'multiref_merge grid mismatch: ', ipick, nx, ny, &
+                    size(pickers(ipick)%box_scores,dim=1), size(pickers(ipick)%box_scores,dim=2)
+                THROW_HARD('Incompatible score grids in multiref_merge')
+            endif
+        enddo
         allocate(map(nx,ny),    source=0)
         allocate(scores(nx,ny), source=-1.0)
         do ioff = 1,nx
             do joff = 1,ny
                 do ipick = 1,np
+                    if( .not. pickers(ipick)%exists ) cycle
                     if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
                         if( pickers(ipick)%box_scores(ioff,joff) > scores(ioff,joff) )then
                             scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
@@ -754,22 +775,30 @@ contains
                 end do
             end do
         end do
+        if( .not. any(map > 0) )then
+            pickers(1)%box_scores = -1.
+            pickers(1)%npeaks     = 0
+            pickers(1)%t          = 0.
+            deallocate(scores,map)
+            return
+        endif
         ! output is first in the vector
         pickers(1)%box_scores(:,:) = scores
-        pickers(1)%t = minval(scores, mask=scores >= 0.)
+        pickers(1)%t = minval(scores, mask=map > 0)
         ! apply distance filter to merged
         call pickers(1)%distance_filter
-        ! vote for reference
-        where( pickers(1)%box_scores(:,:) < pickers(1)%t ) map = 0
-        pickind = 0
-        cmax    = -1
-        do ipick = 1,np
-            c = count(map==ipick)
-            if( c > cmax )then
-                cmax    = c
-                pickind = ipick
-            endif
-        enddo
+        if( pickers(1)%npeaks > 0 )then
+            ! vote for reference
+            where( pickers(1)%box_scores(:,:) < pickers(1)%t ) map = 0
+            cmax    = -1
+            do ipick = 1,np
+                c = count(map==ipick)
+                if( c > cmax )then
+                    cmax    = c
+                    pickind = ipick
+                endif
+            enddo
+        endif
         ! cleanup
         deallocate(scores,map)
     end subroutine multiref_merge
