@@ -114,7 +114,9 @@
         {% endif %}
     </div>
 
-    {% include 'messages.html' %}
+    {% if not project or current_workspace_id %}
+        {% include 'messages.html' %}
+    {% endif %}
 
     <script>
         (() => {

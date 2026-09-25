@@ -208,7 +208,7 @@
 
                         {% endfor %}
                     </div>
-                    <div class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2">
+                    <div class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2" data-nice-message-footer>
                         <button type="submit"
                                 class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                             start
@@ -437,7 +437,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div id="simple_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 bottom-0 left-0 w-full z-10 bg-streambar">
+                <div id="simple_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 bottom-0 left-0 w-full z-10 bg-streambar" data-nice-message-footer>
                     <button id="simple_batch_start" type="button" onclick="submitSelectedBatch('simple')"
                             class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                         start
@@ -662,7 +662,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div id="single_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 bottom-0 left-0 w-full z-10 bg-streambar">
+                <div id="single_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 bottom-0 left-0 w-full z-10 bg-streambar" data-nice-message-footer>
                     <button id="single_batch_start" type="button" onclick="submitSelectedBatch('single')"
                             class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                         start
@@ -1068,6 +1068,16 @@
             singleBatchTab.className = activeTabName === "single_batch" ? ACTIVE_TAB_CLASS : INACTIVE_TAB_CLASS;
         }
 
+        function positionBuilderMessages() {
+            const messageAlert = document.getElementById("message_alert");
+            if (!messageAlert) return;
+            const footer = Array.from(document.querySelectorAll("[data-nice-message-footer]"))
+                .find((candidate) => candidate.getClientRects().length > 0);
+            if (footer && footer.previousElementSibling !== messageAlert) {
+                footer.before(messageAlert);
+            }
+        }
+
         function selectBuilderTab(tabName) {
             const streamPanel = document.getElementById("panel_stream");
             const batchPanel = document.getElementById("panel_batch");
@@ -1106,6 +1116,7 @@
                 singleBatchCard.classList.remove("hidden");
                 setBuilderTabStyles("stream");
             }
+            positionBuilderMessages();
         }
 
         function showSimpleProgramSelector() {
@@ -1390,5 +1401,6 @@
     </script>
 
     {% include 'messages.html' %}
+    <script>positionBuilderMessages();</script>
 </body>
 </html>

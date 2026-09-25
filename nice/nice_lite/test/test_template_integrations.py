@@ -94,19 +94,37 @@ class TemplateIntegrationTests(SimpleTestCase):
 
     def test_browser_messages_remain_visible(self):
         content = self._read_template("messages.html")
+        index = self._read_template("index.html")
+        project = self._read_template("project.html")
         workspace = self._read_template("workspace.html")
+        stream = self._read_template("nice_stream/streamview.html")
+        batch = self._read_template("nice_batch/batchview.html")
+        manual_picker = self._read_template("nice_batch/manual_picker.html")
+        jobbuilder = self._read_template("jobbuilder.html")
 
         self.assertIn('id="message_alert"', content)
-        self.assertIn("{% if messages_above_footer %} flex-shrink-0", content)
-        self.assertIn("{% else %} absolute bottom-0{% endif %}", content)
+        self.assertIn("w-full flex-shrink-0", content)
+        self.assertNotIn("absolute", content)
         self.assertNotIn("setTimeout", content)
         self.assertNotIn('style.display="none"', content)
-        message_include = "{% include 'messages.html' with messages_above_footer=True %}"
-        self.assertIn(message_include, workspace)
-        self.assertLess(
-            workspace.index(message_include),
-            workspace.index("<!-- Workspace details footer"),
-        )
+        message_include = "{% include 'messages.html' %}"
+        for template, footer_marker in (
+            (project, "<footer class="),
+            (workspace, "<!-- Workspace details footer"),
+            (stream, "{% include 'includes/_job_details.html' %}"),
+            (batch, "{% include 'includes/_job_details.html' %}"),
+            (manual_picker, "{% include 'includes/_job_details.html' %}"),
+        ):
+            self.assertLess(template.index(message_include), template.index(footer_marker))
+
+        self.assertIn("{% if not project or current_workspace_id %}", index)
+        self.assertIn("data-nice-message-footer", jobbuilder)
+        self.assertEqual(jobbuilder.count("data-nice-message-footer"), 3)
+        self.assertIn("{% include 'messages.html' %}", jobbuilder)
+        self.assertIn("function positionBuilderMessages()", jobbuilder)
+        self.assertEqual(jobbuilder.count("positionBuilderMessages();"), 2)
+        self.assertNotIn("MutationObserver", content)
+        self.assertNotIn("MutationObserver", jobbuilder)
 
     def test_jobbuilder_submits_to_named_workspace_iframe(self):
         jobbuilder = self._read_template("jobbuilder.html")
