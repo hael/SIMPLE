@@ -43,6 +43,8 @@ real(dp), parameter :: POSE_NUMERIC_FLOOR = epsilon(1._dp)**2
 real(dp), parameter :: LM_INITIAL_DAMPING = 1.e-3_dp
 real(dp), parameter :: LM_INITIAL_REJECTION_MULTIPLIER = 4._dp
 real(dp), parameter :: LM_MAX_DAMPING = 1._dp/epsilon(1._dp)
+real(dp), parameter :: LM_ACCEPTED_RELATIVE_TOLERANCE = 1.e-6_dp
+integer, parameter :: LM_MAX_CONSECUTIVE_REJECTIONS = 8
 
 !> One shift-free, noise-whitened particle observation for a fixed reference.
 type :: cartesian_pose_data
@@ -328,7 +330,7 @@ contains
         complex :: value, dvalue_dloc(3), phase
         complex(dp) :: model, raw_observed, residual
         real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:)
-        real(dp) :: arg, root_sigma, vnum, vden
+        real(dp) :: l_arg, root_sigma, vnum, vden
         real(sp) :: loc(3), switch_margin(3)
         integer, allocatable :: counts(:)
         integer :: h, k, shell, radius_squared, lower_shell, upper_shell
@@ -352,8 +354,8 @@ contains
                 shell = nint(sqrt(real(radius_squared)))
                 loc = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                 call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
-                arg = 2._dp*real(PI, dp)*(real(h, dp)*shift(1) + real(k, dp)*shift(2))/real(self%box, dp)
-                phase = cmplx(cos(arg), sin(arg), kind=sp)
+                l_arg = 2._dp*real(PI, dp)*(real(h, dp)*shift(1) + real(k, dp)*shift(2))/real(self%box, dp)
+                phase = cmplx(cos(l_arg), sin(l_arg), kind=sp)
                 root_sigma = sqrt(real(data%sigma2(shell), dp))
                 model = cmplx(phase, kind=dp)*cmplx(data%transfer(h, k), kind=dp)* &
                     &cmplx(value, kind=dp)*root_sigma
@@ -478,7 +480,7 @@ contains
                                             &self%lims2(2, 1):self%lims2(2, 2))
         complex :: value, dvalue_dloc(3), phase
         real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: arg
+        real(dp) :: l_arg
         integer :: h, k
         if (.not. self%exists) error stop 'predict_unweighted called on an empty Fourier workspace'
         prediction = cmplx(0., 0.)
@@ -487,9 +489,9 @@ contains
                 if (h*h + k*k > (self%box/2)**2) cycle
                 loc = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                 call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
-                arg = 2._dp*real(PI, dp)* &
+                l_arg = 2._dp*real(PI, dp)* &
                     &(real(h, dp)*shift(1) + real(k, dp)*shift(2))/real(self%box, dp)
-                phase = cmplx(cos(arg), sin(arg), kind=sp)
+                phase = cmplx(cos(l_arg), sin(l_arg), kind=sp)
                 prediction(h, k) = phase*value
             end do
         end do
@@ -513,7 +515,7 @@ contains
         complex :: value, dvalue_dloc(3), phase
         complex(dp) :: model, particle, residual, jacobian(2)
         real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: arg, frequency(2), particle_power, prediction_power, cross_real
+        real(dp) :: l_arg, frequency(2), particle_power, prediction_power, cross_real
         real(dp) :: model_gradient(2)
         integer :: axis, h, jaxis, k, active_sqhp, active_sqlp
         if (.not. self%exists) error stop 'shift_normal_terms called on an empty Fourier workspace'
@@ -538,9 +540,9 @@ contains
                 if (h*h + k*k < active_sqhp .or. h*h + k*k > active_sqlp) cycle
                 loc = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                 call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
-                arg = 2._dp*real(PI, dp)* &
+                l_arg = 2._dp*real(PI, dp)* &
                     &(real(h, dp)*shift(1) + real(k, dp)*shift(2))/real(self%box, dp)
-                phase = cmplx(cos(arg), sin(arg), kind=sp)
+                phase = cmplx(cos(l_arg), sin(l_arg), kind=sp)
                 model = cmplx(phase*value, kind=dp)
                 if (present(transfer)) model = model*cmplx(transfer(h, k), kind=dp)
                 particle = cmplx(observed(h, k), kind=dp)
@@ -742,7 +744,7 @@ contains
         real(dp) :: objective, trial_objective, mu, rejection_multiplier
         real(dp) :: det, predicted, actual, ratio, maxdiag
         real(dp) :: discriminant, lambda_max, lambda_min, step_norm, relative_reduction
-        integer :: axis, iteration, naccepted
+        integer :: axis, iteration, naccepted, consecutive_rejections
         logical :: bounded_trial
         result = pose_lm_result()
         if (present(diagnostics)) call diagnostics%reset
@@ -759,6 +761,7 @@ contains
         call self%shift_normal_terms(rotmat, shift, data%observed, objective, gradient, hessian, &
             &config%objective, data%transfer, data%shell_range)
         naccepted = 0
+        consecutive_rejections = 0
         bounded_trial = .false.
         if (.not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
             &any(.not. ieee_is_finite(hessian))) then
@@ -816,7 +819,12 @@ contains
                 result%status = LM_INVALID_NUMERICS
                 exit
             elseif (predicted <= 0._dp) then
+                consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
+                if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) then
+                    result%status = rejection_terminal_status(naccepted, bounded_trial)
+                    exit
+                end if
                 cycle
             end if
             trial_shift = shift + direction
@@ -825,8 +833,10 @@ contains
                 &trial_gradient, trial_hessian, config%objective, data%transfer, data%shell_range)
             if (.not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian))) then
+                consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
                 result%status = LM_INVALID_NUMERICS
+                if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) exit
                 cycle
             end if
             actual = objective - trial_objective
@@ -838,13 +848,20 @@ contains
                 gradient = trial_gradient
                 hessian = trial_hessian
                 naccepted = naccepted + 1
+                consecutive_rejections = 0
                 if (present(diagnostics)) diagnostics%naccepted = naccepted
                 if (ratio > 0.75_dp) mu = max(mu/2._dp, epsilon(1._dp))
                 rejection_multiplier = LM_INITIAL_REJECTION_MULTIPLIER
                 result%status = LM_ACCEPTED_IMPROVEMENT
-                if (step_norm < 1.e-8_dp .or. relative_reduction < 1.e-10_dp) exit
+                if (step_norm < 1.e-8_dp .or. &
+                    &relative_reduction < LM_ACCEPTED_RELATIVE_TOLERANCE) exit
             else
+                consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
+                if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) then
+                    result%status = rejection_terminal_status(naccepted, bounded_trial)
+                    exit
+                end if
             end if
         end do
         if (result%status == LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial) &
@@ -868,7 +885,7 @@ contains
         real(dp) :: predicted, actual, ratio, rotation_norm, shift_norm
         real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
         real(dp) :: cumulative_rotation, cumulative_shift, sine_half
-        integer :: iteration, naccepted
+        integer :: iteration, naccepted, consecutive_rejections
         logical :: active(5), bounded_trial, bounded_step, cumulative_guard
         logical :: accept_trial, identifiable, reliable, stationary
 
@@ -878,6 +895,7 @@ contains
         result%status = LM_ITERATION_LIMIT
         result%niterations = 0
         naccepted = 0
+        consecutive_rejections = 0
         if (present(diagnostics)) call diagnostics%reset
         active = config%active_parameters
         if (.not. any(active)) error stop 'refine_pose_lm requires one active parameter'
@@ -950,7 +968,12 @@ contains
                 result%status = LM_INVALID_NUMERICS
                 exit
             elseif (predicted <= 0._dp) then
+                consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
+                if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) then
+                    result%status = rejection_terminal_status(naccepted, bounded_trial)
+                    exit
+                end if
                 cycle
             end if
             ! Apply the proposed three-component SO(3) increment and the two
@@ -966,10 +989,15 @@ contains
                 cumulative_shift = sqrt(sum((trial_shift - config%anchor_shift)**2))
                 if (cumulative_rotation > config%max_total_rotation + 10._dp*epsilon(1._dp) .or. &
                     &cumulative_shift > config%max_total_shift + 10._dp*epsilon(1._dp)) then
+                    consecutive_rejections = consecutive_rejections + 1
                     call increase_lm_damping(mu, rejection_multiplier)
                     if (.not. bounded_step .and. present(diagnostics)) &
                         &diagnostics%nbound_hits = diagnostics%nbound_hits + 1
                     bounded_trial = .true.
+                    if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) then
+                        result%status = rejection_terminal_status(naccepted, bounded_trial)
+                        exit
+                    end if
                     cycle
                 end if
             end if
@@ -981,8 +1009,10 @@ contains
                 &data%transfer, data%shell_range)
             if (.not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian))) then
+                consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
                 result%status = LM_INVALID_NUMERICS
+                if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) exit
                 cycle
             end if
             ! Compare the measured reduction with the quadratic prediction.
@@ -999,20 +1029,41 @@ contains
                 gradient = trial_gradient
                 hessian = trial_hessian
                 naccepted = naccepted + 1
+                consecutive_rejections = 0
                 if (present(diagnostics)) diagnostics%naccepted = naccepted
                 if (ratio > 0.75_dp) mu = max(mu/2._dp, epsilon(1._dp))
                 rejection_multiplier = LM_INITIAL_REJECTION_MULTIPLIER
                 result%status = LM_ACCEPTED_IMPROVEMENT
                 ! Stop early after an accepted but negligible step or objective
                 ! reduction; otherwise continue from this accepted endpoint.
-                if (max(rotation_norm, shift_norm) < 1.e-8_dp .or. relative_reduction < 1.e-10_dp) exit
+                if (max(rotation_norm, shift_norm) < 1.e-8_dp .or. &
+                    &relative_reduction < LM_ACCEPTED_RELATIVE_TOLERANCE) exit
             else
+                consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
+                if (consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS) then
+                    result%status = rejection_terminal_status(naccepted, bounded_trial)
+                    exit
+                end if
             end if
         end do
         if (result%status == LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial) &
             &result%status = LM_STEP_BOUND_REJECTED
     end subroutine refine_pose_lm
+
+    !> Classify a finite rejection limit without discarding an earlier accepted endpoint.
+    pure integer function rejection_terminal_status(naccepted, bounded_trial) result(status)
+        integer, intent(in) :: naccepted
+        logical, intent(in) :: bounded_trial
+
+        if (naccepted > 0) then
+            status = LM_ACCEPTED_IMPROVEMENT
+        elseif (bounded_trial) then
+            status = LM_STEP_BOUND_REJECTED
+        else
+            status = LM_FINITE_NO_IMPROVEMENT
+        end if
+    end function rejection_terminal_status
 
     !> Increase damping aggressively across consecutive rejected proposals.
     !! The owning solver resets the multiplier after an accepted proposal.

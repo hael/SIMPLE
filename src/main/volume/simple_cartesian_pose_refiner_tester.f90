@@ -104,8 +104,12 @@ contains
 
 
     subroutine run_pose_cont_numerics()
-        write(*,'(A)') 'test_prepared_particle_contract'
-        call test_prepared_particle_contract()
+        write(*,'(A)') 'test_particle_preparation_contract'
+        call test_particle_preparation_contract()
+        write(*,'(A)') 'test_sigma_shell_contract'
+        call test_sigma_shell_contract()
+        write(*,'(A)') 'test_reference_envelope_contract'
+        call test_reference_envelope_contract()
         write(*,'(A)') 'test_shift_phase_sign'
         call test_shift_phase_sign()
         write(*,'(A)') 'test_ncc_objective_formula'
@@ -118,21 +122,19 @@ contains
         call test_rotation_increment()
     end subroutine run_pose_cont_numerics
 
-    subroutine test_prepared_particle_contract()
-        type(cartesian_pose_refiner) :: workspace, corrected_workspace
+    subroutine test_particle_preparation_contract()
+        type(cartesian_pose_refiner) :: workspace
         type(cartesian_pose_data) :: data
         type(ctfparams) :: ctfparms
         type(ctf) :: tfun
         type(ctfvars) :: ctfvals
-        type(kbinterpol) :: kbwin
-        real, allocatable :: volume(:, :, :), corrected_volume(:, :, :), inv1d(:)
+        real, allocatable :: volume(:, :, :)
         real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-        real :: sigma2(0:TEST_BOX/2), short_sigma2(0:TEST_BOX/2 - 2), angle, cval, v
+        real :: sigma2(0:TEST_BOX/2), angle, cval, v
         complex :: prediction(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
-        complex :: corrected_prediction(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
         complex :: raw_observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
         real(dp) :: rotation(3, 3), shift(2), objective, gradient(5)
-        integer :: effective_range(2), h, i, j, k, shell
+        integer :: h, k, shell
 
         call build_test_volume(volume)
         call workspace%new_physical_reference(volume)
@@ -196,12 +198,33 @@ contains
         call assert_true(objective < 1.e-9_dp .and. maxval(abs(gradient)) < 1.e-7_dp, &
             &'phase-flipped CTF changed an exact particle match')
 
+        call workspace%kill
+    end subroutine test_particle_preparation_contract
+
+    subroutine test_sigma_shell_contract()
+        type(cartesian_pose_refiner) :: workspace
+        type(cartesian_pose_data) :: data
+        type(ctfparams) :: ctfparms
+        real, allocatable :: volume(:, :, :)
+        real :: sigma2(0:TEST_BOX/2), short_sigma2(0:TEST_BOX/2 - 2)
+        complex :: prediction(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: rotation(3, 3), shift(2)
+        integer :: effective_range(2)
+
+        call build_test_volume(volume)
+        call workspace%new_physical_reference(volume)
+        rotation = real(euler2m([17., 31., 23.]), dp)
+        shift = [0.23_dp, -0.17_dp]
+        call workspace%predict_unweighted(rotation, shift, prediction)
+        ctfparms%ctfflag = CTFFLAG_NO
+
         short_sigma2 = 1.
         call workspace%prepare_particle(prediction, ctfparms, short_sigma2, [2, TEST_BOX/2], data)
         effective_range = data%get_shell_range()
         call assert_true(data%is_valid() .and. effective_range(2) == TEST_BOX/2 - 2, &
             &'short noise spectrum did not cap the active shell range')
 
+        sigma2 = 1.
         sigma2(TEST_BOX/2) = -1.
         call workspace%prepare_particle(prediction, ctfparms, sigma2, [2, TEST_BOX/2], data)
         call assert_true(.not. data%is_valid(), 'invalid active noise variance was accepted')
@@ -211,6 +234,18 @@ contains
         call workspace%prepare_particle(prediction, ctfparms, sigma2, [2, TEST_BOX/2], data)
         call assert_true(data%is_valid(), 'invalid variance outside the active range rejected the particle')
 
+        call workspace%kill
+    end subroutine test_sigma_shell_contract
+
+    subroutine test_reference_envelope_contract()
+        type(cartesian_pose_refiner) :: workspace, corrected_workspace
+        type(kbinterpol) :: kbwin
+        real, allocatable :: volume(:, :, :), corrected_volume(:, :, :), inv1d(:)
+        complex :: prediction(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        complex :: corrected_prediction(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        integer :: i, j, k
+
+        call build_test_volume(volume)
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         call kb_stencil_centered_crop_inv_envelope_1d(kbwin, OSMPL_PAD_FAC*TEST_BOX, TEST_BOX, inv1d)
         allocate (corrected_volume, source=volume)
@@ -229,7 +264,7 @@ contains
             &'inverse-envelope constructor did not apply the correction exactly once')
         call workspace%kill
         call corrected_workspace%kill
-    end subroutine test_prepared_particle_contract
+    end subroutine test_reference_envelope_contract
 
     subroutine test_shift_phase_sign()
         type(cartesian_pose_refiner) :: workspace
@@ -433,12 +468,20 @@ contains
     end subroutine test_matched_projector_boundary
 
     subroutine test_rotation_increment()
+        real(dp), parameter :: angle = 0.02_dp
         real(dp) :: rotation(3, 3), updated(3, 3), identity(3, 3)
+        real(dp) :: axis_rotation(3, 3), expected(3, 3)
         real(dp) :: determinant, input_determinant, input_orthogonality, updated_orthogonality
 
         rotation = real(euler2m([19., 37., 28.]), dp)
-        updated = right_increment_rotation(rotation, [0.013_dp, -0.017_dp, 0.011_dp])
+        updated = right_increment_rotation(rotation, [angle, 0._dp, 0._dp])
         identity = identity_rotation()
+        axis_rotation = identity
+        axis_rotation(2, 2) = cos(angle)
+        axis_rotation(2, 3) = -sin(angle)
+        axis_rotation(3, 2) = sin(angle)
+        axis_rotation(3, 3) = cos(angle)
+        expected = matmul(rotation, axis_rotation)
         input_orthogonality = sqrt(sum((matmul(transpose(rotation), rotation) - identity)**2))
         input_determinant = determinant3(rotation)
         updated_orthogonality = sqrt(sum((matmul(transpose(updated), updated) - identity)**2))
@@ -447,6 +490,8 @@ contains
             &'right rotation increment increased the input orthogonality error')
         call assert_true(abs(determinant - 1._dp) <= abs(input_determinant - 1._dp) + ORTHOGONAL_TOL, &
             &'right rotation increment increased the input determinant error')
+        call assert_true(maxval(abs(updated - expected)) <= ORTHOGONAL_TOL, &
+            &'rotation increment does not use the declared right-handed local-axis convention')
     end subroutine test_rotation_increment
 
     pure function determinant3(matrix) result(determinant)
@@ -463,6 +508,8 @@ contains
         call test_shift_solver()
         write(*,'(A)') 'test_joint_solver'
         call test_joint_solver()
+        write(*,'(A)') 'test_tiny_accepted_reduction_stop'
+        call test_tiny_accepted_reduction_stop()
         write(*,'(A)') 'test_ncc_solver'
         call test_ncc_solver()
         write(*,'(A)') 'test_invalid_and_unobservable_inputs'
@@ -494,6 +541,8 @@ contains
         call assert_true(diagnostics%naccepted > 0 .and. &
             &diagnostics%max_shift_step <= config%shift_step_bound + epsilon(1._dp), &
             &'shift-only LM violated its accepted-step contract')
+        call assert_true(result%niterations < config%max_iterations, &
+            &'shift-only LM exhausted its iteration limit after converging')
         shift = truth_shift
         call workspace%refine_shift_lm(rotation, shift, data, config, result, diagnostics)
         call assert_true(result%status == LM_FINITE_NO_IMPROVEMENT .and. &
@@ -533,6 +582,8 @@ contains
         call assert_true(diagnostics%max_rotation_step <= config%rotation_scale + epsilon(1._dp) .and. &
             &diagnostics%max_shift_step <= config%shift_step_bound + epsilon(1._dp), &
             &'joint LM exceeded a configured proposal bound')
+        call assert_true(result%niterations < config%max_iterations, &
+            &'joint LM exhausted its iteration limit after converging')
 
         rotation = truth_rotation
         shift = truth_shift
@@ -580,22 +631,57 @@ contains
         call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
         call assert_true(diagnostics%nbound_hits > 0, &
             &'cumulative guard test did not exercise an out-of-bound proposal')
-        select case(result%status)
-            case(LM_ACCEPTED_IMPROVEMENT)
-                call assert_true(objective_after < objective_before .and. &
-                    &rotation_distance(rotation, frozen_rotation) <= &
-                    &config%max_total_rotation + 10._dp*epsilon(1._dp) .and. &
-                    &sqrt(sum((shift - frozen_shift)**2)) <= &
-                    &config%max_total_shift + 10._dp*epsilon(1._dp), &
-                    &'cumulative guard accepted a pose outside its bounds')
-            case(LM_STEP_BOUND_REJECTED)
-                call assert_true(all(rotation == frozen_rotation) .and. all(shift == frozen_shift), &
-                    &'cumulative-bound rejection changed the complete input pose')
-            case default
-                call assert_true(.false., 'cumulative guard returned an unexpected LM status')
-        end select
+        call assert_true(result%status == LM_STEP_BOUND_REJECTED .and. &
+            &result%niterations == 8, &
+            &'cumulative guard did not stop after eight rejected proposals')
+        call assert_true(all(rotation == frozen_rotation) .and. all(shift == frozen_shift) .and. &
+            &objective_after == objective_before, &
+            &'cumulative-bound rejection changed the complete input pose')
         call workspace%kill
     end subroutine test_joint_solver
+
+    subroutine test_tiny_accepted_reduction_stop()
+        type(cartesian_pose_refiner) :: workspace
+        type(cartesian_pose_data) :: data
+        type(pose_lm_config) :: config
+        type(pose_lm_result) :: result
+        real, allocatable :: volume(:, :, :)
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: truth_rotation(3, 3), rotation(3, 3), frozen_rotation(3, 3)
+        real(dp) :: truth_shift(2), shift(2), initial_shift(2)
+        real(dp) :: objective_before, objective_after, relative_reduction, gradient(5)
+
+        call build_test_volume(volume)
+        call workspace%new_physical_reference(volume)
+        truth_rotation = real(euler2m([19., 37., 28.]), dp)
+        truth_shift = [0.31_dp, -0.24_dp]
+        call workspace%predict_unweighted(truth_rotation, truth_shift, observed)
+        call prepare_unweighted_particle(workspace, observed, data)
+
+        ! Keep a material rotation residual while permitting only a minuscule
+        ! shift step. The first accepted reduction is therefore positive but
+        ! below the production relative-reduction threshold.
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        shift = [-0.08_dp, 0.06_dp]
+        frozen_rotation = rotation
+        initial_shift = shift
+        config = pose_lm_config(rotation_scale=0.10_dp, shift_step_bound=1.e-8_dp, &
+            &max_iterations=20)
+        config%active_parameters = [.false., .false., .false., .true., .true.]
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_before, gradient)
+        call workspace%refine_prepared_pose_lm(rotation, shift, data, config, result)
+        call workspace%prepared_objective_gradient(rotation, shift, data, objective_after, gradient)
+        relative_reduction = (objective_before - objective_after)/objective_before
+
+        call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
+            &result%niterations == 1, &
+            &'LM did not stop after the first tiny accepted reduction')
+        call assert_true(relative_reduction > 0._dp .and. relative_reduction < 1.e-6_dp, &
+            &'tiny accepted reduction fixture does not exercise the production threshold')
+        call assert_true(all(rotation == frozen_rotation) .and. any(shift /= initial_shift), &
+            &'tiny accepted reduction changed inactive coordinates or lost its endpoint')
+        call workspace%kill
+    end subroutine test_tiny_accepted_reduction_stop
 
     subroutine test_ncc_solver()
         type(cartesian_pose_refiner) :: workspace
