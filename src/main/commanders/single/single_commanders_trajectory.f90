@@ -69,6 +69,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
+        orig_box = 0
         if( nlines(params%boxfile) > 0 )then
             call boxfile%new(params%boxfile, 1)
             ndatlines = boxfile%get_ndatalines()

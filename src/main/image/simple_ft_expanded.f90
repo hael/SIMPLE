@@ -127,6 +127,7 @@ contains
                 wh(h)    =  exp(-spafreqh*spafreqh*bfac/4.)
             enddo
         endif
+        wk   = 1.
         kcnt = 0
         do k=self%lims(2,1),self%lims(2,2)
             kcnt = kcnt + 1

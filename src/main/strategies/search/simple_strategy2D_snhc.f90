@@ -43,6 +43,8 @@ contains
             call self%s%inpl_srch_first
             ! Class search
             cc_glob      = -huge(cc_glob)
+            class_glob   = self%s%best_class
+            inpl_glob    = self%s%best_rot
             found_better = .false.
             do isample=1,self%s%nrefs
                 ! stochastic reference index

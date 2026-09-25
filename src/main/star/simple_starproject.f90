@@ -542,6 +542,7 @@ contains
         flagsopen = .false.
         dataopen  = .false.
         lineindex = 1
+        blockname = ''
         call fopen(fhandle, file=self%starfile%filename, status='old')
         do
             call line%readline(fhandle, ios)

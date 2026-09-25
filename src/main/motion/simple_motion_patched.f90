@@ -501,6 +501,8 @@ contains
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
         call CPlot2D__SetFlipY(plot2D, C_TRUE)
+        xcenter = real(self%ldim(1))/2.
+        ycenter = real(self%ldim(2))/2.
         if (self%has_global_shifts) then
             ! centering to first frame for display only
             shifts      = self%global_shifts
@@ -510,8 +512,6 @@ contains
             call CDataSet__new(dataSet)
             call CDataSet__SetDrawMarker(dataSet, C_FALSE)
             call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 1.0_c_double)
-            xcenter = real(self%ldim(1))/2.
-            ycenter = real(self%ldim(2))/2.
             do j = 1, self%nframes
                 call CDataPoint__new2( real(xcenter + SCALE * shifts(j, 1), c_double), &
                                       &real(ycenter + SCALE * shifts(j, 2), c_double), point)

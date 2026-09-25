@@ -240,6 +240,8 @@ contains
                 ind = max(loc(1) - 1,1) ! optimal # peaks
             case(3)
                 ind = max(loc(1) - 2,1) ! more # peaks
+            case default
+                call simple_exception('peak detection level out of range', 'simple_segmentation.f90', __LINE__)
         end select
         t = peak_ts(ind)
     end subroutine refine_peak_thres_sortmeans

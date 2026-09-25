@@ -174,6 +174,8 @@ contains
             get_centype = SEG_CEN
         case('params')
             get_centype = PARAMS_CEN
+        case default
+            get_centype = ENUM_CENTYPE
         end select
     end function get_centype
 

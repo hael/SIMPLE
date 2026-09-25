@@ -1122,6 +1122,8 @@ contains
                 logical :: check_box, check_smpd
                 check_box  = projects(1)%os_stk%isthere(1, 'box')
                 check_smpd = projects(1)%os_stk%isthere(1, 'smpd')
+                box_ref  = 0
+                smpd_ref = 0.
                 if( check_box  ) box_ref  = projects(1)%os_stk%get_int(1, 'box')
                 if( check_smpd ) smpd_ref = projects(1)%os_stk%get(1, 'smpd')
                 do ip = 1,nprojs

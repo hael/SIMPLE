@@ -19,7 +19,7 @@ use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_test_utils
-use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite
+use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
 implicit none
 private
 public :: run_all_pftc_inplane_tests
@@ -195,6 +195,9 @@ contains
                 call b%pftc%gen_corr_grad_at_angle(1, 1, shift, rotind, f, grad)
             case(OBJ_HYBRID)
                 call b%pftc%gen_hybrid_grad_at_angle(1, 1, shift, rotind, f, grad)
+            case default
+                f    = ieee_value(f, ieee_quiet_nan)
+                grad = f
         end select
     end subroutine evaluate
 

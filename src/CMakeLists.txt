@@ -168,20 +168,48 @@ set(SIMPLE_FOX_IMPORT_SOURCES
 set_property(SOURCE ${SIMPLE_FOX_IMPORT_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-surprising")
 
-# GNU 15/16 emit descriptor-flow false positives around allocatable assignment
-# and move_alloc in these routines. The descriptors are initialized by the
-# language runtime before the reported statements execute.
+# GNU 15/16 emit descriptor-flow false positives around allocatable assignment,
+# array constructors and move_alloc in these routines (reported on hidden
+# descriptor fields such as x.offset, x.dim[0].ubound or MEM <...>). The
+# descriptors are initialized by the language runtime before the reported
+# statements execute.
 set(SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_fileio.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_imghead.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/cavg_quality/simple_cavg_quality_relations.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/single/single_commanders_trajectory.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/flex/simple_flex_pca_em_iter.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/flex/simple_flex_pca_rec3D.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/image/simple_ft_expanded.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/opt/simple_opt_simplex.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_oris_getters.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/pick/simple_pickref.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/sigma2/simple_euclid_sigma2.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cmdline.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject_stream.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_cls_split_strategy.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_denoise_project_strategy.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_watcher.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_pcg.f90"
 )
 set_property(SOURCE ${SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-maybe-uninitialized")
+
+# Test sources (BUILD_TESTS=ON) with the same GCC 16 descriptor false positives.
+# Local fplane_type objects passed to intent(out) dummies are also reported as
+# definitely uninitialized (-Wuninitialized) on their descriptor fields.
+set(SIMPLE_TEST_DESCRIPTOR_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/class/simple_class_compatibility_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/test/simple_commanders_test_highlevel.f90"
+)
+set_property(SOURCE ${SIMPLE_TEST_DESCRIPTOR_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-maybe-uninitialized")
+set(SIMPLE_TEST_INTENT_OUT_DESCRIPTOR_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/class/simple_classaverager_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/ctf/simple_ctf_tester.f90"
+)
+set_property(SOURCE ${SIMPLE_TEST_INTENT_OUT_DESCRIPTOR_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-uninitialized;-Wno-maybe-uninitialized")
 
 # Add Windows-only stubs
 if(WIN32)

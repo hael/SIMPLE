@@ -481,6 +481,7 @@ contains
             logical :: pose_cont_seed_available
             pose_result = pose_cont_transaction_result()
             pose_elapsed = 0._dp
+            pose_start   = 0._dp
             pose_cont_seed_available = .true.
             select case(ctrl%refine_mode)
                 case('shc')

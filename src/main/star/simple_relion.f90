@@ -346,6 +346,7 @@ contains
         call starfile_table__delete(startable)
         call starfile_table__new(startable)
         call starfile_table__setName(startable, "particles")
+        dfxstep = 1.
         if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
             call spproj%os_stk%minmax('dfx', dfxmin, dfxmax)
             dfxstep = (dfxmax - dfxmin)/ (cline%get_rarg('reliongroups') + 1)

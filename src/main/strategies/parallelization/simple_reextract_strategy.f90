@@ -246,6 +246,7 @@ contains
             enddo
             if( .not.cline%defined('box') ) params%box = prev_box
             if( is_odd(params%box) ) THROW_HARD('Box size must be of even dimension! exec_reextract')
+            scale = 1. ! set per micrograph below when l_scale_particles
             write(logfhandle,'(A)')'>>> EXTRACTING... '
             call spproj_in%read_segment('ptcl2D', params%projfile)
             call spproj_in%read_segment('ptcl3D', params%projfile)

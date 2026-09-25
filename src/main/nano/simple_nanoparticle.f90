@@ -505,6 +505,7 @@ contains
         call atom_centers%new(pdbfile_in)
         m(:)     = self%masscen()
         d_before = huge(d_before)
+        vec      = 0.
         do i = 1, self%n_cc
             d = euclid(m,self%atominfo(i)%center(:))
             if( d < d_before )then
@@ -1057,6 +1058,7 @@ contains
         elsewhere
             atom_del_mask = .false.
         endwhere
+        cscore_thres = it_contact_score ! clamped to it_contact_score/2 below if no cn qualifies
         do cn = 1,it_contact_score
             percen = (real(count(cscores >= cn)) / real(self%n_cc)) * 100.
             if( ll_print ) write(logfhandle,*) 'percen atoms with contact score > '//int2str(cn)//':', percen

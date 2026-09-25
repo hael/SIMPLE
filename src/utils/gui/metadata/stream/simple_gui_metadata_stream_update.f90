@@ -186,7 +186,6 @@ contains
   subroutine set_pickrefs_cycle( self, ncycle )
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: ncycle
-    integer :: n
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned       = .true.
     self%pickrefs_cycle   = ncycle

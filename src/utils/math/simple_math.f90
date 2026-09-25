@@ -904,6 +904,7 @@ contains
         integer :: i, cnt
         scores_sorted = scores
         call hpsort(scores_sorted) ! largest last
+        t = 0.
         if( npeaks >= n )then
             t = scores_sorted(n)
         else 
@@ -950,8 +951,7 @@ contains
             if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_1'
             dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
         case DEFAULT
-            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
-            write(logfhandle,*)'Error! Unsupported pixels_dist kind; pixels_dist_1'
+            call simple_exception('Unsupported pixels_dist kind: '//trim(which)//'; pixels_dist_1', 'simple_math.f90', __LINE__)
         end select
     end function pixels_dist_1
 
@@ -995,8 +995,7 @@ contains
                 if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_2'
                 dist =  sum(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
             case DEFAULT
-                write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
-                write(logfhandle,*)'Error! Unsupported pixels_dist kind; pixels_dist_2'
+                call simple_exception('Unsupported pixels_dist kind: '//trim(which)//'; pixels_dist_2', 'simple_math.f90', __LINE__)
         end select
     end function pixels_dist_2
 

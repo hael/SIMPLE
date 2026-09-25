@@ -1032,6 +1032,8 @@ contains
         band_avg = sum(tmp(s:e)) / real(e-s+1)
         ! location of maximum in ice band
         mag_max = -1.
+        hmax    = 0
+        kmax    = 0
         gs = real(max(            1,   ice_maxind-3)) / real(self%ldim(1))
         ge = real(min(size(powspec)-1, ice_maxind+3)) / real(self%ldim(1))
         do k = lims(2,1),lims(2,2)
@@ -1048,6 +1050,7 @@ contains
                 endif
             end do
         end do
+        if( mag_max < 0. ) return ! no Fourier component in the ice band; score stays 0
         ! ice peak
         ice_avg = 0.
         cnt     = 0

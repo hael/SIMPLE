@@ -157,7 +157,10 @@ def main() -> int:
         m = LOC_RE.match(raw)
         if m:
             loc = (m.group(1), int(m.group(2)))
-            continue
+            # optimizer diagnostics (-Wmaybe-uninitialized) print the warning on the location line
+            raw = raw[m.end():]
+            if "Warning:" not in raw:
+                continue
         if loc is None:
             continue
         if m := UNUSED_VAR_RE.search(raw):

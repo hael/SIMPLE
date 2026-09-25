@@ -236,6 +236,7 @@ contains
           call fopen(fnr, status='replace', file=string('symmetry_test_output.txt'), action='write')
         endif
         write(fnr,'(a)') '>>> RESULTS RANKED ACCORDING TO DEGREE OF SYMMETRY'
+        highest_pgrp_detected = 1 ! c1 unless a higher point group is flagged as a peak
         do isym=1,nsym
             write(fnr,'(a,f5.2,a,f5.2,a,i1)') 'POINT-GROUP: '//str_pad(trim(pgrps(isym)%str), 3)//' CORRELATION: ',&
             &ccs(isym), ' Z-SCORE: ', zscores(isym), ' PEAK: ', peaks(isym)

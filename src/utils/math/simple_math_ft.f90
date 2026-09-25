@@ -177,6 +177,7 @@ contains
         real,    intent(in) :: res(:), crit_res
         integer :: n, h, find
         n = size(res)
+        find = n - 1
         do h=3,n-1
             if( res(h) >= crit_res )then
                 cycle

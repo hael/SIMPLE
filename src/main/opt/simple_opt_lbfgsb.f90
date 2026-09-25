@@ -1308,6 +1308,8 @@ contains
             nbreak = 0
             ibkmin = 0
             bkmin = zero
+            tl = zero
+            tu = zero
             col2 = 2*col
             f1 = zero
             !     We set p to zero and build it up as we determine d.

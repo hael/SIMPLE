@@ -684,6 +684,11 @@ contains
                 call json%create_object(dataset, "dataset")
                 fsc05_crossed   = .false.
                 fsc0143_crossed = .false.
+                ! FSC never above a threshold: lowest-resolution shell; never below it: last shell
+                fsc05               = res(1)
+                fsc0143             = res(1)
+                fsc05_crossed_bin   = size(fsc)
+                fsc0143_crossed_bin = size(fsc)
                 do ifsc=1, size(fsc)
                     if(.not. fsc05_crossed) then
                         if(fsc(ifsc) .gt. 0.5) then

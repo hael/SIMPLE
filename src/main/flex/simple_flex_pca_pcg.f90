@@ -1882,6 +1882,7 @@ contains
         if( .not. self%l_kernel ) THROW_HARD('kernels are not finalized; solve')
         ! cold start (production convention). The zero iterate is trivially on the support, so no masking
         ! of the start is needed; the gridding solution is kept only when the diagnostic is asked for.
+        gnorm = 0._dp
         if( verbose > 0 )then
             allocate(xgrid, source=x)
             ! compare on the SUPPORT: the CG solution is zero outside it while the gridding reference is a

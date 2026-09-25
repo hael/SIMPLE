@@ -381,6 +381,7 @@ contains
         call read_filetable(params%oritab, projfnames)
         nprojs = size(projfnames)
         allocate(spprojs(nprojs))
+        noris1 = 0
         do iproj = 1, nprojs
             call spprojs(iproj)%read(projfnames(iproj))
             if( iproj == 1 )then

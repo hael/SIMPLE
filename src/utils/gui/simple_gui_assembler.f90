@@ -556,6 +556,7 @@ contains
         call self%json%destroy(json_pickrefs_ptr)
       endif
     endif
+    l_add = .false.
     if( allocated(meta_latest_cavgs2D) ) then
       call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')
       do i_cls2D=1, size(meta_latest_cavgs2D)

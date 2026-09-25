@@ -12,6 +12,8 @@ use unix, only : c_pthread_mutex_init, c_pthread_mutex_destroy
 use unix, only : c_pthread_mutex_lock, c_pthread_mutex_unlock
 implicit none
 
+private :: append_thumbnail
+
 real, parameter, dimension(21)  :: astig_hist_bins = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
 real, parameter, dimension(19)  :: ctf_res_bins    = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
 real, parameter, dimension(21)  :: ice_score_bins  = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
@@ -1200,8 +1202,7 @@ end type simple_nice_comm
         real,             optional, intent(in)    :: avg_ctf_resolution, avg_ice_score, avg_astigmatism
         logical,          optional, intent(in)    :: last_movie_imported, carousel, clear_carousel
         character(len=*), optional, intent(in)    :: thumbnail
-        type(nice_stat_thumb_image) :: new_thumbnail
-        integer :: uid, i
+        integer :: uid, i, inew
         real    :: rnd
         logical :: new
         this%view_micrographs%active = .true.
@@ -1236,12 +1237,11 @@ end type simple_nice_comm
                         end if
                     end do
                     if(new) then
-                        new_thumbnail%path      = thumbnail
-                        new_thumbnail%id        = thumbnail_id
-                        new_thumbnail%static_id = thumbnail_static_id
-                        new_thumbnail%uid       = "U" // int2str(uid)
-                        this%view_micrographs%thumbnail_carousel      = [this%view_micrographs%thumbnail_carousel,      new_thumbnail]
-                        this%view_micrographs%thumbnail_carousel_mask = [this%view_micrographs%thumbnail_carousel_mask, .true.]
+                        call append_thumbnail(this%view_micrographs%thumbnail_carousel, this%view_micrographs%thumbnail_carousel_mask, inew)
+                        this%view_micrographs%thumbnail_carousel(inew)%path      = thumbnail
+                        this%view_micrographs%thumbnail_carousel(inew)%id        = thumbnail_id
+                        this%view_micrographs%thumbnail_carousel(inew)%static_id = thumbnail_static_id
+                        this%view_micrographs%thumbnail_carousel(inew)%uid       = "U" // int2str(uid)
                     end if
                 else 
                     if(thumbnail_id .ne. this%view_micrographs%thumbnail%id) then
@@ -1276,8 +1276,7 @@ end type simple_nice_comm
         logical,          optional, intent(in)    :: last_micrograph_imported, carousel, clear_carousel
         character(len=*), optional, intent(in)    :: thumbnail, pickrefs_thumbnail, boxfile
         real,             optional, intent(in)    :: scale, pickrefs_thumbnail_scale
-        type(nice_stat_thumb_image) :: new_thumbnail
-        integer :: uid, i
+        integer :: uid, i, inew
         real    :: rnd
         logical :: new
         this%view_pick%active = .true.
@@ -1309,14 +1308,13 @@ end type simple_nice_comm
                         end if
                     end do
                     if(new) then
-                        new_thumbnail%path      = thumbnail
-                        new_thumbnail%id        = thumbnail_id
-                        new_thumbnail%static_id = thumbnail_static_id
-                        new_thumbnail%uid       = "U" // int2str(uid)
-                        if(present(boxfile)) new_thumbnail%boxfile = boxfile
-                        if(present(scale))   new_thumbnail%scale   = scale
-                        this%view_pick%thumbnail_carousel      = [this%view_pick%thumbnail_carousel,      new_thumbnail]
-                        this%view_pick%thumbnail_carousel_mask = [this%view_pick%thumbnail_carousel_mask, .true.]
+                        call append_thumbnail(this%view_pick%thumbnail_carousel, this%view_pick%thumbnail_carousel_mask, inew)
+                        this%view_pick%thumbnail_carousel(inew)%path      = thumbnail
+                        this%view_pick%thumbnail_carousel(inew)%id        = thumbnail_id
+                        this%view_pick%thumbnail_carousel(inew)%static_id = thumbnail_static_id
+                        this%view_pick%thumbnail_carousel(inew)%uid       = "U" // int2str(uid)
+                        if(present(boxfile)) this%view_pick%thumbnail_carousel(inew)%boxfile = boxfile
+                        if(present(scale))   this%view_pick%thumbnail_carousel(inew)%scale   = scale
                     end if
                 else
                     if(thumbnail_id .ne. this%view_pick%thumbnail%id) then
@@ -1348,6 +1346,21 @@ end type simple_nice_comm
             end if
         end if
     end subroutine update_pick
+
+    ! Append one default-initialized entry (mask .true.) to a thumbnail carousel and
+    ! return its index. The new element comes from allocate, so every component,
+    ! including the hidden lengths of unallocated deferred-length strings, is defined.
+    subroutine append_thumbnail( carousel, mask, inew )
+        type(nice_stat_thumb_image), allocatable, intent(inout) :: carousel(:)
+        logical,                     allocatable, intent(inout) :: mask(:)
+        integer,                                  intent(out)   :: inew
+        type(nice_stat_thumb_image), allocatable :: tmp(:)
+        inew = size(carousel) + 1
+        allocate(tmp(inew))
+        tmp(1:inew-1) = carousel
+        call move_alloc(tmp, carousel)
+        mask = [mask, .true.]
+    end subroutine append_thumbnail
 
     subroutine update_cls2D(this, particles_extracted, particles_imported, last_particles_imported, iteration, number_classes, number_classes_rejected, &
     number_particles_assigned, number_particles_rejected, maximum_resolution, last_iteration, thumbnail, thumbnail_id, thumbnail_static_id, &
