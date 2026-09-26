@@ -1,0 +1,6977 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/abinitio3D_addon_mode_proposal.html">
+      
+      
+        <link rel="prev" href="abinitio2D_seeded_restart.html">
+      
+      
+        <link rel="next" href="calpha_finder.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>abinitio3D_addon — development proposal - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#abinitio3d_addon-development-proposal" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              abinitio3D_addon — development proposal
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_18" id="__nav_5_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity analysis
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity analysis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/classify3d_refs.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification (classify3D_refs)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/refine3d_states.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement (refine3D_states)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2_process_heterogeneous_datasets.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Processing heterogeneous data sets in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_seeded_restart.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D seeded restart: initialize from the previous 2D clustering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio3D_addon — development proposal
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="abinitio3D_addon_mode_proposal.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio3D_addon — development proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-context-and-goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Context and goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-strategy-in-one-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Strategy in one page
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-frozen-contributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Frozen contributions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-abinitio3d_addon-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The abinitio3D_addon workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-architectural-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Architectural considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-full-particle-update-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Full-particle update passes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-risks-open-questions-and-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Risks, open questions and plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-verification-against-master-3f5e6adce-2026-09-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Verification against master 3f5e6adce (2026-09-25)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Verification against master 3f5e6adce (2026-09-25)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendations-on-the-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendations on the open questions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-file-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 file checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-review-disposition-2026-09-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Review disposition (2026-09-25)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-revision-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Revision log
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="calpha_finder.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-alpha finder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="calpha_nu_evidence_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Resolution Mask for C-alpha Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_cont_refine3D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Cartesian pose refinement in refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_pca_envelope_support.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_pca: sampling-distance control, reconstruction backends, and the envelope mask as solve support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_refine_ml_estimator_competition.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retiring the NU shell walk: a dense static ladder with the regularized pair in the competition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_backend_overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The PCG reconstruction backend: what it is today
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_decision_log.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: decision log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_priors_history.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: the complete experiment record (2026-08-25 to 2026-09-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="single_pcg_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE on the PCG backend: the atomic density prior
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/test_environment_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Environment Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_13" id="__nav_10_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    2D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/2D/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/2D/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/2D/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_14" id="__nav_10_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    3D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_15" id="__nav_10_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    NU
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/NU/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_16" id="__nav_10_16_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/heterogeneity/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_17" id="__nav_10_17_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_pca_architecture_audit_and_refactoring_plan_2026_09_17.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX PCA architectural audit and staged refactoring plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/image_rmat_padding_encapsulation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The padded real-space array of image: zero padding, and a box-shaped pointer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/mrc_stack_volume_output_suffix_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical MRC stack and volume output suffix refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 5 of the test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/scripts_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE scripts/ inventory and cleanup candidates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/single_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/stream_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/heterogeneity_analysis_ui_and_algorithm_docs_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis UI and Algorithm Documentation Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/test_review_record.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test review record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/testing_standards_assessment.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE's testing against modern practice: an assessment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/ui_category_membership_tidying.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Category Membership Tidying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/uniform_test_environment_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A uniform, two-tier test environment for SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/class_average_and_reconstruct3d_partials_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average State and Reconstruct3D Partials Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_10" id="__nav_11_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rejected
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Rejected
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/contract_submodule_architecture.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contract/Implementation Module Architecture for Fast Builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-context-and-goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Context and goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-strategy-in-one-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Strategy in one page
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-frozen-contributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Frozen contributions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-abinitio3d_addon-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The abinitio3D_addon workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-architectural-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Architectural considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-full-particle-update-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Full-particle update passes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-risks-open-questions-and-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Risks, open questions and plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-verification-against-master-3f5e6adce-2026-09-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Verification against master 3f5e6adce (2026-09-25)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Verification against master 3f5e6adce (2026-09-25)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendations-on-the-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendations on the open questions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-file-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 file checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-review-disposition-2026-09-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Review disposition (2026-09-25)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-revision-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Revision log
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="abinitio3d_addon-development-proposal">abinitio3D_addon — development proposal<a class="headerlink" href="#abinitio3d_addon-development-proposal" title="Permanent link">&para;</a></h1>
+<p>Date: 2026-09-25 (first draft 2026-09-24). Drafted against master <code>0bf593876</code>,
+verified against master <code>3f5e6adce</code> on 2026-09-25 (section 8) and revised
+after review (section 9). Nothing implemented yet.</p>
+<h2 id="1-context-and-goal">1. Context and goal<a class="headerlink" href="#1-context-and-goal" title="Permanent link">&para;</a></h2>
+<p>abinitio3D has no way to take a converged solution and let a larger set of
+particles grow it without re-searching the particles that built it. This
+proposal adds <code>abinitio3D_addon</code>: given a frozen project (the accepted
+solution) and a current project whose active particles are a superset of the
+frozen ones, the particles not covered by the frozen solution are searched
+against it while the frozen particles contribute their signal, unsearched, to
+every reconstruction. The motivating case is a solution obtained on a harsh
+class-average selection that the user wants to extend with the particles an
+earlier, more permissive selection contained, to see what they add.</p>
+<p>The workflow is defined by two projects, <code>projfile</code> and <code>projfile_frozen</code>, and
+nothing else: the frozen project supplies poses, state labels, halves, its
+own sigma2 state and, through the run manifest it registers, every setting of
+the base run; the current project supplies the particles and their 2D
+metadata; the two share one particle index space.</p>
+<p>What exists today. The abinitio3D entry routes are a random start,
+<code>cavg_ini</code>, <code>cavg_ini_ext</code>, <code>vol1</code> and state continuation (<code>state=</code>); none
+takes a second project as a trusted, particle-backed solution, and <code>vol1</code>
+treats its maps as untrusted and re-initialises poses by CC. <code>refine3D</code> with
+<code>update_missing=yes</code> assigns particles with <code>updatecnt==0</code> in a single greedy
+pass and is refused in probabilistic modes (<code>simple_strategy3D_matcher.f90</code>:
+"update_missing requires matcher-owned assignment").</p>
+<p>The gap: once a solution exists, particles outside it have no 3D pose, and the
+only tools on hand either re-run everything or assign newcomers in a single
+greedy pass against a fixed map. Neither lets the newcomers add signal to the
+model while being searched properly.</p>
+<h2 id="2-strategy-in-one-page">2. Strategy in one page<a class="headerlink" href="#2-strategy-in-one-page" title="Permanent link">&para;</a></h2>
+<p>In the first implementation the frozen project's particles are not searched;
+the current project's other active particles are run through a standard
+abinitio3D from the probabilistic stage on, with the frozen particles' Fourier
+accumulators summed into every reconstruction as a second, constant set of
+partials. The output is one
+project carrying both cohorts' poses and the union maps. Updating the solution
+with searches over all active particles is a later extension (section 6).</p>
+<pre><code class="language-mermaid">flowchart LR
+  FP[projfile_frozen&lt;br/&gt;poses, states, sigma2,&lt;br/&gt;run manifest] --&gt; C[abinitio3D_addon&lt;br/&gt;validate identity, mask cohort]
+  CP[projfile&lt;br/&gt;superset of active particles] --&gt; C
+  C --&gt; R[Search cohort from stage 3&lt;br/&gt;to the last stage of the base run&lt;br/&gt;frozen term in every reconstruction]
+  R --&gt; O[Output project&lt;br/&gt;union poses + maps]
+</code></pre>
+<p>The output is an ordinary project: it can be inspected or refined with
+<code>refine3D</code>; it becomes a valid frozen project for a later add-on only once the
+union sigma state exists (section 3, "Sigma2").</p>
+<p>The design reuses one existing object on both backends: the raw accumulator at
+full dataset mass, which is what the trailing chain already is. Gridding trails
+<code>trailrec_stateNN_{even,odd}</code> sums plus <code>rho</code> in <code>blend_trailing_accumulators</code>
+(<code>simple_commanders_rec_distr.f90</code>), and PCG trails raw <code>(B,D)</code> pairs through
+<code>add_raw_accum_weighted</code> in the distributed master
+(<code>simple_rec3D_pcg_strategy.f90</code>); the PCG reader zero-extends a smaller
+previous grid when the crop grows, the gridding reader only under a fractional
+update (section 8, F6). A frozen contribution is the same artifact,
+summed in like the partials of another partition: no coefficient, no decay,
+never written into the chain. The reuse is the artifact and the reduction
+step, not the trailing algebra (section 3, "How this differs from trailing").</p>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Owner today</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Frozen accumulator set at every distinct consuming box, plus the native box</td>
+<td><code>calc_rec</code> + <code>reconstruct3D</code> (<code>trail_seed=yes</code> writes a full-mass chain seed)</td>
+<td>Sibling handshake writes a <code>frozen_*</code> set instead of the chain, once per distinct box, run on a collision-proof copy of the frozen project (section 9, items 3.1 and 4.7)</td>
+</tr>
+<tr>
+<td>Summing it into the reduction</td>
+<td><code>restore_state_from_parts</code>, PCG master reduction</td>
+<td>One new step after the trailing blend, before restoration or priors</td>
+</tr>
+<tr>
+<td>Which particles are frozen</td>
+<td>nothing</td>
+<td>Commander validates that the frozen project's active indices are active in the current project, masks them to <code>state=0</code> in its working copy, restores them with the frozen poses at the end</td>
+</tr>
+<tr>
+<td>The workflow</td>
+<td><code>abinitio3D</code>, <code>abinitio3D_cavgs</code> (own UI entry, exec case, commander, shared <code>simple_abinitio_utils</code> helpers)</td>
+<td>New <code>abinitio3D_addon</code> program: own UI entry and exec case, a thin wrapper commander in <code>simple_commanders_abinitio.f90</code>, and the shared flow of <code>exec_abinitio3D</code> behind an internal handshake; <code>nstates</code>, <code>pgrp</code>, the state volumes and every run parameter are read from the frozen project and its run manifest, never from the command line (section 4)</td>
+</tr>
+<tr>
+<td>Sampling</td>
+<td><code>force_full_sampling_mode</code> (nsample/active &gt; 0.9), class sampling, trailing chain</td>
+<td>Unchanged, run on the masked cohort; the frozen term stays outside the cohort chain</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-frozen-contributions">3. Frozen contributions<a class="headerlink" href="#3-frozen-contributions" title="Permanent link">&para;</a></h2>
+<p>A frozen contribution is a per-state, per-half raw accumulator set built from
+the frozen particles at each distinct consuming box, and at the native box,
+and summed into the add-on run's current partials, as a second set of
+partials, before any restoration or prior.</p>
+<pre><code class="language-text">gridding:  S_eo  = S_eo(cohort)  + S_eo(frozen)      Fourier sums
+           rho_eo = rho_eo(cohort) + rho_eo(frozen)  sampling density
+pcg:       B = B(cohort) + B(frozen)                 weighted RHS
+           D = D(cohort) + D(frozen)                 Gram precursor, before end_accum
+</code></pre>
+<p>This is a plain union of two particle sets, not a fractional update: no <code>u/f</code>
+scaling, no <code>1-u</code> decay. Sampling density and FSC then describe frozen plus
+cohort, which is the model the cohort particles are being aligned to.</p>
+<p><strong>How this differs from trailing.</strong> Trailing has one population, all of it
+searchable: each iteration a random fraction <code>f</code> is re-searched and yields
+partials of mass <code>f*D</code>, and the chain is an exponential moving average,
+<code>chain_t = (u/f)*current_t + (1-u)*chain_{t-1}</code>. The <code>u/f</code> makes a
+fractional-mass partial stand in for the whole population; the <code>1-u</code> decay
+makes stale poses fade at <code>(1-u)^k</code> until the particle is resampled and its
+new pose replaces the old one. "Frozen per iteration" there means only "not
+resampled this iteration": every pose keeps moving, the chain always holds
+some contribution from poses <code>k</code> iterations old, total mass stays <code>D</code> by
+convex mixing, and the chain is rewritten every iteration. Here there are two
+populations. <code>F</code> has fixed poses for the whole run and is never searched; <code>C</code>
+is searched in full every iteration (under full sampling; the sampled
+recurrence is in section 4, "Sampling"). The reconstruction at iteration <code>t</code> is
+<code>A_F + A_C(t)</code>: <code>A_F</code> is an actual full-mass reconstruction of <code>F</code>, computed
+once and read-only; <code>A_C(t)</code> is the ordinary complete set of partials of <code>C</code>.
+Nothing stands in for anything, so there is no <code>u/f</code>; nothing goes stale, so
+there is no <code>1-u</code>; the mass is <code>|F| + |C|</code> because it is a union, not a
+mixture. Two statements, not one (review item 5): at a fixed grid with fixed
+per-particle weights, separately accumulated raw statistics of <code>F</code> and <code>C</code> add
+to exactly the statistics a direct accumulation of the union would give, with
+no memory of <code>C</code>'s earlier poses; with sigma curves estimated separately on
+<code>F</code> and on <code>C</code>, the union is a cohort-specific weighting model whose agreement
+with a one-shot reconstruction is empirical, measured by the
+joint-versus-separate gate against a declared tolerance. The frozen term must stay outside the chain: if
+<code>A_F</code> were folded in, the <code>1-u</code> decay would erode it by <code>(1-u)^k</code> unless
+re-added, and re-adding while it is inside double counts. Keeping it separate
+also means that when the cohort is sampled, trailing applies to <code>C</code> alone and
+<code>A_F</code> is still summed in, unchanged, after the blend (section 4, "Sampling").</p>
+<p><strong>Producer.</strong> <code>calc_rec</code> (<code>simple_abinitio_utils.f90</code>) already runs
+<code>reconstruct3D</code> on a project and, with the internal <code>trail_seed=yes</code>
+handshake, writes the accumulators at full mass. A sibling, <code>calc_frozen_rec</code>,
+builds its own local command object from <code>cline_reconstruct3D</code> and
+<code>apply_refine3D_reconstruction_controls</code> (it never mutates the shared stage
+command lines or <code>lpinfo</code>; section 9, item 3.1), sets <code>box_crop</code> to the box it
+is asked for, passes the sibling handshake <code>frozen_seed</code>, and does no stage
+renaming, injection or registration. It runs on a collision-proof copy of the
+frozen project in the run directory (the frozen project itself is never
+written to; section 8, F4, and section 9, item 4.7), once per distinct
+consuming box. The writer targets a different artifact stem:
+<code>frozen_stateNN_boxBBBB_{even,odd}</code> plus <code>rho</code> and a manifest on gridding, and
+a <code>frozen</code> raw pair per box with its own provenance tag on PCG. Names must
+avoid the <code>recvol_state</code> and <code>trailrec</code> stems so partial-reconstruction globs,
+chain validation and cleanup never touch them.</p>
+<p><strong>One accumulation per distinct box.</strong> The stage plan
+(<code>lpinfo(start_stage:nstages)%box_crop</code>, from the manifest) uses a handful of
+distinct boxes; the commander runs one frozen accumulation per distinct box,
+plus one at the native box for the final reconstruction. The first draft
+proposed one native accumulation clipped to each box. The constant
+field-of-view contract (<code>box*smpd == box_crop*smpd_crop</code>, padded lattices
+exactly <code>2*box</code> on both backends) does make the Fourier sample locations
+index-aligned, but the values deposited on them differ: the shared observation
+contract <code>prep_rec_observation</code> (<code>simple_matcher_ptcl_io.f90</code>) noise-normalises
+a cropped particle at the native box, Fourier-crops it and tapers it at the
+cropped box, whereas an uncropped particle is tapered first and normalised
+second; cropping and tapering do not commute, so a clipped native set is not
+the set a consumer at that box would have accumulated, at low frequencies and
+not only in a wrap rim (review item 3.1). The PCG chain's zero-extension of a
+smaller previous grid is the opposite, deliberately lossy direction and is not
+evidence for clipping. A single-traversal producer may be investigated later,
+only after an exact equivalence is proved, and never by changing the shared
+particle preprocessing. Padding is never used either: a set at a smaller box
+than the consumer's is rejected by its manifest. The starting <code>vol1..volN</code> for
+<code>start_stage</code> are the state volumes the native-box frozen reconstruction
+writes anyway: <code>refine3D</code> crops every reference to the stage box on read, so no
+restore-from-set entry point is needed (section 8, F7).</p>
+<p><strong>Consumer.</strong> Gridding: a new <code>add_frozen_accumulators()</code> step in
+<code>restore_state_from_parts</code>, after <code>blend_trailing_accumulators()</code> and before
+<code>sum_eos_before_density_correction_if_needed()</code>, reading through
+<code>read_gridding_pair_accumulators</code> and <code>sum_reduce</code>, with the manifest validated
+before the read. PCG: <code>add_raw_accum_weighted(frozen, weight=1.0)</code> in the
+distributed half job and in the shared-memory half solve, after the chain
+write and before <code>end_accum</code>, so <code>B</code>/<code>D</code> see the union and priors are applied
+to the union. In both cases the trailing chain, if active, is written <em>before</em>
+the frozen term is added, so the chain carries only the cohort's mass. The
+frozen add must run before every zero-current early-out: the PCG half job
+returns when <code>job%nptcls == 0</code>, and the gridding assembly carries a state
+without partials forward from the previous iteration
+(<code>determine_dropped_states</code>, <code>carry_forward_dropped_state</code>); a state or half
+with a valid frozen set and no cohort contribution is assembled from the frozen
+term alone, never skipped, carried or rejected (review item 4.6). The same add
+is needed in both reconstructions of <code>bootstrap_rec3D</code>, which <code>calc_final_rec</code>
+runs whenever the last stage was cropped; its bootstrap map is gridding by
+design, for speed, and in add-on mode is built on the run's backend, so there
+is one frozen kind (decided; section 8, F1 and F2). Activation is an internal
+handshake carrying the frozen manifest path, set only on the in-process
+assembly command lines the way <code>trail_seed</code> is today (neither is a
+<code>parameters</code> field, so neither is in the generated argument vocabulary and
+neither can be given on a command line); a consumer opens nothing without a
+validated manifest bound to the run identifier (review item 4.1).</p>
+<p><strong>Sigma2.</strong> The frozen cohort's committed residual sigma2 is consumed by every
+frozen accumulation; it is never re-estimated. The canonical state lives at
+the native box (<code>fdim(box)-1</code> shells) and every cropped box uses a prefix of
+those shells under the constant field-of-view contract. Canonical identity is
+validated against <code>params%nptcls</code> and a layout digest over every row
+(<code>sigma2_state_project_layout_digest</code>, <code>ensure_canonical_sigma_state</code> in
+<code>simple_rec3D_strategy.f90</code>), and a mismatch would rebuild the state from
+particle power spectra; running the accumulation on a plain copy of the frozen
+project keeps its state resolvable (section 8, F4), and the add-on refuses a
+frozen project whose committed residual state is not consumable rather than
+accept an image-power seed in its place. The add-on run estimates its own
+state for the cohort in the working copy, whose inherited registration the
+commander deletes first, exactly as a fresh <code>abinitio3D</code> does; frozen rows are
+<code>state=0</code> there and receive no records (<code>calc_pspec</code> computes <code>state&gt;0</code> rows
+only).</p>
+<p>At the end the output project carries no cohort-only sigma registration: the
+consumability check (<code>canonical_sigma2_consumable</code>: file size and group
+checksum, then identity of box, sampling, shells, row count, layout digest,
+grouping and committed state) does not look at the active set, so a
+cohort-only state would pass once the frozen rows are active again and its
+group curve would weight the union with the cohort's noise model (review item
+3.4). The registration is removed, the output is marked not eligible as a
+frozen input, and the next ordinary <code>refine3D</code> bootstraps a state for the
+union. A scientifically composed union state (cohort rows from the add-on's
+state, frozen rows from the frozen state, one group reduction over the union
+through the candidate machinery of <code>simple_sigma2_state.f90</code>) is a later phase
+and the precondition for chaining add-ons. One numerical gate accompanies the
+weighting model: the identity test run once with sigmas estimated jointly on
+<code>A u B</code> and once with the frozen rows from a run on <code>A</code> alone and the cohort
+rows from the add-on, comparing maps and FSC against a declared tolerance.</p>
+<p><strong>Provenance.</strong> Each frozen set carries a manifest recording box, sampling,
+total row count, frozen active count, state layout, backend and the add-on
+run identifier; readers refuse the set on any mismatch, mirroring
+<code>validate_trail_chain</code> and the PCG chain identity, and never fall back to a
+reconstruction without the frozen term. A stale <code>frozen_*</code> file in a directory
+activates nothing, because consumers open frozen sets only through the
+handshake.</p>
+<p><strong>Symmetry.</strong> The frozen run is already on the target axis; the add-on runs
+with <code>pgrp_start=pgrp</code>, so the frozen accumulation and the cohort partials are
+replicated identically.</p>
+<h2 id="4-the-abinitio3d_addon-workflow">4. The abinitio3D_addon workflow<a class="headerlink" href="#4-the-abinitio3d_addon-workflow" title="Permanent link">&para;</a></h2>
+<p><code>abinitio3D_addon</code> is its own program with its own UI entry and exec case. Its
+commander is a thin wrapper in <code>simple_commanders_abinitio.f90</code> that turns the
+base run's manifest into a command line and hands it to <code>exec_abinitio3D</code>,
+whose add-on route shares the sampling initialisation, stage loop and final
+reconstruction ("Registration" below). It takes <code>projfile</code> and
+<code>projfile_frozen</code>, inherits everything that describes the solution and the run
+from the frozen project and its manifest, validates that the current project
+is a superset by physical particle identity, and masks the frozen particles in
+its own working copy, so refine3D needs no new sampling policy at all.</p>
+<p><strong>Superset validation.</strong> The two projects share one particle index space:
+<code>projfile_frozen</code> was derived from <code>projfile</code>, or both from a common ancestor,
+by selection. Equal row counts and an equal stack table do not prove that row
+<code>i</code> is the same image, so the commander resolves every row of both projects
+through the canonical mapping <code>map_ptcl_ind2stk_ind</code>
+(<code>simple_sp_project_ptcl.f90</code>) for <code>ptcl2D</code> and <code>ptcl3D</code> and requires the same
+source stack and physical image index row by row, the same particle source
+(<code>ptcl_src</code>), and the same optics and CTF identity needed to reproduce the
+frozen contribution (review item 4.4). Every index with <code>state &gt; 0 .and.
+updatecnt &gt; 0</code> in the frozen project must be active in the current <code>ptcl2D</code>,
+the segment that controls the fresh-start selection. A frozen member inactive
+in the current project, a row permutation, a changed stack source, a
+<code>ptcl2D</code>/<code>ptcl3D</code> selection mismatch, an optics or CTF mismatch, or a box or
+<code>smpd</code> mismatch is a hard error naming the first offending index, raised before
+any project is written. Membership is defined once:</p>
+<pre><code class="language-text">frozen = frozen state &gt; 0 AND frozen updatecnt &gt; 0
+cohort = current ptcl2D active AND NOT frozen
+</code></pre>
+<p>An empty cohort is refused before masking. The commander reports the frozen,
+cohort and never-updated counts before the first reconstruction.</p>
+<p><strong>Option A, working-copy masking (recommended).</strong> <code>params%new</code> with
+<code>mkdir=yes</code> copies the current project into the run directory once; the
+commander then saves the current <code>ptcl2D</code> state of every row and sets
+<code>state=0</code> in both <code>ptcl2D</code> and <code>ptcl3D</code> for every frozen row. The mask is
+installed before the established sampling initialisation reaches its counting
+block, so abinitio3D machinery sees only the cohort everywhere it counts
+particles (<code>count_state_gt_zero</code> counts active <code>ptcl2D</code> rows,
+<code>reset_ptcl3D_from_ptcl2D_selection</code> derives the 3D state from the 2D state,
+<code>gen_labelling</code> randomises only active rows, <code>get_state_update_fracs</code> counts
+<code>state&gt;0</code> rows), without any add-on-specific counting branch. The ptcl2D mask
+is required because the fresh-start route resets <code>ptcl3D%state</code> from the 2D
+selection. The frozen rows stay masked through search, reconstruction,
+trailing-fraction consumption, the final missing-assignment coverage of the
+cohort and the <code>addon_diag</code> reconstruction. Only then does the commander
+restore them: the frozen project's 3D records through the canonical
+<code>transfer_3Dparams</code> (projection, correlation, fraction, <code>sampled</code>,
+<code>updatecnt</code>, <code>eo</code>, Euler angles and shifts) plus an explicit <code>state</code>, the
+saved current <code>ptcl2D</code> state, and union-aware <code>res</code>/<code>res05</code> for the restored
+rows (the final reconstruction writes those only for rows active at the time;
+review item 4.5). No <code>frozen</code> row field is added: the orientation schema has
+none and the algorithm does not need one; provenance lives in the run manifest
+(review item 4.9). The output is one ordinary project with every particle
+posed, which the user inspects or refines; it is not a valid frozen input for
+a later add-on until the union sigma state exists (section 3, "Sigma2").</p>
+<p><strong>Option B, cohort filter inside refine3D.</strong> <code>sample4update_missing</code>
+(<code>state&gt;0 .and. updatecnt==0</code>) is the natural candidate, but it increments
+<code>updatecnt</code> on the first pass and so selects nothing on the second iteration,
+and the matcher refuses it under <code>prob_align</code>. Making it multi-iteration and
+prob-compatible means a persistent cohort key consulted by <code>sample4update_*</code>,
+<code>prob_align</code>/<code>prob_tab</code> reproduction and <code>sample4update_reprod</code>, plus the
+trailing-fraction bookkeeping in <code>get_update_frac</code>. That touches the
+importance-sampling contract in four modules for no gain over A. Keep B in
+reserve for the case where the same project must serve both cohorts at once.</p>
+<p><strong>Where <code>updatecnt</code> earns its keep: the freeze.</strong> In the frozen project,
+particles with <code>updatecnt &gt; 0</code> were searched and are frozen; particles with
+<code>updatecnt == 0</code> (never sampled when that run used <code>nsample</code> below the
+full-sampling switch) are <em>not</em> frozen and join the cohort, together with the
+particles only the current project activates. Chaining add-ons is not part of
+the first release (section 3, "Sigma2").</p>
+<p><strong>Inputs and the run manifest.</strong> The add-on runs with exactly the settings of
+the base <code>abinitio3D</code> run (Hans, 2026-09-25): a run parameter that differs
+changes the model the cohort is aligned to. The command line therefore carries
+only what governs compute effort, convergence and diagnostics; everything else
+comes from one versioned run manifest written by the base run (review items
+3.2 and 4.3):</p>
+<ul>
+<li>The manifest is a single, typed, versioned key-value file in the base run's
+  directory, registered in <code>projinfo</code> by bare name and resolved against the
+  project's own directory exactly like <code>sigma2_state</code>. It carries a schema
+  version, a run identifier, a completion marker and a checksum; the project
+  and particle-layout identity (row count, layout digest, stack table,
+  <code>ptcl_src</code>, optics/CTF identity); the solution (<code>nstates</code> as the completed
+  final state count, <code>pgrp</code>, box, <code>smpd</code>, <code>mskdiam</code>, <code>base_multivol_mode</code> and
+  <code>split_stage</code> as provenance only); the reconstruction policy
+  (<code>rec_backend</code>, <code>maxits_pcg</code>, <code>maxits_ml</code>, <code>pcg_solvent</code>,
+  <code>pcg_solvent_lambda</code>, <code>filt_mode</code>, <code>automsk</code>, <code>envfsc</code>, <code>envmsklp</code>,
+  <code>conical_fsc</code>, <code>projrec</code>, <code>objfun</code>, <code>sigma_est</code>); the search policy
+  (<code>nstages</code>, first and last stage run, per stage the planned and the
+  <em>emitted</em> <code>lp</code> and <code>lpstop</code>, <code>box_crop</code>, <code>smpd_crop</code>, <code>trslim</code>; <code>hp</code>, <code>lp</code>
+  override, <code>lpstart</code>, <code>lpstop</code>, <code>force_lp_range</code> as given; <code>objfun_den</code>,
+  <code>objfun_den_w</code>, <code>inpl_cont</code>, <code>ptcl_src</code>, <code>prob_athres</code>, <code>bfac</code>, <code>gauref</code>,
+  <code>partition</code>); the effective <code>nsample</code> (the value the base run used, even when
+  it came from the default that lives only in <code>params</code>); and the artifact
+  inventory (state maps, halves, FSCs, sigma state) with digests. The base
+  run's <code>nptcls_eff</code>, <code>update_frac</code>, realized fractions and full-sampling
+  result are recorded as provenance and never copied into the add-on's
+  execution state: they are outputs of the base population, and the add-on
+  derives its own from the masked cohort. Planned limits alone are
+  insufficient because FSC=0.5 promotion changes the limits a base run actually
+  matched at; the add-on matches at the emitted ones with promotion off.</li>
+<li><code>exec_abinitio3D</code> always writes the manifest at the end of a completed run,
+  atomically and last; a manifest-write failure never fails or alters the
+  completed run. The manifest is the only route into the add-on (Hans,
+  2026-09-25): no opt-in, no export program, no re-derivation from <code>jobproc</code>
+  or from FRCs, and no command-line override of an inherited value. Expert
+  overridables may come later as an explicit, separately reviewed extension.
+  The add-on writes its own manifest, marked not eligible as a frozen input
+  until the union sigma state exists.</li>
+<li>The add-on never replays a stored command line. The project's <code>jobproc</code> row
+  of the base run (appended by <code>update_job_descriptions_in_project</code> after the
+  commander returns, with <code>mkdir=no</code> and the base run-directory <code>projfile</code>
+  already substituted) is provenance and the writer's source for the input
+  keys; it is not executable. The add-on builds a fresh sparse command line
+  from an explicit allowlist of manifest fields, normalises both project paths
+  before any change of directory, calls <code>params%new</code> exactly once with
+  <code>mkdir=yes</code>, and refuses unknown schema fields and unknown keys. Entry,
+  execution, partition, range, iteration, trailing and frozen controls are
+  never inherited; each child receives only the fields it needs.</li>
+</ul>
+<p>Inheriting the ladder means the frozen sets are accumulated at the boxes the
+base run used and the union is matched at the limits the base run was matched
+at. The add-on never plans limits from class FRCs, on either project, and a
+frozen project without a manifest is refused (Hans, 2026-09-25). A base run
+bootstrapped through <code>cavg_ini=yes</code> or <code>cavg_ini_ext=yes</code> is inherited as a
+finished solution; the add-on never runs <code>abinitio3D_cavgs</code> and never aligns
+class averages (Hans, 2026-09-25).</p>
+<p>The command line, from the CLI review of 2026-09-25 (Hans). Refusal is by key,
+not by value, so a user cannot silently "confirm" an inherited value. The
+parser accepts any key of the generated vocabulary for any program, so
+ordinary <code>abinitio3D</code> and <code>abinitio3D_cavgs</code> refuse <code>projfile_frozen</code> and
+<code>addon_diag</code> explicitly (review item 4.1).</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Keys</th>
+<th>Status in <code>abinitio3D_addon</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Required</td>
+<td><code>projfile</code>, <code>projfile_frozen</code> (new)</td>
+<td>accepted</td>
+</tr>
+<tr>
+<td>Compute</td>
+<td><code>nparts</code>, <code>nthr</code></td>
+<td>accepted</td>
+</tr>
+<tr>
+<td>Sampling and convergence</td>
+<td><code>nsample</code>, <code>overlap</code></td>
+<td>accepted; <code>nsample</code> defaults to the base run's effective value</td>
+</tr>
+<tr>
+<td>PCG solve budget and checks</td>
+<td><code>maxits_pcg</code>, <code>maxits_ml</code>, <code>pcg_solvent_check</code></td>
+<td>accepted</td>
+</tr>
+<tr>
+<td>Diagnostics</td>
+<td><code>euclid_diag</code>, <code>addon_diag</code> (new)</td>
+<td>accepted</td>
+</tr>
+<tr>
+<td>Same as the base run</td>
+<td><code>rec_backend</code>, <code>pcg_solvent</code>, <code>pcg_solvent_lambda</code>, <code>projrec</code>, <code>pgrp</code>, <code>center</code>, <code>cenlp</code>, <code>inpl_cont</code>, <code>multivol_mode</code>, <code>nstages</code>, <code>nstates</code>, <code>split_stage</code>, <code>objfun_den</code>, <code>objfun_den_w</code>, <code>ptcl_src</code>, <code>conical_fsc</code>, <code>envfsc</code>, <code>envmsklp</code>, <code>filt_mode</code>, <code>force_lp_range</code>, <code>hp</code>, <code>lp</code>, <code>lpstart</code>, <code>lpstop</code>, <code>lpstart_ini3D</code>, <code>lpstop_ini3D</code>, <code>mskdiam</code>, <code>automsk</code></td>
+<td>from the manifest; refused if given</td>
+</tr>
+<tr>
+<td>Entry routes and their controls</td>
+<td><code>vol1</code>, <code>cavg_ini</code>, <code>cavg_ini_ext</code>, <code>pgrp_start</code>, <code>state</code>, <code>nthr_ini3D</code></td>
+<td>refused: the add-on has one entry route, no ini3D phase, and sets <code>pgrp_start=pgrp</code></td>
+</tr>
+</tbody>
+</table>
+<p>Review notes on the labels:</p>
+<ul>
+<li><code>center</code> cannot follow the base run. Centring runs only for a single-state
+  run with <code>center=yes</code>, a cyclic point group, shifts on and no fractional
+  update (<code>simple_matcher_refvol_utils.f90:211</code>); it re-centres the
+  reference each iteration and maps the shift onto every particle of the
+  state (<code>map3dshift22d</code>). The frozen accumulators never receive that shift,
+  so the cohort's frame would drift away from the frozen term. Because the
+  fractional update of a sampled base run disables centring, a full-sampling
+  add-on would be the first place it could fire. The add-on forces
+  <code>center=no</code>, and <code>cenlp</code> is then unused. The base run's own centring, if
+  any, is harmless: its final poses and maps agree with each other.</li>
+<li><code>overlap</code> has no effect in <code>abinitio3D</code> today: the stage controller emits
+  its own per-stage values (0.99 up to the symmetry-search stage, 0.9 for
+  stages 4 to 6, 0.95 after) and overwrites the top-level key. Accepting it is
+  harmless; it becomes useful only if the add-on's stage-3 early stopping
+  reads it (section 7).</li>
+<li><code>maxits_pcg</code> and <code>maxits_ml</code> change the solved map slightly through solver
+  convergence, not through the model; the final reconstruction keeps its floor
+  of five iterations.</li>
+<li><code>lpstart_ini3D</code> and <code>lpstop_ini3D</code> are inert in the add-on (no ini3D phase);
+  listing them as "same as base run" costs nothing.</li>
+<li><code>multivol_mode</code> and <code>split_stage</code> are inherited as provenance only; the
+  add-on's own mode follows the final frozen state count ("Multi-state"
+  below).</li>
+<li>Keys the UI never exposes but the base run set (<code>prob_athres</code>, <code>bfac</code>,
+  <code>gauref</code>, <code>partition</code>, <code>sigma_est</code>, <code>objfun</code>) are manifest fields, recorded
+  by the writer from the base run's <code>jobproc</code> row.</li>
+</ul>
+<p><strong>Registration.</strong> <code>new_abinitio3D_addon</code> in
+<code>src/main/ui/simple/simple_ui_abinitio3D.f90</code> (11 inputs) and a
+<code>case('abinitio3D_addon')</code> in <code>src/main/exec/simple_exec_abinitio3D.f90</code>, as
+for any program with its own command-line contract. No new commander file and
+no second workflow (Hans, 2026-09-25): <code>commander_abinitio3D_addon</code> is a thin
+wrapper type in <code>simple_commanders_abinitio.f90</code>, on the pattern of
+<code>commander_abinitio3D_cavgs_conditional_restarts</code> in the same file. Its
+<code>execute</code> reads and validates the manifest and both projects before any
+directory change, builds the allowlisted command line, sets the internal
+add-on handshake (<code>addon_manifest=&lt;path&gt;</code>, outside the generated vocabulary,
+so no command line can set it) and calls <code>exec_abinitio3D</code>. <code>exec_abinitio3D</code>
+gains one entry route selected only by that handshake, beside <code>state=</code>,
+<code>cavg_ini</code>, <code>cavg_ini_ext</code> and <code>vol1</code>: a prologue after the project read
+(collision-proof frozen copy, physical-identity validation, mask, drop of the
+inherited sigma registration), a planning branch (the ladder from the manifest
+instead of <code>set_lplims_*</code>), a starting-volume branch (reset, random
+orientations and labels on the cohort, the per-box frozen sets, the native
+frozen references as <code>vol1..volN</code>), the add-on context passed into
+<code>set_cline_refine3D</code> and the final reconstruction, and an epilogue before the
+final GUI update (<code>addon_diag</code>, restore, sigma unregistration, own manifest).
+The sampling initialisation, the stage loop, the final reconstruction, the
+multi-state coverage helpers and the GUI updates are shared unchanged; a
+standalone commander would have duplicated about 370 of the 760 lines of
+<code>exec_abinitio3D</code> and its contained helpers. The only justification for the
+wrapper is that the exec router needs a target and the manifest must be
+translated into a command line before <code>params%new</code>; an ordinary <code>abinitio3D</code>
+never carries the handshake and its behaviour is byte-identical.</p>
+<p><strong>Flow.</strong></p>
+<ul>
+<li><code>pgrp_start = pgrp</code>; the symmetry axis was settled by the frozen run, so no
+  axis search and no <code>symmetrize</code> call. <code>center=no</code> whatever the base run
+  did: a re-centred reference maps a shift onto the cohort particles that the
+  frozen accumulators never receive.</li>
+<li><code>start_stage = PROB_REFINE_STAGE</code> (3): cohort particles get <code>rnd_oris</code>,
+  uniform random state labels across every inherited state when <code>nstates&gt;1</code>,
+  and their first assignment comes from the stage-3 <code>refine=prob</code> search at
+  the base run's emitted stage-3 limit. Compare the <code>vol1</code> route of
+  <code>abinitio3D</code>, which enters at stage 4 after a CC pose-initialisation pass
+  because its references are untrusted; here they are trusted, so that pass is
+  skipped. Decided: stage 3 (Hans, 2026-09-25). The add-on's stage 3
+  early-stops on <code>overlap</code>, since the symmetry search that keeps stage 3 at
+  full budget never runs here (section 7, question 7).</li>
+<li>The last stage is the base run's last stage, from the manifest: a
+  single-state run went to stage 8 (<code>NSTAGES</code>, <code>prob</code> then <code>prob_neigh</code>, NU
+  filtering from stage 6); an <code>independent</code> multi-state run stopped after
+  stage 5 with <code>lpstop</code> 6 A (<code>NSTAGES_INDEPENDENT</code>, <code>LPSTOP_INDEPENDENT</code>), or
+  earlier if its <code>nstages</code> said so; a docked base run completed through stage
+  8 under <code>refine3D_states</code>, and the add-on runs <code>independent</code> stages 3 to 8
+  ("Multi-state" below) on its ladder: the controller's emitted limits up to
+  the split, the planned limits after it, where <code>refine3D_states</code> ran its own
+  schedule between them. The add-on cannot lower or raise the last stage.</li>
+<li>Starting references come from the native-box frozen reconstruction; its
+  state volumes are the stage-3 <code>vol1..volN</code> as they are (section 8, F5 and
+  F7). The per-box frozen sets are produced before the stage loop, one per
+  distinct box of the ladder plus the native box. The frozen-only native
+  reconstruction is also a provenance check for free: compared with the base
+  run's registered final state maps at the matching band, agreement shows
+  that poses, halves, sigmas and settings were reproduced; in the first
+  release a discrepancy beyond tolerance is reported as a warning, and the
+  end-to-end scenario decides whether it becomes a refusal.</li>
+<li>Stage schedule, <code>nspace</code>, <code>ml_reg</code>, <code>frac_best</code>, early stopping and backend
+  policy stay exactly as <code>build_refine3D_stage_cfg</code> emits them for stages 3 to
+  <code>nstages</code>. The controller gains no add-on branch beyond an explicit,
+  immutable add-on context passed as an optional argument (absent means the
+  legacy path; review item 4.2) that switches the FSC=0.5 stage-LP promotion
+  (<code>FSC05_PROMOTE_MIN_STAGE</code>) off, because the FSC reflects the frozen
+  population and would promote the cohort past the inherited ladder, and
+  enables stage-3 early stopping.</li>
+<li>The stage ladder (emitted LP and crop per stage) is the base run's, read
+  from the manifest; there is no re-planning from the current project's FRCs
+  and no <code>lpstart</code>/<code>lpstop</code> override.</li>
+<li>Before the first stage whose policy has <code>trail_rec=yes</code>, the stage-boundary
+  reconstruction of the working copy writes a full-mass, cohort-only chain seed
+  at the consuming box with the current cohort poses, through the existing
+  <code>trail_seed</code> handshake; the frozen term is added to that reconstruction's
+  output but is never written into the seed. A missing, stale or incompatible
+  cohort chain at a trailing stage rebuilds the seed or fails before any
+  iteration output; add-on mode never enters the legacy union-volume bootstrap
+  (review item 3.3).</li>
+<li>Optional diagnostic, <code>addon_diag=yes</code>: a cohort-only reconstruction at the
+  native box, run while the frozen rows are still masked and without the
+  frozen term, so the newcomers' own map and FSC can be compared with the
+  frozen project's maps and the union.</li>
+</ul>
+<p><strong>Sampling.</strong> <code>nsample</code> is accepted (Hans, 2026-09-25) and defaults to the
+base run's effective value from the manifest. After masking, the established
+sampling initialisation runs unchanged on the cohort: it derives <code>nptcls_eff</code>
+from the active <code>ptcl2D</code> rows, decides the regime with the existing switch
+(<code>nsample/cohort &gt; 0.9</code> forces full sampling, otherwise
+<code>update_frac = min(UPDATE_FRAC_MAX, nstates*nsample/cohort)</code>), and later
+<code>get_update_frac</code>/<code>get_state_update_fracs</code> count <code>state&gt;0</code> rows only, so every
+denominator is the cohort's. The sample-once-and-reproduce handshake is
+untouched: <code>prob_align</code> selects from the active cohort and writes <code>sampled</code>,
+<code>prob_tab</code> and <code>refine3D_exec</code> reproduce that subset, and no frozen index can
+enter the outer subset, an inner probability table or a realized fraction.
+Under a sampled cohort the reconstruction obeys</p>
+<pre><code class="language-text">P_C(s,h,t) = sampled cohort raw partial
+T_C(s,h,t) = (u_s/f_s) * P_C(s,h,t) + (1 - u_s) * T_C(s,h,t-1)
+U(s,h,t)   = F(s,h) + T_C(s,h,t)
+</code></pre>
+<p>per state <code>s</code> and half <code>h</code>, with the realized fraction <code>f_s</code> and the applied
+weight <code>u_s</code> state-local as today; the cohort chain <code>T_C</code> is published before
+<code>F</code> is added, and restoration, FSC, priors and NU filtering consume <code>U</code>. A
+state or half with a chain but no current sample keeps its chain unchanged
+(weight zero); one with neither has zero cohort mass and <code>U = F</code>. When the
+inherited stage policy has <code>trail_rec=no</code>, the union is <code>F</code> plus the current
+cohort partial and no trailing is introduced. Sampled and trailing PCG
+assembly is supported in shared memory as it is: the shared-memory <code>refine3D</code>
+strategy has its matcher write one raw partial through
+<code>execute_rec3D_pcg_worker</code> and assembles through
+<code>execute_rec3D_pcg_distributed_master</code> (<code>simple_refine3D_strategy.f90:750</code>),
+the same master the distributed strategy uses (line 1234), which owns the
+accumulator-domain fractional and trailing path. The refusal of
+<code>update_frac</code>/<code>trail_rec</code> in <code>validate_supported_mode</code> belongs to the
+standalone in-memory <code>reconstruct3D</code> PCG strategy (<code>execute_rec3D_pcg_shared</code>,
+chosen below <code>nparts=2</code>, <code>simple_rec3D_strategy.f90:149</code>), which the add-on's
+own reconstructions never reach with a fractional update: <code>calc_frozen_rec</code>,
+the stage-boundary <code>calc_rec</code> and the final reconstruction carry none, and
+<code>trail_seed</code> is supported there. That standalone path is where the
+shared-memory frozen add of section 8, F2, is needed. Its refusal does bite
+two existing routes today, the <code>vol1</code> checkpoint reconstruction and the docked
+split checkpoint (<code>current_sample_only</code>), on PCG without <code>nparts&gt;1</code>; the fix,
+routing the in-memory PCG <code>reconstruct3D</code> through the same worker-plus-master
+pair the shared-memory <code>refine3D</code> already uses, is a separate change (section
+10, 2026-09-25). A base <code>nsample</code> of 10 000 on a cohort of 8 000 runs full
+sampling without any user action.</p>
+<p><strong>Multi-state.</strong> The add-on mode follows the base run's completed final state
+count: one frozen state gives <code>single</code>, more than one gives <code>independent</code>,
+whatever the base run's own <code>multivol_mode</code> was; <code>base_multivol_mode</code> and
+<code>split_stage</code> are provenance only (review item 4.8, product requirement). All
+final frozen state references are present from stage 3, frozen rows keep their
+labels, cohort rows get uniform initial labels across every inherited state,
+and the ordinary <code>independent</code> <code>prob</code>/<code>prob_neigh</code> policies update the cohort;
+<code>ensure_multistate_particle_assignments</code> runs on the cohort, frozen rows still
+masked, before the final reconstruction. No consensus accumulator, no split at
+the base run's <code>split_stage</code>, no <code>prob_state</code>, no docked geometric
+neighbourhood and no sticky class sampling are constructed: the heterogeneity
+policy gives <code>abinitio3D</code> only the single-state scaffold and split checkpoint
+of docked work and <code>refine3D_states</code> its completion
+(<code>doc/policies/heterogeneity/refine3D_states_policy.md</code>), and the add-on adds
+no second docked production path. Every inherited state is carried through the
+run: a state without cohort particles is reconstructed from its frozen term
+(section 3, "Consumer") and registered with its union population. Parity gate:
+completed N-state products from an <code>independent</code> and from a docked base run
+enter the same add-on policy, differing only in their inherited states, maps,
+ladder and data.</p>
+<h2 id="5-architectural-considerations">5. Architectural considerations<a class="headerlink" href="#5-architectural-considerations" title="Permanent link">&para;</a></h2>
+<p>Every change lands in the subsystem that already owns the concern;
+<code>abinitio3D_cavgs</code> is not entered by the new program, and <code>exec_abinitio3D</code>
+only through its add-on route behind the wrapper's internal handshake.</p>
+<table>
+<thead>
+<tr>
+<th>Subsystem</th>
+<th>Change</th>
+<th>Untouched</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/main/ui/simple/simple_ui_abinitio3D.f90</code>, <code>src/main/exec/simple_exec_abinitio3D.f90</code></td>
+<td><code>new_abinitio3D_addon</code> program entry (11 inputs: <code>projfile</code>, <code>projfile_frozen</code>, <code>addon_diag</code>, <code>nsample</code>, <code>overlap</code>, <code>maxits_pcg</code>, <code>maxits_ml</code>, <code>pcg_solvent_check</code>, <code>euclid_diag</code>, <code>nparts</code>, <code>nthr</code>); <code>case('abinitio3D_addon')</code></td>
+<td><code>abinitio3D</code>, <code>abinitio3D_cavgs</code> entries</td>
+</tr>
+<tr>
+<td><code>src/main/commanders/simple/simple_commanders_abinitio.f90</code></td>
+<td><code>commander_abinitio3D_addon</code> wrapper type: manifest read and validation before any write, allowlisted command line, internal handshake. Add-on route in <code>exec_abinitio3D</code>: prologue (collision-proof frozen copy, physical-identity validation, saved <code>ptcl2D</code> state and mask, registration drop), mode from the final state count, ladder from the manifest, per-box <code>calc_frozen_rec</code> and native references, add-on context through the shared stage loop and final reconstruction, cohort-only chain seeding, epilogue (<code>addon_diag</code> while masked, <code>transfer_3Dparams</code> restore, union metadata, sigma unregistration, own manifest, transactional publication). Manifest write at the end of every ordinary run; refusal of <code>projfile_frozen</code>/<code>addon_diag</code> on the two ordinary entries</td>
+<td>The ordinary routes, byte-identical without the handshake</td>
+</tr>
+<tr>
+<td><code>src/main/abinitio/simple_abinitio_controller.f90</code></td>
+<td>Optional add-on context argument: FSC=0.5 promotion off, stage-3 early stopping on <code>overlap</code>; an absent context is the legacy path</td>
+<td><code>NSTAGES</code>, <code>NSPACE</code>, <code>MAXITS</code>, mode/backend/trailrec policies</td>
+</tr>
+<tr>
+<td><code>src/main/abinitio/simple_abinitio_utils.f90</code></td>
+<td><code>calc_frozen_rec</code> beside <code>calc_rec</code> with the <code>frozen_seed</code> handshake on a local command object; manifest writer and reader; no new module-level mode flag</td>
+<td>Stage-boundary reconstruction semantics, <code>lpinfo</code>, shared command lines</td>
+</tr>
+<tr>
+<td><code>src/main/commanders/simple/simple_commanders_rec_distr.f90</code></td>
+<td><code>add_frozen_accumulators()</code> in <code>restore_state_from_parts</code> after the chain write and before restoration, ahead of the dropped-state logic; manifest check before the read; union counts for populations</td>
+<td>Trailing blend, restoration, FSC, NU inputs</td>
+</tr>
+<tr>
+<td><code>src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90</code></td>
+<td>Frozen raw pair summed into the reduction in the distributed half job and in the shared-memory half solve, after the chain write, before <code>end_accum</code> and ahead of the <code>job%nptcls == 0</code> return (section 8, F2; review item 4.6)</td>
+<td>Solver, priors, support, chain identity</td>
+</tr>
+<tr>
+<td><code>src/main/sigma2/simple_sigma2_state.f90</code></td>
+<td>Nothing in the first release; the union state composition (row import by index, union group reduction, commit) is the later phase that unlocks chaining</td>
+<td>Transaction, validation and commit semantics</td>
+</tr>
+<tr>
+<td><code>src/main/project</code></td>
+<td>Physical-identity superset helper on <code>map_ptcl_ind2stk_ind</code>; manifest registration by bare name beside <code>sigma2_state</code>; last-job lookup in <code>jobproc</code> for the manifest writer</td>
+<td>Segment layout</td>
+</tr>
+<tr>
+<td><code>src/defs/simple_refine3D_fnames.f90</code></td>
+<td><code>frozen_*</code> artifact names, per state and box</td>
+<td>Existing stems and globs</td>
+</tr>
+<tr>
+<td><code>src/main/params</code></td>
+<td><code>projfile_frozen</code>, <code>addon_diag</code> only; no <code>frozen_rec</code>, no <code>fsc05_promote</code>: the frozen context and the seed handshake are internal command-line keys outside the generated vocabulary, like <code>trail_seed</code></td>
+<td>Everything else</td>
+</tr>
+<tr>
+<td><code>src/main/simple_final_rec.f90</code>, <code>src/main/commanders/simple/simple_commanders_refine3D.f90</code> (<code>exec_bootstrap_rec3D</code>)</td>
+<td>Forward the frozen context into the final and bootstrap reconstructions, build the bootstrap map on the run's backend under that context, drop the key from the <code>calc_pspec</code> line (section 8, F1 and F3)</td>
+<td>Sigma bootstrap sequence</td>
+</tr>
+<tr>
+<td><code>src/main/sigma2/simple_sigma2_bootstrap.f90</code></td>
+<td>Delete the frozen keys wherever <code>trail_seed</code> is deleted (section 8, F3)</td>
+<td>Bootstrap rule</td>
+</tr>
+</tbody>
+</table>
+<p>Rules this design keeps (from <code>simple-frac-update-trailing</code>, <code>simple-refine3d</code>,
+<code>simple-architecture</code>) and the review's compatibility invariants (section 9):</p>
+<ul>
+<li>Producer writes what the consumer expects: the frozen set is accumulated at
+  every consuming box by the same <code>reconstruct3D</code> that produces the chain seed,
+  through the unchanged observation contract, and the reader validates the
+  manifest rather than accepting a mismatch.</li>
+<li>Accumulators, not volumes, are the source of truth. Blending frozen and
+  cohort <em>maps</em> would double-regularise and break the sampling-density
+  weighting; the sum happens on raw sums and <code>rho</code> (or <code>B</code> and <code>D</code>) before any
+  restoration or prior.</li>
+<li>The matcher's single-read particle I/O and partial-reconstruction handoff are
+  untouched; the add-on run's partials are ordinary partials of a smaller
+  active set.</li>
+<li><code>volassemble</code> stays the execution site for volume-domain work; the frozen
+  add is one more step there, not a new commander.</li>
+<li><code>ui -&gt; exec -&gt; commander -&gt; strategy/domain</code> is preserved: the program has
+  its own UI entry and exec case, its two public keys are registered in
+  <code>parameters</code>, and the commander consumes typed fields after <code>params%new</code>.</li>
+<li>Existing workflows keep their contracts: with no add-on context every shared
+  reconstruction site behaves exactly as today before it opens any frozen
+  artifact, changes a command line, alters an accumulator or changes cleanup;
+  <code>abinitio3D</code> gains the manifest write, the refusal of the two add-on keys
+  and an add-on route reachable only through the wrapper's internal
+  handshake, <code>abinitio3D_cavgs</code> only the refusal; no add-on mode lives in
+  module-global state;
+  frozen names, readers, writers and cleanup are disjoint from <code>recvol_state*</code>,
+  <code>trailrec*</code> and every existing glob; both input projects and their sigma
+  states are byte-unchanged on success and on every injected failure.</li>
+</ul>
+<p>Deliberate non-goals for the first cut: no cohort filter inside refine3D, no
+frozen term in the trailing chain, no re-search of frozen particles (see
+section 6 for the later all-particle update), no chaining of add-ons until the
+union sigma state exists, no single-traversal frozen producer until its
+equivalence is proved.</p>
+<p>Tests, as <code>simple_&lt;thing&gt;_tester.f90</code> suites under <code>simple_test_exec</code> (the
+review's approval gates, section 9, in condensed form):</p>
+<ul>
+<li>Original-application isolation: ordinary <code>abinitio3D</code> and
+  <code>abinitio3D_cavgs</code> retain equivalent child commands, project segments,
+  numerical outputs and artifact inventories with no add-on request, across
+  single/independent/docked, sampled/full, gridding/PCG, shared/distributed;
+  valid and stale <code>frozen_*</code> files in the directory are never opened; add-on
+  keys are refused on ordinary and direct <code>refine3D</code>/<code>reconstruct3D</code> entries;
+  ordinary-to-add-on-to-ordinary and the reverse order in one process leak no
+  state; injected manifest, producer, consumer and final-write failures leave
+  the source projects and completed ordinary output unchanged.</li>
+<li>Fixed-grid numerics, both backends, shared and distributed, C1 and non-C1:
+  direct <code>F u C</code> accumulation equals separately accumulated <code>F + C</code> on raw
+  statistics and on restored/solved maps with fixed sigma inputs; over at
+  least two sampled iterations <code>T_C = (u/f) P_C + (1-u) T_C_prev</code>, the
+  persisted chain holds no frozen mass and the consumed union is <code>F + T_C</code>;
+  the coefficient of <code>F</code> stays one through seeding, steady state, box
+  transitions, every PCG operator replay and the final reconstruction; a
+  deleted or corrupt cohort chain is rebuilt or fails before output; N=1 and
+  N&gt;1 including a state or half with no cohort contribution and a frozen-only
+  state, every inherited state producing maps, FSC and union metadata; FSC,
+  NU/ML inputs and final maps use union half-statistics; the
+  joint-versus-separate sigma gate with its declared tolerance.</li>
+<li>Sampling and state policy: sampled IDs identical across <code>prob_align</code>,
+  <code>prob_tab</code>, the matcher and reconstruction with no frozen index; every
+  denominator is the cohort's, at, below and above the 0.9 switch including
+  <code>nstates*nsample</code>; sampled and full runs for two and three states on both
+  backends, sampled PCG in shared memory (worker plus master in process) and
+  distributed with several parts; independent and docked base fixtures enter the same <code>independent</code>
+  add-on policy; final coverage touches cohort rows only and leaves frozen
+  labels and poses unchanged.</li>
+<li>Project and provenance: manifest round trip, schema refusal, truncation,
+  checksum, run-identifier, box/backend/layout and stale-set refusal;
+  same-basename projects, same-file and symlink aliases, empty cohort,
+  permuted rows, changed stack mapping, optics/CTF mismatch; source hashes
+  unchanged after success and each injected failure; <code>addon_diag</code> contains the
+  cohort only.</li>
+<li>End to end on a real data set: solution on a strict class-average
+  selection, add-on with the permissive selection, union FSC and cohort-only
+  map compared with a one-shot run on the permissive selection; scientific
+  validation, not a substitute for the gates.</li>
+</ul>
+<p>Compilation and runs stay with the user, per the repository policy.</p>
+<h2 id="6-full-particle-update-passes">6. Full-particle update passes<a class="headerlink" href="#6-full-particle-update-passes" title="Permanent link">&para;</a></h2>
+<p>A full-particle pass re-opens every pose against the union model. It is not
+part of <code>abinitio3D_addon</code>: the add-on's output is an ordinary project with
+every particle posed, so the pass is a subsequent refinement of that project,
+and when it is run is the caller's policy.</p>
+<p><strong>Why it is needed.</strong> Frozen poses were found against a smaller-population,
+lower-resolution model, and each add-on cohort is only ever refined against
+the model it joined. Without an occasional pass the solution ratchets:
+newcomers improve the map, but the particles that built it never benefit, and
+in multi-state runs the state partition never changes.</p>
+<p><strong>What it is.</strong> All particles active, standard <code>update_frac</code>/<code>nsample</code>
+sampling and <code>trail_rec</code>, seeded from a full reconstruction through
+<code>trail_seed</code>. Two candidate carriers: <code>refine3D</code> with the inherited <code>nstates</code>
+(<code>refine=prob</code> then <code>prob_neigh</code>, the emitted controls of stages 5 and later),
+or the abinitio3D state-continuation route (<code>state=</code>), which today requires
+<code>multivol_mode=single</code> and would need an <code>independent</code> extension. The first
+reuses more and keeps the states coupled; the second gives the NU ladder for
+free. Decide once the add-on exists and its outputs can be inspected.</p>
+<p><strong>Interaction with add-ons.</strong> Whether a refined project can be the frozen
+project of a later add-on is open (section 7, frozen input scope): it carries
+no <code>abinitio3D</code> manifest of its own and its maps no longer match the base
+manifest's digests. Frozen accumulator sets are never reused across runs; each
+add-on regenerates them at its own stage boxes.</p>
+<h2 id="7-risks-open-questions-and-plan">7. Risks, open questions and plan<a class="headerlink" href="#7-risks-open-questions-and-plan" title="Permanent link">&para;</a></h2>
+<p>The numerics are a straight sum of artifacts that already exist; the risk sits
+in the policy edges around them.</p>
+<p>Risks:</p>
+<ul>
+<li>Frozen mass dominates the FSC, so any FSC-driven control (stage-LP
+  promotion, NU band selection, early stopping on resolution) sees the frozen
+  model, not the cohort. Promotion is switched off; the NU ladder is reached
+  exactly where the base run reached it, and <code>overlap</code>-based early stopping is
+  computed on the cohort only.</li>
+<li>A junk-rich cohort barely moves the map but is posed and written into the
+  output all the same. The run reports per-state populations and the union
+  resolution against the frozen project's, and <code>addon_diag</code> shows the cohort
+  on its own; rejecting the outcome is the user's call.</li>
+<li>The frozen partition never changes inside an add-on; a later chain of
+  add-ons without a refinement pass would keep the first solution's states
+  forever.</li>
+<li>The output must not be mistaken for a frozen input: its sigma registration
+  is removed and its manifest marks it ineligible until the union sigma state
+  exists (section 3, "Sigma2").</li>
+<li>Sigma2: the cohort's sigma2 is estimated on its own population; the
+  joint-versus-separate gate measures the effect before it is trusted.</li>
+<li>Disk and compute: one frozen accumulation per distinct stage box per state
+  plus the native box, a handful in total, each a full pass over the frozen
+  particles.</li>
+<li>A cohort too small for a stable multi-state assignment; enforce a floor on
+  the cohort size per inherited state and refuse below it (open items below).</li>
+</ul>
+<p>Decided (Hans, 2026-09-25): enter at stage 3; <code>nsample</code> is accepted; one
+frozen kind, the bootstrap map runs on the run's backend in add-on mode; no
+limit is ever planned from class FRCs, a frozen project without a manifest is
+refused; the frozen term is an <code>abinitio3D</code> capability only, nothing is routed
+through <code>refine3D_states</code>; the class-average route is off, the add-on aligns
+particles only; the sigma2 union is deferred. Review disposition (section 9):
+the frozen set is accumulated per consuming box, the add-on mode follows the
+final frozen state count with docked as provenance, sampled and full cohorts
+are both first-release, and the output is not chainable until the union sigma
+state exists. The manifest is the only route (Hans, 2026-09-25): always
+written by the base run, no opt-in, no export, no re-derivation, no override;
+expert overridables are a possible later extension. No new commander file: a
+thin wrapper commander in <code>simple_commanders_abinitio.f90</code> and an add-on route
+in <code>exec_abinitio3D</code> behind an internal handshake, sharing the sampling
+initialisation, stage loop and final reconstruction (Hans, 2026-09-25).</p>
+<p>Open before implementation (2026-09-25, evening):</p>
+<ul>
+<li>Frozen input scope: the direct <code>abinitio3D</code> output only (the manifest's
+  artifact digests must match the project's registered maps), or also a
+  <code>refine3D</code>-refined descendant? Mechanically a descendant still resolves the
+  manifest, because <code>refine3D</code> never rewrites the project's recorded
+  directory, and it carries its own consumable sigma state; its registered
+  maps would no longer match the manifest digests. Recommendation: direct
+  output only in the first release.</li>
+<li>Cohort floor numbers: a hard floor of 5 cohort particles per inherited
+  state (the docked split's <code>MIN_SPLIT_STATE_POP</code>) and a warning below 5 % of
+  the frozen population.</li>
+<li>Stage-3 early stopping: <code>overlap</code> defaults to 0.95 (the <code>abinitio3D</code> entry
+  default) rather than the 0.9 of stages 4 to 6.</li>
+<li>The joint-versus-separate sigma tolerance is set from the first real-data
+  run (map correlation and FSC difference reported, a gate value proposed
+  afterwards), not guessed now.</li>
+</ul>
+<p>Implied by the decided rules, recorded so they are not re-asked: a frozen
+project must be a completed run with its final native-box reconstruction and
+committed residual sigma state (an early-stopped run has neither at native
+sampling and is refused); an empty inherited state breaks the contiguous
+<code>1..N</code> layout and is refused; the manifest file and its <code>projinfo</code> key are
+named after the program (<code>abinitio3D_manifest</code>).</p>
+<p>Decision matrix for the remaining questions. The verdict column is a
+recommendation; the decision stays with Hans.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>Option</th>
+<th>Correctness and fidelity</th>
+<th>Code touched</th>
+<th>Compute</th>
+<th>Failure mode</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Frozen rows with <code>updatecnt==0</code></td>
+<td>a. join the cohort</td>
+<td>Correct: the base run's maps never contained them (<code>reconstruct3D</code> selects <code>state&gt;0 .and. updatecnt&gt;0</code>, <code>sample4rec</code>; the PCG master skips <code>updatecnt&lt;1</code>), so the frozen accumulation excludes them by the existing rule and they are newcomers by definition</td>
+<td>cohort count and a log line</td>
+<td>proportional to their number</td>
+<td>none</td>
+<td>recommended</td>
+</tr>
+<tr>
+<td>1</td>
+<td></td>
+<td>b. exclude them from the run</td>
+<td>Discards active particles of the current project; a chain of add-ons never poses them</td>
+<td>one mask</td>
+<td>lower</td>
+<td>silent particle loss</td>
+<td>no</td>
+</tr>
+<tr>
+<td>1</td>
+<td></td>
+<td>c. freeze them</td>
+<td>Wrong: their poses are <code>rnd_oris</code> leftovers</td>
+<td>an override of the accumulation rule</td>
+<td>none</td>
+<td>random-pose signal in the frozen term</td>
+<td>no</td>
+</tr>
+<tr>
+<td>2</td>
+<td>NU-filter inputs</td>
+<td>a. the union, by construction</td>
+<td>The frozen sum precedes restoration; gridding captures the NU inputs from the restored halves, PCG filters the solved maps</td>
+<td>none</td>
+<td>none</td>
+<td>none</td>
+<td>recommended; close</td>
+</tr>
+<tr>
+<td>2</td>
+<td></td>
+<td>b. cohort-only NU inputs</td>
+<td>Filters on a cohort-only FSC, worse than the union's, and the matching references stop being the shipped model</td>
+<td>a second restoration per state and iteration</td>
+<td>one extra restoration per iteration</td>
+<td>inconsistent references</td>
+<td>no</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Full-particle pass</td>
+<td>out of scope</td>
+<td>The add-on's output is an ordinary project; the pass is a later refinement whose carrier belongs in its own note</td>
+<td>none here</td>
+<td></td>
+<td></td>
+<td>deferred, not an add-on decision</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Cohort floor per state</td>
+<td>a. absolute hard floor only</td>
+<td>Prevents degenerate paths (balanced <code>gen_labelling</code>, per-state halves); <code>randomize_states</code> refuses at <code>MIN_SPLIT_STATE_POP=5</code></td>
+<td>one check</td>
+<td></td>
+<td>a tiny cohort runs and changes nothing, unnoticed</td>
+<td>partial</td>
+</tr>
+<tr>
+<td>4</td>
+<td></td>
+<td>b. fraction of the frozen population as a hard floor</td>
+<td>Refuses legitimate small add-ons; a few hundred good particles are worth posing</td>
+<td>one check</td>
+<td></td>
+<td>over-refusal</td>
+<td>no</td>
+</tr>
+<tr>
+<td>4</td>
+<td></td>
+<td>c. absolute hard floor plus a warning below a fraction (5 % of the frozen population)</td>
+<td>Degenerate runs refused, small runs allowed and flagged</td>
+<td>two checks</td>
+<td></td>
+<td>none</td>
+<td>recommended</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Manifest carrier</td>
+<td>a. one versioned key-value file, bare name resolved against the project directory (accepted, review item 4.3)</td>
+<td>Mirrors <code>sigma2_state</code> exactly; human-readable; per-stage arrays are natural</td>
+<td>writer, reader, one <code>projinfo</code> key</td>
+<td></td>
+<td>a relocated project loses it, as it loses its sigma state; refused loudly</td>
+<td>decided (Hans, 2026-09-25)</td>
+</tr>
+<tr>
+<td>5</td>
+<td></td>
+<td>b. derived keys pushed onto the command line so they land in the <code>jobproc</code> row</td>
+<td>Travels with the project, but derived values masquerade as inputs, must be stripped before <code>params%new</code>, and the row is written by the executable after the commander returns</td>
+<td>cline push plus strip logic</td>
+<td></td>
+<td>unknown keys reaching the parser</td>
+<td>no</td>
+</tr>
+<tr>
+<td>5</td>
+<td></td>
+<td>c. keys in <code>projinfo</code></td>
+<td>Travels with the project; <code>projinfo</code> is project identity, thirty stage keys clutter it and a chain overwrites them</td>
+<td>a setter and getter per key</td>
+<td></td>
+<td>none</td>
+<td>no</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Docked base run</td>
+<td>a. refuse</td>
+<td>Nothing wrong, nothing supported</td>
+<td>none</td>
+<td></td>
+<td>docked users excluded</td>
+<td>no: docked results are required multi-state inputs</td>
+</tr>
+<tr>
+<td>6</td>
+<td></td>
+<td>b. translate: mode from the final frozen state count, <code>independent</code> <code>prob</code>/<code>prob_neigh</code> over the co-aligned frozen states</td>
+<td>The frozen term pins the references, so the drift that motivates docked mode cannot occur; early state labels at low resolution are noise but harmless; the docked route is provenance</td>
+<td>a mode derivation</td>
+<td>N references per particle from stage 3</td>
+<td>none structural</td>
+<td>decided (product requirement, review item 4.8)</td>
+</tr>
+<tr>
+<td>6</td>
+<td></td>
+<td>c. in-line docked particle loop with a consensus set and the controller's docked policies</td>
+<td>Would be a second docked production path, which the heterogeneity policy reserves to <code>abinitio3D</code>'s scaffold plus <code>refine3D_states</code></td>
+<td>consensus sum, split-stage labelling and reconstruction</td>
+<td></td>
+<td>policy conflict</td>
+<td>declined</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>overlap</code></td>
+<td>a. keep, inert</td>
+<td>The controller overwrites it per stage</td>
+<td>none</td>
+<td></td>
+<td>a knob that does nothing</td>
+<td>no</td>
+</tr>
+<tr>
+<td>7</td>
+<td></td>
+<td>b. drop from the entry</td>
+<td>Honest</td>
+<td>one line</td>
+<td></td>
+<td>none</td>
+<td>acceptable</td>
+</tr>
+<tr>
+<td>7</td>
+<td></td>
+<td>c. drive the add-on's stage-3 early stopping (add-on context)</td>
+<td>Stage 3 lacks early stopping only because of the symmetry search, absent here; gives the accepted key a meaning; default 0.95</td>
+<td>two lines in the controller</td>
+<td>saves most of the 17-iteration stage-3 budget when the cohort converges early</td>
+<td>an early stop on a cohort that has not settled; the base run's stages 4 to 6 accept the same risk at 0.9</td>
+<td>recommended</td>
+</tr>
+</tbody>
+</table>
+<p>Phased plan:</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Scope</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Frozen accumulator contract at a fixed grid: <code>frozen_seed</code> writer on a local command object in <code>calc_frozen_rec</code>, per-box producer, <code>frozen_*</code> names per state and box, frozen add in gridding <code>restore_state_from_parts</code>, the PCG distributed half job and the shared-memory half solve ahead of every zero-current early-out, internal frozen context with manifest validation, forwarding through <code>calc_final_rec</code> and <code>bootstrap_rec3D</code> with the bootstrap map on the run's backend, cohort-only chain seeding and the sampled recurrence</td>
+<td>Fixed-grid numerical gates (section 5); joint-versus-separate sigma gate</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Run manifest: writer at the end of <code>exec_abinitio3D</code> (atomic, published last, non-fatal), reader with schema, run-identifier, checksum and layout validation, allowlisted command-line construction, <code>jobproc</code> last-job lookup for the writer</td>
+<td>Project and provenance gates</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>abinitio3D_addon</code> program: UI entry, exec case, wrapper commander and the add-on route in <code>exec_abinitio3D</code> per the first-cut contract (section 9): identity validation before any write, collision-proof copies, saved <code>ptcl2D</code> state and mask, registration drop, mode from the final state count, per-box accumulation, stage-3 entry with <code>center=no</code>, sampling initialisation unchanged on the cohort, promotion off, frozen-only states, coverage and <code>addon_diag</code> while masked, <code>transfer_3Dparams</code> restore, union metadata, sigma unregistration, own manifest</td>
+<td>Isolation, sampling and state-policy gates; strict-versus-permissive scenario on a real data set</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Union sigma state composition, then chaining; the full-particle pass (section 6) in its own note</td>
+<td><code>A -&gt; A+B -&gt; A+B+C</code> with a valid union sigma state</td>
+</tr>
+</tbody>
+</table>
+<p>Phase 1 can be developed and tested with two hand-made projects before any
+commander work starts, which keeps the numerics reviewable on their own.</p>
+<h2 id="8-verification-against-master-3f5e6adce-2026-09-25">8. Verification against master <code>3f5e6adce</code> (2026-09-25)<a class="headerlink" href="#8-verification-against-master-3f5e6adce-2026-09-25" title="Permanent link">&para;</a></h2>
+<p>Every symbol, constant and mechanism the note relies on was checked against
+the tree. Inside the files this design touches, the only source change since
+the drafting base is one initialisation line in
+<code>simple_strategy3D_matcher.f90</code>, so the note is drafted against the current
+code.</p>
+<p>Confirmed as written: the entry routes and the <code>update_missing</code> refusal
+(<code>simple_strategy3D_matcher.f90:407</code>); the <code>trail_seed</code> handshake in
+<code>calc_rec</code>, gated on the consuming stage's <code>trail_rec</code>, and its writers in
+<code>blend_trailing_accumulators</code> and <code>prepare_distributed_half_job</code>; the
+manifest fields <code>validate_trail_chain</code> checks; the constant-FOV zero-extension
+of <code>add_raw_accum_weighted</code> with its nested-lattice, extent and provenance
+checks; <code>force_full_sampling_mode</code> and the <code>trail_rec=no</code> it implies;
+<code>FSC05_PROMOTE_MIN_STAGE=2</code>, promotion reading the per-particle <code>res05</code> of
+<code>state&gt;0</code> rows; <code>PROB_REFINE_STAGE=3</code>, <code>NSTAGES=8</code>, <code>NSTAGES_INDEPENDENT=5</code>,
+<code>LPSTOP_INDEPENDENT=6</code>, NU filtering from stage 6;
+<code>reset_ptcl3D_from_ptcl2D_selection</code> deleting every row's 3D alignment and
+deriving <code>ptcl3D%state</code> from <code>ptcl2D</code>; <code>gen_labelling('uniform')</code> relabelling
+only <code>state&gt;0</code> rows, so the state draw cannot un-mask a frozen row;
+<code>sample4update_all</code> packing <code>state&gt;0</code> only; 42 explicit <code>add_input</code> calls in
+<code>new_abinitio3D</code> plus the implicit <code>projfile</code>; no two-project helper besides
+<code>append_project</code>. The padded lattices are exactly constant-FOV on both
+backends, not approximately: <code>box_croppd = 2*round2even(KBALPHA*box_crop/2)</code>
+with <code>KBALPHA = OSMPL_PAD_FAC = 2</code> and an even <code>box_crop</code> (enforced for
+<code>reconstruct3D</code>), and <code>boxpd = padf*box</code> on PCG, so a central clip of a
+native set would be index-aligned; the deposited values are nevertheless not
+those of a direct accumulation at the smaller box (section 9, item 3.1), which
+is why the design accumulates per box.</p>
+<h3 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>F1. The final ending runs through <code>bootstrap_rec3D</code>, whose bootstrap map
+  is gridding by design.</strong> <code>calc_final_rec</code> (<code>simple_final_rec.f90</code>) takes the
+  <code>bootstrap_rec3D</code> route whenever the registration box differs from the
+  native box (<code>final_rec_box_changed</code>) or the committed sigma state is not
+  consumable at native sampling; an add-on whose last stage is cropped always
+  takes it. <code>exec_bootstrap_rec3D</code> (<code>simple_commanders_refine3D.f90</code>) runs two
+  reconstructions: the euclid bootstrap map the residual sigma pass scores
+  against, and the shipped map. <code>prepare_bootstrap_rec_cline</code> forces the
+  bootstrap map onto gridding (<code>l_final=.false.</code>: <code>strip_pcg_backend_keys</code>,
+  <code>rec_backend=gridding</code>) because gridding is faster, while the shipped map
+  runs on the caller's backend with the cold-solve budget of at least five
+  iterations (Hans, 2026-09-25). This is not a defect of the workflows in use:
+  without a frozen term both maps are built from the same particles, and the
+  split only trades solver time for a slightly differently regularised
+  reference. In the add-on both maps must carry the frozen term, which gives
+  the split a cost: either the producer writes two native frozen kinds, a
+  gridding set for the bootstrap map and a PCG pair for the shipped map, or
+  the add-on builds the bootstrap map on the run's backend. The second follows
+  the one-backend rule of the run manifest (section 4) and scores the residual
+  sigmas against a reference regularised as the refinement's references were,
+  at the cost of one cold PCG solve at the native box in place of a gridding
+  assembly. Decided (Hans, 2026-09-25): one frozen kind, the bootstrap map on
+  the run's backend in add-on mode. <code>prep_final_rec_cline</code> (built from scratch
+  from a fixed key list) and <code>prepare_bootstrap_rec_cline</code> forward
+  <code>frozen_rec</code>, and <code>exec_bootstrap_rec3D</code> deletes it from its <code>calc_pspec</code>
+  line.</li>
+<li><strong>F2. A third consumer, the shared-memory PCG half solve.</strong> <code>reconstruct3D</code>
+  without <code>nparts</code> reaches <code>execute_rec3D_pcg_shared</code>
+  (<code>simple_rec3D_strategy.f90:251</code>), whose <code>solve_state_half</code> accumulates
+  batches and calls <code>end_accum</code> with no chain or frozen step. Shared-memory
+  gridding is covered because it assembles through <code>volassemble</code> too
+  (<code>force_volassemble</code>, <code>simple_refine3D_strategy.f90</code>). Add
+  <code>add_raw_accum_weighted(frozen, weight=1.0)</code> before <code>end_accum</code> there as
+  well. With the separate fix that routes the in-memory PCG <code>reconstruct3D</code>
+  through the worker-plus-master pair (section 4, "Sampling"), this consumer
+  disappears and the master is the only PCG site. Refusing <code>rec_backend=pcg</code>
+  without <code>nparts&gt;1</code> is not an option: shared-memory PCG is supported.</li>
+<li><strong>F3. Key forwarding and stripping.</strong> <code>prepare_assembly_cline</code> copies the
+  refine3D line to <code>volassemble</code> and strips only search keys, the
+  <code>reconstruct3D</code> strategy copies its whole line, and <code>calc_rec</code> strips
+  through <code>strip_refine3D_planning_keys</code>, so the internal frozen context key
+  (<code>frozen_rec</code>, outside the generated vocabulary; review item 4.1) survives
+  every in-process path it must survive. <code>frozen_seed</code> must be deleted wherever <code>trail_seed</code> is
+  deleted today: <code>ensure_sigma2_for_iteration</code> and
+  <code>prepare_residual_sigma2_pass_cline</code> (<code>simple_sigma2_bootstrap.f90</code>) and the
+  <code>calc_pspec</code> line of <code>exec_bootstrap_rec3D</code>.</li>
+<li><strong>F4. The frozen project must not be mutated.</strong> <code>reconstruct3D</code> writes into
+  the project it runs on: <code>update_project_resolution_metadata</code>
+  (<code>simple_commanders_rec_distr.f90</code>) sets <code>res</code> and <code>res05</code> on every row, the
+  stage and PCG output registrations write the <code>out</code> segment, and a sigma
+  bootstrap registers a new <code>sigma2_state</code>. The accumulation runs on a plain
+  file copy of the frozen project in the run directory. The copy keeps the
+  frozen sigma state consumable: a bare registered name resolves against
+  <code>projinfo%cwd</code>, the project's own directory (<code>get_sigma2_state_path</code>,
+  <code>sigma2_state_project_dir</code> in <code>simple_sp_project_core.f90</code>), and the layout
+  digest's lineage is <code>projname</code>; both survive a copy as long as
+  <code>update_projinfo</code> is never called on it (the <code>state=</code> continuation route
+  calls it on its work project, which would break this). When the state is
+  not consumable (a relocated frozen run, a stale <code>cwd</code>), <code>calc_rec</code>'s
+  bootstrap would silently replace the residual sigmas by an image-power seed;
+  the add-on refuses, because the frozen term would then be weighted by a
+  seed rather than by the base run's residual sigmas.</li>
+<li><strong>F5. <code>calc_rec</code> is not the producer as is.</strong> It always sets <code>box_crop</code> from
+  the stage plan, renames its outputs to <code>_stageNN</code>, injects them into
+  <code>cline_refine3D</code> and registers them in the project. The producer is a
+  sibling, <code>calc_frozen_rec</code>, that reuses <code>cline_reconstruct3D</code>,
+  <code>apply_refine3D_reconstruction_controls</code> and <code>strip_refine3D_planning_keys</code>,
+  sets <code>box_crop</code> to the requested box on a local command object, passes
+  <code>frozen_seed</code>, and does no renaming, injection or registration.</li>
+<li><strong>F6. The gridding reader pads only under a fractional update.</strong>
+  <code>read_gridding_pair_accumulators</code> zero-extends a smaller artifact only when
+  <code>params%l_update_frac</code> is true; otherwise it opens the file at the current
+  dimensions with <code>readhead=.false.</code>, so a wrong-size set is read as corrupt
+  data, not rejected. Under full sampling <code>l_update_frac</code> is false, so a
+  wrong-size set is read that way; under a sampled cohort it is true, so a
+  smaller set is zero-padded silently. Either way the manifest box check must
+  run before the read; this is the reason behind the provenance rule of
+  section 3. Section 2 is corrected
+  accordingly.</li>
+<li><strong>F7. No restore-from-set entry point for the starting references.</strong>
+  <code>refine3D</code> crops every reference to the stage box on read (<code>read_and_crop</code>,
+  <code>simple_matcher_refvol_utils.f90:219</code>; <code>symmetrize</code> relies on the same for
+  full-box maps), so the state volumes the native-box frozen reconstruction
+  writes anyway serve as <code>vol1..volN</code> at stage 3 unchanged. No crop utility
+  exists after the review (section 9, item 3.1): the per-box sets are
+  accumulated directly.</li>
+<li><strong>F8. <code>updatecnt==0</code> rows of the frozen project are newcomers.</strong> In a
+  sampled run they carry <code>rnd_oris</code> poses with <code>state&gt;0</code>, but the base run's
+  maps never contained them: <code>reconstruct3D</code> selects <code>state&gt;0 .and.
+  updatecnt&gt;0</code> (<code>sample4rec</code>, <code>simple_rec3D_strategy.f90</code>) and the PCG master
+  skips <code>updatecnt&lt;1</code> once any particle has updates, so the frozen
+  accumulation excludes them by the existing rule, with no mask. The
+  commander puts them in the cohort and reports the count. <code>fillin</code> prefers
+  them in a single-state final stage but covers only <code>update_frac</code> per
+  iteration, so large sets can end with some; multi-state runs end with
+  <code>ensure_multistate_particle_assignments</code> and have none.</li>
+<li><strong>F9. <code>projfile_frozen</code> is normalised in the commander before
+  <code>params%new</code>.</strong> The parameters layer absolutises only <code>projfile</code> ahead of
+  the <code>mkdir</code> change of directory (<code>setup_execution_context</code>); the registry
+  absolutises other existing file arguments at parse time. Doing it in the
+  commander follows the cmdline-normalisation rule and removes any dependence
+  on parse order.</li>
+<li><strong>F10. The composed sigma2 union is deferred, and the output is therefore
+  not chainable.</strong> <code>sigma2_state_merge_local_ranges</code> merges range files of the
+  candidate's own generation and layout digest, so frozen rows from another
+  project's state cannot pass through it; an import would be new machinery
+  (<code>sigma2_state_read_particles</code> into a candidate,
+  <code>sigma2_state_reduce_groups</code> over the union, <code>sigma2_state_commit</code>). The
+  first draft assumed the consumer would reject a cohort-only state once the
+  frozen rows are active; the review (item 3.4) is right that it would not:
+  <code>canonical_sigma2_consumable</code> checks file integrity and identity only, never
+  the active set. So the output project drops the add-on's registration, is
+  marked ineligible as a frozen input, and the next ordinary <code>refine3D</code>
+  bootstraps a state for the union, as <code>abinitio3D</code> does with an inherited
+  registration. The joint-versus-separate reconstruction gate stays: it
+  measures the effect of two global sigma curves in one sum, which is real.</li>
+<li><strong>F11. No <code>fsc05_promote</code> parameter, and no module-level mode flag.</strong> The
+  controller carries mode flags as module variables of <code>simple_abinitio_utils</code>
+  (<code>l_state_continue_mode</code>, <code>l_cavgs_mode</code>) with resets at every entry point;
+  the review (item 4.2) asks for an explicit immutable context instead, passed
+  as an optional argument to <code>set_cline_refine3D</code> and the reconstruction
+  helpers, an absent context meaning the legacy path. Adopted: it costs an
+  optional argument and removes any dependence on process-lifetime state. The
+  context switches promotion off and stage-3 early stopping on.</li>
+<li><strong>F12. Frozen manifest semantics.</strong> <code>write_trail_chain_set</code> records the
+  field's total row count and <code>validate_trail_chain</code> compares it with the
+  current field; for a frozen set the total rows are equal in both projects,
+  and the frozen active count is a second number the producer records and the
+  consumer reports. Naming the per-box sets by box
+  (<code>frozen_stateNN_boxBBBB_{even,odd}</code> plus <code>rho</code> and manifest, one PCG pair
+  per box) lets every consumer select its set by its own <code>box_crop</code>, so the
+  box check is in the name as well as in the manifest.</li>
+<li><strong>F13. The <code>jobproc</code> row is provenance, not a manifest.</strong>
+  <code>update_job_descriptions_in_project</code> (<code>simple_exec_helpers.f90</code>) runs after
+  every <code>simple_exec</code> program and appends <code>cline%gen_job_descr</code> (every key of
+  the command line as it stands after execution, so including the defaults
+  the commander injected) plus date and time to the project's <code>jobproc</code>
+  segment through <code>append_job_descr2jobproc</code>, into the project named by
+  <code>projfile</code>, which after <code>mkdir=yes</code> is the run-directory copy, with
+  <code>mkdir=no</code> already substituted. Replaying it would carry that path and
+  <code>mkdir=no</code> into the add-on (review item 3.2), so the row is the manifest
+  writer's source for the input keys and nothing more; nothing reads
+  <code>jobproc</code> back today except the print and JSON routines, so the writer needs
+  a small last-job lookup. Values the commander sets on <code>params</code> only (the
+  <code>nsample</code> default) and the derived plan (<code>lpinfo</code>, the emitted per-stage
+  limits) are recorded nowhere and need the manifest; <code>lp_crop_inf</code> is a flat
+  record of seven fields (<code>simple_type_defs.f90</code>), so a key-value text file
+  holds it directly.</li>
+</ul>
+<h3 id="recommendations-on-the-open-questions">Recommendations on the open questions<a class="headerlink" href="#recommendations-on-the-open-questions" title="Permanent link">&para;</a></h3>
+<p>Superseded by the decisions and the decision matrix of section 7
+(2026-09-25).</p>
+<h3 id="phase-1-file-checklist">Phase 1 file checklist<a class="headerlink" href="#phase-1-file-checklist" title="Permanent link">&para;</a></h3>
+<p>Superseded by the architecture table of section 5 and the phased plan of
+section 7 after the review (section 9).</p>
+<h2 id="9-review-disposition-2026-09-25">9. Review disposition (2026-09-25)<a class="headerlink" href="#9-review-disposition-2026-09-25" title="Permanent link">&para;</a></h2>
+<p>The review at <code>abinitio3D_addon_mode_review.md</code> (working tree, source
+<code>ba3ac5762</code>) was assessed item by item against the code. Accepted items
+changed the note as listed; qualified items are accepted with a stated
+reservation; the one policy item (4.3) was decided by Hans on 2026-09-25. No
+item was declined.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Verdict</th>
+<th>Basis in the code</th>
+<th>Change to the note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.1 Native-to-stage central clipping is not exact</td>
+<td>Accepted</td>
+<td><code>prep_rec_observation</code> (<code>simple_matcher_ptcl_io.f90</code>): a cropped particle is normalised at native, Fourier-cropped, then tapered at the cropped box; an uncropped one is tapered first and normalised second; the two do not commute. Index alignment (pad factor exactly 2) does not make the deposited values equal.</td>
+<td>One frozen accumulation per distinct consuming box plus native (sections 2, 3, 5, 7); crop utility and crop gate removed; single-traversal producer deferred until proved.</td>
+</tr>
+<tr>
+<td>3.2 A <code>jobproc</code> row is unsafe as an executable command line</td>
+<td>Accepted</td>
+<td>The row is appended after the commander returns, with <code>mkdir=no</code> and the base run-directory <code>projfile</code> substituted (<code>simple_exec.f90</code>, <code>update_job_descriptions_in_project</code>); <code>cmdline%read</code> holds 32 tokens; the strip lists of <code>prep_class_command_lines</code> and <code>prepare_assembly_cline</code> are denylists.</td>
+<td>One versioned typed manifest; fresh allowlisted command line; <code>params%new</code> once with <code>mkdir=yes</code>; the row is provenance and the writer's source only (section 4, F13).</td>
+</tr>
+<tr>
+<td>3.3 Sampled cohort contract</td>
+<td>Accepted; consistent with the frozen-outside-the-chain design</td>
+<td><code>validate_supported_mode</code> refuses <code>l_update_frac</code>/<code>l_trail_rec</code> only in the standalone in-memory <code>reconstruct3D</code> PCG strategy, while shared-memory <code>refine3D</code> already assembles PCG through the distributed master over one part (<code>simple_refine3D_strategy.f90:750</code>); <code>count_state_gt_zero</code> counts active <code>ptcl2D</code> rows; <code>get_state_update_fracs</code> masks <code>state&gt;0</code>; both consumers write the chain seed before the frozen add.</td>
+<td>Recurrence <code>U = F + T_C</code> stated; cohort-only seed before the first trailing stage, no legacy union-volume bootstrap; sampled PCG supported in shared memory through the existing worker-plus-master assembly; effective <code>nsample</code> and final <code>nstates</code> inherited, population-derived values provenance only; membership definition (section 4, "Sampling").</td>
+</tr>
+<tr>
+<td>3.4 Deferred sigma union makes chaining unsafe</td>
+<td>Accepted</td>
+<td><code>canonical_sigma2_consumable</code> is file size and group checksum (<code>sigma2_state_validate_file</code>, deep) plus identity; no active-set check; <code>calc_pspec</code> writes <code>state&gt;0</code> rows only, so frozen rows hold no records.</td>
+<td>Output drops its sigma registration and is marked ineligible as a frozen input; the add-on refuses a frozen project without a consumable committed residual state; the working copy drops the current project's inherited registration; chaining moves to phase 4 (sections 3, 4, 7, F10).</td>
+</tr>
+<tr>
+<td>4.1 No activation through global parameters</td>
+<td>Accepted</td>
+<td>The vocabulary is generated from the declared fields of <code>simple_parameters.f90</code> (<code>simple_args_generator.pl</code>); <code>parse_command_line_value</code> stops on any key outside it; <code>trail_seed</code> is not in it and works as an in-process handshake; programs do not reject foreign vocabulary keys.</td>
+<td><code>frozen_rec</code> and <code>fsc05_promote</code> withdrawn from <code>parameters</code>; the frozen context is an internal key carrying the manifest path, bound to the run identifier, on in-process assembly lines only; <code>abinitio3D</code> and <code>abinitio3D_cavgs</code> refuse <code>projfile_frozen</code> and <code>addon_diag</code> explicitly (sections 3, 4, 5).</td>
+</tr>
+<tr>
+<td>4.2 Replace <code>l_addon_mode</code> with explicit state</td>
+<td>Accepted, qualified</td>
+<td>Module singletons with entry-point resets are the existing pattern (<code>l_state_continue_mode</code>, <code>l_cavgs_mode</code>, <code>nptcls_eff</code>), so the risk is shared with them; an optional context argument is nevertheless cheap and cleaner.</td>
+<td>Optional immutable add-on context on <code>set_cline_refine3D</code> and the reconstruction helpers; absent means legacy; ordering tests (sections 4, 5, F11).</td>
+</tr>
+<tr>
+<td>4.3 Mandatory manifest changes the base application</td>
+<td>Accepted in mechanics; decided by Hans on 2026-09-25: the manifest is always written and is the only route</td>
+<td>A separate export could recover the input keys from <code>jobproc</code> but not the emitted per-stage limits, which only the running controller knows; the write is one file plus one <code>projinfo</code> key.</td>
+<td>Single versioned manifest with schema version, run identifier, completion marker, checksum, layout identity, backend, planned and emitted limits, artifact digests; atomic, published last, write failure non-fatal; always on, no opt-in, no export, no override (section 4).</td>
+</tr>
+<tr>
+<td>4.4 Superset validation must prove physical identity</td>
+<td>Accepted</td>
+<td><code>map_ptcl_ind2stk_ind</code> is the canonical row-to-image mapping; equal stack tables alone do not exclude permutation.</td>
+<td>Row-wise identity for both segments, <code>ptcl_src</code>, optics/CTF identity, negative gates (section 4).</td>
+</tr>
+<tr>
+<td>4.5 Restoration and output metadata</td>
+<td>Accepted</td>
+<td><code>transfer_3Dparams</code> restores projection, correlation, fraction, <code>sampled</code>, <code>updatecnt</code>, <code>eo</code>, Euler angles and shifts; <code>update_project_resolution_metadata</code> writes <code>res</code>/<code>res05</code> for rows active at reconstruction time.</td>
+<td>Restore through <code>transfer_3Dparams</code> plus explicit state, restore the saved <code>ptcl2D</code> state, union-aware <code>res</code>/<code>res05</code>, <code>addon_diag</code> while masked (section 4).</td>
+</tr>
+<tr>
+<td>4.6 Multi-state and frozen-only states or halves</td>
+<td>Accepted</td>
+<td>The PCG half job returns on <code>job%nptcls == 0</code>; the gridding assembly carries dropped states forward; <code>calc_final_rec</code> skips <code>pop == 0</code> states.</td>
+<td>Frozen add ahead of every zero-current early-out, separate cohort, frozen and union counts, union populations at registration, zero-weight rule for a chain without a current sample (sections 3, 4).</td>
+</tr>
+<tr>
+<td>4.7 Temporary projects and failures</td>
+<td>Accepted</td>
+<td>Current and frozen projects commonly share a basename; <code>params%new</code> already places the current copy in the run directory.</td>
+<td>Collision-proof frozen copy name, alias rejection, empty-cohort refusal before any write, transactional outputs, hash gates (sections 3, 4, 5).</td>
+</tr>
+<tr>
+<td>4.8 Base docked mode translated, not replayed</td>
+<td>Accepted (product requirement)</td>
+<td>The heterogeneity policy gives <code>abinitio3D</code> only the single-state scaffold and split checkpoint of docked work; the earlier in-line loop would have been a second docked production path.</td>
+<td>Mode from the final frozen state count; no consensus set, split, <code>prob_state</code>, geometric neighbourhood or sticky sampling; parity gate (sections 4, 7).</td>
+</tr>
+<tr>
+<td>4.9 Remove the <code>frozen=1</code> row field</td>
+<td>Accepted</td>
+<td>No such field exists in the orientation schema and the algorithm does not use one.</td>
+<td>Removed; provenance in the manifest (section 4).</td>
+</tr>
+<tr>
+<td>5 Numerical interpretation</td>
+<td>Accepted</td>
+<td>Two global sigma curves in one sum are a cohort-specific weighting model, not the one-shot model.</td>
+<td>The one-shot equivalence claim replaced by the fixed-grid statement and the empirical sigma statement with a declared tolerance (section 3).</td>
+</tr>
+<tr>
+<td>2 Invariants, 6 first-cut contract, 7 approval gates</td>
+<td>Adopted</td>
+<td></td>
+<td>Architecture table, rules, tests and phased plan rewritten around them (sections 5, 7).</td>
+</tr>
+</tbody>
+</table>
+<p>Qualifications recorded: item 4.2's risk applies equally to the existing
+module flags, which the new context does not remove; item 4.3's technical
+requirements (atomic, last, non-fatal, one file) are adopted and its default
+was settled by Hans (always written, the only route, no overrides in the
+first release); the review's line references point at the earlier
+working-tree revision of this note. Invariant 1 of the review
+(existing commanders do not infer add-on mode) is kept in substance with one
+refinement decided by Hans on 2026-09-25: the shared flow lives in
+<code>exec_abinitio3D</code> behind an internal handshake that only the wrapper
+commander sets, so no user key, file, name or module state activates it, and
+no workflow code is duplicated.</p>
+<h2 id="10-revision-log">10. Revision log<a class="headerlink" href="#10-revision-log" title="Permanent link">&para;</a></h2>
+<ul>
+<li>2026-09-24: first draft as a streaming feature; review findings folded in
+  (explicit cohort set, sigma2 identity covers <code>nptcls</code> and row layout, accept
+  channel direction, generation recovery).</li>
+<li>2026-09-24, later: reframed as a batch abinitio3D capability (Hans: not
+  streaming-specific; the harsh-selection case). The commander owns cohort
+  determination, masking, the frozen-row restore and the sigma2 union; the
+  frozen reconstruction runs on the frozen project file itself, which removes
+  the need for a sigma2 state extension.</li>
+<li>2026-09-25: <code>abinitio3D_addon</code> is its own program (UI entry, exec case,
+  commander) rather than a route inside <code>exec_abinitio3D</code>; <code>nstates</code>, <code>pgrp</code>,
+  <code>multivol_mode</code> and the starting references are inherited from the frozen
+  project and refused on the command line; the CLI is stripped to 17 of
+  abinitio3D's 43 inputs (Hans).</li>
+<li>2026-09-25, later: streaming removed from the note entirely (Hans); the
+  workflow is defined by <code>projfile</code> and <code>projfile_frozen</code> alone, and the
+  superset relation is validated on active particle indices rather than
+  matched by stack identity. Streaming orchestration, if wanted, is a separate
+  note that calls this program.</li>
+<li>2026-09-25, later still: the frozen set is accumulated once at the native
+  box and central-cropped to each distinct stage box, not recomputed per
+  stage; the frozen sigmas are likewise consumed once, by that accumulation,
+  and copied by index into the output state (Hans).</li>
+<li>2026-09-25, verification pass: every mechanism checked against master
+  <code>3f5e6adce</code> (section 8). Corrections in place: the gridding reader pads
+  only under a fractional update; the producer is a sibling of <code>calc_rec</code>
+  run on a copy of the frozen project; the starting references are the
+  native frozen volumes; <code>bootstrap_rec3D</code> and the shared-memory PCG solve
+  are consumers too; the sigma2 union is deferred and <code>fsc05_promote</code>
+  replaced by a controller mode flag. Open questions keep their checkboxes;
+  recommendations and evidence recorded in section 8.</li>
+<li>2026-09-25, later (Hans): the bootstrap map of <code>bootstrap_rec3D</code> is
+  gridding by design, for speed, and the shipped PCG map keeps its five
+  iteration budget; the add-on runs on the frozen run's <code>rec_backend</code> and
+  changes no run parameter except possibly <code>nsample</code>. A run manifest written
+  by <code>abinitio3D</code> (Layer A: the <code>jobproc</code> row that already exists; Layer B:
+  the derived stage plan) replaces the 17-input command line; section 4
+  "Inputs and the run manifest", section 8 (F1, F13) and the open questions
+  updated accordingly. Pending Hans's review; no code.</li>
+<li>2026-09-25, CLI review (Hans): one frozen kind, the bootstrap map runs on
+  the run's backend in add-on mode; the add-on never plans limits from class
+  FRCs and a frozen project without a manifest is refused (no re-derivation
+  fallback); the command line keeps <code>nsample</code>, <code>overlap</code>, <code>maxits_pcg</code>,
+  <code>maxits_ml</code>, <code>pcg_solvent_check</code>, <code>euclid_diag</code>, <code>nparts</code>, <code>nthr</code> beside the
+  two projects and <code>addon_diag</code>, everything else comes from the manifest or is
+  refused. Review notes added: <code>center</code> is forced to <code>no</code> (a centring shift
+  never reaches the frozen accumulators), <code>overlap</code> is inert in <code>abinitio3D</code>
+  today, docked base runs need a translation to <code>independent</code>. Pending Hans's
+  review; no code.</li>
+<li>2026-09-25, decisions (Hans): enter at stage 3; the frozen term is an
+  <code>abinitio3D</code> capability only, nothing routes through <code>refine3D_states</code>.
+  Docked base runs are supported by an in-line docked particle loop on the
+  controller's existing docked policies (consensus frozen set before the
+  split, per-state sets from it). Never-updated frozen rows are newcomers by the reconstruction's own
+  <code>updatecnt&gt;0</code> rule, no mask needed. Section 7 now carries the decided list
+  and a decision matrix for the remaining questions; section 8's
+  recommendations are superseded by it. Pending Hans's review; no code.</li>
+<li>2026-09-25, scope (Hans): the class-average route is off in the add-on. A
+  base run bootstrapped through <code>cavg_ini</code>/<code>cavg_ini_ext</code> is inherited as a
+  finished solution, those keys are stripped from the manifest row, and no
+  class averages are ever aligned; the controller's docked policies are used
+  as particle-loop policies only.</li>
+<li>2026-09-25, review disposition: the review note beside this one was assessed
+  item by item (section 9). Accepted: per-box frozen accumulation instead of
+  clipping, a single typed manifest with an allowlisted command line instead
+  of replaying the <code>jobproc</code> row, the sampled-cohort recurrence and seeding
+  rules, non-chainable output with its sigma registration dropped, an internal
+  frozen context instead of a <code>frozen_rec</code> parameter, an explicit add-on
+  context instead of a module flag, physical-identity validation,
+  <code>transfer_3Dparams</code> restoration, frozen-only states, temporary-project
+  ownership, docked translated to <code>independent</code>, the <code>frozen=1</code> field removed,
+  the numerical interpretation restated, and the first-cut contract and
+  gates. Left to Hans: manifest default-on versus opt-in. Pending review; no
+  code.</li>
+<li>2026-09-25, manifest decision (Hans): the manifest is the only route into
+  the add-on, always written by <code>exec_abinitio3D</code>, with no opt-in, export,
+  re-derivation or command-line override; expert overridables are a possible
+  later extension. The frozen-only native reconstruction doubles as a
+  provenance check against the base run's final maps.</li>
+<li>2026-09-25, correction (Hans's question on shared-memory PCG): shared-memory
+  <code>refine3D</code> already assembles PCG through the distributed master over one
+  part, so sampled and trailing add-on runs on PCG need no distributed route;
+  the refusal of fractional and trailing updates lives only in the standalone
+  in-memory <code>reconstruct3D</code> PCG strategy, which the add-on never reaches with
+  a fractional update but which bites the <code>vol1</code> checkpoint and the docked
+  split checkpoint today. Proposed separate fix: route that strategy through
+  the worker-plus-master pair. Note, disposition row 3.3 and the test list
+  corrected.</li>
+<li>2026-09-25, structure (Hans): no new commander file and no duplicated
+  workflow. <code>commander_abinitio3D_addon</code> is a thin wrapper in
+  <code>simple_commanders_abinitio.f90</code> (manifest to command line, internal
+  handshake); <code>exec_abinitio3D</code> gains an add-on entry route behind that
+  handshake and shares its sampling initialisation, stage loop, final
+  reconstruction and coverage helpers. Section 4 "Registration", the
+  architecture table, the plan and the disposition updated.</li>
+<li>2026-09-26, consistency pass before Hans's review: sentences left stale by
+  the 2026-09-25 decisions aligned (section 1 inputs, section 2 output and
+  diagram, section 3 full-sampling qualifier, section 4 opening and docked
+  ladder, section 5 introduction, section 6 interaction with add-ons, risk on
+  the cohort floor, matrix rows 5 and 7, F2, F4, F6). No decision changed.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

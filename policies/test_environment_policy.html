@@ -1,0 +1,7051 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/test_environment_policy.html">
+      
+      
+        <link rel="prev" href="segdiampick_mics_policy.html">
+      
+      
+        <link rel="next" href="ui_layer_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Test Environment Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#test-environment-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Test Environment Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_18" id="__nav_5_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity analysis
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity analysis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/classify3d_refs.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification (classify3D_refs)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/refine3d_states.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement (refine3D_states)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2_process_heterogeneous_datasets.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Processing heterogeneous data sets in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2D_seeded_restart.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D seeded restart: initialize from the previous 2D clustering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio3D_addon_mode_proposal.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio3D_addon — development proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/calpha_finder.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-alpha finder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/calpha_nu_evidence_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Resolution Mask for C-alpha Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_cont_refine3D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Cartesian pose refinement in refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/flex_pca_envelope_support.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_pca: sampling-distance control, reconstruction backends, and the envelope mask as solve support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_refine_ml_estimator_competition.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retiring the NU shell walk: a dense static ladder with the regularized pair in the competition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_backend_overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The PCG reconstruction backend: what it is today
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_decision_log.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: decision log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_priors_history.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: the complete experiment record (2026-08-25 to 2026-09-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/single_pcg_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE on the PCG backend: the atomic density prior
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Environment Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="test_environment_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Environment Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-the-fast-area-suites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 The fast area suites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-long-running-ctest-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Long-running CTest entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-programs-that-are-not-registered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Programs that are not registered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Running tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-a-test-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What a test is
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. What a test is">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 A test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-not-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Not a test
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-where-a-test-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Where a test goes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Where a test goes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-the-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 The decision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-admission-to-the-fast-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Admission to the fast gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-is-it-part-of-the-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Is it part of the build?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-scratch-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Scratch development
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-how-to-implement-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. How to implement a test
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. How to implement a test">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-a-unit-test-fast-or-library-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 A unit test (fast or library tier)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Fixtures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-white-box-self-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 White-box self-tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-a-workflow-or-platform-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 A workflow or platform test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-checks-and-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 Checks and records
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#46-fortran-traps-seen-in-the-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.6 Fortran traps seen in the review
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-library-support-for-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Library support for tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Library support for tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-simple_test_utils" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 simple_test_utils
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-nightly-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The nightly suite
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The nightly suite">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-what-belongs-in-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 What belongs in it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-how-a-workflow-gate-is-designed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 How a workflow gate is designed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-the-nightly-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 The nightly run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-why-tests-are-no-longer-standalone-programs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Why tests are no longer standalone programs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-what-the-refactoring-deleted-and-why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. What the refactoring deleted, and why
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-where-is-my-test-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Where is my test now?
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_13" id="__nav_10_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    2D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="2D/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="2D/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="2D/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_14" id="__nav_10_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    3D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_15" id="__nav_10_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    NU
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="NU/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_16" id="__nav_10_16_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="heterogeneity/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_17" id="__nav_10_17_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_pca_architecture_audit_and_refactoring_plan_2026_09_17.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX PCA architectural audit and staged refactoring plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/image_rmat_padding_encapsulation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The padded real-space array of image: zero padding, and a box-shaped pointer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/mrc_stack_volume_output_suffix_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical MRC stack and volume output suffix refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 5 of the test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/scripts_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE scripts/ inventory and cleanup candidates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/single_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/stream_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/heterogeneity_analysis_ui_and_algorithm_docs_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis UI and Algorithm Documentation Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/test_review_record.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test review record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/testing_standards_assessment.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE's testing against modern practice: an assessment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/ui_category_membership_tidying.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Category Membership Tidying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/uniform_test_environment_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A uniform, two-tier test environment for SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/class_average_and_reconstruct3d_partials_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average State and Reconstruct3D Partials Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_10" id="__nav_11_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rejected
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Rejected
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/contract_submodule_architecture.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contract/Implementation Module Architecture for Fast Builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-the-fast-area-suites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 The fast area suites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-long-running-ctest-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Long-running CTest entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-programs-that-are-not-registered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Programs that are not registered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Running tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-a-test-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What a test is
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. What a test is">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 A test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-not-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Not a test
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-where-a-test-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Where a test goes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Where a test goes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-the-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 The decision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-admission-to-the-fast-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Admission to the fast gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-is-it-part-of-the-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Is it part of the build?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-scratch-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Scratch development
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-how-to-implement-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. How to implement a test
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. How to implement a test">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-a-unit-test-fast-or-library-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 A unit test (fast or library tier)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Fixtures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-white-box-self-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 White-box self-tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-a-workflow-or-platform-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 A workflow or platform test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-checks-and-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 Checks and records
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#46-fortran-traps-seen-in-the-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.6 Fortran traps seen in the review
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-library-support-for-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Library support for tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Library support for tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-simple_test_utils" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 simple_test_utils
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-nightly-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The nightly suite
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The nightly suite">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-what-belongs-in-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 What belongs in it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-how-a-workflow-gate-is-designed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 How a workflow gate is designed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-the-nightly-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 The nightly run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-why-tests-are-no-longer-standalone-programs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Why tests are no longer standalone programs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-what-the-refactoring-deleted-and-why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. What the refactoring deleted, and why
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-where-is-my-test-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Where is my test now?
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="test-environment-policy">Test Environment Policy<a class="headerlink" href="#test-environment-policy" title="Permanent link">&para;</a></h1>
+<h2 id="purpose-and-scope">Purpose and scope<a class="headerlink" href="#purpose-and-scope" title="Permanent link">&para;</a></h2>
+<p>This policy says what a test is in SIMPLE, where each test goes, how to write
+one, and what runs when. It applies to every Fortran test in the repository
+and to everyone who adds, changes or removes one. It records the state after
+the test-environment refactoring of September 2026.</p>
+<p>The refactoring itself is documented in
+<code>doc/refactoring_notes/completed/uniform_test_environment_refactoring.md</code> (the plan and
+its batch records, section 9.7). Every test that existed before it is listed,
+with its review verdict, in <code>doc/refactoring_notes/completed/test_review_record.md</code>; the
+full inventory, <code>doc/code_overview/test_inventory.md</code>, is generated from
+the sources and that record on every build and is not committed. This
+policy is the short version for day-to-day work; when the two disagree, fix
+the one that is wrong.</p>
+<h2 id="1-the-environment">1. The environment<a class="headerlink" href="#1-the-environment" title="Permanent link">&para;</a></h2>
+<p>SIMPLE has one test executable, <code>simple_test_exec</code>, built by every
+<code>compile_*.sh</code> unless it is given <code>--exclude-tests</code> (CMake option
+<code>BUILD_TESTS</code>, default ON). Every test is
+a procedure inside the library, not a program of its own, and every test is
+reached through <code>simple_test_exec test=&lt;name&gt;</code>. <code>simple_test_exec test=list</code>
+lists what exists.</p>
+<p>Tests are grouped into suites, and a suite is what CTest registers: one CTest
+entry per suite, never one per test. The entries fall into two tiers and four
+labels.</p>
+<table>
+<thead>
+<tr>
+<th>label</th>
+<th>entries</th>
+<th>when</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fast</code></td>
+<td>13 area suites <code>unit_&lt;area&gt;</code></td>
+<td>every <code>compile_*.sh</code> build (unless <code>--exclude-tests</code>), before installation</td>
+<td>unit tests of the library: hermetic, in-process, one thread, seconds</td>
+</tr>
+<tr>
+<td><code>library</code></td>
+<td>5 library suites <code>lib_&lt;area&gt;</code></td>
+<td>nightly</td>
+<td>longer numerical tests on generated data: realistic sizes, minutes</td>
+</tr>
+<tr>
+<td><code>highlevel</code></td>
+<td>9 high-level gates</td>
+<td>explicit CTest command only</td>
+<td>long simulated pipelines and commander integrations, including independent 6VXX/1JXY suites</td>
+</tr>
+<tr>
+<td><code>platform</code></td>
+<td><code>forked_process</code>, plus <code>coarrays</code>, <code>flex_gpu</code>, <code>openmp_offload</code> when CMake finds the capability</td>
+<td>by hand, nightly where the machine has the capability, and <code>coarrays</code> during <code>compile_coarrays.sh</code></td>
+<td>tests that need child processes, a launcher or a device; <code>coarrays</code> is a two-image integer-transfer smoke</td>
+</tr>
+</tbody>
+</table>
+<p>The fast tier is the build-time gate. Library and supported platform tests may
+run overnight; high-level tests run only when explicitly selected with CTest.</p>
+<p><strong>The fast gate is part of the build.</strong> Every <code>compile_*.sh</code> build
+runs <code>scripts/run_fast_gate.sh</code> between <code>make</code> and <code>make install</code>. It first
+runs <code>scripts/check_test_registry.py</code> (section 4.5), then
+<code>ctest -L fast</code> with half the cores, then <code>scripts/ctest_budget.py</code>, which
+fails the build when an entry fails or the gate takes more than 30 s of real
+time. A failed gate installs nothing. The per-entry timings are kept in
+<code>build/test_runs/ctest_fast.log.timing.txt</code>; the gate takes about 5 s on the
+reference Mac in Debug. Tests are on by default in every compile script;
+<code>--exclude-tests</code> (<code>BUILD_TESTS=OFF</code>) builds the library and executables only
+and skips the gate, for when only the executables are needed.</p>
+<p><code>compile_coarrays.sh</code> additionally runs the capability-gated
+<code>coarrays</code> CTest entry after the fast gate and before installation. A failed
+two-image smoke test therefore prevents a coarray build from being installed.</p>
+<p><strong>The process budget.</strong> The number of CTest entries is fixed in
+<code>SIMPLE_CTEST_BUDGET</code> (<code>production/CMakeLists.txt</code>, currently 28: 13 fast,
+5 library, 9 highlevel, 1 platform) and configuration fails when it does not
+match. A CTest entry is an isolation unit, not a place for one more check:
+checks are added inside existing suites. A new entry needs a stated reason and
+the owner's agreement, and is recorded in the plan.</p>
+<p><strong>Every entry</strong> runs in its own directory <code>build/test_runs/&lt;entry&gt;</code>, with its
+own <code>TIMEOUT</code>, an explicit <code>OMP_NUM_THREADS</code> (1 for the fast tier) and
+<code>SIMPLE_SEED=20260923</code>. Each suite writes a report,
+<code>SIMPLE_TEST_&lt;suite&gt;_&lt;date&gt;/simple_test_&lt;suite&gt;_report.txt</code>, with every check,
+every failure by name and the time of each sub-suite.</p>
+<h3 id="11-the-fast-area-suites">1.1 The fast area suites<a class="headerlink" href="#11-the-fast-area-suites" title="Permanent link">&para;</a></h3>
+<p>Each area suite runs its sub-suites in one process. One sub-suite is one
+tester module (section 4.1).</p>
+<table>
+<thead>
+<tr>
+<th>suite</th>
+<th>sub-suites</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>unit_core</code></td>
+<td>ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line</td>
+</tr>
+<tr>
+<td><code>unit_ori</code></td>
+<td>orientation, orientation collection, symmetry, Euler shift</td>
+</tr>
+<tr>
+<td><code>unit_image</code></td>
+<td>image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation</td>
+</tr>
+<tr>
+<td><code>unit_numerics</code></td>
+<td>online variance, random draws, affinity propagation, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search</td>
+</tr>
+<tr>
+<td><code>unit_project</code></td>
+<td>STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model</td>
+</tr>
+<tr>
+<td><code>unit_ui</code></td>
+<td>UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility</td>
+</tr>
+<tr>
+<td><code>unit_ipc</code></td>
+<td>IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only)</td>
+</tr>
+<tr>
+<td><code>unit_reconstruction</code></td>
+<td>rec3D backend, observation noise, class-average accumulator</td>
+</tr>
+<tr>
+<td><code>unit_pftc_align2D3D</code></td>
+<td>polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, cavg registration</td>
+</tr>
+<tr>
+<td><code>unit_cart_align3D</code></td>
+<td>Cartesian Fourier, pose refiner, pose adapter</td>
+</tr>
+<tr>
+<td><code>unit_heterogeneity</code></td>
+<td>flex PCA, flex PCG operator</td>
+</tr>
+<tr>
+<td><code>unit_parallel</code></td>
+<td>qsys control, qsys environment</td>
+</tr>
+<tr>
+<td><code>unit_single</code></td>
+<td>atoms, cif2mrc, C-alpha finder</td>
+</tr>
+</tbody>
+</table>
+<p><code>simple_test_exec test=units</code> runs all thirteen in one process. It is a
+convenience and deliberately not a CTest entry.</p>
+<h3 id="12-long-running-ctest-entries">1.2 Long-running CTest entries<a class="headerlink" href="#12-long-running-ctest-entries" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>entry</th>
+<th>label</th>
+<th>what it runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lib_reconstruction</code></td>
+<td>library</td>
+<td>PCG half-set: independent half-set PCG solves against gridding</td>
+</tr>
+<tr>
+<td><code>lib_cart_align3D</code></td>
+<td>library</td>
+<td>pose 1JYX recovery: 5 000 simulated 1JYX particles refined by the Cartesian pose refiner</td>
+</tr>
+<tr>
+<td><code>lib_heterogeneity</code></td>
+<td>library</td>
+<td>flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep</td>
+</tr>
+<tr>
+<td><code>lib_single</code></td>
+<td>library</td>
+<td>pdb2mrc coverage of the built-in molecular models</td>
+</tr>
+<tr>
+<td><code>lib_stream</code></td>
+<td>library</td>
+<td>optics assignment, picking references, pick and extract</td>
+</tr>
+<tr>
+<td><code>mini_stream_6vxx</code>, <code>mini_stream_1jxy</code></td>
+<td>highlevel</td>
+<td>independent embedded-model mini-stream validations</td>
+</tr>
+<tr>
+<td><code>simulated_workflow_6vxx</code>, <code>simulated_workflow_1jxy</code></td>
+<td>highlevel</td>
+<td>simulated movies through import, motion correction, CTF, picking, extraction, <code>abinitio2D</code>, <code>abinitio3D</code></td>
+</tr>
+<tr>
+<td><code>single_workflow</code></td>
+<td>highlevel</td>
+<td>the SINGLE pipeline on a simulated Pt nanoparticle</td>
+</tr>
+<tr>
+<td><code>pcg_recon</code></td>
+<td>highlevel</td>
+<td>gated stages of the PCG reconstruction operator</td>
+</tr>
+<tr>
+<td><code>simulate_particles</code></td>
+<td>highlevel</td>
+<td><code>reproject</code> and <code>simulate_particles</code> on the embedded 6VXX volume</td>
+</tr>
+<tr>
+<td><code>single_atoms_stats</code></td>
+<td>highlevel</td>
+<td>simulated Pt nanoparticle atom detection and statistics</td>
+</tr>
+<tr>
+<td><code>stream_preproc</code></td>
+<td>highlevel</td>
+<td>five simulated movies through the stream's preprocessing stage and its worker jobs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-programs-that-are-not-registered">1.3 Programs that are not registered<a class="headerlink" href="#13-programs-that-are-not-registered" title="Permanent link">&para;</a></h3>
+<p>A few programs are reachable through <code>simple_test_exec</code> but are not CTest
+entries because they need data a user supplies: <code>pcg_frac_update</code> and
+<code>rec3D_backends</code>. No new program joins this list
+without a reason: a diagnostic that runs on a user's data is a developer
+program (section 3.4), not a test.</p>
+<p>For any suite-based entry, print its accepted sub-suite identifiers without
+running tests using <code>simple_test_exec test=&lt;entry&gt; suite=list</code>; for example,
+<code>simple_test_exec test=unit_image suite=list</code>.</p>
+<h3 id="14-running-tests">1.4 Running tests<a class="headerlink" href="#14-running-tests" title="Permanent link">&para;</a></h3>
+<pre><code class="language-text">./compile_debug.sh                                      # build, run the fast gate, install
+simple_test_exec test=list                              # every test program
+simple_test_exec test=unit_image                        # one area suite
+simple_test_exec test=unit_image suite=masks            # one sub-suite of it
+SIMPLE_UNIT_ORDER=reverse simple_test_exec test=units   # the sub-suites in reverse order
+cd build &amp;&amp; ctest -L fast --output-on-failure           # the gate by hand
+cd build &amp;&amp; ctest -L library                            # a nightly tier by hand
+cd build &amp;&amp; ctest -L highlevel --output-on-failure      # long tests, explicit only
+</code></pre>
+<p>The <code>suite=</code> selector is the sub-suite name in lower case, with blanks and
+hyphens written as underscores and commas and slashes dropped
+(<code>stack I/O</code> is <code>stack_io</code>, <code>search, sort, locate</code> is <code>search_sort_locate</code>).
+The selectors of each suite are listed in the description of its <code>suite=</code>
+input in the test UI (<code>src/main/ui/simple_test/simple_test_ui_class.f90</code>). To
+reproduce a CTest run by hand, export <code>SIMPLE_SEED=20260923</code> first.</p>
+<p><code>SIMPLE_UNIT_ORDER=reverse</code> is a diagnostic for the fused, in-process suites:
+it reverses the sub-suite table so a result that differs from the normal run
+exposes state leaked by one sub-suite into another. It does not reverse CTest
+entries and is not part of the normal build gate; use it after changing shared
+state, lifecycle or test-runner code.</p>
+<h2 id="2-what-a-test-is">2. What a test is<a class="headerlink" href="#2-what-a-test-is" title="Permanent link">&para;</a></h2>
+<p>A test states something the code guarantees and fails when that guarantee is
+broken. If it cannot fail, it is not a test, whatever it is called and
+wherever it lives.</p>
+<h3 id="21-a-test">2.1 A test<a class="headerlink" href="#21-a-test" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Makes assertions whose failure reaches the exit status.</strong> Checks go
+  through <code>simple_test_utils</code> (section 5.1), one assertion per guarantee, with
+  a message that states the guarantee ("an integer shift is the circular shift
+  out(x) = in(x + s)", not "shift test 3").</li>
+<li><strong>Derives the expected value independently of the code under test</strong>: a
+  closed form, a brute-force computation in the test, an exact array
+  operation, or an emulation of the algorithm (for example in numpy) whose
+  numbers are written into the test with a comment naming how they were
+  obtained. Running the routine once and pasting its output into the test
+  pins the bug along with the behaviour.</li>
+<li><strong>Names its tolerances</strong> and derives them from the arithmetic: single
+  precision, an interpolation order, a statistical standard error. A
+  tolerance that was widened until the test passed is a finding, not a
+  tolerance.</li>
+<li><strong>Pins what the routine guarantees</strong>, not what it happened to produce: not
+  the outcome of a random start, an unconverged iteration or a timing.</li>
+<li><strong>Includes a negative control where one is cheap</strong>: an unrelated image does
+  not correlate, a constant sample has no foreground, an atom's density does
+  not correlate with a window beside it.</li>
+<li><strong>Pins conventions.</strong> Sign, handedness, origin and index conventions are
+  where SIMPLE's code breaks silently. When a test finds out which convention
+  a routine follows, it asserts that convention.</li>
+<li><strong>Is reproducible</strong>: every draw it makes comes from a fixed seed.</li>
+</ul>
+<p>The review of September 2026 wrote tests to this standard for most of the
+library, and they found and fixed more than twenty-five production defects,
+none of which the programs they replaced could have caught. Examples of the
+standard are the graphene-mask test (the excluded shells found by a
+brute-force search in the test), the <code>rotate_ref_8</code> test (the explicit
+rotation of <code>calc_frc</code> must peak where the FFT path of <code>gen_objfun_vals</code>
+does, for probes that exercise every branch) and the <code>atom_validate</code> test (an
+atom must correlate with its own simulated density; a numpy emulation put the
+expected value at 0.99 and the defect at 0.4).</p>
+<h3 id="22-not-a-test">2.2 Not a test<a class="headerlink" href="#22-not-a-test" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>A program that only runs.</strong> It prints numbers, writes files or reports
+  "completed". Of the 130 test identities that existed before the
+  refactoring, 63 could not fail.</li>
+<li><strong>A wrapper of commanders.</strong> A routine that calls <code>new_project</code>,
+  <code>import_movies</code> and <code>preprocess</code> in sequence is a high-level workflow. It
+  belongs with the production programs, with developer visibility, or in a
+  local worktree (section 3.4). It becomes a workflow gate (section 6) only when it runs on
+  simulated data and compares its result with the model the data was
+  simulated from, against declared floors.</li>
+<li><strong>A benchmark or a timing loop.</strong> Timings are not assertions; a benchmark
+  is a developer program or stays in a local worktree.</li>
+<li><strong>A conversion or utility invocation that only produces output</strong>: a program. The underlying
+  conversion can be a unit test when it generates its own input and quantitatively verifies the output.</li>
+<li><strong>An experiment on downloaded or user data</strong>: a local worktree, or a
+  developer program if the team needs it again.</li>
+<li><strong>A demonstration</strong> (sampling pictures, gnuplot windows, printed tables to
+  eyeball): delete it or keep it in a local worktree.</li>
+</ul>
+<h2 id="3-where-a-test-goes">3. Where a test goes<a class="headerlink" href="#3-where-a-test-goes" title="Permanent link">&para;</a></h2>
+<h3 id="31-the-decision">3.1 The decision<a class="headerlink" href="#31-the-decision" title="Permanent link">&para;</a></h3>
+<p>Answer these in order.</p>
+<ol>
+<li><strong>Does it assert something (section 2.1)?</strong> If not, it does not go in the
+   test environment at all; see section 3.4.</li>
+<li><strong>Which area does it test?</strong> A test goes to the area of the code it
+   tests, not the area of its author or of the workflow that uses the code.
+   The areas are named after the machinery and kept short: <code>core</code>, <code>ori</code>,
+   <code>image</code>, <code>numerics</code>, <code>project</code>, <code>ui</code>, <code>ipc</code>, <code>reconstruction</code>,
+   <code>pftc_align2D3D</code> (everything on the polar Fourier transform, 2D and 3D),
+   <code>cart_align3D</code> (Cartesian continuous registration), <code>heterogeneity</code>,
+   <code>parallel</code>, <code>single</code>, and <code>stream</code> for the stream stages.</li>
+<li><strong>Which tier?</strong> The first that fits:</li>
+<li><strong>fast</strong> (<code>unit_&lt;area&gt;</code>) when it meets all of the admission rules of
+     section 3.2. This is the default: most tests of the library belong here.</li>
+<li><strong>library</strong> (<code>lib_&lt;area&gt;</code>) when it is hermetic and deterministic and runs
+     in-process, but needs realistic sizes and minutes.</li>
+<li><strong>highlevel</strong> when it runs a pipeline that starts <code>simple_exec</code> or
+     distributed workers, on simulated data, and is gated against the
+     simulation truth (section 6).</li>
+<li><strong>platform</strong> when it needs child processes, a launcher (<code>cafrun</code>,
+     <code>mpirun</code>) or a device.</li>
+</ol>
+<h3 id="32-admission-to-the-fast-gate">3.2 Admission to the fast gate<a class="headerlink" href="#32-admission-to-the-fast-gate" title="Permanent link">&para;</a></h3>
+<p>All of them:</p>
+<ol>
+<li>It can fail (section 2.1).</li>
+<li>It is hermetic: no network, no download, no user-supplied file, no
+   dependence on core count, load, wall clock or another test's files.
+   Fixtures are generated from a fixed seed, or committed and small.</li>
+<li>It runs in-process on one OpenMP thread, returns on success, restores the
+   working directory, and leaves no global state behind (the random generator
+   is reseeded by the runner; module memos such as the mask coordinates must
+   be released: <code>unmemoize_mask_coords</code>). A sub-suite whose subject is a
+   threaded path opens its own small team with <code>num_threads</code> (three is the
+   convention); the entry's <code>OMP_NUM_THREADS</code> stays 1.</li>
+<li>It is cheap. The whole gate must stay under 30 s of real time; keep every
+   sub-suite well under a second, with the smallest fixture that exercises
+   the path (a 64-pixel box tests an FFT as well as a 256-pixel one).</li>
+<li>It uses no sleeps, polls or real timers.</li>
+</ol>
+<h3 id="33-is-it-part-of-the-build">3.3 Is it part of the build?<a class="headerlink" href="#33-is-it-part-of-the-build" title="Permanent link">&para;</a></h3>
+<p>The fast tier is, and nothing else is. A test that does not meet section 3.2
+must not be forced into the gate by shrinking it until it no longer tests
+anything; it goes to a library suite and runs every night. A library test
+that turns out to take seconds can move to the fast gate once its fixture
+fits.</p>
+<h3 id="34-scratch-development">3.4 Scratch development<a class="headerlink" href="#34-scratch-development" title="Permanent link">&para;</a></h3>
+<p>The test area is not a scratch area. When a test directory holds
+"everything that is not production", it fills with programs that nobody runs,
+owns or can delete, which is what the old <code>production/tests</code> became.
+Unfinished work has three homes:</p>
+<ul>
+<li><strong>A local worktree.</strong> Exploration, prototypes, experiments and throwaway
+  diagnostics live in a git worktree on your own computer until they become
+  something (see below).</li>
+<li><strong>A developer program.</strong> A diagnostic or tool the team will run again, on
+  real data, is a commander with a program in the UI at developer
+  visibility (the default of <code>ui_program</code>). It gets parameter parsing,
+  project I/O, logging and distributed execution for free, which a
+  standalone program had to reinvent. It needs an owner and a one-line
+  purpose, and it goes when it is no longer used.</li>
+<li><strong>A test.</strong> Once the exploration settles, the claims that must stay true
+  are written as assertions in a tester module (section 4).</li>
+</ul>
+<p>What lands on master is production code, a developer program or a test.
+Nothing else.</p>
+<p><strong>Work on master; scratch in a worktree.</strong> SIMPLE practises extreme
+programming: everyone works on master and pushes to master, in small and
+frequent steps, so that everyone's work is integrated, built and tested
+every day. What makes this safe is the fast gate, and running it is up to
+you: <strong>before you push, build with <code>./compile_debug.sh</code> and
+let the gate pass.</strong> This is a strong recommendation, not a lock: nothing in
+Git or CI blocks a push, because sometimes a push only moves code to another
+machine (a cluster node, say). Then run the gate before the work counts as
+done. The nightly CI builds and gates master on Linux and macOS, in Debug and
+Release, and shows the next morning what slipped through. Do not keep work on a branch in the
+online repository: nobody checks it, it drifts away from master, and the
+merge gets harder every day it waits. A branch pushed to the online
+repository is the exception and needs a strong reason (for example a
+coordinated change that cannot build on master for a while); it is merged
+back as soon as it can be.</p>
+<p>A git worktree is the tool for scratch development. It is a branch with its
+own physical copy of the source on your computer, next to your main
+checkout, with its own build, so you can try several things side by side
+without stashing or switching, and evaluate them against master. When you
+are happy with the result, merge it into master and push; when it led
+nowhere, remove it.</p>
+<pre><code class="language-sh"># a scratch branch with its own checkout beside the main one
+git worktree add -b scratch/nu_probe ../SIMPLE-nu_probe master
+cd ../SIMPLE-nu_probe &amp;&amp; ./compile_debug.sh
+# ... develop, build, run the tests ...
+# what should stay: merge into master in the main checkout and push
+cd ../SIMPLE &amp;&amp; git pull &amp;&amp; git merge scratch/nu_probe &amp;&amp; git push
+# clean up (git branch -D for a branch that is not merged)
+git worktree remove ../SIMPLE-nu_probe &amp;&amp; git branch -d scratch/nu_probe
+</code></pre>
+<p><code>git worktree list</code> shows the worktrees you have. Scratch branches stay
+local: they are not pushed.</p>
+<h2 id="4-how-to-implement-a-test">4. How to implement a test<a class="headerlink" href="#4-how-to-implement-a-test" title="Permanent link">&para;</a></h2>
+<h3 id="41-a-unit-test-fast-or-library-tier">4.1 A unit test (fast or library tier)<a class="headerlink" href="#41-a-unit-test-fast-or-library-tier" title="Permanent link">&para;</a></h3>
+<p>A unit test is a subroutine in a tester module next to the code it tests.</p>
+<ul>
+<li><strong>The file</strong> is <code>simple_&lt;thing&gt;_tester.f90</code> in the directory of the
+  production module, named after what it tests (<code>simple_stack_io_tester.f90</code>
+  beside <code>simple_stack_io.f90</code>). Files named <code>*_tester.f90</code> are compiled only
+  with <code>BUILD_TESTS=ON</code>.</li>
+<li><strong>The header</strong> is a single <code>!@descr:</code> line naming what the module tests and
+  the production modules it covers; more description goes below it in plain
+  <code>!</code> lines (<code>scripts/check_descr.py</code>, section 4.5).</li>
+<li><strong>The module</strong> uses <code>simple_test_utils</code>, is <code>private</code>, and exports one
+  entry, <code>run_all_&lt;thing&gt;_tests</code>, which prints
+  <code>**** running all &lt;thing&gt; tests ****</code> and calls each test. Each
+  <code>test_&lt;what&gt;</code> subroutine prints its own name first.</li>
+<li><strong>No process control in a tester</strong>: no <code>stop</code>, <code>error stop</code>, <code>simple_end</code> or
+  <code>report_summary</code>. The suite runner reports and sets the exit status.
+  <code>THROW_HARD</code> is only for a broken fixture (a file that could not be
+  written), never for a failed check.</li>
+<li><strong>Registration</strong>: import <code>run_all_&lt;thing&gt;_tests</code> in
+  <code>src/main/commanders/test/simple_commanders_test_class.f90</code> and add
+  <code>call add_suite(s, n, '&lt;sub-suite name&gt;', run_all_&lt;thing&gt;_tests)</code> to the
+  <code>suites_&lt;area&gt;</code> (or <code>suites_lib_&lt;area&gt;</code>) table. Names are at most 32
+  characters. Add the selector to the <code>suite=</code> list of the area's program in
+  <code>src/main/ui/simple_test/simple_test_ui_class.f90</code>, in table order; the
+  registry check fails the build until the two agree.</li>
+<li><strong>A new area suite</strong> (a new <code>unit_&lt;area&gt;</code> or <code>lib_&lt;area&gt;</code>) also needs its
+  program in the test UI, a router case and a CTest registration, and it
+  raises the process budget. That is an owner decision.</li>
+</ul>
+<h3 id="42-fixtures">4.2 Fixtures<a class="headerlink" href="#42-fixtures" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Generate them in the test: images from <code>gauran</code>, <code>gauimg</code>, <code>square</code>;
+  molecules from the embedded models (<code>simple_molecule_data</code>, <code>pdb2mrc</code>);
+  particles and movies from the simulation commanders.</li>
+<li>Seed every draw with <code>set_fixed_seed(&lt;n&gt;)</code>. Call it <strong>after</strong>
+  <code>parameters%new</code>, which reseeds.</li>
+<li>Keep them small and in memory. Write files only when file I/O is what the
+  test is about; name them <code>tmp_&lt;tester&gt;_*</code> and delete them at the end of the
+  test, also when a check failed.</li>
+<li>A tester that loops over something printing through <code>logfhandle</code> diverts
+  <code>logfhandle</code> to a scratch unit and restores it.</li>
+</ul>
+<h3 id="43-white-box-self-tests">4.3 White-box self-tests<a class="headerlink" href="#43-white-box-self-tests" title="Permanent link">&para;</a></h3>
+<p>A self-test that must read private components of a type may stay inside the
+production module. It then takes an out-argument per check, and a tester
+asserts those by name (<code>test_flex_pcg_operator</code> in <code>simple_flex_pca_pcg</code> is
+the model). Every other self-test belongs in a tester module: the review
+moved the self-tests of <code>image</code>, <code>imghead</code>, <code>atoms</code>, <code>oris</code>, <code>ftiter</code>,
+<code>ftexp_shsrch</code>, <code>bspline_smoother</code>, <code>online_var</code> and <code>aff_prop</code>, the flex
+PCA, UI hash, cavg-quality and class-average registration self-tests out of
+their production modules, and deleted those of unused code (<code>hclust</code>,
+<code>srchspace_map2D_io</code>) and the dead ones (<code>CPlot2D</code>, <code>jpg</code>). The only self-tests
+left in production modules are this white-box one and the five <code>flex_gpu</code>
+tests of the GPU platform entry.</p>
+<h3 id="44-a-workflow-or-platform-test">4.4 A workflow or platform test<a class="headerlink" href="#44-a-workflow-or-platform-test" title="Permanent link">&para;</a></h3>
+<p>A test that runs a pipeline is a commander: its type and <code>exec_test_&lt;name&gt;</code>
+routine in <code>src/main/commanders/test/simple_commanders_test_&lt;area&gt;.f90</code>, a
+case in the router <code>src/main/exec/simple_test_exec_&lt;area&gt;.f90</code>, a program in
+<code>src/main/ui/simple_test/simple_test_ui_&lt;area&gt;.f90</code>, and a registration in
+<code>production/CMakeLists.txt</code> with <code>simple_add_test</code> (label, timeout, threads,
+<code>RUN_SERIAL</code>). Section 6 says what it has to check. It still fails through
+assertions or <code>THROW_HARD</code> with a message that names the metric, its value
+and the floor.</p>
+<h3 id="45-checks-and-records">4.5 Checks and records<a class="headerlink" href="#45-checks-and-records" title="Permanent link">&para;</a></h3>
+<p>Before asking for a build:</p>
+<ul>
+<li><code>python3 scripts/check_descr.py .</code> — every source file starts with a
+  one-line <code>!@descr:</code>.</li>
+<li><code>python3 scripts/check_test_registry.py . --verbose</code> — the CTest
+  registrations, the test UI programs, the router cases and the <code>suite=</code>
+  lists agree. The fast gate runs it on every build.</li>
+<li>The default CMake build regenerates the test inventory and code-base map
+  when their source inputs change.</li>
+<li><code>./compile_debug.sh</code> — the build and the gate.</li>
+<li><code>SIMPLE_UNIT_ORDER=reverse</code> on the area suite — the sub-suites do not
+  depend on each other's state.</li>
+</ul>
+<p>When a test is deleted, the commit says why. When a test finds a defect, the
+defect is fixed in the same change and the test pins the fix.</p>
+<p>Two kinds of code need a check that is easy to leave out:</p>
+<ul>
+<li><strong>Threaded paths.</strong> The fast gate runs every suite on one OpenMP thread, so
+  a routine with a threaded path gets a check that forces a team (the masks
+  suite runs a team of three) and compares with the serial result. The
+  nightly run repeats the fast tier on four threads.</li>
+<li><strong>Readers and writers.</strong> A file format is tested by round trips at the
+  sizes where its layout changes: small, odd and non-square boxes and the
+  sizes where a header or record length changes. The SPIDER header was wrong
+  for every box below 43 and right for the 64-pixel boxes the tests used.</li>
+</ul>
+<h3 id="46-fortran-traps-seen-in-the-review">4.6 Fortran traps seen in the review<a class="headerlink" href="#46-fortran-traps-seen-in-the-review" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A dummy argument or local named like a module constant hides it, silently
+  (Fortran is case-insensitive: <code>nmics</code> hides <code>NMICS</code>).</li>
+<li><code>set_fixed_seed</code> before <code>parameters%new</code> is overwritten by it.</li>
+<li>A constant integer division that truncates, <code>(BOX-1)/2</code>, draws a
+  <code>-Winteger-division</code> warning; write the value.</li>
+<li>Comparing whole images after an interpolating rotation includes the
+  circular wrap of <code>rtsq</code> at the corners; compare inside the inscribed disc.</li>
+<li>An <code>rmat</code> pointer (<code>get_rmat_ptr</code>) is the padded array, with extra rows in
+  the first dimension for the in-place FFT; bound it by <code>ldim</code>,
+  <code>rmat(:ldim(1),:ldim(2),:ldim(3))</code>, before a whole-array expression. The
+  unbounded pointer does not conform with a box-sized array: bounds checking
+  stops on it, and without bounds checking it can pass by luck (the <code>cif2mrc</code>
+  tester, 2026-09-25). <code>get_rmat()</code> returns a copy of the box.</li>
+</ul>
+<h2 id="5-library-support-for-tests">5. Library support for tests<a class="headerlink" href="#5-library-support-for-tests" title="Permanent link">&para;</a></h2>
+<h3 id="51-simple_test_utils">5.1 <code>simple_test_utils</code><a class="headerlink" href="#51-simple_test_utils" title="Permanent link">&para;</a></h3>
+<p>The assertion and reporting layer. A tester uses the assertions and
+<code>set_fixed_seed</code>; the suite runner uses the rest.</p>
+<table>
+<thead>
+<tr>
+<th>routine</th>
+<th>use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>assert_true(cond, msg)</code>, <code>assert_false(cond, msg)</code></td>
+<td>a logical guarantee</td>
+</tr>
+<tr>
+<td><code>assert_int(expected, actual, msg)</code></td>
+<td>an exact integer</td>
+</tr>
+<tr>
+<td><code>assert_real(expected, actual, tol, msg)</code></td>
+<td>a real within an absolute tolerance (<code>tol = 0.</code> for an exact value)</td>
+</tr>
+<tr>
+<td><code>assert_double(expected, actual, msg[, ulp_tol])</code></td>
+<td>a double within a number of ulps (10 by default)</td>
+</tr>
+<tr>
+<td><code>assert_char(expected, actual, msg)</code>, <code>assert_string_eq(char, string, msg)</code></td>
+<td>text, trimmed</td>
+</tr>
+<tr>
+<td><code>set_fixed_seed(base)</code></td>
+<td>seed the intrinsic generator with a fixed state</td>
+</tr>
+<tr>
+<td><code>begin_test_suite</code>, <code>end_test_suite</code>, <code>reset_test_report</code>, <code>report_summary</code>, <code>tests_run</code>, <code>tests_failed</code></td>
+<td>the runner's bookkeeping; not for testers</td>
+</tr>
+</tbody>
+</table>
+<p>A failed assertion records its message, with expected and actual values, and
+the suite goes on: every check of a run is reported, not only the first
+failure.</p>
+<h2 id="6-the-nightly-suite">6. The nightly suite<a class="headerlink" href="#6-the-nightly-suite" title="Permanent link">&para;</a></h2>
+<h3 id="61-what-belongs-in-it">6.1 What belongs in it<a class="headerlink" href="#61-what-belongs-in-it" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Library suites</strong>: tests that meet every rule of the fast gate except its
+  cost. Realistic box sizes and particle counts, minutes rather than
+  seconds, still hermetic, deterministic and in-process, and they do not
+  start <code>simple_exec</code> or workers. One suite per coherent part of the library.</li>
+<li><strong>Workflow gates</strong>: simulated pipelines. They run production programs on
+  data simulated from embedded atomic models (6VXX, 1JYX, the Pt
+  nanoparticle), where the orientations, defocus, shifts and positions are
+  known, and they compare the result with that truth.</li>
+<li><strong>Platform entries</strong>, on a machine that has the capability.</li>
+</ul>
+<p>What does not belong: anything that needs user data or a download, timing
+benchmarks, and anything that cannot fail.</p>
+<h3 id="62-how-a-workflow-gate-is-designed">6.2 How a workflow gate is designed<a class="headerlink" href="#62-how-a-workflow-gate-is-designed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>It checks truth, not completion.</strong> "The files exist and the counts
+  match" is the floor, not the gate. The gate compares the result with the
+  model that generated the data: the estimated defocus against the simulated
+  one, the estimated frame shifts against the simulated drift, picked
+  positions against the placed particles, the map against the truth map, the
+  recovered orientations against the simulated ones.</li>
+<li><strong>The truth is independent of the code under test.</strong> Compare the final map
+  with the map <code>pdb2mrc</code> makes from the same coordinates on the same grid,
+  not with a map from an earlier stage of the same run.</li>
+<li><strong>Maps are compared after docking and hand.</strong> An <code>abinitio3D</code> map is
+  neither docked to the truth map nor necessarily of the right hand. The gate
+  docks it with <code>dock_vols</code> at a low-pass of 15 to 20 Å, keeps the hand (the
+  map or its <code>mirror('x')</code>) that docks with the higher correlation, and takes
+  the masked FSC at 0.143 against a declared floor. Orientations are compared
+  after composing each one with the docking rotation (and the mirror), modulo
+  the point group.</li>
+<li><strong>Floors are declared in the test</strong>, next to where their value comes from:
+  the first measured runs with a stated margin, or a physical argument. A
+  floor is loosened only with a written justification in the commit. There
+  are no blessed baselines and no platform keys.</li>
+<li><strong>Every workflow writes its metrics</strong> to <code>metrics.tsv</code> in its run
+  directory, one <code>name value floor pass</code> line per metric, for the nightly
+  summary.</li>
+<li><strong>It fails on a missed floor</strong>, with a message naming the metric, its value
+  and the floor, and it is reproducible: <code>SIMPLE_SEED</code> fixes every draw.</li>
+</ul>
+<h3 id="63-the-nightly-run">6.3 The nightly run<a class="headerlink" href="#63-the-nightly-run" title="Permanent link">&para;</a></h3>
+<p>The runner (Phase 5 of the plan, designed and written by Ruben:
+<code>doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md</code>)
+does the following on the dedicated machine:</p>
+<ol>
+<li>Takes a lock, so two runs never overlap.</li>
+<li>Builds a known commit with <code>./compile_clean.sh</code>, which
+   also runs the fast gate. A failed gate stops the night.</li>
+<li>Runs <code>ctest -L library</code> (the library suites may run side by side), then
+   <code>ctest -L platform</code> where the machine has the capability. High-level tests
+   are excluded and run only by an explicit <code>ctest -L highlevel</code> command.</li>
+<li>Writes a dated summary outside <code>build/</code> with the commit, host, compiler,
+   the status and time of every entry, every metric against its floor, and
+   the tail of every failing log. It appends to a history file, so that a
+   regression can be dated and a growing runtime seen.</li>
+<li>Reports briefly where the team looks.</li>
+</ol>
+<p>Every entry keeps its CTest <code>TIMEOUT</code> and the whole run must fit the night.
+An entry that grows past its share is reported, and trimming it is a reviewed
+change, as for the fast gate.</p>
+<h2 id="7-why-tests-are-no-longer-standalone-programs">7. Why tests are no longer standalone programs<a class="headerlink" href="#7-why-tests-are-no-longer-standalone-programs" title="Permanent link">&para;</a></h2>
+<p>Until September 2026 a test could be a program unit in <code>production/tests</code>,
+built by a glob into its own executable, installed, and called by name from
+CI. That route is closed; <code>production/tests</code> and the glob are gone. The
+reasons, all found in the review:</p>
+<ul>
+<li><strong>Two routes, drifting apart.</strong> 83 standalone programs and 83
+  <code>simple_test_exec</code> cases covered 130 identities; 36 existed on both routes,
+  and the twins had diverged (<code>cmdline</code> duplicated the <code>command line</code> unit
+  test; <code>imgfile</code> was a subset of <code>test_image</code>).</li>
+<li><strong>No failure path.</strong> 63 identities could not fail. A program that runs to
+  its end reports success whatever it computed, and several printed
+  "PASSED" with no way to fail.</li>
+<li><strong>Process control in the test.</strong> A <code>stop</code> ends the process: one failed
+  check hid every later one, and <code>stop</code> with a message exits with status 0
+  (<code>openmp_offload</code> had 65 of them).</li>
+<li><strong>No shared lifecycle.</strong> Hand-parsed arguments instead of the UI and
+  <code>parameters</code>, ad hoc working directories, files left behind, unseeded
+  random numbers.</li>
+<li><strong>One process per test.</strong> Nothing could be budgeted or run as a gate; each
+  program needed its own executable, install rule and CI call, and many were
+  never run at all.</li>
+<li><strong>Dead code kept alive.</strong> Production routines survived because a program
+  in the test area called them; the review deleted dozens of routines and
+  modules that nothing else used.</li>
+</ul>
+<p>A test procedure in a tester module has none of these problems: it shares
+the runner, the assertions, the seeding and the report with every other test,
+and a suite runs many of them in one process. Program units are for
+production executables.</p>
+<h2 id="8-what-the-refactoring-deleted-and-why">8. What the refactoring deleted, and why<a class="headerlink" href="#8-what-the-refactoring-deleted-and-why" title="Permanent link">&para;</a></h2>
+<p>The review gave every test identity in the inventory a verdict. The
+retired-tests table of <code>doc/refactoring_notes/completed/test_review_record.md</code> has one
+row per removed identity (136), with its reason and replacement. Most were
+not lost: 79 were merged into tester modules with real assertions, 10 were
+modified or moved, and 47 were deleted or retired outright. The reasons for
+deletion fall into these groups.</p>
+<table>
+<thead>
+<tr>
+<th>reason</th>
+<th>tests</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>printed or plotted results for eyeballing; nothing to assert that other tests do not assert</td>
+<td><code>uniform_euler</code>, <code>uniform_rot</code>, <code>order_corr</code>, <code>phasecorr</code>, <code>ptcl_center</code></td>
+</tr>
+<tr>
+<td>benchmarks and timing loops</td>
+<td><code>rotate_ref</code>, <code>eval_polarftcc</code>, <code>io</code>, <code>io_parallel</code>, <code>star_export</code>, <code>openacc</code>, <code>openmp</code>, <code>simd</code></td>
+</tr>
+<tr>
+<td>duplicates of a route or of a gate sub-suite</td>
+<td><code>starfile</code>, <code>binoris_test</code>, <code>binoris_io_test</code>, <code>imgfile</code>, the standalone <code>mini_stream</code>, <code>gui_assembler</code>, <code>gui_metadata</code>, <code>project_merge</code> and <code>coarrays</code>, <code>clustering</code>, <code>multinomal_test</code></td>
+</tr>
+<tr>
+<td>runners on user data or downloads that asserted nothing</td>
+<td><code>continuous_inplane_rotation2D</code>, <code>continuous_inplane_rotation2D_metadata</code>, <code>nu_filter</code>, <code>create_gain</code>, <code>search_gain_flips</code>, <code>atomfit</code>, <code>eo_diff</code>, <code>opt_lp</code>, <code>cif2mrc</code>, <code>cif2pdb</code></td>
+</tr>
+<tr>
+<td>not needed: a production program runs the same code, or replaces the test</td>
+<td><code>nu_envmask</code> (<code>nu_filt3D</code>), <code>phase_rand_fsc</code> (<code>fsc</code>), <code>angres</code> (now the program <code>measure_projspace_angres</code>)</td>
+</tr>
+<tr>
+<td>drove code that had no production caller, deleted with it</td>
+<td><code>subproject_distr</code>, <code>ptcls_ppca_subproject_distr</code>, <code>socket_client</code>, <code>socket_comm_distr</code>, <code>socket_io</code>, <code>socket_server</code></td>
+</tr>
+<tr>
+<td>broken or empty</td>
+<td><code>install</code> (ran an executable that no longer existed), <code>nice</code> (posted to a server that does not exist), <code>stream_initial_analysis</code> (a commander smoke on a missing folder)</td>
+</tr>
+<tr>
+<td>tested a hand-written command line instead of the production one</td>
+<td><code>abinitio2D_stream</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="9-where-is-my-test-now">9. Where is my test now?<a class="headerlink" href="#9-where-is-my-test-now" title="Permanent link">&para;</a></h2>
+<p>Look your old test up below. "Deleted" means it was removed without a
+replacement; the reason is in section 8 and in the inventory. A sub-suite is
+written as <code>sub-suite</code> (entry).</p>
+<table>
+<thead>
+<tr>
+<th>old test</th>
+<th>now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>abinitio2D_stream</code></td>
+<td>deleted; <code>abinitio2D</code> runs nightly in <code>simulated_workflow_6vxx</code> and <code>simulated_workflow_1jxy</code></td>
+</tr>
+<tr>
+<td><code>angres</code></td>
+<td>the program <code>simple_exec prg=measure_projspace_angres nspace=&lt;n&gt;</code>; the table of values is a comment above <code>find_angres</code></td>
+</tr>
+<tr>
+<td><code>ansi_colors</code></td>
+<td><code>string</code> (<code>unit_core</code>)</td>
+</tr>
+<tr>
+<td><code>assign_optics</code></td>
+<td><code>optics assignment</code> (<code>lib_stream</code>)</td>
+</tr>
+<tr>
+<td><code>atomfit</code></td>
+<td>deleted, with <code>atoms%fit_bfactors</code>, which nothing called</td>
+</tr>
+<tr>
+<td><code>atoms_stats</code></td>
+<td><code>nanoparticle atoms</code> (<code>lib_single</code>); high-level route <code>simple_test_exec test=single_atoms_stats</code></td>
+</tr>
+<tr>
+<td><code>binoris</code>, <code>binoris_io</code>, <code>inside_write</code></td>
+<td><code>binoris</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>binoris_test</code>, <code>binoris_io_test</code></td>
+<td>deleted (empty stubs); see <code>binoris</code></td>
+</tr>
+<tr>
+<td><code>bounds_from_mask3D</code>, <code>bounds_from_mask3D_test</code>, <code>graphene_mask</code>, <code>mask</code>, <code>msk_routines</code></td>
+<td><code>masks</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>cartesian_fourier</code></td>
+<td><code>Cartesian Fourier</code> (<code>unit_cart_align3D</code>)</td>
+</tr>
+<tr>
+<td><code>cavg_quality_relations</code></td>
+<td><code>cavg quality relations</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>cavg_registration</code></td>
+<td><code>cavg registration</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>cc_connectivity</code>, <code>image_bin</code></td>
+<td><code>binary image</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>cif2mrc</code>, <code>cif2pdb</code></td>
+<td>deleted; they ran the production programs of the same names</td>
+</tr>
+<tr>
+<td><code>class_sample</code>, <code>class_sample_test</code></td>
+<td><code>class sample I/O</code> (<code>unit_core</code>)</td>
+</tr>
+<tr>
+<td><code>clustering</code></td>
+<td>deleted; it called <code>affinity propagation</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>cmdline</code></td>
+<td><code>command line</code> (<code>unit_core</code>)</td>
+</tr>
+<tr>
+<td><code>coarrays</code></td>
+<td>the capability-gated platform entry <code>coarrays</code>; two images transfer one known integer</td>
+</tr>
+<tr>
+<td><code>continuous_3D_pcg_reconstruction</code></td>
+<td><code>observation noise</code> (<code>unit_reconstruction</code>) and <code>PCG half-set</code> (<code>lib_reconstruction</code>)</td>
+</tr>
+<tr>
+<td><code>continuous_inplane_cc_grad</code>, <code>continuous_inplane_hybrid_grad</code>, <code>continuous_inplane_rotation2D_stage1_validation</code>, <code>continuous_inplane_rotation2D_route_identity</code></td>
+<td><code>continuous in-plane</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>continuous_inplane_refine3D</code></td>
+<td><code>refine3D in-plane state</code> and <code>continuous in-plane</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>continuous_inplane_rotation2D</code>, <code>continuous_inplane_rotation2D_metadata</code></td>
+<td>deleted (a shell driver; a post-run scan of a user project)</td>
+</tr>
+<tr>
+<td><code>corrs2weights</code>, <code>corrs2weights_test</code>, <code>rank_weights</code></td>
+<td><code>statistics</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>create_gain</code>, <code>search_gain_flips</code></td>
+<td><code>motion gain</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>ctf</code>, <code>ctf_test</code></td>
+<td><code>CTF</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>detect_atoms</code>, <code>simulate_nanoparticle</code></td>
+<td><code>nanoparticle atoms</code> (<code>lib_single</code>)</td>
+</tr>
+<tr>
+<td><code>detect_calpha</code></td>
+<td><code>C-alpha finder</code> (<code>unit_single</code>)</td>
+</tr>
+<tr>
+<td><code>detect_calpha_molecules</code></td>
+<td>deleted; quantitative synthetic coverage remains in <code>C-alpha finder</code> (<code>unit_single</code>)</td>
+</tr>
+<tr>
+<td><code>diff_map_graphs</code></td>
+<td><code>diffusion-map graphs</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>discrete_stack_io</code>, <code>stack_io</code></td>
+<td><code>stack I/O</code> (<code>unit_core</code>)</td>
+</tr>
+<tr>
+<td><code>eigh</code>, <code>eigh_test</code></td>
+<td><code>linear algebra</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>eo_diff</code>, <code>opt_lp</code></td>
+<td>deleted (needed refine3D volumes or a download; asserted nothing)</td>
+</tr>
+<tr>
+<td><code>eul_prob_tab2D_io</code></td>
+<td><code>2D probability table I/O</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>extr_frac</code></td>
+<td><code>decay schedules</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>flex_gpu</code></td>
+<td>the platform entry <code>flex_gpu</code></td>
+</tr>
+<tr>
+<td><code>flex_pca</code></td>
+<td><code>flex PCA</code> (<code>unit_heterogeneity</code>)</td>
+</tr>
+<tr>
+<td><code>flex_pcg</code></td>
+<td><code>flex PCG operator</code> (<code>unit_heterogeneity</code>), <code>flex PCG operator 64</code> and <code>flex PCG solve sweep</code> (<code>lib_heterogeneity</code>)</td>
+</tr>
+<tr>
+<td><code>forked_process</code></td>
+<td>the platform entry <code>forked_process</code></td>
+</tr>
+<tr>
+<td><code>ft_expanded</code></td>
+<td><code>shift search</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>gencorrs_fft</code></td>
+<td><code>polar correlation</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>gen_pickrefs</code></td>
+<td><code>picking references</code> (<code>lib_stream</code>)</td>
+</tr>
+<tr>
+<td><code>gui_assembler</code>, <code>gui_metadata</code></td>
+<td><code>GUI assembler</code>, <code>GUI metadata</code> (<code>unit_ui</code>)</td>
+</tr>
+<tr>
+<td><code>imgfile</code></td>
+<td><code>image</code> (<code>unit_image</code>), the SPIDER and MRC round trips</td>
+</tr>
+<tr>
+<td><code>install</code></td>
+<td>deleted; the fast gate replaces it</td>
+</tr>
+<tr>
+<td><code>io</code>, <code>io_parallel</code>, <code>star_export</code></td>
+<td>deleted (benchmarks); the round trips are in <code>stack I/O</code> (<code>unit_core</code>) and <code>STAR file</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>kbinterpol_fast</code></td>
+<td><code>Kaiser-Bessel kernel</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>lbfgsb</code>, <code>lbfgsb_cosine</code></td>
+<td><code>optimisers</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>lplims</code>, <code>lpstages</code>, <code>lpstages_test</code></td>
+<td><code>low-pass stages</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>master</code></td>
+<td><code>stream heartbeat</code> (<code>forked_process</code>)</td>
+</tr>
+<tr>
+<td><code>maxnloc</code>, <code>maxnloc_test</code></td>
+<td><code>search, sort, locate</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>mini_stream</code></td>
+<td><code>simple_test_exec test=mini_stream</code>, by hand (needs a user's movies)</td>
+</tr>
+<tr>
+<td><code>mrc2jpeg</code>, <code>mrc_validate</code></td>
+<td><code>mrc2jpeg</code>, <code>mrc validate</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>multinomal_test</code>, <code>rnd_shuffle</code></td>
+<td><code>random draws</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>nano_mask</code></td>
+<td><code>nano mask</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>score_volume_shape</code></td>
+<td><code>volume shape</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>neigh</code>, <code>sym</code>, <code>sym_test</code></td>
+<td><code>symmetry</code> (<code>unit_ori</code>)</td>
+</tr>
+<tr>
+<td><code>nice</code></td>
+<td>deleted</td>
+</tr>
+<tr>
+<td><code>nu_envmask</code>, <code>nu_filter</code></td>
+<td>deleted; <code>simple_exec prg=nu_filt3D</code></td>
+</tr>
+<tr>
+<td><code>openacc</code>, <code>openmp</code>, <code>simd</code></td>
+<td>deleted (demonstrations and timings)</td>
+</tr>
+<tr>
+<td><code>openmp_offload</code></td>
+<td>the platform entry <code>openmp_offload</code></td>
+</tr>
+<tr>
+<td><code>order_corr</code></td>
+<td>deleted; its one check is asserted in <code>orientation collection</code> (<code>unit_ori</code>)</td>
+</tr>
+<tr>
+<td><code>ori</code>, <code>ori_test</code></td>
+<td><code>orientation</code> (<code>unit_ori</code>)</td>
+</tr>
+<tr>
+<td><code>oris</code>, <code>oris_test</code></td>
+<td><code>orientation collection</code> (<code>unit_ori</code>)</td>
+</tr>
+<tr>
+<td><code>otsu</code>, <code>otsu_test</code>, <code>peak_thres_fdr</code></td>
+<td><code>segmentation</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>pca_all</code>, <code>pca_imgvar</code></td>
+<td><code>PCA</code> (<code>unit_numerics</code>)</td>
+</tr>
+<tr>
+<td><code>pcg_frac_update</code>, <code>rec3D_backends</code></td>
+<td>by hand, <code>simple_test_exec test=pcg_frac_update</code>, <code>test=rec3D_backends</code></td>
+</tr>
+<tr>
+<td><code>pcg_recon</code></td>
+<td>the workflow entry <code>pcg_recon</code></td>
+</tr>
+<tr>
+<td><code>pdb2mrc</code></td>
+<td><code>pdb2mrc</code> (<code>lib_single</code>)</td>
+</tr>
+<tr>
+<td><code>phase_rand_fsc</code></td>
+<td>deleted; <code>simple_exec prg=fsc</code></td>
+</tr>
+<tr>
+<td><code>phasecorr</code>, <code>ptcl_center</code>, <code>rotate_ref</code>, <code>uniform_euler</code>, <code>uniform_rot</code>, <code>eval_polarftcc</code></td>
+<td>deleted; the image basics <code>ptcl_center</code> touched are in <code>image</code> (<code>unit_image</code>), <code>rotate_ref_8</code> is in <code>polar correlation</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>phshift_policy</code>, <code>ui_visibility</code></td>
+<td><code>UI visibility</code> (<code>unit_ui</code>)</td>
+</tr>
+<tr>
+<td><code>phshift_star</code></td>
+<td><code>STAR project</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>pick_extract</code></td>
+<td><code>pick and extract</code> (<code>lib_stream</code>)</td>
+</tr>
+<tr>
+<td><code>pose_cont_refine3D_adapter</code></td>
+<td><code>pose adapter</code> (<code>unit_cart_align3D</code>) and <code>pose 1JYX recovery</code> (<code>lib_cart_align3D</code>)</td>
+</tr>
+<tr>
+<td><code>pose_cont_refinement</code></td>
+<td><code>pose refiner</code> (<code>unit_cart_align3D</code>)</td>
+</tr>
+<tr>
+<td><code>preproc</code></td>
+<td>the high-level workflow entry <code>stream_preproc</code></td>
+</tr>
+<tr>
+<td><code>project_merge</code></td>
+<td><code>project merge</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>projdir_accumulator</code></td>
+<td><code>class-average accumulator</code> (<code>unit_reconstruction</code>)</td>
+</tr>
+<tr>
+<td><code>qsys_ctrl</code>, <code>qsys_env</code></td>
+<td><code>qsys control</code>, <code>qsys environment</code> (<code>unit_parallel</code>)</td>
+</tr>
+<tr>
+<td><code>rec3D_backend</code></td>
+<td><code>rec3D backend</code> (<code>unit_reconstruction</code>)</td>
+</tr>
+<tr>
+<td><code>reproject</code></td>
+<td>the workflow entry <code>simulate_particles</code></td>
+</tr>
+<tr>
+<td><code>serialize</code></td>
+<td><code>image serialisation</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>sieve_cavgs</code></td>
+<td><code>particle sieve</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>sigma2_state</code></td>
+<td><code>sigma2 state</code> (<code>unit_pftc_align2D3D</code>)</td>
+</tr>
+<tr>
+<td><code>simulate_particles</code></td>
+<td>the workflow entry <code>simulate_particles</code></td>
+</tr>
+<tr>
+<td><code>simulated_workflow</code></td>
+<td>the workflow entries <code>simulated_workflow_6vxx</code>, <code>simulated_workflow_1jxy</code></td>
+</tr>
+<tr>
+<td><code>single_workflow</code></td>
+<td>the workflow entry <code>single_workflow</code></td>
+</tr>
+<tr>
+<td><code>socket_client</code>, <code>socket_comm_distr</code>, <code>socket_io</code>, <code>socket_server</code></td>
+<td>deleted with the socket modules; <code>IPC TCP socket</code> (<code>unit_ipc</code>) tests the live transport</td>
+</tr>
+<tr>
+<td><code>sp_project</code></td>
+<td><code>project records</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>starfile</code>, <code>starfile_test</code></td>
+<td><code>STAR file</code> (<code>unit_project</code>)</td>
+</tr>
+<tr>
+<td><code>stream_initial_analysis</code></td>
+<td>deleted</td>
+</tr>
+<tr>
+<td><code>stringmatch</code></td>
+<td><code>string</code> (<code>unit_core</code>)</td>
+</tr>
+<tr>
+<td><code>subproject_distr</code>, <code>ptcls_ppca_subproject_distr</code></td>
+<td>deleted with the subproject scheduling code, which had no other caller</td>
+</tr>
+<tr>
+<td><code>trail_rec_blend</code></td>
+<td><code>trailing-reconstruction blend</code> (<code>unit_image</code>)</td>
+</tr>
+<tr>
+<td><code>ui_hash_test</code></td>
+<td><code>UI hash</code> (<code>unit_ui</code>)</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td><code>simple_test_exec test=units</code> (all thirteen area suites, not a CTest entry)</td>
+</tr>
+<tr>
+<td>the <code>unit_&lt;area&gt;</code> suites</td>
+<td>unchanged names, CTest label <code>fast</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

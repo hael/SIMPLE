@@ -1,0 +1,5993 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/pcg_decision_log.html">
+      
+      
+        <link rel="prev" href="pcg_backend_overview.html">
+      
+      
+        <link rel="next" href="pcg_priors_history.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>PCG backend: decision log - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pcg-backend-decision-log" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              PCG backend: decision log
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 2D Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/abinitio3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Ab Initio 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/cluster2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneous_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-State Refinement and Reference-Guided Classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic Pre-Alignment and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_18" id="__nav_5_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity analysis
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity analysis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/classify3d_refs.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification (classify3D_refs)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/heterogeneity_analysis/refine3d_states.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement (refine3D_states)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2_process_heterogeneous_datasets.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Processing heterogeneous data sets in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_seeded_restart.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D seeded restart: initialize from the previous 2D clustering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_addon_mode_proposal.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio3D_addon — development proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="calpha_finder.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-alpha finder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="calpha_nu_evidence_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Resolution Mask for C-alpha Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_cont_refine3D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Cartesian pose refinement in refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_pca_envelope_support.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_pca: sampling-distance control, reconstruction backends, and the envelope mask as solve support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_refine_ml_estimator_competition.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retiring the NU shell walk: a dense static ladder with the regularized pair in the competition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_backend_overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The PCG reconstruction backend: what it is today
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="pcg_decision_log.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: decision log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_priors_history.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: the complete experiment record (2026-08-25 to 2026-09-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="single_pcg_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE on the PCG backend: the atomic density prior
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/test_environment_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Environment Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_13" id="__nav_10_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    2D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/2D/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/2D/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/2D/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_14" id="__nav_10_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    3D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_15" id="__nav_10_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    NU
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/NU/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_16" id="__nav_10_16_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/heterogeneity/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_17" id="__nav_10_17_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_pca_architecture_audit_and_refactoring_plan_2026_09_17.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX PCA architectural audit and staged refactoring plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/image_rmat_padding_encapsulation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The padded real-space array of image: zero padding, and a box-shaped pointer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/mrc_stack_volume_output_suffix_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical MRC stack and volume output suffix refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 5 of the test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/scripts_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE scripts/ inventory and cleanup candidates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/single_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/stream_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/heterogeneity_analysis_ui_and_algorithm_docs_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis UI and Algorithm Documentation Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/test_review_record.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test review record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/testing_standards_assessment.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE's testing against modern practice: an assessment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/ui_category_membership_tidying.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Category Membership Tidying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/uniform_test_environment_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A uniform, two-tier test environment for SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_9" id="__nav_11_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/class_average_and_reconstruct3d_partials_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average State and Reconstruct3D Partials Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/planned/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_10" id="__nav_11_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rejected
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Rejected
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/contract_submodule_architecture.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contract/Implementation Module Architecture for Fast Builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/rejected/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="pcg-backend-decision-log">PCG backend: decision log<a class="headerlink" href="#pcg-backend-decision-log" title="Permanent link">&para;</a></h1>
+<p>One dated paragraph per decision, in order: what was decided, what forced
+it, what it superseded. The full record behind each entry is in
+<code>pcg_priors_history.md</code> (cited by its dated headings and, after
+2026-08-29, by "dev item N" of its Active dev list). The present-tense
+description of the backend is <code>pcg_backend_overview.md</code>; a new decision is
+appended here AND the affected overview paragraph is rewritten. Entries
+that are no longer in force say so in their last sentence.</p>
+<hr />
+<p><strong>2026-08-25 -- Support contract verified; cross-iteration ML warm start
+adopted.</strong> Audit confirmed <code>P H P</code> on both sides of the normal operator and
+one <code>P</code> on the right-hand side (<code>test=pcg_recon</code> stage 3b asserts symmetry
+and positivity). The ML replay was made to warm-start from the previous
+iteration's ML half (validated on bgal), because a 2-iteration replay
+from the unregularized base could not close the beyond-band gap. History:
+Stage 0/1. <em>Warm starts retired 2026-09-10.</em></p>
+<p><strong>2026-08-26 -- Binary-envelope solvent prior <code>Q_s</code> on by default at
+<code>pcg_solvent_lambda_rel=0.1</code>; abinitio3D forces <code>automsk=yes</code> from the
+first NU stage; suppression readout in the convergence report.</strong> A
+real-space penalty on solvent variation (weighted centering, <code>L^T L</code>),
+anchored to the data scale, calibrated on bgal (active regime ~1e-1,
+over-flattening from 3e-1) and the neutral fixture. History: §4, the
+DECISION entries of 2026-08-26, Stage 5 records. <em>Prior removed
+2026-08-27; the forced automasking removed 2026-08-28; the readout left
+with the prior.</em></p>
+<p><strong>2026-08-27 -- Suppression thresholds are not portable; over-flattening
+guidance moved to shipped-vs-base FSC inflation.</strong> The streptavidin and
+bgal ladders did not overlay (convergence state and data-scale anchoring
+differ across box sizes), so the absolute-percentage bounds were retracted
+and the inflation of the shipped pair's FSC=0.143 over the base pair's
+(&gt; 5%) became the portable over-regularization signal. History: Stage 5
+records of 2026-08-27. <em>Left with the priors.</em></p>
+<p><strong>2026-08-27 -- Direct NU-evidence precision <code>Q_NU</code> becomes priority 1;
+<code>Q_s</code> removed.</strong> The NU competition's per-voxel cross-half evidence,
+compacted into a frozen evidence state with an explicit calibrated null,
+replaces <code>P_tau</code> in the replay in NU mode (mode-exclusive; never
+additive). The first run failed on a saturated null (a detection
+threshold used as a likelihood offset); the same-day redesign to a
+lower-quartile null center passed, and the first truth-judged 1WCM
+two-way ablation showed <code>Q_NU</code> beating <code>P_tau</code>. <code>Q_s</code> and its plumbing
+were removed. History: §3, §5, Stage 6 records. <em><code>Q_NU</code> removed
+2026-09-06.</em></p>
+<p><strong>2026-08-28 -- <code>Q_NU</code> default-on in NU mode (<code>pcg_nu_lambda_rel=0.1</code>
+dynamic default); post-hoc NU filtering and forced automasking retired
+from the PCG NU path; <code>Q_NU</code> supports trailing reconstruction (evidence
+pair = FSC pair).</strong> First NU-replay abinitio3D on bgal: the loop worked,
+the solvent-era stage-6 overlap collapse was largely cured, cost was
+production-viable. History: dated DECISION entries of 2026-08-28.
+<em>Superseded 2026-09-06.</em></p>
+<p><strong>2026-08-29 -- Wilson prior <code>Q_W</code> implemented, corrected twice on
+truth-judged failures, validated, adjudicated against <code>Q_NU</code> and REMOVED
+the same day.</strong> On 1WCM <code>Q_NU</code> dominated at every shell even with <code>Q_W</code>
+given the ground-truth spectrum. Stage 7 closed. History: Stage 7.1
+records and the removal DECISION.</p>
+<p><strong>2026-08-29 -- <code>automsk=yes</code> regenerates the evidence envelope under the
+<code>Q_NU</code> replay; refine3D_auto joins the PCG bypass; adaptive band
+granularity (Stage 6.6) reduced to the <code>nu_refine</code> shell walk.</strong> The
+a-priori frontier-tracked candidate proposal degraded on 1WCM and was
+withdrawn; the final form mirrors the gridding challenger (accept a shell
+only on unary win-fraction &gt;= 5%), validated on 1WCM. History: DECISIONs
+of 2026-08-29, Stage 6.6 records. <em>The evidence envelope and the
+<code>nu_refine</code> walk survive; the <code>Q_NU</code>-specific parts left with <code>Q_NU</code>.</em></p>
+<p><strong>2026-08-29/30 -- <code>Q_NU</code> inert on PfCRT at the default strength;
+auto-lambda controller implemented.</strong> Suppression 3% on PfCRT versus ~35%
+on 1WCM and bgal at the same <code>lambda_rel</code>: the data-scale anchoring uses
+the low-band mean of <code>D</code> while the prior competes in the fine shells, so
+the effective strength is a dataset property. A one-pole plant model and
+a memoryless secant controller on the persisted suppression readout were
+added, then (2026-08-31) an AIMD outer loop on the setpoint driven by the
+shipped-pair FSC trajectory. History: dev item 2. <em>Removed 2026-09-06.</em></p>
+<p><strong>2026-08-31 -- Final reconstructions keep the PCG backend.</strong> The
+original-sampling final reconstructions of abinitio3D and refine3D_auto
+had silently dropped to a gridding <code>objfun=cc</code> pass; they now run
+<code>bootstrap_rec3D</code> on the refinement's backend (cc pass for sigma
+availability, then the regularized pass). History: dev item 2
+(FINAL-RECONSTRUCTION Q_NU POLICY).</p>
+<p><strong>2026-09-01 -- <code>envfsc=yes</code> restored as the refine3D_auto default;
+solvent constraint via the lowest-bin convention (dev item 4); direct PCG
+support constraint <code>pcg_mskfile</code> (dev item 5, experimental); refine3D_auto
+startup made reconstruct -&gt; mask -&gt; re-reconstruct -&gt; refine (dev item 7).</strong>
+The conservative density automask at <code>envmsklp</code> returned as the FSC
+envelope; the NU filter and prior regained a solvent clamp (background
+voxels fixed to the coarsest candidate) without re-multiplying references;
+an arbitrary [0,1] support can be installed as <code>P</code>; and the PfCRT
+refine3D_auto collapse was traced by elimination to a first matching
+against unfiltered raw halves. History: dev items 4, 5, 7. <em>The
+"references multiplied by the NU envelope" hypothesis (dev item 6) was
+falsified the same day.</em></p>
+<p><strong>2026-09-02 -- References are never multiplied by an envelope;
+<code>automsk=yes</code> means a heavily low-passed background instead.</strong> With the
+startup fixed, the PfCRT refine3D_auto collapse tracked the first
+consumption of envelope-masked references on both backends
+(<code>rec_backend=gridding</code> reproduced it; <code>filt_mode=none automsk=no</code> was
+healthy). The NU evidence envelope omits the detergent by design, so a
+reference multiplied by it is protein-only while the images contain the
+micelle: a model-data mismatch under the euclid objective. Principle
+(user): a reference must never hard-remove density present in the images;
+excluded density is down-weighted by fixing the filter-field background
+(the envelope complement) to the coarsest bank candidate, cisTEM-style.
+The code-review response of the same day removed the post-hoc
+<code>nu_filter_vols</code> from the PCG path in every mode. History: dev items 8, 9.</p>
+<p><strong>2026-09-06 -- <code>Q_NU</code> REMOVED from the PCG backend in its entirety; the
+PCG path follows the gridding NU competition exactly.</strong> Together with the
+auto-lambda/auto-target controllers, the stats file, the bootstrap
+calibration pass, the parameters, UI, readout, operator and
+<code>test=pcg_priors</code>. Rationale (user): an elegant estimator that ends in a
+parameter optimization the competition never needed; the belt on PfCRT
+and the msp1 trajectories are the record. The gridding volassemble NU
+section was extracted into <code>simple_nu_state_filter</code> and is called from
+both backends: base pair seeds the bank, <code>P_tau</code> pair is the auxiliary
+member, <code>nu_refine=yes</code> runs the shell walk, finest selected label is the
+handoff. History: dev item 2 (DECISION 2026-09-06).</p>
+<p><strong>2026-09-06 -- Solve-support policy correction: no density envelope
+anywhere unless <code>automsk=yes</code>.</strong> Dev item 5 had made the envelope the
+replay support unconditionally in ML mode; every msp1 and streptavidin
+run since 2026-09-01 solved the shipped pair on the envelope while the
+base pair stayed spherical, so their two FSCs were never comparable. Rule:
+<code>automsk=yes</code> gates the envelope; under it the replay takes the envelope
+and <code>envfsc=yes</code> extends it to the base. History: dev item 2
+(SOLVE-SUPPORT POLICY CORRECTION). <em>The envfsc split superseded
+2026-09-09.</em></p>
+<p><strong>2026-09-06 -- Matching low-pass ceiling in the NU stages; sigma2 loader
+carry-over removed; stage-boundary FSC=0.5 promotion.</strong> The fine NU handoff
+must not set the abinitio3D matching band by itself (user verdict); the
+implicit sibling/parent-directory sigma2 carry-over that had seeded ten
+msp1 runs from a foreign run's residuals was removed entirely. History: dev
+item 2 (USER VERDICT, LOG EVIDENCE, msp1 STAGE-7 COLLAPSE ROOT CAUSE).</p>
+<p><strong>2026-09-07 -- PfCRT regression (7/7 at 6.0-6.5 A): the ceiling was the
+ladder's FINAL value, not the 4.5 A hard bound; NU stages run their full
+budget.</strong> Map-level audit by cross-FSC against the July reference showed
+the sets parting at stage 6. Fixes: cap = <code>LPSTOP_BOUNDS(1)</code>, <code>minits =
+maxits</code> in NU stages. Not implicated: the backend, the stage-1 floor, the
+FSC=0.5 promotion, the sigma bootstrap. History: dev item 2 (PfCRT
+REGRESSION 2026-09-07).</p>
+<p><strong>2026-09-07 -- Final-reconstruction stage made standalone
+(<code>bootstrap_rec3D</code>); canonical sigma2 store reviewed; sequence validated
+on msp1 (best msp1 map to date).</strong> Image-power seed, gridding ML bootstrap
+map carrying the workflow's filtering, residual sigma pass, PCG final map
+with a cold-solve floor of five iterations. History: dev items 10-12.</p>
+<p><strong>2026-09-08 -- <code>nu_input=gridding|ml</code> alternatives tried and reverted.</strong>
+Feeding the NU competition a gridding-equivalent <code>M^-1 b</code> pair made the
+PfCRT histograms worse and stage 7 collapsed; the truncated-CG base pair
+remains the NU input. History: run record 2026-09-08b.</p>
+<p><strong>2026-09-09 -- One support, applied once: gridding products deapodized
+and given the same soft spherical support as PCG; no second mask anywhere;
+<code>evaluate_halfmap_pair</code> masks nothing of its own; postprocess skips its
+post-hoc mask for any volume with the provenance sidecar; hard solve
+domain + output window replaces the soft <code>P H P</code>.</strong> Audit of every
+<code>mask3D_soft</code> consumer; the soft formulation had let the band depend on
+the CG state where <code>0 &lt; P &lt; 1</code>. History: records 2026-09-09b/c.</p>
+<p><strong>2026-09-09 -- <code>automsk=yes</code> implies <code>envfsc=yes</code> on both backends; the
+density envelope constrains both PCG solves.</strong> The 09-06 split (spherical
+base under <code>envfsc=no</code>) is retired: on PCG the envelope is the support of
+base and replay once a prior reconstruction exists, so the FSC pair is
+envelope-constrained in the estimator; on gridding the same envelope is
+applied post hoc with the phase-randomized correction. The masked-FSC
+bias of the constrained pair is acknowledged and REPORTED (<code>&gt;&gt;&gt; FSC MODE</code>),
+not corrected. Final reconstructions inherit <code>automsk</code>. History: dev item
+2 (SOLVE-SUPPORT POLICY, ENVFSC COUPLING; CODE REVIEW RESPONSE).</p>
+<p><strong>2026-09-09 -- NU evidence envelope keeps control of the filtering; its
+null has two regimes; shared physical dilation minimum.</strong> With the PCG
+base pair envelope-constrained, the envelope's mixture null (median/MAD
+over the whole support) sat on the zero/zero spike; the null is now
+designated on the density envelope's dilation ring for a constrained pair
+(Euclidean shell, at full weight of the base support) and stays the
+robust mixture estimate for a spherical pair, with the density envelope
+as the fallback background. The dilation has a shared minimum of 7.5 A
+(the former abinitio3D 7 layers at 1.075 A), an explicit <code>binwidth</code> wins
+either way, and the ring's evidence occupancy is logged. <code>pcg_mskfile</code> is
+reported as a constrained support. The vestigial <code>AMSK_FREQ</code> regeneration
+planner was removed. History: dev item 2 (NU EVIDENCE ENVELOPE UNDER THE
+DOUBLE SUPPORT; CODE REVIEW RESPONSE).</p>
+<p><strong>2026-09-10 -- Cross-iteration warm starts RETIRED; base from zero, replay
+from the shell-shrunk current base; <code>maxits_pcg=2</code> kept.</strong> PfCRT
+gridding_vs_pcg (10 vs 9 restarts): every PCG solve was ITS=2 fixed; the
+replay's relative residual never fell below 1 and grew to 10^3-10^4 in the
+failed runs through the warm start from the previous ML half; the base
+pair carried no fine-shell evidence at the stage-6 take-off (0% of the
+mask at 7.96 A vs gridding's 6.4%). The user's simulated-data calibration
+(two iterations beat gridding, beyond five nothing interpretable changes)
+fixes the budget. The first cold-start run: 3.98 A with side chains,
+identical to the gridding successes, cost unchanged. <code>INIT=</code> added to the
+solve summary line. History: dev item 2 (PfCRT REGRESSION gridding_vs_pcg
+2026-09-10, RESULT).</p>
+<p><strong>2026-09-10 -- Replay start rejected when worse than zero (streptavidin
+canonical 9/10).</strong> With the canonical sigma store the PCG backend missed one
+streptavidin run in ten (gridding 10/10; legacy 10/10 on both): the map
+had the wrong symmetry axis. The logs of the good and the bad run are
+identical in the sigma flow (no PCG-specific branch exists in the
+canonical store) and part in stage 3, the first PCG/ML stage and the
+symmetry-search stage, where the bad run stalled at 6 A instead of
+reaching 4.5 A, so the axis was searched on a weaker map. The one
+PCG-specific fragility there: the replay started from the shell-shrunk
+base at <code>INIT</code> 2-4 and ended at <code>RESID</code> 0.4-2, a half-converged transient
+that is both the matching reference and the symmetry-search input at
+that stage. Guard, inside the solver and free: <code>solve_core</code> computes the
+start's residual anyway, and when it exceeds 1
+(<code>PCG_START_MAX_REL_RESID</code>) the start is discarded before the first
+iteration and the residual is <code>b</code> itself (no operator application; a
+first version that re-ran the whole solve was withdrawn as too costly).
+Logged per solve. Whether this closes the 9/10 is to be measured; the
+store itself is not implicated. History: this log entry.</p>
+<p><strong>2026-09-10 -- Documentation split.</strong> <code>pcg_priors.md</code> frozen as
+<code>pcg_priors_history.md</code>; this log and <code>pcg_backend_overview.md</code> created.</p>
+<p><strong>2026-09-11 -- FSC gate removed from the NU bank and the matching low-pass
+under <code>nu_refine=yes</code>; extension is NU evidence only.</strong> refine3D_auto had
+stopped extending in resolution. The 2026-09-08 <code>fsc/1.5</code> cap
+(<code>init_nu_filter(fsc_res=)</code>, <code>nu_bank_cap_find</code>) truncated the static
+bank and bounded the shell walk (<code>max_find</code>) by the base pair's FSC=0.143,
+so the finest label -- and with it the matching low-pass handoff -- could
+never lead the global FSC by more than about two ladder labels, while the
+FSC of the base pair lags the local evidence precisely where the map is
+extending; the loop that used to carry refine3D_auto from the FSC to the
+evidence-supported resolution (July 2026) was closed. Decision (Hans):
+<code>nonuniform_filter_state</code> passes no FSC to the bank under <code>nu_refine=yes</code>
+(full static ladder), the shell walk runs without <code>max_find</code>, and the
+handoff stays the raw finest selected label; <code>get_nu_bank_cap_find</code>
+removed. The cap remains in static-bank mode (<code>nu_refine=no</code>, the
+abinitio3D ladder), where the walk does not run and the PfCRT
+regularized-pair pinning it was written for was in any case fixed at the
+root by the like-for-like coarse-to-fine selection of the same day. Logged
+as <code>NU BANK UNCAPPED (nu_refine=yes)</code>. Stale policy text describing a
+PCG-only two-shell FSC bound on the walk and a 5%-support handoff with FSC
+headroom was corrected at the same time (<code>nonuniform_filtering_policy.md</code>
+sections 8, 10, 12; <code>reconstruct3D_pcg_policy.md</code>;
+<code>refine3D_auto_policy.md</code>). Compile and the refine3D_auto rerun are Hans's.</p>
+<p><strong>2026-09-11 -- Final and startup PCG reconstructions get a support
+reference.</strong> On bgal the refine3D_auto resolution doc reported the gridding
+FSC wording for a PCG run: <code>bootstrap_rec3D</code> deleted <code>vol&lt;state&gt;</code> from the
+final <code>reconstruct3D</code> command line, so <code>build_pcg_state_support</code> found no
+reference, the base pair bootstrapped on the sphere and only the replay
+took the envelope; the reported FSC was the post-hoc/corrected one. Fix:
+the final PCG <code>reconstruct3D</code> receives the step-2 gridding bootstrap map
+(same name, same sampling, automasked as the refinement) as <code>vol&lt;state&gt;</code>;
+refine3D_auto's startup reconstruction receives the initial volume as
+<code>vol1</code>. Both base pairs are now envelope-constrained and <code>FSC MODE</code> reads
+estimator-constrained, as in every refinement iteration.</p>
+<p><strong>2026-09-13 -- Shell-walk acceptance is a majority test; matching handoff
+floor on signal voxels.</strong> Review of the aldolase refine3D_auto log (38.8k
+particles, box 192 at 1.3 A, PCG) with the ladder-only Potts pricing in
+place: the cleanup no longer erases the walk (<code>voxels on walked labels 62333
+-&gt; 62333</code>), which exposed the acceptance rule. The challenge compares filters
+one shell apart voxel by voxel with no margin (null win rate 50%) against a 5%
+threshold, so every shell was accepted until the frontier halved below 32
+voxels: depth = log2(frontier/32) = 12 at the bootstrap, 11 at iteration 1,
+with four shells accepted while the majority preferred the coarser filter.
+The raw-finest handoff then set the matching band from 54 voxels (3.37 A vs
+FSC=0.143 3.62 A) and, once the walk died from iteration 2 on (0% wins on
+frontiers of 4-424 voxels), from seeded remnants of 4-36 voxels; the band
+sat finer than the FSC in every iteration, the FSC never moved in 20
+iterations, orientation overlap was 0.998 from iteration 4 and cFAR decayed
+0.70 -&gt; 0.55. Changes: (1) <code>extend_nu_filter_highres</code> accepts a shell only if
+<code>wins - n/2 &gt;= NU_HIGHRES_EXTENSION_MAJORITY_Z (3) * sqrt(n)/2</code> on the tested
+frontier, seed floor unchanged (<code>majority_z</code> in the stats; logged per
+challenge with the win count instead of the previously misleading
+<code>extended 0</code> on rejections). (2) <code>get_nu_filtmap_finest_selected_lp</code> takes
+<code>min_signal_pct</code>: the floor is relative to the signal voxels (mask minus
+<code>nu_solvent_lmask</code>, <code>count_nu_solvent_clamped</code>), and
+<code>record_nu_alignment_lowpass_limit</code> passes <code>NU_ALIGN_LP_MIN_SIGNAL_PCT</code> (1%)
+with <code>min_assigned_pct=0</code>, logging <code>NU MATCHING LOW-PASS HANDOFF</code> on the
+master. On the aldolase bootstrap both rules land at 3.67-3.73 A. Compile and
+rerun are Hans's; the expected signature is a walk that stops where the win
+rate crosses 50%, a handoff at or just finer than the FSC=0.143, and cFAR no
+longer decaying.</p>
+<p><strong>2026-09-13 -- Ordered-label Potts prior prices the discrete ladder only.</strong>
+Hans's hypothesis: the prior is too conservative for <code>nu_refine=yes</code>. In the
+code every accepted shell became one more integer coordinate
+(<code>new_coords(i) = real(i)</code> at the three bank rebuilds and in
+<code>setup_nu_candidate_coords</code>), so the hinge <code>(d-1)+(d-1)^2</code> priced one
+Fourier shell like one ladder rung and grew quadratically with the walk
+length, while adjacent walked candidates differ little in unary; the
+post-extension cleanup (<code>refine_nu_extension_filtmap_ordered_labels</code>, run
+after every accepted shell) pulled the leading edge back and the next
+frontier shrank under the 32-voxel / 5% gate. Change
+(<code>nu_potts_coord_for_label</code>, <code>nu_static_ladder_count</code> in
+<code>simple_nu_filter_bank.f90</code>): coordinate = ladder position for labels
+1..min(8, n_base), the finest ladder position for every walked shell. The
+coordinate is no longer a label identity: <code>nu_effective_base_label_for_candidate</code>
+returns the clamped label directly, and the evidence-state ordering assertion
+checks <code>cutoff_finds</code> instead of coordinates (the evidence posterior keeps its
+own shell-distance continuation). New master log line per cleanup:
+<code>NU post-extension cleanup: voxels on walked labels a -&gt; b</code>. Discontinuity
+statistics use the same coordinates and now count walked transitions as
+identical. Compile and rerun are Hans's; the expected signature is walked
+populations surviving the cleanup and <code>accepted shell steps</code> advancing across
+iterations.</p>
+<p><strong>2026-09-14 -- Regularized pair in closed form; replay solve and its
+FSC-shrunk start retired; MRES on the summary line.</strong> Trigger: aldolase
+<code>refine3D_auto</code> (18.6k ptcls, box 192) with every replay start rejected
+(<code>INIT</code> 3-7) and every from-zero replay at <code>RESID</code> 1.0-1.9 after two
+iterations against base <code>RESID</code> 0.034 -- the same pattern as every PCG run
+since the warm-start retirement. The sidecars in
+<code>~/for_claude/PfCRT_regression</code> show what it is: (1) the preconditioner and
+the kernel operator are both Fourier multipliers, so up to the support crop
+the preconditioned operator is the identity for base and replay alike, and
+in the preconditioned norm they converge alike (<code>iter2_preconditioned_resid</code>
+0.18-0.31 base, 0.26-0.45 replay); the L2 residual the summary prints
+collapses for the base (the first step fits <code>b</code> everywhere, noise shells
+included) and stays at <code>~b_k</code> for the replay wherever the prior dominates
+and the solution is ~0 by design -- it measures unfitted noise, not an
+unconverged map. (2) <code>P_tau = rho_mean/(tau*SSNR)</code> with the FSC clamped at
+0.001 is 1000x the density beyond the band; <code>ml_prior_to_data_khat_l1</code> is
+400-600 in every abinitio stage and any refinement whose FSC reaches zero
+inside Nyquist (7 only in Sep07 stage 10, the one replay that ever looked
+converged on the L2 number). (3) The FSC-shrunk start <code>W_k = FSC_k</code> is the
+<code>P_tau</code> optimum only for a shell-isotropic operator; <code>rho</code> varies within a
+shell by orders of magnitude and the base solution at undersampled voxels is
+bounded only by the 1% floor, so <code>(H+P)Wx_base ~ rho_mean(1-FSC)x_base(v)</code>
+there, tens of times <code>b(v)</code>: <code>INIT &gt;&gt; 1</code> on every anisotropically sampled
+dataset, rejection correct, start pointless (the first CG direction from
+zero, <code>M^-1 b</code>, is already the voxelwise Wiener-shrunk gridding map).
+Decision (Hans): ship the closed form. <code>reconstructor_pcg%shrink_by_ml_prior</code>
+scales the base solution's padded-lattice coefficients by
+<code>1 - P_tau*precond = (rho+floor)/(rho+floor+P_tau)</code> voxelwise (window
+converted to the solve domain and back), on the replayed operator with the
+prior installed -- the diagonal-model optimum, without the global step-length
+overshoot two CG iterations from zero produce -- and returns the L2 and
+preconditioned residuals of the result against the replay system (one
+operator application) as a diagnostic of the support coupling it leaves out.
+Both execution paths (<code>regularize_state_half</code>, the distributed ML job) take
+it; <code>regularized_ml_initial_guess</code>, <code>ml_shrinkage_filter</code> and
+<code>fsc2shrink_filter</code> are removed; no production solve starts nonzero. The
+summary line gains <code>MRES=</code> (final preconditioned relative residual; the last
+<code>z</code> is now formed at exit so the final entry exists in the sidecar as
+<code>final_rel_resid_m</code>), <code>KIND=ml</code> reads <code>ITS=0 STOP=closed_form</code>. The
+regularized pair costs the raw re-read plus finalization plus ~4 FFT passes
+instead of two CG iterations. What to compare on the aldolase rerun: the
+shipped pair against the former 2-iteration replay (the map Hans judged
+visually good) and against <code>fsc2optlp</code> of the <code>_unfil</code> pair, by FSC between
+them and by eye; <code>MRES</code> of the closed form tells how far the diagonal optimum
+sits from the coupled one. Compile and runs are Hans's.</p>
+<p><strong>2026-09-16 -- The NU shell walk retired; one generated ladder with the
+regularized pair as its finest member for every workflow.</strong> Trigger: the
+<code>nu_refine=yes</code> walk never let the ML-regularized volume compete for voxels
+(it was the finest STATIC member and the walk challenged hard shells beyond
+it), and its acceptance rule -- a full-weight shell helps cross-half
+prediction only where the half-map SNR exceeds 1 -- is local FSC&gt;0.5, which
+is conservative for filtering the map and no better than the FSC-0.143
+extent for setting the matching band; on aldolase it pinned the band while
+the actual ceiling was the data model (no per-particle CTF or polishing).
+Meanwhile every abinitio3D run used the discrete ladder plus auxiliary
+competition and it works. Decision (Hans): delete the walk and densify the
+static ladder instead, one implementation for abinitio3D, refine3D_auto,
+refine3D and postprocess_nu. The bank is generated per box: coarse rungs
+20/15/12/10/8/6 A, then fine rungs every <code>NU_LADDER_FINE_STEP</code>=2 Fourier
+shells up to one shell coarser than the closed-form regularized pair
+(<code>ml_reg=yes</code>), which is the finest member and competes voxelwise like any
+rung; without a regularized pair the rungs are bounded at <code>fsc/1.5</code>
+(postprocess_nu, <code>ml_reg=no</code>); the fine spacing widens (never truncates)
+to fit <code>NU_BANK_MAX_MEMBERS</code>=16. Potts coordinates and the evidence
+candidate masses are positions on the reference ladder 20-4 A interpolated
+in log(1/res), so the smoothing prior is scale-free across boxes. The
+matching handoff is the content extent of the finest label holding &gt;=1% of
+the signal voxels at it or finer: a rung's cutoff, the pair's FSC=0.143
+resolution for the regularized member, no headroom (abinitio3D keeps its
+own 4.5 A stage limit for the non-NU FSC=0.5 promotion only). Removed:
+<code>simple_nu_filter_extend.f90</code>, the <code>nu_refine</code> key (parameters, phases, UI,
+every workflow default), <code>refine_nonuniform_filter_bank</code>, the highres-step
+sidecars, <code>nu_static_ladder_count</code>, the walk statistics and the majority
+test, the <code>NU BANK CAP/UNCAPPED</code> log lines (now one <code>NU BANK</code> line naming the
+rungs, the fine step and the finest member). Design record:
+<code>nu_refine_ml_estimator_competition.md</code> (rewritten). Compile and the
+aldolase/PfCRT A/B reruns are Hans's; the expected signature is the
+regularized label populating the core, hard rungs the periphery, and the
+handoff tracking the FSC=0.143 extent rather than a shell-walk frontier.</p>
+<p><strong>2026-09-16 -- Final reconstruction: automsk and the lag-one reference
+forwarded on the direct route too.</strong> bgal refine3D_auto (native box 256 =
+registration box, committed sigmas reused, so <code>calc_final_rec</code> took the
+direct <code>reconstruct3D</code> route rather than <code>bootstrap_rec3D</code>): the shipped
+PCG map ran on the sphere (<code>rec_final_state01_pcg_support.txt:
+solve_support=sphere</code>, FSC mode "density envelope applied post hoc")
+while every refinement iteration had been estimated on the density
+envelope. <code>prep_final_rec_cline</code> forwarded <code>automsk</code> and <code>vol&lt;state&gt;</code> only
+on the bootstrap route. Now <code>automsk</code> is inherited on both routes and the
+direct route sets <code>filt_mode=none</code> and passes the last refinement volume
+as <code>vol&lt;state&gt;</code> on PCG, so <code>build_pcg_state_support</code> derives the same
+lag-one envelope and the doc reads "halves estimated on a support
+envelope" like the iterations. The first-run readings of the retired-walk
+bank on this bench: abinitio3D 822 s, stage-6 bank 13 rungs + MLreg (14.6%
+of the mask), refine3D_auto 1040 s, registration pass moved 1.8% of
+directions, FSC0.5 4.30 -&gt; 4.03 A, MLreg ~6.5% at box 256 with the 3.63 A
+rung below it at 0.02%; MRES of the closed form 0.86-1.3 at box 256 versus
+~0.1 in the cropped stages. Open: the gridding regularized pair won 0% in
+the abinitio final's bootstrap bank (PCG wins 6-15% at the same box), to be
+checked on the gridding aux path.</p>
+<p><strong>2026-09-16 -- Regularized solve: maxits_ml coupled iterations from the
+closed form.</strong> bgal refine3D_auto at the native box 256: the closed form's
+preconditioned residual <code>MRES</code> read 0.86-1.3 at every iteration and 0.93 in
+the abinitio final, against ~0.1 in the cropped abinitio stages, whose band
+reached Nyquist (box 140 at 2.33 A/px). At the native box a third of the
+shells lie beyond the band with <code>P_tau</code> ~1000x the data, and that is where
+the diagonal and coupled answers can differ; whether they differ inside the
+band (the map) or only beyond it (bookkeeping) the number cannot say. The
+regularized member still won 6-7% of the mask, so nothing was blocked.
+Decision (Hans): run 2 coupled iterations of the regularized system FROM
+the closed form (<code>maxits_ml</code>, default 2, <code>rtol=0</code>, no start rejection,
+indefinite stop falls back to the closed form). Unlike the retired from-zero
+replay, the start already has the prior's spectral shape, so CG can only
+move toward the coupled solution; ~2 s per half per iteration at box 256.
+Diagnostics: <code>INIT</code> on the <code>KIND=ml</code> line is the closed form's L2 residual,
+<code>MRES</code> the final one, and a <code>CLOSED-FORM MRES a -&gt; b</code> line reports the FSC
+between the start and the solved map (0.5/0.143 crossings and the minimum
+over the pair's FSC&gt;0.143 band). Reading rule for the rerun: band minimum
+~1 with <code>MRES</code> down means the iterations only touched beyond-band content
+and the closed form alone was adequate; band minimum well below 1 means the
+closed form was leaving in-band signal on the table and the iterations
+stay. Same bench rerun (abinitio3D + refine3D_auto, PCG) is Hans's.</p>
+<p><strong>2026-09-16 -- maxits_ml result: refinement-invisible; default 0.</strong> Same
+bench rerun (7_refine3D_auto, box 256, <code>maxits_ml=2</code>): <code>MRES</code> of the
+regularized half went 1.02 -&gt; 0.29 at the bootstrap, 0.71 -&gt; 0.49 and
+0.81 -&gt; 0.67 in the iterations (two iterations do not reach the coupled
+solution either); the FSC between the closed form and the solved map stayed</p>
+<blockquote>
+<p>= 0.965 on every in-band shell and crossed 0.5 only at 2.7-3.1 A, beyond
+the 3.59 A band; the regularized member's share of the mask rose 0.4%; and
+every iteration's FSC0.5/0.143, handoff and the final map were identical to
+run 6 to three decimals. Decision (Hans): default <code>maxits_ml=0</code> (closed
+form shipped as before); the parameter and the diagnostics stay as the
+knob. The diagonal model is adequate for the regularized member's two jobs
+(competing for voxels, setting the band); the residual it leaves lives in
+the beyond-band shells.</p>
+</blockquote>
+<p><strong>2026-09-16 -- PfCRT abinitio3D regression: the merged-reference climb
+needs the band ahead of FSC=0.143; headroom restored for nonuniform_lpset.</strong>
+<code>~/for_claude/PfCRT_regression/current_broken</code> (five restarts): with the
+regularized member handing off its FSC=0.143 resolution (the 2026-09-16
+band rule) the NU stages crept one shell per iteration (stage 6: 9.41 -&gt;
+8.39 A over 30 iterations, bank <code>4 hard rungs 19.4 -&gt; 10.0 A + regularized
+pair at 9.41 A</code>), stage 8 was carried only by its explicit 6.0 A limit and
+the final map stalled at 7-8 A. The healthy run (<code>latest2</code>, former static
+bank) at the same point: FSC=0.143 8.87 A, bank capped at fsc/1.5 = 5.86
+A, the regularized pair in the 5.97 A slot winning 5.4% and the 8 A rung
+15%, handoff 5.97 A, then 5.0 and 4.5 A as the FSC caught up to 4.5 A.
+The staged climb is a ratchet: both halves align to one merged reference,
+so its FSC=0.143 is not a gold-standard band, and matching 1.5x ahead of
+it is what pulls the FSC up. bgal, Msp1 and streptavidin climb either way
+(high SNR); PfCRT does not. Fix: under <code>filt_mode=nonuniform_lpset</code> the
+regularized member sits and hands off at <code>max(fsc/NU_BANK_FSC_HEADROOM,
+NU_LPSET_BAND_FLOOR=4.5 A)</code> (the former bank's cap and finest rung), the
+hard rungs run up to that shell; under <code>nonuniform</code> (gold-standard
+refine3D_auto) it stays at FSC=0.143 with no headroom (validated on bgal
+today). One implementation, one mode-dependent resolution for the
+regularized member (<code>nu_aux_effective_resolution</code>). PfCRT rerun is
+Hans's; expected signature: stage-6 handoff ~5.9 A at FSC 8.9 A and the
+final at 4.5 A as in <code>latest2</code>.</p>
+<p><strong>2026-09-17 -- PfCRT <code>latest3</code> (10/10 abinitio3D restarts converge):
+map quality gap is in refine3D_auto, not abinitio3D; band floor 4 A;
+registration pass gated.</strong> abinitio3D with the restored lpset headroom
+reaches its band floor in stage 8 on every restart (FSC=0.143 4.44-4.50 A
+at the 4.5 A floor; final FSC=0.5 4.70 A) versus <code>Jul02_very_good</code>
+(band 4.14 A from the July ladder's 4 A rung, FSC=0.5 4.63 A) -- a small,
+real cost of the 4.5 A rung, so <code>NU_LPSET_BAND_FLOOR</code> is the reference
+ladder's 4 A rung (the 2026-09-08 record already noted 4.5 A pinning the
+handoff that asked for 4.14 A). The large gap is refine3D_auto: July's
+started iteration 1 at 4.09 A from the abinitio poses and reached
+3.61/4.03 A by iteration 3; <code>latest3</code> ran the registration pass at the
+startup pair's FSC=0.8 band, 8.87 A, which moved 33% of the directions
+beyond the basin width (17% beyond twice it), dropped iteration 1 to
+5.54/7.96 A, and the four-iteration budget ended it at 4.31/6.61 A with
+B-factor -137. At that band a small asymmetric membrane protein's
+orientations are not discriminable; bgal (large, D2) reassigned 1.7%.
+Decision (Hans): keep the pass unconditionally -- the FSC=0.8 band is
+too conservative, not the pass itself -- and set <code>regpass_fsc=0.5</code>
+(the PfCRT startup pair's FSC=0.5 was 7.96 A against 8.87 A at 0.8),
+then, agreeing that one shell finer changes nothing for a particle whose
+low-resolution band is the micelle, <code>regpass_fsc=0.143</code>: the pass runs
+at the working band, where a global search confirms a good registration
+and re-basins only the misregistered particles (cost: a full-band
+<code>prob_tab</code> over 5000 directions, 2-3x the coarse pass). A discard gate on
+the reassigned fraction was drafted and withdrawn; instead (Hans) the pass
+is <code>refine=greedy</code>: exhaustive argmax with the incumbent's direction among
+the candidates, so a particle moves only to a better pose, where <code>prob</code>
+samples the assignment from the table and re-basins at random wherever it
+is flat. Rerun of <code>latest3</code>'s refine3D_auto is Hans's; the numbers to
+read are the reassigned fraction at 4.14 A and iteration 1's FSC against
+July's 4.09 A.</p>
+<p><strong>2026-09-17 -- automsk=nu review (Hans's implementation).</strong> Kept: the
+opt-in mode, the lag-one NU-evidence envelope as the gridding post-hoc FSC
+mask and as the reference mask (assembly <code>_nu_filt</code> products, matcher
+fallback), density fallback whenever the artifact is absent, incompatible,
+empty or has an invalid null, <code>envfsc=yes</code> derived from any active
+automsk, the <code>support_kind</code>/<code>mask_kind</code> plumbing and <code>FSC MODE</code> reading
+<code>backend= support= posthoc_mask= phase_randomization=</code>. Changed at review:
+(1) the NU envelope is never the PCG solve support -- under nu the density
+envelope constrains both solves as under yes, because the evidence null of
+a constrained pair is designated on the density envelope's dilation ring
+at full support weight, outside any evidence envelope, so a NU-supported
+solve empties its own null, invalidates the next envelope and falls back to
+a density envelope derived from a map that is zero outside the NU support:
+an oscillating support with no way back for excluded density; (2) the
+bootstrap final-reconstruction route (box change) kept setting
+<code>filt_mode=none</code> for the shipped map while inheriting <code>automsk=nu</code>, which
+the new validation rejects -- it now keeps the caller's filt_mode under nu
+like the direct route; (3) the 2026-09-02 PfCRT collapse rationale, removed
+from the matcher comment and the rewritten automasking policy, is back in
+both: nu is not a default and must not become one.</p>
+<p><strong>2026-09-17 -- Potts coordinate back to the label index; PfCRT map-quality
+gap traced to the abinitio3D poses.</strong> (1) <code>postprocess_nu</code> on the Sep-11
+PfCRT halves produced noise with the retired-walk code. Cause found in the
+code, log pending: the 2026-09-16 Potts coordinate (position on the
+reference ladder in log(1/resolution)) puts the generated fine rungs about a
+tenth of a rank apart while <code>NU_LABEL_SMOOTH_STEP_TOL=1</code> frees jumps of one
+rank, so the smoothing prior was inert across the whole fine end -- the
+label field could alternate freely between rungs 4.6-4.1 A voxel by voxel.
+In refinement the regularized member wins the core and the FSC hid it; in
+the evidence state, which has no regularized member, the fine cutoffs
+scatter and the per-voxel sharpening passes noise. Coordinates are the
+label index again in both the filter and the evidence competition; the
+log-resolution geometry survives as the evidence candidate mass only.
+(2) refine3D_auto on <code>latest3</code> (greedy pass at 4.44 A: 6.2% reassigned,
+no FSC change) plateaus at 4.03/4.50 A from iteration 1 with B -90..-100,
+against the Sep-11 run's 3.93-3.98/4.14-4.25 A with B -73. The gap is
+present in the BOOTSTRAP, before any refinement: gold-standard
+reconstruction of the Sep-17 abinitio poses reads 4.14/4.50 A, of the
+Sep-11 abinitio poses 3.93/4.09 A, from the same particles. The abinitio
+poses are worse although the abinitio's own merged-reference FSC reads the
+same (4.5 A band in both). Candidates, both introduced between the runs:
+the inert Potts prior above (the NU-stage references' hard-rung pattern),
+and the closed-form regularized pair (MRES 1.3 on PfCRT at box 300; the
+Sep-11 references' core came from the two-iteration replay). A/B after the
+recompile: rerun abinitio3D + refine3D_auto with the index coordinate; if
+still short, <code>maxits_ml=2</code> isolates the closed form.</p>
+<p><strong>2026-09-17 -- postprocess_nu restored on the Sep-11 PfCRT halves with the
+index Potts coordinate.</strong> Even/odd run at box 300: 11 distinct evidenced
+cutoffs with coherent populations (4.33 A 181k, 3.80 A 44k, 3.38/3.05 A
+3-5k voxels), four evidence bands, B -49; "PfCRT back to being gorgeous"
+(Hans). Confirms the 09-16 log-resolution coordinate as the cause of the
+noise (and the prime suspect for the abinitio pose gap; A/B pending). Two
+fixes on the way: postprocess_nu's own half-map FSC was computed on
+real-space volumes (<code>image%fsc</code> reads Fourier coefficients) and read 0.000
+A, so the bank ran unbounded to Nyquist -- harmless here (rungs beyond 3 A
+won nothing) but wrong; now transformed before the FSC, so the bank is
+bounded at fsc/1.5 as designed. And identical inputs (vol1 = vol2, an FSC
+of 1 everywhere, the finest cutoff awarded on 1.36M voxels, a sharpened
+noise ball) are refused with a message.</p>
+<p><strong>2026-09-18 -- Index Potts coordinate reverted for the filter competition
+(PfCRT <code>latest4</code>).</strong> With the label index, 3/9 abinitio3D restarts reached
+4.6 A (4.85-8.2 A otherwise) against 10/10 at 4.4-4.5 A with the
+log-resolution coordinate (<code>latest3</code>). Mechanism in the logs: at FSC 8.2 A
+the regularized member sits at 5.45 A but the handoff reads <code>7.96 A (raw
+finest label 5.45 A)</code> for the rest of the stage -- nothing finer than the
+7.96 A rung holds 1% of the signal voxels, because the dense ladder puts
+four to eight members between 8 A and the regularized pair and on the
+index coordinate the core's jump out of the 8 A surround costs several
+hinge steps instead of the one it cost on the 8-rung ladder; on PfCRT's
+small core (12% envelope occupancy) the prior wins. The log-resolution
+coordinate is the scale-free generalization of the old prices and is
+validated by latest3, bgal, Msp1 and streptavidin; restored for the filter
+competition. The evidence competition keeps the index coordinate
+(separate Potts problem, separate beta; validated by the "gorgeous"
+postprocess_nu on the Sep-11 halves). Correction of the 09-17 entry: the
+first "ball of noise" postprocess_nu run had vol1 = vol2, so the
+log-resolution coordinate was never shown to produce a noisy
+postprocess_nu with correct inputs; the index change was made on a
+misdiagnosis. Reruns are Hans's: abinitio3D (expect latest3 behaviour)
+and postprocess_nu on the Sep-11 halves (expect unchanged).</p>
+<p><strong>2026-09-18 -- NU machinery restored to the ed36eb4c static ladder + aux
+competition, as the only mechanism.</strong> Decision (Hans): the discrete ladder
+<code>[20,15,12,10,8,6,5,4]</code> A capped at <code>fsc/1.5</code> with the ML-regularized pair
+replacing the finest retained label -- abinitio3D's machinery at commit
+ed36eb4c, which produced the best PfCRT maps -- is the NU competition for
+abinitio3D, refine3D_auto and postprocess_nu; nothing else. The
+<code>src/main/nu_filt</code> submodules and <code>simple_nu_state_filter</code> are restored
+from ed36eb4c verbatim except: the extend submodule and its interfaces,
+the walk statistics type and the walk-only constants are removed (no code
+path can extend the bank), the <code>nu_refine</code> control stays removed, the
+auxiliary member is used whenever <code>ml_reg=yes</code>, and Hans's <code>automsk=nu</code>
+edits (envelope selection, <code>write_nu_evidence_envmask(mask_out, l_valid)</code>)
+are kept. Gone with this: the generated dense ladder, <code>NU_BANK_MAX_MEMBERS</code>,
+<code>NU_LADDER_*</code>, the log-resolution and index Potts coordinates (integer
+ladder coordinates again), the lpset headroom/floor (<code>NU_LPSET_BAND_FLOOR</code>;
+the cap provides the headroom as it always did), the content-extent
+handoff. postprocess_nu passes the half-map FSC so its bank is capped like
+the refinement's. Compile and the PfCRT/bgal reruns are Hans's.</p>
+<p><strong>2026-09-18 -- The auxiliary pair competes with the finest rung instead of
+replacing it.</strong> Decision (Hans): with <code>ml_reg=yes</code> the ML-regularized pair
+is appended as one more bank member beside the finest retained rung, and
+the two compete voxel by voxel; there must be no prior penalty for
+replacing a finest-rung voxel by the regularized pair -- if it wins the
+unary it is included. Coupling to the ordered-label prior: the auxiliary
+shares the finest rung's Potts coordinate (a boundary between two filter
+shapes of the same terminal resolution is not a resolution discontinuity),
+so every existing price is unchanged and the unary alone decides between
+them. Side effects: the auxiliary is always included when supplied (the
+ed36eb4c rule ignored it unless finer than the finest rung); the handoff
+sorts labels by resolution so it needs no change, and if the auxiliary
+falls below the 1% signal-voxel floor the band now drops to the finest
+rung rather than to the one below it; the auxiliary's own unary margin
+diagnostic now includes the finest rung. <code>setup_nu_dmats</code> appends the
+label (own Fourier index, bwfilters column unused, filtered pair never
+cached), <code>setup_nu_candidate_coords</code> assigns the shared coordinate.
+Untested; the PfCRT abinitio3D + refine3D_auto pair against July's
+3.61/3.98 A is the test.</p>
+<p><strong>2026-09-18 -- postprocess_nu operates on the project.</strong> Decision (Hans):
+like <code>postprocess</code>, <code>postprocess_nu</code> takes <code>projfile</code> (+ <code>state</code>, <code>mskdiam</code>,
+<code>nthr</code>, optional <code>outvol</code>), fetches the state volume from the out segment,
+its <code>_even_unfil/_odd_unfil</code> pair (evidence input) and, when present, its
+<code>_even/_odd</code> regularized pair, with which it first runs the refinement's
+filter competition -- static ladder capped at fsc/1.5, the regularized pair
+beside the finest rung -- printing the bank, the assignment table and the
+matching handoff and writing the references and local-resolution map;
+then the unchanged evidence sharpening. Every product carries
+<code>_pproc_nu</code> (<code>&lt;vol&gt;_pproc_nu.mrc</code> sharpened; <code>&lt;vol&gt;_ref_pproc_nu.mrc</code>,
+<code>&lt;vol&gt;_even/_odd_ref_pproc_nu.mrc</code>, <code>&lt;vol&gt;_locres_pproc_nu.mrc</code>). First
+run on the Sep-11 PfCRT abinitio3D project: FSC 6.61/3.98 A, bank capped
+at 2.65 A (all 8 rungs), regularized pair beside the 4 A rung (both on
+shell 78, 3.981 A): rung 6.6% of the mask, regularized pair 3.9%, handoff
+3.98 A; "map looks great" (Hans). The
+<code>vol1/vol2</code> file inputs are gone. This is the cheap test of the auxiliary
+competition on any completed run directory.</p>
+<p><strong>2026-09-18 -- solvent prior as an opt-in SOFT real-space ridge on the replay.</strong>
+Decision (Hans): "there is solvent left to flatten, no doubt about that",
+but "the prior needs to be soft". A first cut refined the replay's hard
+support with a Wang-type mask; with the default <code>maxits_ml=0</code> that is the
+closed-form shrink multiplied by a solvent mask, i.e. exactly the
+post-solve masking the backend forbids, and with iterations it is still a
+hard cut at a single Otsu boundary. Discarded. What ships:
+<code>pcg_solvent=yes|no</code> (default <code>no</code>; refine3D/refine3D_auto/abinitio3D/
+reconstruct3D; requires <code>rec_backend=pcg</code>; forwarded like the other
+backend keys, stripped for the gridding children) with
+<code>pcg_solvent_lambda</code> (default 1.0, relative to <code>data_scale</code>). On: the
+regularized operator gains <code>lambda_s (1 - w(r))</code> on its diagonal, <code>w</code> the
+logistic protein weight built PER HALF from that half's own current base
+map (half-independent prior, regularized pair stays gold standard) at
+<code>max(8 A, 2 x res0143)</code> (Otsu inside the production support, width = the
+solvent class's spread); <code>maxits_ml</code> defaults to 2 with the prior on
+(parameters class, <code>PCG_SOLVENT_MAXITS_ML</code>; explicit 0 refused) because
+the closed form cannot see a real-space term. Weight volumes written per
+half (<code>pcg_solvent_weight_stateNN_even|odd.mrc</code>, overwritten every
+iteration, never accumulated), even/odd correlation and solvent-fraction
+gap logged (the half-independence check). In abinitio3D the key is withheld
+through stages 3-7 and passed only to stage 8; shortened workflows never use
+the prior (superseded 2026-09-22: from stage 7, one stage after
+<code>NU_FILTER_STAGE</code>). Support, base pair, FSC oracle and NU bank inputs are untouched on
+purpose: the resolution claim carries no extra
+mask and the prior's effect is confined to the shipped regularized pair.
+No low-pass guard on <code>w</code>: a ridge modulator, unlike a multiplicative
+mask, injects no spectrum, and the statistic is band-limited at 2 x res
+anyway. Runs under <code>automsk=no</code> too (sphere as support). Provenance
+<code>solvent_prior=soft lambda_rel=&lt;x&gt;</code>. Off: bit-identical.
+Untested; first test is the PfCRT cold-start run with <code>pcg_solvent=yes</code>
+against its 3.98 A baseline, judged on the map (cavities, detergent
+belt, skirt) rather than the FSC, then a <code>pcg_solvent_lambda</code> sweep
+(0.3, 1, 3).</p>
+<p><strong>2026-09-19 -- solvent prior moved to the base solve (per-half re-solve).</strong>
+Observation (Hans, several data sets): stage maps under the replay-ridge
+design looked less noise-fitted but the final map looked too low-pass
+filtered. Diagnosis: the on/off comparison was confounded with
+<code>maxits_ml</code> 2 vs 0, and the coupled replay's proper P_tau attenuation
+plus the classical postprocess's <code>2FSC/(1+FSC)</code> double-attenuates a
+regularized map (the closed form under-attenuates, hiding it; the stage
+maps ship NU-filtered base rungs, hiding it). Decision (Hans): keep runs
+comparable -- a separate cold solve with the prior on the base system,
+its pair fed to the NU machinery, <code>maxits_ml=0</code> and the closed-form
+shrink as standard. What ships: prior-free base pair (operators kept)
+-&gt; its FSC sets the smoothing scale, per-half weights from the
+prior-free halves -&gt; ridge installed -&gt; both halves solved again from
+zero with the same budget on the same accumulators -&gt; that pair is the
+base pair everywhere (FSC, NU evidence, replay, B factor). NU caveat
+recorded, not acted on: the NU null (dilation ring / robust bulk) is
+measured on the prior'd pair; watch <code>NU NULL SHELL GEOMETRY</code>, the null
+bias median/MAD and the assignment table for collapse. Summary lines
+<code>KIND=pre</code> (prior-free) then <code>KIND=base</code> (prior'd). <code>postprocess</code> gained
+<code>fsc_filt=no</code> (skip the optimal filter, low-pass at FSC=0.143 only) and
+<code>imgkind=unfil</code> (classical route from the unfiltered pair average) for
+the re-reconstruct/re-postprocess matrix on the completed runs.</p>
+<p><strong>2026-09-19 -- abinitio3D robustness: one bank rule for every workflow;
+the matching band is the finest member of the bank.</strong> Log analysis of every
+PfCRT set (record: <code>claude/pfcrt_abinitio_band_lead_analysis.md</code>; note that
+the <code>MATCHING LOW-PASS LIMIT (THIS ITERATION)</code> readout is the handoff for
+the NEXT iteration): with the regularized member handing off its FSC=0.143
+(b9cc8e31 <code>current_broken</code> 0/4; 4ff3a1f6 <code>latest5</code> 1/9, the ed36eb4c
+restoration of 09-18 had dropped the 09-16 headroom placement) the band
+equals the FSC in 41-42% of stage-6 iterations, the crossing advances
+about one shell per iteration and the assignment crawls or freezes; with
+the member at <code>max(fsc/1.5, 4.5)</code> (6a41a40f <code>Sep16_10of10</code>) the band was
+pinned in 4% of iterations, +0.47 A per iteration, 10/10 converged, and
+the 4.5 A floor held stages 7-8 below their crop Nyquist (4.14/3.88 A).
+July's uncapped rung handoff led by 1.55x median (p90 1.88) and froze 2/10
+in stage 6. <code>latest4</code> (281ca643, index Potts coordinate): the member one
+prior step from the finest rung won &lt;= 0.6% of voxels, the handoff fell
+back to the rungs, 3/9. Replacement versus competition is not the
+separator (replacement at FSC=0.143 failed identically, iteration 86 of
+<code>current_broken</code>: MLreg 3.9%, band 8.62 = FSC). Stages 1-5 end alike in
+Sep16 and latest5 and better than July's. Hans's reading, adopted: the
+band at the FSC starves the alignment (underfitting); the objective's
+sigma2 weighting, the stochastic assignment and the evidence-limited NU
+reference guard against overfitting, so the 09-16 "inflated FSC" story is
+withdrawn. Rule (Hans): the ladder cut at fsc/1.5; the ML-regularized pair
+carries its FSC=0.143 and joins beside the finest rung the moment that is
+at or beyond the ladder's finest rung at the box (<code>setup_nu_dmats</code>; within
+the ladder the rungs compete alone, since the cut always keeps a rung
+between fsc/1.5 and fsc); the finest member of the bank is the handoff
+(<code>get_nu_filter_bank_finest_lp</code>, <code>record_nu_alignment_lowpass_limit</code> and
+postprocess_nu), the 1% signal-voxel floor and the raw finest label are
+diagnostics on the handoff line. Same code path for abinitio3D,
+refine3D_auto, refine3D_states, classify3D_refs and postprocess_nu; the
+interim lpset-only cap placement of the same morning was superseded before
+any run. Band per FSC on the PfCRT boxes: 10.7 -&gt; 7.96, 8.9 -&gt; 5.97,
+7.6 -&gt; 5.97, 6.9 -&gt; 5.01, 6.0 -&gt; 3.98 (or the crop Nyquist 4.44/4.14),
+5.0 -&gt; 3.98, 4.03 -&gt; 3.98, 3.93 -&gt; 3.93 (pair admitted). Expected signature
+(Hans's rerun): handoff 5.97 A at an 8.9 A FSC in the first stage-6
+iteration, <code>NU AUXILIARY MEMBER ... within the ladder ... the rungs compete
+alone</code> throughout the lpset stages on PfCRT, FSC=0.143 at the stage-6
+Nyquist within ~10 iterations, overlap &lt; 0.5 through stage 6, stages 7-8
+climbing to 4.1/3.9 A. refine3D_auto on PfCRT: the pair admitted only once
+the FSC reaches 3.98 A. Not changed, on record: the stage early-stop
+(overlap 0.9/0.95) cannot tell a frozen assignment from convergence.</p>
+<p><strong>2026-09-21 -- solvent prior: estimate on the base pair, apply to the
+prior'd pair; isotropic postprocess protocol; postprocess_nu names.</strong>
+<code>~/for_claude/pcg_solvent=yes</code> (exp_gate, msp1 at ae97341c; the
+streptavidin logs there are ec5527df, pre-prior, not comparable): the
+<code>_lp</code> maps the best yet, the <code>_pproc</code> maps noise. Measured: the prior'd
+pair was the <code>_unfil</code> pair, its FSC (3.64/3.43 A against 3.88/3.91 A
+prior-free; even/odd weight correlation 0.971/0.996, no randomization,
+stage-8 crossing pinned at the crop Nyquist in every iteration) set the
+optimal filter, which stays open to FSC=0.05, and the B-factor
+(-121/-115, density-windowed on top of the ridge) sharpened the
+closed-form map with nothing closing it. postprocess_nu on that pair
+"looks like madness": its evidence null and the NU whitening (the MAD of
+even minus odd per radial shell over a support that is 80-93% solvent)
+are measured where the prior removed the noise. Decisions (Hans): the
+FSC is never computed from a solvent-prior'd pair; the prior must
+influence every reference voxel, not only the band beyond the ladder, so
+the NU label field is derived on the prior-free base pair and applied to
+the prior'd pair (<code>nonuniform_filter_state</code> apply pair -&gt; <code>nu_filter_vols</code>
+per-label composition of the apply halves); the prior-free pair is the
+base pair everywhere (FSC, cap, band, competition, evidence, <code>_unfil</code>,
+start-volume handoff), the prior'd pair is <code>_even_solvent/_odd_solvent</code>,
+the base of the replay and of the references (both PCG paths:
+<code>reduce_solve_state_pair</code> solvent outputs, <code>resolve_base_pair_with_solvent_prior</code>
+into the solvent pair); <code>automsk=nu</code> needs no special case (its null is
+the base pair's). Postprocess (classical): cutoff = FSC=0.143 of the
+reconstruction's FSC file (now always the base pair's curve; the <code>_unfil</code>
+pair's own FSC computed there only when no file is given), B
+from the unfiltered pair average between <code>HPLIM_GUINIER</code> and the cutoff
+(a first version fitted the shipped regularized map: -150 on
+streptavidin, a cloud of structured noise; the Wiener suppression
+steepens the slope, which is what the unfil-pair estimate was always
+for), sharpen, the FSC weighting <code>2FSC/(1+FSC)</code> inside the passband and
+the Butterworth at the cutoff (2026-09-22: with the Butterworth alone,
+exp_gate at B -108 was a cloud of structured noise, bfac=0 normal, -50
+under-sharpened, -75 the cloud beginning; the low-SNR shoulder between
+FSC=0.5 and 0.143 passed at full weight, which the weighting holds at
+0.25-0.67; streptavidin and msp1 survived on a steeper FSC; postprocess_nu
+got the same weighting stretched to each voxel's evidenced cutoff, and its
+B-factor from the unregularized pair when it sharpens the solvent pair); <code>fsc_filt</code> and the density window
+retired; <code>imgkind=unfil|solvent</code> postprocess the pair averages with the
+same cutoff (<code>pair_stem</code>). postprocess_nu: evidence from <code>_unfil</code>,
+sharpening applied to the <code>_solvent</code> pair when present; outputs named
+like postprocess with <code>_nu</code> in the suffix (<code>_pproc_nu</code>, <code>_pproc_nu_mirr</code>,
+<code>_locres_nu</code>; the <code>_ref_pproc_nu</code> references are gone). Also on record:
+the final PCG map is the 5-iteration cold solve; the gridding
+reconstruction before it is bootstrap_rec3D's sigma seed, the only NU
+competition in the final block (its gridding ML pair beyond the ladder
+wins 0% of voxels: open since 09-18, inconsequential for the map). To
+watch on the rerun: the B-factor of a solvent-flattened map, and whether
+the prior'd references keep what made the exp_gate/msp1 <code>_lp</code> maps.</p>
+<p><strong>2026-09-22 -- solvent prior strength by cross-validation (<code>pcg_solvent_lambda</code>
+auto).</strong> <code>lambda_rel=1</code> means the ridge equals the low-band data diagonal,
+which is strong where D(k) falls steeply (msp1, exp_gate) and weak where it
+is flat (PfCRT), and the weight map decides what it can act on at all.
+Decision (Hans): choose the strength per specimen by the NU objective over
+the whole production support, in closed form (post-hoc shrink of the
+prior-free pair against the operator's real-space diagonal) rather than by
+re-solves, so it costs a few volume passes and runs every iteration. Placed
+by layer: <code>image%nu_objective</code>/<code>nu_objective_noise_profile</code> (core, already
+there), <code>reconstructor_pcg%get_realspace_diagonal</code> (operator),
+<code>estimate_solvent_prior_lambda</code> + <code>solvent_prior_cross_half_objective</code> in
+the sidecar (the prior's estimation module), orchestration and the
+<code>pcg_solvent_check</code> re-solve diagnostic in the PCG strategy,
+<code>l_pcg_solvent_lambda_auto</code> in params, <code>{auto}</code> in the four UIs, provenance
+<code>lambda_rel=&lt;x&gt; auto|set</code>. Also on 2026-09-22: postprocess_nu takes the
+stretched <code>2FSC/(1+FSC)</code> weighting and the base-pair B-factor as its fixed
+policy (evidence pair + FSC required, apply pair optional). First thing to
+read on the reruns: the <code>PCG SOLVENT PRIOR LAMBDA</code> table on exp_gate, msp1
+and PfCRT, and once with the check variable set on exp_gate, whether the
+re-solve argmin agrees with the closed form. Same day, two follow-ups
+(Hans): the prior starts one stage after the first NU stage
+(<code>PCG_SOLVENT_START_STAGE = NU_FILTER_STAGE + 1</code>, stage 7) so the label field
+applied to the prior'd pair has settled on a prior-free stage first, instead
+of stage 8 only; and the controller forwards <code>pcg_solvent_lambda</code> to the
+stage command lines only when it was given (it used to forward the default,
+which would have defined the key downstream and switched the estimate off).
+The re-solve check runs in both the shared-memory and the distributed path,
+so an ordinary <code>nparts</code> run validates the closed form; it is a parameter
+(<code>pcg_solvent_check=yes</code>, no environment variables), forwarded like
+<code>pcg_solvent</code>, and its table carries the re-solve residuals (RESID/MRES per
+half). First bgal run (2026-09-22): the prior activates in stage 7, the
+closed-form curve has an interior minimum at lambda_rel 1.21-1.24 in every
+stage-7/8 iteration (26-27 % below no prior) and 2.34 in the final
+reconstruction; the prior'd base solve is left at RESID 0.20-0.31 (final:
+0.55, MRES 2.4) against 0.04-0.06 (final: 0.027) for the prior-free solve at
+the same budget. The preconditioner is <code>1/(rho + floor [+ ml_prior])</code> and
+carries no counterpart of the real-space ridge; whether that is the cause
+is what the residual columns of the check are for. Second bgal run with
+<code>pcg_solvent_check=yes</code> (stages 7-8, six iterations): the re-solve residual
+climbs monotonically with lambda_rel in every iteration (RESID 0.05 at 0.1,
+0.21 at 1, 0.38 at 2, 0.72 at 5, above 1 -- worse than the zero start --
+at 10 and 20; MRES up to 4.9), so the convergence story is established;
+the closed-form and re-solve argmins nevertheless agree (both at 1.0 on the
+grid in all six iterations), and the re-solve objective at the optimum is
+0.77-0.82 against the closed form's 0.73-0.74, i.e. the real prior'd map
+realizes less of the predicted gain, which is what an under-converged
+solve looks like. Fix in the operator: the mean of the ridge over the
+solve domain folded into the preconditioner diagonal
+(<code>fold_solvent_ridge_into_precond</code>, idempotent under strength changes,
+re-applied when the preconditioner is rebuilt). The check was not
+forwarded to the final reconstruction (<code>simple_final_rec</code> copies the PCG
+keys explicitly); fixed, so the final-reconstruction table (closed form
+chose 2.34-2.39 there) can be read on the next run. Third bgal run, with
+the ridge in the preconditioner: in-stage prior'd base RESID 0.095-0.10
+(was 0.18-0.31), MRES 0.10-0.11 (was 0.4-1.0, now equal to the prior-free
+solve's); final reconstruction RESID 0.048 (was 0.56), MRES 0.032 (was
+2.6); no grid value ends above the zero start any more. Closed-form and
+re-solve argmins agree in-stage (1.0, 6/6) and in the final reconstruction
+(2.0; closed form chose 2.43), so the final-block strength is real and h
+needs no box correction. The re-solve objective at the optimum now reaches
+0.715-0.733 against the closed form's 0.733-0.739 (before the fix it fell
+short by 4-9 points). Remaining deviation: at small lambda the re-solve
+improves more than the closed form predicts (0.88 vs 0.91 at 0.1), the
+known optimism of the scalar shrink about high-frequency solvent noise; it
+does not move the argmin. Replay start residual from the solvent pair in
+the final 0.74 (was 1.55; in-stage 0.12) -- the closed-form replay at box
+256 is the next thing to look at if the final map is questioned.</p>
+<p><strong>2026-09-22 -- activation moved to the final stage.</strong> The stage-7/8 results
+above remain the validation record, but the active abinitio3D policy now sets
+<code>PCG_SOLVENT_START_STAGE = NSTAGES</code>: stages 6-7 remain prior-free and an
+explicitly requested solvent prior is applied only in stage 8.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
