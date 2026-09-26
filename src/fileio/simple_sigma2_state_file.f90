@@ -1,7 +1,7 @@
 !@descr: versioned binary persistence and transaction primitives for canonical sigma2 state
 module simple_sigma2_state_file
 use, intrinsic :: iso_fortran_env, only: int8, int32, int64, real32, real64
-use simple_fileio, only: get_fpath
+use simple_fileio, only: get_fpath, fopen, fclose
 use simple_string, only: string
 use simple_syslib, only: file_exists, simple_sync_file, simple_sync_dir, simple_atomic_replace
 implicit none
@@ -14,6 +14,7 @@ public :: sigma2_state_write_groups, sigma2_state_read_groups
 public :: sigma2_state_write_local_range, sigma2_state_read_local_range
 public :: sigma2_state_validate_file, sigma2_state_publish
 public :: sigma2_state_digest_begin, sigma2_state_digest_text, sigma2_state_digest_integer
+public :: sigma2_state_digest_file
 public :: SIGMA2_STATE_FNAME, SIGMA2_STATE_NEXT_FNAME
 public :: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK
 public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_LEGACY_PARTS, SIGMA2_PROV_STAR_SEED
@@ -751,5 +752,60 @@ contains
         integer,        intent(in)    :: value
         hash = fnv_integer(hash, int(value,int64), 8)
     end subroutine sigma2_state_digest_integer
+
+    !> FNV-1a 64 over the bytes of a file (8-byte words, then the tail), 0 when unreadable
+    integer(int64) function sigma2_state_digest_file( fname ) result( digest )
+        class(string), intent(in) :: fname
+        integer, parameter :: CHUNK = 65536
+        integer(int64), allocatable :: words(:)
+        integer(int64) :: fsize, pos, nwords, i
+        integer(int8)  :: tail(8)
+        integer :: funit, io_stat, ntail, j
+        digest = 0_int64
+        if( .not. file_exists(fname) ) return
+        inquire(file=fname%to_char(), size=fsize)
+        if( fsize < 0 ) return
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=io_stat)
+        if( io_stat /= 0 ) return
+        digest = sigma2_state_digest_begin()
+        allocate(words(CHUNK))
+        pos    = 1
+        nwords = fsize / 8_int64
+        do while( nwords > 0 )
+            i = min(int(CHUNK,int64), nwords)
+            read(funit, pos=pos, iostat=io_stat) words(1:i)
+            if( io_stat /= 0 )then
+                digest = 0_int64
+                exit
+            endif
+            do j = 1, int(i)
+                call digest_word(digest, words(j))
+            enddo
+            pos    = pos + 8_int64*i
+            nwords = nwords - i
+        enddo
+        ntail = int(fsize - 8_int64*(fsize/8_int64))
+        if( digest /= 0_int64 .and. ntail > 0 )then
+            read(funit, pos=pos, iostat=io_stat) tail(1:ntail)
+            if( io_stat /= 0 )then
+                digest = 0_int64
+            else
+                do j = 1, ntail
+                    call sigma2_state_digest_integer(digest, int(tail(j)))
+                enddo
+            endif
+        endif
+        call fclose(funit)
+        if( digest /= 0_int64 ) call sigma2_state_digest_integer(digest, int(mod(fsize, 2147483647_int64)))
+        if( digest == 0_int64 .and. io_stat == 0 ) digest = 1_int64
+    end function sigma2_state_digest_file
+
+    subroutine digest_word( digest, word )
+        integer(int64), intent(inout) :: digest
+        integer(int64), intent(in)    :: word
+        call sigma2_state_digest_integer(digest, int(ibits(word, 0, 31)))
+        call sigma2_state_digest_integer(digest, int(ibits(word, 31, 31)))
+        call sigma2_state_digest_integer(digest, int(ibits(word, 62, 2)))
+    end subroutine digest_word
 
 end module simple_sigma2_state_file

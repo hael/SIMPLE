@@ -12,6 +12,12 @@ public :: cmdline, cmdline_err
 
 integer, parameter :: MAX_CMDARGS = 100
 logical, parameter :: DEBUG_HERE  = .false.
+! In-process handshakes set by one commander on the command line of another
+! (never by a user): they are outside the generated argument vocabulary, so a
+! worker that parsed them would stop, and they are not provenance. Job
+! descriptions (worker scripts, jobproc records) never carry them.
+character(len=*), parameter :: INPROCESS_KEYS(4) = [character(len=14) :: &
+    &'trail_seed', 'frozen_seed', 'frozen_rec', 'addon_manifest']
 
 !> cmdarg key/value pair command-line type
 type cmdarg
@@ -814,6 +820,7 @@ contains
         integer :: i
         call hash%new(MAX_CMDARGS)
         do i=1,self%argcnt
+            if( any(INPROCESS_KEYS == self%cmds(i)%key%to_char()) ) cycle
             if( .not. self%cmds(i)%carg%is_allocated() )then
                 ! value is real
                 call hash%push(self%cmds(i)%key%to_char(), real2str(self%cmds(i)%rarg))

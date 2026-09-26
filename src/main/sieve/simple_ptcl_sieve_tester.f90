@@ -403,7 +403,11 @@ contains
         real, optional, intent(in) :: lpstart, lpstop_coarse, lpstop_fine
         integer, optional, intent(in) :: box_coarse, box_fine, nsample_coarse, nsample_fine, ncls_coarse, ncls_fine
 
-        call cline%set('prg',        'abinitio2D')
+        ! a program outside every UI table: with a registered program the
+        ! result depended on whether an earlier suite built the UI (then
+        ! abinitio2D requires a project and mkdir=yes enters a run directory;
+        ! the SIMPLE_UNIT_ORDER=reverse run of test=units failed)
+        call cline%set('prg',        'ptcl_sieve_tester')
         call cline%set('mkdir',      'yes')
         call cline%set('split_mode', 'even')
         call cline%set('nchunks',    1)

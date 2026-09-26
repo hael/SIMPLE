@@ -57,6 +57,7 @@ type, extends(image) :: reconstructor
     procedure          :: pad_with_zeros
     ! GETTERS
     procedure          :: get_kbwin
+    procedure          :: get_rho_copy
     ! I/O
     procedure          :: write_raw_accum
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
@@ -237,6 +238,14 @@ contains
         type(kbinterpol) :: wf                      !< return kbintpol window
         wf = kbinterpol(KBWINSZ, KBALPHA)
     end function get_kbwin
+
+    !> copy of the sampling density; test/diagnostic boundary only
+    subroutine get_rho_copy( self, rho )
+        class(reconstructor), intent(in)  :: self
+        real, allocatable,    intent(out) :: rho(:,:,:)
+        if( .not. self%rho_allocated ) THROW_HARD('gridding accumulator density is not allocated')
+        allocate(rho(self%rho_shape(1),self%rho_shape(2),self%rho_shape(3)), source=self%rho)
+    end subroutine get_rho_copy
 
     ! I/O
 

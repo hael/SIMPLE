@@ -27,6 +27,9 @@ contains
         type(sp_project) :: spproj
         character(len=STDLEN) :: message
         call spproj%read_segment('projinfo', projfile)
+        ! the layout digest is taken over the stack table as well: without it
+        ! the digest is undefined and no committed state is ever consumable
+        call spproj%read_segment('stk',      projfile)
         call spproj%read_segment('ptcl3D',   projfile)
         l_available = canonical_sigma2_consumable(spproj, spproj%os_ptcl3D, box, smpd, l_sigma_glob, message)
         if( .not. l_available ) write(logfhandle,'(A)') '>>> SIGMA2 BOOTSTRAP: canonical state not consumable: '//trim(message)
@@ -75,6 +78,8 @@ contains
         call cline_pspec%delete('pcg_solvent_lambda')
         call cline_pspec%delete('pcg_solvent_check')
         call cline_pspec%delete('trail_seed')
+        call cline_pspec%delete('frozen_seed')
+        call cline_pspec%delete('frozen_rec')
         call cline_pspec%delete('trail_rec')
         call cline_pspec%delete('outfile')
         do state = 1, 99
@@ -121,6 +126,8 @@ contains
         call cline_sigma%delete('endit')
         call cline_sigma%delete('trail_rec')
         call cline_sigma%delete('trail_seed')
+        call cline_sigma%delete('frozen_seed')
+        call cline_sigma%delete('frozen_rec')
         call cline_sigma%delete('ufrac_trec')
         call cline_sigma%delete('objfun_den')
         call cline_sigma%delete('objfun_den_w')

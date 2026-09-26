@@ -284,6 +284,13 @@ if(BUILD_TESTS)
   # Review verdict 2026-09-23 (plan, section 9.7, highlevel).
   simple_add_test(simulate_particles highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulate_particles nthr=8)
+  # abinitio3D_addon end to end on its own simulated particles of a
+  # symmetry-broken 6VXX map: abinitio3D on a seeded subset (the frozen
+  # solution), then the add-on on all of them, checked against the simulation
+  # truth and the base run. Its own entry by owner decision (2026-09-26): an
+  # independent workflow, not an extension of simulate_particles.
+  simple_add_test(abinitio3D_addon highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=abinitio3D_addon nthr=8)
   simple_add_test(single_atoms_stats highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
   # stream preprocessing: five simulated movies through the stream's
@@ -328,7 +335,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, flex_gpu, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 28)   # 13 fast + 1 platform + 9 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 29)   # 13 fast + 1 platform + 10 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

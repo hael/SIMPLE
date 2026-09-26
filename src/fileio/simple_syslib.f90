@@ -1179,6 +1179,20 @@ contains
             class default
                 call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
         end select
+        ! realpath canonicalises existing paths only. A path that does not
+        ! exist yet (check_exists=.false.) is made absolute against the working
+        ! directory as given: the C fallback returned it relative with its
+        ! first character overwritten by '/' ('run/x' -> '/un/x')
+        if( .not. file_exists(infilename_c(1:lengthin)) )then
+            if( infilename_c(1:1) == '/' )then
+                absolute_name = infilename_c(1:lengthin)
+            else
+                call simple_getcwd(absolute_name)
+                absolute_name = absolute_name%to_char()//'/'//infilename_c(1:lengthin)
+            endif
+            if( present(status) ) status = 0
+            return
+        endif
         status_here = get_absolute_pathname(infilename_c, lengthin, outfilename_c, lengthout)
         call syslib_c2fortran_string(outfilename_c)
         if( lengthout > 1)then

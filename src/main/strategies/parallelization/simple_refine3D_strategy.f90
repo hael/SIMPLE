@@ -206,7 +206,7 @@ contains
         ! gridding volassemble and hands off the matching low-pass
         call execute_rec3D_pcg_distributed_master(params, build, cline, &
             &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
-        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_align_lps)
+        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, cline%defined('frozen_rec'), nu_align_lps)
     end subroutine assemble_refine3D_pcg
 
     subroutine remove_pcg_raw_files( params )

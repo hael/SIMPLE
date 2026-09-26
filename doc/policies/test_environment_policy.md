@@ -55,8 +55,8 @@ and skips the gate, for when only the executables are needed.
 two-image smoke test therefore prevents a coarray build from being installed.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 28: 13 fast,
-5 library, 9 highlevel, 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 29: 13 fast,
+5 library, 10 highlevel, 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -78,10 +78,10 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
-| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model |
+| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, abinitio3D manifest, project superset |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
-| `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator |
+| `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator, frozen accumulator |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, cavg registration |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter |
 | `unit_heterogeneity` | flex PCA, flex PCG operator |
@@ -105,6 +105,7 @@ convenience and deliberately not a CTest entry.
 | `single_workflow` | highlevel | the SINGLE pipeline on a simulated Pt nanoparticle |
 | `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
+| `abinitio3D_addon` | highlevel | `abinitio3D` on a seeded half of simulated particles of a symmetry-broken 6VXX map, then `abinitio3D_addon` on all of them, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 

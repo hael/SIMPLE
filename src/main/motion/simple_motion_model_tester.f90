@@ -42,7 +42,11 @@ contains
         type(motion_model)       :: model
         type(parameters), target :: params
         type(cmdline)            :: cline
-        call cline%set('prg', 'motion_correct')
+        ! a program outside every UI table: parameters is only the container
+        ! here, and a registered program (motion_correct requires a project)
+        ! made the result depend on whether an earlier suite built the UI
+        ! (the SIMPLE_UNIT_ORDER=reverse run of test=units failed)
+        call cline%set('prg', 'motion_model_tester')
         call cline%set('mkdir', 'no')
         call cline%set('smpd', 1.5)
         call cline%set('kv', 300.)

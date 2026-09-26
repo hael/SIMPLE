@@ -2,7 +2,7 @@
 module simple_abinitio_utils
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
-use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration
+use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration, sigma2_estimate_available
 use simple_commanders_volops,    only: commander_symmetrize_map
 use simple_cluster_seed,         only: gen_labelling
 use simple_class_frcs,           only: class_frcs
@@ -16,6 +16,7 @@ use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_halfmap_diagnostics,  only: copy_support_provenance, rename_support_provenance, &
     &remove_support_provenance
+use simple_abinitio3D_manifest,  only: abinitio3D_manifest, abinitio3D_stage_record
 implicit none
 #include "simple_local_flags.inc"
 
@@ -38,6 +39,17 @@ real             :: update_frac  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0
 integer          :: nstages_refine3D = 0
 integer, parameter :: FINAL_PCG_MAXITS_FLOOR = 5
+
+!> Immutable abinitio3D_addon context for the stage controller. Absent (or
+!! inactive) means the legacy path; present and active it switches the FSC=0.5
+!! stage-LP promotion off (the FSC reflects the frozen population), gives the
+!! add-on's stage 3 an overlap early stop (no symmetry search keeps it at full
+!! budget) and puts the frozen_rec handshake on the stage command line.
+type :: abinitio3D_addon_ctx
+    logical      :: active  = .false.
+    real         :: overlap = 0.95   !< stage-3 early-stopping overlap target
+    type(string) :: frozen_rec       !< frozen run context file
+end type abinitio3D_addon_ctx
 
 ! In submodule: simple_abinitio_controller.f90
 interface
@@ -133,10 +145,11 @@ interface
         integer :: niters
     end function abinitio_remaining_niters
 
-    module subroutine set_cline_refine3D( params, istage, l_cavgs )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
-        logical,           intent(in) :: l_cavgs
+    module subroutine set_cline_refine3D( params, istage, l_cavgs, addon )
+        class(parameters),                    intent(in) :: params
+        integer,                              intent(in) :: istage
+        logical,                              intent(in) :: l_cavgs
+        type(abinitio3D_addon_ctx), optional, intent(in) :: addon
     end subroutine set_cline_refine3D
 
     module subroutine calc_docked_multistate_max_sampling( params, nptcls, nptcls_cap, ufrac_cap )
@@ -307,6 +320,11 @@ contains
         endif
         if( cline_refine3D%defined('which_iter') )then
             call child_cline%set('which_iter', cline_refine3D%get_iarg('which_iter'))
+        endif
+        ! abinitio3D_addon: the stage's frozen term joins every reconstruction
+        ! the stage owns (in-process handshake, absent on ordinary runs)
+        if( cline_refine3D%defined('frozen_rec') )then
+            call child_cline%set('frozen_rec', cline_refine3D%get_carg('frozen_rec'))
         endif
     end subroutine apply_refine3D_reconstruction_controls
 
@@ -505,6 +523,33 @@ contains
         allocate(lpinfo(nstages))
         call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
     end subroutine set_lplims_from_input
+
+    !> abinitio3D_addon planning branch: the base run's ladder from its
+    !! manifest, never planned from class FRCs. Every stage keeps its recorded
+    !! crop, sampling, shift limit and flags; its matching limit is the one the
+    !! base run's controller actually emitted (FSC=0.5 promotion included), so
+    !! with promotion off the add-on matches where the base run matched.
+    subroutine set_lplims_from_manifest( man )
+        class(abinitio3D_manifest), intent(in) :: man
+        type(abinitio3D_stage_record) :: stage
+        integer :: i
+        l_cavgs_mode = .false.
+        if( man%get_nstages() < 1 ) THROW_HARD('abinitio3D manifest carries no stage ladder')
+        if( allocated(lpinfo) ) deallocate(lpinfo)
+        allocate(lpinfo(man%get_nstages()))
+        do i = 1, man%get_nstages()
+            stage = man%get_stage(i)
+            lpinfo(i)%lp          = stage%lp_planned
+            if( stage%lp_emitted > TINY ) lpinfo(i)%lp = stage%lp_emitted
+            lpinfo(i)%box_crop    = stage%box_crop
+            lpinfo(i)%smpd_crop   = stage%smpd_crop
+            lpinfo(i)%scale       = stage%scale
+            lpinfo(i)%trslim      = stage%trslim
+            lpinfo(i)%frc_crit    = stage%frc_crit
+            lpinfo(i)%l_autoscale = stage%l_autoscale
+            lpinfo(i)%l_lpset     = stage%l_lpset
+        enddo
+    end subroutine set_lplims_from_manifest
 
     integer function active_lp_schedule_nstages() result(nstages)
         nstages = abinitio_nstages()
@@ -793,6 +838,52 @@ contains
         call vol_odd_unfil%kill
         call cline_rec%kill
     end subroutine calc_rec
+
+    !> abinitio3D_addon producer: accumulate the frozen particles of projfile (a
+    !! collision-proof copy of the frozen project) at one consuming box and
+    !! publish them as the frozen set of the run context. A local command line
+    !! is built from the stage reconstruction controls (the stage command line
+    !! must be configured); nothing is renamed, injected or registered, and
+    !! the frozen cohort's committed residual sigma2 is consumed, never
+    !! re-estimated. The state volumes written at the native box are the
+    !! add-on's starting references.
+    subroutine calc_frozen_rec( params, projfile, xrec3D, box, frozen_context_fname )
+        class(parameters),     intent(in)    :: params
+        class(string),         intent(in)    :: projfile
+        class(commander_base), intent(inout) :: xrec3D
+        integer,               intent(in)    :: box
+        class(string),         intent(in)    :: frozen_context_fname
+        type(cmdline) :: cline_rec
+        integer       :: state
+        cline_rec = cline_reconstruct3D
+        call apply_refine3D_reconstruction_controls(cline_rec)
+        call cline_rec%delete('frozen_rec') ! a producer never consumes
+        call cline_rec%set('prg',         'reconstruct3D')
+        call cline_rec%set('mkdir',       'no')
+        call cline_rec%set('projfile',    projfile)
+        call cline_rec%set('pgrp',        params%pgrp)
+        call cline_rec%set('box_crop',    box)
+        call cline_rec%set('trail_rec',   'no')
+        call cline_rec%delete('trail_seed')
+        call cline_rec%delete('sticky_class_sampling')
+        call cline_rec%delete('update_frac')
+        if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
+        do state = 1,params%nstates
+            call cline_rec%delete('vol'//int2str(state))
+        enddo
+        call cline_rec%delete('vol_even')
+        call cline_rec%delete('vol_odd')
+        call strip_refine3D_planning_keys(cline_rec)
+        if( stage_rec_is_euclid(cline_rec) )then
+            if( .not. sigma2_estimate_available(projfile, params%box, params%smpd, params%l_sigma_glob) )then
+                THROW_HARD('abinitio3D_addon: the frozen project carries no consumable committed residual sigma2 state')
+            endif
+        endif
+        call cline_rec%set('frozen_seed', frozen_context_fname)
+        write(logfhandle,'(A,I0)') '>>> ABINITIO3D_ADDON: FROZEN ACCUMULATION AT BOX ', box
+        call xrec3D%execute(cline_rec)
+        call cline_rec%kill
+    end subroutine calc_frozen_rec
 
     !> Does a stage-start reconstruction command line run the euclid/ML estimator
     logical function stage_rec_is_euclid( cline_rec ) result( l_euclid )

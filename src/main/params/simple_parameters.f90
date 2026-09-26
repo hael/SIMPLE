@@ -143,6 +143,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
     character(len=3)          :: euclid_diag='no'     !< per-iteration euclid reference/particle scale diagnostics(yes|no){no}
+    character(len=3)          :: addon_diag='no'      !< abinitio3D_addon cohort-only diagnostic reconstruction(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
@@ -258,6 +259,7 @@ type :: parameters
     type(string)              :: projfile_raw         !< raw SIMPLE project used as input to denoise_project
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
+    type(string)              :: projfile_frozen      !< abinitio3D_addon: the frozen solution's SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
     type(string)              :: projtab              !< table of SIMPLE *.simple project files
     type(string)              :: ptcl_new_root        !< new root for relocated particle data

@@ -494,3 +494,31 @@ suffixes and companion `_lp` diagnostics.
 Final outputs use the `rec_final_stateNN` naming convention and include raw and
 low-pass diagnostic volumes. Final low-pass diagnostic maps use the state FSC
 resolution when available, otherwise the supplied final fallback LP.
+
+Every completed run also writes `abinitio3D_manifest.txt` last, atomically and
+never fatally, and registers it in `projinfo` by bare name with its run
+identifier (`simple_abinitio3D_manifest`): the project identity, the particle
+source, the solution, the ladder as planned and emitted, the entry inputs and
+the digests of the state maps, halves, FSCs and the committed sigma2 state. A
+failed manifest write warns and leaves the run as it is.
+
+## 11. abinitio3D_addon
+
+`abinitio3D_addon projfile=<superset> projfile_frozen=<abinitio3D run project>`
+extends a completed `abinitio3D` solution with the particles the current
+project adds (the cohort); the frozen particles contribute their accumulators
+unsearched. The design, its contracts and its limits are in
+`doc/implementation_notes/abinitio3D_addon_mode_proposal.md`. In short:
+
+- Only a direct `abinitio3D` output whose manifest validates against its
+  project is accepted; the solution's settings are replayed from the manifest
+  and refused on the command line, which carries only the 11 add-on inputs.
+- Both projects must share one particle index space, row by row; the cohort
+  needs at least 5 particles per inherited state (a warning below 5 % of the
+  frozen population).
+- The run enters at stage 3 of the base run's ladder with `center=no`,
+  promotion off and `overlap` 0.95 by default.
+- `mkdir=yes` by default; `mkdir=no` is for NICE. When the run has completed,
+  the finished project (every particle posed, no sigma2 registration) replaces
+  the current project file; the frozen project is never written. The add-on's
+  own manifest is not eligible as a frozen input.

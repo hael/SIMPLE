@@ -72,6 +72,7 @@ contains
         self%projfile_raw=''      !< raw SIMPLE project used as input to denoise_project
         self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
+        self%projfile_frozen=''   !< abinitio3D_addon: the frozen solution's project file
         self%projname=''          !< SIMPLE  project name
         self%projtab=''           !< table of SIMPLE *.simple project files
         self%ptcl_new_root=''     !< new root for relocated particle data

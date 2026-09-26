@@ -1,0 +1,376 @@
+!@descr: abinitio3D_addon superset relation of a current and a frozen project: identity, frozen/cohort membership, masking and restoration
+! The two projects share one particle index space: the frozen project was
+! derived from the current one, or both from a common ancestor, by selection.
+! Equal row counts and stack tables do not prove that row i is the same image,
+! so every row of both projects is resolved through map_ptcl_ind2stk_ind in
+! ptcl2D and ptcl3D and must name the same stack file and physical image, with
+! the same stack geometry (and the same denoised source image when the solution
+! was reconstructed from ptcl_src=den), and the frozen rows the same CTF
+! parameters.
+! Membership is defined once:
+!   frozen = frozen ptcl3D state > 0 .and. updatecnt > 0
+!   cohort = current ptcl2D state > 0 .and. .not. frozen
+! The cohort is labelled into the inherited states by balanced labelling, so
+! the per-state floor holds exactly when every state receives at least
+! MIN_COHORT_STATE_POP of ncohort/nstates.
+! Masking sets state 0 in ptcl2D and ptcl3D of the working copy for the frozen
+! rows after saving the current ptcl2D states; restoration transfers the
+! frozen project's 3D records back (transfer_3Dparams plus the state) and
+! restores the saved ptcl2D states.
+module simple_project_superset
+use simple_core_module_api
+use simple_sp_project, only: sp_project
+implicit none
+
+public :: project_superset, COHORT_WARN_FRAC
+private
+#include "simple_local_flags.inc"
+
+integer, parameter :: MIN_COHORT_STATE_POP = 5    !< hard floor: cohort particles per inherited state
+real,    parameter :: COHORT_WARN_FRAC     = 0.05 !< warn below this fraction of the frozen population
+
+!> the validated superset relation of a current and a frozen project: the
+!! frozen rows, the cohort, and the current ptcl2D states saved by masking
+type :: project_superset
+    private
+    integer :: nrows = 0, nstates = 0
+    integer :: nfrozen = 0, ncohort = 0, nnever_updated = 0
+    logical, allocatable :: l_frozen(:)
+    integer, allocatable :: nfrozen_state(:)
+    integer, allocatable :: saved_state2D(:)   !< current ptcl2D states before masking
+  contains
+    procedure :: new
+    procedure :: validate_cohort_states
+    procedure :: mask
+    procedure :: restore
+    procedure :: get_nfrozen
+    procedure :: get_ncohort
+    procedure :: get_nnever_updated
+    procedure :: get_nfrozen_state
+    procedure :: is_small_cohort
+    procedure :: kill
+end type project_superset
+
+contains
+
+    !> Validate the relation and define the membership, with the refusals
+    !! that precede any write: a row-wise identity defect (the message names
+    !! the first offending particle), an empty inherited state, an empty
+    !! cohort, and a cohort that gives an inherited state fewer than
+    !! MIN_COHORT_STATE_POP particles. A cohort below COHORT_WARN_FRAC of the
+    !! frozen population is allowed (is_small_cohort, warned by the caller).
+    !! ptcl_src is the particle source the frozen solution was reconstructed
+    !! from. On refusal status /= 0 and the object is left empty.
+    subroutine new( self, cur, frozen, nstates, ptcl_src, status, msg )
+        class(project_superset), intent(inout) :: self
+        class(sp_project),       intent(inout) :: cur, frozen
+        integer,                 intent(in)    :: nstates
+        character(len=*),        intent(in)    :: ptcl_src
+        integer,                 intent(out)   :: status
+        character(len=*),        intent(out)   :: msg
+        logical, allocatable :: l_cohort(:)
+        integer :: n, i, s, nper_state
+        call self%kill
+        call validate_identity(cur, frozen, trim(ptcl_src) == 'den', status, msg)
+        if( status /= 0 ) return
+        status = 1
+        n = cur%os_ptcl3D%get_noris()
+        self%nrows   = n
+        self%nstates = nstates
+        allocate(self%l_frozen(n), l_cohort(n), source=.false.)
+        allocate(self%nfrozen_state(nstates), source=0)
+        do i = 1, n
+            self%l_frozen(i) = is_frozen_row(frozen, i)
+            if( self%l_frozen(i) )then
+                s = frozen%os_ptcl3D%get_state(i)
+                if( s > nstates )then
+                    write(msg,'(A,I0,A,I0)') 'frozen particle ', i, ' carries a state label above nstates: ', s
+                    call self%kill
+                    return
+                endif
+                self%nfrozen_state(s) = self%nfrozen_state(s) + 1
+            else
+                l_cohort(i) = cur%os_ptcl2D%get_state(i) > 0
+                if( l_cohort(i) .and. frozen%os_ptcl3D%get_state(i) > 0 ) &
+                    &self%nnever_updated = self%nnever_updated + 1
+            endif
+        enddo
+        self%nfrozen = count(self%l_frozen)
+        self%ncohort = count(l_cohort)
+        if( self%nfrozen < 1 )then
+            msg = 'the frozen project has no frozen particles (state > 0 and updatecnt > 0)'
+        else if( any(self%nfrozen_state < 1) )then
+            msg = 'an inherited state has no frozen particles; the state layout must be contiguous 1..nstates'
+        else if( self%ncohort < 1 )then
+            msg = 'the current project adds no particles to the frozen solution (empty cohort)'
+        else
+            ! balanced labelling gives every inherited state ncohort/nstates
+            ! cohort particles or one more
+            nper_state = self%ncohort / nstates
+            if( nper_state < MIN_COHORT_STATE_POP )then
+                write(msg,'(A,I0,A,I0,A,I0,A)') 'the cohort (', self%ncohort, ' particles) gives an inherited state ', &
+                    &nper_state, ', below the floor of ', MIN_COHORT_STATE_POP, ' per state'
+            else
+                status = 0
+            endif
+        endif
+        if( status /= 0 ) call self%kill
+    end subroutine new
+
+    !> After the cohort is labelled in the masked working copy (frozen rows at
+    !! state 0), every inherited state holds at least MIN_COHORT_STATE_POP
+    !! cohort particles
+    subroutine validate_cohort_states( self, spproj, status, msg )
+        class(project_superset), intent(in)    :: self
+        class(sp_project),       intent(inout) :: spproj
+        integer,                 intent(out)   :: status
+        character(len=*),        intent(out)   :: msg
+        integer :: s, pop
+        status = 1
+        msg    = ''
+        if( .not. allocated(self%saved_state2D) ) THROW_HARD('the cohort is validated only after masking')
+        do s = 1, self%nstates
+            pop = spproj%os_ptcl3D%get_pop(s, 'state')
+            if( pop < MIN_COHORT_STATE_POP )then
+                write(msg,'(A,I0,A,I0,A,I0)') 'inherited state ', s, ' holds ', pop, &
+                    &' cohort particles, below the floor of ', MIN_COHORT_STATE_POP
+                return
+            endif
+        enddo
+        status = 0
+    end subroutine validate_cohort_states
+
+    !> Save the working copy's ptcl2D states and set state 0 in ptcl2D and
+    !! ptcl3D for every frozen row, so every counting, sampling and labelling
+    !! routine of the established workflow sees the cohort alone
+    subroutine mask( self, spproj )
+        class(project_superset), intent(inout) :: self
+        class(sp_project),       intent(inout) :: spproj
+        integer :: i
+        if( .not. allocated(self%l_frozen) ) THROW_HARD('the superset relation was never established')
+        if( spproj%os_ptcl2D%get_noris() /= self%nrows .or. spproj%os_ptcl3D%get_noris() /= self%nrows ) &
+            &THROW_HARD('frozen-row mask does not match the working project')
+        if( allocated(self%saved_state2D) ) deallocate(self%saved_state2D)
+        allocate(self%saved_state2D(self%nrows))
+        do i = 1, self%nrows
+            self%saved_state2D(i) = spproj%os_ptcl2D%get_state(i)
+            if( self%l_frozen(i) )then
+                call spproj%os_ptcl2D%set_state(i, 0)
+                call spproj%os_ptcl3D%set_state(i, 0)
+            endif
+        enddo
+    end subroutine mask
+
+    !> Restore the frozen rows from the frozen project (projection, correlation,
+    !! fraction, sampled, updatecnt, eo, Euler angles, shifts and state) and
+    !! every row's saved ptcl2D state; cohort 3D records are left as they are
+    subroutine restore( self, spproj, frozen )
+        class(project_superset), intent(in)    :: self
+        class(sp_project),       intent(inout) :: spproj
+        class(sp_project),       intent(in)    :: frozen
+        integer :: i
+        if( .not. allocated(self%saved_state2D) ) THROW_HARD('frozen rows were never masked')
+        if( spproj%os_ptcl3D%get_noris() /= self%nrows .or. frozen%os_ptcl3D%get_noris() /= self%nrows ) &
+            &THROW_HARD('frozen-row restore does not match the working project')
+        do i = 1, self%nrows
+            call spproj%os_ptcl2D%set_state(i, self%saved_state2D(i))
+            if( .not. self%l_frozen(i) ) cycle
+            call spproj%os_ptcl3D%transfer_3Dparams(i, frozen%os_ptcl3D, i)
+            call spproj%os_ptcl3D%set_state(i, frozen%os_ptcl3D%get_state(i))
+        enddo
+    end subroutine restore
+
+    integer function get_nfrozen( self ) result( n )
+        class(project_superset), intent(in) :: self
+        n = self%nfrozen
+    end function get_nfrozen
+
+    integer function get_ncohort( self ) result( n )
+        class(project_superset), intent(in) :: self
+        n = self%ncohort
+    end function get_ncohort
+
+    !> cohort rows the frozen project had selected but never updated
+    integer function get_nnever_updated( self ) result( n )
+        class(project_superset), intent(in) :: self
+        n = self%nnever_updated
+    end function get_nnever_updated
+
+    !> frozen particles of one inherited state
+    integer function get_nfrozen_state( self, state ) result( n )
+        class(project_superset), intent(in) :: self
+        integer,                 intent(in) :: state
+        if( state < 1 .or. state > self%nstates ) THROW_HARD('state is outside the inherited state layout')
+        n = self%nfrozen_state(state)
+    end function get_nfrozen_state
+
+    !> a cohort below COHORT_WARN_FRAC of the frozen population
+    logical function is_small_cohort( self ) result( l_small )
+        class(project_superset), intent(in) :: self
+        l_small = real(self%ncohort) < COHORT_WARN_FRAC * real(self%nfrozen)
+    end function is_small_cohort
+
+    subroutine kill( self )
+        class(project_superset), intent(inout) :: self
+        self%nrows = 0; self%nstates = 0
+        self%nfrozen = 0; self%ncohort = 0; self%nnever_updated = 0
+        if( allocated(self%l_frozen)      ) deallocate(self%l_frozen)
+        if( allocated(self%nfrozen_state) ) deallocate(self%nfrozen_state)
+        if( allocated(self%saved_state2D) ) deallocate(self%saved_state2D)
+    end subroutine kill
+
+    ! PRIVATE HELPERS
+
+    logical function is_frozen_row( frozen, i ) result( l_frozen )
+        class(sp_project), intent(in) :: frozen
+        integer,           intent(in) :: i
+        l_frozen = frozen%os_ptcl3D%get_state(i) > 0
+        if( l_frozen ) l_frozen = frozen%os_ptcl3D%get_updatecnt(i) > 0
+    end function is_frozen_row
+
+    !> Row-wise physical identity of the current and the frozen project, and
+    !! the superset relation. With l_den the denoised source image of every
+    !! row must be the same as well. status /= 0 names the defect and, for a
+    !! row defect, the first offending particle index.
+    subroutine validate_identity( cur, frozen, l_den, status, msg )
+        class(sp_project), intent(inout) :: cur, frozen
+        logical,           intent(in)    :: l_den
+        integer,           intent(out)   :: status
+        character(len=*),  intent(out)   :: msg
+        type(ctfparams) :: ctf_cur, ctf_frz
+        integer :: n, i
+        status = 1
+        msg    = ''
+        n = cur%os_ptcl3D%get_noris()
+        if( n < 1 )then
+            msg = 'the current project has no particles'
+            return
+        endif
+        if( cur%os_ptcl2D%get_noris() /= n )then
+            msg = 'the current project ptcl2D and ptcl3D segments differ in length'
+            return
+        endif
+        if( frozen%os_ptcl3D%get_noris() /= n .or. frozen%os_ptcl2D%get_noris() /= n )then
+            msg = 'the frozen and current projects do not share one particle index space (row counts differ)'
+            return
+        endif
+        do i = 1, n
+            ! the same physical image in every segment of both projects
+            if( .not. same_image(cur, 'ptcl3D', frozen, 'ptcl3D', i) )then
+                msg = 'ptcl3D rows name different images (permuted rows or a changed stack source)'
+                call name_particle(i)
+                return
+            endif
+            if( .not. same_image(cur, 'ptcl2D', frozen, 'ptcl2D', i) )then
+                msg = 'ptcl2D rows name different images (permuted rows or a changed stack source)'
+                call name_particle(i)
+                return
+            endif
+            if( image_id(cur, 'ptcl2D', i) /= image_id(cur, 'ptcl3D', i) )then
+                msg = 'the current project ptcl2D and ptcl3D rows name different images'
+                call name_particle(i)
+                return
+            endif
+            if( image_id(frozen, 'ptcl2D', i) /= image_id(frozen, 'ptcl3D', i) )then
+                msg = 'the frozen project ptcl2D and ptcl3D rows name different images'
+                call name_particle(i)
+                return
+            endif
+            if( l_den )then
+                if( len(den_image_id(cur, i)) == 0 .or. len(den_image_id(frozen, i)) == 0 )then
+                    msg = 'the solution was reconstructed from denoised particles, and a stack has no stk_den'
+                    call name_particle(i)
+                    return
+                endif
+                if( den_image_id(cur, i) /= den_image_id(frozen, i) )then
+                    msg = 'ptcl3D rows name different denoised source images'
+                    call name_particle(i)
+                    return
+                endif
+            endif
+            if( .not. is_frozen_row(frozen, i) ) cycle
+            ! a frozen member must be active where the fresh-start selection is made
+            if( frozen%os_ptcl2D%get_state(i) <= 0 )then
+                msg = 'a frozen particle is deselected in the frozen project ptcl2D (ptcl2D/ptcl3D selection mismatch)'
+                call name_particle(i)
+                return
+            endif
+            if( cur%os_ptcl2D%get_state(i) <= 0 )then
+                msg = 'a frozen particle is inactive in the current project ptcl2D'
+                call name_particle(i)
+                return
+            endif
+            ! the optics and CTF identity that reproduces the frozen contribution
+            ctf_cur = cur%get_ctfparams('ptcl3D', i)
+            ctf_frz = frozen%get_ctfparams('ptcl3D', i)
+            if( .not. same_ctf(ctf_cur, ctf_frz) )then
+                msg = 'a frozen particle has other CTF or optics parameters in the current project'
+                call name_particle(i)
+                return
+            endif
+            if( cur%os_ptcl3D%isthere(i, 'ogid') .or. frozen%os_ptcl3D%isthere(i, 'ogid') )then
+                if( cur%os_ptcl3D%get_int(i, 'ogid') /= frozen%os_ptcl3D%get_int(i, 'ogid') )then
+                    msg = 'a frozen particle belongs to another optics group in the current project'
+                    call name_particle(i)
+                    return
+                endif
+            endif
+        enddo
+        status = 0
+
+    contains
+
+        subroutine name_particle( iptcl )
+            integer, intent(in) :: iptcl
+            msg = trim(msg)//'; first offending particle: '//int2str(iptcl)
+        end subroutine name_particle
+
+    end subroutine validate_identity
+
+    !> the same stack file, physical image and stack geometry for row i
+    logical function same_image( a, seg_a, b, seg_b, i ) result( l_same )
+        class(sp_project), intent(inout) :: a, b
+        character(len=*),  intent(in)    :: seg_a, seg_b
+        integer,           intent(in)    :: i
+        l_same = image_id(a, seg_a, i) == image_id(b, seg_b, i)
+    end function same_image
+
+    !> row i's physical identity: stack file, image index, stack box and sampling
+    function image_id( p, seg, i ) result( id )
+        class(sp_project), intent(inout) :: p
+        character(len=*),  intent(in)    :: seg
+        integer,           intent(in)    :: i
+        character(len=:), allocatable :: id
+        type(string) :: stk
+        integer :: stkind, ind
+        call p%map_ptcl_ind2stk_ind(seg, i, stkind, ind)
+        stk = p%os_stk%get_str(stkind, 'stk')
+        id  = trim(stk%to_char())//'|'//int2str(ind)//'|'//int2str(p%os_stk%get_int(stkind, 'box'))// &
+            &'|'//trim(real2str(p%os_stk%get(stkind, 'smpd')))
+        call stk%kill
+    end function image_id
+
+    !> row i's denoised source image (ptcl3D): stk_den file and image index;
+    !! empty when its stack records no denoised source
+    function den_image_id( p, i ) result( id )
+        class(sp_project), intent(inout) :: p
+        integer,           intent(in)    :: i
+        character(len=:), allocatable :: id
+        type(string) :: stk
+        integer :: stkind, ind
+        call p%map_ptcl_ind2stk_ind('ptcl3D', i, stkind, ind)
+        id = ''
+        if( .not. p%os_stk%isthere(stkind, 'stk_den') ) return
+        stk = p%os_stk%get_str(stkind, 'stk_den')
+        if( stk%strlen_trim() > 0 ) id = trim(stk%to_char())//'|'//int2str(ind)
+        call stk%kill
+    end function den_image_id
+
+    logical function same_ctf( a, b ) result( l_same )
+        type(ctfparams), intent(in) :: a, b
+        l_same = a%ctfflag == b%ctfflag .and. a%smpd == b%smpd .and. a%kv == b%kv .and. a%cs == b%cs .and. &
+            &a%fraca == b%fraca .and. a%dfx == b%dfx .and. a%dfy == b%dfy .and. a%angast == b%angast .and. &
+            &a%phshift == b%phshift
+    end function same_ctf
+
+end module simple_project_superset

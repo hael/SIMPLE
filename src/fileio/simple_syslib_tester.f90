@@ -337,7 +337,7 @@ contains
     !---------------- simple_abspath ----------------
 
     subroutine test_simple_abspath()
-        type(string) :: fname, absname
+        type(string) :: fname, absname, cwd
         integer :: istat
         write(*,'(A)') 'test_simple_abspath'
         fname = 'abs_test.txt'
@@ -346,7 +346,18 @@ contains
         call assert_int(0, istat, 'abspath: status')
         ! crude check: absolute path should start with '/'
         call assert_true(absname%has_substr('/') .or. absname%has_substr('\'), 'abspath: contains path separator')
+        call simple_getcwd(cwd)
+        call assert_char(cwd%to_char()//'/abs_test.txt', absname%to_char(), 'abspath: an existing file resolves in the cwd')
         call del_file(fname)
+        ! a path that does not exist yet is made absolute against the cwd, unchanged
+        ! (the realpath fallback used to overwrite its first character: 'no_such' -> '/o_such')
+        absname = simple_abspath(string('no_such_dir/abs_test_missing.txt'), status=istat, check_exists=.false.)
+        call assert_int(0, istat, 'abspath: status of a missing path')
+        call assert_char(cwd%to_char()//'/no_such_dir/abs_test_missing.txt', absname%to_char(), &
+            &'abspath: a missing relative path is prefixed with the cwd')
+        absname = simple_abspath('/no_such_root/abs_test_missing.txt', check_exists=.false.)
+        call assert_char('/no_such_root/abs_test_missing.txt', absname%to_char(), &
+            &'abspath: a missing absolute path is returned as given')
     end subroutine test_simple_abspath
 
     !---------------- simple_getenv wrappers ----------------

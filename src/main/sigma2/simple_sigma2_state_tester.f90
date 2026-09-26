@@ -33,6 +33,7 @@ contains
         call test_recovery_guards()
         call test_update_preparation()
         call test_invalid_record_skip()
+        call test_estimate_available_on_disk()
     end subroutine run_all_sigma2_state_tests
 
     subroutine test_policy(prefix, grouping, ngroups, nptcls)
@@ -105,6 +106,81 @@ contains
         call require(.not. file_exists(candidate), 'candidate consumed by publication')
         call cleanup(candidate, committed, ranges(1)%to_char(), ranges(2)%to_char())
     end subroutine test_policy
+
+    !> sigma2_estimate_available on a project file: the committed state of
+    !! the project's own layout is consumable; another grid is not. The layout
+    !! digest covers the stack table, so the project's stk segment must be
+    !! read (it was not: every state was reported "layout digest undefined")
+    subroutine test_estimate_available_on_disk()
+        use simple_sp_project,       only: sp_project
+        use simple_sigma2_state,     only: sigma2_state_project_layout_digest
+        use simple_sigma2_bootstrap, only: sigma2_estimate_available
+        use simple_syslib,           only: simple_getcwd
+        integer, parameter :: NP = 6, BOXT = 8
+        real,    parameter :: SMPDT = 1.5
+        character(len=*), parameter :: PROJ = 'tmp_sigma2_state_tester_proj.simple'
+        character(len=*), parameter :: CAND = 'tmp_sigma2_state_tester.next'
+        character(len=*), parameter :: COMM = 'tmp_sigma2_state_tester.bin'
+        character(len=*), parameter :: RNG  = 'tmp_sigma2_state_tester_range.bin'
+        type(sp_project) :: project
+        type(sigma2_state_header) :: header
+        type(string) :: ranges(1), cwd
+        real(real32) :: spectra(BOXT/2, NP)
+        logical :: scheduled(NP), active(NP)
+        integer :: eo(NP), groups(NP), i, status
+        integer(int64) :: digest
+        character(len=128) :: message
+        write(*,'(A)') 'test_estimate_available_on_disk'
+        call cleanup(CAND, COMM, RNG, PROJ)
+        call project%projinfo%new(1, is_ptcl=.false.)
+        call project%projinfo%set(1, 'projname', 'sigma_lineage')
+        call project%projinfo%set(1, 'projfile', PROJ)
+        call simple_getcwd(cwd)
+        call project%projinfo%set(1, 'cwd', cwd%to_char())
+        call project%os_stk%new(1, is_ptcl=.false.)
+        call project%os_stk%set(1, 'stk',   '/data/sigma_particles.mrcs')
+        call project%os_stk%set(1, 'fromp', 1)
+        call project%os_stk%set(1, 'top',   NP)
+        call project%os_stk%set(1, 'box',   BOXT)
+        call project%os_stk%set(1, 'smpd',  SMPDT)
+        call project%os_ptcl3D%new(NP, is_ptcl=.true.)
+        do i = 1, NP
+            call project%os_ptcl3D%set(i, 'stkind', 1)
+            call project%os_ptcl3D%set(i, 'indstk', i)
+            call project%os_ptcl3D%set_state(i, 1)
+        enddo
+        project%os_ptcl2D = project%os_ptcl3D
+        digest = sigma2_state_project_layout_digest(project, project%os_ptcl3D)
+        call require(digest /= 0_int64, 'the in-memory project has a layout digest')
+        call sigma2_state_init_header(header, 1, BOXT/2, NP, BOXT, SMPDT, 1, SIGMA2_GROUP_GLOBAL, &
+            &1_int64, digest, SIGMA2_PROV_RESIDUAL)
+        call sigma2_state_create_candidate(CAND, header, status, message)
+        call require_ok(status, message)
+        do i = 1, NP
+            spectra(:,i) = real(i, real32)
+        enddo
+        call sigma2_state_write_local_range(RNG, 1_int64, digest, 1, spectra, 1, BOXT/2, status, message)
+        call require_ok(status, message)
+        ranges(1) = RNG
+        scheduled = .true.
+        active    = .true.
+        eo        = [(modulo(i-1,2), i = 1, NP)]
+        groups    = 1
+        call sigma2_state_merge_local_ranges(CAND, ranges, scheduled, status, message)
+        call require_ok(status, message)
+        call sigma2_state_reduce_groups(CAND, active, eo, groups, status, message)
+        call require_ok(status, message)
+        call sigma2_state_commit(CAND, COMM, active, eo, groups, status, message)
+        call require_ok(status, message)
+        call project%set_sigma2_state_path(string(COMM))
+        call project%write(string(PROJ))
+        call assert_true(sigma2_estimate_available(string(PROJ), BOXT, SMPDT, .true.), &
+            &'a committed state of the project''s own layout is consumable from the project file')
+        call assert_false(sigma2_estimate_available(string(PROJ), BOXT+2, SMPDT, .true.), &
+            &'negative control: the same state is not consumable on another grid')
+        call project%kill
+        call cleanup(CAND, COMM, RNG, PROJ)
+    end subroutine test_estimate_available_on_disk
 
     subroutine test_checksum_free_particle_io()
         type(sigma2_state_header) :: header

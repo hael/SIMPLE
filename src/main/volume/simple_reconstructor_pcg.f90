@@ -18,7 +18,7 @@ implicit none
 
 public :: reconstructor_pcg, pcg_solver_outcome
 public :: PCG_OP_MATRIXFREE, PCG_OP_KERNEL
-public :: pcg_raw_accum_compatible
+public :: pcg_raw_accum_compatible, read_pcg_raw_accum_header
 private
 #include "simple_local_flags.inc"
 
@@ -1556,6 +1556,39 @@ contains
         if( prov_file /= prov_expected ) return
         l_compatible = .true.
     end function pcg_raw_accum_compatible
+
+    !> reads the identity and geometry header of a persisted raw artifact without
+    !! its payload; status /= 0 when the file is missing, unreadable or not in the
+    !! current raw format. Validation policy (exact or nested geometry, provenance)
+    !! stays with the caller
+    subroutine read_pcg_raw_accum_header( fname, state, eo, part, nparts, nptcls, box, smpd, provenance, status )
+        class(string),    intent(in)  :: fname
+        integer,          intent(out) :: state, eo, part, nparts, nptcls, box
+        real,             intent(out) :: smpd
+        character(len=*), intent(out) :: provenance
+        integer,          intent(out) :: status
+        character(len=16)               :: magic
+        character(len=PCG_RAW_PROV_LEN) :: prov_file
+        integer :: funit, version, boxpd_file, padf_file, lims_file(3,2)
+        state = 0; eo = -1; part = 0; nparts = 0; nptcls = -1; box = 0; smpd = 0.
+        provenance = ''
+        status = 1
+        if( .not. file_exists(fname) ) return
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=status)
+        if( status /= 0 ) return
+        read(funit, iostat=status) magic, version
+        if( status == 0 ) read(funit, iostat=status) state, eo, part, nparts, nptcls
+        if( status == 0 ) read(funit, iostat=status) box, boxpd_file, padf_file, lims_file, smpd
+        if( status == 0 ) read(funit, iostat=status) prov_file
+        call fclose(funit)
+        if( status /= 0 ) return
+        if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION )then
+            status = 2
+            return
+        endif
+        provenance = trim(prov_file)
+        status = 0
+    end subroutine read_pcg_raw_accum_header
 
     !> adds one complete raw artifact with an explicit weight; deterministic algebra
     !! on reduced chains, outside the worker-part ordering. Under constant FOV the

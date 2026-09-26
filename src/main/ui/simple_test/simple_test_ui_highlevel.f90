@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('highl
 type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
+type(ui_program), target :: abinitio3D_addon
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
@@ -20,6 +21,7 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call new_mini_stream(tsttab)
         call new_simulate_particles(tsttab)
+        call new_abinitio3D_addon(tsttab)
         call new_simulated_workflow(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
@@ -34,6 +36,7 @@ contains
         write(logfhandle,'(A)') format_str('High-level tests:', C_UNDERLINED)
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_addon%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
@@ -89,6 +92,20 @@ contains
         ! add to ui_hash
         call add_ui_program('simulate_particles', simulate_particles, tsttab, UI_CATEGORY)
     end subroutine new_simulate_particles
+
+    subroutine new_abinitio3D_addon( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_addon%new(&
+        &'abinitio3D_addon',&                       ! name
+        &'validate abinitio3D_addon end to end on simulated particles',&
+        &'abinitio3D on a seeded subset of simulated particles of a symmetry-broken 6VXX map, then '//&
+        &'abinitio3D_addon on all of them, checked against the simulation truth (poses, map) and the base run',&
+        &'simple_test_exec',&                       ! executable
+        &.false.)                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('abinitio3D_addon', abinitio3D_addon, tsttab, UI_CATEGORY)
+    end subroutine new_abinitio3D_addon
 
     subroutine new_simulated_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab

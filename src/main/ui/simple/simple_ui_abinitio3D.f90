@@ -6,6 +6,7 @@ implicit none
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('abinitio3d', 'Ab Initio 3D Reconstruction', 50)
 type(ui_program), target :: abinitio3D
 type(ui_program), target :: abinitio3D_cavgs
+type(ui_program), target :: abinitio3D_addon
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
 
@@ -15,6 +16,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio3D(prgtab)
         call new_abinitio3D_cavgs(prgtab)
+        call new_abinitio3D_addon(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
     end subroutine construct_abinitio3D_programs
@@ -165,6 +167,57 @@ contains
         ! add to ui_hash
         call add_ui_program('abinitio3D', abinitio3D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio3D
+
+    !> Grow a completed abinitio3D solution with the particles a superset
+    !! project adds: the frozen particles contribute their signal, unsearched,
+    !! to every reconstruction; the others are searched against the union from
+    !! stage 3 to the base run's last stage. Every setting that describes the
+    !! solution comes from the frozen project's run manifest; the command line
+    !! carries only compute effort, convergence and diagnostics.
+    subroutine new_abinitio3D_addon( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_addon%new(&
+        &'abinitio3D_addon',&                                                                  ! name
+        &'Extend an abinitio3D solution with the particles of a superset project',&           ! summary
+        &'is a distributed workflow that searches the particles a superset project adds '//&
+        &'against a frozen abinitio3D solution whose particles contribute unsearched; '//&
+        &'when the run completes, its project replaces the superset project file',&           ! help
+        &'simple_exec',&                                                                       ! executable
+        &.true., visibility=UI_VIS_ADVANCED, display_name='Extend Initial 3D Model')           ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call abinitio3D_addon%add_input(UI_IMG, 'projfile_frozen', 'file', 'Frozen solution project', &
+        &'Project of a completed abinitio3D run (its run directory copy) whose particles are frozen', &
+        &'e.g. 1_abinitio3D/myproject.simple', .true., '')
+        ! parameter input/output
+        call abinitio3D_addon%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
+        &'Also reconstruct the searched particles alone, without the frozen term, into addon_diag/(yes|no){no}', &
+        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call abinitio3D_addon%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations (PCG base runs); default is the base run''s value', &
+        &'iterations', .false., 2., group="search", visibility=UI_VIS_ADVANCED)
+        call abinitio3D_addon%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the ML-regularized system (PCG base runs); default is the base run''s value', &
+        &'iterations', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        call abinitio3D_addon%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
+        &'Validation of the automatic solvent-prior strength when the base run used the solvent prior(yes|no){no}', &
+        &'', .false., 'no', group="search", visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call abinitio3D_addon%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
+        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}', &
+        &'', .false., 'no', visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        ! search controls
+        call abinitio3D_addon%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
+        call abinitio3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
+        &'Required overlap of the searched particles'' assignments for early stopping in stage 3{0.95}', &
+        &'overlap fraction', .false., .95, group="search", visibility=UI_VIS_ADVANCED)
+        ! computer controls
+        call abinitio3D_addon%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call abinitio3D_addon%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('abinitio3D_addon', abinitio3D_addon, prgtab, UI_CATEGORY)
+    end subroutine new_abinitio3D_addon
 
     subroutine new_abinitio3D_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -4,7 +4,7 @@ use simple_cmdline,             only: cmdline
 use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec, exec_screen
 use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D,&
-                                    & commander_abinitio3D_cavgs_conditional_restarts
+                                    & commander_abinitio3D_cavgs_conditional_restarts, commander_abinitio3D_addon
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
@@ -14,6 +14,7 @@ private
 
 type(commander_abinitio3D)                            :: xabinitio3D
 type(commander_abinitio3D_cavgs)                      :: xabinitio3D_cavgs
+type(commander_abinitio3D_addon)                      :: xabinitio3D_addon
 type(commander_abinitio3D_cavgs_conditional_restarts) :: xabinitio3D_cavgs_conditional_restarts
 type(commander_estimate_lpstages)                     :: xestimate_lpstages
 type(commander_noisevol)                              :: xnoisevol
@@ -45,6 +46,8 @@ contains
                 else
                     call xabinitio3D_cavgs%execute(cline)
                 endif
+            case( 'abinitio3D_addon' )
+                call xabinitio3D_addon%execute(cline)
             case( 'estimate_lpstages' )
                 call xestimate_lpstages%execute(cline)
             case( 'noisevol' )

@@ -219,6 +219,20 @@ contains
         call assert_string_eq('myprog', v, 'gen_job_descr: prg value')
         call v%kill
         call h%kill
+        ! in-process handshakes are outside the vocabulary a worker parses
+        ! against: a job description never carries them
+        call cl%set('trail_seed',     'yes')
+        call cl%set('frozen_seed',    'ctx.txt')
+        call cl%set('frozen_rec',     'ctx.txt')
+        call cl%set('addon_manifest', '/abs/manifest.txt')
+        call cl%gen_job_descr(h)
+        call assert_false(h%isthere('trail_seed'),     'gen_job_descr drops the trail_seed handshake')
+        call assert_false(h%isthere('frozen_seed'),    'gen_job_descr drops the frozen_seed handshake')
+        call assert_false(h%isthere('frozen_rec'),     'gen_job_descr drops the frozen_rec handshake')
+        call assert_false(h%isthere('addon_manifest'), 'gen_job_descr drops the addon_manifest handshake')
+        call assert_true(h%isthere('a') .and. h%isthere('b'), 'gen_job_descr keeps ordinary keys beside handshakes')
+        call assert_true(cl%defined('frozen_rec'), 'the command line itself keeps the handshake')
+        call h%kill
         call s%kill
     end subroutine test_gen_job_descr
 

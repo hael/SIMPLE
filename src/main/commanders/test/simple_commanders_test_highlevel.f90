@@ -26,6 +26,11 @@ type, extends(commander_base) :: commander_test_simulate_particles
     procedure :: execute      => exec_test_simulate_particles
 end type commander_test_simulate_particles
 
+type, extends(commander_base) :: commander_test_abinitio3D_addon
+  contains
+    procedure :: execute      => exec_test_abinitio3D_addon
+end type commander_test_abinitio3D_addon
+
 type, extends(commander_base) :: commander_test_simulated_workflow
   contains
     procedure :: execute      => exec_test_simulated_workflow
@@ -3143,5 +3148,530 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         end function real_tok
 
 end subroutine run_rec3D_backends_single
+
+
+!> abinitio3D_addon end to end: abinitio3D on a seeded subset of simulated
+!! particles, the add-on on all of them, checked against the simulation truth
+!! and the base run. The fixture directory (a few hundred MB) is removed on
+!! success and kept for inspection on failure.
+subroutine exec_test_abinitio3D_addon( self, cline )
+    class(commander_test_abinitio3D_addon), intent(inout) :: self
+    class(cmdline),                         intent(inout) :: cline
+    type(parameters) :: params
+    type(string)     :: cwd_saved, fixture_root
+    integer          :: status
+    logical          :: all_ok
+    call simple_getcwd(cwd_saved)
+    fixture_root = filepath(cwd_saved, 'test_abinitio3D_addon_'//int2str(get_process_id()))
+    if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_ABINITIO3D_ADDON FAILED: could not enter fixture directory')
+    call params%new(cline)
+    all_ok = .true.
+    call run_abinitio3D_addon_gate(params%nthr, all_ok)
+    call simple_chdir(cwd_saved, status)
+    if( status /= 0 ) THROW_HARD('TEST_ABINITIO3D_ADDON FAILED: could not restore original directory')
+    if( all_ok )then
+        call simple_rmdir(fixture_root)
+        write(logfhandle,'(a)') 'PASS: abinitio3D_addon validated against the simulation truth and the base run'
+        call simple_end('**** SIMPLE_TEST_ABINITIO3D_ADDON NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_ABINITIO3D_ADDON FAILED')
+    endif
+end subroutine exec_test_abinitio3D_addon
+
+!> abinitio3D_addon on simulated particles, gated on the simulation truth.
+!  An off-axis Gaussian blob breaks the c3 symmetry of the embedded 6VXX map,
+!  so that c1 poses are unique; particles are simulated from that map (the
+!  truth) with CTF and noise. abinitio3D solves a seeded half of them (the
+!  frozen project, sampled so that trailing reconstruction is exercised);
+!  abinitio3D_addon then grows that solution with the other half, the current
+!  project being the superset under the same project basename (the collision
+!  case). The gate checks the frozen inputs byte-unchanged, the frozen rows of
+!  the output identical to the frozen project, the add-on's own manifest and
+!  sigma unregistration, the coverage of the cohort, the cohort poses against
+!  the truth (frame- and hand-independent pair metric) and against the frozen
+!  poses, and the docked map correlation and masked FSC of the union map
+!  against the truth and against the base map. The joint-versus-separate sigma
+!  comparison is reported without a gate value (first release). Every metric
+!  goes to metrics.tsv.
+subroutine run_abinitio3D_addon_gate( nthr, all_ok )
+    use simple_atoms,               only: atoms
+    use simple_molecule_data,       only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_imghead,             only: find_ldim_nptcls, find_img_smpd
+    use simple_dock_vols,           only: dock_vols
+    use simple_ui,                  only: make_ui
+    use simple_commanders_abinitio, only: commander_abinitio3D_addon
+    use simple_commanders_refine3D, only: commander_bootstrap_rec3D
+    use simple_abinitio3D_manifest, only: abinitio3D_manifest
+    use simple_sigma2_state_file,   only: sigma2_state_digest_file
+    use simple_ori_utils,           only: euler2m
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: iso_fortran_env, only: int64
+    integer, intent(in)    :: nthr
+    logical, intent(inout) :: all_ok
+    character(len=*), parameter :: GATE_DIR    = 'abinitio3D_addon_gate'
+    character(len=*), parameter :: TRUTH_VOL   = 'truth_6VXX_blob.mrc'
+    character(len=*), parameter :: PTCL_STK    = 'simulated_particles.mrc'
+    character(len=*), parameter :: TRUTH_ORIS  = 'simulated_oris.txt'
+    character(len=*), parameter :: PROJNAME    = 'addon_gate'
+    character(len=*), parameter :: STRICT_DIR  = 'strict'
+    real,    parameter :: SMPD        = 2.2
+    integer, parameter :: BOX         = 112
+    real,    parameter :: MSKDIAM     = 180.
+    integer, parameter :: NPTCLS      = 3000
+    real,    parameter :: SNR         = 0.2
+    integer, parameter :: NSAMPLE     = 500    ! sampled in the base run and in the add-on (trailing from stage 5)
+    real,    parameter :: GATE_LPSTART = 20.
+    real,    parameter :: GATE_LPSTOP  = 8.
+    integer, parameter :: NCLS2D      = 10     ! class labels for class-balanced sampling
+    integer, parameter :: NPAIRS      = 20000
+    integer, parameter :: GATE_SEED   = 20260926
+    real,    parameter :: DOCK_HP     = 100.
+    real,    parameter :: DOCK_LP     = 20.
+    ! blob: amplitude relative to the map maximum, width and position in A
+    real,    parameter :: BLOB_AMP    = 1.5, BLOB_SIGMA = 11., BLOB_POS(3) = [45., 25., 30.]
+    ! Floors from five measured runs on the Dell (2026-09-26; the runs are
+    ! not bit-reproducible, OpenMP reductions, and the base run itself varies
+    ! with SIMPLE_SEED): two at 16 threads (SIMPLE_SEED 20260923) and three at
+    ! 8 threads, the CTest setting (SIMPLE_SEED 20260923, 20260927, 20260928).
+    ! Cohort-frozen pair median 8.5 / 11.0 and 5.2 / 4.5 / 11.5 deg
+    ! (frozen-frozen 7.1 / 8.4 and 4.4 / 3.5 / 9.4, excess at most 2.7),
+    ! coverage 1.00 throughout, union map correlation 0.974 / 0.949 and
+    ! 0.961 / 0.960 / 0.952 (never below the base map's by more than 0.001),
+    ! masked FSC=0.143 against the truth 4.83 to 5.03 A (base 5.13 to 5.48 A);
+    ! random poses give a pair median near 40 deg. Margins: about 30% on the
+    ! worst pose median, 5 deg on the excess, 0.05 on the union correlation,
+    ! 0.03 on the correlation loss, 1 A on the FSC
+    real,    parameter :: MAX_COHORT_POSE_ERR  = 15.  !< cohort-frozen pair median; random poses give ~40
+    real,    parameter :: MAX_POSE_ERR_EXCESS  = 5.   !< cohort-frozen above frozen-frozen
+    real,    parameter :: MIN_COVERAGE        = 0.9   !< cohort particles with updatecnt > 0
+    real,    parameter :: MIN_UNION_CORR      = 0.9   !< docked union map vs truth
+    real,    parameter :: MAX_CORR_LOSS       = 0.03  !< union map correlation below the base map's
+    real,    parameter :: MAX_FSC_LOSS        = 1.0   !< union FSC=0.143 above the base map's (A)
+    type(commander_abinitio3D)        :: xabinitio3D
+    type(commander_abinitio3D_addon)  :: xaddon
+    type(commander_bootstrap_rec3D)   :: xbootstrap
+    type(commander_simulate_particles):: xsim
+    type(commander_new_project)       :: xnew_project
+    type(cmdline)       :: cl
+    type(atoms)         :: molecule
+    type(molecule_data) :: mol
+    type(sp_project)    :: spproj, strict_proj, out_proj, frz_proj
+    type(oris)          :: truth
+    type(ctfparams)     :: ctfvars
+    type(abinitio3D_manifest) :: man_base, man_out, man_pub
+    type(sp_project)          :: pub_proj
+    type(string)        :: root, stk_abs, full_proj, strict_proj_fname, frozen_run_proj, out_run_proj
+    type(string)        :: frozen_sigma, frozen_vol, addon_vol, base_vol, joint_vol, cwd_here, truth_abs
+    character(len=STDLEN) :: msg
+    integer(int64)      :: dig_proj0
+    integer, allocatable :: frozen_inds(:), cohort_inds(:)
+    logical, allocatable :: l_frozen(:)
+    integer :: i, status, funit, nf, nc, nposed, box_vol
+    real    :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage
+    real    :: corr_joint, fsc_joint, frac_ff, frac_cf
+    logical :: found, l_same, l_pub
+    call make_ui
+    write(logfhandle,'(a)') '>>> TEST_ABINITIO3D_ADDON: abinitio3D_addon gate'
+    call simple_getcwd(root)
+    if( file_exists(GATE_DIR) )then
+        call simple_rmdir(GATE_DIR, status)
+        if( status /= 0 ) THROW_HARD('Could not reset '//GATE_DIR)
+    endif
+    call simple_mkdir(GATE_DIR)
+    call simple_chdir(GATE_DIR, status)
+    if( status /= 0 ) THROW_HARD('Could not enter '//GATE_DIR)
+    call fopen(funit, file=string('metrics.tsv'), status='REPLACE', action='WRITE', iostat=status)
+    write(funit,'(A)') 'name'//achar(9)//'value'//achar(9)//'floor'//achar(9)//'pass'
+    ! ---- the truth: 6VXX with an off-axis blob ----
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc(smpd=SMPD, volfile=string(TRUTH_VOL), mol=mol, center_pdb=.true., vol_dim=[BOX,BOX,BOX])
+    call molecule%kill()
+    call add_symmetry_breaking_blob(string(TRUTH_VOL))
+    truth_abs = simple_abspath(string(TRUTH_VOL))
+    ! ---- particles ----
+    call cl%set('prg',     'simulate_particles')
+    call cl%set('vol1',    TRUTH_VOL)
+    call cl%set('smpd',    SMPD)
+    call cl%set('mskdiam', MSKDIAM)
+    call cl%set('nthr',    nthr)
+    call cl%set('nptcls',  NPTCLS)
+    call cl%set('pgrp',    'c1')
+    call cl%set('snr',     SNR)
+    call cl%set('ctf',     'yes')
+    call cl%set('sherr',   0.0)
+    call xsim%execute(cl)
+    call cl%kill
+    stk_abs = simple_abspath(string(PTCL_STK))
+    call truth%new(NPTCLS, is_ptcl=.true.)
+    call truth%read(string(TRUTH_ORIS), [1,NPTCLS])
+    ! ---- the current (superset) project ----
+    call cl%set('projname',  PROJNAME)
+    call cl%set('qsys_name', 'local')
+    call xnew_project%execute(cl)             ! creates and enters PROJNAME/
+    call cl%kill
+    full_proj = simple_abspath(string(PROJNAME//'.simple'))
+    call spproj%read(full_proj)
+    ctfvars%smpd    = SMPD
+    ctfvars%kv      = 300.
+    ctfvars%cs      = 2.7
+    ctfvars%fraca   = 0.1
+    ctfvars%ctfflag = CTFFLAG_YES
+    call spproj%add_stk(stk_abs, ctfvars)
+    call set_fixed_seed(GATE_SEED)
+    call spproj%os_cls2D%new(NCLS2D, is_ptcl=.false.)
+    call spproj%os_cls2D%set_all2single('state', 1.)
+    do i = 1, NPTCLS
+        call spproj%os_ptcl3D%set(i, 'dfx',    truth%get(i, 'dfx'))
+        call spproj%os_ptcl3D%set(i, 'dfy',    truth%get(i, 'dfy'))
+        call spproj%os_ptcl3D%set(i, 'angast', truth%get(i, 'angast'))
+        call random_number(r)
+        ! a 2D classification stand-in: the 3D workflows need a searched ptcl2D
+        ! field and class labels for class-balanced sampling, nothing else
+        call spproj%os_ptcl2D%set(i, 'class', 1 + int(r*real(NCLS2D)))
+        call spproj%os_ptcl2D%set(i, 'corr',  0.5)
+        call spproj%os_ptcl2D%set(i, 'dfx',    truth%get(i, 'dfx'))
+        call spproj%os_ptcl2D%set(i, 'dfy',    truth%get(i, 'dfy'))
+        call spproj%os_ptcl2D%set(i, 'angast', truth%get(i, 'angast'))
+        call spproj%os_ptcl2D%set_state(i, 1)
+        call spproj%os_ptcl3D%set_state(i, 1)
+    enddo
+    call spproj%write(full_proj)
+    ! ---- the strict project: a seeded half, same basename, own directory ----
+    allocate(l_frozen(NPTCLS), source=.false.)
+    do i = 1, NPTCLS
+        call random_number(r)
+        l_frozen(i) = r < 0.5
+    enddo
+    strict_proj = spproj
+    do i = 1, NPTCLS
+        if( .not. l_frozen(i) )then
+            call strict_proj%os_ptcl2D%set_state(i, 0)
+            call strict_proj%os_ptcl3D%set_state(i, 0)
+        endif
+    enddo
+    call simple_mkdir(STRICT_DIR)
+    strict_proj_fname = simple_abspath(string(STRICT_DIR//'/'//PROJNAME//'.simple'), check_exists=.false.)
+    call strict_proj%write(strict_proj_fname)
+    call strict_proj%kill
+    call spproj%kill
+    ! ---- the base run on the strict selection ----
+    call simple_getcwd(cwd_here)
+    call simple_chdir(string(STRICT_DIR), status)
+    call cl%set('prg',            'abinitio3D')
+    call cl%set('projfile',       strict_proj_fname)
+    call cl%set('mkdir',          'yes')
+    call cl%set('pgrp',           'c1')
+    call cl%set('mskdiam',        MSKDIAM)
+    call cl%set('nthr',           nthr)
+    call cl%set('nsample',        NSAMPLE)
+    call cl%set('force_lp_range', 'yes')
+    call cl%set('lpstart',        GATE_LPSTART)
+    call cl%set('lpstop',         GATE_LPSTOP)
+    call xabinitio3D%execute(cl)
+    call cl%kill
+    call simple_getcwd(frozen_run_proj)
+    frozen_run_proj = frozen_run_proj//'/'//PROJNAME//'.simple'
+    call simple_chdir(cwd_here, status)
+    ! the frozen inputs, before the add-on
+    call frz_proj%read(frozen_run_proj)
+    call man_base%read_registered(frz_proj, frozen_run_proj, status, msg)
+    call gate_check('base_manifest_registered', status == 0)
+    call man_base%validate_frozen(frz_proj, status, msg)
+    call gate_check('base_manifest_valid_frozen_input', status == 0)
+    call man_base%get_artifact('sigma2_state', 0, frozen_sigma, found)
+    call frz_proj%get_vol('vol', 1, frozen_vol, smpd_vol, box_vol)
+    base_vol   = frozen_vol
+    dig_proj0  = sigma2_state_digest_file(frozen_run_proj)
+    ! ---- the add-on on the superset ----
+    call cl%set('prg',             'abinitio3D_addon')
+    call cl%set('projfile',        full_proj)
+    call cl%set('projfile_frozen', frozen_run_proj)
+    call cl%set('nthr',            nthr)
+    call cl%set('addon_diag',      'yes')
+    call xaddon%execute(cl)
+    call cl%kill
+    call simple_getcwd(out_run_proj)
+    out_run_proj = out_run_proj//'/'//PROJNAME//'.simple'
+    call simple_chdir(cwd_here, status)
+    ! ---- provenance and isolation ----
+    call gate_check('frozen_project_unchanged', sigma2_state_digest_file(frozen_run_proj) == dig_proj0)
+    call gate_check('frozen_sigma2_unchanged',  man_base%matches_artifact('sigma2_state', 0, frozen_sigma))
+    call gate_check('frozen_map_unchanged',     man_base%matches_artifact('vol', 1, frozen_vol))
+    ! the frozen term was weighted by the base run's committed residual sigma2
+    ! state (its copy in the add-on run is byte-equal after every accumulation)
+    call gate_check('frozen_sigma2_consumed_as_committed', &
+        &man_base%matches_artifact('sigma2_state', 0, string('1_abinitio3D_addon/frozen/frozen_sigma2_state.bin')))
+    call man_base%kill
+    call out_proj%read(out_run_proj)
+    call gate_check('output_has_no_sigma2_registration', .not. out_proj%projinfo%isthere(1, 'sigma2_state'))
+    call man_out%read_registered(out_proj, out_run_proj, status, msg)
+    call gate_check('addon_manifest_registered', status == 0)
+    ! an add-on output never serves as a frozen input (no union sigma2 state)
+    call man_out%validate_frozen(out_proj, status, msg)
+    call gate_check('addon_manifest_refused_as_frozen_input', status /= 0)
+    ! all done: the finished project replaced the original current project
+    ! file, registering the add-on's manifest by absolute path
+    call pub_proj%read(full_proj)
+    l_pub = pub_proj%os_ptcl3D%get_noris() == out_proj%os_ptcl3D%get_noris()
+    if( l_pub )then
+        do i = 1, out_proj%os_ptcl3D%get_noris()
+            l_pub = l_pub .and. pub_proj%os_ptcl3D%get_state(i) == out_proj%os_ptcl3D%get_state(i) .and. &
+                &all(abs(pub_proj%os_ptcl3D%get_euler(i) - out_proj%os_ptcl3D%get_euler(i)) < 1.e-4)
+        enddo
+    endif
+    call gate_check('original_project_replaced_by_the_output', l_pub)
+    call man_pub%read_registered(pub_proj, full_proj, status, msg)
+    call gate_check('published_project_registers_the_addon_manifest', status == 0 .and. &
+        &man_pub%get_run_id() == man_out%get_run_id())
+    call man_pub%kill
+    call pub_proj%kill
+    call man_out%kill
+    call gate_check('addon_diag_map_written', file_exists(string('1_abinitio3D_addon/addon_diag/')// &
+        &refine3D_state_vol_fname_here(1)))
+    ! frozen rows identical to the frozen project; cohort rows posed
+    nf = count(l_frozen)
+    nc = NPTCLS - nf
+    allocate(frozen_inds(0), cohort_inds(0))
+    l_same = .true.
+    nposed = 0
+    do i = 1, NPTCLS
+        if( frz_proj%os_ptcl3D%get_state(i) > 0 .and. frz_proj%os_ptcl3D%get_updatecnt(i) > 0 )then
+            frozen_inds = [frozen_inds, i]
+            l_same = l_same .and. all(abs(out_proj%os_ptcl3D%get_euler(i) - frz_proj%os_ptcl3D%get_euler(i)) < 1.e-3) &
+                &.and. all(abs(out_proj%os_ptcl3D%get_2Dshift(i) - frz_proj%os_ptcl3D%get_2Dshift(i)) < 1.e-4) &
+                &.and. out_proj%os_ptcl3D%get_state(i) == frz_proj%os_ptcl3D%get_state(i) &
+                &.and. out_proj%os_ptcl3D%get_eo(i) == frz_proj%os_ptcl3D%get_eo(i) &
+                &.and. out_proj%os_ptcl3D%get_updatecnt(i) == frz_proj%os_ptcl3D%get_updatecnt(i)
+        else
+            cohort_inds = [cohort_inds, i]
+            if( out_proj%os_ptcl3D%get_state(i) > 0 .and. out_proj%os_ptcl3D%get_updatecnt(i) > 0 ) nposed = nposed + 1
+        endif
+    enddo
+    call gate_check('frozen_rows_restored_exactly', l_same)
+    call gate_check('every_particle_active', out_proj%count_state_gt_zero() == NPTCLS)
+    coverage = real(nposed) / real(max(1,size(cohort_inds)))
+    call gate_metric('cohort_coverage', coverage, MIN_COVERAGE, coverage >= MIN_COVERAGE)
+    ! ---- poses against the truth ----
+    err_ff = pair_pose_error(frozen_inds, frozen_inds, frac_ff)
+    err_cf = pair_pose_error(cohort_inds, frozen_inds, frac_cf)
+    call gate_metric('frozen_frozen_pairs_within_5deg', frac_ff, -1., .true.)
+    call gate_metric('cohort_frozen_pairs_within_5deg', frac_cf, -1., .true.)
+    call gate_metric('frozen_frozen_pair_pose_error_deg', err_ff, -1., .true.)
+    call gate_metric('cohort_frozen_pair_pose_error_deg', err_cf, MAX_COHORT_POSE_ERR, err_cf <= MAX_COHORT_POSE_ERR)
+    call gate_metric('cohort_pose_error_excess_deg', err_cf - err_ff, MAX_POSE_ERR_EXCESS, &
+        &err_cf - err_ff <= MAX_POSE_ERR_EXCESS)
+    ! ---- maps against the truth ----
+    call out_proj%get_vol('vol', 1, addon_vol, smpd_vol, box_vol)
+    call dock_and_compare(addon_vol, 'union', corr_addon, fsc_addon)
+    call dock_and_compare(base_vol,  'base',  corr_base,  fsc_base)
+    call gate_metric('union_map_truth_corr', corr_addon, MIN_UNION_CORR, corr_addon >= MIN_UNION_CORR)
+    call gate_metric('base_map_truth_corr',  corr_base,  -1., .true.)
+    call gate_metric('union_minus_base_corr', corr_addon - corr_base, -MAX_CORR_LOSS, &
+        &corr_addon - corr_base >= -MAX_CORR_LOSS)
+    call gate_metric('union_truth_fsc0143_A', fsc_addon, fsc_base + MAX_FSC_LOSS, fsc_addon <= fsc_base + MAX_FSC_LOSS)
+    call gate_metric('base_truth_fsc0143_A',  fsc_base,  -1., .true.)
+    ! ---- joint versus separate sigma2 (reported, no gate value) ----
+    call joint_sigma_reconstruction(out_run_proj, joint_vol)
+    call compare_maps(addon_vol, joint_vol, corr_joint, fsc_joint)
+    call gate_metric('joint_vs_separate_sigma_corr',     corr_joint, -1., .true.)
+    call gate_metric('joint_vs_separate_sigma_fsc0143_A', fsc_joint, -1., .true.)
+    call fclose(funit)
+    call out_proj%kill
+    call frz_proj%kill
+    call truth%kill
+    call simple_chdir(root, status)
+
+contains
+
+    function refine3D_state_vol_fname_here( state ) result( fname )
+        integer, intent(in) :: state
+        type(string) :: fname
+        fname = string('recvol_state')//int2str_pad(state,2)//MRC_EXT
+    end function refine3D_state_vol_fname_here
+
+    subroutine gate_check( name, ok )
+        character(len=*), intent(in) :: name
+        logical,          intent(in) :: ok
+        write(funit,'(A,A,I0,A,A,A,A)') name, achar(9), merge(1,0,ok), achar(9), '1', achar(9), trim(merge('yes','no ',ok))
+        if( .not. ok )then
+            write(logfhandle,'(a)') '    FAIL: '//name
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: '//name
+        endif
+    end subroutine gate_check
+
+    subroutine gate_metric( name, val, floor, ok )
+        character(len=*), intent(in) :: name
+        real,             intent(in) :: val, floor
+        logical,          intent(in) :: ok
+        logical :: l_ok
+        l_ok = ok .and. ieee_is_finite(val)
+        write(funit,'(A,A,F12.5,A,F12.5,A,A)') name, achar(9), val, achar(9), floor, achar(9), trim(merge('yes','no ',l_ok))
+        write(logfhandle,'(a,f12.5,a,f12.5)') '    '//trim(merge('PASS: ','FAIL: ',l_ok))//name//' = ', val, ' floor ', floor
+        if( .not. l_ok ) all_ok = .false.
+    end subroutine gate_metric
+
+    !> Median over seeded pairs (i from a, j from b, i /= j) of the difference
+    !! between the estimated and the true relative rotation angle: invariant to
+    !! a global rotation or reflection of the reconstruction frame, so no
+    !! docking convention enters the pose metric
+    real function pair_pose_error( a, b, frac5 ) result( err )
+        integer, intent(in)  :: a(:), b(:)
+        real,    intent(out) :: frac5 !< fraction of pairs within 5 degrees
+        real, allocatable :: errs(:)
+        real    :: ra(3,3), rb(3,3), ta(3,3), tb(3,3), r1, r2
+        integer :: k, i1, i2, n
+        allocate(errs(NPAIRS))
+        call set_fixed_seed(GATE_SEED + 1)
+        n = 0
+        do k = 1, NPAIRS
+            call random_number(r1)
+            call random_number(r2)
+            i1 = a(1 + int(r1*real(size(a))))
+            i2 = b(1 + int(r2*real(size(b))))
+            if( i1 == i2 ) cycle
+            ra = euler2m(out_proj%os_ptcl3D%get_euler(i1))
+            rb = euler2m(out_proj%os_ptcl3D%get_euler(i2))
+            ta = euler2m(truth%get_euler(i1))
+            tb = euler2m(truth%get_euler(i2))
+            n = n + 1
+            errs(n) = abs(rel_angle(ra, rb) - rel_angle(ta, tb))
+        enddo
+        err   = median(errs(1:n))
+        frac5 = real(count(errs(1:n) < 5.)) / real(max(1,n))
+    end function pair_pose_error
+
+    real function rel_angle( r1, r2 ) result( ang )
+        real, intent(in) :: r1(3,3), r2(3,3)
+        real :: m(3,3), c
+        m   = matmul(transpose(r1), r2)
+        c   = max(-1., min(1., 0.5*(m(1,1) + m(2,2) + m(3,3) - 1.)))
+        ang = rad2deg(acos(c))
+    end function rel_angle
+
+    subroutine add_symmetry_breaking_blob( fname )
+        class(string), intent(in) :: fname
+        type(image) :: v
+        real, allocatable :: rmat(:,:,:)
+        real    :: ctr, d2, vmax
+        integer :: ix, iy, iz
+        call v%new([BOX,BOX,BOX], SMPD)
+        call v%read(fname)
+        rmat = v%get_rmat()
+        vmax = maxval(rmat)
+        ctr  = real(BOX)/2. + 1.
+        do iz = 1, BOX
+            do iy = 1, BOX
+                do ix = 1, BOX
+                    d2 = ((real(ix)-ctr)*SMPD - BLOB_POS(1))**2 + ((real(iy)-ctr)*SMPD - BLOB_POS(2))**2 + &
+                        &((real(iz)-ctr)*SMPD - BLOB_POS(3))**2
+                    rmat(ix,iy,iz) = rmat(ix,iy,iz) + BLOB_AMP * vmax * exp(-0.5 * d2 / BLOB_SIGMA**2)
+                enddo
+            enddo
+        enddo
+        call v%set_rmat(rmat, .false.)
+        call v%write(fname, del_if_exists=.true.)
+        call v%kill
+    end subroutine add_symmetry_breaking_blob
+
+    !> dock a map onto the truth in both hands, keep the better, and score the
+    !! whole-volume correlation and the masked FSC=0.143 resolution
+    subroutine dock_and_compare( fname, tag, corr, fsc0143 )
+        class(string),    intent(in)  :: fname
+        character(len=*), intent(in)  :: tag
+        real,             intent(out) :: corr, fsc0143
+        type(dock_vols) :: docker
+        type(image)     :: v
+        type(string)    :: mirr, docked, docked_mirr
+        real :: eulers(3), shifts(3), cc_direct, cc_mirror
+        corr    = 0.
+        fsc0143 = huge(1.)
+        if( .not. file_exists(fname) ) return
+        mirr        = string('gate_'//tag//'_mirror.mrc')
+        docked      = string('gate_'//tag//'_docked.mrc')
+        docked_mirr = string('gate_'//tag//'_mirror_docked.mrc')
+        call v%new([BOX,BOX,BOX], SMPD)
+        call v%read(fname)
+        call v%mirror('x')
+        call v%write(mirr)
+        call v%kill
+        call docker%new(truth_abs, fname, SMPD, DOCK_HP, DOCK_LP, MSKDIAM)
+        call docker%srch()
+        call docker%get_dock_info(eulers, shifts, cc_direct)
+        call docker%rotate_target(fname, docked)
+        call docker%kill()
+        call docker%new(truth_abs, mirr, SMPD, DOCK_HP, DOCK_LP, MSKDIAM)
+        call docker%srch()
+        call docker%get_dock_info(eulers, shifts, cc_mirror)
+        call docker%rotate_target(mirr, docked_mirr)
+        call docker%kill()
+        write(logfhandle,'(a,f7.4,a,f7.4)') '>>> '//tag//' map docking correlation: direct=', cc_direct, &
+            &', mirrored=', cc_mirror
+        if( cc_direct >= cc_mirror )then
+            call compare_maps(truth_abs, docked, corr, fsc0143)
+        else
+            call compare_maps(truth_abs, docked_mirr, corr, fsc0143)
+        endif
+    end subroutine dock_and_compare
+
+    !> whole-volume correlation and masked FSC=0.143 resolution of two maps in one frame
+    subroutine compare_maps( fname_a, fname_b, corr, fsc0143 )
+        class(string), intent(in)  :: fname_a, fname_b
+        real,          intent(out) :: corr, fsc0143
+        type(image) :: a, b
+        real, allocatable :: fsc(:), res(:)
+        real :: fsc05
+        corr    = 0.
+        fsc0143 = huge(1.)
+        if( .not. file_exists(fname_a) .or. .not. file_exists(fname_b) ) return
+        call a%new([BOX,BOX,BOX], SMPD)
+        call b%new([BOX,BOX,BOX], SMPD)
+        call a%read(fname_a)
+        call b%read(fname_b)
+        corr = a%real_corr(b)
+        call a%mask3D_soft(0.5*MSKDIAM/SMPD, backgr=0.)
+        call b%mask3D_soft(0.5*MSKDIAM/SMPD, backgr=0.)
+        call a%fft()
+        call b%fft()
+        allocate(fsc(a%get_filtsz()), source=0.)
+        call a%fsc(b, fsc)
+        res = a%get_res()
+        call get_resolution(fsc, res, fsc05, fsc0143)
+        fsc0143 = max(fsc0143, 2.*SMPD)
+        call a%kill
+        call b%kill
+    end subroutine compare_maps
+
+    !> the union with jointly estimated sigma2: bootstrap_rec3D on a copy of the
+    !! output project (image-power seed, one residual pass over every particle,
+    !! shipped map), in its own directory
+    subroutine joint_sigma_reconstruction( projfile_in, vol_out )
+        class(string), intent(in)    :: projfile_in
+        type(string),  intent(inout) :: vol_out
+        type(cmdline) :: cl_joint
+        type(string)  :: here
+        integer :: st
+        call simple_getcwd(here)
+        call simple_mkdir('joint_sigma')
+        call simple_copy_file(projfile_in, string('joint_sigma/'//PROJNAME//'.simple'))
+        call simple_chdir(string('joint_sigma'), st)
+        call cl_joint%set('prg',      'bootstrap_rec3D')
+        call cl_joint%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
+        call cl_joint%set('mkdir',    'no')
+        call cl_joint%set('pgrp',     'c1')
+        call cl_joint%set('mskdiam',  MSKDIAM)
+        call cl_joint%set('nthr',     nthr)
+        call xbootstrap%execute(cl_joint)
+        call cl_joint%kill
+        vol_out = simple_abspath(refine3D_state_vol_fname_here(1), check_exists=.false.)
+        call simple_chdir(here, st)
+        call here%kill
+    end subroutine joint_sigma_reconstruction
+
+end subroutine run_abinitio3D_addon_gate
 
 end module simple_commanders_test_highlevel

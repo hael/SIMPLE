@@ -2,7 +2,9 @@
 
 Date: 2026-09-25 (first draft 2026-09-24). Drafted against master `0bf593876`,
 verified against master `3f5e6adce` on 2026-09-25 (section 8) and revised
-after review (section 9). Nothing implemented yet.
+after review (section 9). Phases 1 to 3 implemented on 2026-09-26 against
+`ba3ac5762`; the implementation notes and the corrections to this note are in
+the revision log (section 10, 2026-09-26).
 
 ## 1. Context and goal
 
@@ -356,9 +358,15 @@ comes from one versioned run manifest written by the base run (review items
   keys; it is not executable. The add-on builds a fresh sparse command line
   from an explicit allowlist of manifest fields, normalises both project paths
   before any change of directory, calls `params%new` exactly once with
-  `mkdir=yes`, and refuses unknown schema fields and unknown keys. Entry,
-  execution, partition, range, iteration, trailing and frozen controls are
-  never inherited; each child receives only the fields it needs.
+  `mkdir=yes` by default (`mkdir=no` is accepted for NICE, whose job directory
+  is the run directory and holds the job's own copy of the project), and
+  refuses unknown schema fields and unknown keys. Entry, execution, partition,
+  range, iteration, trailing and frozen controls are never inherited; each
+  child receives only the fields it needs. When the run has completed, the
+  finished project (frozen rows restored, the cohort refined) replaces the
+  current project file: written beside it and renamed over it, with the run
+  manifest registered by absolute path, and the job record appended to it. A
+  failed run never touches it, and the frozen project is never written.
 
 Inheriting the ladder means the frozen sets are accumulated at the boxes the
 base run used and the union is matched at the limits the base run was matched
@@ -520,8 +528,10 @@ U(s,h,t)   = F(s,h) + T_C(s,h,t)
 per state `s` and half `h`, with the realized fraction `f_s` and the applied
 weight `u_s` state-local as today; the cohort chain `T_C` is published before
 `F` is added, and restoration, FSC, priors and NU filtering consume `U`. A
-state or half with a chain but no current sample keeps its chain unchanged
-(weight zero); one with neither has zero cohort mass and `U = F`. When the
+state with a chain but no current sample keeps its chain unchanged (weight
+zero); in a sampled state a half that drew no particle follows the recurrence
+like every other half, its chain decaying by `1 - u_s` (the gridding code;
+both backends follow it); one with neither has zero cohort mass and `U = F`. When the
 inherited stage policy has `trail_rec=no`, the union is `F` plus the current
 cohort partial and no trailing is introduced. Sampled and trailing PCG
 assembly is supported in shared memory as it is: the shared-memory `refine3D`
@@ -613,8 +623,10 @@ Rules this design keeps (from `simple-frac-update-trailing`, `simple-refine3d`,
   handshake, `abinitio3D_cavgs` only the refusal; no add-on mode lives in
   module-global state;
   frozen names, readers, writers and cleanup are disjoint from `recvol_state*`,
-  `trailrec*` and every existing glob; both input projects and their sigma
-  states are byte-unchanged on success and on every injected failure.
+  `trailrec*` and every existing glob; the frozen project and its sigma state
+  are byte-unchanged on success and on every injected failure; the current
+  project is unchanged on every failure and, on success, replaced by the
+  finished project (owner decision, 2026-09-26).
 
 Deliberate non-goals for the first cut: no cohort filter inside refine3D, no
 frozen term in the trailing chain, no re-search of frozen particles (see
@@ -741,23 +753,23 @@ thin wrapper commander in `simple_commanders_abinitio.f90` and an add-on route
 in `exec_abinitio3D` behind an internal handshake, sharing the sampling
 initialisation, stage loop and final reconstruction (Hans, 2026-09-25).
 
-Open before implementation (2026-09-25, evening):
+Decided (Hans, 2026-09-26), adopting the note's recommendations:
 
-- Frozen input scope: the direct `abinitio3D` output only (the manifest's
-  artifact digests must match the project's registered maps), or also a
-  `refine3D`-refined descendant? Mechanically a descendant still resolves the
-  manifest, because `refine3D` never rewrites the project's recorded
-  directory, and it carries its own consumable sigma state; its registered
-  maps would no longer match the manifest digests. Recommendation: direct
-  output only in the first release.
-- Cohort floor numbers: a hard floor of 5 cohort particles per inherited
-  state (the docked split's `MIN_SPLIT_STATE_POP`) and a warning below 5 % of
-  the frozen population.
+- Frozen input scope: the direct `abinitio3D` output only: the manifest's
+  artifact digests must match the project's registered maps. A
+  `refine3D`-refined descendant still resolves the manifest, because
+  `refine3D` never rewrites the project's recorded directory, but its
+  registered maps no longer match the digests and it is refused.
+- Cohort floor: a hard floor of 5 cohort particles per inherited state (the
+  docked split's `MIN_SPLIT_STATE_POP`) and a warning below 5 % of the frozen
+  population. Checked per state: balanced labelling gives every state
+  `ncohort/nstates` cohort particles or one more, which is refused before any
+  write when below the floor, and verified again after labelling.
 - Stage-3 early stopping: `overlap` defaults to 0.95 (the `abinitio3D` entry
   default) rather than the 0.9 of stages 4 to 6.
-- The joint-versus-separate sigma tolerance is set from the first real-data
-  run (map correlation and FSC difference reported, a gate value proposed
-  afterwards), not guessed now.
+- Joint-versus-separate sigma: map correlation and FSC difference are
+  reported; no gate value in the first release (a value is proposed after the
+  first real-data runs).
 
 Implied by the decided rules, recorded so they are not re-asked: a frozen
 project must be a completed run with its final native-box reconstruction and
@@ -1133,3 +1145,130 @@ no workflow code is duplicated.
   diagram, section 3 full-sampling qualifier, section 4 opening and docked
   ladder, section 5 introduction, section 6 interaction with add-ons, risk on
   the cohort floor, matrix rows 5 and 7, F2, F4, F6). No decision changed.
+- 2026-09-26, decisions (Hans): the four open questions of section 7 decided
+  by adopting the recommendations (frozen input scope: direct `abinitio3D`
+  output only; cohort floor 5 per inherited state plus a warning below 5 % of
+  the frozen population; stage-3 `overlap` 0.95; joint-versus-separate sigma
+  reported without a gate value).
+- 2026-09-26, implementation of phases 1 to 3 (working tree on `ba3ac5762`).
+  Where the code differed from this note, the option most consistent with the
+  decided rules was taken:
+  - Section 8, F4 is wrong about the copy: `sp_project%read` resets
+    `projname`, `projfile` and `cwd` from the file name on every read
+    (`update_projinfo`), and `builder` then resets `cwd` to the process
+    directory. `projname` is the lineage of the sigma2 layout digest, so a
+    copy under another file name loses the base run's state (first
+    implementation: every frozen accumulation silently re-seeded it from
+    particle power), and a bare-name state resolves against whichever
+    directory applies. The frozen copy therefore keeps the frozen project's
+    file name in `<run dir>/frozen/`, owns a copy of the frozen run's
+    committed sigma2 state registered by absolute path (digest-checked
+    against the manifest, and re-checked after every frozen accumulation,
+    fatal otherwise), and its `projinfo projfile` names the copy itself:
+    `write_segment_inside` without a file name targets `projinfo projfile`,
+    which in the add-on run directory would otherwise have been the working
+    copy whenever the two projects share a basename (review item 4.7). The
+    same file-name rule holds for the `addon_diag` copy.
+  - Section 4 and F13: the base run's `jobproc` row is appended after the
+    commander returns, so the manifest writer inside `exec_abinitio3D` cannot
+    read it. The writer records the command line as given at the entry of
+    `exec_abinitio3D` (an allowlist of keys) plus typed `params` values and the
+    stage command line's shape at planning time (whether `lp`/`lpstop` were on
+    it); no `jobproc` lookup exists. The add-on replays the recorded keys of
+    `MANIFEST_REPLAY_KEYS`, so its own default injection reproduces the base
+    run's state.
+  - The manifest is its own module, `simple_abinitio3D_manifest` in
+    `src/main/abinitio/` (beside `simple_abinitio3D_split_checkpoint`), not
+    part of `simple_abinitio_utils`. It is resolved against the directory of
+    the project file that registers it (for the reason above `projinfo cwd`
+    is not a reliable project directory), and bound to the run identifier
+    registered beside it in `projinfo`.
+  - Handshakes: `frozen_seed` and `frozen_rec` both carry the path of the
+    run's frozen context file (run identifier, backend, state layout, row and
+    frozen counts); `addon_manifest` carries the manifest path. Distributed
+    workers parse their command lines strictly against the argument
+    vocabulary and stop on any other key, so `cmdline%gen_job_descr` drops
+    all in-process keys (`trail_seed` included) from every job description:
+    all frozen reads and writes are master-side. This also removes a latent
+    stop of distributed workers on `trail_seed`.
+  - The frozen sets and their validated adds are a domain module,
+    `simple_frozen_accum` in `src/main/volume/`, called from the gridding
+    `restore_state_from_parts`, the PCG shared half solve and the PCG
+    distributed master; a set is refused unless its manifest matches the
+    context and the consumer's exact grid, and it is never padded.
+  - The raw gridding accumulator format (MRC complex slices) persists `box/2`
+    complex values per row: the `h = box/2` column of every partial, chain
+    and frozen set is dropped on write. Existing behaviour, a linear
+    projection common to F, C and F u C, so the union identity holds on what
+    is persisted; not changed.
+  - A base ladder whose stage box exceeds the native box (small boxes, where
+    the crop rounds up to a larger magic box) is refused before any write:
+    `reconstruct3D` never upsamples, so no frozen set can be produced for such
+    a stage. Known limitation of the first release.
+  - Stage 3 starts from the native frozen-only maps as they are; the
+    frozen-only map is compared with the base run's registered final map and
+    the correlation reported (1.000 per state with gridding, 0.999 with
+    distributed PCG), a warning below 0.9.
+  - Two defects found on the way were fixed and pinned by tests:
+    `simple_abspath(..., check_exists=.false.)` returned a path that does not
+    exist yet relative with its first character overwritten by '/', and
+    `sigma2_estimate_available` never read the stack table the layout digest
+    covers, so no committed state was ever consumable through it (stage
+    boundaries of the `cavg_ini`/`cavg_ini_ext` routes and the docked split
+    re-seeded from image power).
+  - Tests: `frozen accumulator` (unit_reconstruction: F u C = F + C on raw
+    statistics and restored/solved maps, both backends, and the refusals),
+    `abinitio3D manifest` and `project superset` (unit_project), and the
+    end-to-end gate on simulated particles in the `simulate_particles`
+    workflow entry (no new CTest entry). The gate's cohort is sampled, so it
+    runs the cohort chain seeding and the trailing recurrence with the
+    frozen term end to end. PCG in distributed mode and a two-state run were
+    run by hand, not in a registered test. The isolation matrix and the
+    unit-level sampled recurrence of section 5 are not yet automated.
+  - Results (2026-09-26): the registered `simulate_particles` entry passes
+    (956 s at 8 threads; union map vs truth correlation 0.961, base 0.960;
+    masked FSC0.143 vs truth 4.93 A for both; cohort-frozen pose pair median
+    5.2 deg, frozen-frozen 4.4 deg; joint-vs-separate sigma correlation
+    1.000). The two-state gridding run and the distributed PCG run end with
+    exit 0 and no sigma2 re-seed inside the stages.
+- 2026-09-26, structure (Hans's review): the three new domain modules are
+  classes with private state, `new`/`kill` and type-bound behaviour, per the
+  SIMPLE Fortran conventions, instead of public records with free procedures.
+  `abinitio3D_manifest` is built by `new` (the project identity) and its
+  record setters and owns `write`/`read`, `register`/`read_registered` (which
+  checks the registered run identifier), `validate_frozen` and `replay` (the
+  replayed inputs, the stage-line shape and the solution); `project_superset`
+  (was `addon_membership`) validates the row identity and defines the
+  membership in `new`, then `mask`/`restore`; `frozen_accum` (was
+  `frozen_context`) is the run's store: `new`/`write`/`read`/`validate`/`load`
+  and the gridding-set and PCG-half writers, checks and adds. The file digest
+  moved next to its FNV-1a primitives as `sigma2_state_digest_file` in
+  `simple_sigma2_state_file`. Workflow behaviour and file formats unchanged.
+- 2026-09-26, review against this note (Hans's decisions): the add-on
+  replaces the current project file with the finished project when the run has
+  completed (`mkdir=yes` by default; `mkdir=no` for NICE works in its job
+  directory), and the job record goes to it; NICE's `niceprocid`,
+  `niceserver` and `nicedispid` pass through. Distributed `refine3D` dropping
+  the map of a state whose cohort population is zero is accepted: the frozen
+  partition's contribution is restored and in the final union map. The
+  recurrence of an empty half in a sampled state follows the gridding code;
+  distributed PCG now matches it, writes a zero-mass seed chain for a half
+  without cohort particles and refuses the legacy bootstrap under
+  `frozen_rec`. The cohort floor is checked per state. The end-to-end test is
+  its own highlevel entry, `abinitio3D_addon` (budget 29), no longer part of
+  `simulate_particles`; multi-state, distributed PCG, non-C1 and the
+  isolation matrix remain open (later). `sigma2_estimate_available` stays as
+  a fix. Further fixes from the review: the manifest reader keeps `/` in
+  input values (a `vol1` path stopped the add-on), refuses unknown input keys
+  and records after the checksum, and a value the format cannot hold leaves
+  the manifest unpublished instead of stopping the completed run; the
+  manifest records the effective `ptcl_src`, which the add-on replays and the
+  superset check compares row by row on the denoised source when it is `den`;
+  unrun stages are recorded as not emitted (-1) instead of their planned
+  limits; every frozen set records its reconstruction weighting (euclid or
+  cc) and a consumer of another weighting refuses it; PCG NU matching counts
+  every state under the frozen term; the epilogue reports union populations
+  and resolution against the frozen solution. The motion-model and
+  particle-sieve testers use unregistered program names, which removes a
+  suite-order dependency (`SIMPLE_UNIT_ORDER=reverse`) found on the way.
+

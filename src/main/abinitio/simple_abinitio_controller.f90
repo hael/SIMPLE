@@ -200,16 +200,30 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        logical :: l_sticky_class_sampling_active
+        logical :: l_sticky_class_sampling_active, l_addon
         l_sticky_class_sampling_active = .false.
         if( .not. l_cavgs ) l_sticky_class_sampling_active = abinitio_docked_cohort_active(params, istage)
         if( l_sticky_class_sampling_active .and. docked_split_stage(params, istage) )then
             write(logfhandle,'(A)') &
                 '>>> ABINITIO3D DOCKED STICKY CLASS SAMPLING ENABLED FOR POST-SPLIT STAGES'
         endif
+        l_addon = .false.
+        if( present(addon) ) l_addon = addon%active
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
+        if( l_addon )then
+            ! stage 3 keeps its full budget only because of the symmetry search,
+            ! which never runs in an add-on: it early-stops on overlap
+            if( istage <= SYMSRCH_STAGE )then
+                cfg%overlap  = addon%overlap
+                cfg%fracsrch = 90.
+            endif
+        endif
         call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, &
-            &l_refine3D_lp_override, l_sticky_class_sampling_active )
+            &l_refine3D_lp_override, l_sticky_class_sampling_active, l_fsc05_promote=.not. l_addon )
+        if( l_addon )then
+            if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
+            call cline_refine3D%set('frozen_rec', addon%frozen_rec)
+        endif
     end procedure set_cline_refine3D
 
     subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
@@ -505,13 +519,15 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling, &
+            &l_fsc05_promote )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_sticky_class_sampling
+        logical,                  intent(in) :: l_fsc05_promote !< .false. in an add-on: the ladder is inherited
         character(len=STDLEN) :: ptcl_src_eff
         real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
@@ -544,7 +560,7 @@ contains
         ! log set: the plan sat at 8.6/7.6 A in stages 4/5 while the halves
         ! agreed to 4.3 A at FSC=0.5.
         l_fsc05_promoted = .false.
-        if( .not. l_cavgs .and. .not. l_explicit_lp ) &
+        if( .not. l_cavgs .and. .not. l_explicit_lp .and. l_fsc05_promote ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
         ! Matching-band ceiling. Non-NU stages match at the (possibly
         ! promoted) stage limit, so the ceiling equals it. NU stages match at

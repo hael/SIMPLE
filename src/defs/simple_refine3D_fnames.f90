@@ -30,6 +30,10 @@ public :: refine3D_trail_rec_fbody
 public :: refine3D_trail_rec_fname
 public :: refine3D_trail_rho_fname
 public :: refine3D_trail_manifest_fname
+public :: refine3D_frozen_context_fname
+public :: refine3D_frozen_rec_fbody
+public :: refine3D_frozen_manifest_fname
+public :: refine3D_frozen_pcg_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_pose_cont_ref_fname
 public :: refine3D_bench_fname
@@ -229,6 +233,37 @@ contains
         integer, intent(in) :: state
         fname = refine3D_trail_rec_fbody(state)//TXT_EXT
     end function refine3D_trail_manifest_fname
+
+    ! abinitio3D_addon frozen contributions. The run-level context ties every
+    ! frozen set of one add-on run to its run identifier; the per-state sets
+    ! carry their consuming box in the name, so a consumer selects its set by
+    ! its own box_crop. None of these contain the VOL_FBODY or trailrec stems,
+    ! so partial-reconstruction globs, chain validation and cleanup never
+    ! match them.
+    type(string) function refine3D_frozen_context_fname() result(fname)
+        fname = string('abinitio3D_addon_frozen_context')//TXT_EXT
+    end function refine3D_frozen_context_fname
+
+    !> Gridding frozen set: <fbody>_{even,odd}.mrc and rho_<fbody>_{even,odd}.mrc
+    type(string) function refine3D_frozen_rec_fbody( state, box ) result(fname)
+        integer, intent(in) :: state, box
+        fname = string('frozen_state')//state_tag(state)//'_box'//int2str_pad(box, 4)
+    end function refine3D_frozen_rec_fbody
+
+    !> Manifest of one gridding frozen set, written last
+    type(string) function refine3D_frozen_manifest_fname( state, box ) result(fname)
+        integer, intent(in) :: state, box
+        fname = refine3D_frozen_rec_fbody(state, box)//TXT_EXT
+    end function refine3D_frozen_manifest_fname
+
+    !> PCG frozen raw (B,D) pair for one (state,half) at one box, in the raw
+    !! accumulator format with its own provenance tag
+    type(string) function refine3D_frozen_pcg_fname( state, box, half ) result(fname)
+        integer,          intent(in) :: state, box
+        character(len=*), intent(in) :: half
+        fname = string('frozen_pcg_state')//state_tag(state)//'_box'//int2str_pad(box, 4)// &
+            &half_suffix(half)//BIN_EXT
+    end function refine3D_frozen_pcg_fname
 
     type(string) function refine3D_reproj_model_fname( half ) result(fname)
         character(len=*), intent(in) :: half

@@ -5,6 +5,7 @@ use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolutio
     &refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_fsc_fname, &
     &refine3D_volassemble_bench_fname, refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
     &refine3D_trail_rho_fname, refine3D_trail_manifest_fname, refine3D_cfar_summary_fname
+use simple_frozen_accum,    only: frozen_accum
 implicit none
 private
 public :: commander_volassemble, filter_pcg_nonuniform_maps
@@ -35,7 +36,7 @@ contains
         &sum_rec, state, numlen_part, &
         &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
-        &volname, eonames, res05, res0143, cfar, timings )
+        &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed )
         use simple_reconstructor, only: reconstructor, gridding_half_restore
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
             &write_halfmap_diagnostics, write_support_provenance
@@ -52,6 +53,8 @@ contains
         type(string),           intent(inout) :: volname, eonames(2)
         real,                   intent(out)   :: res05, res0143, cfar
         type(restore_timings_t), intent(inout) :: timings
+        type(frozen_accum), optional, intent(in) :: frozen_rec  !< add-on consumer: frozen term summed into the union
+        type(frozen_accum), optional, intent(in) :: frozen_seed !< add-on producer: publish these accumulators as the frozen set
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd
         type(string) :: fsc_txt_file, trail_fbody
         type(halfmap_diagnostics_result) :: pair_diagnostics
@@ -71,6 +74,11 @@ contains
         ! chain does not exist yet (bootstrap) do we fall back to the legacy
         ! previous-halfmap volume blend below, while seeding the chain.
         call blend_trailing_accumulators()
+        ! abinitio3D_addon: the frozen accumulators join as a second, constant
+        ! set of partials after the cohort chain is written and before any
+        ! restoration or prior, so FSC, regularization and NU inputs describe
+        ! the union while the chain carries the cohort's mass only
+        call add_frozen_accumulators()
         call sum_eos_before_density_correction_if_needed()
         call restore_eos_and_write_fsc()
         call sum_eos_after_density_correction_if_needed()
@@ -118,6 +126,12 @@ contains
             trail_chain_gen = 0
             trail_fbody     = refine3D_trail_rec_fbody(state)
             if( .not. params%l_trail_rec )then
+                if( present(frozen_seed) )then
+                    ! abinitio3D_addon producer: the frozen particles' full
+                    ! accumulators at this reconstruction's box
+                    call frozen_seed%write_gridding_set(state, even_rec, odd_rec)
+                    return
+                endif
                 ! Full-reconstruction producer contract: a stage-boundary
                 ! reconstruct3D can seed the chain with full-dataset weight via
                 ! the internal trail_seed handshake, so the consuming trailing
@@ -132,6 +146,21 @@ contains
                 return
             endif
             l_trail_chain = validate_trail_chain()
+            if( present(frozen_rec) )then
+                ! add-on mode never enters the legacy union-volume bootstrap:
+                ! the stage boundary seeds the cohort chain before the first
+                ! trailing stage
+                if( .not. l_trail_chain ) THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
+                if( realized_update_frac < 0.001 )then
+                    ! no cohort sample for this state: the chain carries
+                    ! unchanged (weight zero on the current sample) and the
+                    ! union is F + chain
+                    call read_gridding_pair_accumulators(params, even_rec, odd_rec, trail_fbody, required=.true.)
+                    write(logfhandle,'(A,I0,A)') '>>> VOLASSEMBLE: STATE ', state, &
+                        &' HAS NO COHORT SAMPLE; COHORT CHAIN CARRIED UNCHANGED'
+                    return
+                endif
+            endif
             if( realized_update_frac < 0.001 )then
                 ! nothing meaningful was sampled for this state; leave the chain
                 ! untouched and let the legacy path govern this iteration
@@ -186,6 +215,13 @@ contains
                 endif
             endif
         end subroutine blend_trailing_accumulators
+
+        subroutine add_frozen_accumulators()
+            if( .not. present(frozen_rec) ) return
+            call frozen_rec%add_gridding_set(state, even_rec, odd_rec, read_even_rec, read_odd_rec)
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> VOLASSEMBLE: FROZEN TERM ADDED, STATE ', state, ' (', &
+                &frozen_rec%get_nfrozen_state(state), ' FROZEN PARTICLES)'
+        end subroutine add_frozen_accumulators
 
         function trail_chain_component( ifile ) result( fname )
             integer, intent(in) :: ifile
@@ -842,10 +878,14 @@ contains
     !! update_project_nu_alignment_lowpass in the gridding volassemble: the
     !! _nu_filt products themselves are written by nonuniform_filter_state
     !! inside the PCG master (both backends run the same competition).
-    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, nu_align_lps )
+    !> l_frozen_term: an abinitio3D_addon reconstruction, in which every
+    !! inherited state holds frozen particles and so has a map even when its
+    !! cohort population is zero
+    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, l_frozen_term, nu_align_lps )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         logical,          intent(in)    :: l_trail_bootstrap(:)
+        logical,          intent(in)    :: l_frozen_term
         real, optional,   intent(in)    :: nu_align_lps(:)
         integer, allocatable :: state_pops(:)
         logical, allocatable :: l_included(:)
@@ -862,7 +902,7 @@ contains
         do state = 1, params%nstates
             state_pops(state) = build%spproj_field%get_pop(state, 'state')
         enddo
-        l_included = (state_pops > 0) .and. (nu_align_lps > TINY)
+        l_included = (state_pops > 0 .or. l_frozen_term) .and. (nu_align_lps > TINY)
         if( any(l_included) )then
             align_lp = minval(nu_align_lps, mask=l_included)
             write(logfhandle,'(A,F8.3,A)') '>>> NU filter project matching low-pass limit: ', align_lp, ' A'
@@ -896,6 +936,8 @@ contains
         real, allocatable             :: res0143s(:), res05s(:), cfars(:)
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:), realized_update_fracs(:)
+        type(frozen_accum)            :: frozen_ctx
+        logical                       :: l_frozen_rec, l_frozen_seed
         integer                       :: state, numlen_part
         integer(timer_int_kind)       :: t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
@@ -965,6 +1007,15 @@ contains
             call sum_rec%new_accumulator(params, build%spproj, expand=.false.)
             numlen_part       = max(1, params%numlen)
             l_nonuniform_mode = params%l_nonuniform
+            ! abinitio3D_addon handshakes (in-process only): consume or
+            ! produce the frozen term named by the run context
+            l_frozen_rec  = cline%defined('frozen_rec')
+            l_frozen_seed = cline%defined('frozen_seed')
+            if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
+            if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'gridding', &
+                &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
+            if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'gridding', &
+                &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
             allocate(res0143s(params%nstates), res05s(params%nstates), cfars(params%nstates))
             res0143s = 0.
             res05s   = 0.
@@ -984,6 +1035,9 @@ contains
             if( .not. allocated(state_pops) ) return
             do istate = 1,params%nstates
                 state_pops(istate) = build%spproj_field%get_pop(istate, 'state')
+                ! the union population: the frozen rows are masked in the add-on
+                ! working project but their accumulators are in every map
+                if( l_frozen_rec ) state_pops(istate) = state_pops(istate) + frozen_ctx%get_nfrozen_state(istate)
             enddo
         end subroutine refresh_state_populations
 
@@ -1000,6 +1054,10 @@ contains
             integer :: istate
             allocate(l_state_dropped(params%nstates), source=.false.)
             if( params%nstates <= 1 ) return
+            ! every inherited state of an add-on run carries its frozen term:
+            ! a state without cohort partials is assembled from it, never
+            ! carried forward
+            if( l_frozen_rec ) return
             do istate = 1, params%nstates
                 l_has_partials(istate) = state_has_partials(istate)
             enddo
@@ -1068,12 +1126,30 @@ contains
         end subroutine determine_trailing_update_fraction
 
         subroutine assemble_state()
-            call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
-                &sum_rec, state, numlen_part, &
-                &update_frac_trail_recs(state), realized_update_fracs(state), &
-                &vol_prev_even, vol_prev_odd, vol_merged, &
-                &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
-                &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings)
+            if( l_frozen_rec )then
+                call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
+                    &sum_rec, state, numlen_part, &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), &
+                    &vol_prev_even, vol_prev_odd, vol_merged, &
+                    &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
+                    &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
+                    &frozen_rec=frozen_ctx)
+            else if( l_frozen_seed )then
+                call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
+                    &sum_rec, state, numlen_part, &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), &
+                    &vol_prev_even, vol_prev_odd, vol_merged, &
+                    &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
+                    &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
+                    &frozen_seed=frozen_ctx)
+            else
+                call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
+                    &sum_rec, state, numlen_part, &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), &
+                    &vol_prev_even, vol_prev_odd, vol_merged, &
+                    &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
+                    &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings)
+            endif
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
             params%vols_odd(state)  = eonames(2)
@@ -1212,6 +1288,7 @@ contains
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             if( allocated(realized_update_fracs)  ) deallocate(realized_update_fracs)
+            call frozen_ctx%kill
             call volname%kill
             call eonames(1)%kill
             call eonames(2)%kill

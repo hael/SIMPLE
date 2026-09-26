@@ -24,6 +24,7 @@ use simple_nu_state_filter,   only: nonuniform_filter_state, nu_aux_member
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
+use simple_frozen_accum,      only: frozen_accum
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
 !$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
@@ -744,8 +745,18 @@ contains
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
         real :: align_lp, res0143_prior_free
         logical :: l_sigma_loaded
+        type(frozen_accum) :: frozen_ctx
+        logical :: l_frozen_rec, l_frozen_seed
 
         call validate_supported_mode()
+        ! abinitio3D_addon handshakes (in-process only)
+        l_frozen_rec  = cline%defined('frozen_rec')
+        l_frozen_seed = cline%defined('frozen_seed')
+        if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
+        if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'pcg', &
+            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
+        if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'pcg', &
+            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
         nselected = 0
         call build%spproj_field%sample4rec([params%fromp,params%top], nselected, selected_pinds)
         if( nselected < 1 ) THROW_HARD('no active particles selected for PCG reconstruct3D')
@@ -766,12 +777,14 @@ contains
             n_state = count_state(state)
             n_even = count_state_half(state, 0)
             n_odd  = count_state_half(state, 1)
-            if( n_state == 0 )then
+            if( n_state == 0 .and. .not. l_frozen_rec )then
                 write(logfhandle,'(A,I0,A)') '>>> PCG RECONSTRUCT3D: STATE ', state, ' HAS NO SELECTED PARTICLES; SKIPPING'
                 cycle
             endif
             if( n_even + n_odd /= n_state ) THROW_HARD('PCG reconstruct3D found invalid halfset labels')
-            if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
+            ! an add-on state may be carried by its frozen halves alone
+            if( (n_even < 1 .or. n_odd < 1) .and. .not. l_frozen_rec ) &
+                &THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
 
             ! One selected envelope support per state, shared with the
             ! distributed owner: density for yes, lagged NU with density
@@ -936,6 +949,7 @@ contains
 
         call state_support_msk%kill_bimg
         call killimgbatch(build)
+        call frozen_ctx%kill
         if( .not. any(state_written) ) THROW_HARD('PCG reconstruct3D produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res',   res0143s(1))
@@ -1147,7 +1161,7 @@ contains
             complex, allocatable :: y_batch(:,:,:)
             real,    allocatable :: sig2(:,:), x(:,:,:), rel_res_hist(:)
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
-            integer :: i, ii, iptcl, ibatch, niters
+            integer :: i, ii, iptcl, ibatch, niters, nfrozen_half
             real    :: shift(2), crop_factor
             integer(timer_int_kind) :: t_half, t_phase
             real(dp) :: time_metadata, time_particles, time_accum_init, time_accum
@@ -1185,23 +1199,30 @@ contains
                 enddo
             endif
 
-            call selection%new(size(pinds), .true.)
             call orientation%new(.false.)
-            do i = 1, size(pinds)
-                iptcl = pinds(i)
-                call build%spproj_field%get_ori(iptcl, orientation)
-                ctfparms      = build%spproj%get_ctfparams(params%oritype, iptcl)
-                ctfparms%smpd = params%smpd_crop
-                shift         = build%spproj_field%get_2Dshift(iptcl) * crop_factor
-                call orientation%set_ctfvars(ctfparms)
-                call orientation%set_shift(shift)
-                call selection%set_ori(i, orientation)
-            enddo
-            call pcgop%prep_particles(selection, use_ctf=.true., sig2=sig2)
+            if( size(pinds) > 0 )then
+                call selection%new(size(pinds), .true.)
+                do i = 1, size(pinds)
+                    iptcl = pinds(i)
+                    call build%spproj_field%get_ori(iptcl, orientation)
+                    ctfparms      = build%spproj%get_ctfparams(params%oritype, iptcl)
+                    ctfparms%smpd = params%smpd_crop
+                    shift         = build%spproj_field%get_2Dshift(iptcl) * crop_factor
+                    call orientation%set_ctfvars(ctfparms)
+                    call orientation%set_shift(shift)
+                    call selection%set_ori(i, orientation)
+                enddo
+                call pcgop%prep_particles(selection, use_ctf=.true., sig2=sig2)
+            endif
             time_metadata = real(toc(t_phase),dp)
             t_phase = tic()
             allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
-            call pcgop%begin_accum
+            if( size(pinds) > 0 )then
+                call pcgop%begin_accum
+            else
+                ! a frozen-only add-on half: the frozen term is its only data
+                call pcgop%begin_reduction
+            endif
             time_accum_init = real(toc(t_phase),dp)
             call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
@@ -1225,16 +1246,26 @@ contains
                 call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
                 time_accum = time_accum + real(toc(t_phase),dp)
             enddo
-            if( params%l_ml_reg )then
-                raw_fname_here = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
-                call pcgop%write_raw_accum(raw_fname_here, state_here, eo_here, 1, 1, &
-                    &size(pinds), pcg_raw_provenance(params))
-                call raw_fname_here%kill
-            endif
+            ! the trailing chain seed carries this reconstruction's own particles
+            ! only: written before an add-on frozen term joins
             if( pcg_trail_seed_requested(cline) )then
                 raw_fname_here = refine3D_pcg_trail_accum_fname(state_here, half)
                 call pcgop%write_raw_accum(raw_fname_here, state_here, eo_here, 1, 1, &
                     &size(pinds), pcg_chain_provenance(params))
+                call raw_fname_here%kill
+            endif
+            nfrozen_half = 0
+            if( l_frozen_seed ) call frozen_ctx%write_pcg_half(state_here, eo_here, params%box_crop, &
+                &pcgop, size(pinds))
+            if( l_frozen_rec ) call frozen_ctx%add_pcg_half(state_here, eo_here, params%box_crop, &
+                &params%smpd_crop, pcgop, nfrozen_half)
+            if( size(pinds) + nfrozen_half < 1 ) THROW_HARD('PCG reconstruct3D half has neither particles nor a frozen term')
+            ! the ML replay re-reads these statistics: after the frozen add, so
+            ! priors are estimated on and applied to the union
+            if( params%l_ml_reg )then
+                raw_fname_here = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
+                call pcgop%write_raw_accum(raw_fname_here, state_here, eo_here, 1, 1, &
+                    &size(pinds) + nfrozen_half, pcg_raw_provenance(params))
                 call raw_fname_here%kill
             endif
             call obs%kill
@@ -2026,6 +2057,7 @@ contains
             type(pcg_solver_outcome) :: result
             real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             integer :: state = 0, eo = 0, nptcls = 0, niters = 0
+            integer :: nfrozen = 0     !< frozen particles added to the reduction (abinitio3D_addon)
             integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
             integer :: prior_npositive = 0
             character(len=8) :: half = '', solve_kind = ''
@@ -2065,8 +2097,20 @@ contains
         character(len=16) :: previous_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
+        type(frozen_accum) :: frozen_ctx
+        logical :: l_frozen_rec, l_frozen_seed
+        integer :: nfz_even, nfz_odd
 
         call validate_pcg_common(params)
+        ! abinitio3D_addon handshakes (in-process only): the master owns every
+        ! frozen read and write; workers only ever see their own particles
+        l_frozen_rec  = cline%defined('frozen_rec')
+        l_frozen_seed = cline%defined('frozen_seed')
+        if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
+        if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'pcg', &
+            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
+        if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'pcg', &
+            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
         ! the partition workers are idle during the master-side solve and NU
         ! filtering phases: on local execution use the full
         ! allocation, restored to nthr before returning to the matching
@@ -2134,6 +2178,9 @@ contains
                 l_odd_chain = file_exists(raw_fname)
                 if( l_even_chain .neqv. l_odd_chain ) THROW_HARD('PCG trailing chain pair is incomplete')
                 l_bootstrap = .not. l_even_chain
+                ! add-on mode never enters the legacy union-volume bootstrap
+                if( l_bootstrap .and. l_frozen_rec ) &
+                    &THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
             ! Build one selected support per state. It is installed in both
@@ -2146,6 +2193,8 @@ contains
             if( l_base_support_constrained ) base_support_kind = state_support_kind
             call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base', &
                 &solvent_even=solvent_even, solvent_odd=solvent_odd)
+            nfz_even = even_job%nfrozen
+            nfz_odd  = odd_job%nfrozen
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
@@ -2155,12 +2204,14 @@ contains
                     endif
                 endif
             endif
-            if( n_even == 0 .and. n_odd == 0 )then
+            ! n_even/n_odd count this run's own particles; an add-on half also
+            ! carries its frozen particles
+            if( n_even + nfz_even == 0 .and. n_odd + nfz_odd == 0 )then
                 write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
                     &' HAS NO SELECTED PARTICLES; SKIPPING'
                 cycle
             endif
-            if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('distributed PCG requires both halfsets')
+            if( n_even + nfz_even < 1 .or. n_odd + nfz_odd < 1 ) THROW_HARD('distributed PCG requires both halfsets')
             fname_even = refine3D_state_halfvol_fname(state, 'even')
             fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
             fname_vol  = refine3D_state_vol_fname(state)
@@ -2416,6 +2467,7 @@ contains
         endif
         call raw_fname%kill
         call state_support_msk%kill_bimg
+        call frozen_ctx%kill
         deallocate(res0143s, res05s, state_written, realized_fractions, update_weights, align_lps)
         !$ call omp_set_num_threads(params%nthr)
 
@@ -2672,6 +2724,7 @@ contains
             job%half = half
             job%solve_kind = solve_kind
             job%nptcls = 0
+            job%nfrozen = 0
             job%niters = 0
             job%ready = .false.
             job%l_ml_solve = present(fsc_prior)
@@ -2708,11 +2761,39 @@ contains
                 enddo
             endif
             job%time_reduce = real(toc(t_phase),dp)
-            if( job%nptcls == 0 )then
+            if( job%nptcls == 0 .and. .not. l_frozen_rec )then
                 call job%pcgop%kill
                 return
             endif
-            if( .not. job%l_ml_solve )then
+            if( job%nptcls == 0 )then
+                ! add-on half without a cohort particle, following the gridding
+                ! recurrence: the chain of a state without a cohort sample carries
+                ! unchanged (weight zero on the current sample, union F + chain);
+                ! in a sampled state an empty half decays like every other half,
+                ! T = (1-u)*T(t-1), and is rewritten; the stage-boundary seed of
+                ! an empty half is a zero-mass chain, so the trailing stages find it
+                if( .not. job%l_ml_solve )then
+                    fname = refine3D_pcg_trail_accum_fname(state_here, half)
+                    if( params%l_trail_rec )then
+                        if( .not. file_exists(fname) ) &
+                            &THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
+                        if( realized_fractions(state_here) < 0.001 )then
+                            call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
+                                &chain_provenance, 1.0, n_part)
+                        else
+                            if( 1.0-update_weights(state_here) > 0.01 ) &
+                                &call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
+                                &chain_provenance, 1.0-update_weights(state_here), n_part)
+                            call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, &
+                                &count_full_state_half(state_here, eo_here), chain_provenance)
+                        endif
+                    else if( pcg_trail_seed_requested(cline) )then
+                        call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, &
+                            &count_full_state_half(state_here, eo_here), chain_provenance)
+                    endif
+                    call fname%kill
+                endif
+            else if( .not. job%l_ml_solve )then
                 n_full_half = count_full_state_half(state_here, eo_here)
                 if( n_full_half < job%nptcls ) &
                     &THROW_HARD('PCG current half population exceeds its full population')
@@ -2744,6 +2825,20 @@ contains
                         &chain_provenance)
                 endif
                 call fname%kill
+                ! abinitio3D_addon producer: the frozen particles' raw pair at this box
+                if( l_frozen_seed ) call frozen_ctx%write_pcg_half(state_here, eo_here, params%box_crop, &
+                    &job%pcgop, job%nptcls)
+            endif
+            ! abinitio3D_addon consumer: the frozen raw pair joins the base and the
+            ! ML reduction alike, after the chain write and before end_accum, so
+            ! B/D, the priors and the solve all see the union
+            if( l_frozen_rec )then
+                call frozen_ctx%add_pcg_half(state_here, eo_here, params%box_crop, params%smpd_crop, &
+                    &job%pcgop, job%nfrozen)
+                if( job%nptcls + job%nfrozen == 0 )then
+                    call job%pcgop%kill
+                    return
+                endif
             endif
 
             t_phase = tic()

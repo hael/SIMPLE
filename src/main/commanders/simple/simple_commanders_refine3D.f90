@@ -2103,6 +2103,8 @@ contains
         call cline_pspec%delete('pcg_solvent')
         call cline_pspec%delete('pcg_solvent_lambda')
         call cline_pspec%delete('trail_seed')
+        call cline_pspec%delete('frozen_seed')
+        call cline_pspec%delete('frozen_rec')
         call cline_pspec%delete('outfile')
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
         call xcalc_pspec%execute(cline_pspec)
@@ -2187,6 +2189,15 @@ contains
                 ! is valid only in an NU filt_mode: there the caller's
                 ! filt_mode is kept, as on the direct route (simple_final_rec)
                 if( .not. l_automsk_nu ) call cline_rec%set('filt_mode', 'none')
+                if( cline_rec%defined('rec_backend') )then
+                    if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
+                        &call configure_final_pcg_solve_budget(cline, cline_rec)
+                endif
+            else if( cline_rec%defined('frozen_rec') )then
+                ! abinitio3D_addon: the frozen term exists on the run's backend
+                ! only, so the bootstrap map is built on that backend (one
+                ! frozen kind; the cost is one cold PCG solve at this box)
+                call cline_rec%set('postprocess', 'no')
                 if( cline_rec%defined('rec_backend') )then
                     if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
                         &call configure_final_pcg_solve_budget(cline, cline_rec)

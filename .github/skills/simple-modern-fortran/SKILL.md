@@ -48,6 +48,13 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
 - Do not declare a dummy argument `optional` when every valid caller supplies
   it; make the dependency explicit and update all callers together.
 - Preserve `new`/`kill` lifecycle symmetry for stateful types.
+- A new stateful module is an encapsulated class: `private` components,
+  `new`/`kill`, behavior as type-bound procedures, private helpers, getters
+  only for what production code reads, and no unrelated utilities exported
+  beside the type, which is named after its module (`simple_<x>` holds `<x>`).
+  Do not model it as a public record passed to free procedures, even where an
+  older module does (`simple_sigma2_state`); free-procedure modules are for
+  stateless utilities.
 - Watch for generated sources from `scripts/simple_args_generator.pl` and git-hash insertion during builds.
 - Keep new function-like preprocessor macro invocations on one physical line.
   `THROW_HARD(...)` and `THROW_WARN(...)` are expanded before Fortran parses the
