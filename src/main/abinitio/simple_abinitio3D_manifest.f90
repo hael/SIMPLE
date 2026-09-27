@@ -775,7 +775,7 @@ contains
         integer :: i
         do i = 1, size(MANIFEST_REPLAY_KEYS)
             call self%get_input(trim(MANIFEST_REPLAY_KEYS(i)), val, found)
-            if( found ) call set_typed(cline, trim(MANIFEST_REPLAY_KEYS(i)), trim(val))
+            if( found ) call cline%set_from_text(trim(MANIFEST_REPLAY_KEYS(i)), trim(val))
         enddo
         ! the particle source the frozen solution was reconstructed from, even
         ! when it came from the default
@@ -991,29 +991,6 @@ contains
                 &call sigma2_state_digest_integer(digest, spproj%os_ptcl3D%get_int(i, 'ogid'))
         enddo
     end function optics_ctf_digest
-
-    !> a recorded input value onto a command line, typed the way the parser types it
-    subroutine set_typed( cl, k, v )
-        class(cmdline),   intent(inout) :: cl
-        character(len=*), intent(in)    :: k, v
-        character(len=:), allocatable :: form
-        real    :: rval
-        integer :: ival, io_stat
-        call str2format(v, form, rval, ival)
-        select case(form)
-            case('real')
-                call cl%set(k, rval)
-            case('int')
-                ival = str2int(v, io_stat)
-                if( io_stat == 0 )then
-                    call cl%set(k, ival)
-                else
-                    call cl%set(k, v)
-                endif
-            case DEFAULT
-                call cl%set(k, v)
-        end select
-    end subroutine set_typed
 
     function int64_str( i ) result( str )
         integer(int64), intent(in) :: i

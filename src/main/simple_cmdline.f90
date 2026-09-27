@@ -43,6 +43,8 @@ type cmdline
     generic            :: assignment(=) => assign
     procedure, private :: set_1, set_2, set_3, set_4, set_5, set_6
     generic            :: set => set_1, set_2, set_3, set_4, set_5, set_6
+    procedure          :: set_from_text
+    procedure          :: copy_arg
     procedure          :: lookup
     procedure          :: get_argcnt
     procedure          :: get_keys
@@ -607,6 +609,46 @@ contains
             self%cmds(which)%carg = str
         endif
     end subroutine set_6
+
+    !> Set a key from its command-line text, typed the way the parser types a
+    !! value: a number is a real value, anything else a character value
+    subroutine set_from_text( self, key, val )
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(in)    :: key, val
+        character(len=:), allocatable :: form
+        real(kind=dp) :: rval
+        integer       :: ival, io_stat
+        call str2format(val, form, rval, ival)
+        select case(form)
+            case('real')
+                call self%set_1(key, rval)
+            case('int')
+                ival = str2int(adjustl(val), io_stat)
+                if( io_stat == 0 )then
+                    call self%set_4(key, ival)
+                else
+                    call self%set_3(key, adjustl(val))
+                endif
+            case DEFAULT
+                call self%set_3(key, adjustl(val))
+        end select
+    end subroutine set_from_text
+
+    !> One argument of another command line, with the type it holds there;
+    !! nothing when src does not define it
+    subroutine copy_arg( self, src, key )
+        class(cmdline),   intent(inout) :: self
+        class(cmdline),   intent(in)    :: src
+        character(len=*), intent(in)    :: key
+        integer :: which
+        which = src%lookup(key)
+        if( which == 0 ) return
+        if( src%cmds(which)%carg%is_allocated() )then
+            call self%set_5(key, src%cmds(which)%carg)
+        else
+            call self%set_1(key, src%cmds(which)%rarg)
+        endif
+    end subroutine copy_arg
 
     !> \brief for removing a command line argument
     subroutine delete( self, key )

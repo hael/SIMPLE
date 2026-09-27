@@ -10,9 +10,15 @@ use simple_sigma2_files,      only: canonical_sigma2_consumable
 implicit none
 
 public :: sigma2_estimate_available, ensure_sigma2_for_iteration
-public :: prepare_residual_sigma2_pass_cline
+public :: prepare_pspec_cline, prepare_residual_sigma2_pass_cline
 private
 #include "simple_local_flags.inc"
+
+!> what calc_pspec takes from the command line it is derived from: the
+!! particle segment and source, the mask, and the compute and queue settings;
+!! the rest of the execution environment is the project's compenv
+character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(7) = [character(len=10) :: &
+    &'oritype', 'mskdiam', 'ptcl_src', 'nthr', 'nparts', 'qsys_name', 'walltime']
 
 contains
 
@@ -50,42 +56,9 @@ contains
         logical,                  intent(out)   :: l_bootstrapped
         type(commander_calc_pspec) :: xcalc_pspec
         type(cmdline) :: cline_pspec
-        integer       :: state
         l_bootstrapped = .false.
         if( sigma2_estimate_available(projfile, box, smpd, l_sigma_glob) ) return
-        cline_pspec = template_cline
-        call cline_pspec%set('prg',                    'calc_pspec')
-        call cline_pspec%set('mkdir',                          'no')
-        call cline_pspec%set('projfile',                   projfile)
-        call cline_pspec%set('objfun',                     'euclid')
-        call cline_pspec%set('sigma_est',                  'global')
-        call cline_pspec%set('cc_emit_sigma',                  'no')
-        call cline_pspec%set('which_iter',           max(1, iter))
-        call cline_pspec%delete('part')
-        call cline_pspec%delete('update_frac')
-        call cline_pspec%delete('nsample')
-        call cline_pspec%delete('fillin')
-        call cline_pspec%delete('endit')
-        call cline_pspec%delete('startit')
-        call cline_pspec%delete('ml_reg')
-        call cline_pspec%delete('postprocess')
-        call cline_pspec%delete('combine_eo')
-        call cline_pspec%delete('rec_backend')
-        call cline_pspec%delete('maxits_pcg')
-        call cline_pspec%delete('maxits_ml')
-        call cline_pspec%delete('rtol')
-        call cline_pspec%delete('pcg_solvent')
-        call cline_pspec%delete('pcg_solvent_lambda')
-        call cline_pspec%delete('pcg_solvent_check')
-        call cline_pspec%delete('trail_seed')
-        call cline_pspec%delete('frozen_seed')
-        call cline_pspec%delete('frozen_rec')
-        call cline_pspec%delete('trail_rec')
-        call cline_pspec%delete('outfile')
-        do state = 1, 99
-            if( .not. cline_pspec%defined('vol'//int2str(state)) ) exit
-            call cline_pspec%delete('vol'//int2str(state))
-        enddo
+        call prepare_pspec_cline(template_cline, projfile, iter, cline_pspec)
         write(logfhandle,'(A,I0)') '>>> '//trim(label)// &
             &': no compatible canonical sigma2 state; seeding from particle power spectra at iteration ', max(1, iter)
         call xcalc_pspec%execute(cline_pspec)
@@ -93,10 +66,34 @@ contains
         l_bootstrapped = .true.
     end subroutine ensure_sigma2_for_iteration
 
+    !> The calc_pspec command line that seeds the canonical sigma2 state from
+    !! particle image power at iteration iter: a fresh, sparse line with the
+    !! PSPEC_TEMPLATE_KEYS the template defines
+    subroutine prepare_pspec_cline( template_cline, projfile, iter, cline_pspec )
+        class(cmdline), intent(in)    :: template_cline
+        class(string),  intent(in)    :: projfile
+        integer,        intent(in)    :: iter
+        type(cmdline),  intent(inout) :: cline_pspec
+        integer :: i
+        call cline_pspec%kill
+        call cline_pspec%set('prg',        'calc_pspec')
+        call cline_pspec%set('mkdir',      'no')
+        call cline_pspec%set('projfile',   projfile)
+        call cline_pspec%set('objfun',     'euclid')
+        call cline_pspec%set('sigma_est',  'global')
+        call cline_pspec%set('which_iter', max(1, iter))
+        do i = 1, size(PSPEC_TEMPLATE_KEYS)
+            call cline_pspec%copy_arg(template_cline, trim(PSPEC_TEMPLATE_KEYS(i)))
+        enddo
+    end subroutine prepare_pspec_cline
+
     !> refine3D command line for one residual sigma2 pass: no search, every
     !! particle's sigma2 re-estimated from its residual against the given state
     !! volumes at the template's sampling; no volume assembly, no orientation
     !! output. The pass commits its candidate as the next canonical generation.
+    !! It is the template's refinement in another mode, so it keeps every key
+    !! that defines the scoring (limits, crop, mask, source, filtering) and
+    !! drops only what samples, assembles, trails or seeds.
     subroutine prepare_residual_sigma2_pass_cline( template_cline, iter, nstates, vols, cline_sigma )
         class(cmdline), intent(in)    :: template_cline
         integer,        intent(in)    :: iter, nstates

@@ -82,7 +82,7 @@ tester module (section 4.1).
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator, frozen accumulator |
-| `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, cavg registration |
+| `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, sigma2 bootstrap, cavg registration |
 | `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter |
 | `unit_heterogeneity` | flex PCA, flex PCG operator |
 | `unit_parallel` | qsys control, qsys environment |
@@ -456,6 +456,19 @@ The assertion and reporting layer. A tester uses the assertions and
 A failed assertion records its message, with expected and actual values, and
 the suite goes on: every check of a run is reported, not only the first
 failure.
+
+### 5.2 Workflow-gate support
+
+Shared by the highlevel test commanders (`src/main/commanders/test/`, built
+with the tests); a new gate uses these instead of its own copies.
+
+| routine | use |
+|---|---|
+| `test_gate` (`simple_test_gate`): `new(fname)`, `check(name, ok)`, `metric(name, val, floor, ok)`, `report(name, val)`, `passed()`, `kill` | a gate's checks and metrics, logged as PASS/FAIL and tabulated in a TSV file (name, value, floor, pass) |
+| `validate_reconstructed_volume` (`simple_test_truth_metrics`) | a workflow's final map against its simulation truth: box and sampling, docking in both hands, correlation and masked-FSC floors |
+| `dock_both_hands`, `compare_to_truth` | the two steps of it, for a gate with its own floors |
+| `pair_pose_error` | poses against the simulation truth without docking (median error of relative rotation angles over seeded pairs) |
+| `add_gaussian_blob` | a blob that breaks the symmetry of a model map, so that c1 poses are unique |
 
 ## 6. The nightly suite
 

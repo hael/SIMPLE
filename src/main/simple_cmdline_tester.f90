@@ -23,6 +23,7 @@ contains
         call test_read_parsing()
         call test_gen_job_descr()
         call test_read_line_typed_values()
+        call test_set_from_text_and_copy_arg()
         ! call report_summary()
     end subroutine run_all_cmdline_tests
 
@@ -270,5 +271,36 @@ contains
         call cl%kill()
         call sval%kill
     end subroutine test_read_line_typed_values
+
+    !-----------------------------------------
+    ! 10. set_from_text types a value the way the parser does; copy_arg keeps
+    !     the type an argument holds
+    !-----------------------------------------
+    subroutine test_set_from_text_and_copy_arg()
+        type(cmdline) :: cl, dst
+        type(string)  :: sval
+        write(*,'(A)') 'test_set_from_text_and_copy_arg'
+        call cl%set_from_text('lpstop', '6.5')
+        call cl%set_from_text('nthr',   '16')
+        call cl%set_from_text('pgrp',   'c3')
+        call cl%set_from_text('vol1',   '/abs/refs/startvol_state01.mrc')
+        call assert_real(6.5, cl%get_rarg('lpstop'), 1.e-6, 'set_from_text: a real value')
+        call assert_int(16,   cl%get_iarg('nthr'),          'set_from_text: an integer value')
+        sval = cl%get_carg('pgrp')
+        call assert_string_eq('c3', sval, 'set_from_text: a character value')
+        sval = cl%get_carg('vol1')
+        call assert_string_eq('/abs/refs/startvol_state01.mrc', sval, 'set_from_text: a path keeps its slashes')
+        call dst%copy_arg(cl, 'lpstop')
+        call dst%copy_arg(cl, 'pgrp')
+        call dst%copy_arg(cl, 'nsample')   ! not defined in cl
+        call assert_real(6.5, dst%get_rarg('lpstop'), 1.e-6, 'copy_arg: a real value stays real')
+        sval = dst%get_carg('pgrp')
+        call assert_string_eq('c3', sval, 'copy_arg: a character value stays character')
+        call assert_false(dst%defined('nsample'), 'copy_arg: an undefined argument is not created')
+        call assert_int(2, dst%get_argcnt(), 'copy_arg: only the defined arguments are copied')
+        call cl%kill()
+        call dst%kill()
+        call sval%kill
+    end subroutine test_set_from_text_and_copy_arg
 
 end module simple_cmdline_tester

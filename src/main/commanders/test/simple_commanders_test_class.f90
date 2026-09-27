@@ -50,6 +50,7 @@ use simple_qsys_ctrl_tester,                 only: run_all_qsys_ctrl_tests
 use simple_qsys_env_tester,                  only: run_all_qsys_env_tests
 use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relations_tests
 use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
+use simple_sigma2_bootstrap_tester,          only: run_all_sigma2_bootstrap_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
 use simple_classaverager_tester,             only: run_all_classaverager_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
@@ -373,6 +374,7 @@ contains
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
         call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
+        call add_suite(s, n, 'sigma2 bootstrap',         run_all_sigma2_bootstrap_tests)
         call add_suite(s, n, 'cavg registration',          run_all_cavg_registration_tests)
     end subroutine suites_pftc_align2D3D
 

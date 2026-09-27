@@ -1608,7 +1608,9 @@ contains
         geodesic_dist_frobdev = geodesic_frobdev(self1%get_euler(), self2%get_euler())
     end function geodesic_dist_frobdev
 
-    ! computing the angle of the difference rotation, see http://www.boris-belousov.net/2016/12/01/quat-dist/
+    ! computing the angle (radians) of the difference rotation, see
+    ! http://www.boris-belousov.net/2016/12/01/quat-dist/; round-off pushes the
+    ! cosine just past 1 for (near-)equal rotations, so it is clamped to [-1,1]
     pure function geodesic_dist_trace( self1, self2 ) result(angle)
         class(ori), intent(in) :: self1, self2
         real :: angle, mat_diff(3, 3), arg_tr, mat1(3,3), mat2(3,3), euls1(3), euls2(3)
@@ -1617,12 +1619,8 @@ contains
         mat1  = euler2m(euls1)
         mat2  = euler2m(euls2)
         mat_diff = matmul(mat1, transpose(mat2))
-        arg_tr   = (trace(mat_diff) - 1.)/2.
-        if( arg_tr < -1 .or. arg_tr > 1)then
-            angle = huge(arg_tr)
-        else
-            angle = acos(arg_tr)
-        endif
+        arg_tr   = max(-1., min(1., (trace(mat_diff) - 1.)/2.))
+        angle    = acos(arg_tr)
     end function geodesic_dist_trace
 
     ! CLASSIC DISTANCE METRICS

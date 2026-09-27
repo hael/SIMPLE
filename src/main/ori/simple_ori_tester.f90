@@ -4,6 +4,7 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! dp, STDLEN, etc.
 use simple_ori,       only: ori
 use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev
+use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
 use simple_chash,     only: chash
@@ -505,7 +506,32 @@ contains
         d_trace = a%geodesic_dist_trace(b)
         call assert_true(d_frob  > 0.0, 'geodesic_frobdev > 0 for different')
         call assert_true(d_trace > 0.0, 'geodesic_dist_trace > 0 for different')
+        ! 30 degrees about one axis is 30 degrees of difference rotation
+        call assert_real(30.0, rad2deg(d_trace), DEG_TOL, 'geodesic_dist_trace is the difference angle')
+        call test_geodesic_trace_self_distance()
     end subroutine test_geodesic_metrics
+
+    !> Every rotation is at distance ~0 from itself: round-off pushes the
+    !! cosine of the difference angle just past 1 for some rotations, which
+    !! must be clamped, not reported as a huge distance. 1000 seeded random
+    !! rotations, a sample in which that round-off occurs.
+    subroutine test_geodesic_trace_self_distance()
+        integer, parameter :: NROT = 1000
+        type(ori) :: a
+        real    :: e(3), r(3), d, dmax
+        integer :: i
+        call a%new_ori(.false.)
+        call set_fixed_seed(20260926)
+        dmax = 0.
+        do i = 1, NROT
+            call random_number(r)
+            e = [360.*r(1), 180.*r(2), 360.*r(3)]
+            call a%set_euler(e)
+            d    = a%geodesic_dist_trace(a)
+            dmax = max(dmax, d)
+        enddo
+        call assert_true(dmax < 1.e-2, 'geodesic_dist_trace of a rotation with itself is ~0 (clamped cosine)')
+    end subroutine test_geodesic_trace_self_distance
 
     !---------------- euler_compose vs compeuler ----------------
 

@@ -2056,7 +2056,7 @@ contains
     subroutine exec_bootstrap_rec3D( self, cline )
         use simple_commanders_rec,    only: commander_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
-        use simple_sigma2_bootstrap,  only: prepare_residual_sigma2_pass_cline
+        use simple_sigma2_bootstrap,  only: prepare_pspec_cline, prepare_residual_sigma2_pass_cline
         use simple_abinitio_utils,    only: configure_final_pcg_solve_budget, strip_pcg_backend_keys
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -2089,23 +2089,7 @@ contains
         ! estimator sat on a different basis than the residual sigmas a
         ! refinement then computes and conditioned the euclid system markedly
         ! worse (bgal residual 0.23 vs 0.08, refine3D_auto startup record).
-        cline_pspec = cline
-        call cline_pspec%set('prg',       'calc_pspec')
-        call cline_pspec%set('mkdir',              'no')
-        call cline_pspec%set('objfun',       'euclid')
-        call cline_pspec%set('sigma_est',    'global')
-        call cline_pspec%set('which_iter',  which_iter)
-        call cline_pspec%delete('postprocess')
-        call cline_pspec%delete('combine_eo')
-        call cline_pspec%delete('rec_backend')
-        call cline_pspec%delete('maxits_pcg')
-        call cline_pspec%delete('rtol')
-        call cline_pspec%delete('pcg_solvent')
-        call cline_pspec%delete('pcg_solvent_lambda')
-        call cline_pspec%delete('trail_seed')
-        call cline_pspec%delete('frozen_seed')
-        call cline_pspec%delete('frozen_rec')
-        call cline_pspec%delete('outfile')
+        call prepare_pspec_cline(cline, params%projfile, which_iter, cline_pspec)
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
         call xcalc_pspec%execute(cline_pspec)
         call cline_pspec%kill

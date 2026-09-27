@@ -722,11 +722,10 @@ contains
                 case('prg', 'projfile', 'projfile_frozen', 'mkdir')
                     cycle
             end select
-            if( cline%defined(trim(ADDON_ACCEPTED_KEYS(i))) ) &
-                &call copy_key(cline, cline_run, trim(ADDON_ACCEPTED_KEYS(i)))
+            call cline_run%copy_arg(cline, trim(ADDON_ACCEPTED_KEYS(i)))
         enddo
         do i = 1, size(ADDON_ENV_KEYS)
-            if( cline%defined(trim(ADDON_ENV_KEYS(i))) ) call copy_key(cline, cline_run, trim(ADDON_ENV_KEYS(i)))
+            call cline_run%copy_arg(cline, trim(ADDON_ENV_KEYS(i)))
         enddo
         call cline_run%set('addon_manifest', man%get_fname())
         call man%kill
@@ -773,42 +772,6 @@ contains
             call tmpname%kill
             call manifest_abs%kill
         end subroutine publish_result
-
-        !> a value onto a command line with the type the parser would give it
-        subroutine set_typed( cl, k, v )
-            class(cmdline),   intent(inout) :: cl
-            character(len=*), intent(in)    :: k, v
-            character(len=:), allocatable :: form
-            real    :: rval
-            integer :: ival, io_stat
-            call str2format(v, form, rval, ival)
-            select case(form)
-                case('real')
-                    call cl%set(k, rval)
-                case('int')
-                    ival = str2int(v, io_stat)
-                    if( io_stat == 0 )then
-                        call cl%set(k, ival)
-                    else
-                        call cl%set(k, v)
-                    endif
-                case DEFAULT
-                    call cl%set(k, v)
-            end select
-        end subroutine set_typed
-
-        subroutine copy_key( src, dst, k )
-            class(cmdline),   intent(in)    :: src
-            class(cmdline),   intent(inout) :: dst
-            character(len=*), intent(in)    :: k
-            type(chash)  :: descr
-            type(string) :: v
-            call src%gen_job_descr(descr)
-            v = descr%get(k)
-            call set_typed(dst, k, v%to_char())
-            call descr%kill
-            call v%kill
-        end subroutine copy_key
 
     end subroutine exec_abinitio3D_addon
 
