@@ -68,12 +68,14 @@ shifts, state assignments, half assignments, CTF parameters, phase shifts and
 `ctfflag` are read from the project and are never optimized by reconstruction.
 The Euclidean objective uses per-particle `sigma2`; correlation is unweighted.
 `mskdiam` supplies the spherical fallback support and `pgrp` is applied by
-coordinate replication. `automsk=yes` replaces it with density support;
-`automsk=nu` prefers lagged NU-evidence support and falls back to density.
+coordinate replication. `automsk=yes` and `automsk=nu` replace it with density
+support; the NU-evidence envelope is never a solve support.
 
-Shared execution accumulates and solves both halfsets in-process. Distributed
-workers publish raw accumulators and the master reduces, finalizes and solves
-them. Standard project volumes, halfmaps, FSC, cFAR, resolution fields and
+Both execution modes run one route: workers publish raw accumulators and the
+master reduces, finalizes and solves them. Shared-memory execution runs it in
+one process, as the only worker and then the master (2026-09-27; the separate
+in-process solve route and its refusal of fractional and trailing
+reconstruction are retired). Standard project volumes, halfmaps, FSC, cFAR, resolution fields and
 postprocessing handoffs are written by the ordinary `reconstruct3D` workflow.
 Per-half diagnostics record stop reason, requested/completed iteration count,
 convergence flag, initial/final true relative residual, final relative update,
@@ -108,7 +110,7 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 | File | Contents |
 | --- | --- |
 | `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type |
-| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | shared worker/master PCG orchestration |
+| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | PCG worker accumulation and master reduction and solve, for both execution modes |
 | `src/defs/simple_refine3D_fnames.f90` | raw `(state,half,part)` artifact names |
 | `src/main/commanders/simple/simple_commanders_rec.f90` | `reconstruct3D` commander and backend default |
 | `src/main/ui/simple/simple_ui_refine3D.f90` | `reconstruct3D` UI and backend selector |
@@ -249,9 +251,17 @@ post-hoc mask and no phase-randomized correction are applied to it, and the
 `>>> FSC MODE` line in the log and the resolution text says so. This is a
 deliberate, reported choice, not a claim that a constrained estimate is free
 of masked-FSC bias.
-With `automsk=nu`, the same contract uses the compatible lagged NU-evidence
-artifact and falls back to density; a first solve without either source
-bootstraps on the sphere.
+With `automsk=nu` the same contract holds: the density envelope is the
+support of both solves, and the NU-evidence envelope is never installed as a
+solve support (review 2026-09-17). The evidence null of a constrained base pair
+lies on the density envelope's dilation ring, outside an evidence envelope, so
+an evidence-supported solve would empty its own null, invalidate the next
+envelope and fall back to a density envelope derived from a map that is zero
+outside the evidence support: an oscillating support with no way back for
+density the evidence excluded (the micelle in the PfCRT collapse, 2026-09-02).
+Under `nu` the evidence envelope multiplies the matching references (assembly,
+matcher fallback) and masks the gridding FSC post hoc. A first solve without a
+density source bootstraps on the sphere.
 
 Before any reconstruction-derived density source exists, the base necessarily
 bootstraps on the sphere and its completed pair supplies the conservative
@@ -528,8 +538,9 @@ particle I/O loop, and replicated symmetry through the matrix-free operator
 Not implemented, and hard-errored or absent rather than silently approximated:
 
 - no orientation search or pose optimization inside reconstruction;
-- no online pose update inside reconstruction; distributed fractional/trailing
-  reconstruction is supported through persisted raw accumulator chains;
+- no online pose update inside reconstruction; fractional/trailing
+  reconstruction is supported through persisted raw accumulator chains, in
+  shared-memory and distributed execution alike;
 - no post-hoc masking of PCG maps; NU filtering is the assembly-owned
   competition shared with gridding and writes derived `_nu_filt` products
   without touching the primary maps;

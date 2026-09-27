@@ -44,12 +44,17 @@
 !  on a data set.
 module simple_pcg_solvent_sidecar
 use simple_core_module_api
-use simple_parameters, only: parameters
-use simple_image,      only: image
+use simple_parameters,        only: parameters
+use simple_image,             only: image
+use simple_image_msk,         only: image_msk
+use simple_reconstructor_pcg, only: reconstructor_pcg
+use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname
 implicit none
 
 public :: build_solvent_prior_weight, pcg_solvent_stats, estimate_solvent_prior_lambda, pcg_solvent_lambda_stats, &
     &solvent_prior_cross_half_objective, PCG_SOLVENT_LAMBDA_GRID
+public :: prepare_solvent_prior_on_pair, write_pcg_solvent_pair, solvent_prior_provenance, &
+    &build_solvent_check_support
 private
 #include "simple_local_flags.inc"
 
@@ -333,5 +338,194 @@ contains
         j = sum(diff, mask=lmask) / real(nmask)
         deallocate(sigma_r, diff, lmask)
     end function solvent_prior_cross_half_objective
+
+    !> pcg_solvent=yes: the per-half protein weights of the soft solvent prior,
+    !! each from its own prior-free base half so the pair stays gold-standard;
+    !! the solve support only selects the voxels the threshold is estimated on.
+    subroutine build_pcg_solvent_prior_weight( params, state_here, base_even, base_odd, res0143, state_support, &
+        &l_state_support, weight, l_weight, base_support_out )
+        class(parameters),     intent(in)    :: params
+        integer,               intent(in)    :: state_here
+        class(image),          intent(in)    :: base_even, base_odd
+        real,                  intent(in)    :: res0143
+        class(image),          intent(in)    :: state_support
+        logical,               intent(in)    :: l_state_support
+        type(image),           intent(inout) :: weight(2) !< (1) even, (2) odd
+        logical,               intent(out)   :: l_weight
+        type(image), optional, intent(inout) :: base_support_out !< the production support the weights were drawn on
+        type(image)             :: base_support
+        real                    :: lambda_tag
+        type(pcg_solvent_stats) :: stats_even, stats_odd
+        type(string)            :: fname_even, fname_odd, fbody
+        real, allocatable       :: ones(:,:,:)
+        real                    :: corr
+        logical                 :: l_explicit
+        l_weight = .false.
+        if( .not. params%l_pcg_solvent ) return
+        if( res0143 <= 0. )then
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+                &', no base-pair resolution available; prior not applied'
+            return
+        endif
+        l_explicit = .false.
+        if( params%pcg_mskfile%is_allocated() ) l_explicit = len_trim(params%pcg_mskfile%to_char()) > 0
+        if( l_explicit )then
+            call base_support%read_and_crop(params%pcg_mskfile, params%smpd, params%box_crop, params%smpd_crop)
+        else if( l_state_support )then
+            call base_support%copy(state_support)
+        else
+            allocate(ones(params%box_crop,params%box_crop,params%box_crop), source=1.0)
+            call base_support%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call base_support%set_rmat(ones, .false.)
+            call base_support%mask3D_soft(params%msk_crop, backgr=0.)
+            deallocate(ones)
+        endif
+        call weight(1)%kill
+        call weight(2)%kill
+        lambda_tag = params%pcg_solvent_lambda
+        if( params%l_pcg_solvent_lambda_auto ) lambda_tag = -1. ! reported as auto
+        call build_solvent_prior_weight(state_here, 'even', base_even, res0143, base_support, lambda_tag, &
+            &weight(1), stats_even)
+        call build_solvent_prior_weight(state_here, 'odd',  base_odd,  res0143, base_support, lambda_tag, &
+            &weight(2), stats_odd)
+        if( present(base_support_out) )then
+            call base_support_out%copy(base_support)
+        endif
+        call base_support%kill
+        l_weight = .true.
+        ! the half-independent weights must agree: report their correlation and
+        ! solvent fractions, and write both beside the map
+        corr = weight(1)%real_corr(weight(2))
+        write(logfhandle,'(A,I0,A,F6.3,A,F6.2,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+            &', even/odd weight correlation ', corr, ', solvent fraction gap ', &
+            &100.*abs(stats_even%solvent_frac - stats_odd%solvent_frac), ' %'
+        ! pcg_solvent_weight_stateNN_even|odd.mrc, overwritten every iteration
+        fbody = string(PCG_SOLVENT_WEIGHT_FBODY)//int2str_pad(state_here,2)
+        fname_even = fbody//'_even'//MRC_EXT
+        fname_odd  = fbody//'_odd'//MRC_EXT
+        call fbody%kill
+        call weight(1)%write(fname_even, del_if_exists=.true.)
+        call weight(2)%write(fname_odd,  del_if_exists=.true.)
+        write(logfhandle,'(A)') '>>> PCG SOLVENT PRIOR: weights written to '//fname_even%to_char()//' and '//fname_odd%to_char()
+        call fname_even%kill
+        call fname_odd%kill
+    end subroutine build_pcg_solvent_prior_weight
+
+    !> pcg_solvent=yes: the ridge re-solve written beside the base pair as
+    !! <half>_solvent, a diagnostic that nothing in the iteration reads back
+    subroutine write_pcg_solvent_pair( params, state_here, solvent_even, solvent_odd )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        class(image),      intent(inout) :: solvent_even, solvent_odd
+        type(string) :: fname
+        fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'even'), MRC_EXT, '_solvent')
+        call solvent_even%write(fname, del_if_exists=.true.)
+        fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'odd'), MRC_EXT, '_solvent')
+        call solvent_odd%write(fname, del_if_exists=.true.)
+        if( params%part == 1 ) write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+            &', prior-free pair written as _unfil (FSC, NU competition, evidence, postprocess), '//&
+            &'prior''d pair as _solvent (replay base, NU references)'
+        call fname%kill
+    end subroutine write_pcg_solvent_pair
+
+    !> pcg_solvent=yes, between the prior-free base solve and its re-solve: the
+    !! prior-free pair's FSC=0.143 sets the smoothing scale, the per-half
+    !! weights come from the prior-free halves and the ridge goes on both
+    !! operators. The prior-free pair stays the base pair (FSC, NU, _unfil).
+    subroutine prepare_solvent_prior_on_pair( params, state_here, pcgop_even, pcgop_odd, x_even, x_odd, &
+        &state_support, l_state_support, weight, l_weight, res0143_prior_free, lambda_rel_out )
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: state_here
+        class(reconstructor_pcg), intent(inout) :: pcgop_even, pcgop_odd
+        real,                     intent(in)    :: x_even(:,:,:), x_odd(:,:,:)
+        class(image),             intent(in)    :: state_support
+        logical,                  intent(in)    :: l_state_support
+        type(image),              intent(inout) :: weight(2)
+        logical,                  intent(out)   :: l_weight
+        real,                     intent(out)   :: res0143_prior_free
+        real,                     intent(out)   :: lambda_rel_out !< the ridge installed on both operators
+        type(image)                    :: prov_even, prov_odd, base_support
+        type(pcg_solvent_lambda_stats) :: lstats
+        real, allocatable              :: corrs(:), res(:)
+        real                           :: fsc05, lambda_rel
+        integer                        :: n
+        l_weight = .false.
+        res0143_prior_free = 0.
+        lambda_rel_out = 0.
+        if( .not. params%l_pcg_solvent ) return
+        n = fdim(params%box_crop) - 1
+        if( n < 1 ) THROW_HARD('solvent prior: box too small for an FSC; prepare_solvent_prior_on_pair')
+        call prov_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call prov_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call prov_even%set_rmat(x_even, .false.)
+        call prov_odd%set_rmat( x_odd,  .false.)
+        allocate(corrs(n), source=0.)
+        call prov_even%fft
+        call prov_odd%fft
+        call prov_even%fsc(prov_odd, corrs)
+        call prov_even%ifft
+        call prov_odd%ifft
+        res = get_resarr(params%box_crop, params%smpd_crop)
+        call get_resolution(corrs, res, fsc05, res0143_prior_free)
+        write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') '>>> PCG SOLVENT PRIOR: STATE ', state_here, &
+            &', prior-free base pair FSC=0.143 ', res0143_prior_free, ' A, FSC=0.5 ', fsc05, &
+            &' A (reference for the prior-free/prior comparison and the smoothing scale)'
+        call build_pcg_solvent_prior_weight(params, state_here, prov_even, prov_odd, res0143_prior_free, &
+            &state_support, l_state_support, weight, l_weight, base_support_out=base_support)
+        deallocate(corrs, res)
+        if( .not. l_weight )then
+            call prov_even%kill
+            call prov_odd%kill
+            call base_support%kill
+            return
+        endif
+        ! the strength: the command-line value, or the cross-validated estimate
+        ! (simple_pcg_solvent_sidecar)
+        if( params%l_pcg_solvent_lambda_auto )then
+            call estimate_solvent_prior_lambda(state_here, prov_even, prov_odd, weight(1), weight(2), base_support, &
+                &pcgop_even%get_realspace_diagonal(), pcgop_odd%get_realspace_diagonal(), &
+                &pcgop_even%get_data_scale(), pcgop_odd%get_data_scale(), lambda_rel, lstats)
+        else
+            lambda_rel = params%pcg_solvent_lambda
+        endif
+        lambda_rel_out = lambda_rel
+        call prov_even%kill
+        call prov_odd%kill
+        call base_support%kill
+        call pcgop_even%set_solvent_prior(weight(1), lambda_rel)
+        call pcgop_odd%set_solvent_prior( weight(2), lambda_rel)
+    end subroutine prepare_solvent_prior_on_pair
+
+    !> the solvent_prior= line of the support provenance sidecar; lambda_eff is
+    !! the ridge in force (prepare_solvent_prior_on_pair)
+    function solvent_prior_provenance( params, lambda_eff ) result( str )
+        class(parameters), intent(in) :: params
+        real,              intent(in) :: lambda_eff
+        character(len=64) :: str
+        if( params%l_pcg_solvent_lambda_auto )then
+            write(str,'(A,F0.3,A)') 'soft per_half base_pair lambda_rel=', lambda_eff, ' auto'
+        else
+            write(str,'(A,F0.3,A)') 'soft per_half base_pair lambda_rel=', params%pcg_solvent_lambda, ' set'
+        endif
+    end function solvent_prior_provenance
+
+    !> The production support of the strength estimate: the state
+    !! support when constrained, the soft sphere otherwise.
+    subroutine build_solvent_check_support( params, state_support_msk, l_state_support, support )
+        class(parameters), intent(in)    :: params
+        type(image_msk),   intent(in)    :: state_support_msk
+        logical,           intent(in)    :: l_state_support
+        type(image),       intent(inout) :: support
+        real, allocatable :: ones(:,:,:)
+        if( l_state_support )then
+            call support%copy(state_support_msk)
+        else
+            allocate(ones(params%box_crop,params%box_crop,params%box_crop), source=1.0)
+            call support%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call support%set_rmat(ones, .false.)
+            call support%mask3D_soft(params%msk_crop, backgr=0.)
+            deallocate(ones)
+        endif
+    end subroutine build_solvent_check_support
 
 end module simple_pcg_solvent_sidecar

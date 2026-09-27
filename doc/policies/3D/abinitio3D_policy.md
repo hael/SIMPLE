@@ -507,18 +507,27 @@ failed manifest write warns and leaves the run as it is.
 
 ## 11. abinitio3D_addon
 
-`abinitio3D_addon projfile=<superset> projfile_frozen=<abinitio3D run project>`
-extends a completed `abinitio3D` solution with the particles the current
-project adds (the cohort); the frozen particles contribute their accumulators
-unsearched. The design, its contracts and its limits are in
-`doc/implementation_notes/abinitio3D_addon_mode_proposal.md`. In short:
+`abinitio3D_addon projfile=<current> projfile_frozen=<abinitio3D or abinitio3D_addon run project>`
+extends a completed solution with the particles the current project adds (the
+cohort); the frozen particles contribute their accumulators unsearched. Its
+policy is [abinitio3D_addon_policy.md](abinitio3D_addon_policy.md); the design
+history is in
+`doc/implementation_notes/completed/abinitio3D_addon_mode_proposal.md`. In
+short:
 
-- Only a direct `abinitio3D` output whose manifest validates against its
-  project is accepted; the solution's settings are replayed from the manifest
-  and refused on the command line, which carries only the 11 add-on inputs.
-- Both projects must share one particle index space, row by row; the cohort
-  needs at least 5 particles per inherited state (a warning below 5 % of the
-  frozen population).
+- Only an `abinitio3D` or `abinitio3D_addon` output whose manifest validates
+  against its project is accepted, so add-ons chain; the solution's settings
+  are replayed from the manifest and refused on the command line, which
+  carries only the 11 add-on inputs.
+- Both projects must share one particle index space: row `i` names the same
+  image in both wherever both hold a row `i`, and they may differ in size. Rows
+  the current project appends past the frozen project's last row (a stream's
+  later particle sets) join the cohort; appended rows from a stack the frozen
+  project holds are refused. Every frozen particle must lie within the current
+  project's rows and be active there. The cohort needs at least 5
+  particles per inherited state (a warning below 5 % of the frozen population).
+- The execution-environment keys pass through, the stream's persistent-worker
+  keys (`worker_server`, `worker_priority`) included.
 - The run enters at stage 3 of the base run's planned ladder with
   `center=no` and `overlap` 0.95 by default; the stage limits follow the rule
   above (FSC=0.5 promotion from the union FSC, the NU handoff in the NU
@@ -530,7 +539,12 @@ unsearched. The design, its contracts and its limits are in
   resolution (docked below 0.9), the cohort-only map against the base map
   with `addon_diag=yes`, and both runs' stage limits. A regression is warned
   about; the result is published all the same.
-- `mkdir=yes` by default; `mkdir=no` is for NICE. When the run has completed,
-  the finished project (every particle posed, no sigma2 registration) replaces
-  the current project file; the frozen project is never written. The add-on's
-  own manifest is not eligible as a frozen input.
+- The frozen rows are restored before the final reconstruction and the
+  cohort-only sigma2 registration is dropped, so the final reconstruction
+  bootstraps the union's sigma2 state over every particle exactly as
+  `bootstrap_rec3D` does, and ships the union map on it.
+- `mkdir=yes` by default; `mkdir=no` is for NICE and the stream. When the run
+  has completed, the finished project (every particle posed, the union's
+  sigma2 state) replaces the current project file; the frozen project is never
+  written. The add-on's own manifest is eligible: the output is the frozen
+  input of the next add-on.

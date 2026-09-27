@@ -29,7 +29,7 @@ use simple_kbinterpol,      only: kbinterpol
 use simple_linalg,          only: eigsrt, jacobi, matinv, norm_2, svdcmp, svdfit, svd_multifit, euclid, hyp, myacos, deg2rad, rad2deg, pythag,&
                                  &eigh, arg, fit_lsq_plane, fit_straight_line, plane_from_points, projz, trace, ang2vox, vox2ang
 use simple_magic_boxes,     only: magic_pftsz, find_larger_magic_box, find_magic_box, print_magic_box_range, autoscale
-use simple_map_reduce,      only: split_nobjs_even
+use simple_map_reduce,      only: split_nobjs_even, split_nobjs_active
 use simple_math,            only: otsu, pixels_dist, equispaced_vals, put_last, bounds_from_mask3D, elim_dup, mode, sortmeans,&
                                  &quantize_vec_serial, quantize_vec, quadri, create_hist_vector, round2even, round2odd, rotmat2d, gauwfun,&
                                  &gaussian1D, gaussian2D, gaussian3D, shft, cross, get_pixel_pos, hac_1d, hac_1d_fast

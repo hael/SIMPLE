@@ -1,15 +1,19 @@
 !@descr: abinitio3D_addon superset relation of a current and a frozen project: identity, frozen/cohort membership, masking and restoration
-! The two projects share one particle index space: the frozen project was
-! derived from the current one, or both from a common ancestor, by selection.
-! Equal row counts and stack tables do not prove that row i is the same image,
-! so every row of both projects is resolved through map_ptcl_ind2stk_ind in
-! ptcl2D and ptcl3D and must name the same stack file and physical image, with
-! the same stack geometry (and the same denoised source image when the solution
-! was reconstructed from ptcl_src=den), and the frozen rows the same CTF
-! parameters.
+! The two projects share one particle index space: row i names the same image
+! in both wherever both hold a row i. They may differ in size. The current
+! project may extend the frozen one by appended rows (a stream adding particle
+! sets after the base run), and the frozen project may run past the current
+! project's last row as long as no frozen particle lies there. Equal row counts
+! and stack tables would not prove that row i is the same image, so every
+! shared row is resolved through map_ptcl_ind2stk_ind in ptcl2D and ptcl3D and
+! must name the same stack file and physical image, with the same stack
+! geometry (and the same denoised source image when the solution was
+! reconstructed from ptcl_src=den), and the frozen rows the same CTF
+! parameters. Appended rows must come from stacks the frozen project does not
+! hold, so that no image enters the union twice.
 ! Membership is defined once:
 !   frozen = frozen ptcl3D state > 0 .and. updatecnt > 0
-!   cohort = current ptcl2D state > 0 .and. .not. frozen
+!   cohort = current ptcl2D state > 0 .and. .not. frozen (appended rows included)
 ! The cohort is labelled into the inherited states by balanced labelling, so
 ! the per-state floor holds exactly when every state receives at least
 ! MIN_COHORT_STATE_POP of ncohort/nstates.
@@ -33,7 +37,7 @@ real,    parameter :: COHORT_WARN_FRAC     = 0.05 !< warn below this fraction of
 !! frozen rows, the cohort, and the current ptcl2D states saved by masking
 type :: project_superset
     private
-    integer :: nrows = 0, nstates = 0
+    integer :: nrows = 0, nrows_frozen = 0, nstates = 0 !< row counts of the current and the frozen project
     integer :: nfrozen = 0, ncohort = 0, nnever_updated = 0
     logical, allocatable :: l_frozen(:)
     integer, allocatable :: nfrozen_state(:)
@@ -75,12 +79,13 @@ contains
         if( status /= 0 ) return
         status = 1
         n = cur%os_ptcl3D%get_noris()
-        self%nrows   = n
-        self%nstates = nstates
+        self%nrows        = n
+        self%nrows_frozen = frozen%os_ptcl3D%get_noris()
+        self%nstates      = nstates
         allocate(self%l_frozen(n), l_cohort(n), source=.false.)
         allocate(self%nfrozen_state(nstates), source=0)
         do i = 1, n
-            self%l_frozen(i) = is_frozen_row(frozen, i)
+            if( i <= self%nrows_frozen ) self%l_frozen(i) = is_frozen_row(frozen, i)
             if( self%l_frozen(i) )then
                 s = frozen%os_ptcl3D%get_state(i)
                 if( s > nstates )then
@@ -91,8 +96,9 @@ contains
                 self%nfrozen_state(s) = self%nfrozen_state(s) + 1
             else
                 l_cohort(i) = cur%os_ptcl2D%get_state(i) > 0
-                if( l_cohort(i) .and. frozen%os_ptcl3D%get_state(i) > 0 ) &
-                    &self%nnever_updated = self%nnever_updated + 1
+                if( l_cohort(i) .and. i <= self%nrows_frozen )then
+                    if( frozen%os_ptcl3D%get_state(i) > 0 ) self%nnever_updated = self%nnever_updated + 1
+                endif
             endif
         enddo
         self%nfrozen = count(self%l_frozen)
@@ -163,14 +169,15 @@ contains
 
     !> Restore the frozen rows from the frozen project (projection, correlation,
     !! fraction, sampled, updatecnt, eo, Euler angles, shifts and state) and
-    !! every row's saved ptcl2D state; cohort 3D records are left as they are
+    !! every row's saved ptcl2D state; cohort 3D records, appended rows'
+    !! included, are left as they are
     subroutine restore( self, spproj, frozen )
         class(project_superset), intent(in)    :: self
         class(sp_project),       intent(inout) :: spproj
         class(sp_project),       intent(in)    :: frozen
         integer :: i
         if( .not. allocated(self%saved_state2D) ) THROW_HARD('frozen rows were never masked')
-        if( spproj%os_ptcl3D%get_noris() /= self%nrows .or. frozen%os_ptcl3D%get_noris() /= self%nrows ) &
+        if( spproj%os_ptcl3D%get_noris() /= self%nrows .or. frozen%os_ptcl3D%get_noris() /= self%nrows_frozen ) &
             &THROW_HARD('frozen-row restore does not match the working project')
         do i = 1, self%nrows
             call spproj%os_ptcl2D%set_state(i, self%saved_state2D(i))
@@ -212,7 +219,7 @@ contains
 
     subroutine kill( self )
         class(project_superset), intent(inout) :: self
-        self%nrows = 0; self%nstates = 0
+        self%nrows = 0; self%nrows_frozen = 0; self%nstates = 0
         self%nfrozen = 0; self%ncohort = 0; self%nnever_updated = 0
         if( allocated(self%l_frozen)      ) deallocate(self%l_frozen)
         if( allocated(self%nfrozen_state) ) deallocate(self%nfrozen_state)
@@ -228,17 +235,20 @@ contains
         if( l_frozen ) l_frozen = frozen%os_ptcl3D%get_updatecnt(i) > 0
     end function is_frozen_row
 
-    !> Row-wise physical identity of the current and the frozen project, and
-    !! the superset relation. With l_den the denoised source image of every
-    !! row must be the same as well. status /= 0 names the defect and, for a
-    !! row defect, the first offending particle index.
+    !> Row-wise physical identity of the current and the frozen project on the
+    !! rows both hold, and the superset relation: every frozen particle lies
+    !! within the current project's rows, and appended rows (beyond the frozen
+    !! project's last row) come from stacks the frozen project does not hold.
+    !! With l_den the denoised source image of every shared row must be the
+    !! same as well, and every appended row must have one. status /= 0 names
+    !! the defect and, for a row defect, the first offending particle index.
     subroutine validate_identity( cur, frozen, l_den, status, msg )
         class(sp_project), intent(inout) :: cur, frozen
         logical,           intent(in)    :: l_den
         integer,           intent(out)   :: status
         character(len=*),  intent(out)   :: msg
         type(ctfparams) :: ctf_cur, ctf_frz
-        integer :: n, i
+        integer         :: n, nf, i
         status = 1
         msg    = ''
         n = cur%os_ptcl3D%get_noris()
@@ -250,11 +260,28 @@ contains
             msg = 'the current project ptcl2D and ptcl3D segments differ in length'
             return
         endif
-        if( frozen%os_ptcl3D%get_noris() /= n .or. frozen%os_ptcl2D%get_noris() /= n )then
-            msg = 'the frozen and current projects do not share one particle index space (row counts differ)'
+        nf = frozen%os_ptcl3D%get_noris()
+        if( frozen%os_ptcl2D%get_noris() /= nf )then
+            msg = 'the frozen project ptcl2D and ptcl3D segments differ in length'
             return
         endif
         do i = 1, n
+            if( i > nf )then
+                ! an appended row: consistent in the current project
+                if( image_id(cur, 'ptcl2D', i) /= image_id(cur, 'ptcl3D', i) )then
+                    msg = 'the current project ptcl2D and ptcl3D rows name different images'
+                    call name_particle(i)
+                    return
+                endif
+                if( l_den )then
+                    if( len(den_image_id(cur, i)) == 0 )then
+                        msg = 'the solution was reconstructed from denoised particles, and a stack has no stk_den'
+                        call name_particle(i)
+                        return
+                    endif
+                endif
+                cycle
+            endif
             ! the same physical image in every segment of both projects
             if( .not. same_image(cur, 'ptcl3D', frozen, 'ptcl3D', i) )then
                 msg = 'ptcl3D rows name different images (permuted rows or a changed stack source)'
@@ -316,6 +343,18 @@ contains
                 endif
             endif
         enddo
+        ! frozen-project rows past the current project's last row hold no frozen particle
+        do i = n + 1, nf
+            if( is_frozen_row(frozen, i) )then
+                msg = 'a frozen particle is missing from the current project (its row lies past the last)'
+                call name_particle(i)
+                return
+            endif
+        enddo
+        if( n > nf )then
+            call check_appended_stacks
+            if( len_trim(msg) > 0 ) return
+        endif
         status = 0
 
     contains
@@ -324,6 +363,38 @@ contains
             integer, intent(in) :: iptcl
             msg = trim(msg)//'; first offending particle: '//int2str(iptcl)
         end subroutine name_particle
+
+        !> appended rows come from stacks the frozen project does not hold: an
+        !! appended copy of a frozen-project image would enter the union twice
+        subroutine check_appended_stacks
+            type(string)         :: stk_cur, stk_frz
+            logical, allocatable :: l_app(:)
+            integer              :: j, k, istk, stkind, ind
+            allocate(l_app(cur%os_stk%get_noris()), source=.false.)
+            do j = nf + 1, n
+                call cur%map_ptcl_ind2stk_ind('ptcl3D', j, stkind, ind)
+                l_app(stkind) = .true.
+            enddo
+            do k = 1, size(l_app)
+                if( .not. l_app(k) ) cycle
+                stk_cur = cur%os_stk%get_str(k, 'stk')
+                do istk = 1, frozen%os_stk%get_noris()
+                    stk_frz = frozen%os_stk%get_str(istk, 'stk')
+                    if( stk_cur%to_char() /= stk_frz%to_char() ) cycle
+                    msg = 'appended particles come from a stack the frozen project holds: '//stk_cur%to_char()
+                    do j = nf + 1, n
+                        call cur%map_ptcl_ind2stk_ind('ptcl3D', j, stkind, ind)
+                        if( stkind == k ) exit
+                    enddo
+                    call name_particle(j)
+                    call stk_cur%kill
+                    call stk_frz%kill
+                    return
+                enddo
+            enddo
+            call stk_cur%kill
+            call stk_frz%kill
+        end subroutine check_appended_stacks
 
     end subroutine validate_identity
 

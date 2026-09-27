@@ -43,8 +43,8 @@ end type commander_bootstrap_rec3D
 contains
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_final_rec,      only: calc_final_rec
-        use simple_commanders_rec, only: commander_rec3D
+        use simple_final_rec,         only: calc_final_rec
+        use simple_commanders_rec,    only: commander_rec3D
         use simple_estimate_ssnr,     only: lpstages_setlims
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_refine3D_strategy, only: strip_refine3D_search_only_args
@@ -516,7 +516,7 @@ contains
 
         ! Prepare external input e/o volumes & FSC for refinement and import into project
         subroutine prepare_external_init_vol( init_vol )
-            use simple_refine3D_fnames, only: refine3D_startvol_fname, refine3D_fsc_fname
+            use simple_refine3D_fnames,     only: refine3D_startvol_fname, refine3D_fsc_fname
             use simple_halfmap_diagnostics, only: remove_support_provenance
             type(string), intent(inout) :: init_vol
             type(string)      :: init_even, init_odd, new_vol, new_even, new_odd
@@ -2173,15 +2173,6 @@ contains
                 ! is valid only in an NU filt_mode: there the caller's
                 ! filt_mode is kept, as on the direct route (simple_final_rec)
                 if( .not. l_automsk_nu ) call cline_rec%set('filt_mode', 'none')
-                if( cline_rec%defined('rec_backend') )then
-                    if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
-                        &call configure_final_pcg_solve_budget(cline, cline_rec)
-                endif
-            else if( cline_rec%defined('frozen_rec') )then
-                ! abinitio3D_addon: the frozen term exists on the run's backend
-                ! only, so the bootstrap map is built on that backend (one
-                ! frozen kind; the cost is one cold PCG solve at this box)
-                call cline_rec%set('postprocess', 'no')
                 if( cline_rec%defined('rec_backend') )then
                     if( cline_rec%get_carg('rec_backend') == 'pcg' ) &
                         &call configure_final_pcg_solve_budget(cline, cline_rec)

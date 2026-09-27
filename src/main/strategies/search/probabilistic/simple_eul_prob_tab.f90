@@ -1,14 +1,13 @@
 !@descr: the core probability table routines used for probabilistic 3D search
 module simple_eul_prob_tab
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use, intrinsic :: iso_fortran_env,  only: int64
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
-use simple_builder,          only: builder
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample,&
-    &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
+use simple_builder,            only: builder
+use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
+    &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist, &
     &write_seed_shift_table, prob_candidate, prob_candidate_buffer
-use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
-use simple_type_defs,        only: OBJFUN_EUCLID
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 implicit none
 
 public :: eul_prob_tab
@@ -895,7 +894,8 @@ contains
         integer(int64) :: file_header(4), addr
         if( .not. self%table_is_open ) call self%begin_write(binfname)
         call self%flush_candidate_buffers
-        if( self%table_nnz < 1 ) THROW_HARD('eul_prob_tab%write_tab; empty candidate stream')
+        ! a partition without particles writes a table without candidates
+        if( self%table_nnz < 1 .and. self%nptcls > 0 ) THROW_HARD('eul_prob_tab%write_tab; empty candidate stream')
         file_header = [int(self%nrefs,int64),int(self%nptcls,int64),self%table_nnz,int(self%table_nchunks,int64)]
         write(self%table_unit,pos=1) file_header
         addr = sizeof(file_header) + 1
@@ -939,8 +939,11 @@ contains
         call fileiochk('simple_eul_prob_tab; read_tab_to_glob pinds; file: '//binfname%to_char(), io_stat)
         addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
-        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab%read_tab_to_glob')
+        ! a partition without particles never set its rotation grid
+        if( nptcls_loc > 0 )then
+            if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+            if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab%read_tab_to_glob')
+        endif
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
         do i_loc = 1,nptcls_loc
             pind = pinds_loc(i_loc)

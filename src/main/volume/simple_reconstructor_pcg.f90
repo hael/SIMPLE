@@ -8,17 +8,19 @@ module simple_reconstructor_pcg
 use, intrinsic :: iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
-use simple_image, only: image
-use simple_ctf,   only: ctf
+use simple_image,             only: image
+use simple_ctf,               only: ctf
 use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
     &extract_native_fourier_plane, gather_packed_window
-use simple_gridding, only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
+use simple_gridding,          only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
 public :: reconstructor_pcg, pcg_solver_outcome
 public :: PCG_OP_MATRIXFREE, PCG_OP_KERNEL
 public :: pcg_raw_accum_compatible, read_pcg_raw_accum_header
+public :: measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, report_closed_form_agreement
+public :: write_closed_form_diagnostics, validate_solved_map
 private
 #include "simple_local_flags.inc"
 
@@ -33,6 +35,10 @@ character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
 !> stop_reason when dot(p,Hp) is non-positive or non-finite: the iterate is
 !! returned as it stood before that step and the caller decides (restart or fail)
 character(len=*), parameter, public :: PCG_STOP_INDEFINITE = 'indefinite'
+real,             parameter, public :: PCG_LAMBDA = 1.0e-3 !< the Tikhonov coefficient of production reconstructions
+!> a nonzero start whose initial relative residual exceeds this is discarded
+!! for a zero start (which has exactly 1.0) before iterating
+real,             parameter         :: PCG_START_MAX_REL_RESID = 1.0
 
 type :: pcg_solver_outcome
     character(len=24) :: stop_reason          = 'not_started'
@@ -234,6 +240,8 @@ type :: reconstructor_pcg
     procedure :: solve
     procedure :: solve_accum
     procedure :: shrink_by_ml_prior
+    procedure :: solve_with_cold_restart
+    procedure :: solve_regularized
     procedure, private :: solve_core
     ! PROFILING
     procedure :: reset_profile
@@ -2972,6 +2980,235 @@ contains
         call self%window_mul(x)
         deallocate(u, r, z, bz)
     end subroutine shrink_by_ml_prior
+
+    !> Solve, retrying once from zero when a nonzero start loses positive-
+    !! definiteness (the solver itself discards a start worse than zero).
+    !! Compute-only, so safe inside the concurrent half sections; reporting
+    !! and fatal handling belong to handle_cold_restart_outcome.
+    subroutine solve_with_cold_restart( pcgop, x, l_nonzero, maxits, rtol, rel_res_hist, niters, outcome )
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        real,                     intent(inout) :: x(:,:,:)
+        logical,                  intent(in)    :: l_nonzero
+        integer,                  intent(in)    :: maxits
+        real,                     intent(in)    :: rtol
+        real, allocatable,        intent(out)   :: rel_res_hist(:)
+        integer,                  intent(out)   :: niters
+        type(pcg_solver_outcome), intent(out)   :: outcome
+        type(pcg_solver_outcome) :: first_failure
+        if( l_nonzero )then
+            call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+                &outcome=outcome, start_max_rel_resid=PCG_START_MAX_REL_RESID)
+        else
+            call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+                &outcome=outcome)
+        endif
+        if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
+        if( .not. l_nonzero ) return
+        if( outcome%start_rejected ) return  ! already a zero start: fatal below
+        first_failure = outcome
+        x = 0.0
+        if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
+        call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+            &outcome=outcome)
+        outcome%cold_restart_used = .true.
+        outcome%restart_trigger_curvature = first_failure%failure_curvature
+        outcome%restart_trigger_iteration = first_failure%failure_iteration
+    end subroutine solve_with_cold_restart
+
+    !> The regularized solve: the closed-form shrink of the base solution, then
+    !! maxits_ml coupled PCG iterations from it (rtol=0, exactly that many; an
+    !! indefinite stop falls back to the closed form; maxits_ml=0 ships the
+    !! closed form). x_cf receives the closed form when iterations ran.
+    subroutine solve_regularized( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf, &
+            &solvent_weight, solvent_lambda_rel )
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        real,                     intent(inout) :: x(:,:,:)
+        integer,                  intent(in)    :: maxits_ml
+        real, allocatable,        intent(out)   :: rel_res_hist(:)
+        integer,                  intent(out)   :: niters
+        type(pcg_solver_outcome), intent(out)   :: outcome
+        real, allocatable,        intent(out)   :: x_cf(:,:,:)
+        class(image),   optional, intent(in)    :: solvent_weight     !< pcg_solvent=yes: protein weight w(r)
+        real,           optional, intent(in)    :: solvent_lambda_rel !< ridge coefficient relative to the data scale
+        real    :: rel_l2, rel_m
+        integer :: maxits_here
+        maxits_here = maxits_ml
+        if( present(solvent_weight) )then
+            ! the solvent ridge, so coupled iterations solve the same ridged
+            ! system as the base re-solve
+            if( .not. present(solvent_lambda_rel) ) THROW_HARD('solvent prior requires its relative coefficient; solve_regularized')
+            call pcgop%set_solvent_prior(solvent_weight, solvent_lambda_rel)
+        endif
+        call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
+        if( maxits_here < 1 )then
+            niters = 0
+            allocate(rel_res_hist(0))
+            outcome%stop_reason          = 'closed_form'
+            outcome%requested_maxits     = 0
+            outcome%iteration_count      = 0
+            outcome%initial_rel_residual = rel_l2
+            outcome%final_rel_residual   = rel_l2
+            outcome%final_rel_residual_m = rel_m
+            outcome%final_rel_update     = 0.0
+            outcome%converged            = .true.
+        else
+            x_cf = x
+            call pcgop%solve_accum(x, maxits=maxits_here, rtol=0.0, rel_res_hist=rel_res_hist, &
+                &niters=niters, outcome=outcome)
+            if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE )then
+                x = x_cf
+                niters = 0
+                if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
+                allocate(rel_res_hist(0))
+                if( present(solvent_weight) ) write(logfhandle,'(A)') &
+                    &'>>> PCG SOLVENT PRIOR: indefinite stop, half shipped as the closed form WITHOUT the solvent prior'
+                outcome%stop_reason          = 'closed_form_fallback'
+                outcome%iteration_count      = 0
+                outcome%final_rel_residual   = rel_l2
+                outcome%final_rel_residual_m = rel_m
+                outcome%final_rel_update     = 0.0
+                outcome%converged            = .true.
+            endif
+        endif
+        outcome%closed_form_rel_residual   = rel_l2
+        outcome%closed_form_rel_residual_m = rel_m
+    end subroutine solve_regularized
+
+    !> FSC between the solved regularized map and its closed-form start, its
+    !! crossings and its minimum inside the pair's FSC>0.143 band. Serial.
+    subroutine measure_closed_form_agreement( x_cf, x, box, smpd, band_shell, outcome )
+        real,                     intent(in)    :: x_cf(:,:,:), x(:,:,:)
+        integer,                  intent(in)    :: box, band_shell
+        real,                     intent(in)    :: smpd
+        type(pcg_solver_outcome), intent(inout) :: outcome
+        type(image)       :: img_cf, img
+        real, allocatable :: corrs(:), res(:)
+        real              :: fsc05, fsc0143
+        integer           :: n
+        n = fdim(box) - 1
+        if( n < 1 ) return
+        call img_cf%new([box,box,box], smpd)
+        call img%new([box,box,box], smpd)
+        call img_cf%set_rmat(x_cf, .false.)
+        call img%set_rmat(x, .false.)
+        call img_cf%fft()
+        call img%fft()
+        allocate(corrs(n), source=0.)
+        call img_cf%fsc(img, corrs)
+        res = get_resarr(box, smpd)
+        call get_resolution(corrs, res, fsc05, fsc0143)
+        outcome%closed_form_fsc05_res      = fsc05
+        outcome%closed_form_fsc0143_res    = fsc0143
+        outcome%closed_form_band_shell     = max(1, min(n, band_shell))
+        outcome%closed_form_min_fsc_inband = minval(corrs(1:outcome%closed_form_band_shell))
+        call img_cf%kill
+        call img%kill
+        deallocate(corrs, res)
+    end subroutine measure_closed_form_agreement
+
+    !> Serial reporting and failure boundary of solve_with_cold_restart: no log
+    !! I/O or THROW_HARD inside the OpenMP sections.
+    subroutine handle_cold_restart_outcome( outcome, context, half, solve_kind )
+        type(pcg_solver_outcome), intent(in) :: outcome
+        character(len=*),         intent(in) :: context, half, solve_kind
+        character(len=256) :: error_message
+        logical            :: l_restarted
+        if( outcome%start_rejected )then
+            write(logfhandle,'(A,ES10.3,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
+                &trim(solve_kind)//'): start worse than zero (INIT=', outcome%rejected_start_initial, &
+                &'); discarded, solved from zero'
+        endif
+        l_restarted = outcome%cold_restart_used
+        if( l_restarted )then
+            write(logfhandle,'(A,I0,A,ES12.4,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
+                &trim(solve_kind)//'): CG from the nonzero start lost positive-definiteness at iteration ', &
+                &outcome%restart_trigger_iteration, ' (dot(p,Hp)=', outcome%restart_trigger_curvature, &
+                &'); restarted from zero'
+        endif
+        if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
+        if( l_restarted )then
+            error_message = 'PCG lost positive-definiteness from the cold restart as well; '//&
+                &trim(context)//'/'//trim(half)//'/'//trim(solve_kind)
+        else
+            write(logfhandle,'(A,I0,A,ES12.4,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
+                &trim(solve_kind)//'): cold CG lost positive-definiteness at iteration ', &
+                &outcome%failure_iteration, ' (dot(p,Hp)=', outcome%failure_curvature, ')'
+            error_message = 'PCG lost positive-definiteness from a cold start; '//trim(context)//'/'//&
+                &trim(half)//'/'//trim(solve_kind)
+        endif
+        THROW_HARD(error_message)
+    end subroutine handle_cold_restart_outcome
+
+    !> Refuse a non-finite or empty solved map
+    subroutine validate_solved_map( x, execution_mode, state, half, solve_kind )
+        real,             intent(in) :: x(:,:,:)
+        character(len=*), intent(in) :: execution_mode, half, solve_kind
+        integer,          intent(in) :: state
+        character(len=256) :: error_message
+        real               :: peak
+        if( any(.not. ieee_is_finite(x)) )then
+            error_message = 'PCG '//trim(execution_mode)//' solve produced a non-finite map; state='// &
+                &int2str(state)//' half='//trim(half)//' kind='//trim(solve_kind)
+            THROW_HARD(error_message)
+        endif
+        peak = maxval(abs(x))
+        if( peak <= 0.0 )then
+            error_message = 'PCG '//trim(execution_mode)//' solve produced an empty map; state='// &
+                &int2str(state)//' half='//trim(half)//' kind='//trim(solve_kind)
+            THROW_HARD(error_message)
+        endif
+    end subroutine validate_solved_map
+
+    !> One line per half and solve kind: INIT and RESID are the true L2
+    !! relative residuals of start and end, MRES the final residual in the
+    !! preconditioned norm, in which base and regularized maps compare.
+    subroutine report_pcg_solve( execution_mode, state, half, solve_kind, nptcls, niters, solve_time, outcome )
+        character(len=*),         intent(in) :: execution_mode, half, solve_kind
+        integer,                  intent(in) :: state, nptcls, niters
+        real(dp),                 intent(in) :: solve_time
+        type(pcg_solver_outcome), intent(in) :: outcome
+        character(len=4) :: half_label, kind_label
+        half_label = adjustl(half)
+        kind_label = adjustl(solve_kind)
+        write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,ES10.3,A,ES10.3,A,F7.2,2A)') &
+            &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
+            &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | INIT=', outcome%initial_rel_residual, &
+            &' | RESID=', outcome%final_rel_residual, ' | MRES=', outcome%final_rel_residual_m, ' | TIME=', solve_time, &
+            &' s | STOP=', trim(outcome%stop_reason)
+        call flush(logfhandle)
+    end subroutine report_pcg_solve
+
+    !> One line per regularized half that ran coupled iterations from the
+    !! closed form: where the start sat in the preconditioned norm, where the
+    !! iterations left it, and how much of the in-band map they changed
+    subroutine report_closed_form_agreement( execution_mode, state, half, result )
+        character(len=*),         intent(in) :: execution_mode, half
+        integer,                  intent(in) :: state
+        type(pcg_solver_outcome), intent(in) :: result
+        character(len=4) :: half_label
+        if( result%closed_form_band_shell < 1 ) return
+        half_label = adjustl(half)
+        write(logfhandle,'(4A,I2,A,A4,A,ES10.3,A,ES10.3,A,F5.3,A,F5.2,A)') &
+            &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
+            &' | KIND=ml   | CF MRES=', result%closed_form_rel_residual_m, ' -> ', &
+            &result%final_rel_residual_m, ' | FSC(cf,solved) in band >= ', result%closed_form_min_fsc_inband, &
+            &', 0.5 at ', result%closed_form_fsc05_res, ' A'
+        call flush(logfhandle)
+    end subroutine report_closed_form_agreement
+
+    !> Closed-form start diagnostics of a regularized solve
+    subroutine write_closed_form_diagnostics( funit, result )
+        integer,                  intent(in) :: funit
+        type(pcg_solver_outcome), intent(in) :: result
+        if( result%closed_form_rel_residual < 0.0 ) return
+        write(funit,'(A,ES14.6)') 'closed_form_rel_resid_l2=',    result%closed_form_rel_residual
+        write(funit,'(A,ES14.6)') 'closed_form_rel_resid_m=',     result%closed_form_rel_residual_m
+        if( result%closed_form_band_shell < 1 ) return
+        write(funit,'(A,I0)')     'closed_form_vs_solved_band_shell=',  result%closed_form_band_shell
+        write(funit,'(A,ES14.6)') 'closed_form_vs_solved_min_fsc_inband=', result%closed_form_min_fsc_inband
+        write(funit,'(A,F10.3)')  'closed_form_vs_solved_fsc05_A=',   result%closed_form_fsc05_res
+        write(funit,'(A,F10.3)')  'closed_form_vs_solved_fsc0143_A=', result%closed_form_fsc0143_res
+    end subroutine write_closed_form_diagnostics
 
     ! PROFILING
 

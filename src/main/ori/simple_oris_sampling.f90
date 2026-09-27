@@ -1,7 +1,6 @@
 !@descr: sampling and updatecnt related routines for oris
 submodule (simple_oris) simple_oris_sampling
 use simple_ori_api
-use simple_ori, only: ori
 implicit none
 #include "simple_local_flags.inc"
 
@@ -250,13 +249,19 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_class
 
-    module subroutine sample4update_reprod( self, fromto, nsamples, inds )
+    !> The particles of fromto the previous sampling selected. allow_empty
+    !! accepts a range without any (a distributed partition of state-0 rows
+    !! only, e.g. the frozen rows of abinitio3D_addon): nsamples is 0 and inds
+    !! empty, for a caller that emits empty partition outputs
+    module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
+        logical, optional,    intent(in)    :: allow_empty
         integer, allocatable :: sampled(:)
         integer :: i, cnt, nptcls, sample_ind
+        logical :: l_allow_empty
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), sampled(nptcls), source=0)
@@ -269,7 +274,9 @@ contains
             sampled(cnt) = self%o(i)%get_sampled()
         end do
         nsamples = count(sampled == sample_ind)
-        if( nsamples == 0 ) THROW_HARD('no particles sampled in previous sampling')
+        l_allow_empty = .false.
+        if( present(allow_empty) ) l_allow_empty = allow_empty
+        if( nsamples == 0 .and. .not. l_allow_empty ) THROW_HARD('no particles sampled in previous sampling')
         inds     = pack(inds, mask=sampled == sample_ind)
     end subroutine sample4update_reprod
 

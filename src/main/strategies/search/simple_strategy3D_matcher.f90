@@ -4,31 +4,29 @@ use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_pftc_srch_api
 use simple_matcher_refvol_utils
 use simple_matcher_ptcl_batch
-use simple_strategy3D_alloc,        only: clean_strategy3D, prep_strategy3D, s3D
-use simple_binoris_io,              only: binwrite_oritab
-use simple_builder,                 only: builder
-use simple_euclid_sigma2,           only: euclid_sigma2
-use simple_eul_prob_tab,            only: eul_prob_tab
-use simple_matcher_2Dprep,          only: prepimg4align
-use simple_matcher_3Drec,           only: calc_3Drec, calc_projdir3Drec
-use simple_rec3D_pcg_strategy,      only: execute_rec3D_pcg_worker
-use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
-use simple_qsys_funs,               only: qsys_job_finished
-use simple_refine3D_fnames,         only: refine3D_bench_fname
-use simple_syslib,                  only: get_peak_rss_bytes, get_current_rss_bytes
-use simple_strategy3D_eval,         only: strategy3D_eval
-use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
-use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
-use simple_strategy3D_greedy,       only: strategy3D_greedy
-use simple_strategy3D_greedy_inpl,  only: strategy3D_greedy_inpl
-use simple_strategy3D_prob,         only: strategy3D_prob
-use simple_strategy3D_pose_cont,    only: strategy3D_pose_cont, pose_cont_seed_is_valid
-use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
-use simple_strategy3D_shc,          only: strategy3D_shc
-use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
-use simple_strategy3D_srch,         only: strategy3D_spec
-use simple_strategy3D,              only: strategy3D
-use simple_pose_cont_run_stats,     only: pose_cont_run_stats
+use simple_strategy3D_alloc,           only: clean_strategy3D, prep_strategy3D
+use simple_binoris_io,                 only: binwrite_oritab
+use simple_builder,                    only: builder
+use simple_eul_prob_tab,               only: eul_prob_tab
+use simple_matcher_3Drec,              only: calc_3Drec, calc_projdir3Drec
+use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
+use simple_matcher_smpl_and_lplims,    only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
+use simple_qsys_funs,                  only: qsys_job_finished
+use simple_refine3D_fnames,            only: refine3D_bench_fname
+use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes
+use simple_strategy3D_eval,            only: strategy3D_eval
+use simple_strategy3D_greedy_smpl,     only: strategy3D_greedy_smpl
+use simple_strategy3D_greedy_sub,      only: strategy3D_greedy_sub
+use simple_strategy3D_greedy,          only: strategy3D_greedy
+use simple_strategy3D_greedy_inpl,     only: strategy3D_greedy_inpl
+use simple_strategy3D_prob,            only: strategy3D_prob
+use simple_strategy3D_pose_cont,       only: strategy3D_pose_cont, pose_cont_seed_is_valid
+use simple_strategy3D_shc_smpl,        only: strategy3D_shc_smpl
+use simple_strategy3D_shc,             only: strategy3D_shc
+use simple_strategy3D_snhc_smpl,       only: strategy3D_snhc_smpl
+use simple_strategy3D_srch,            only: strategy3D_spec
+use simple_strategy3D,                 only: strategy3D
+use simple_pose_cont_run_stats,        only: pose_cont_run_stats
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
     &cartesian_pose_data, pose_cont_particle_workspace, pose_cont_particle_spec, &
@@ -116,21 +114,31 @@ contains
         if( ctrl%do_pose_cont_strategy ) call validate_pose_cont_strategy_seeds()
         call sample_particles_for_update( pinds, nptcls2update )
         if( nptcls2update < 1 )then
+            ! An empty partition: no missing particle to update, or no active
+            ! or sampled particle in the range (a distributed partition of
+            ! state-0 rows only, e.g. the frozen rows of abinitio3D_addon).
+            ! The master still expects every partition's outputs, so emit the
+            ! unchanged committed sigma2 slice (canonical consolidation needs
+            ! one range per partition), the range's orientations
+            ! (merge_algndocs), zero PCG raw accumulators when partial
+            ! reconstructions are written (gridding partials may be absent),
+            ! and JOB_FINISHED: an empty update is a valid transaction rather
+            ! than a missing-file failure.
             if( p_ptr%l_update_missing )then
                 write(logfhandle,'(A)') '>>> MATCH3D: no missing particles selected for update'
-                ! Canonical consolidation still expects one range from every
-                ! scheduled partition. Emit the unchanged committed slice so
-                ! an empty update is a valid transaction rather than a
-                ! missing-file failure.
-                if( ctrl%do_emit_sigma )then
-                    call prep_sigmas_objfun(p_ptr, b_ptr, cartesian_only=ctrl%do_pose_cont_strategy)
-                    call b_ptr%esig%write_sigma2
-                endif
-                converged = .true.
-                call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
-                return
+            else
+                write(logfhandle,'(A)') '>>> MATCH3D: no particles of this partition selected for update'
             endif
-            THROW_HARD('No particles selected for 3D update')
+            if( ctrl%do_emit_sigma )then
+                call prep_sigmas_objfun(p_ptr, b_ptr, cartesian_only=ctrl%do_pose_cont_strategy)
+                call b_ptr%esig%write_sigma2
+            endif
+            call maybe_write_orientations()
+            if( ctrl%do_write_partial_recs .and. trim(params%rec_backend) == 'pcg' ) &
+                &call execute_rec3D_pcg_worker(params, build, cline, pinds)
+            converged = .true.
+            call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
+            return
         endif
         call prepare_particles_batches( nptcls2update )
         if( ctrl%do_bench )then
@@ -406,7 +414,7 @@ contains
                 if( p_ptr%l_update_missing )then
                     THROW_HARD('update_missing requires matcher-owned assignment; use a non-probabilistic refine mode')
                 endif
-                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local)
+                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, allow_empty=.true.)
             else
                 if( p_ptr%l_update_missing )then
                     call sample_ptcls4missing3D(b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)

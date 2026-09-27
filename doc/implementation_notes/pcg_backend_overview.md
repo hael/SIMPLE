@@ -254,8 +254,9 @@ string records which envelope ran.
   (2026-09-11; previously the final base pair bootstrapped on the sphere).
   refine3D_auto's startup reconstruction likewise receives the initial
   volume as `vol1`.
-- **Shared-memory** (`nparts=1`) uses `execute_rec3D_pcg_shared`, the same
-  policy in one process; shared-memory trailing is not supported.
+- **Shared-memory** (`nparts=1`) runs the same worker and master in one
+  process (since 2026-09-27; the separate `execute_rec3D_pcg_shared` route is
+  retired), trailing included.
 
 ## 7. Reading a run
 

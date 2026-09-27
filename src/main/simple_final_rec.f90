@@ -28,7 +28,7 @@ contains
     !! products (rec_final maps, low-pass snapshots, postprocessed and mirrored
     !! maps, orthogonal reprojections) are written as well.
     subroutine calc_final_rec( params, spproj, projfile, cline_refine, xrec3D, xbootstrap_rec3D, &
-        &l_postprocess, lp_snapshot, state_pops )
+        &l_postprocess, lp_snapshot )
         class(parameters),     intent(in)    :: params
         type(sp_project),      intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
@@ -37,8 +37,6 @@ contains
         class(commander_base), intent(inout) :: xbootstrap_rec3D
         logical,               intent(in)    :: l_postprocess
         real,                  intent(in)    :: lp_snapshot   !< planned low-pass fallback for the diagnostic snapshot
-        integer, optional,     intent(in)    :: state_pops(:) !< registered state populations when the project's
-                                                              !! active rows are not the map's (abinitio3D_addon union)
         type(cmdline) :: cline_final
         type(string)  :: str_state, vol_name, stkname, vol_pproc, vol_mirr, vol_envmsk
         integer       :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, bootstrap_sigma_iter
@@ -100,15 +98,8 @@ contains
         endif
         call spproj%read_segment('out', projfile)
         call spproj%read_segment('ptcl3D', projfile)
-        if( present(state_pops) )then
-            if( size(state_pops) /= params%nstates ) THROW_HARD('final reconstruction state populations have invalid size')
-        endif
         do state = 1, params%nstates
-            if( present(state_pops) )then
-                pop = state_pops(state)
-            else
-                pop = spproj%os_ptcl3D%get_pop(state, 'state')
-            endif
+            pop = spproj%os_ptcl3D%get_pop(state, 'state')
             if( pop == 0 )cycle     ! empty-state case
             str_state = int2str_pad(state,2)
             vol_name  = refine3D_state_vol_fname(state)
@@ -256,10 +247,6 @@ contains
                 if( .not. l_postprocess )then
                     call child_cline%set('postprocess', 'no')
                 endif
-                ! abinitio3D_addon: the frozen term joins the final and the
-                ! bootstrap reconstructions (in-process handshake)
-                if( cline_refine%defined('frozen_rec') ) &
-                    &call child_cline%set('frozen_rec', cline_refine%get_carg('frozen_rec'))
                 if( prg.eq.'reconstruct3D' .and. .not. final_stage_uses_ml_reg() )then
                     call child_cline%set('objfun', 'cc')
                     call child_cline%set('ml_reg', 'no')

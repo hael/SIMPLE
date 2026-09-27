@@ -5,10 +5,10 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch,&
-    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
+use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, &
+    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist, &
     &prob_candidate, prob_candidate_store
-use simple_decay_funs,        only: extremal_decay
+use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 implicit none
@@ -1115,14 +1115,17 @@ contains
         nnz        = file_header(3)
         nchunks    = int(file_header(4))
         if( nrefs_loc .ne. self%nrefs ) THROW_HARD('nrefs mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
-        if( nnz < 1 ) THROW_HARD('empty sparse table in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        ! a partition without particles writes a table without candidates
+        if( nnz < 1 .and. nptcls_loc > 0 ) THROW_HARD('empty sparse table in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
         read(funit, pos=addr) pinds_loc
         addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
-        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        if( nptcls_loc > 0 )then
+            if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+            if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        endif
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
         if( max_pind < 1 )then
             call fclose(funit)

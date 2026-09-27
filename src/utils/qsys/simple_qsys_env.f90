@@ -108,7 +108,7 @@ contains
     !> Initialize qsys environment state, script controllers, and optional worker backend.
     !! A qsys_name ending in '_worker' (e.g. 'local_worker', 'slurm_worker') activates the
     !! TCP persistent-worker dispatch path; all other names use the standard backend directly.
-    subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
+    subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition, l_active )
         use simple_sp_project, only: sp_project
         class(qsys_env), target, intent(inout) :: self
         class(parameters),       intent(in)    :: params             !< run-time parameter set
@@ -120,6 +120,7 @@ contains
         class(string), optional, intent(in)    :: exec_bin           !< override default submission executable
         class(string), optional, intent(in)    :: qsys_name          !< override scheduler name from params/env
         class(string), optional, intent(in)    :: qsys_partition     !< override scheduler partition from params/env
+        logical,       optional, intent(in)    :: l_active(:)        !< split_mode='even': balance the particles that do work
         type(ori)             :: compenv_o
         type(sp_project)      :: spproj
         type(string)          :: qsnam, qsnam_requested, tpi, hrs_str, mins_str, secs_str, runtime_simple_path
@@ -137,8 +138,14 @@ contains
         if( present(nptcls) ) nptcls_here = nptcls
         select case(trim(params%split_mode))
             case('even')
-                self%parts = split_nobjs_even(nptcls_here, self%nparts)
-                partsz     = max(1, self%parts(1,2) - self%parts(1,1) + 1)
+                if( present(l_active) )then
+                    if( size(l_active) /= nptcls_here ) THROW_HARD('active-particle mask does not match the particle count; new')
+                    self%parts = split_nobjs_active(l_active, self%nparts, szmax=partsz)
+                    partsz     = max(1, partsz)
+                else
+                    self%parts = split_nobjs_even(nptcls_here, self%nparts)
+                    partsz     = max(1, self%parts(1,2) - self%parts(1,1) + 1)
+                endif
             case('singles')
                 allocate(self%parts(nptcls_here,2))
                 self%parts(:,:) = 1

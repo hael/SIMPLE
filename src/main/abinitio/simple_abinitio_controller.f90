@@ -560,7 +560,7 @@ contains
         ! the union FSC measured in the add-on run; that FSC includes frozen
         ! particles aligned up to the base run's final band, so it is clean only
         ! for the cohort and reaches the base resolution within a stage or two
-        ! (abinitio3D_addon_mode_proposal.md, stage ladder).
+        ! (abinitio3D_addon_policy.md, section 5).
         l_fsc05_promoted = .false.
         if( .not. l_cavgs .and. .not. l_explicit_lp ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)

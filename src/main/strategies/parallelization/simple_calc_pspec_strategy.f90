@@ -206,8 +206,8 @@ contains
         call write_sigma2_bootstrap_selection(params, build)
         ! Set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        ! Partition ranges must be the ones the downstream distributed consumers
-        ! derive, i.e. qsys_env's split_mode='even' partitioning of nptcls.
+        ! The ranges only name the per-partition artifacts: the work is batched over the
+        ! shared selection, and calc_pspec_assemble reads each artifact's own range.
         self%parts = split_nobjs_even(params%nptcls, params%nparts)
         self%cline_calc_pspec_assemble = cline
         call self%cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble')

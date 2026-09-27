@@ -554,43 +554,35 @@ contains
         call o_src%kill
     end subroutine replace_project
 
-    !> for merging alignment documents from SIMPLE runs in distributed mode
+    !> for merging alignment documents from SIMPLE runs in distributed mode: each document carries
+    !! its own particle range, whatever the partitioning, and together they must cover 1..nptcls once
     module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: nptcls, ndocs
         character(len=*),  intent(in)    :: oritype, fbody
         integer, optional, intent(in)    :: numlen_in
-        integer,      allocatable :: parts(:,:)
         type(string)              :: fname, projfile
         type(string), allocatable :: os_strings(:)
+        logical,      allocatable :: covered(:)
         class(oris),      pointer :: os => null()
         type(binoris) :: bos_doc
-        integer       :: i, numlen, n_records, partsz, isegment, strlen_max
+        integer       :: i, numlen, isegment, strlen_max
         numlen = len(int2str(ndocs))
         if( present(numlen_in) ) numlen = numlen_in
-        parts  = split_nobjs_even(nptcls, ndocs)
+        allocate(covered(nptcls), source=.false.)
         ! convert from flag to enumerator
         isegment = oritype2segment(oritype)
         if( isegment==3 .or. isegment==6 )then
             call self%ptr2oritype(oritype, os)
             do i=1,ndocs
                 ! read part
-                fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
+                fname = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
                 call bos_doc%open(fname)
-                n_records = bos_doc%get_n_records(isegment)
-                partsz    = parts(i,2) - parts(i,1) + 1
-                if( n_records /= partsz )then
-                    write(logfhandle,*) 'ERROR, # records does not match expectation'
-                    write(logfhandle,*) 'EXTRACTED FROM file: ', fname%to_char()
-                    write(logfhandle,*) 'n_records: ', n_records
-                    write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
-                    write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
-                    write(logfhandle,*) 'partsz: ', partsz
-                    stop
-                endif
+                call register_doc_range
                 call bos_doc%read_segment(isegment, os)
                 call bos_doc%close
             end do
+            if( .not. all(covered) ) THROW_HARD('partial alignment documents do not cover every record; merge_algndocs')
             ! write
             call self%projinfo%getter(1, 'projfile', projfile)
             call self%bos%open(projfile)
@@ -603,23 +595,14 @@ contains
             ! read into string representation
             do i=1,ndocs
                 ! read part
-                fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
+                fname = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
                 call bos_doc%open(fname)
-                n_records = bos_doc%get_n_records(isegment)
-                partsz    = parts(i,2) - parts(i,1) + 1
-                if( n_records /= partsz )then
-                    write(logfhandle,*) 'ERROR, # records does not match expectation'
-                    write(logfhandle,*) 'EXTRACTED FROM file: ', fname%to_char()
-                    write(logfhandle,*) 'n_records: ', n_records
-                    write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
-                    write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
-                    write(logfhandle,*) 'partsz: ', partsz
-                    stop
-                endif
+                call register_doc_range
                 call bos_doc%read_segment(isegment, os_strings)
                 strlen_max = max(strlen_max, bos_doc%get_n_bytes_per_record(isegment))
                 call bos_doc%close
             end do
+            if( .not. all(covered) ) THROW_HARD('partial alignment documents do not cover every record; merge_algndocs')
             ! write
             call self%projinfo%getter(1, 'projfile', projfile)
             call self%bos%open(projfile)
@@ -631,10 +614,28 @@ contains
             end do
             call os_strings%kill
         endif
-        if( allocated(parts) ) deallocate(parts)
+        deallocate(covered)
         nullify(os)
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
+
+    contains
+
+        !> the open document's own range must lie in 1..nptcls, hold its record count and not
+        !! overlap an earlier document's
+        subroutine register_doc_range
+            integer :: fromto(2), n_records
+            n_records = bos_doc%get_n_records(isegment)
+            if( n_records == 0 ) return
+            fromto = bos_doc%get_fromto(isegment)
+            if( fromto(1) < 1 .or. fromto(2) > nptcls .or. fromto(2) - fromto(1) + 1 /= n_records )then
+                write(logfhandle,*) 'document, records, range, nptcls: ', fname%to_char(), n_records, fromto, nptcls
+                THROW_HARD('partial alignment document range does not fit the project; merge_algndocs')
+            endif
+            if( any(covered(fromto(1):fromto(2))) ) THROW_HARD('partial alignment documents overlap; merge_algndocs')
+            covered(fromto(1):fromto(2)) = .true.
+        end subroutine register_doc_range
+
     end subroutine merge_algndocs
 
     !> convert a polymorphic list of project records into a sp_project instance

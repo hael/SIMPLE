@@ -6,6 +6,11 @@ after review (section 9). Phases 1 to 3 implemented on 2026-09-26 against
 `ba3ac5762`; the implementation notes and the corrections to this note are in
 the revision log (section 10, 2026-09-26).
 
+Status (2026-09-27): completed, including chaining (phase 4) and the streaming
+prerequisites. The current contract is
+[abinitio3D_addon_policy.md](../../policies/3D/abinitio3D_addon_policy.md);
+this note keeps the design history, the review record and the decisions.
+
 ## 1. Context and goal
 
 abinitio3D has no way to take a converged solution and let a larger set of
@@ -56,8 +61,9 @@ flowchart LR
 ```
 
 The output is an ordinary project: it can be inspected or refined with
-`refine3D`; it becomes a valid frozen project for a later add-on only once the
-union sigma state exists (section 3, "Sigma2").
+`refine3D`. Its final reconstruction bootstraps the union's sigma2 state, so
+it is also the frozen project of a later add-on: add-ons chain, each searching
+only the particles appended since the previous one (section 3, "Sigma2").
 
 The design reuses one existing object on both backends: the raw accumulator at
 full dataset mass, which is what the trailing chain already is. Gridding trails
@@ -119,8 +125,9 @@ per-particle weights, separately accumulated raw statistics of `F` and `C` add
 to exactly the statistics a direct accumulation of the union would give, with
 no memory of `C`'s earlier poses; with sigma curves estimated separately on
 `F` and on `C`, the union is a cohort-specific weighting model whose agreement
-with a one-shot reconstruction is empirical, measured by the
-joint-versus-separate gate against a declared tolerance. The frozen term must stay outside the chain: if
+with a one-shot reconstruction is empirical. It serves the stage references
+only: the final reconstruction reads every particle on the union's own sigmas
+(section 3, "Sigma2"). The frozen term must stay outside the chain: if
 `A_F` were folded in, the `1-u` decay would erode it by `(1-u)^k` unless
 re-added, and re-adding while it is inside double counts. Keeping it separate
 also means that when the cohort is sampled, trailing applies to `C` alone and
@@ -145,7 +152,7 @@ chain validation and cleanup never touch them.
 **One accumulation per distinct box.** The stage plan
 (`lpinfo(start_stage:nstages)%box_crop`, from the manifest) uses a handful of
 distinct boxes; the commander runs one frozen accumulation per distinct box,
-plus one at the native box for the final reconstruction. The first draft
+plus one at the native box for the frozen references of stage 3. The first draft
 proposed one native accumulation clipped to each box. The constant
 field-of-view contract (`box*smpd == box_crop*smpd_crop`, padded lattices
 exactly `2*box` on both backends) does make the Fourier sample locations
@@ -179,11 +186,12 @@ returns when `job%nptcls == 0`, and the gridding assembly carries a state
 without partials forward from the previous iteration
 (`determine_dropped_states`, `carry_forward_dropped_state`); a state or half
 with a valid frozen set and no cohort contribution is assembled from the frozen
-term alone, never skipped, carried or rejected (review item 4.6). The same add
-is needed in both reconstructions of `bootstrap_rec3D`, which `calc_final_rec`
-runs whenever the last stage was cropped; its bootstrap map is gridding by
-design, for speed, and in add-on mode is built on the run's backend, so there
-is one frozen kind (decided; section 8, F1 and F2). Activation is an internal
+term alone, never skipped, carried or rejected (review item 4.6). Until
+2026-09-27 the same add was made in both reconstructions of `bootstrap_rec3D`,
+which `calc_final_rec` runs whenever the last stage was cropped, with the
+bootstrap map on the run's backend so there was one frozen kind (section 8, F1
+and F2); since chaining, the final reconstruction reads every particle and
+carries no frozen term (section 3, "Sigma2"). Activation is an internal
 handshake carrying the frozen manifest path, set only on the in-process
 assembly command lines the way `trail_seed` is today (neither is a
 `parameters` field, so neither is in the generated argument vocabulary and
@@ -206,21 +214,25 @@ commander deletes first, exactly as a fresh `abinitio3D` does; frozen rows are
 `state=0` there and receive no records (`calc_pspec` computes `state>0` rows
 only).
 
-At the end the output project carries no cohort-only sigma registration: the
-consumability check (`canonical_sigma2_consumable`: file size and group
-checksum, then identity of box, sampling, shells, row count, layout digest,
-grouping and committed state) does not look at the active set, so a
-cohort-only state would pass once the frozen rows are active again and its
-group curve would weight the union with the cohort's noise model (review item
-3.4). The registration is removed, the output is marked not eligible as a
-frozen input, and the next ordinary `refine3D` bootstraps a state for the
-union. A scientifically composed union state (cohort rows from the add-on's
-state, frozen rows from the frozen state, one group reduction over the union
-through the candidate machinery of `simple_sigma2_state.f90`) is a later phase
-and the precondition for chaining add-ons. One numerical gate accompanies the
-weighting model: the identity test run once with sigmas estimated jointly on
-`A u B` and once with the frozen rows from a run on `A` alone and the cohort
-rows from the add-on, comparing maps and FSC against a declared tolerance.
+The cohort-only state must not survive the run: the consumability check
+(`canonical_sigma2_consumable`: file size and group checksum, then identity
+of box, sampling, shells, row count, layout digest, grouping and committed
+state) does not look at the active set, so a cohort-only state would pass once
+the frozen rows are active again and its group curve would weight the union
+with the cohort's noise model (review item 3.4). The add-on therefore restores
+the frozen rows before its final reconstruction and drops the cohort-only
+registration. The final reconstruction (`calc_final_rec`) then reads every
+particle, finds no consumable state and bootstraps the union's exactly as
+`bootstrap_rec3D` does for any project without consumable sigmas: the
+image-power seed of every particle, the gridding ML bootstrap map, one
+residual pass that commits the canonical state at native sampling, and the
+shipped map on it (Hans, 2026-09-27). The output carries the union's committed
+residual state, its manifest is eligible, and it is the frozen input of the
+next add-on: add-ons chain, and a stream never rebases for the sake of its
+sigmas. The next add-on's frozen accumulations at every cropped stage box use
+a prefix of the state's shells, as they do with a base run's state. No
+composed union state (cohort rows from the add-on's state, frozen rows from
+the frozen state) is needed.
 
 **Provenance.** Each frozen set carries a manifest recording box, sampling,
 total row count, frozen active count, state layout, backend and the add-on
@@ -248,24 +260,38 @@ its own working copy, so refine3D needs no new sampling policy at all.
 
 **Superset validation.** The two projects share one particle index space:
 `projfile_frozen` was derived from `projfile`, or both from a common ancestor,
-by selection. Equal row counts and an equal stack table do not prove that row
-`i` is the same image, so the commander resolves every row of both projects
+by selection: row `i` names the same image in both wherever both hold a row
+`i`, and the two may differ in size. `projfile` may extend the frozen project
+by appended rows (a stream adding particle sets after the base run), which are
+cohort candidates; `projfile_frozen` may run past the current project's last
+row as long as no frozen particle lies there. Appended rows must come from
+stacks the frozen project does not hold, so that no image enters the union
+twice, and must name the same image in `ptcl2D` and `ptcl3D` (with a denoised
+source when the solution used one). Equal row counts and an equal stack table
+would not prove that row `i` is the same image, so the commander resolves
+every row both projects hold
 through the canonical mapping `map_ptcl_ind2stk_ind`
 (`simple_sp_project_ptcl.f90`) for `ptcl2D` and `ptcl3D` and requires the same
 source stack and physical image index row by row, the same particle source
 (`ptcl_src`), and the same optics and CTF identity needed to reproduce the
 frozen contribution (review item 4.4). Every index with `state > 0 .and.
-updatecnt > 0` in the frozen project must be active in the current `ptcl2D`,
-the segment that controls the fresh-start selection. A frozen member inactive
-in the current project, a row permutation, a changed stack source, a
+updatecnt > 0` in the frozen project must lie within the current project's
+rows and be active in its `ptcl2D`, the segment that controls the fresh-start
+selection. A frozen member missing from or inactive in the current project, a
+row permutation, a changed stack source, a
 `ptcl2D`/`ptcl3D` selection mismatch, an optics or CTF mismatch, or a box or
 `smpd` mismatch is a hard error naming the first offending index, raised before
 any project is written. Membership is defined once:
 
 ```text
 frozen = frozen state > 0 AND frozen updatecnt > 0
-cohort = current ptcl2D active AND NOT frozen
+cohort = current ptcl2D active AND NOT frozen   (appended rows included)
 ```
+
+The frozen accumulator store records both row counts: its producers (the
+`reconstruct3D` runs on the frozen project) are validated against the frozen
+project's rows, its consumers (the add-on's reconstructions) against the working
+project's.
 
 An empty cohort is refused before masking. The commander reports the frozen,
 cohort and never-updated counts before the first reconstruction.
@@ -283,7 +309,7 @@ particles (`count_state_gt_zero` counts active `ptcl2D` rows,
 is required because the fresh-start route resets `ptcl3D%state` from the 2D
 selection. The frozen rows stay masked through search, reconstruction,
 trailing-fraction consumption, the final missing-assignment coverage of the
-cohort and the `addon_diag` reconstruction. Only then does the commander
+cohort. Only then, before the final reconstruction, does the commander
 restore them: the frozen project's 3D records through the canonical
 `transfer_3Dparams` (projection, correlation, fraction, `sampled`,
 `updatecnt`, `eo`, Euler angles and shifts) plus an explicit `state`, the
@@ -292,8 +318,10 @@ rows (the final reconstruction writes those only for rows active at the time;
 review item 4.5). No `frozen` row field is added: the orientation schema has
 none and the algorithm does not need one; provenance lives in the run manifest
 (review item 4.9). The output is one ordinary project with every particle
-posed, which the user inspects or refines; it is not a valid frozen input for
-a later add-on until the union sigma state exists (section 3, "Sigma2").
+posed and the union's sigma2 state, which the user inspects or refines, or
+hands to a later add-on as its frozen input (section 3, "Sigma2"). The
+`addon_diag` reconstruction runs after the final reconstruction on a copy with
+the frozen rows masked again.
 
 **Option B, cohort filter inside refine3D.** `sample4update_missing`
 (`state>0 .and. updatecnt==0`) is the natural candidate, but it increments
@@ -309,8 +337,8 @@ reserve for the case where the same project must serve both cohorts at once.
 particles with `updatecnt > 0` were searched and are frozen; particles with
 `updatecnt == 0` (never sampled when that run used `nsample` below the
 full-sampling switch) are *not* frozen and join the cohort, together with the
-particles only the current project activates. Chaining add-ons is not part of
-the first release (section 3, "Sigma2").
+particles only the current project activates. Chaining add-ons followed on
+2026-09-27 (section 3, "Sigma2").
 
 **Inputs and the run manifest.** The add-on runs with exactly the settings of
 the base `abinitio3D` run (Hans, 2026-09-25): a run parameter that differs
@@ -350,8 +378,8 @@ comes from one versioned run manifest written by the base run (review items
   2026-09-25): no opt-in, no export program, no re-derivation from `jobproc`
   or from FRCs, and no command-line override of an inherited value. Expert
   overridables may come later as an explicit, separately reviewed extension.
-  The add-on writes its own manifest, marked not eligible as a frozen input
-  until the union sigma state exists.
+  The add-on writes its own manifest, eligible as a frozen input: its output
+  carries the union's sigma2 state (section 3, "Sigma2"), so add-ons chain.
 - The add-on never replays a stored command line. The project's `jobproc` row
   of the base run (appended by `update_job_descriptions_in_project` after the
   commander returns, with `mkdir=no` and the base run-directory `projfile`
@@ -441,8 +469,10 @@ inherited sigma registration), a planning branch (the ladder from the manifest
 instead of `set_lplims_*`), a starting-volume branch (reset, random
 orientations and labels on the cohort, the per-box frozen sets, the native
 frozen references as `vol1..volN`), the add-on context passed into
-`set_cline_refine3D` and the final reconstruction, and an epilogue before the
-final GUI update (`addon_diag`, restore, sigma unregistration, own manifest).
+`set_cline_refine3D`, the restore and the drop of the cohort-only sigma2
+registration before the final reconstruction (which then bootstraps the
+union's state), and an epilogue before the final GUI update (`addon_diag` on a
+masked copy, union metadata, the report, own manifest).
 The sampling initialisation, the stage loop, the final reconstruction, the
 multi-state coverage helpers and the GUI updates are shared unchanged; a
 standalone commander would have duplicated about 370 of the 760 lines of
@@ -598,16 +628,16 @@ only through its add-on route behind the wrapper's internal handshake.
 | Subsystem | Change | Untouched |
 | --- | --- | --- |
 | `src/main/ui/simple/simple_ui_abinitio3D.f90`, `src/main/exec/simple_exec_abinitio3D.f90` | `new_abinitio3D_addon` program entry (11 inputs: `projfile`, `projfile_frozen`, `addon_diag`, `nsample`, `overlap`, `maxits_pcg`, `maxits_ml`, `pcg_solvent_check`, `euclid_diag`, `nparts`, `nthr`); `case('abinitio3D_addon')` | `abinitio3D`, `abinitio3D_cavgs` entries |
-| `src/main/commanders/simple/simple_commanders_abinitio.f90` | `commander_abinitio3D_addon` wrapper type: manifest read and validation before any write, allowlisted command line, internal handshake. Add-on route in `exec_abinitio3D`: prologue (collision-proof frozen copy, physical-identity validation, saved `ptcl2D` state and mask, registration drop), mode from the final state count, ladder from the manifest, per-box `calc_frozen_rec` and native references, add-on context through the shared stage loop and final reconstruction, cohort-only chain seeding, epilogue (`addon_diag` while masked, `transfer_3Dparams` restore, union metadata, sigma unregistration, own manifest, transactional publication). Manifest write at the end of every ordinary run; refusal of `projfile_frozen`/`addon_diag` on the two ordinary entries | The ordinary routes, byte-identical without the handshake |
+| `src/main/commanders/simple/simple_commanders_abinitio.f90` | `commander_abinitio3D_addon` wrapper type: manifest read and validation before any write, allowlisted command line, internal handshake. Add-on route in `exec_abinitio3D`: prologue (collision-proof frozen copy, physical-identity validation, saved `ptcl2D` state and mask, registration drop), mode from the final state count, ladder from the manifest, per-box `calc_frozen_rec` and native references, add-on context through the shared stage loop, cohort-only chain seeding, `transfer_3Dparams` restore and the cohort-only sigma registration dropped before the final reconstruction (which bootstraps the union's state), epilogue (`addon_diag` on a masked copy, union metadata, report, own eligible manifest, transactional publication). Manifest write at the end of every ordinary run; refusal of `projfile_frozen`/`addon_diag` on the two ordinary entries | The ordinary routes, byte-identical without the handshake |
 | `src/main/abinitio/simple_abinitio_controller.f90` | Optional add-on context argument: stage-3 early stopping on `overlap` (FSC=0.5 promotion as in the legacy path since 2026-09-26); an absent context is the legacy path | `NSTAGES`, `NSPACE`, `MAXITS`, mode/backend/trailrec policies |
 | `src/main/abinitio/simple_abinitio_utils.f90` | `calc_frozen_rec` beside `calc_rec` with the `frozen_seed` handshake on a local command object; manifest writer and reader; no new module-level mode flag | Stage-boundary reconstruction semantics, `lpinfo`, shared command lines |
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90` | `add_frozen_accumulators()` in `restore_state_from_parts` after the chain write and before restoration, ahead of the dropped-state logic; manifest check before the read; union counts for populations | Trailing blend, restoration, FSC, NU inputs |
 | `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | Frozen raw pair summed into the reduction in the distributed half job and in the shared-memory half solve, after the chain write, before `end_accum` and ahead of the `job%nptcls == 0` return (section 8, F2; review item 4.6) | Solver, priors, support, chain identity |
-| `src/main/sigma2/simple_sigma2_state.f90` | Nothing in the first release; the union state composition (row import by index, union group reduction, commit) is the later phase that unlocks chaining | Transaction, validation and commit semantics |
+| `src/main/sigma2/simple_sigma2_state.f90` | Nothing: the union's state comes from `bootstrap_rec3D` in the final reconstruction, which makes the output chainable | Transaction, validation and commit semantics |
 | `src/main/project` | Physical-identity superset helper on `map_ptcl_ind2stk_ind`; manifest registration by bare name beside `sigma2_state`; last-job lookup in `jobproc` for the manifest writer | Segment layout |
 | `src/defs/simple_refine3D_fnames.f90` | `frozen_*` artifact names, per state and box | Existing stems and globs |
 | `src/main/params` | `projfile_frozen`, `addon_diag` only; no `frozen_rec`, no `fsc05_promote`: the frozen context and the seed handshake are internal command-line keys outside the generated vocabulary, like `trail_seed` | Everything else |
-| `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | Forward the frozen context into the final and bootstrap reconstructions, build the bootstrap map on the run's backend under that context, drop the key from the `calc_pspec` line (section 8, F1 and F3) | Sigma bootstrap sequence |
+| `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | Nothing since 2026-09-27: the final reconstruction runs on the restored union without the frozen term (the forwarding, the union populations and the bootstrap map under the frozen context are gone); the key stays off the `calc_pspec` and residual-pass lines of the stage iterations (section 8, F1 and F3) | Sigma bootstrap sequence |
 | `src/main/sigma2/simple_sigma2_bootstrap.f90` | Delete the frozen keys wherever `trail_seed` is deleted (section 8, F3) | Bootstrap rule |
 
 Rules this design keeps (from `simple-frac-update-trailing`, `simple-refine3d`,
@@ -644,9 +674,8 @@ Rules this design keeps (from `simple-frac-update-trailing`, `simple-refine3d`,
 
 Deliberate non-goals for the first cut: no cohort filter inside refine3D, no
 frozen term in the trailing chain, no re-search of frozen particles (see
-section 6 for the later all-particle update), no chaining of add-ons until the
-union sigma state exists, no single-traversal frozen producer until its
-equivalence is proved.
+section 6 for the later all-particle update), no single-traversal frozen
+producer until its equivalence is proved.
 
 Tests, as `simple_<thing>_tester.f90` suites under `simple_test_exec` (the
 review's approval gates, section 9, in condensed form):
@@ -670,8 +699,8 @@ review's approval gates, section 9, in condensed form):
   deleted or corrupt cohort chain is rebuilt or fails before output; N=1 and
   N>1 including a state or half with no cohort contribution and a frozen-only
   state, every inherited state producing maps, FSC and union metadata; FSC,
-  NU/ML inputs and final maps use union half-statistics; the
-  joint-versus-separate sigma gate with its declared tolerance.
+  NU/ML inputs and final maps use union half-statistics; the output
+  registers the union's sigma2 state and validates as a frozen input.
 - Sampling and state policy: sampled IDs identical across `prob_align`,
   `prob_tab`, the matcher and reconstruction with no frozen index; every
   denominator is the cohort's, at, below and above the 0.9 switch including
@@ -750,14 +779,16 @@ Risks:
 - The frozen partition never changes inside an add-on; a later chain of
   add-ons without a refinement pass would keep the first solution's states
   forever.
-- The output must not be mistaken for a frozen input: its sigma registration
-  is removed and its manifest marks it ineligible until the union sigma state
-  exists (section 3, "Sigma2").
-- Sigma2: the cohort's sigma2 is estimated on its own population; the
-  joint-versus-separate gate measures the effect before it is trusted.
+- The output is a frozen input only with the union's sigma2 state: the
+  cohort-only registration is dropped before the final reconstruction, which
+  bootstraps the union's over every particle (section 3, "Sigma2").
+- Sigma2: during the stages the cohort's sigma2 is estimated on its own
+  population and the frozen term keeps the base run's; the final map and the
+  output's state use the union's own sigmas.
 - Disk and compute: one frozen accumulation per distinct stage box per state
   plus the native box, a handful in total, each a full pass over the frozen
-  particles.
+  particles, and the final reconstruction's bootstrap, four passes over every
+  particle.
 - A cohort too small for a stable multi-state assignment; enforce a floor on
   the cohort size per inherited state and refuse below it (open items below).
 
@@ -794,6 +825,15 @@ Decided (Hans, 2026-09-26), adopting the note's recommendations:
 - Joint-versus-separate sigma: map correlation and FSC difference are
   reported; no gate value in the first release (a value is proposed after the
   first real-data runs).
+
+Decided (Hans, 2026-09-27): the union's sigma2 is updated exactly as
+`bootstrap_rec3D` does it, in the add-on's final reconstruction at native
+sampling, and the sigmas at full sampling serve the downsampled stages of the
+next add-on. An add-on output is therefore eligible, add-ons chain, and a
+stream never rebases unless the search needs it. The frozen input scope
+widens from the direct `abinitio3D` output to an eligible `abinitio3D` or
+`abinitio3D_addon` output; the joint-versus-separate comparison is gone, the
+final map being the joint one.
 
 Implied by the decided rules, recorded so they are not re-asked: a frozen
 project must be a completed run with its final native-box reconstruction and
@@ -833,7 +873,7 @@ Phased plan:
 | 1 | Frozen accumulator contract at a fixed grid: `frozen_seed` writer on a local command object in `calc_frozen_rec`, per-box producer, `frozen_*` names per state and box, frozen add in gridding `restore_state_from_parts`, the PCG distributed half job and the shared-memory half solve ahead of every zero-current early-out, internal frozen context with manifest validation, forwarding through `calc_final_rec` and `bootstrap_rec3D` with the bootstrap map on the run's backend, cohort-only chain seeding and the sampled recurrence | Fixed-grid numerical gates (section 5); joint-versus-separate sigma gate |
 | 2 | Run manifest: writer at the end of `exec_abinitio3D` (atomic, published last, non-fatal), reader with schema, run-identifier, checksum and layout validation, allowlisted command-line construction, `jobproc` last-job lookup for the writer | Project and provenance gates |
 | 3 | `abinitio3D_addon` program: UI entry, exec case, wrapper commander and the add-on route in `exec_abinitio3D` per the first-cut contract (section 9): identity validation before any write, collision-proof copies, saved `ptcl2D` state and mask, registration drop, mode from the final state count, per-box accumulation, stage-3 entry with `center=no`, sampling initialisation unchanged on the cohort, promotion off, frozen-only states, coverage and `addon_diag` while masked, `transfer_3Dparams` restore, union metadata, sigma unregistration, own manifest | Isolation, sampling and state-policy gates; strict-versus-permissive scenario on a real data set |
-| 4 | Union sigma state composition, then chaining; the full-particle pass (section 6) in its own note | `A -> A+B -> A+B+C` with a valid union sigma state |
+| 4 | Chaining (done 2026-09-27: the final reconstruction bootstraps the union's sigma2 state, no composition); the full-particle pass (section 6) in its own note | `A -> A+B -> A+B+C` with a valid union sigma state (the HolJunk streaming emulation) |
 
 Phase 1 can be developed and tested with two hand-made projects before any
 commander work starts, which keeps the numerics reviewable on their own.
@@ -987,6 +1027,12 @@ is why the design accumulates per box.
   bootstraps a state for the union, as `abinitio3D` does with an inherited
   registration. The joint-versus-separate reconstruction gate stays: it
   measures the effect of two global sigma curves in one sum, which is real.
+  Superseded (Hans, 2026-09-27): no composition is needed. The add-on
+  restores the union before its final reconstruction and drops the cohort-only
+  registration, so `calc_final_rec` bootstraps the union's state through
+  `bootstrap_rec3D`; the output is eligible and add-ons chain. The
+  joint-versus-separate comparison is gone, the final map being the joint
+  one.
 - **F11. No `fsc05_promote` parameter, and no module-level mode flag.** The
   controller carries mode flags as module variables of `simple_abinitio_utils`
   (`l_state_continue_mode`, `l_cavgs_mode`) with resets at every entry point;
@@ -1044,7 +1090,7 @@ item was declined.
 | 3.1 Native-to-stage central clipping is not exact | Accepted | `prep_rec_observation` (`simple_matcher_ptcl_io.f90`): a cropped particle is normalised at native, Fourier-cropped, then tapered at the cropped box; an uncropped one is tapered first and normalised second; the two do not commute. Index alignment (pad factor exactly 2) does not make the deposited values equal. | One frozen accumulation per distinct consuming box plus native (sections 2, 3, 5, 7); crop utility and crop gate removed; single-traversal producer deferred until proved. |
 | 3.2 A `jobproc` row is unsafe as an executable command line | Accepted | The row is appended after the commander returns, with `mkdir=no` and the base run-directory `projfile` substituted (`simple_exec.f90`, `update_job_descriptions_in_project`); `cmdline%read` holds 32 tokens; the strip lists of `prep_class_command_lines` and `prepare_assembly_cline` are denylists. | One versioned typed manifest; fresh allowlisted command line; `params%new` once with `mkdir=yes`; the row is provenance and the writer's source only (section 4, F13). |
 | 3.3 Sampled cohort contract | Accepted; consistent with the frozen-outside-the-chain design | `validate_supported_mode` refuses `l_update_frac`/`l_trail_rec` only in the standalone in-memory `reconstruct3D` PCG strategy, while shared-memory `refine3D` already assembles PCG through the distributed master over one part (`simple_refine3D_strategy.f90:750`); `count_state_gt_zero` counts active `ptcl2D` rows; `get_state_update_fracs` masks `state>0`; both consumers write the chain seed before the frozen add. | Recurrence `U = F + T_C` stated; cohort-only seed before the first trailing stage, no legacy union-volume bootstrap; sampled PCG supported in shared memory through the existing worker-plus-master assembly; effective `nsample` and final `nstates` inherited, population-derived values provenance only; membership definition (section 4, "Sampling"). |
-| 3.4 Deferred sigma union makes chaining unsafe | Accepted | `canonical_sigma2_consumable` is file size and group checksum (`sigma2_state_validate_file`, deep) plus identity; no active-set check; `calc_pspec` writes `state>0` rows only, so frozen rows hold no records. | Output drops its sigma registration and is marked ineligible as a frozen input; the add-on refuses a frozen project without a consumable committed residual state; the working copy drops the current project's inherited registration; chaining moves to phase 4 (sections 3, 4, 7, F10). |
+| 3.4 Deferred sigma union makes chaining unsafe | Accepted | `canonical_sigma2_consumable` is file size and group checksum (`sigma2_state_validate_file`, deep) plus identity; no active-set check; `calc_pspec` writes `state>0` rows only, so frozen rows hold no records. | Output drops its sigma registration and is marked ineligible as a frozen input; the add-on refuses a frozen project without a consumable committed residual state; the working copy drops the current project's inherited registration; chaining moves to phase 4 (sections 3, 4, 7, F10). Superseded 2026-09-27: the final reconstruction bootstraps the union's state and the output is eligible (F10). |
 | 4.1 No activation through global parameters | Accepted | The vocabulary is generated from the declared fields of `simple_parameters.f90` (`simple_args_generator.pl`); `parse_command_line_value` stops on any key outside it; `trail_seed` is not in it and works as an in-process handshake; programs do not reject foreign vocabulary keys. | `frozen_rec` and `fsc05_promote` withdrawn from `parameters`; the frozen context is an internal key carrying the manifest path, bound to the run identifier, on in-process assembly lines only; `abinitio3D` and `abinitio3D_cavgs` refuse `projfile_frozen` and `addon_diag` explicitly (sections 3, 4, 5). |
 | 4.2 Replace `l_addon_mode` with explicit state | Accepted, qualified | Module singletons with entry-point resets are the existing pattern (`l_state_continue_mode`, `l_cavgs_mode`, `nptcls_eff`), so the risk is shared with them; an optional context argument is nevertheless cheap and cleaner. | Optional immutable add-on context on `set_cline_refine3D` and the reconstruction helpers; absent means legacy; ordering tests (sections 4, 5, F11). |
 | 4.3 Mandatory manifest changes the base application | Accepted in mechanics; decided by Hans on 2026-09-25: the manifest is always written and is the only route | A separate export could recover the input keys from `jobproc` but not the emitted per-stage limits, which only the running controller knows; the write is one file plus one `projinfo` key. | Single versioned manifest with schema version, run identifier, completion marker, checksum, layout identity, backend, planned and emitted limits, artifact digests; atomic, published last, write failure non-fatal; always on, no opt-in, no export, no override (section 4). |
@@ -1313,3 +1359,63 @@ no workflow code is duplicated.
   `abinitio3D_addon` gate reads the report (no regression, union-base
   correlation floor). First real-data test: bgal (5513 particles, D2), a
   random half as the base run and the other half added.
+- 2026-09-27, streaming prerequisites (Hans): the current project may extend
+  the frozen project by appended rows, as a stream's pool does between updates
+  (`stream_p07_abinitio3D_multistate` imports exported sets into a growing
+  project). The two projects need not have the same number of rows: they must
+  agree, image by image, on every row both hold; appended rows join the cohort,
+  and appended rows from a stack the frozen project holds are refused; a frozen
+  project longer than the current one is accepted when no frozen particle lies
+  past the current project's last row (the first implementation refused any
+  row-count difference, and its tests never built projects of different
+  sizes). The tests now do: the superset unit tests pair a 20-row current
+  project with a 14-row frozen project, and the `abinitio3D_addon` gate runs
+  the base on a 2000-row project (the first particle set, a 75% selection)
+  and the add-on on a 3000-row project that appends a second set.
+  `project_superset` keeps both row counts and
+  restores only the frozen project's rows; the frozen accumulator context
+  (schema version 2) records the frozen project's rows as well, and `load`
+  validates a producer (`frozen_seed`) against them and a consumer
+  (`frozen_rec`) against the working project's. The stream's persistent-worker
+  keys `worker_server` and `worker_priority` pass through the add-on's command
+  line.
+- 2026-09-27, chaining (Hans): the union's sigma2 is updated exactly as
+  `bootstrap_rec3D` does it. The add-on restores the frozen rows before its
+  final reconstruction and drops the cohort-only sigma2 registration;
+  `calc_final_rec` then reads every particle, finds no consumable state and
+  bootstraps the union's (image-power seed, gridding ML bootstrap map, one
+  residual pass, shipped map) at native sampling, whose shells the next
+  add-on's cropped stage boxes use by prefix. The output's manifest is
+  eligible and `validate_frozen` accepts an `abinitio3D_addon` output, so
+  add-ons chain: each update is frozen on the previous one and searches only
+  the particles appended since. The final map is the union's on its own
+  sigmas (the frozen term serves the stage references only); the
+  `addon_diag` reconstruction runs after it on a copy with the frozen rows
+  masked again. The bootstrap's residual pass (`refine=sigma`) leaves the
+  particle field as it found it (refine3D policy, 2026-09-27), so the frozen
+  rows stay exactly the frozen project's through the final reconstruction. Gone with it: `calc_final_rec`'s `state_pops` and its
+  forwarding of the frozen context, `bootstrap_rec3D`'s bootstrap map under
+  that context, and the gate's joint-versus-separate sigma comparison; the
+  gate checks instead that the output registers the union's state and
+  validates as a frozen input, and the manifest unit tests accept an eligible
+  add-on output.
+- 2026-09-27, distributed partitions of frozen rows (HolJunk streaming
+  emulation): distributed jobs split the rows evenly into contiguous
+  partitions, and a stream's frozen rows are its first rows, so whole
+  partitions hold masked (state 0) rows only. Their `prob_tab` workers stopped
+  on "no particles sampled in previous sampling", and the master waited for
+  their `JOB_FINISHED` forever (the local queue checks no exit status). An
+  empty partition is now a valid transaction: `sample4update_reprod` takes
+  `allow_empty`; `prob_tab` and `prob_tab_neigh` write a table without
+  candidates, which `write_tab` and the dense and sparse readers accept (no
+  rotation-grid check for an empty part); the refine3D matcher's empty exit,
+  formerly `update_missing` only, emits for every mode what the master
+  collects from each partition: the unchanged committed sigma2 slice, the
+  range's orientations (the `update_missing` exit skipped them, and
+  `merge_algndocs` would stop), zero PCG accumulators when partial
+  reconstructions are written, and `JOB_FINISHED`. Partitions balanced over
+  active rows would not suffice: the prob workers need a sampled row, not an
+  active one. Also found by the emulation: `merge_projects` merged the
+  inputs' canonical sigma2 states with the grouping of an `intent(out)`
+  header passed as its own input (reset to 0 on entry, refused as invalid),
+  in the chunk merge as well; both pass it by value now.

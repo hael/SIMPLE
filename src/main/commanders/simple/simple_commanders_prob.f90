@@ -3,6 +3,7 @@ module simple_commanders_prob
 use simple_commanders_api
 use simple_pftc_srch_api
 implicit none
+private :: write_empty_prob_tab
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_prob_tab
@@ -39,9 +40,9 @@ contains
 
     subroutine exec_prob_tab( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_refvol_utils,    only: read_reprojection_model
-        use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
-        use simple_eul_prob_tab,            only: eul_prob_tab
+        use simple_matcher_refvol_utils, only: read_reprojection_model
+        use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
+        use simple_eul_prob_tab,         only: eul_prob_tab
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -59,11 +60,20 @@ contains
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
         if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, allow_empty=.true.)
         else
             THROW_HARD('exec_prob_tab requires particle sampling from exec_prob_align')
         endif
-        if( nptcls < 1 ) THROW_HARD('exec_prob_tab selected no particles')
+        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        if( nptcls < 1 )then
+            ! a partition without sampled particles (state-0 rows only, e.g. the
+            ! frozen rows of abinitio3D_addon) contributes an empty table
+            call write_empty_prob_tab(params, build, pinds, fname)
+            call build%kill_general_tbox
+            call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
+            call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
+            return
+        endif
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls) / real(batchsz_max))
         batches     = split_nobjs_even(nptcls, nbatches)
@@ -76,7 +86,6 @@ contains
         ! Fill the partition table in matcher-sized batches to cap particle PFT memo memory.
         l_state_only = str_has_substr(params%refine, 'prob_state')
         call eulprob_obj_part%new_worker(params,build,pinds)
-        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%begin_write(fname)
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
@@ -101,9 +110,9 @@ contains
 
     subroutine exec_prob_tab_neigh( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_refvol_utils,    only: read_reprojection_model
-        use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
-        use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
+        use simple_matcher_refvol_utils, only: read_reprojection_model
+        use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
+        use simple_eul_prob_tab_neigh,   only: eul_prob_tab_neigh
         class(commander_prob_tab_neigh), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -117,15 +126,19 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, allow_empty=.true.)
         else
             THROW_HARD('exec_prob_tab_neigh requires particle sampling from exec_prob_align')
         endif
-        if( nptcls < 1 ) THROW_HARD('exec_prob_tab_neigh selected no particles')
-        ! All neighborhood modes can fill the table in matcher-sized batches; this
-        ! caps particle-image/PFT memo memory without changing assignment ownership.
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
-        call run_prob_tab_neigh_batch(fname)
+        if( nptcls < 1 )then
+            ! a partition without sampled particles contributes an empty table
+            call write_empty_prob_tab(params, build, pinds, fname)
+        else
+            ! All neighborhood modes can fill the table in matcher-sized batches; this
+            ! caps particle-image/PFT memo memory without changing assignment ownership.
+            call run_prob_tab_neigh_batch(fname)
+        endif
         call fname%kill
         call build%kill_general_tbox
         call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab_neigh'))
@@ -216,8 +229,8 @@ contains
         if( .not.cline_prob_tab%defined('nparts') )then
             call xprob_tab%execute(cline_prob_tab)
         else
-            ! setup the environment for distributed execution
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
+            ! setup the environment for distributed execution: partitions balance the particles with state > 0
+            call qenv%new(params, params%nparts, nptcls=params%nptcls, l_active=build%spproj_field%included())
             call cline_prob_tab%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
@@ -296,7 +309,7 @@ contains
         if( .not. cline_prob_tab%defined('nparts') )then
             call xprob_tab_neigh%execute(cline_prob_tab)
         else
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
+            call qenv%new(params, params%nparts, nptcls=params%nptcls, l_active=build%spproj_field%included())
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
@@ -320,13 +333,13 @@ contains
 
     subroutine exec_prob_tab2D( self, cline )
         use simple_matcher_smpl_and_lplims, only: set_bp_range2D
-        use simple_strategy2D_matcher,  only: set_b_p_ptrs2D, &
-                                              ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
-        use simple_matcher_pftc_prep,      only: prep_pftc4align2D
-        use simple_matcher_ptcl_batch,  only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
-        use simple_ptcl_cache,          only: ptcl_cache_in_use, ptcl_cache_assert_ready
-        use simple_classaverager,       only: cavger_new, cavger_read_all, cavger_kill
-        use simple_eul_prob_tab2D,      only: eul_prob_tab2D
+        use simple_strategy2D_matcher,      only: set_b_p_ptrs2D, &
+            &ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
+        use simple_matcher_pftc_prep,       only: prep_pftc4align2D
+        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+        use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
+        use simple_classaverager,           only: cavger_new, cavger_read_all, cavger_kill
+        use simple_eul_prob_tab2D,          only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -492,5 +505,21 @@ contains
         call del_file(string(ASSIGNMENT_FBODY)//'.dat')
         call fname%kill
     end subroutine cleanup_prob_align_outputs
+
+    !> The table of a partition without sampled particles: the header, no
+    !! candidates, so prob_align reads one table per partition. Written by the
+    !! plain table type, whose file format the neighbourhood tables share.
+    subroutine write_empty_prob_tab( params, build, pinds, fname )
+        use simple_eul_prob_tab, only: eul_prob_tab
+        class(parameters), intent(in) :: params
+        class(builder),    intent(in) :: build
+        integer,           intent(in) :: pinds(:)
+        class(string),     intent(in) :: fname
+        type(eul_prob_tab) :: tab
+        call tab%new_worker(params, build, pinds)
+        call tab%begin_write(fname)
+        call tab%write_tab(fname)
+        call tab%kill
+    end subroutine write_empty_prob_tab
 
 end module simple_commanders_prob

@@ -2,12 +2,12 @@
 module simple_ui_program
 use simple_core_module_api
 use simple_ansi_ctrls
-use simple_linked_list, only: linked_list, list_iterator
-use simple_ui_param,    only: ui_param
+use simple_linked_list,         only: linked_list, list_iterator
+use simple_ui_param,            only: ui_param
 use simple_ui_descriptor_types, only: ui_choice
-use simple_ui_visibility, only: UI_VIS_STANDARD, UI_VIS_ADVANCED, UI_VIS_DEVELOPER, &
-                               &ui_visibility_is_valid, ui_visibility_name
-use simple_ui_default_values, only: get_ui_default
+use simple_ui_visibility,       only: UI_VIS_STANDARD, UI_VIS_ADVANCED, UI_VIS_DEVELOPER, &
+    &ui_visibility_is_valid, ui_visibility_name
+use simple_ui_default_values,   only: get_ui_default
 implicit none
 #include "simple_local_flags.inc"
 
@@ -16,6 +16,14 @@ integer, parameter :: UI_SUMMARY_MIN_LEN = 30
 integer, parameter :: UI_SUMMARY_MAX_LEN = 100
 integer, parameter :: UI_DISPLAY_NAME_MAX_LEN = 100
 character(len=*), parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
+!> The execution environment a launcher passes to any program beside the
+!! program's declared inputs: the queue system, NICE and the stream's
+!! persistent workers. A program that holds its command line to its UI
+!! definition accepts these (ui_program%accepts).
+character(len=*), parameter :: UI_ENVIRONMENT_KEYS(17) = [character(len=19) :: &
+    &'qsys_name', 'qsys_partition', 'qsys_qos', 'qsys_reservation', 'job_memory_per_task', 'time_per_image', &
+    &'walltime', 'user_account', 'user_email', 'user_project', 'verbose_exit', 'verbose_exit_fname', &
+    &'niceprocid', 'niceserver', 'nicedispid', 'worker_server', 'worker_priority']
 
 public :: ui_cli_param_choices, ui_cli_param_summary
 
@@ -105,6 +113,8 @@ type :: ui_program
     procedure          :: get_nrequired_keys
     procedure          :: get_required_keys
     procedure          :: requires_sp_project
+    procedure          :: has_input
+    procedure          :: accepts
     procedure, private :: kill
 end type ui_program
 
@@ -722,6 +732,25 @@ contains
         requires_sp_project = self%sp_required
     end function requires_sp_project
 
+    !> key is one of the program's declared inputs, in any section
+    logical function has_input( self, key ) result( l_has )
+        class(ui_program), intent(in) :: self
+        character(len=*),  intent(in) :: key
+        l_has = list_has_key(self%img_ios,    key) .or. list_has_key(self%file_ios,   key) .or. &
+               &list_has_key(self%parm_ios,   key) .or. list_has_key(self%srch_ctrls, key) .or. &
+               &list_has_key(self%filt_ctrls, key) .or. list_has_key(self%mask_ctrls, key) .or. &
+               &list_has_key(self%comp_ctrls, key)
+    end function has_input
+
+    !> the program accepts key on its command line: a declared input or an
+    !! execution-environment key (UI_ENVIRONMENT_KEYS)
+    logical function accepts( self, key ) result( l_accepts )
+        class(ui_program), intent(in) :: self
+        character(len=*),  intent(in) :: key
+        l_accepts = any(UI_ENVIRONMENT_KEYS == key)
+        if( .not. l_accepts ) l_accepts = self%has_input(key)
+    end function accepts
+
     subroutine kill( self )
         class(ui_program), intent(inout) :: self
         if (.not. self%exists) return
@@ -1149,5 +1178,27 @@ contains
             call it%next()
         end do
     end subroutine append_required_keys_from_list
+
+    logical function list_has_key( lst, key ) result( l_has )
+        class(linked_list), intent(in) :: lst
+        character(len=*),   intent(in) :: key
+        type(list_iterator)   :: it
+        class(*), allocatable :: tmp
+        l_has = .false.
+        if (lst%is_empty()) return
+        it = lst%begin()
+        do while (it%has_value())
+            call it%getter(tmp)
+            select type(t => tmp)
+            type is (ui_program_input)
+                l_has = t%param%key%to_char() == key
+            class default
+                THROW_HARD('list_has_key: list element is not ui_program_input')
+            end select
+            if (allocated(tmp)) deallocate(tmp)
+            if (l_has) return
+            call it%next()
+        end do
+    end function list_has_key
 
 end module simple_ui_program

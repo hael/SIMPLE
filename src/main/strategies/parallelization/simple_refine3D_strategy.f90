@@ -4,20 +4,17 @@ use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_core_module_api
 use simple_refine3D_fnames
 use simple_matcher_refvol_utils
-use simple_builder,       only: builder
-use simple_parameters,    only: parameters
-use simple_cmdline,       only: cmdline
-use simple_sp_project,    only: sp_project
-use simple_qsys_env,      only: qsys_env
-use simple_convergence,   only: convergence
-use simple_decay_funs,    only: inv_cos_decay, cos_decay
-use simple_cluster_seed,  only: gen_labelling
-use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
-    &sigma2_state_project_layout_digest, sigma2_state_range_path, sigma2_state_validate_identity, &
-    &sigma2_state_next_generation
-use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
-    &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
-use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
+use simple_builder,             only: builder
+use simple_parameters,          only: parameters
+use simple_cmdline,             only: cmdline
+use simple_sp_project,          only: sp_project
+use simple_qsys_env,            only: qsys_env
+use simple_convergence,         only: convergence
+use simple_decay_funs,          only: inv_cos_decay, cos_decay
+use simple_cluster_seed,        only: gen_labelling
+use simple_sigma2_state,        only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
+    &sigma2_state_range_path, sigma2_state_next_generation
+use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
 implicit none
@@ -563,7 +560,7 @@ contains
     ! ======================================================================
 
     subroutine inmem_initialize(self, params, build, cline)
-        use simple_commanders_euclid,       only: commander_calc_group_sigmas, commander_calc_pspec
+        use simple_commanders_euclid, only: commander_calc_group_sigmas, commander_calc_pspec
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -581,6 +578,8 @@ contains
         ! Some refine modes manage sampling/updatecnt internally
         if( params%l_prob_align_mode )then
             ! random sampling and updatecnt dealt with in prob_align
+        else if( trim(params%refine) == 'sigma' )then
+            ! a residual-only sigma2 pass leaves the update history as it is
         else
             if( startit == 1 )then
                 call build%spproj_field%clean_entry('updatecnt', 'sampled')
@@ -633,9 +632,9 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
-        use simple_strategy3D_matcher, only: refine3D_exec
-        use simple_commanders_euclid,  only: commander_calc_group_sigmas
-        use simple_commanders_prob,    only: commander_prob_align, commander_prob_align_neigh
+        use simple_strategy3D_matcher,   only: refine3D_exec
+        use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
         use simple_commanders_rec_distr, only: commander_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
@@ -805,8 +804,10 @@ contains
         ! report last iteration
         call cline%delete( 'startit' )
         call cline%set('endit', real(params%which_iter))
-        ! update project with new orientations
-        call build%spproj%write_segment_inside(params%oritype)
+        ! update project with new orientations; a residual-only sigma2 pass
+        ! (refine=sigma) has none: its sampling bookkeeping (updatecnt,
+        ! sampled, cleared search statistics) is not an update and is not kept
+        if( trim(params%refine) /= 'sigma' ) call build%spproj%write_segment_inside(params%oritype)
         call del_file(params%outfile)
         if( trim(params%volrec) .eq. 'yes' )then
             do state = 1, params%nstates
@@ -895,8 +896,8 @@ contains
         endif
         ! set mkdir to no (to avoid nested directory structure in scheduled parts)
         call cline%set('mkdir', 'no')
-        ! distributed environment
-        call self%qenv%new(params, params%nparts)
+        ! distributed environment: partitions balance the particles with state > 0
+        call self%qenv%new(params, params%nparts, l_active=build%spproj_field%included())
         ! prepare prototype command lines
         self%cline_rec3D = cline
         self%cline_calc_pspec_distr    = cline
@@ -1116,12 +1117,10 @@ contains
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_commanders_rec_distr, only: commander_volassemble
-        use simple_commanders_volops, only: commander_postprocess
-        use simple_commanders_euclid, only: commander_calc_group_sigmas
-        use simple_commanders_prob,   only: commander_prob_align, commander_prob_align_neigh
-        use simple_fsc,               only: plot_fsc
-        use simple_image,             only: image
-        use simple_image_msk,         only: image_msk
+        use simple_commanders_volops,    only: commander_postprocess
+        use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
+        use simple_fsc,                  only: plot_fsc
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1390,7 +1389,14 @@ contains
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
+        if( trim(params%refine) == 'sigma' )then
+            ! a residual-only sigma2 pass (refine=sigma) leaves the orientation
+            ! field as it found it: the field on disk replaces the master's
+            ! copy before the whole project is written
+            call build%spproj%read_segment(params%oritype, params%projfile)
+        else if( trim(params%oritype).eq.'cls3D' )then
+            call build%spproj%map2ptcls
+        endif
         ! safest to write the whole thing here as multiple fields updated
         call build%spproj%write
         ! report last iteration on exit

@@ -105,7 +105,7 @@ convenience and deliberately not a CTest entry.
 | `single_workflow` | highlevel | the SINGLE pipeline on a simulated Pt nanoparticle |
 | `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
-| `abinitio3D_addon` | highlevel | `abinitio3D` on a seeded half of simulated particles of a symmetry-broken 6VXX map, then `abinitio3D_addon` on all of them, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
+| `abinitio3D_addon` | highlevel | `abinitio3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `abinitio3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 

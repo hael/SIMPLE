@@ -246,6 +246,16 @@ a `ui_param` into a `ui_program_input` binding in one of the seven input
 lists. The same object supplies required-key checks, CLI help, program
 descriptions, group metadata, and JSON.
 
+The command-line parser checks keys against the generated argument vocabulary,
+not against the program. A program that holds its command line to its own
+contract asks its `ui_program`: `has_input(key)` is true for a declared input
+in any of the seven lists, and `accepts(key)` also for the execution
+environment a launcher passes to any program, `UI_ENVIRONMENT_KEYS` (the queue
+system, NICE and the stream's persistent workers). `abinitio3D_addon` is the
+first such program: its UI entry is its allowlist, and adding an input there
+is all it takes to accept and forward it
+([abinitio3D_addon_policy.md](3D/abinitio3D_addon_policy.md), section 2).
+
 ### Construction and registration
 
 Common inputs are initialized by `set_ui_params`. The program modules then

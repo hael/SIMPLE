@@ -2,24 +2,24 @@
 module simple_commanders_abinitio
 use simple_commanders_api
 use simple_abinitio_utils
-use simple_abinitio3D_split_checkpoint, only: build_abinitio3D_split_checkpoint
-use simple_final_rec,               only: calc_final_rec
+use simple_abinitio3D_split_checkpoint,            only: build_abinitio3D_split_checkpoint
+use simple_final_rec,                              only: calc_final_rec
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
-use simple_procimgstk,              only: shift_imgfile
-use simple_commanders_project_core, only: commander_selection
-use simple_commanders_reproject,    only: commander_reproject
-use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D_states, commander_bootstrap_rec3D
-use simple_commanders_rec,          only: commander_rec3D
-use simple_cluster_seed,            only: gen_labelling
-use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
+use simple_procimgstk,                             only: shift_imgfile
+use simple_commanders_project_core,                only: commander_selection
+use simple_commanders_reproject,                   only: commander_reproject
+use simple_commanders_refine3D,                    only: commander_refine3D, commander_refine3D_states, commander_bootstrap_rec3D
+use simple_commanders_rec,                         only: commander_rec3D
+use simple_cluster_seed,                           only: gen_labelling
+use simple_refine3D_fnames,                        only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname, refine3D_frozen_context_fname, refine3D_fsc_fname
-use simple_halfmap_diagnostics,     only: rename_support_provenance
-use simple_gui_communicator,        only: gui_communicator
-use simple_abinitio3D_manifest,     only: abinitio3D_manifest, abinitio3D_stage_record, MANIFEST_FNAME
-use simple_project_superset,        only: project_superset, COHORT_WARN_FRAC
-use simple_frozen_accum,            only: frozen_accum
-use simple_abinitio3D_addon_report, only: abinitio3D_addon_report, ADDON_REPORT_FNAME
-
+use simple_halfmap_diagnostics,                    only: rename_support_provenance
+use simple_gui_communicator,                       only: gui_communicator
+use simple_abinitio3D_manifest,                    only: abinitio3D_manifest, abinitio3D_stage_record, MANIFEST_FNAME, &
+    &manifest_records_input
+use simple_project_superset,                       only: project_superset, COHORT_WARN_FRAC
+use simple_frozen_accum,                           only: frozen_accum
+use simple_abinitio3D_addon_report,                only: abinitio3D_addon_report, ADDON_REPORT_FNAME
 implicit none
 
 public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_conditional_restarts
@@ -45,35 +45,14 @@ type, extends(commander_base) :: commander_abinitio3D
 end type commander_abinitio3D
 
 !> abinitio3D_addon: a thin wrapper that validates both projects and the base
-!! run's manifest before any write, turns the manifest into a fresh
-!! allowlisted command line and enters exec_abinitio3D through the internal
-!! addon_manifest handshake, which no command line can set
+!! run's manifest before any write, turns the manifest and the add-on's own
+!! inputs into a fresh command line and enters exec_abinitio3D through the
+!! internal addon_manifest handshake, which no command line can set
 type, extends(commander_base) :: commander_abinitio3D_addon
     contains
     procedure :: execute => exec_abinitio3D_addon
 end type commander_abinitio3D_addon
 
-integer, parameter :: ADDON_KLEN = 20
-character(len=*), parameter :: FROZEN_COPY_DIR = 'frozen' !< the frozen project's copy in an add-on run
-!> the add-on's own command line: projects, compute, sampling/convergence,
-!! PCG solve budget and checks, diagnostics
-character(len=ADDON_KLEN), parameter :: ADDON_ACCEPTED_KEYS(13) = [character(len=ADDON_KLEN) :: &
-    &'prg', 'projfile', 'projfile_frozen', 'mkdir', 'nparts', 'nthr', 'nsample', 'overlap', 'maxits_pcg', &
-    &'maxits_ml', 'pcg_solvent_check', 'euclid_diag', 'addon_diag']
-!> execution environment keys passed through unchanged, NICE's included
-character(len=ADDON_KLEN), parameter :: ADDON_ENV_KEYS(14) = [character(len=ADDON_KLEN) :: &
-    &'qsys_name', 'qsys_partition', 'qsys_qos', 'qsys_reservation', 'job_memory_per_task', 'time_per_image', &
-    &'user_account', 'user_email', 'user_project', 'verbose_exit', 'verbose_exit_fname', 'niceprocid', &
-    &'niceserver', 'nicedispid']
-!> everything that describes the solution: inherited from the base run, refused by key
-character(len=ADDON_KLEN), parameter :: ADDON_INHERITED_KEYS(28) = [character(len=ADDON_KLEN) :: &
-    &'rec_backend', 'pcg_solvent', 'pcg_solvent_lambda', 'projrec', 'pgrp', 'center', 'cenlp', 'inpl_cont', &
-    &'multivol_mode', 'nstages', 'nstates', 'split_stage', 'objfun_den', 'objfun_den_w', 'ptcl_src', &
-    &'conical_fsc', 'envfsc', 'envmsklp', 'filt_mode', 'force_lp_range', 'hp', 'lp', 'lpstart', 'lpstop', &
-    &'lpstart_ini3D', 'lpstop_ini3D', 'mskdiam', 'automsk']
-!> the entry routes of abinitio3D and their controls; the add-on has one route
-character(len=ADDON_KLEN), parameter :: ADDON_ENTRY_KEYS(6) = [character(len=ADDON_KLEN) :: &
-    &'vol1', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'state', 'nthr_ini3D']
 
 contains
 
@@ -640,6 +619,8 @@ contains
     !! projects, their shared particle index space and the base run's manifest
     !! have been validated.
     subroutine exec_abinitio3D_addon( self, cline )
+        use simple_ui,         only: get_prg_ptr
+        use simple_ui_program, only: ui_program
         class(commander_abinitio3D_addon), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(commander_abinitio3D)    :: xabinitio3D
@@ -647,6 +628,7 @@ contains
         type(abinitio3D_stage_record) :: stage
         type(sp_project)              :: spproj_cur, spproj_frz
         type(project_superset)        :: superset
+        type(ui_program), pointer     :: ui_addon => null()
         type(cmdline)                 :: cline_run
         type(string), allocatable     :: keys(:)
         type(string)                  :: projfile, projfile_frz, sigma_path
@@ -654,17 +636,24 @@ contains
         character(len=:), allocatable :: key
         integer :: i, status
         logical :: found
-        ! refusal is by key, so an inherited value cannot be silently confirmed
+        ! The command line is the program's UI contract: its declared inputs and
+        ! the execution environment. A setting of the frozen solution comes
+        ! from its manifest; refusal is by key, so an inherited value cannot be
+        ! confirmed silently.
+        call get_prg_ptr(string('abinitio3D_addon'), ui_addon)
+        if( .not. associated(ui_addon) ) THROW_HARD('the abinitio3D_addon user interface is not registered')
         keys = cline%get_keys()
         do i = 1, size(keys)
             key = trim(keys(i)%to_char())
-            if( any(ADDON_ACCEPTED_KEYS == key) .or. any(ADDON_ENV_KEYS == key) ) cycle
-            if( any(ADDON_INHERITED_KEYS == key) )then
-                THROW_HARD(key//' is inherited from the base abinitio3D run; remove it from the abinitio3D_addon command line')
-            else if( any(ADDON_ENTRY_KEYS == key) )then
-                THROW_HARD(key//' selects an abinitio3D entry route; abinitio3D_addon has one route and takes no '//key)
+            select case(key)
+                case('prg', 'projfile', 'mkdir')
+                    cycle
+            end select
+            if( ui_addon%accepts(key) ) cycle
+            if( manifest_records_input(key) )then
+                THROW_HARD(key//' is set by the frozen run (recorded in its manifest); remove it from the command line')
             else
-                THROW_HARD(key//' is not accepted by abinitio3D_addon')
+                THROW_HARD(key//' is not an input of abinitio3D_addon')
             endif
         enddo
         if( .not. cline%defined('projfile') )        THROW_HARD('abinitio3D_addon requires projfile')
@@ -717,16 +706,14 @@ contains
         ! the base run's replayed inputs, stage-line shape and solution
         call man%replay(cline_run)
         call cline_run%set('center', 'no')  ! a centring shift would never reach the frozen term
-        ! what the add-on's own command line governs
-        do i = 1, size(ADDON_ACCEPTED_KEYS)
-            select case(trim(ADDON_ACCEPTED_KEYS(i)))
+        ! the add-on's own inputs and the execution environment, as given
+        do i = 1, size(keys)
+            key = trim(keys(i)%to_char())
+            select case(key)
                 case('prg', 'projfile', 'projfile_frozen', 'mkdir')
                     cycle
             end select
-            call cline_run%copy_arg(cline, trim(ADDON_ACCEPTED_KEYS(i)))
-        enddo
-        do i = 1, size(ADDON_ENV_KEYS)
-            call cline_run%copy_arg(cline, trim(ADDON_ENV_KEYS(i)))
+            call cline_run%copy_arg(cline, key)
         enddo
         call cline_run%set('addon_manifest', man%get_fname())
         call man%kill
@@ -813,9 +800,9 @@ contains
         type(sp_project)           :: spproj_frz
         type(abinitio3D_addon_ctx) :: addon_ctx
         type(string)               :: frozen_copy, frozen_ctx_fname, frozen_sigma_copy
-        integer, allocatable       :: union_pops(:)
         logical :: l_addon, l_cohort_chain_seeded
-        character(len=*), parameter :: ADDON_DIAG_DIR = 'addon_diag' !< addon_diag=yes: the cohort-only map
+        character(len=*), parameter :: ADDON_DIAG_DIR  = 'addon_diag' !< addon_diag=yes: the cohort-only map
+        character(len=*), parameter :: FROZEN_COPY_DIR = 'frozen'     !< the frozen project's copy
         cline_entry = cline
         l_addon = cline%defined('addon_manifest')
         l_cohort_chain_seeded = .false.
@@ -1291,19 +1278,13 @@ contains
             end select
             ! the shared ending: final all-particle reconstruction at original
             ! sampling, project registration, final products and reprojections
-            if( l_addon )then
-                ! the maps are the union's: register the union populations
-                call spproj%read_segment('ptcl3D', params%projfile)
-                allocate(union_pops(params%nstates))
-                do state = 1, params%nstates
-                    union_pops(state) = spproj%os_ptcl3D%get_pop(state, 'state') + superset%get_nfrozen_state(state)
-                enddo
-                call calc_final_rec(params, spproj, params%projfile, cline_refine3D, xrec3D, xbootstrap_rec3D, &
-                    &l_postprocess=.true., lp_snapshot=lpinfo(nstages_refine3D)%lp, state_pops=union_pops)
-            else
-                call calc_final_rec(params, spproj, params%projfile, cline_refine3D, xrec3D, xbootstrap_rec3D, &
-                    &l_postprocess=.true., lp_snapshot=lpinfo(nstages_refine3D)%lp)
-            endif
+            ! abinitio3D_addon: every particle is active again and the
+            ! cohort-only sigma2 registration is gone, so the final
+            ! reconstruction bootstraps the union's own state over every
+            ! particle (bootstrap_rec3D) and ships the union map on it
+            if( l_addon ) call addon_restore_union
+            call calc_final_rec(params, spproj, params%projfile, cline_refine3D, xrec3D, xbootstrap_rec3D, &
+                &l_postprocess=.true., lp_snapshot=lpinfo(nstages_refine3D)%lp)
         else
             write(logfhandle,'(A,I0)')'>>> ABINITIO3D EARLY STOP AFTER STAGE ', nstages_refine3D
             write(logfhandle,'(A)')'>>> FINAL ALL-PARTICLE RECONSTRUCTION SKIPPED'
@@ -1311,12 +1292,12 @@ contains
         ! the run manifest, last and never fatal: a completed run (final
         ! reconstruction or refine3D_states handoff) is a candidate frozen input
         if( l_addon )then
-            ! epilogue: cohort diagnostic while masked, restore, union metadata,
-            ! sigma unregistration; the add-on's manifest is not eligible as a
-            ! frozen input until the union sigma2 state exists
+            ! epilogue: union metadata and the report against the base
+            ! solution; with its union sigma2 state the output is a frozen
+            ! input for the next add-on
             if( .not. l_run_final_rec ) THROW_HARD('abinitio3D_addon inherited a ladder without a final reconstruction')
             call addon_epilogue
-            call write_run_manifest(.false., 'abinitio3D_addon')
+            call write_run_manifest(.true., 'abinitio3D_addon')
         else if( l_states_handoff_complete .or. l_run_final_rec )then
             call write_run_manifest(.true., 'abinitio3D')
         endif
@@ -1440,7 +1421,7 @@ contains
             ! the stage-3 controls define the frozen accumulations
             call set_cline_refine3D(params, start_stage, l_cavgs=.false., addon=addon_ctx)
             call store%new(run_id, trim(params%rec_backend), spproj%os_ptcl3D%get_noris(), &
-                &[(superset%get_nfrozen_state(s), s=1,params%nstates)])
+                &spproj_frz%os_ptcl3D%get_noris(), [(superset%get_nfrozen_state(s), s=1,params%nstates)])
             call store%write(frozen_ctx_fname)
             allocate(boxes(0))
             do istage = start_stage, nstages_refine3D
@@ -1531,13 +1512,30 @@ contains
             l_cohort_chain_seeded = .true.
         end subroutine addon_stage_boundary
 
-        !> Masked cohort diagnostic, then the frozen rows back from the frozen
-        !! project, union-aware res/res05 for every row, no cohort-only sigma
-        !! registration (the next ordinary refinement bootstraps the union's),
-        !! and the validation against the base solution: FSC verdict, map
-        !! correlation at the base resolution, the cohort-only map against the
-        !! base map, and both runs' stage limits (abinitio3D_addon_report.txt;
-        !! a regression is warned about, the result is published regardless)
+        !> The union before its final reconstruction: the frozen rows' 3D
+        !! records and every saved ptcl2D state back from the frozen
+        !! project. The cohort-only sigma2 registration is
+        !! dropped and the frozen term leaves the reconstruction command line:
+        !! the final reconstruction reads every particle and finds no
+        !! consumable state, so it bootstraps the union's (image-power seed,
+        !! bootstrap map, one residual pass) exactly as bootstrap_rec3D does
+        !! for any project without consumable sigmas
+        subroutine addon_restore_union
+            call spproj%read(params%projfile)
+            call superset%restore(spproj, spproj_frz)
+            if( spproj%projinfo%isthere(1, 'sigma2_state') ) call spproj%projinfo%delete_entry('sigma2_state')
+            call spproj%write(params%projfile)
+            call cline_refine3D%delete('frozen_rec')
+            write(logfhandle,'(A,I0,A)') '>>> ABINITIO3D_ADDON: RESTORED ', superset%get_nfrozen(), &
+                &' FROZEN PARTICLES; THE FINAL RECONSTRUCTION BOOTSTRAPS THE UNION SIGMA2 STATE'
+        end subroutine addon_restore_union
+
+        !> The cohort-only diagnostic (addon_diag=yes), union-aware res/res05
+        !! for every row and the validation against the base solution: FSC
+        !! verdict, map correlation at the base resolution, the cohort-only map
+        !! against the base map, and both runs' stage limits
+        !! (abinitio3D_addon_report.txt; a regression is warned about, the
+        !! result is published regardless)
         subroutine addon_epilogue
             type(abinitio3D_addon_report) :: report
             type(abinitio3D_stage_record) :: base_stage
@@ -1548,7 +1546,6 @@ contains
             logical :: l_union, l_base
             if( trim(params%addon_diag) == 'yes' ) call addon_cohort_diagnostic
             call spproj%read(params%projfile)
-            call superset%restore(spproj, spproj_frz)
             call report%new(params%nstates, size(emitted_lp), params%smpd, params%mskdiam)
             do i = start_stage, size(emitted_lp)
                 if( emitted_lp(i) < 0. ) cycle
@@ -1593,10 +1590,7 @@ contains
                 if( trim(params%addon_diag) == 'yes' ) call report%compare_cohort(s, vol_base, &
                     &string(ADDON_DIAG_DIR//'/')//refine3D_state_vol_fname(s))
             enddo
-            if( spproj%projinfo%isthere(1, 'sigma2_state') ) call spproj%projinfo%delete_entry('sigma2_state')
             call spproj%write(params%projfile)
-            write(logfhandle,'(A,I0,A)') '>>> ABINITIO3D_ADDON: RESTORED ', superset%get_nfrozen(), &
-                &' FROZEN PARTICLES; OUTPUT PROJECT CARRIES EVERY PARTICLE POSED, NO SIGMA2 REGISTRATION'
             call report%print
             call report%write(string(ADDON_REPORT_FNAME))
             write(logfhandle,'(A,A)') '>>> ABINITIO3D_ADDON REPORT WRITTEN: ', ADDON_REPORT_FNAME
@@ -1607,7 +1601,9 @@ contains
         end subroutine addon_epilogue
 
         !> addon_diag=yes: the cohort alone at the native box, without the
-        !! frozen term, in its own directory so no output of the run is touched
+        !! frozen term, on a copy with the frozen rows masked again and the
+        !! union's sigma2 state, in its own directory so no output of the run
+        !! is touched
         subroutine addon_cohort_diagnostic
             type(sp_project) :: spproj_diag
             type(cmdline)    :: cline_diag
@@ -1619,6 +1615,7 @@ contains
             ! the working copy's file name keeps the sigma2 layout lineage
             diag_proj = simple_abspath(string(ADDON_DIAG_DIR//'/')//basename(params%projfile), check_exists=.false.)
             call spproj_diag%read(params%projfile)
+            call superset%mask(spproj_diag)
             call spproj_diag%get_sigma2_state_path(sigma_path, found)
             if( found )then
                 sigma_path = simple_abspath(sigma_path)

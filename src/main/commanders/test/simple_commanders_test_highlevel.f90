@@ -46,7 +46,6 @@ type, extends(commander_base) :: commander_test_pcg_frac_update
     procedure :: execute      => exec_test_pcg_frac_update
 end type commander_test_pcg_frac_update
 
-
 type, extends(commander_base) :: commander_test_rec3D_backends
   contains
     procedure :: execute      => exec_test_rec3D_backends
@@ -217,11 +216,11 @@ end subroutine exec_test_mini_stream_legacy
 
 subroutine exec_test_mini_stream_quantitative( self, cline )
     use simple_atoms,         only: atoms
-    use simple_imghead, only: find_ldim_nptcls
+    use simple_imghead,       only: find_ldim_nptcls
     use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
-    use simple_oris,   only: oris
+    use simple_oris,          only: oris
     use simple_string_utils,  only: lowercase
-    use simple_ui,     only: make_ui
+    use simple_ui,            only: make_ui
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_mini_stream), intent(inout) :: self
     class(cmdline),                    intent(inout) :: cline
@@ -792,12 +791,12 @@ subroutine exec_test_simulate_particles( self, cline )
 end subroutine exec_test_simulate_particles
 
 subroutine exec_test_simulated_workflow( self, cline )
-    use simple_atoms,         only: atoms
+    use simple_atoms,              only: atoms
     use simple_test_truth_metrics, only: validate_reconstructed_volume
-    use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
-    use simple_refine3D_fnames, only: refine3D_state_vol_fname
-    use simple_string_utils,  only: lowercase
-    use simple_ui,            only: make_ui
+    use simple_molecule_data,      only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_refine3D_fnames,    only: refine3D_state_vol_fname
+    use simple_string_utils,       only: lowercase
+    use simple_ui,                 only: make_ui
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
     character(len=*), parameter :: PROJNAME       = 'simulated_workflow'
@@ -2366,11 +2365,9 @@ subroutine exec_test_pcg_recon( self, cline )
 
 end subroutine exec_test_pcg_recon
 
-
 subroutine exec_test_pcg_frac_update( self, cline )
-    use simple_builder,            only: builder
-    use simple_parameters,         only: parameters
-    use simple_rec3D_pcg_strategy, only: validate_rec3D_pcg_fractional_updates
+    use simple_builder,    only: builder
+    use simple_parameters, only: parameters
     class(commander_test_pcg_frac_update), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
     type(parameters) :: params
@@ -2389,6 +2386,433 @@ subroutine exec_test_pcg_frac_update( self, cline )
     call build%kill_general_tbox
     call simple_end('**** SIMPLE_TEST_PCG_FRAC_UPDATE NORMAL STOP ****', print_simple=.false.)
 end subroutine exec_test_pcg_frac_update
+
+!> Project-backed pre-integration gate for accumulator-domain fractional
+!! updates. The caller supplies exactly the reconstruction project and
+!! geometry; complementary subsets, realized fractions and continuation
+!! artifacts are generated deterministically here.
+subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
+    use simple_builder,            only: builder
+    use simple_parameters,         only: parameters
+    use simple_image,              only: image
+    use simple_reconstructor_pcg,  only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, PCG_LAMBDA
+    use simple_rec3D_pcg_strategy, only: validate_pcg_common
+    use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch, &
+        &prep_rec_observation
+    use simple_sigma2_files,       only: load_sigma2_groups
+    use simple_math_ft,            only: resample_sigma2
+    type(parameters), intent(inout) :: params
+    type(builder),    intent(inout) :: build
+    class(cmdline),   intent(inout) :: cline
+    real, parameter :: RAW_TOL = 2.0e-5, REPLAY_TOL = 2.0e-6
+    integer, allocatable :: selected_pinds(:), state_pinds(:), state_subset1(:), state_subset2(:)
+    integer, allocatable :: half_pinds(:), subset1(:), subset2(:)
+    logical              :: l_sigma_loaded
+    integer              :: nselected, state, eo, n_half, nhalves_tested
+    real                 :: state_f1, state_f2
+    character(len=4)     :: half
+    integer              :: funit
+    type(string)         :: diag_fname
+
+    call validate_pcg_common(params)
+    if( cline%defined('part') ) THROW_HARD('pcg_frac_update cannot run as a worker part')
+    nselected = 0
+    call build%spproj_field%sample4rec([params%fromp,params%top], nselected, selected_pinds)
+    if( nselected < 1 ) THROW_HARD('no active particles selected for PCG fractional-update validation')
+    if( params%cc_objfun == OBJFUN_EUCLID )then
+        call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, &
+            &build%spproj_field, l_sigma_loaded)
+        if( .not. l_sigma_loaded ) THROW_HARD('PCG fractional-update validation requires sigma2 for objfun=euclid')
+    endif
+    call prepimgbatch(params, build, MAXIMGBATCHSZ)
+    diag_fname = 'pcg_fractional_update_validation.txt'
+    call fopen(funit, file=diag_fname, status='replace', action='write')
+    write(funit,'(A)') 'test=pcg_frac_update'
+    write(funit,'(A,I0)') 'selected_particles=', nselected
+    write(funit,'(A,I0)') 'box_crop=', params%box_crop
+    write(funit,'(A,F12.6)') 'smpd_crop=', params%smpd_crop
+    write(funit,'(A,I0)') 'maxits_pcg=', params%maxits_pcg
+    write(funit,'(A,ES14.6)') 'rtol=', params%rtol
+    nhalves_tested = 0
+
+    do state = 1, params%nstates
+        call collect_state(state, selected_pinds, state_pinds)
+        if( size(state_pinds) == 0 )then
+            deallocate(state_pinds)
+            cycle
+        endif
+        call split_complementary(state_pinds, state_subset1, state_subset2)
+        state_f1 = real(size(state_subset1)) / real(size(state_pinds))
+        state_f2 = real(size(state_subset2)) / real(size(state_pinds))
+        do eo = 0, 1
+            call collect_state_half(state, eo, state_pinds, half_pinds)
+            call collect_state_half(state, eo, state_subset1, subset1)
+            call collect_state_half(state, eo, state_subset2, subset2)
+            n_half = size(half_pinds)
+            if( n_half == 0 )then
+                deallocate(half_pinds, subset1, subset2)
+                cycle
+            endif
+            if( n_half < 2 ) THROW_HARD('PCG fractional test needs two particles per state/half')
+            if( size(subset1) < 1 .or. size(subset2) < 1 )then
+                THROW_HARD('PCG fractional test needs both state subsets represented in each half')
+            endif
+            half = merge('odd ', 'even', eo == 1)
+            call validate_half(state, eo, trim(half), half_pinds, subset1, subset2, &
+                &state_f1, state_f2, funit)
+            nhalves_tested = nhalves_tested + 1
+            deallocate(half_pinds, subset1, subset2)
+        enddo
+        deallocate(state_pinds, state_subset1, state_subset2)
+    enddo
+    if( nhalves_tested < 1 ) THROW_HARD('PCG fractional-update validation found no populated state/half')
+    call fclose(funit)
+    call killimgbatch(build)
+    deallocate(selected_pinds)
+    write(logfhandle,'(A,1X,A)') '>>> PCG FRACTIONAL-UPDATE VALIDATION: PASS; DIAGNOSTICS:', diag_fname%to_char()
+    call diag_fname%kill
+
+contains
+
+    subroutine collect_state( state_here, pinds, selected )
+        integer,              intent(in)  :: state_here, pinds(:)
+        integer, allocatable, intent(out) :: selected(:)
+        integer :: i, n
+        n = 0
+        do i = 1, size(pinds)
+            if( build%spproj_field%get_state(pinds(i)) == state_here ) n = n + 1
+        enddo
+        allocate(selected(n))
+        n = 0
+        do i = 1, size(pinds)
+            if( build%spproj_field%get_state(pinds(i)) /= state_here ) cycle
+            n = n + 1
+            selected(n) = pinds(i)
+        enddo
+    end subroutine collect_state
+
+    subroutine collect_state_half( state_here, eo_here, pinds, selected )
+        integer,              intent(in)  :: state_here, eo_here, pinds(:)
+        integer, allocatable, intent(out) :: selected(:)
+        integer :: i, n, p
+        n = 0
+        do i = 1, size(pinds)
+            p = pinds(i)
+            if( build%spproj_field%get_state(p) == state_here .and. build%spproj_field%get_eo(p) == eo_here ) n = n + 1
+        enddo
+        allocate(selected(n))
+        n = 0
+        do i = 1, size(pinds)
+            p = pinds(i)
+            if( build%spproj_field%get_state(p) /= state_here .or. build%spproj_field%get_eo(p) /= eo_here ) cycle
+            n = n + 1
+            selected(n) = p
+        enddo
+    end subroutine collect_state_half
+
+    subroutine split_complementary( pinds, first, second )
+        integer,              intent(in)  :: pinds(:)
+        integer, allocatable, intent(out) :: first(:), second(:)
+        integer :: i, i1, i2
+        ! Deliberately use an unequal one-third/two-thirds split. A 50/50
+        ! split with the default u=0.5 would make u/f=1 and fail to exercise
+        ! the mass-renormalization step at all.
+        allocate(first((size(pinds)+2)/3), second(size(pinds)-(size(pinds)+2)/3))
+        i1 = 0
+        i2 = 0
+        do i = 1, size(pinds)
+            if( mod(i-1,3) == 0 )then
+                i1 = i1 + 1
+                first(i1) = pinds(i)
+            else
+                i2 = i2 + 1
+                second(i2) = pinds(i)
+            endif
+        enddo
+    end subroutine split_complementary
+
+    subroutine validate_half( state_here, eo_here, half_here, full_pinds, pinds1, pinds2, f1, f2, unit )
+        integer,          intent(in) :: state_here, eo_here, full_pinds(:), pinds1(:), pinds2(:), unit
+        character(len=*), intent(in) :: half_here
+        real,             intent(in) :: f1, f2
+        type(reconstructor_pcg) :: op_full, op_subset, op_sum, op_ref
+        type(reconstructor_pcg) :: op_blend, op_oracle, op_replay, op_ensemble
+        type(string)            :: f_full, f_sub1, f_sub2, f_chain1, f_chain2
+        real, allocatable       :: x_direct(:,:,:), x_replay(:,:,:), x_full(:,:,:), hist(:)
+        character(len=256)      :: provenance
+        real                    :: u, berr, derr, solve_err, sample_map_err
+        integer                 :: nraw, nraw_total, niters
+
+        provenance = 'pcg-frac-update-v1'
+        u  = 0.5
+        if( params%l_ufrac_trec_defined ) u = params%ufrac_trec
+        if( u <= 0.0 .or. u > 1.0 ) THROW_HARD('pcg_frac_update requires 0 < ufrac_trec <= 1')
+        f_full   = frac_fname(state_here, half_here, 'full')
+        f_sub1   = frac_fname(state_here, half_here, 'subset1')
+        f_sub2   = frac_fname(state_here, half_here, 'subset2')
+        f_chain1 = frac_fname(state_here, half_here, 'chain1')
+        f_chain2 = frac_fname(state_here, half_here, 'chain2')
+        write(unit,'(A,I0,A,A)') 'state=', state_here, ' half=', trim(half_here)
+        write(unit,'(A,I0,A,I0,A,I0)') 'n_full=', size(full_pinds), &
+            &' n_subset1=', size(pinds1), ' n_subset2=', size(pinds2)
+        write(unit,'(A,F10.6,A,F10.6,A,F10.6)') 'state_f1=', f1, ' state_f2=', f2, ' u=', u
+
+        call accumulate_raw(full_pinds, op_full)
+        call op_full%write_raw_accum(f_full, state_here, eo_here, 1, 1, size(full_pinds), provenance)
+        call op_full%kill
+        call accumulate_raw(pinds1, op_subset)
+        call op_subset%write_raw_accum(f_sub1, state_here, eo_here, 1, 2, size(pinds1), provenance)
+        call op_subset%kill
+        call accumulate_raw(pinds2, op_subset)
+        call op_subset%write_raw_accum(f_sub2, state_here, eo_here, 2, 2, size(pinds2), provenance)
+        call op_subset%kill
+
+        call load_weighted(op_blend, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+        call op_blend%scale_raw_accum(1.0/f1)
+        call op_blend%write_raw_accum(f_chain1, state_here, eo_here, 1, 1, size(full_pinds), provenance)
+        call op_blend%scale_raw_accum(f1)
+        call load_weighted(op_ref, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+        call op_blend%compare_raw_accum(op_ref, berr, derr)
+        call require_raw('bootstrap working-mass restore', berr, derr, REPLAY_TOL)
+        call op_blend%kill
+        call op_ref%kill
+        call load_weighted(op_replay, f_chain1, state_here, eo_here, 1, 1, provenance, 1.0)
+        call load_weighted(op_oracle, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+        call op_oracle%scale_raw_accum(1.0/f1)
+        call op_replay%compare_raw_accum(op_oracle, berr, derr)
+        call require_raw('bootstrap full-mass chain seed', berr, derr, REPLAY_TOL)
+        call op_replay%kill
+        call op_oracle%kill
+
+        call new_reduction(op_sum)
+        call op_sum%add_raw_accum(f_sub1, state_here, eo_here, 1, 2, provenance, nraw)
+        nraw_total = nraw
+        call op_sum%add_raw_accum(f_sub2, state_here, eo_here, 2, 2, provenance, nraw)
+        nraw_total = nraw_total + nraw
+        if( nraw_total /= size(full_pinds) ) THROW_HARD('complementary raw PCG particle counts do not close')
+        call load_weighted(op_ref, f_full, state_here, eo_here, 1, 1, provenance, 1.0)
+        call op_sum%compare_raw_accum(op_ref, berr, derr)
+        call require_raw('complementary additivity', berr, derr, RAW_TOL)
+        call op_sum%kill
+        call op_ref%kill
+
+        call build_blend(f_sub1, 1, f1, f_full, state_here, eo_here, provenance, u, op_blend)
+        call load_weighted(op_oracle, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+        call op_oracle%scale_raw_accum(u/f1)
+        call add_weighted(op_oracle, f_full, state_here, eo_here, 1, 1, provenance, 1.0-u)
+        call op_blend%compare_raw_accum(op_oracle, berr, derr)
+        call require_raw('subset1 u/f blend', berr, derr, REPLAY_TOL)
+        call op_blend%write_raw_accum(f_chain1, state_here, eo_here, 1, 1, size(full_pinds), provenance)
+        call op_oracle%kill
+
+        call load_weighted(op_replay, f_chain1, state_here, eo_here, 1, 1, provenance, 1.0)
+        call op_blend%compare_raw_accum(op_replay, berr, derr)
+        call require_raw('continuation write/read', berr, derr, REPLAY_TOL)
+        call finalize_and_solve(op_blend, x_direct, hist, niters)
+        deallocate(hist)
+        call finalize_and_solve(op_replay, x_replay, hist, niters)
+        deallocate(hist)
+        solve_err = volume_rel_error(x_direct, x_replay)
+        if( solve_err > REPLAY_TOL ) THROW_HARD('PCG continuation replay changed the reconstructed solution')
+        call op_blend%kill
+        call op_replay%kill
+        deallocate(x_replay)
+
+        call build_blend(f_sub2, 2, f2, f_full, state_here, eo_here, provenance, u, op_blend)
+        call load_weighted(op_oracle, f_sub2, state_here, eo_here, 2, 2, provenance, 1.0)
+        call op_oracle%scale_raw_accum(u/f2)
+        call add_weighted(op_oracle, f_full, state_here, eo_here, 1, 1, provenance, 1.0-u)
+        call op_blend%compare_raw_accum(op_oracle, berr, derr)
+        call require_raw('subset2 u/f blend', berr, derr, REPLAY_TOL)
+        call op_blend%write_raw_accum(f_chain2, state_here, eo_here, 1, 1, size(full_pinds), provenance)
+        call op_blend%kill
+        call op_oracle%kill
+
+        call load_weighted(op_ensemble, f_chain1, state_here, eo_here, 1, 1, provenance, f1)
+        call add_weighted(op_ensemble, f_chain2, state_here, eo_here, 1, 1, provenance, f2)
+        call load_weighted(op_ref, f_full, state_here, eo_here, 1, 1, provenance, 1.0)
+        call op_ensemble%compare_raw_accum(op_ref, berr, derr)
+        call require_raw('full-mass weighted ensemble', berr, derr, RAW_TOL)
+        call op_ensemble%kill
+        call finalize_and_solve(op_ref, x_full, hist, niters)
+        deallocate(hist)
+        sample_map_err = volume_rel_error(x_direct, x_full)
+        call op_ref%kill
+
+        write(unit,'(A,ES14.6)') 'continuation_replay_solution_relerr=', solve_err
+        write(unit,'(A,ES14.6)') 'single_subset_vs_full_map_relerr_diagnostic_only=', sample_map_err
+        write(unit,'(A)') 'status=PASS'
+        write(logfhandle,'(A,I0,A,A,A,F7.4,A,ES10.3)') '>>> PCG FRAC | STATE=', state_here, &
+            &' | HALF=', trim(half_here), ' | U=', u, ' | REPLAY=', solve_err
+
+        deallocate(x_direct, x_full)
+        call del_file(f_full)
+        call del_file(f_sub1)
+        call del_file(f_sub2)
+        call del_file(f_chain1)
+        call del_file(f_chain2)
+        call f_full%kill
+        call f_sub1%kill
+        call f_sub2%kill
+        call f_chain1%kill
+        call f_chain2%kill
+    end subroutine validate_half
+
+    subroutine accumulate_raw( pinds, op )
+        integer,                 intent(in)    :: pinds(:)
+        type(reconstructor_pcg), intent(inout) :: op
+        type(oris)           :: selection
+        type(ori)            :: orientation
+        type(ctfparams)      :: ctfparms
+        type(image)          :: obs
+        complex, allocatable :: y_batch(:,:,:)
+        real, allocatable    :: sig2(:,:)
+        integer              :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
+        integer              :: i, ii, iptcl, ibatch
+        real                 :: shift(2), crop_factor
+        call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
+        call op%set_sym(build%pgrpsyms)
+        call op%set_mask(params%msk_crop)
+        lims2 = op%get_lims2()
+        R = lims2(1,2)
+        allocate(sig2(0:R,size(pinds)), source=1.0)
+        if( params%cc_objfun == OBJFUN_EUCLID )then
+            kfromto = build%esig%get_kfromto()
+            do i = 1, size(pinds)
+                call resample_sigma2(kfromto(1), kfromto(2), &
+                    &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, 1.0, sig2(0:R,i))
+            enddo
+        endif
+        call selection%new(size(pinds), .true.)
+        call orientation%new(.false.)
+        crop_factor = real(params%box_crop) / real(params%box)
+        do i = 1, size(pinds)
+            iptcl = pinds(i)
+            call build%spproj_field%get_ori(iptcl, orientation)
+            ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+            ctfparms%smpd = params%smpd_crop
+            shift = build%spproj_field%get_2Dshift(iptcl) * crop_factor
+            call orientation%set_ctfvars(ctfparms)
+            call orientation%set_shift(shift)
+            call selection%set_ori(i, orientation)
+        enddo
+        call op%prep_particles(selection, use_ctf=.true., sig2=sig2)
+        allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
+        call op%begin_accum
+        call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
+        do ibatch = 1, size(pinds), MAXIMGBATCHSZ
+            batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+            batchsz = batchlims(2)-batchlims(1)+1
+            if( params%l_ptcl_src_den )then
+                call discrete_read_imgbatch_source(params, build, 'den', size(pinds), pinds, &
+                    &batchlims, build%imgbatch(:batchsz))
+            else
+                call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
+            endif
+            do ii = 1, batchsz
+                ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
+                call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                call obs%fft
+                y_batch(:,:,ii) = op%extract_native_plane(obs)
+            enddo
+            call op%accumulate_batch(y_batch, batchsz, batchlims(1))
+        enddo
+        call obs%kill
+        call selection%kill
+        call orientation%kill
+        deallocate(y_batch, sig2)
+    end subroutine accumulate_raw
+
+    subroutine new_reduction( op )
+        type(reconstructor_pcg), intent(inout) :: op
+        call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
+        call op%set_mask(params%msk_crop)
+        call op%begin_reduction
+    end subroutine new_reduction
+
+    subroutine load_weighted( op, fname, state_here, eo_here, part, nparts, provenance, weight )
+        type(reconstructor_pcg), intent(inout) :: op
+        class(string),           intent(in)    :: fname
+        integer,                 intent(in)    :: state_here, eo_here, part, nparts
+        character(len=*),        intent(in)    :: provenance
+        real,                    intent(in)    :: weight
+        call new_reduction(op)
+        call add_weighted(op, fname, state_here, eo_here, part, nparts, provenance, weight)
+    end subroutine load_weighted
+
+    subroutine add_weighted( op, fname, state_here, eo_here, part, nparts, provenance, weight )
+        type(reconstructor_pcg), intent(inout) :: op
+        class(string),           intent(in)    :: fname
+        integer,                 intent(in)    :: state_here, eo_here, part, nparts
+        character(len=*),        intent(in)    :: provenance
+        real,                    intent(in)    :: weight
+        integer :: nraw
+        call op%add_raw_accum_weighted(fname, state_here, eo_here, part, nparts, provenance, weight, nraw)
+    end subroutine add_weighted
+
+    subroutine build_blend( f_subset, subset_part, frac, f_full, state_here, eo_here, provenance, u, op )
+        class(string),           intent(in)    :: f_subset, f_full
+        integer,                 intent(in)    :: subset_part, state_here, eo_here
+        real,                    intent(in)    :: frac, u
+        character(len=*),        intent(in)    :: provenance
+        type(reconstructor_pcg), intent(inout) :: op
+        call load_weighted(op, f_subset, state_here, eo_here, subset_part, 2, provenance, u/frac)
+        call add_weighted(op, f_full, state_here, eo_here, 1, 1, provenance, 1.0-u)
+    end subroutine build_blend
+
+    subroutine finalize_and_solve( op, x, history, niters )
+        type(reconstructor_pcg), intent(inout) :: op
+        real, allocatable,       intent(out)   :: x(:,:,:), history(:)
+        integer,                 intent(out)   :: niters
+        type(pcg_solver_outcome) :: outcome
+        allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+        call op%end_accum(.true.)
+        call op%set_op_mode(PCG_OP_KERNEL)
+        call op%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, rel_res_hist=history, &
+            &niters=niters, outcome=outcome)
+        if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE ) &
+            &THROW_HARD('PCG lost positive-definiteness in the harness solve')
+    end subroutine finalize_and_solve
+
+    subroutine require_raw( label, b_err, d_err, tolerance )
+        character(len=*), intent(in) :: label
+        real,             intent(in) :: b_err, d_err, tolerance
+        write(funit,'(A,A)') 'gate=', trim(label)
+        write(funit,'(A,ES14.6)') 'B_relerr=', b_err
+        write(funit,'(A,ES14.6)') 'D_relerr=', d_err
+        if( b_err > tolerance .or. d_err > tolerance )then
+            write(logfhandle,'(A,A,A,ES12.4,A,ES12.4)') '>>> PCG FRAC FAIL | ', trim(label), &
+                &' | B=', b_err, ' | D=', d_err
+            THROW_HARD('PCG fractional-update raw accumulator validation failed')
+        endif
+    end subroutine require_raw
+
+    pure real function volume_rel_error( lhs, rhs ) result(err)
+        real, intent(in) :: lhs(:,:,:), rhs(:,:,:)
+        real(dp) :: numerator, denominator
+        integer  :: i, j, k
+        numerator = 0.0_dp
+        denominator = 0.0_dp
+        do k = 1, size(lhs,3)
+            do j = 1, size(lhs,2)
+                do i = 1, size(lhs,1)
+                    numerator = numerator + real(lhs(i,j,k)-rhs(i,j,k),dp)**2
+                    denominator = denominator + real(rhs(i,j,k),dp)**2
+                enddo
+            enddo
+        enddo
+        err = real(sqrt(numerator) / max(1.0_dp, sqrt(denominator)))
+    end function volume_rel_error
+
+    function frac_fname( state_here, half_here, tag ) result(fname)
+        integer,          intent(in) :: state_here
+        character(len=*), intent(in) :: half_here, tag
+        type(string) :: fname
+        fname = 'pcg_frac_state'//int2str_pad(state_here,2)//'_'//trim(half_here)//'_'//trim(tag)//'.raw'
+    end function frac_fname
+
+end subroutine validate_rec3D_pcg_fractional_updates
+
 
 !> Same-inputs dual-backend reconstruction test (doc/implementation_notes/
 !> drop_legacy_box_division.md, plan step 2). Reconstructs ONE fixed set of
@@ -3023,10 +3447,11 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
 end subroutine run_rec3D_backends_single
 
 
-!> abinitio3D_addon end to end: abinitio3D on a seeded subset of simulated
-!! particles, the add-on on all of them, checked against the simulation truth
-!! and the base run. The fixture directory (a few hundred MB) is removed on
-!! success and kept for inspection on failure.
+!> abinitio3D_addon end to end: abinitio3D on a seeded selection of a first
+!! set of simulated particles, the add-on on a larger project that appends a
+!! second set, checked against the simulation truth and the base run. The
+!! fixture directory (a few hundred MB) is removed on success and kept for
+!! inspection on failure.
 subroutine exec_test_abinitio3D_addon( self, cline )
     class(commander_test_abinitio3D_addon), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
@@ -3057,43 +3482,52 @@ end subroutine exec_test_abinitio3D_addon
 !> abinitio3D_addon on simulated particles, gated on the simulation truth.
 !  An off-axis Gaussian blob breaks the c3 symmetry of the embedded 6VXX map,
 !  so that c1 poses are unique; particles are simulated from that map (the
-!  truth) with CTF and noise. abinitio3D solves a seeded half of them (the
-!  frozen project, sampled so that trailing reconstruction is exercised);
-!  abinitio3D_addon then grows that solution with the other half, the current
-!  project being the superset under the same project basename (the collision
-!  case). The gate checks the frozen inputs byte-unchanged, the frozen rows of
-!  the output identical to the frozen project, the add-on's own manifest and
-!  sigma unregistration, the coverage of the cohort, the cohort poses against
-!  the truth (frame- and hand-independent pair metric) and against the frozen
+!  truth) with CTF and noise and split into two stacks: the base set (the
+!  first NBASE) and a set appended after it, as a stream's pool grows. The
+!  frozen project holds the base set alone (NBASE rows), and abinitio3D solves
+!  a seeded selection of it (sampled so that trailing reconstruction is
+!  exercised); abinitio3D_addon then grows that solution on the current
+!  project, which holds both sets (NPTCLS rows, the frozen project's indices
+!  first) under the same project basename (the collision case): the cohort is
+!  the deselected base particles and the appended set. The gate checks the
+!  frozen inputs byte-unchanged, the frozen rows of the output identical to
+!  the frozen project, the add-on's own manifest, the union's sigma2 state
+!  registered at native sampling and the output valid as the frozen input of
+!  a next add-on, the coverage of the cohort, the cohort poses against the
+!  truth (frame- and hand-independent pair metric) and against the frozen
 !  poses, and the docked map correlation and masked FSC of the union map
-!  against the truth and against the base map. The joint-versus-separate sigma
-!  comparison is reported without a gate value (first release). Every metric
-!  goes to metrics.tsv.
+!  against the truth and against the base map. Every metric goes to
+!  metrics.tsv.
 subroutine run_abinitio3D_addon_gate( nthr, all_ok )
-    use simple_atoms,               only: atoms
-    use simple_molecule_data,       only: molecule_data, sars_cov2_spkgp_6vxx
-    use simple_ui,                  only: make_ui
-    use simple_commanders_abinitio, only: commander_abinitio3D_addon
-    use simple_commanders_refine3D, only: commander_bootstrap_rec3D
-    use simple_abinitio3D_manifest, only: abinitio3D_manifest
-    use simple_sigma2_state_file,   only: sigma2_state_digest_file
-    use simple_refine3D_fnames,     only: refine3D_state_vol_fname
-    use simple_test_gate,           only: test_gate
-    use simple_test_truth_metrics,  only: dock_both_hands, compare_to_truth, pair_pose_error, add_gaussian_blob
+    use simple_atoms,                   only: atoms
+    use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_ui,                      only: make_ui
+    use simple_commanders_abinitio,     only: commander_abinitio3D_addon
+    use simple_abinitio3D_manifest,     only: abinitio3D_manifest
+    use simple_sigma2_state_file,       only: sigma2_state_digest_file
+    use simple_sigma2_files,            only: canonical_sigma2_consumable
+    use simple_refine3D_fnames,         only: refine3D_state_vol_fname
+    use simple_test_gate,               only: test_gate
+    use simple_test_truth_metrics,      only: dock_both_hands, compare_to_truth, pair_pose_error, add_gaussian_blob
     use simple_abinitio3D_addon_report, only: abinitio3D_addon_report, ADDON_REPORT_FNAME
+    use simple_image,                   only: image
     use, intrinsic :: iso_fortran_env, only: int64
     integer, intent(in)    :: nthr
     logical, intent(inout) :: all_ok
     character(len=*), parameter :: GATE_DIR    = 'abinitio3D_addon_gate'
     character(len=*), parameter :: TRUTH_VOL   = 'truth_6VXX_blob.mrc'
     character(len=*), parameter :: PTCL_STK    = 'simulated_particles.mrc'
+    character(len=*), parameter :: STK_BASE    = 'particles_base.mrc'   !< the base set: particles 1-NBASE
+    character(len=*), parameter :: STK_NEW     = 'particles_new.mrc'    !< the set appended after it
     character(len=*), parameter :: TRUTH_ORIS  = 'simulated_oris.txt'
     character(len=*), parameter :: PROJNAME    = 'addon_gate'
     character(len=*), parameter :: STRICT_DIR  = 'strict'
     real,    parameter :: SMPD        = 2.2
     integer, parameter :: BOX         = 112
     real,    parameter :: MSKDIAM     = 180.
-    integer, parameter :: NPTCLS      = 3000
+    integer, parameter :: NPTCLS      = 3000   ! rows of the current project: both sets
+    integer, parameter :: NBASE       = 2000   ! rows of the frozen project: the base set
+    real,    parameter :: BASE_SELECT = 0.75   ! seeded selection of the base set (about 1500 frozen particles)
     real,    parameter :: SNR         = 0.2
     integer, parameter :: NSAMPLE     = 500    ! sampled in the base run and in the add-on (trailing from stage 5)
     real,    parameter :: GATE_LPSTART = 20.
@@ -3127,7 +3561,6 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     type(commander_abinitio3D)        :: xabinitio3D
     type(commander_abinitio3D_addon)  :: xaddon
     type(abinitio3D_addon_report)     :: addon_report
-    type(commander_bootstrap_rec3D)   :: xbootstrap
     type(commander_simulate_particles):: xsim
     type(commander_new_project)       :: xnew_project
     type(cmdline)       :: cl
@@ -3138,8 +3571,10 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     type(ctfparams)     :: ctfvars
     type(abinitio3D_manifest) :: man_base, man_out, man_pub
     type(sp_project)          :: pub_proj
-    type(string)        :: root, stk_abs, full_proj, strict_proj_fname, frozen_run_proj, out_run_proj
-    type(string)        :: frozen_sigma, frozen_vol, addon_vol, base_vol, joint_vol, cwd_here, truth_abs
+    type(string)        :: root, stk_abs, stk_base_abs, stk_new_abs, full_proj, strict_proj_fname
+    type(string)        :: frozen_run_proj, out_run_proj
+    type(image)         :: img
+    type(string)        :: frozen_sigma, frozen_vol, addon_vol, base_vol, cwd_here, truth_abs
     character(len=STDLEN) :: msg
     integer(int64)      :: dig_proj0
     integer, allocatable :: frozen_inds(:), cohort_inds(:)
@@ -3147,8 +3582,8 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     type(test_gate)     :: gate
     integer :: i, status, nf, nc, nposed, box_vol
     real    :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage
-    real    :: corr_joint, fsc_joint, fsc05_joint, frac_ff, frac_cf
-    logical :: found, l_same, l_pub
+    real    :: frac_ff, frac_cf
+    logical :: found, l_same, l_pub, l_frz_row
     call make_ui
     write(logfhandle,'(a)') '>>> TEST_ABINITIO3D_ADDON: abinitio3D_addon gate'
     call simple_getcwd(root)
@@ -3180,9 +3615,22 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call xsim%execute(cl)
     call cl%kill
     stk_abs = simple_abspath(string(PTCL_STK))
+    ! the base set and the set appended after it, each its own stack
+    call img%new([BOX,BOX,1], SMPD)
+    do i = 1, NPTCLS
+        call img%read(stk_abs, i)
+        if( i <= NBASE )then
+            call img%write(string(STK_BASE), i)
+        else
+            call img%write(string(STK_NEW), i - NBASE)
+        endif
+    enddo
+    call img%kill
+    stk_base_abs = simple_abspath(string(STK_BASE))
+    stk_new_abs  = simple_abspath(string(STK_NEW))
     call truth%new(NPTCLS, is_ptcl=.true.)
     call truth%read(string(TRUTH_ORIS), [1,NPTCLS])
-    ! ---- the current (superset) project ----
+    ! ---- the current project: both sets ----
     call cl%set('projname',  PROJNAME)
     call cl%set('qsys_name', 'local')
     call xnew_project%execute(cl)             ! creates and enters PROJNAME/
@@ -3194,7 +3642,8 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     ctfvars%cs      = 2.7
     ctfvars%fraca   = 0.1
     ctfvars%ctfflag = CTFFLAG_YES
-    call spproj%add_stk(stk_abs, ctfvars)
+    call spproj%add_stk(stk_base_abs, ctfvars)
+    call spproj%add_stk(stk_new_abs,  ctfvars)
     call set_fixed_seed(GATE_SEED)
     call spproj%os_cls2D%new(NCLS2D, is_ptcl=.false.)
     call spproj%os_cls2D%set_all2single('state', 1.)
@@ -3214,14 +3663,19 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
         call spproj%os_ptcl3D%set_state(i, 1)
     enddo
     call spproj%write(full_proj)
-    ! ---- the strict project: a seeded half, same basename, own directory ----
+    ! ---- the frozen project: the base set alone (its import gives the current
+    ! project's first stack and rows), a seeded selection, same basename, own
+    ! directory ----
     allocate(l_frozen(NPTCLS), source=.false.)
-    do i = 1, NPTCLS
+    do i = 1, NBASE
         call random_number(r)
-        l_frozen(i) = r < 0.5
+        l_frozen(i) = r < BASE_SELECT
     enddo
     strict_proj = spproj
-    do i = 1, NPTCLS
+    strict_proj%os_stk    = spproj%os_stk%extract_subset(1, 1)
+    strict_proj%os_ptcl2D = spproj%os_ptcl2D%extract_subset(1, NBASE)
+    strict_proj%os_ptcl3D = spproj%os_ptcl3D%extract_subset(1, NBASE)
+    do i = 1, NBASE
         if( .not. l_frozen(i) )then
             call strict_proj%os_ptcl2D%set_state(i, 0)
             call strict_proj%os_ptcl3D%set_state(i, 0)
@@ -3232,7 +3686,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call strict_proj%write(strict_proj_fname)
     call strict_proj%kill
     call spproj%kill
-    ! ---- the base run on the strict selection ----
+    ! ---- the base run on the frozen project ----
     call simple_getcwd(cwd_here)
     call simple_chdir(string(STRICT_DIR), status)
     call cl%set('prg',            'abinitio3D')
@@ -3260,7 +3714,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call frz_proj%get_vol('vol', 1, frozen_vol, smpd_vol, box_vol)
     base_vol   = frozen_vol
     dig_proj0  = sigma2_state_digest_file(frozen_run_proj)
-    ! ---- the add-on on the superset ----
+    ! ---- the add-on on the current project ----
     call cl%set('prg',             'abinitio3D_addon')
     call cl%set('projfile',        full_proj)
     call cl%set('projfile_frozen', frozen_run_proj)
@@ -3281,12 +3735,15 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
         &man_base%matches_artifact('sigma2_state', 0, string('1_abinitio3D_addon/frozen/frozen_sigma2_state.bin')))
     call man_base%kill
     call out_proj%read(out_run_proj)
-    call gate%check('output_has_no_sigma2_registration', .not. out_proj%projinfo%isthere(1, 'sigma2_state'))
+    ! the final reconstruction bootstrapped the union's sigma2 state over
+    ! every particle at native sampling, so the output is the frozen input of
+    ! a next add-on
+    call gate%check('output_registers_the_union_sigma2_state', &
+        &canonical_sigma2_consumable(out_proj, out_proj%os_ptcl3D, BOX, SMPD, .true., msg))
     call man_out%read_registered(out_proj, out_run_proj, status, msg)
     call gate%check('addon_manifest_registered', status == 0)
-    ! an add-on output never serves as a frozen input (no union sigma2 state)
     call man_out%validate_frozen(out_proj, status, msg)
-    call gate%check('addon_manifest_refused_as_frozen_input', status /= 0)
+    call gate%check('addon_manifest_valid_frozen_input', status == 0)
     ! all done: the finished project replaced the original current project
     ! file, registering the add-on's manifest by absolute path
     call pub_proj%read(full_proj)
@@ -3318,14 +3775,17 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     else
         call gate%check('addon_report_written', .false.)
     endif
-    ! frozen rows identical to the frozen project; cohort rows posed
+    ! frozen rows identical to the frozen project; cohort rows (the appended
+    ! set included) posed
     nf = count(l_frozen)
     nc = NPTCLS - nf
     allocate(frozen_inds(0), cohort_inds(0))
     l_same = .true.
     nposed = 0
     do i = 1, NPTCLS
-        if( frz_proj%os_ptcl3D%get_state(i) > 0 .and. frz_proj%os_ptcl3D%get_updatecnt(i) > 0 )then
+        l_frz_row = i <= NBASE
+        if( l_frz_row ) l_frz_row = frz_proj%os_ptcl3D%get_state(i) > 0 .and. frz_proj%os_ptcl3D%get_updatecnt(i) > 0
+        if( l_frz_row )then
             frozen_inds = [frozen_inds, i]
             l_same = l_same .and. all(abs(out_proj%os_ptcl3D%get_euler(i) - frz_proj%os_ptcl3D%get_euler(i)) < 1.e-3) &
                 &.and. all(abs(out_proj%os_ptcl3D%get_2Dshift(i) - frz_proj%os_ptcl3D%get_2Dshift(i)) < 1.e-4) &
@@ -3361,11 +3821,6 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call gate%metric('union_truth_fsc0143_A', fsc_addon, fsc_base + MAX_FSC_LOSS, &
         &fsc_addon > 0. .and. fsc_addon <= fsc_base + MAX_FSC_LOSS)
     call gate%report('base_truth_fsc0143_A', fsc_base)
-    ! ---- joint versus separate sigma2 (reported, no gate value) ----
-    call joint_sigma_reconstruction(out_run_proj, joint_vol)
-    call compare_to_truth(addon_vol, joint_vol, MSKDIAM, corr_joint, fsc05_joint, fsc_joint)
-    call gate%report('joint_vs_separate_sigma_corr', corr_joint)
-    call gate%report('joint_vs_separate_sigma_fsc0143_A', fsc_joint)
     all_ok = all_ok .and. gate%passed()
     call gate%kill
     call out_proj%kill
@@ -3389,32 +3844,6 @@ contains
             &string('gate_'//tag//'_docked.mrc'), cc_direct, cc_mirror)
         call compare_to_truth(truth_abs, string('gate_'//tag//'_docked.mrc'), MSKDIAM, corr, fsc05, fsc0143)
     end subroutine dock_and_compare
-
-    !> the union with jointly estimated sigma2: bootstrap_rec3D on a copy of the
-    !! output project (image-power seed, one residual pass over every particle,
-    !! shipped map), in its own directory
-    subroutine joint_sigma_reconstruction( projfile_in, vol_out )
-        class(string), intent(in)    :: projfile_in
-        type(string),  intent(inout) :: vol_out
-        type(cmdline) :: cl_joint
-        type(string)  :: here
-        integer :: st
-        call simple_getcwd(here)
-        call simple_mkdir('joint_sigma')
-        call simple_copy_file(projfile_in, string('joint_sigma/'//PROJNAME//'.simple'))
-        call simple_chdir(string('joint_sigma'), st)
-        call cl_joint%set('prg',      'bootstrap_rec3D')
-        call cl_joint%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
-        call cl_joint%set('mkdir',    'no')
-        call cl_joint%set('pgrp',     'c1')
-        call cl_joint%set('mskdiam',  MSKDIAM)
-        call cl_joint%set('nthr',     nthr)
-        call xbootstrap%execute(cl_joint)
-        call cl_joint%kill
-        vol_out = simple_abspath(refine3D_state_vol_fname(1), check_exists=.false.)
-        call simple_chdir(here, st)
-        call here%kill
-    end subroutine joint_sigma_reconstruction
 
 end subroutine run_abinitio3D_addon_gate
 

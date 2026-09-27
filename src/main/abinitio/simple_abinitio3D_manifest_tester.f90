@@ -8,7 +8,8 @@
 ! project (a bare name resolves against the project file's own directory, an
 ! absolute one is kept, the registered run identifier must match); the replay
 ! of the base run's settings onto a command line; and the frozen-project
-! validation with its negative cases: an ineligible or foreign manifest, a
+! validation (an eligible add-on output is a frozen input, so add-ons chain)
+! with its negative cases: an ineligible or foreign manifest, a
 ! missing state map, a changed particle layout, stack table, optics/CTF
 ! parameters or final map, and another particle count. In-memory projects, one
 ! 8-pixel map and one small sigma2 stand-in file whose name has blanks.
@@ -432,8 +433,11 @@ contains
         call assert_int(0, status, 'the manifest validates against its own project: '//trim(msg))
         call make_foreign('abinitio3D', .false., 1)
         call foreign%validate_frozen(spproj, status, msg)
-        call assert_true(status /= 0, 'an ineligible manifest (add-on output) is refused')
+        call assert_true(status /= 0, 'an ineligible manifest is refused')
         call make_foreign('abinitio3D_addon', .true., 1)
+        call foreign%validate_frozen(spproj, status, msg)
+        call assert_int(0, status, 'an eligible add-on output is a frozen input (add-ons chain): '//trim(msg))
+        call make_foreign('refine3D_auto', .true., 1)
         call foreign%validate_frozen(spproj, status, msg)
         call assert_true(status /= 0, 'a manifest of another program is refused')
         call make_foreign('abinitio3D', .true., 2)

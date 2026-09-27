@@ -64,6 +64,11 @@ Strategy selection is command-line shaped:
 - `nparts` without `part` selects the distributed master strategy
 - otherwise the shared-memory strategy is used
 - distributed workers run the partition command path with `part` and `outfile`
+- the distributed master splits the rows into contiguous partitions that
+  balance the particles with state > 0 (`qsys_env%new(..., l_active)`,
+  `split_nobjs_active`); with every row active this is the even split. The
+  master merges the partition documents by their own ranges (`merge_algndocs`),
+  so no consumer assumes a particular split
 
 `maxits` is the number of iterations to run in the current invocation.
 `which_iter` starts at `startit`, and `extr_iter` follows the same per-call
@@ -178,7 +183,11 @@ an empty directory, and every final reconstruction at a new sampling. Since
   sampling in abinitio3D and refine3D_auto), the seed is upgraded by one
   residual pass: `refine=sigma` against the seeded map at the final sampling
   (no search, no volume assembly, no orientation output, alignment docs are
-  not merged), committed as the next canonical generation, then the shipped euclid
+  not merged, and the particle field left exactly as it was: shared-memory
+  initialisation does not reset `updatecnt`/`sampled` for it, the run
+  finalizers do not write the field, and the distributed master refreshes it
+  from disk before its whole-project write), committed as the next canonical
+  generation, then the shipped euclid
   ML reconstruction runs on the residual sigmas. Since 2026-09-07
   `bootstrap_rec3D` (module `simple_commanders_refine3D`) owns this whole
   sequence: seed, bootstrap map, residual pass, commit, final map; the shared
@@ -200,6 +209,17 @@ an empty directory, and every final reconstruction at a new sampling. Since
   pair of that final PCG reconstruction is inherent to ML regularization:
   the prior is built from the base pair's independent-half FSC, which is
   also the reported FSC and the unfiltered pair postprocessing uses.
+- The residual pass is not an update (2026-09-27). Before this, the
+  shared-memory run finalizer wrote the particle field with the pass's
+  sampling bookkeeping: every active particle came back with `updatecnt` + 1,
+  a new `sampled` round and cleared search statistics (poses untouched). So
+  particles never updated by the refinement entered the shipped map, unlike
+  the bootstrap map (`sample4rec` takes `updatecnt > 0` rows), and counted as
+  updated for `update_missing` and for the frozen membership of
+  `abinitio3D_addon`; a standalone `bootstrap_rec3D` at `which_iter=1`
+  (`startit=1`) even reset `updatecnt`/`sampled` for every particle first.
+  Nothing reads the bump: the pass only closes final reconstructions, and a
+  later refinement starts its own sampling round.
 - The unfiltered pair belongs to the assembly that wrote the map it
   accompanies (2026-09-12): every gridding `volassemble` writes the `_unfil`
   halves, the unregularized pair under ML regularization and copies of the

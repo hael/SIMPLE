@@ -18,7 +18,7 @@ use simple_sigma2_state_file, only: sigma2_state_digest_begin, sigma2_state_dige
     &sigma2_state_digest_integer, sigma2_state_digest_file
 implicit none
 
-public :: abinitio3D_manifest, abinitio3D_stage_record, MANIFEST_FNAME
+public :: abinitio3D_manifest, abinitio3D_stage_record, MANIFEST_FNAME, manifest_records_input
 private
 #include "simple_local_flags.inc"
 
@@ -134,6 +134,13 @@ type :: abinitio3D_manifest
 end type abinitio3D_manifest
 
 contains
+
+    !> key is one of the run inputs a manifest records (MANIFEST_INPUT_KEYS):
+    !! part of a completed run's settings, which abinitio3D_addon inherits
+    logical function manifest_records_input( key ) result( l_recorded )
+        character(len=*), intent(in) :: key
+        l_recorded = any(MANIFEST_INPUT_KEYS == key)
+    end function manifest_records_input
 
     ! CONSTRUCTION
 
@@ -706,10 +713,11 @@ contains
     ! USE AS A FROZEN INPUT
 
     !> A manifest may serve as a frozen input only for the project that
-    !! registered it, unchanged: an eligible, completed abinitio3D run with the
-    !! same particle layout, stack table and optics/CTF identity, and every
-    !! registered state map with the recorded digest (direct abinitio3D output
-    !! only). The registered run identifier is checked by read_registered.
+    !! registered it, unchanged: an eligible, completed abinitio3D or
+    !! abinitio3D_addon run (an add-on output carries the union's sigma2
+    !! state, so add-ons chain) with the same particle layout, stack table and
+    !! optics/CTF identity, and every registered state map with the recorded
+    !! digest. The registered run identifier is checked by read_registered.
     subroutine validate_frozen( self, spproj, status, msg )
         class(abinitio3D_manifest), intent(in)    :: self
         class(sp_project),          intent(inout) :: spproj
@@ -720,12 +728,12 @@ contains
         real    :: smpd
         status = 1
         msg    = ''
-        if( trim(self%program) /= 'abinitio3D' )then
-            msg = 'the frozen project was not produced by abinitio3D'
+        if( trim(self%program) /= 'abinitio3D' .and. trim(self%program) /= 'abinitio3D_addon' )then
+            msg = 'the frozen project was not produced by abinitio3D or abinitio3D_addon'
             return
         endif
         if( .not. self%eligible )then
-            msg = 'the frozen project is not eligible as a frozen input (an add-on output has no union sigma2 state)'
+            msg = 'the frozen project is not eligible as a frozen input'
             return
         endif
         if( self%nrows /= spproj%os_ptcl3D%get_noris() )then

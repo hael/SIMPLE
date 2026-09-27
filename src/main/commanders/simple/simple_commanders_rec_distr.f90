@@ -37,7 +37,7 @@ contains
         &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed )
-        use simple_reconstructor, only: reconstructor, gridding_half_restore
+        use simple_reconstructor,       only: reconstructor, gridding_half_restore
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
             &write_halfmap_diagnostics, write_support_provenance
         type(parameters),       intent(in)    :: params
@@ -828,7 +828,7 @@ contains
         !! and writes a newly generated density artifact when density is used.
         !! Any selected envelope is applied post hoc with phase randomization.
         subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics, cones )
-            use simple_fsc, only: fsc_area_score_result
+            use simple_fsc,              only: fsc_area_score_result
             use simple_vol_pproc_policy, only: state_mask_is_compatible
             class(parameters),                      intent(in)    :: params
             class(image),                           intent(in)    :: even, odd
@@ -922,9 +922,9 @@ contains
     end subroutine filter_pcg_nonuniform_maps
 
     subroutine exec_volassemble( self, cline )
-        use simple_reconstructor,    only: reconstructor
-        use simple_nu_filter,        only: set_nu_filter_report, NU_DEV_OUTPUT
-        use simple_nu_state_filter,  only: nonuniform_filter_state, nu_state_filter_timings, &
+        use simple_reconstructor,   only: reconstructor
+        use simple_nu_filter,       only: set_nu_filter_report, NU_DEV_OUTPUT
+        use simple_nu_state_filter, only: nonuniform_filter_state, nu_state_filter_timings, &
             &nu_aux_member
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -1019,9 +1019,9 @@ contains
             l_frozen_seed = cline%defined('frozen_seed')
             if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
             if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'gridding', &
-                &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
+                &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.false.)
             if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'gridding', &
-                &params%nstates, build%spproj_field%get_noris(), params%cc_objfun)
+                &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.true.)
             allocate(res0143s(params%nstates), res05s(params%nstates), cfars(params%nstates))
             res0143s = 0.
             res05s   = 0.

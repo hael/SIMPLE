@@ -37,6 +37,7 @@ contains
         call test_write_read_roundtrip()
         call test_read_does_not_mutate_projinfo()
         call test_partial_docs_merge()
+        call test_partial_docs_merge_uneven()
         call test_print_segment_json()
         call cleanup()
     end subroutine run_all_sp_project_tests
@@ -340,6 +341,26 @@ contains
         call proj%kill
         call merged%kill
     end subroutine test_partial_docs_merge
+
+    ! documents from active-balanced partitions have uneven ranges (here a long first part of mostly
+    ! inactive rows); the merge takes each document's own range and reproduces the source segment
+    subroutine test_partial_docs_merge_uneven()
+        type(sp_project) :: proj, merged
+        write(*,'(A)') 'test_partial_docs_merge_uneven'
+        call make_project(proj)
+        call merged%os_ptcl2D%new(NPTCLS, .true.)
+        call merged%update_projinfo(string(MERGE_PROJ))
+        call binwrite_oritab(string('doc_1.simple'), proj, proj%os_ptcl2D, [  1, 250],    isegment=PTCL2D_SEG)
+        call binwrite_oritab(string('doc_2.simple'), proj, proj%os_ptcl2D, [251, 260],    isegment=PTCL2D_SEG)
+        call binwrite_oritab(string('doc_3.simple'), proj, proj%os_ptcl2D, [261, NPTCLS], isegment=PTCL2D_SEG)
+        call merged%merge_algndocs(NPTCLS, 3, 'ptcl2D', 'doc_', 1)
+        call del_file(string('doc_1.simple'))
+        call del_file(string('doc_2.simple'))
+        call del_file(string('doc_3.simple'))
+        call assert_segments_equal(proj%os_ptcl2D, merged%os_ptcl2D, NPTCLS, 'merged os_ptcl2D from uneven ranges')
+        call proj%kill
+        call merged%kill
+    end subroutine test_partial_docs_merge_uneven
 
     !---------------- JSON view ----------------
 

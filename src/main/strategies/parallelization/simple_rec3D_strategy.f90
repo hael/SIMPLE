@@ -10,7 +10,7 @@ use simple_matcher_3Drec,        only: calc_3Drec, calc_projdir3Drec
 use simple_commanders_rec_distr, only: commander_volassemble, filter_pcg_nonuniform_maps
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, &
     &refine3D_pcg_raw_accum_fname
-use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared, execute_rec3D_pcg_distributed_master
+use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 use simple_sigma2_files,         only: load_sigma2_groups
 use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
 use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
@@ -49,12 +49,12 @@ contains
     procedure :: cleanup      => inmem_cleanup
 end type rec3D_inmem_strategy
 
-! Shared-memory kernel PCG. Initialization, final postprocessing and cleanup
-! reuse the established in-memory reconstruct3D lifecycle; only execution is
-! replaced because PCG produces dense halfmaps rather than gridding partials.
+! Shared-memory kernel PCG: the distributed route in one process (this
+! process is the only worker, then the master), on the in-memory lifecycle
 type, extends(rec3D_inmem_strategy) :: rec3D_pcg_inmem_strategy
 contains
-    procedure :: execute => pcg_inmem_execute
+    procedure :: execute      => pcg_inmem_execute
+    procedure :: finalize_run => pcg_inmem_finalize_run
 end type rec3D_pcg_inmem_strategy
 
 ! Distributed-memory
@@ -245,11 +245,30 @@ contains
 
     subroutine pcg_inmem_execute(self, params, build, cline)
         class(rec3D_pcg_inmem_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
-        call execute_rec3D_pcg_shared(params, build, cline)
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
+        integer, allocatable :: pinds(:)
+        integer              :: nptcls2update
+        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
+        else
+            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
+        endif
+        call remove_pcg_raw_files(params)
+        call execute_rec3D_pcg_worker(params, build, cline, pinds)
+        call assemble_pcg(params, build, cline)
+        deallocate(pinds)
     end subroutine pcg_inmem_execute
+
+    subroutine pcg_inmem_finalize_run(self, params, build, cline)
+        class(rec3D_pcg_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
+        call register_rec3D_outputs(params, build)
+        call maybe_postprocess_reconstruct3D(params, cline)
+    end subroutine pcg_inmem_finalize_run
 
     subroutine inmem_finalize_run(self, params, build, cline)
         class(rec3D_inmem_strategy), intent(inout) :: self
@@ -307,8 +326,8 @@ contains
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
         call ensure_canonical_sigma_state(params, build, cline)
-        ! setup distributed execution
-        call self%qenv%new(params, params%nparts)
+        ! setup distributed execution: partitions balance the particles with state > 0
+        call self%qenv%new(params, params%nparts, l_active=build%spproj_field%included())
         call cline%gen_job_descr(self%job_descr)
     end subroutine distr_initialize
 
@@ -319,41 +338,12 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
-        type(string)                :: volname, vol_in, raw_fname
-        logical, allocatable        :: l_trail_bootstrap(:)
-        real,    allocatable        :: nu_align_lps(:)
-        integer                     :: state, part, eo
-        if( trim(params%rec_backend) == 'pcg' )then
-            ! A stale final filename must never masquerade as a completed worker
-            ! from this launch. Workers publish through .tmp + atomic rename.
-            do state = 1, params%nstates
-                do eo = 0, 1
-                    do part = 1, params%nparts
-                        raw_fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
-                            &merge('odd ', 'even', eo == 1))
-                        call del_file(raw_fname)
-                        call del_file(raw_fname//'.tmp')
-                    enddo
-                enddo
-            enddo
-            call raw_fname%kill
-        endif
+        type(string)                :: volname, vol_in
+        integer                     :: state
+        if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         if( trim(params%rec_backend) == 'pcg' )then
-            if( params%l_nonuniform )then
-                ! reconstruct3D must leave behind the same _nu_filt matching
-                ! references and matching low-pass handoff as a refinement
-                ! iteration.
-                allocate(l_trail_bootstrap(params%nstates), source=.false.)
-                allocate(nu_align_lps(params%nstates),      source=0.0)
-                call execute_rec3D_pcg_distributed_master(params, build, cline, &
-                    &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
-                call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, cline%defined('frozen_rec'), &
-                    &nu_align_lps)
-                deallocate(l_trail_bootstrap, nu_align_lps)
-            else
-                call execute_rec3D_pcg_distributed_master(params, build, cline)
-            endif
+            call assemble_pcg(params, build, cline)
             return
         endif
         ! Assemble volumes on master
@@ -380,26 +370,73 @@ contains
         type(parameters),            intent(in)    :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(string) :: fsc_file
-        integer      :: state
-        ! updates project file only if mkdir is set to yes
-        if( params%mkdir.eq.'yes' )then
-            do state = 1, params%nstates
-                fsc_file = refine3D_fsc_fname(state)
-                call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
-                if( trim(params%oritype).eq.'cls3D' )then
-                    call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
-                        &params%smpd_crop, state, 'vol_cavg')
-                else
-                    call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
-                        &params%smpd_crop, state, 'vol')
-                endif
-                call fsc_file%kill
-            enddo
-            call build%spproj%write_segment_inside('out', params%projfile)
-        endif
+        call register_rec3D_outputs(params, build)
         call maybe_postprocess_reconstruct3D(params, cline)
     end subroutine distr_finalize_run
+
+    !> The state maps and FSCs registered in the project (mkdir=yes only)
+    subroutine register_rec3D_outputs(params, build)
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: fsc_file
+        integer      :: state
+        if( params%mkdir.ne.'yes' ) return
+        do state = 1, params%nstates
+            fsc_file = refine3D_fsc_fname(state)
+            call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
+            if( trim(params%oritype).eq.'cls3D' )then
+                call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
+                    &params%smpd_crop, state, 'vol_cavg')
+            else
+                call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
+                    &params%smpd_crop, state, 'vol')
+            endif
+            call fsc_file%kill
+        enddo
+        call build%spproj%write_segment_inside('out', params%projfile)
+    end subroutine register_rec3D_outputs
+
+    !> A stale raw accumulator must never pass for a completed worker of this
+    !! launch; workers publish through .tmp and an atomic rename
+    subroutine remove_pcg_raw_files(params)
+        type(parameters), intent(in) :: params
+        type(string) :: raw_fname
+        integer      :: state, part, eo
+        do state = 1, params%nstates
+            do eo = 0, 1
+                do part = 1, params%nparts
+                    raw_fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
+                        &merge('odd ', 'even', eo == 1))
+                    call del_file(raw_fname)
+                    call del_file(raw_fname//'.tmp')
+                enddo
+            enddo
+        enddo
+        call raw_fname%kill
+    end subroutine remove_pcg_raw_files
+
+    !> The PCG master: reduce the parts' raw accumulators and solve; with
+    !! nonuniform filtering also the NU competition and the matching low-pass
+    !! handoff, so reconstruct3D leaves the same _nu_filt references as a
+    !! refinement iteration
+    subroutine assemble_pcg(params, build, cline)
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        class(cmdline),   intent(inout) :: cline
+        logical, allocatable :: l_trail_bootstrap(:)
+        real,    allocatable :: nu_align_lps(:)
+        if( params%l_nonuniform )then
+            allocate(l_trail_bootstrap(params%nstates), source=.false.)
+            allocate(nu_align_lps(params%nstates),      source=0.0)
+            call execute_rec3D_pcg_distributed_master(params, build, cline, &
+                &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
+            call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, cline%defined('frozen_rec'), &
+                &nu_align_lps)
+            deallocate(l_trail_bootstrap, nu_align_lps)
+        else
+            call execute_rec3D_pcg_distributed_master(params, build, cline)
+        endif
+    end subroutine assemble_pcg
 
     subroutine distr_cleanup(self, params, build, cline)
         use simple_qsys_funs, only: qsys_cleanup

@@ -10,7 +10,12 @@
 !
 ! A frozen_accum object is one add-on run's store. Its identity, the run
 ! context (one text file per add-on run), carries the run identifier, the
-! backend, the state layout and the particle counts. Every set records the
+! backend, the state layout and the particle counts, with the row counts of
+! both projects: the producers (reconstruct3D on the frozen project) are
+! validated against the frozen project's rows, the consumers (the add-on's
+! reconstructions) against the working project's. The two share their particle
+! index space on the rows both hold, and either may be the longer (appended
+! rows of the working project are cohort rows). Every set records the
 ! context's identity and is validated against it and against the consumer's
 ! grid before a single payload byte is read; a set is never padded or clipped.
 ! Consumers load the store only through the frozen_rec handshake, which names
@@ -32,7 +37,7 @@ private
 
 character(len=*), parameter :: FROZEN_CONTEXT_SCHEMA = 'abinitio3D_addon_frozen_context'
 character(len=*), parameter :: FROZEN_SET_SCHEMA     = 'abinitio3D_addon_frozen_set'
-integer,          parameter :: FROZEN_SCHEMA_VERSION = 1
+integer,          parameter :: FROZEN_SCHEMA_VERSION = 2
 real,             parameter :: SMPD_RELTOL           = 1.e-5
 
 !> one add-on run's frozen contribution: its identity (the run context) and
@@ -41,9 +46,10 @@ type :: frozen_accum
     private
     character(len=64) :: run_id  = ''
     character(len=16) :: backend = ''
-    integer :: nstates = 0 !< inherited state count
-    integer :: nrows   = 0 !< total rows of the shared particle index space
-    integer :: nfrozen = 0 !< frozen particles (state > 0 and updatecnt > 0 in the frozen project)
+    integer :: nstates      = 0 !< inherited state count
+    integer :: nrows        = 0 !< rows of the add-on's working project (the consumers' index space)
+    integer :: nrows_frozen = 0 !< rows of the frozen project (the producers' index space)
+    integer :: nfrozen      = 0 !< frozen particles (state > 0 and updatecnt > 0 in the frozen project)
     integer, allocatable :: nfrozen_state(:)
     character(len=8)  :: weighting = '' !< the loading run's reconstruction weighting (euclid|cc)
   contains
@@ -70,22 +76,25 @@ contains
 
     ! RUN CONTEXT
 
-    !> the store of one add-on run: nstates is the length of the per-state
-    !! frozen counts and nfrozen their sum
-    subroutine new( self, run_id, backend, nrows, nfrozen_state )
+    !> the store of one add-on run: nrows and nrows_frozen are the row counts
+    !! of the working and the frozen project, nstates is the length of the
+    !! per-state frozen counts and nfrozen their sum
+    subroutine new( self, run_id, backend, nrows, nrows_frozen, nfrozen_state )
         class(frozen_accum), intent(inout) :: self
         character(len=*),    intent(in)    :: run_id, backend
-        integer,             intent(in)    :: nrows
+        integer,             intent(in)    :: nrows, nrows_frozen
         integer,             intent(in)    :: nfrozen_state(:)
         call self%kill
         if( len_trim(run_id) == 0 .or. index(trim(run_id), ' ') > 0 ) &
             &THROW_HARD('frozen context requires a blank-free run identifier')
         if( size(nfrozen_state) < 1 ) THROW_HARD('frozen context has no state layout')
         if( nrows < 1 .or. any(nfrozen_state < 0) ) THROW_HARD('frozen context particle counts are invalid')
+        if( nrows_frozen < 1 ) THROW_HARD('frozen context row counts are invalid')
         self%run_id        = run_id
         self%backend       = backend
         self%nstates       = size(nfrozen_state)
         self%nrows         = nrows
+        self%nrows_frozen  = nrows_frozen
         self%nfrozen_state = nfrozen_state
         self%nfrozen       = sum(nfrozen_state)
     end subroutine new
@@ -106,6 +115,7 @@ contains
         write(funit,'(A,1X,A)')  'backend', trim(self%backend)
         write(funit,'(A,1X,I0)') 'nstates', self%nstates
         write(funit,'(A,1X,I0)') 'nrows',   self%nrows
+        write(funit,'(A,1X,I0)') 'nrows_frozen', self%nrows_frozen
         write(funit,'(A,1X,I0)') 'nfrozen', self%nfrozen
         do s = 1, self%nstates
             write(funit,'(A,1X,I0,1X,I0)') 'nfrozen_state', s, self%nfrozen_state(s)
@@ -125,7 +135,7 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=64) :: key, schema
         integer :: funit, io_stat, version, s, cnt, nseen
-        logical :: l_end, l_seen(5)
+        logical :: l_end, l_seen(6)
         call self%kill
         status = 1
         msg    = ''
@@ -177,6 +187,9 @@ contains
                 case('nrows')
                     read(line,*,iostat=io_stat) key, self%nrows
                     l_seen(4) = .true.
+                case('nrows_frozen')
+                    read(line,*,iostat=io_stat) key, self%nrows_frozen
+                    l_seen(6) = .true.
                 case('nfrozen')
                     read(line,*,iostat=io_stat) key, self%nfrozen
                     l_seen(5) = .true.
@@ -214,18 +227,23 @@ contains
             msg = 'frozen context state counts are incomplete'
         else if( self%nrows < 1 .or. self%nfrozen < 1 .or. sum(self%nfrozen_state) /= self%nfrozen )then
             msg = 'frozen context particle counts are inconsistent'
+        else if( self%nrows_frozen < 1 )then
+            msg = 'frozen context row counts are inconsistent'
         else
             status = 0
         endif
         if( status /= 0 ) call self%kill
     end subroutine read
 
-    !> the context must describe the consumer's run: backend, state layout and
-    !! particle index space
-    subroutine validate( self, backend, nstates, nrows, status, msg )
+    !> the context must describe the loading run: backend, state layout and
+    !! particle index space, which is the frozen project's for a producer
+    !! (a reconstruct3D on the frozen project) and the working project's for a
+    !! consumer (an add-on reconstruction)
+    subroutine validate( self, backend, nstates, nrows, producer, status, msg )
         class(frozen_accum), intent(in)  :: self
         character(len=*),    intent(in)  :: backend
         integer,             intent(in)  :: nstates, nrows
+        logical,             intent(in)  :: producer
         integer,             intent(out) :: status
         character(len=*),    intent(out) :: msg
         status = 1
@@ -234,7 +252,9 @@ contains
             msg = 'frozen context backend '//trim(self%backend)//' differs from the reconstruction backend '//trim(backend)
         else if( self%nstates /= nstates )then
             msg = 'frozen context state layout differs from the reconstruction'
-        else if( self%nrows /= nrows )then
+        else if( producer .and. self%nrows_frozen /= nrows )then
+            msg = 'frozen context particle index space differs from the frozen project'
+        else if( .not. producer .and. self%nrows /= nrows )then
             msg = 'frozen context particle index space differs from the reconstruction project'
         else
             status = 0
@@ -243,17 +263,19 @@ contains
 
     !> Read and validate the context named by a handshake; any defect is fatal:
     !! a consumer never falls back to a reconstruction without its frozen term.
-    !! cc_objfun is the loading run's reconstruction weighting.
-    subroutine load( self, fname, backend, nstates, nrows, cc_objfun )
+    !! cc_objfun is the loading run's reconstruction weighting; producer is
+    !! true for the frozen_seed handshake, false for frozen_rec.
+    subroutine load( self, fname, backend, nstates, nrows, cc_objfun, producer )
         class(frozen_accum), intent(inout) :: self
         class(string),       intent(in)    :: fname
         character(len=*),    intent(in)    :: backend
         integer,             intent(in)    :: nstates, nrows, cc_objfun
+        logical,             intent(in)    :: producer
         character(len=STDLEN) :: msg
         integer :: status
         call self%read(fname, status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
-        call self%validate(backend, nstates, nrows, status, msg)
+        call self%validate(backend, nstates, nrows, producer, status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
         self%weighting = trim(merge('euclid', 'cc    ', cc_objfun == OBJFUN_EUCLID))
     end subroutine load
@@ -272,6 +294,7 @@ contains
         self%backend = ''
         self%nstates = 0
         self%nrows   = 0
+        self%nrows_frozen = 0
         self%nfrozen = 0
         if( allocated(self%nfrozen_state) ) deallocate(self%nfrozen_state)
         self%weighting = ''

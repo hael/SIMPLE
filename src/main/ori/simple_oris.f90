@@ -1258,11 +1258,12 @@ interface
         logical, optional,    intent(in)    :: sampled_only
     end subroutine sample4update_class
 
-    module subroutine sample4update_reprod( self, fromto, nsamples, inds )
+    module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
+        logical, optional,    intent(in)    :: allow_empty
     end subroutine sample4update_reprod
 
     module subroutine sample4update_updated( self, fromto, nsamples, inds, incr_sampled )

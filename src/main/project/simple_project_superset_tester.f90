@@ -1,18 +1,20 @@
 !@descr: unit tests of the abinitio3D_addon superset relation (simple_project_superset)
-! Physical identity of a current and a frozen project sharing one particle
-! index space, with its negative cases, each naming the first offending
-! particle: permuted rows, a changed stack source, a ptcl2D/ptcl3D mismatch, a
-! changed CTF parameter or optics group, another stack sampling or box, a
-! frozen member inactive in the current project, a changed or missing denoised
-! source (ptcl_src=den), and another row count; membership (frozen =
-! state > 0 and updatecnt > 0, never-updated rows join the cohort) with the
-! refusals of an empty cohort, a cohort below the per-state floor, a state
-! label above nstates and an empty inherited state, and the per-state floor
-! after labelling; masking of the frozen rows and their restoration from the
-! frozen project. In-memory projects of 20 rows.
+! A current project of 20 rows in two stacks and a frozen project of 14, its
+! first stack: the two differ in size and share the particle indices 1-14, as
+! a stream's pool that appended a set after the base run. Physical identity on
+! the shared indices, with its negative cases, each naming the first offending
+! particle: permuted rows, a changed stack source, appended rows from a stack
+! the frozen project holds, a ptcl2D/ptcl3D mismatch, a changed CTF parameter
+! or optics group, another stack sampling or box, a frozen member inactive in
+! the current project, a changed or missing denoised source (ptcl_src=den),
+! and a frozen particle missing from a current project that ends before it;
+! membership (frozen = state > 0 and updatecnt > 0, never-updated, deselected
+! and appended rows join the cohort) with the refusals of an empty cohort, a
+! cohort below the per-state floor, a state label above nstates and an empty
+! inherited state, and the per-state floor after labelling; masking of the
+! frozen rows and their restoration from the frozen project.
 module simple_project_superset_tester
 use simple_defs,             only: STDLEN
-use simple_string,           only: string
 use simple_string_utils,     only: int2str
 use simple_sp_project,       only: sp_project
 use simple_project_superset, only: project_superset
@@ -21,7 +23,8 @@ implicit none
 private
 public :: run_all_project_superset_tests
 
-integer, parameter :: NPTCLS = 20
+integer, parameter :: NPTCLS     = 20 !< rows of the current project
+integer, parameter :: NPTCLS_FRZ = 14 !< rows of the frozen project: the current project's first stack
 
 contains
 
@@ -36,7 +39,8 @@ contains
 
     ! ---- fixtures -------------------------------------------------------------
 
-    !> NPTCLS rows in two stacks, every row active, with CTF parameters
+    !> NPTCLS rows in two stacks, every row active, with CTF parameters: stack 1
+    !! holds rows 1-NPTCLS_FRZ, stack 2 the rows appended after the base run
     subroutine make_current( spproj )
         type(sp_project), intent(inout) :: spproj
         integer :: i, istk
@@ -46,8 +50,8 @@ contains
         call spproj%os_stk%new(2, is_ptcl=.false.)
         do istk = 1, 2
             call spproj%os_stk%set(istk, 'stk',   '/data/stacks/stack_'//char(48+istk)//'.mrcs')
-            call spproj%os_stk%set(istk, 'fromp', (istk-1)*NPTCLS/2 + 1)
-            call spproj%os_stk%set(istk, 'top',   istk*NPTCLS/2)
+            call spproj%os_stk%set(istk, 'fromp', merge(1, NPTCLS_FRZ + 1, istk == 1))
+            call spproj%os_stk%set(istk, 'top',   merge(NPTCLS_FRZ, NPTCLS, istk == 1))
             call spproj%os_stk%set(istk, 'box',   64)
             call spproj%os_stk%set(istk, 'smpd',  1.3)
             call spproj%os_stk%set(istk, 'ctf',   'yes')
@@ -57,9 +61,9 @@ contains
         enddo
         call spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
         do i = 1, NPTCLS
-            istk = merge(1, 2, i <= NPTCLS/2)
+            istk = merge(1, 2, i <= NPTCLS_FRZ)
             call spproj%os_ptcl3D%set(i, 'stkind', istk)
-            call spproj%os_ptcl3D%set(i, 'indstk', i - (istk-1)*NPTCLS/2)
+            call spproj%os_ptcl3D%set(i, 'indstk', i - (istk-1)*NPTCLS_FRZ)
             call spproj%os_ptcl3D%set(i, 'dfx',    1.0 + 0.05*real(i))
             call spproj%os_ptcl3D%set(i, 'dfy',    1.1 + 0.05*real(i))
             call spproj%os_ptcl3D%set(i, 'angast', 15.)
@@ -68,7 +72,8 @@ contains
         spproj%os_ptcl2D = spproj%os_ptcl3D
     end subroutine make_current
 
-    !> the frozen project: rows 1-12 selected (2D and 3D), 3D-aligned with state
+    !> the frozen project: the current project's first stack, rows
+    !! 1-NPTCLS_FRZ; rows 1-12 selected (2D and 3D), 3D-aligned with state
     !! labels 1/2; rows 1-10 were updated, rows 11-12 never were (sampled run)
     subroutine make_frozen( cur, frozen, nstates )
         type(sp_project), intent(in)    :: cur
@@ -77,7 +82,10 @@ contains
         integer :: i
         frozen = cur
         call frozen%projinfo%set(1, 'projname', 'frozen')
-        do i = 1, NPTCLS
+        frozen%os_stk    = cur%os_stk%extract_subset(1, 1)
+        frozen%os_ptcl2D = cur%os_ptcl2D%extract_subset(1, NPTCLS_FRZ)
+        frozen%os_ptcl3D = cur%os_ptcl3D%extract_subset(1, NPTCLS_FRZ)
+        do i = 1, NPTCLS_FRZ
             if( i <= 12 )then
                 call frozen%os_ptcl2D%set_state(i, 1)
                 call frozen%os_ptcl3D%set_state(i, 1 + mod(i, nstates))
@@ -134,7 +142,7 @@ contains
         call make_current(cur)
         call make_frozen(cur, frozen, 2)
         call superset%new(cur, frozen, 2, 'raw', status, msg)
-        call assert_int(0, status, 'a selection of the same particles is a valid frozen project: '//trim(msg))
+        call assert_int(0, status, 'a shorter frozen project on the shared indices is valid: '//trim(msg))
         call superset%kill
         call cur%kill
         call frozen%kill
@@ -156,8 +164,12 @@ contains
         call expect_refusal(cur, frozen, 'a row permutation', 3)
         ! a changed stack source
         cur = ref
-        call cur%os_stk%set(2, 'stk', '/data/stacks/other.mrcs')
-        call expect_refusal(cur, frozen, 'a changed stack source', NPTCLS/2 + 1)
+        call cur%os_stk%set(1, 'stk', '/data/stacks/other.mrcs')
+        call expect_refusal(cur, frozen, 'a changed stack source', 1)
+        ! appended rows from a stack the frozen project holds would enter the union twice
+        cur = ref
+        call cur%os_stk%set(2, 'stk', '/data/stacks/stack_1.mrcs')
+        call expect_refusal(cur, frozen, 'appended rows from a stack of the frozen project', NPTCLS_FRZ + 1)
         ! ptcl2D and ptcl3D naming different images in the current project
         cur = ref
         call cur%os_ptcl2D%set(7, 'indstk', 8)
@@ -191,12 +203,12 @@ contains
         cur = ref
         call cur%os_stk%set(1, 'box', 72)
         call expect_refusal(cur, frozen, 'another stack box', 1)
-        ! another row count
+        ! a current project that ends before frozen particle 10
         cur = ref
-        call cur%os_ptcl3D%reallocate(NPTCLS+1)
-        call cur%os_ptcl2D%reallocate(NPTCLS+1)
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
-        call assert_true(status /= 0, 'projects of another row count are refused')
+        cur%os_stk    = ref%os_stk%extract_subset(1, 1)
+        cur%os_ptcl2D = ref%os_ptcl2D%extract_subset(1, 9)
+        cur%os_ptcl3D = ref%os_ptcl3D%extract_subset(1, 9)
+        call expect_refusal(cur, frozen, 'a frozen particle missing from the current project', 10)
         call superset%kill
         call cur%kill
         call frozen%kill
@@ -218,15 +230,17 @@ contains
         call make_frozen(ref, frozen, 2)
         call superset%new(cur, frozen, 2, 'den', status, msg)
         call assert_int(0, status, 'the same denoised sources are accepted: '//trim(msg))
-        call cur%os_stk%set(2, 'stk_den', '/data/stacks/other_den.mrcs')
+        call cur%os_stk%set(1, 'stk_den', '/data/stacks/other_den.mrcs')
         call superset%new(cur, frozen, 2, 'raw', status, msg)
         call assert_int(0, status, 'a raw-source solution ignores the denoised sources: '//trim(msg))
         call superset%new(cur, frozen, 2, 'den', status, msg)
-        call assert_true(status /= 0 .and. names_particle(msg, NPTCLS/2 + 1), &
+        call assert_true(status /= 0 .and. names_particle(msg, 1), &
             &'a changed denoised source is refused, naming the first particle of its stack')
-        call cur%os_stk%delete_entry(1, 'stk_den')
+        cur = ref
+        call cur%os_stk%delete_entry(2, 'stk_den')
         call superset%new(cur, frozen, 2, 'den', status, msg)
-        call assert_true(status /= 0 .and. names_particle(msg, 1), 'a missing denoised source is refused')
+        call assert_true(status /= 0 .and. names_particle(msg, NPTCLS_FRZ + 1), &
+            &'a missing denoised source of the appended stack is refused')
         call superset%kill
         call cur%kill
         call frozen%kill
@@ -244,7 +258,8 @@ contains
         call make_frozen(cur, frozen, 2)
         call superset%new(cur, frozen, 2, 'raw', status, msg)
         call assert_int(0, status, 'the membership of a valid pair is computed: '//trim(msg))
-        ! rows 1-10 frozen; rows 11-12 were never updated and join rows 13-20
+        ! rows 1-10 frozen; rows 11-12 were never updated and join rows 13-14
+        ! (deselected in the frozen project) and 15-20 (appended)
         call assert_int(10, superset%get_nfrozen(),        'frozen = frozen state > 0 and updatecnt > 0')
         call assert_int(10, superset%get_ncohort(),        'cohort = current active and not frozen')
         call assert_int(2,  superset%get_nnever_updated(), 'never-updated frozen-project rows are counted')

@@ -1,11 +1,11 @@
 !@descr: project file utilities
 module simple_projfile_utils
-use, intrinsic :: iso_fortran_env, only: int64, real32
+use, intrinsic :: iso_fortran_env, only: int32, int64, real32
 use simple_core_module_api
-use simple_image,         only: image
-use simple_sp_project,    only: sp_project
-use simple_oris,          only: oris
-use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
+use simple_image,             only: image
+use simple_sp_project,        only: sp_project
+use simple_oris,              only: oris
+use simple_sigma2_state,      only: sigma2_state_candidate_path, sigma2_state_commit, &
     &sigma2_state_project_layout_digest, sigma2_state_reduce_groups
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
     &sigma2_state_init_header, sigma2_state_read_header, sigma2_state_read_particles, &
@@ -299,9 +299,10 @@ contains
             if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
             target_path = dir//'sigma2_state.bin'
             candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
+            ! target_header is intent(out) there: its own fields go in as values
             call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
                 &nallptcls, int(target_header%box), real(target_header%smpd), ngroups, &
-                &target_header%grouping, generation, layout_digest, SIGMA2_PROV_RESIDUAL)
+                &int(target_header%grouping, int32), generation, layout_digest, SIGMA2_PROV_RESIDUAL)
             call sigma2_state_create_candidate(candidate_path%to_char(), target_header, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             offset = 0
@@ -847,9 +848,10 @@ contains
                 target_dir = get_fpath(projfile_out)
                 target_path = target_dir//'sigma2_state.bin'
                 candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
+                ! target_header is intent(out) there: its own fields go in as values
                 call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
                     &nrows, int(target_header%box), real(target_header%smpd), ngroups, &
-                    &target_header%grouping, generation, layout_digest, SIGMA2_PROV_RESIDUAL)
+                    &int(target_header%grouping, int32), generation, layout_digest, SIGMA2_PROV_RESIDUAL)
                 call sigma2_state_create_candidate(candidate_path%to_char(), target_header, status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
                 offset = 0

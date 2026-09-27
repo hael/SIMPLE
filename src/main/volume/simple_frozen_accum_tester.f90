@@ -5,14 +5,17 @@
 ! Fourier sums and densities, PCG raw B and D), and so do the restored gridding
 ! halves and the fixed-iteration PCG solutions; a zero cohort gives F exactly.
 ! Provenance: the run context round trip (every record, re-written line for
-! line), and the refusals of a wrong schema, a truncated or inconsistent
-! context, another run, another grid, another reconstruction weighting, another
-! frozen count, a missing or size-mismatched component and a wrong half.
+! line; the working project three rows longer than the frozen project, a
+! producer accepted with the frozen project's row count and a consumer with
+! the working project's), and the refusals of a wrong schema, a truncated or
+! inconsistent context, another run, another grid, another reconstruction
+! weighting, another frozen count, a missing or size-mismatched component and
+! a wrong half.
 ! Box 16, a few tens of planes of seeded white noise: well under a second.
 module simple_frozen_accum_tester
-use simple_defs,              only: dp, OSMPL_PAD_FAC, STDLEN
+use simple_defs,              only: OSMPL_PAD_FAC, STDLEN
 use simple_string,            only: string
-use simple_fileio,            only: del_file, file_exists, fopen, fclose
+use simple_fileio,            only: del_file, fopen, fclose
 use simple_image,             only: image
 use simple_ori,               only: ori
 use simple_oris,              only: oris
@@ -59,11 +62,13 @@ contains
 
     ! ---- fixtures -------------------------------------------------------------
 
-    !> two inherited states of NFROZEN and 1 frozen particles in NFROZEN+NCOHORT+3 rows
+    !> two inherited states of NFROZEN and 1 frozen particles; the working
+    !! project has NFROZEN+NCOHORT+3 rows, the frozen project its first
+    !! NFROZEN+NCOHORT (three appended rows)
     subroutine make_context( ctx, rid, backend )
         type(frozen_accum), intent(inout) :: ctx
         character(len=*),   intent(in)    :: rid, backend
-        call ctx%new(rid, backend, NFROZEN + NCOHORT + 3, [NFROZEN, 1])
+        call ctx%new(rid, backend, NFROZEN + NCOHORT + 3, NFROZEN + NCOHORT, [NFROZEN, 1])
     end subroutine make_context
 
     !> NFROZEN + NCOHORT well-spread orientations; the first NFROZEN are frozen
@@ -155,13 +160,15 @@ contains
         call assert_true(same_text(CTX_FNAME, CTX_FNAME2), 'every context record round trips')
         call assert_int(NFROZEN, back%get_nfrozen_state(1), 'context state 1 count round trip')
         call assert_int(1,       back%get_nfrozen_state(2), 'context state 2 count round trip')
-        call back%validate('gridding', 2, NFROZEN+NCOHORT+3, status, msg)
-        call assert_int(0, status, 'the context accepts its own run')
-        call back%validate('pcg', 2, NFROZEN+NCOHORT+3, status, msg)
+        call back%validate('gridding', 2, NFROZEN+NCOHORT+3, .false., status, msg)
+        call assert_int(0, status, 'the context accepts a consumer of its working project')
+        call back%validate('gridding', 2, NFROZEN+NCOHORT, .true., status, msg)
+        call assert_int(0, status, 'the context accepts a producer of its frozen project')
+        call back%validate('pcg', 2, NFROZEN+NCOHORT+3, .false., status, msg)
         call assert_true(status /= 0, 'the context refuses another backend')
-        call back%validate('gridding', 1, NFROZEN+NCOHORT+3, status, msg)
+        call back%validate('gridding', 1, NFROZEN+NCOHORT+3, .false., status, msg)
         call assert_true(status /= 0, 'the context refuses another state layout')
-        call back%validate('gridding', 2, NFROZEN+NCOHORT+4, status, msg)
+        call back%validate('gridding', 2, NFROZEN+NCOHORT+4, .false., status, msg)
         call assert_true(status /= 0, 'the context refuses another particle index space')
         call del_file(CTX_FNAME)
         call del_file(CTX_FNAME2)
@@ -172,33 +179,36 @@ contains
     subroutine test_context_refusals()
         type(frozen_accum)    :: ctx
         character(len=STDLEN) :: msg
-        character(len=64)     :: good(9)
+        character(len=64)     :: good(10)
         integer :: status
         write(*,'(A)') 'test_context_refusals'
-        good = [character(len=64) :: 'abinitio3D_addon_frozen_context 1', 'run_id r1', 'backend pcg', &
-            &'nstates 2', 'nrows 30', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
+        good = [character(len=64) :: 'abinitio3D_addon_frozen_context 2', 'run_id r1', 'backend pcg', &
+            &'nstates 2', 'nrows 30', 'nrows_frozen 25', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
         call write_text(CTX_FNAME, good)
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_int(0, status, 'a hand-written valid context is accepted: '//trim(msg))
         call del_file(CTX_FNAME)
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a missing context is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: 'abinitio3D_addon_frozen_context 2', good(2:)])
+        call write_text(CTX_FNAME, [character(len=64) :: 'abinitio3D_addon_frozen_context 1', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'an unsupported schema version is refused')
         call write_text(CTX_FNAME, [character(len=64) :: 'abinitio3D_addon_frozen_set 1', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'another schema is refused')
-        call write_text(CTX_FNAME, good(1:8))
+        call write_text(CTX_FNAME, good(1:9))
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a truncated context (no end marker) is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: good(1:6), 'nfrozen_state 1 3', 'end'])
+        call write_text(CTX_FNAME, [character(len=64) :: good(1:7), 'nfrozen_state 1 3', 'end'])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a context missing a state count is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: good(1:5), 'nfrozen 8', good(7:)])
+        call write_text(CTX_FNAME, [character(len=64) :: good(1:6), 'nfrozen 8', good(8:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'state counts that do not sum to nfrozen are refused')
-        call write_text(CTX_FNAME, [character(len=64) :: good(1:8), 'frozen_rows 1 2 3', 'end'])
+        call write_text(CTX_FNAME, [character(len=64) :: good(1:5), good(7:)])
+        call ctx%read(string(CTX_FNAME), status, msg)
+        call assert_true(status /= 0, 'a context without the frozen project''s row count is refused')
+        call write_text(CTX_FNAME, [character(len=64) :: good(1:9), 'frozen_rows 1 2 3', 'end'])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'an unknown context field is refused')
         call del_file(CTX_FNAME)
@@ -337,10 +347,10 @@ contains
         call assert_true(status /= 0, 'no set is found for a state that was not written')
         ! a consumer of another reconstruction weighting, another frozen count
         call ctx%write(string(CTX_FNAME))
-        call weighted%load(string(CTX_FNAME), 'gridding', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID)
+        call weighted%load(string(CTX_FNAME), 'gridding', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false.)
         call weighted%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_true(status /= 0 .and. index(msg, 'weighting') > 0, 'a set of another weighting is refused')
-        call recount%new(RUN_ID, 'gridding', NFROZEN+NCOHORT+3, [NFROZEN-1, 2])
+        call recount%new(RUN_ID, 'gridding', NFROZEN+NCOHORT+3, NFROZEN+NCOHORT, [NFROZEN-1, 2])
         call recount%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_true(status /= 0, 'a set whose frozen count differs from the context is refused')
         call del_file(CTX_FNAME)
@@ -488,7 +498,7 @@ contains
         call ctx%pcg_half_status(1, 0, BOX, 1.1*SMPD, status, msg)
         call assert_true(status /= 0, 'a PCG half at another sampling is refused')
         call ctx%write(string(CTX_FNAME))
-        call weighted%load(string(CTX_FNAME), 'pcg', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID)
+        call weighted%load(string(CTX_FNAME), 'pcg', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false.)
         call weighted%pcg_half_status(1, 0, BOX, SMPD, status, msg)
         call assert_true(status /= 0, 'a PCG half of another weighting is refused')
         call del_file(CTX_FNAME)
