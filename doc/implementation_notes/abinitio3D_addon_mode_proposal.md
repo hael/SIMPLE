@@ -340,9 +340,10 @@ comes from one versioned run manifest written by the base run (review items
   run's `nptcls_eff`, `update_frac`, realized fractions and full-sampling
   result are recorded as provenance and never copied into the add-on's
   execution state: they are outputs of the base population, and the add-on
-  derives its own from the masked cohort. Planned limits alone are
-  insufficient because FSC=0.5 promotion changes the limits a base run actually
-  matched at; the add-on matches at the emitted ones with promotion off.
+  derives its own from the masked cohort. The emitted limits are the base
+  run's record of where it matched; the add-on plans from the planned ones and
+  promotes them by the legacy FSC=0.5 rule from the FSC it measures on the
+  union (revised 2026-09-26, below).
 - `exec_abinitio3D` always writes the manifest at the end of a completed run,
   atomically and last; a manifest-write failure never fails or alters the
   completed run. The manifest is the only route into the add-on (Hans,
@@ -369,8 +370,9 @@ comes from one versioned run manifest written by the base run (review items
   failed run never touches it, and the frozen project is never written.
 
 Inheriting the ladder means the frozen sets are accumulated at the boxes the
-base run used and the union is matched at the limits the base run was matched
-at. The add-on never plans limits from class FRCs, on either project, and a
+base run used, and the union is matched at the base run's planned limits,
+promoted from the union's own FSC as `abinitio3D` promotes them. The add-on
+never re-plans limits from class FRCs, on either project, and a
 frozen project without a manifest is refused (Hans, 2026-09-25). A base run
 bootstrapped through `cavg_ini=yes` or `cavg_ini_ext=yes` is inherited as a
 finished solution; the add-on never runs `abinitio3D_cavgs` and never aligns
@@ -458,7 +460,9 @@ never carries the handshake and its behaviour is byte-identical.
 - `start_stage = PROB_REFINE_STAGE` (3): cohort particles get `rnd_oris`,
   uniform random state labels across every inherited state when `nstates>1`,
   and their first assignment comes from the stage-3 `refine=prob` search at
-  the base run's emitted stage-3 limit. Compare the `vol1` route of
+  the base run's planned stage-3 limit: no FSC has been measured on the union
+  yet, and the reset clears every row's `res` and `res05`, so nothing left by
+  an earlier refinement promotes it. Compare the `vol1` route of
   `abinitio3D`, which enters at stage 4 after a CC pose-initialisation pass
   because its references are untrusted; here they are trusted, so that pass is
   skipped. Decided: stage 3 (Hans, 2026-09-25). The add-on's stage 3
@@ -470,9 +474,9 @@ never carries the handshake and its behaviour is byte-identical.
   stage 5 with `lpstop` 6 A (`NSTAGES_INDEPENDENT`, `LPSTOP_INDEPENDENT`), or
   earlier if its `nstages` said so; a docked base run completed through stage
   8 under `refine3D_states`, and the add-on runs `independent` stages 3 to 8
-  ("Multi-state" below) on its ladder: the controller's emitted limits up to
-  the split, the planned limits after it, where `refine3D_states` ran its own
-  schedule between them. The add-on cannot lower or raise the last stage.
+  ("Multi-state" below) on its planned ladder, promoted from the union FSC,
+  where `refine3D_states` ran its own schedule after the split. The add-on
+  cannot lower or raise the last stage.
 - Starting references come from the native-box frozen reconstruction; its
   state volumes are the stage-3 `vol1..volN` as they are (section 8, F5 and
   F7). The per-box frozen sets are produced before the stage loop, one per
@@ -486,13 +490,23 @@ never carries the handshake and its behaviour is byte-identical.
   policy stay exactly as `build_refine3D_stage_cfg` emits them for stages 3 to
   `nstages`. The controller gains no add-on branch beyond an explicit,
   immutable add-on context passed as an optional argument (absent means the
-  legacy path; review item 4.2) that switches the FSC=0.5 stage-LP promotion
-  (`FSC05_PROMOTE_MIN_STAGE`) off, because the FSC reflects the frozen
-  population and would promote the cohort past the inherited ladder, and
-  enables stage-3 early stopping.
-- The stage ladder (emitted LP and crop per stage) is the base run's, read
+  legacy path; review item 4.2) that enables stage-3 early stopping. The stage
+  limits follow the legacy rule: the planned ladder, FSC=0.5 promotion at every
+  stage boundary past `FSC05_PROMOTE_MIN_STAGE` from the FSC measured in the
+  add-on run, and the NU handoff in the NU stages. Revised 2026-09-26 (Hans):
+  the first release switched promotion off and replayed the emitted limits,
+  which held stages 3 to 5 at the base run's limits however much the added
+  particles improved the union, where real use needs the limits to follow the
+  data. The union FSC includes frozen particles aligned up to the base run's
+  final band, so it is not clean in the promotion rule's sense (the crossing
+  lies inside the band that produced those alignments) and it reaches the base
+  resolution within a stage or two, bounded by the ladder cap
+  (`LPSTOP_BOUNDS(1)`, or a replayed `lpstop`); the validation report checks
+  the cohort on its own for that reason.
+- The stage ladder (planned LP and crop per stage) is the base run's, read
   from the manifest; there is no re-planning from the current project's FRCs
-  and no `lpstart`/`lpstop` override.
+  and no `lpstart`/`lpstop` override. Each stage boundary logs the add-on's
+  emitted limits next to the base run's.
 - Before the first stage whose policy has `trail_rec=yes`, the stage-boundary
   reconstruction of the working copy writes a full-mass, cohort-only chain seed
   at the consuming box with the current cohort poses, through the existing
@@ -585,7 +599,7 @@ only through its add-on route behind the wrapper's internal handshake.
 | --- | --- | --- |
 | `src/main/ui/simple/simple_ui_abinitio3D.f90`, `src/main/exec/simple_exec_abinitio3D.f90` | `new_abinitio3D_addon` program entry (11 inputs: `projfile`, `projfile_frozen`, `addon_diag`, `nsample`, `overlap`, `maxits_pcg`, `maxits_ml`, `pcg_solvent_check`, `euclid_diag`, `nparts`, `nthr`); `case('abinitio3D_addon')` | `abinitio3D`, `abinitio3D_cavgs` entries |
 | `src/main/commanders/simple/simple_commanders_abinitio.f90` | `commander_abinitio3D_addon` wrapper type: manifest read and validation before any write, allowlisted command line, internal handshake. Add-on route in `exec_abinitio3D`: prologue (collision-proof frozen copy, physical-identity validation, saved `ptcl2D` state and mask, registration drop), mode from the final state count, ladder from the manifest, per-box `calc_frozen_rec` and native references, add-on context through the shared stage loop and final reconstruction, cohort-only chain seeding, epilogue (`addon_diag` while masked, `transfer_3Dparams` restore, union metadata, sigma unregistration, own manifest, transactional publication). Manifest write at the end of every ordinary run; refusal of `projfile_frozen`/`addon_diag` on the two ordinary entries | The ordinary routes, byte-identical without the handshake |
-| `src/main/abinitio/simple_abinitio_controller.f90` | Optional add-on context argument: FSC=0.5 promotion off, stage-3 early stopping on `overlap`; an absent context is the legacy path | `NSTAGES`, `NSPACE`, `MAXITS`, mode/backend/trailrec policies |
+| `src/main/abinitio/simple_abinitio_controller.f90` | Optional add-on context argument: stage-3 early stopping on `overlap` (FSC=0.5 promotion as in the legacy path since 2026-09-26); an absent context is the legacy path | `NSTAGES`, `NSPACE`, `MAXITS`, mode/backend/trailrec policies |
 | `src/main/abinitio/simple_abinitio_utils.f90` | `calc_frozen_rec` beside `calc_rec` with the `frozen_seed` handshake on a local command object; manifest writer and reader; no new module-level mode flag | Stage-boundary reconstruction semantics, `lpinfo`, shared command lines |
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90` | `add_frozen_accumulators()` in `restore_state_from_parts` after the chain write and before restoration, ahead of the dropped-state logic; manifest check before the read; union counts for populations | Trailing blend, restoration, FSC, NU inputs |
 | `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | Frozen raw pair summed into the reduction in the distributed half job and in the shared-memory half solve, after the chain write, before `end_accum` and ahead of the `job%nptcls == 0` return (section 8, F2; review item 4.6) | Solver, priors, support, chain identity |
@@ -716,13 +730,23 @@ Risks:
 
 - Frozen mass dominates the FSC, so any FSC-driven control (stage-LP
   promotion, NU band selection, early stopping on resolution) sees the frozen
-  model, not the cohort. Promotion is switched off; the NU ladder is reached
-  exactly where the base run reached it, and `overlap`-based early stopping is
-  computed on the cohort only.
+  model, not the cohort. Promotion therefore reaches close to the base
+  resolution early (see the stage ladder above), and `overlap`-based early
+  stopping is computed on the cohort only.
 - A junk-rich cohort barely moves the map but is posed and written into the
-  output all the same. The run reports per-state populations and the union
-  resolution against the frozen project's, and `addon_diag` shows the cohort
-  on its own; rejecting the outcome is the user's call.
+  output all the same. The epilogue writes a validation report against the
+  base solution (`abinitio3D_addon_report.txt` in the run directory, and the
+  log): per state the union and base FSC=0.5 and FSC=0.143 resolutions, the
+  move of the FSC=0.143 shell with a verdict (improved or regressed beyond one
+  shell, else unchanged) and the mean FSC gain up to the base shell; the
+  correlation of the union map with the base map inside the base mask up to
+  the base FSC=0.143 resolution, compared in the base frame and docked only
+  below 0.9 (rotation, shift and docked correlation tell a moved frame from a
+  changed structure); with `addon_diag=yes` the FSC and correlation of the
+  cohort-only map against the base map, which come from disjoint particles
+  and so cross-validate the cohort's alignment; and both runs' stage limits.
+  A regression is warned about and the result is published all the same
+  (Hans, 2026-09-26); rejecting the outcome is the user's call.
 - The frozen partition never changes inside an add-on; a later chain of
   add-ons without a refinement pass would keep the first solution's states
   forever.
@@ -970,7 +994,8 @@ is why the design accumulates per box.
   as an optional argument to `set_cline_refine3D` and the reconstruction
   helpers, an absent context meaning the legacy path. Adopted: it costs an
   optional argument and removes any dependence on process-lifetime state. The
-  context switches promotion off and stage-3 early stopping on.
+  context switches stage-3 early stopping on (it also switched promotion off
+  until 2026-09-26).
 - **F12. Frozen manifest semantics.** `write_trail_chain_set` records the
   field's total row count and `validate_trail_chain` compares it with the
   current field; for a frozen set the total rows are equal in both projects,
@@ -1271,4 +1296,20 @@ no workflow code is duplicated.
   and resolution against the frozen solution. The motion-model and
   particle-sieve testers use unregistered program names, which removes a
   suite-order dependency (`SIMPLE_UNIT_ORDER=reverse`) found on the way.
-
+- 2026-09-26, stage limits and validation (Hans's decisions): the add-on
+  plans from the base run's planned ladder (crop boxes unchanged, so the frozen
+  sets are too) and promotes it by the legacy FSC=0.5 rule from the union FSC
+  it measures, instead of replaying the emitted limits with promotion off;
+  stage 3 runs at its planned limit. `reset_ptcl3D_from_ptcl2D_selection`
+  clears `res` and `res05` on every row, so a resolution left by an earlier
+  refinement of the project cannot promote the first stage of either entry.
+  The stage-boundary warning became a log line with both runs' limits. The
+  epilogue writes the validation report (`abinitio3D_addon_report` class,
+  `abinitio3D_addon_report.txt`; section 7, risks), built on the production
+  map comparison `compare_volpair` (`simple_volpair_metrics`), which the test
+  helper `compare_to_truth` now uses for its masked FSC; a regression is
+  warned about and published. Unit sub-suites `abinitio3D addon report`
+  (`unit_project`) and `volume pair metrics` (`unit_reconstruction`); the
+  `abinitio3D_addon` gate reads the report (no regression, union-base
+  correlation floor). First real-data test: bgal (5513 particles, D2), a
+  random half as the base run and the other half added.

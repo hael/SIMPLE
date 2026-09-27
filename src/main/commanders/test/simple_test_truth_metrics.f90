@@ -8,16 +8,18 @@
 ! without docking: the median over seeded particle pairs of the difference
 ! between the estimated and the true relative rotation angle, invariant to a
 ! global rotation or reflection of the reconstruction frame. add_gaussian_blob
-! breaks the symmetry of a model map so that c1 poses are unique.
+! breaks the symmetry of a model map so that c1 poses are unique. The masked FSC
+! is the production compare_volpair (simple_volpair_metrics).
 module simple_test_truth_metrics
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
-use simple_image,      only: image
-use simple_ori,        only: ori
-use simple_oris,       only: oris
-use simple_dock_vols,  only: dock_vols
-use simple_imghead,    only: find_ldim_nptcls, find_img_smpd
-use simple_test_utils, only: set_fixed_seed
+use simple_image,           only: image
+use simple_ori,             only: ori
+use simple_oris,            only: oris
+use simple_dock_vols,       only: dock_vols
+use simple_imghead,         only: find_ldim_nptcls, find_img_smpd
+use simple_volpair_metrics, only: compare_volpair
+use simple_test_utils,      only: set_fixed_seed
 implicit none
 
 public :: dock_both_hands, compare_to_truth, validate_reconstructed_volume, pair_pose_error, add_gaussian_blob
@@ -82,8 +84,9 @@ contains
         real,          intent(out) :: corr, fsc05, fsc0143
         type(image) :: truth, map
         real, allocatable :: fsc(:), res(:)
-        real    :: smpd
+        real    :: smpd, corr_band
         integer :: ldim(3), nsections
+        logical :: ok
         corr    = 0.
         fsc05   = -1.
         fsc0143 = -1.
@@ -95,20 +98,14 @@ contains
         call truth%read(truth_fname)
         call map%read(map_fname)
         corr = truth%real_corr(map)
-        call truth%mask3D_soft(0.5 * mskdiam / smpd, backgr=0.)
-        call map%mask3D_soft(0.5 * mskdiam / smpd, backgr=0.)
-        call truth%fft()
-        call map%fft()
-        allocate(fsc(truth%get_filtsz()), source=0.)
-        call truth%fsc(map, fsc)
-        res = truth%get_res()
-        if( all(ieee_is_finite(fsc)) )then
+        call truth%kill
+        call map%kill
+        call compare_volpair(truth_fname, map_fname, mskdiam, 0., corr_band, fsc, res, ok)
+        if( ok )then
             call get_resolution(fsc, res, fsc05, fsc0143)
             if( fsc05   > 0. ) fsc05   = max(fsc05,   2. * smpd)
             if( fsc0143 > 0. ) fsc0143 = max(fsc0143, 2. * smpd)
         endif
-        call truth%kill
-        call map%kill
     end subroutine compare_to_truth
 
     !> The final map of a workflow against its simulation truth: the expected

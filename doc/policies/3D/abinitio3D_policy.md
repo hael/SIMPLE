@@ -173,7 +173,10 @@ Stage-boundary FSC=0.5 promotion (2026-09-06, particle route only): past
 stage 2, the planned `lpinfo(istage)%lp` is replaced by the project's FSC=0.5
 resolution of the best resolved populated state (the per-particle `res05`
 field written by the reconstruction) when that is finer, bounded by the
-ladder cap (`lpfinal`, or the coarser explicit `lpstop`). The promoted value
+ladder cap (`LPSTOP_BOUNDS(1)`, 4.5 A, or the coarser explicit `lpstop`; the
+class-average route keeps its final limit). The resolution fields are
+cleared when the particles are reset from `ptcl2D`, so only resolutions
+measured in the run itself promote. The promoted value
 is the printed stage limit and, in non-NU stages, the `lpstop` ceiling. The
 decision is taken once per stage boundary and never per iteration:
 `abinitio3D` runs without gold-standard halves, so an FSC crossing is
@@ -516,8 +519,17 @@ unsearched. The design, its contracts and its limits are in
 - Both projects must share one particle index space, row by row; the cohort
   needs at least 5 particles per inherited state (a warning below 5 % of the
   frozen population).
-- The run enters at stage 3 of the base run's ladder with `center=no`,
-  promotion off and `overlap` 0.95 by default.
+- The run enters at stage 3 of the base run's planned ladder with
+  `center=no` and `overlap` 0.95 by default; the stage limits follow the rule
+  above (FSC=0.5 promotion from the union FSC, the NU handoff in the NU
+  stages), and each stage boundary logs them next to the base run's.
+- The run ends with a validation report against the base solution
+  (`abinitio3D_addon_report.txt` in the run directory, and the log): per state
+  the FSC verdict (improved or regressed beyond one FSC=0.143 shell, else
+  unchanged), the union map's correlation with the base map up to the base
+  resolution (docked below 0.9), the cohort-only map against the base map
+  with `addon_diag=yes`, and both runs' stage limits. A regression is warned
+  about; the result is published all the same.
 - `mkdir=yes` by default; `mkdir=no` is for NICE. When the run has completed,
   the finished project (every particle posed, no sigma2 registration) replaces
   the current project file; the frozen project is never written. The add-on's

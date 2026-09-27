@@ -11,8 +11,11 @@ add_custom_command(
     OUTPUT
         "${SIMPLE_GEN_DIR}/simple_args.f90"
         "${SIMPLE_GEN_DIR}/simple_varlist.txt"
+    # the generator writes into the directory given as its argument, exactly
+    # the OUTPUT above; left to itself it would pick build/lib64 once an
+    # install has created it, and the build would compile a stale copy
     COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR}
-            "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl"
+            "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl" "${SIMPLE_GEN_DIR}"
     DEPENDS
         "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl"
         "${CMAKE_CURRENT_SOURCE_DIR}/main/params/simple_parameters.f90"

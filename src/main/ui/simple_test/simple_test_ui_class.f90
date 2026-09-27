@@ -127,7 +127,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, abinitio3d_manifest, project_superset)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, abinitio3d_manifest, project_superset, abinitio3d_addon_report)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -166,7 +166,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_accumulator, frozen_accumulator)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_accumulator, frozen_accumulator, volume_pair_metrics)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 
@@ -174,12 +174,12 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call lib_reconstruction%new(&
         &'lib_reconstruction',&
-        &'library tests: half-set PCG reconstruction against gridding',&
-        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding',&
+        &'library tests: half-set PCG reconstruction against gridding, map docking',&
+        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; the abinitio3D_addon report docking a moved map',&
         &'simple_test_exec',&
         &.false.)
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, addon_report_docking)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 

@@ -3080,6 +3080,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     use simple_refine3D_fnames,     only: refine3D_state_vol_fname
     use simple_test_gate,           only: test_gate
     use simple_test_truth_metrics,  only: dock_both_hands, compare_to_truth, pair_pose_error, add_gaussian_blob
+    use simple_abinitio3D_addon_report, only: abinitio3D_addon_report, ADDON_REPORT_FNAME
     use, intrinsic :: iso_fortran_env, only: int64
     integer, intent(in)    :: nthr
     logical, intent(inout) :: all_ok
@@ -3122,8 +3123,10 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     real,    parameter :: MIN_UNION_CORR      = 0.9   !< docked union map vs truth
     real,    parameter :: MAX_CORR_LOSS       = 0.03  !< union map correlation below the base map's
     real,    parameter :: MAX_FSC_LOSS        = 1.0   !< union FSC=0.143 above the base map's (A)
+    real,    parameter :: MIN_REPORT_CORR     = 0.9   !< report: union vs base map up to the base FSC=0.143 resolution
     type(commander_abinitio3D)        :: xabinitio3D
     type(commander_abinitio3D_addon)  :: xaddon
+    type(abinitio3D_addon_report)     :: addon_report
     type(commander_bootstrap_rec3D)   :: xbootstrap
     type(commander_simulate_particles):: xsim
     type(commander_new_project)       :: xnew_project
@@ -3303,6 +3306,18 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call man_out%kill
     call gate%check('addon_diag_map_written', file_exists(string('1_abinitio3D_addon/addon_diag/')// &
         &refine3D_state_vol_fname(1)))
+    ! ---- the validation report against the base solution ----
+    if( file_exists(string('1_abinitio3D_addon/'//ADDON_REPORT_FNAME)) )then
+        call addon_report%read(string('1_abinitio3D_addon/'//ADDON_REPORT_FNAME))
+        call gate%check('addon_report_no_regression', .not. addon_report%any_regressed())
+        call gate%metric('addon_report_union_base_corr', addon_report%get_corr(1), MIN_REPORT_CORR, &
+            &addon_report%get_corr(1) >= MIN_REPORT_CORR)
+        call gate%report('addon_report_dshell0143', real(addon_report%get_dshell(1)))
+        call gate%report('addon_report_cohort_base_fsc0143_A', addon_report%get_cohort_res0143(1))
+        call addon_report%kill
+    else
+        call gate%check('addon_report_written', .false.)
+    endif
     ! frozen rows identical to the frozen project; cohort rows posed
     nf = count(l_frozen)
     nc = NPTCLS - nf

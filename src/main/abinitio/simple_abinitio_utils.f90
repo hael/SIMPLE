@@ -41,10 +41,10 @@ integer          :: nstages_refine3D = 0
 integer, parameter :: FINAL_PCG_MAXITS_FLOOR = 5
 
 !> Immutable abinitio3D_addon context for the stage controller. Absent (or
-!! inactive) means the legacy path; present and active it switches the FSC=0.5
-!! stage-LP promotion off (the FSC reflects the frozen population), gives the
-!! add-on's stage 3 an overlap early stop (no symmetry search keeps it at full
-!! budget) and puts the frozen_rec handshake on the stage command line.
+!! inactive) means the legacy path; present and active it gives the add-on's
+!! stage 3 an overlap early stop (no symmetry search keeps it at full budget)
+!! and puts the frozen_rec handshake on the stage command line. The stage
+!! limits follow the legacy rule (planned ladder, FSC=0.5 promotion).
 type :: abinitio3D_addon_ctx
     logical      :: active  = .false.
     real         :: overlap = 0.95   !< stage-3 early-stopping overlap target
@@ -524,11 +524,13 @@ contains
         call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
     end subroutine set_lplims_from_input
 
-    !> abinitio3D_addon planning branch: the base run's ladder from its
-    !! manifest, never planned from class FRCs. Every stage keeps its recorded
-    !! crop, sampling, shift limit and flags; its matching limit is the one the
-    !! base run's controller actually emitted (FSC=0.5 promotion included), so
-    !! with promotion off the add-on matches where the base run matched.
+    !> abinitio3D_addon planning branch: the base run's planned ladder from its
+    !! manifest, never re-planned from class FRCs. Every stage keeps its
+    !! recorded crop, sampling, shift limit and flags, so the frozen sets are
+    !! accumulated at the base run's boxes; its matching limit is the planned
+    !! one, which the controller promotes from the FSC the add-on measures on
+    !! the union, as in the base run (the base run's own promotions reflect the
+    !! base population and are not inherited).
     subroutine set_lplims_from_manifest( man )
         class(abinitio3D_manifest), intent(in) :: man
         type(abinitio3D_stage_record) :: stage
@@ -540,7 +542,6 @@ contains
         do i = 1, man%get_nstages()
             stage = man%get_stage(i)
             lpinfo(i)%lp          = stage%lp_planned
-            if( stage%lp_emitted > TINY ) lpinfo(i)%lp = stage%lp_emitted
             lpinfo(i)%box_crop    = stage%box_crop
             lpinfo(i)%smpd_crop   = stage%smpd_crop
             lpinfo(i)%scale       = stage%scale

@@ -219,7 +219,7 @@ contains
             endif
         endif
         call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, &
-            &l_refine3D_lp_override, l_sticky_class_sampling_active, l_fsc05_promote=.not. l_addon )
+            &l_refine3D_lp_override, l_sticky_class_sampling_active )
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
             call cline_refine3D%set('frozen_rec', addon%frozen_rec)
@@ -519,15 +519,13 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling, &
-            &l_fsc05_promote )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_sticky_class_sampling
-        logical,                  intent(in) :: l_fsc05_promote !< .false. in an add-on: the ladder is inherited
         character(len=STDLEN) :: ptcl_src_eff
         real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
@@ -558,9 +556,13 @@ contains
         ! by the project's FSC=0.5 resolution of the best resolved populated
         ! state when that is finer, never beyond the ladder cap. Streptavidin
         ! log set: the plan sat at 8.6/7.6 A in stages 4/5 while the halves
-        ! agreed to 4.3 A at FSC=0.5.
+        ! agreed to 4.3 A at FSC=0.5. An add-on promotes by the same rule from
+        ! the union FSC measured in the add-on run; that FSC includes frozen
+        ! particles aligned up to the base run's final band, so it is clean only
+        ! for the cohort and reaches the base resolution within a stage or two
+        ! (abinitio3D_addon_mode_proposal.md, stage ladder).
         l_fsc05_promoted = .false.
-        if( .not. l_cavgs .and. .not. l_explicit_lp .and. l_fsc05_promote ) &
+        if( .not. l_cavgs .and. .not. l_explicit_lp ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
         ! Matching-band ceiling. Non-NU stages match at the (possibly
         ! promoted) stage limit, so the ceiling equals it. NU stages match at

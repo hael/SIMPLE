@@ -18,6 +18,7 @@ use simple_gui_communicator,        only: gui_communicator
 use simple_abinitio3D_manifest,     only: abinitio3D_manifest, abinitio3D_stage_record, MANIFEST_FNAME
 use simple_project_superset,        only: project_superset, COHORT_WARN_FRAC
 use simple_frozen_accum,            only: frozen_accum
+use simple_abinitio3D_addon_report, only: abinitio3D_addon_report, ADDON_REPORT_FNAME
 
 implicit none
 
@@ -814,6 +815,7 @@ contains
         type(string)               :: frozen_copy, frozen_ctx_fname, frozen_sigma_copy
         integer, allocatable       :: union_pops(:)
         logical :: l_addon, l_cohort_chain_seeded
+        character(len=*), parameter :: ADDON_DIAG_DIR = 'addon_diag' !< addon_diag=yes: the cohort-only map
         cline_entry = cline
         l_addon = cline%defined('addon_manifest')
         l_cohort_chain_seeded = .false.
@@ -1503,8 +1505,9 @@ contains
             call fname%kill
         end subroutine report_frozen_provenance
 
-        !> Per stage: the controller must emit the limits the base run emitted;
-        !! before the first trailing stage the boundary reconstruction seeds the
+        !> Per stage: the emitted limits next to the base run's (the add-on
+        !! plans and promotes by the legacy rule, so they may differ); before
+        !! the first trailing stage the boundary reconstruction seeds the
         !! cohort-only chain (trail_seed) with the frozen term added to its maps
         subroutine addon_stage_boundary( istage_here )
             integer, intent(in) :: istage_here
@@ -1512,15 +1515,12 @@ contains
             if( istage_here <= man_addon%get_nstages() )then
                 base = man_addon%get_stage(istage_here)
                 if( base%lp_emitted < 0. )then
-                    ! the base run entered after this stage: its planned limits apply
-                    write(logfhandle,'(A,I0,A)') '>>> ABINITIO3D_ADDON STAGE ', istage_here, &
-                        &': NOT RUN BY THE BASE RUN, PLANNED LIMITS'
-                else if( abs(emitted_lp(istage_here) - base%lp_emitted) > 1.e-3 .or. &
-                    &abs(emitted_lpstop(istage_here) - base%lpstop_emitted) > 1.e-3 )then
-                    write(logfhandle,'(A,I0,4(A,F7.3))') '>>> ABINITIO3D_ADDON STAGE ', istage_here, ' LP ', &
-                        &emitted_lp(istage_here), ' (BASE ', base%lp_emitted, ') LPSTOP ', &
-                        &emitted_lpstop(istage_here), ' (BASE ', base%lpstop_emitted
-                    THROW_WARN('abinitio3D_addon stage limits differ from the base run''s')
+                    write(logfhandle,'(A,I0,2(A,F7.3),A)') '>>> ABINITIO3D_ADDON STAGE ', istage_here, ' LP ', &
+                        &emitted_lp(istage_here), ' LPSTOP ', emitted_lpstop(istage_here), ' (NOT RUN BY THE BASE RUN)'
+                else
+                    write(logfhandle,'(A,I0,4(A,F7.3),A)') '>>> ABINITIO3D_ADDON STAGE ', istage_here, ' LP ', &
+                        &emitted_lp(istage_here), ' LPSTOP ', emitted_lpstop(istage_here), ' (BASE RUN LP ', &
+                        &base%lp_emitted, ' LPSTOP ', base%lpstop_emitted, ')'
                 endif
             endif
             if( l_cohort_chain_seeded ) return
@@ -1532,61 +1532,92 @@ contains
         end subroutine addon_stage_boundary
 
         !> Masked cohort diagnostic, then the frozen rows back from the frozen
-        !! project, union-aware res/res05 for every row, and no cohort-only sigma
-        !! registration (the next ordinary refinement bootstraps the union's)
+        !! project, union-aware res/res05 for every row, no cohort-only sigma
+        !! registration (the next ordinary refinement bootstraps the union's),
+        !! and the validation against the base solution: FSC verdict, map
+        !! correlation at the base resolution, the cohort-only map against the
+        !! base map, and both runs' stage limits (abinitio3D_addon_report.txt;
+        !! a regression is warned about, the result is published regardless)
         subroutine addon_epilogue
+            type(abinitio3D_addon_report) :: report
+            type(abinitio3D_stage_record) :: base_stage
             real, allocatable :: fsc(:), res(:), fsc_base(:)
-            type(string) :: fsc_name
-            real    :: fsc05, fsc0143, fsc05_base, fsc0143_base
-            integer :: s, i, box_fsc
+            type(string) :: fsc_name, vol_base
+            real    :: fsc05, fsc0143, lp_base, lpstop_base, smpd_vol
+            integer :: s, i, box_fsc, box_vol
+            logical :: l_union, l_base
             if( trim(params%addon_diag) == 'yes' ) call addon_cohort_diagnostic
             call spproj%read(params%projfile)
             call superset%restore(spproj, spproj_frz)
+            call report%new(params%nstates, size(emitted_lp), params%smpd, params%mskdiam)
+            do i = start_stage, size(emitted_lp)
+                if( emitted_lp(i) < 0. ) cycle
+                lp_base     = -1.
+                lpstop_base = -1.
+                if( i <= man_addon%get_nstages() )then
+                    base_stage  = man_addon%get_stage(i)
+                    lp_base     = base_stage%lp_emitted
+                    lpstop_base = base_stage%lpstop_emitted
+                endif
+                call report%set_stage(i, emitted_lp(i), emitted_lpstop(i), lp_base, lpstop_base)
+            enddo
             res = get_resarr(params%box, params%smpd)
             do s = 1, params%nstates
+                l_union  = .false.
                 fsc_name = refine3D_fsc_fname(s)
-                if( .not. file_exists(fsc_name) ) cycle
-                fsc = file2rarr(fsc_name)
-                if( size(fsc) /= size(res) ) cycle
-                call get_resolution(fsc, res, fsc05, fsc0143)
-                do i = 1, spproj%os_ptcl3D%get_noris()
-                    if( spproj%os_ptcl3D%get_state(i) /= s ) cycle
-                    call spproj%os_ptcl3D%set(i, 'res',   fsc0143)
-                    call spproj%os_ptcl3D%set(i, 'res05', fsc05)
-                enddo
-                ! the union against the frozen solution: populations and resolution
-                write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.2,A)') '>>> ABINITIO3D_ADDON STATE ', s, ': UNION POPULATION ', &
-                    &spproj%os_ptcl3D%get_pop(s, 'state'), ' (FROZEN ', superset%get_nfrozen_state(s), &
-                    &'), UNION FSC=0.143 ', fsc0143, ' A'
-                if( .not. spproj_frz%isthere_in_osout('fsc', s) ) cycle
-                call spproj_frz%get_fsc(s, fsc_name, box_fsc)
-                if( .not. file_exists(fsc_name) ) cycle
-                fsc_base = file2rarr(fsc_name)
-                if( size(fsc_base) /= size(res) ) cycle
-                call get_resolution(fsc_base, res, fsc05_base, fsc0143_base)
-                write(logfhandle,'(A,I0,A,F7.2,A)') '>>> ABINITIO3D_ADDON STATE ', s, &
-                    &': FROZEN SOLUTION FSC=0.143 ', fsc0143_base, ' A'
+                if( file_exists(fsc_name) )then
+                    fsc     = file2rarr(fsc_name)
+                    l_union = size(fsc) == size(res)
+                endif
+                if( l_union )then
+                    call get_resolution(fsc, res, fsc05, fsc0143)
+                    do i = 1, spproj%os_ptcl3D%get_noris()
+                        if( spproj%os_ptcl3D%get_state(i) /= s ) cycle
+                        call spproj%os_ptcl3D%set(i, 'res',   fsc0143)
+                        call spproj%os_ptcl3D%set(i, 'res05', fsc05)
+                    enddo
+                endif
+                call report%set_populations(s, spproj%os_ptcl3D%get_pop(s, 'state'), superset%get_nfrozen_state(s))
+                l_base = .false.
+                if( spproj_frz%isthere_in_osout('fsc', s) )then
+                    call spproj_frz%get_fsc(s, fsc_name, box_fsc)
+                    if( file_exists(fsc_name) )then
+                        fsc_base = file2rarr(fsc_name)
+                        l_base   = size(fsc_base) == size(res)
+                    endif
+                endif
+                if( l_union .and. l_base ) call report%compare_fsc(s, fsc_base, fsc, res)
+                if( .not. spproj_frz%isthere_in_osout('vol', s) ) cycle
+                call spproj_frz%get_vol('vol', s, vol_base, smpd_vol, box_vol)
+                call report%compare_maps(s, vol_base, refine3D_state_vol_fname(s))
+                if( trim(params%addon_diag) == 'yes' ) call report%compare_cohort(s, vol_base, &
+                    &string(ADDON_DIAG_DIR//'/')//refine3D_state_vol_fname(s))
             enddo
             if( spproj%projinfo%isthere(1, 'sigma2_state') ) call spproj%projinfo%delete_entry('sigma2_state')
             call spproj%write(params%projfile)
             write(logfhandle,'(A,I0,A)') '>>> ABINITIO3D_ADDON: RESTORED ', superset%get_nfrozen(), &
                 &' FROZEN PARTICLES; OUTPUT PROJECT CARRIES EVERY PARTICLE POSED, NO SIGMA2 REGISTRATION'
+            call report%print
+            call report%write(string(ADDON_REPORT_FNAME))
+            write(logfhandle,'(A,A)') '>>> ABINITIO3D_ADDON REPORT WRITTEN: ', ADDON_REPORT_FNAME
+            if( report%any_regressed() ) THROW_WARN('abinitio3D_addon: a state regressed against the base solution')
+            call report%kill
             call fsc_name%kill
+            call vol_base%kill
         end subroutine addon_epilogue
 
         !> addon_diag=yes: the cohort alone at the native box, without the
         !! frozen term, in its own directory so no output of the run is touched
         subroutine addon_cohort_diagnostic
-            character(len=*), parameter :: DIAG_DIR = 'addon_diag'
             type(sp_project) :: spproj_diag
             type(cmdline)    :: cline_diag
             type(string)     :: diag_proj, sigma_path, cwd_run
             logical :: found
             integer :: status, s
-            call simple_mkdir(DIAG_DIR)
+            call simple_mkdir(ADDON_DIAG_DIR)
             call simple_getcwd(cwd_run)
             ! the working copy's file name keeps the sigma2 layout lineage
-            diag_proj = simple_abspath(string(DIAG_DIR//'/')//basename(params%projfile), check_exists=.false.)
+            diag_proj = simple_abspath(string(ADDON_DIAG_DIR//'/')//basename(params%projfile), check_exists=.false.)
             call spproj_diag%read(params%projfile)
             call spproj_diag%get_sigma2_state_path(sigma_path, found)
             if( found )then
@@ -1611,7 +1642,7 @@ contains
                 call cline_diag%delete('vol'//int2str(s))
             enddo
             call strip_refine3D_planning_keys(cline_diag)
-            call simple_chdir(string(DIAG_DIR), status)
+            call simple_chdir(string(ADDON_DIAG_DIR), status)
             if( status /= 0 ) THROW_HARD('cannot enter the add-on diagnostic directory')
             write(logfhandle,'(A)') '>>> ABINITIO3D_ADDON: COHORT-ONLY DIAGNOSTIC RECONSTRUCTION (addon_diag/)'
             call xrec3D%execute(cline_diag)
@@ -1790,6 +1821,10 @@ contains
             endif
             call clean_ptcl3D_sampling
             call spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
+            ! the stage-LP promotion reads res05: no resolution left by an
+            ! earlier refinement of this project may promote the first stage
+            call spproj%os_ptcl3D%delete_entry('res')
+            call spproj%os_ptcl3D%delete_entry('res05')
             call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
             nactive = 0
             do iptcl = 1,nptcls3D

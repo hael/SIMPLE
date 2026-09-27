@@ -9,13 +9,23 @@ my @lines;
 my @vars;
 my $varlistfile;     my $tmp_varlist;
 my $simple_argsfile; my $tmp_argsfile;
-if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
-    $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_varlist.txt';
-    $simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_args.f90';
+# The output directory is the first argument: the build passes the directory
+# its custom command declares as OUTPUT and compiles from (src/CMakeLists.txt).
+# Without an argument (a hand-run generator) it is guessed from SIMPLE_PATH as
+# before; the build must not rely on the guess, because a lib64 directory,
+# which `make install` creates on lib64 systems, would divert the output away
+# from the file the build compiles.
+my $outdir;
+if ( @ARGV && length($ARGV[0]) ){
+    $outdir = $ARGV[0];
+}elsif ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
+    $outdir = $ENV{'SIMPLE_PATH'}.'/lib64/simple';
 }else {
-    $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
-    $simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_args.f90';
+    $outdir = $ENV{'SIMPLE_PATH'}.'/lib/simple';
 }
+-d $outdir or die "Output directory $outdir does not exist\n";
+$varlistfile     = $outdir.'/simple_varlist.txt';
+$simple_argsfile = $outdir.'/simple_args.f90';
 $tmp_varlist  = $ENV{'SIMPLE_PATH'}.'/simple_varlist.tmp';
 $tmp_argsfile = $ENV{'SIMPLE_PATH'}.'/simple_args.tmp';
 open(PARAMS, "< simple_parameters.f90") or die "Cannot open simple_parameters.f90\n";

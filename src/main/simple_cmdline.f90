@@ -187,7 +187,7 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                stop
+                THROW_HARD('command-line argument longer than XLONGSTRLEN')
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -195,7 +195,7 @@ contains
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
                 call ptr2prg%print_cmdline(defined_keys)
-                stop
+                THROW_HARD('required command-line inputs are missing; see the usage above')
             endif
         endif
         if( sz_keys_req > 0 ) call self%check
@@ -283,7 +283,7 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                stop
+                THROW_HARD('command-line argument longer than XLONGSTRLEN')
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -291,7 +291,7 @@ contains
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
                 call ptr2prg%print_cmdline(defined_keys)
-                stop
+                THROW_HARD('required command-line inputs are missing; see the usage above')
             endif
         endif
         if( sz_keys_req > 0 ) call self%check
@@ -375,7 +375,7 @@ contains
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
                 call ptr2prg%print_cmdline(defined_keys)
-                stop
+                THROW_HARD('required command-line inputs are missing; see the usage above')
             endif
         endif
         if( sz_keys_req > 0 ) call self%check
@@ -433,7 +433,7 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                stop
+                THROW_HARD('command-line argument longer than XLONGSTRLEN')
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -455,7 +455,7 @@ contains
             if( .not. allowed_args%is_present(self%cmds(i)%key%to_char()) )then
                 write(logfhandle,'(a,a)') self%cmds(i)%key%to_char(), ' argument is not allowed'
                 write(logfhandle,'(a)') 'Perhaps you have misspelled?'
-                stop
+                THROW_HARD('unknown command-line argument: '//self%cmds(i)%key%to_char())
             endif
             call str2format(arg(pos1+1:), form, rval, ival)
             select case(form)
@@ -713,7 +713,7 @@ contains
         ! output
         if( any(cmderr) )then
             write(logfhandle,'(a)') 'ERROR, not enough input variables defined!'
-            stop
+            THROW_HARD('required command-line inputs are missing')
         endif
         deallocate( cmderr )
     end subroutine check
@@ -898,7 +898,7 @@ contains
             write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
             write(logfhandle,*) 'which likely exceeds the lenght limit XLONGSTRLEN'
             write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-            stop
+            THROW_HARD('command-line argument longer than XLONGSTRLEN')
         endif
         selectcase(arg(:pos-1))   
             case('prg', 'test')
@@ -913,7 +913,7 @@ contains
                 write(logfhandle,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
                 write(logfhandle,'(a)') ''
                 write(logfhandle,'(a)') 'Executing with prg flag only prints all available command-line options'
-                stop
+                THROW_HARD('prg= or test= must come first on the command line')
         end select
     end subroutine cmdline_err
 
