@@ -1,15 +1,17 @@
-!@descr: unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims) and the Butterworth kernel
+!@descr: unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims), the FSC weightings (fsc2optlp, fsc2cref) and the Butterworth kernel
 ! The clamps that turn a mask diameter into the 2D low-pass limits, the FRC-driven multi-stage schedule
 ! of refinement (stages from the FRC crossings, the linear fallback when the FRC never crosses, the crop
-! box / sampling / shift-limit bookkeeping through the magic boxes), its two linear cousins, and the
-! order-8 Butterworth transfer function against its closed form. References: lpstages_ref.py (stats
-! batch scratch), a double-precision emulation of the same rules.
+! box / sampling / shift-limit bookkeeping through the magic boxes), its two linear cousins, the
+! postprocess FSC weightings (the Wiener 2FSC/(1+FSC) and RELION's sqrt(2FSC/(1+FSC)) with its
+! truncation at the first FSC < 1e-4), and the order-8 Butterworth transfer function against its
+! closed form. References: lpstages_ref.py (stats batch scratch), a double-precision emulation of the
+! same rules; the FSC weightings are closed forms.
 module simple_lpstages_tester
 use simple_test_utils        ! assertions etc.
 use simple_defs              ! sp
 use simple_type_defs,        only: lp_crop_inf
 use simple_string_utils,     only: int2str
-use simple_estimate_ssnr,    only: mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims
+use simple_estimate_ssnr,    only: mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims, fsc2optlp, fsc2cref
 use simple_butterworth,      only: butterworth_filter
 use simple_image,            only: image
 implicit none
@@ -43,6 +45,7 @@ contains
         call test_lpstages_flat_frc_fallback()
         call test_lpstages_fast()
         call test_lpstages_setlims()
+        call test_fsc_weightings()
         call test_butterworth()
     end subroutine run_all_lpstages_tests
 
@@ -239,6 +242,31 @@ contains
         call assert_real(3.0, info(1)%smpd_crop, 1.e-6, 'coarse data: sampling kept')
         call assert_false(info(1)%l_autoscale, 'coarse data: no autoscaling')
     end subroutine test_lpstages_setlims
+
+    !---------------- FSC weightings ----------------
+
+    ! fsc2optlp = 2f/(1+f) (zero for f <= 0, capped at 0.99999); fsc2cref = its square root (Rosenthal &
+    ! Henderson C_ref, RELION postprocessing.cpp applyFscWeighting), zero from the first shell with
+    ! f < 1e-4 onwards even where a later shell recovers (closed forms)
+    subroutine test_fsc_weightings()
+        real, parameter :: CORRS(8)  = [0.999, 0.8, 0.5, 0.143, 0.02, 0.00005, 0.3, 0.1]
+        real, parameter :: WIENER(8) = [0.999500, 0.888889, 0.666667, 0.250219, 0.039216, 0.000100, 0.461538, 0.181818]
+        real, parameter :: CREF(8)   = [0.999750, 0.942809, 0.816497, 0.500219, 0.198030, 0.0, 0.0, 0.0]
+        real, allocatable :: w(:), c(:)
+        integer :: k
+        write(*,'(A)') 'test_fsc_weightings'
+        w = fsc2optlp(CORRS)
+        c = fsc2cref(CORRS)
+        call assert_int(size(CORRS), size(c), 'fsc2cref: one weight per shell')
+        do k = 1,size(CORRS)
+            call assert_real(WIENER(k), w(k), 1.e-5, 'fsc2optlp: 2f/(1+f) at shell '//int2str(k))
+            call assert_real(CREF(k),   c(k), 1.e-5, 'fsc2cref: sqrt(2f/(1+f)), truncated, at shell '//int2str(k))
+        end do
+        c = fsc2cref([0.143])
+        call assert_real(0.5, c(1), 1.e-3, 'fsc2cref: C_ref = 1/2 at the 0.143 threshold')
+        c = fsc2cref([0.9, -0.2, 0.6])
+        call assert_true(c(2) == 0. .and. c(3) == 0., 'fsc2cref: a negative shell zeroes it and every shell beyond')
+    end subroutine test_fsc_weightings
 
     !---------------- Butterworth ----------------
 

@@ -801,6 +801,8 @@ competition in the final block (its gridding ML pair beyond the ladder
 wins 0% of voxels: open since 09-18, inconsequential for the map). To
 watch on the rerun: the B-factor of a solvent-flattened map, and whether
 the prior'd references keep what made the exp_gate/msp1 `_lp` maps.
+*The 2026-09-22 FSC weighting narrowed 2026-09-26: never on an
+ML-regularized map, `sqrt(2FSC/(1+FSC))` elsewhere, Guinier fit from 10 A.*
 
 **2026-09-22 -- solvent prior strength by cross-validation (`pcg_solvent_lambda`
 auto).** `lambda_rel=1` means the ridge equals the low-band data diagonal,
@@ -874,3 +876,35 @@ the final 0.74 (was 1.55; in-stage 0.12) -- the closed-form replay at box
 above remain the validation record, but the active abinitio3D policy now sets
 `PCG_SOLVENT_START_STAGE = NSTAGES`: stages 6-7 remain prior-free and an
 explicitly requested solvent prior is applied only in stage 8.
+
+**2026-09-26 -- postprocess applies the FSC weighting exactly once; RELION's
+defaults for the weighting and the Guinier range.** Observation (Hans):
+after the 2026-09-22 change postprocess and postprocess_nu maps looked
+excessively low-pass filtered. Diagnosis: classical postprocess sharpens
+the shipped map, which with `ml_reg=yes` is ML-regularized on both
+backends (PCG `shrink_by_ml_prior`, gridding `add_invtausq2rho`: the
+factor `rho/(rho + <rho>/(tau SSNR_half))`, about FSC per shell, the
+half-map Wiener filter), and the 2026-09-22 recipe multiplied it by
+`2FSC/(1+FSC)` again: 0.33 of the amplitude left at FSC=0.5, 0.036 at
+0.143, before the Butterworth (the same double attenuation diagnosed for
+the replay on 2026-09-19). RELION (checked in its source): postprocess
+reads the `_unfil` halves, reconstructed without the tau2 prior
+(`BackProjector::reconstruct(..., do_map=false, ...)`), applies
+`sqrt(2FSC/(1+FSC))` once (zero from the first shell with FSC < 1e-4),
+fits B on the weighted map from `--autob_lowres` 10 A, and applies no
+low-pass by default. Decision (Hans): postprocess skips the weighting on
+ML-regularized maps (support-provenance `solve_kind=regularized`, and the
+new `gridding_regularized` written by the gridding restoration under
+`ml_reg=yes`) and keeps B + Butterworth at FSC=0.143; every other map
+(pair averages of `imgkind=unfil|solvent`, base/mixed solves,
+unregularized gridding, foreign maps) and postprocess_nu's stretched
+weighting take `sqrt(2FSC/(1+FSC))` (`fsc2cref`, tested in the lpstages
+suite); `HPLIM_GUINIER` 20 -> 10 A (postprocess, postprocess_nu,
+sharpvol). exp_gate's noise cloud under the Butterworth alone (auto B
+-108, -50 to -75 right) is read as a B problem: the 20-10 A range is the
+envelope/micelle falloff, not the Wilson regime. Kept from SIMPLE: B from
+the unweighted unfiltered pair up to the FSC=0.143 cutoff (conservative)
+and the Butterworth at that cutoff. To check on the rerun: `>>> POSTPROCESS:
+ML-regularized map (solve_kind=...)` on the workflow's final postprocess,
+the automatic B on exp_gate against the -50 to -75 it wanted, and whether
+the `_pproc` maps lose the over-smoothed look.

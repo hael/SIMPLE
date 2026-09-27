@@ -13,7 +13,7 @@ use simple_string_utils
 use simple_fileio
 implicit none
 
-public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
+public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2cref, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, gaussian_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
@@ -62,6 +62,26 @@ contains
         where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
         where( filt  > 0.99999 ) filt = 0.99999
     end function fsc2optlp
+
+    !> \brief  converts the FSC to the Rosenthal & Henderson (2003) figure-of-merit
+    !!         weight C_ref = sqrt(2FSC/(1+FSC)), with RELION's truncation
+    !!         (postprocessing.cpp applyFscWeighting): zero where FSC <= 0 and
+    !!         for every shell from the first one where FSC < 1e-4 onwards.
+    !!         The square root of fsc2optlp: the correlation-optimal weight of a
+    !!         merged unregularized map, milder than the Wiener form (0.5 against
+    !!         0.25 at FSC=0.143)
+    function fsc2cref( corrs ) result( filt )
+        real, intent(in)  :: corrs(:) !< fsc plot (correlations)
+        real, allocatable :: filt(:)  !< output weights
+        integer :: k
+        filt = sqrt(fsc2optlp(corrs))
+        do k = 1,size(corrs)
+            if( corrs(k) < 1.e-4 )then
+                filt(k:) = 0.
+                exit
+            endif
+        end do
+    end function fsc2cref
 
 
     !> \brief  converts the FSC to the optimal low-pass filter

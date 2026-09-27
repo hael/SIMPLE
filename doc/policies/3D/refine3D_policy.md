@@ -638,17 +638,32 @@ the FSC=0.143 of the reconstruction's FSC file (the base pair's curve,
 envfsc-corrected where that applies), or of the `_even_unfil/_odd_unfil`
 pair beside the map computed by postprocess when no file is given, one
 Guinier B-factor of the unfiltered pair average between `HPLIM_GUINIER`
-and that cutoff (never of the shipped regularized map: its prior's
-amplitude suppression steepens the slope, -150 on streptavidin against
--77 to -83 from unregularized maps), sharpen, then the FSC weighting
-`2FSC/(1+FSC)` inside the passband AND the Butterworth low-pass at the
-cutoff. Both halves are needed (2026-09-22): the weighting alone stayed
-open to FSC=0.05 and left amplified noise uncut (exp_gate/msp1, B
--121/-115 with the density-windowed estimate on the solvent-prior'd
-pair); the Butterworth alone let the low-SNR shells between FSC=0.5 and
-0.143 pass at full weight and a B of -108 turned exp_gate into a cloud
-of structured noise while bfac=0 was normal. No density-windowed pair
-estimate. With
+(10 A since 2026-09-26, RELION's `--autob_lowres` default and Rosenthal &
+Henderson's lower limit; 20 A before, which put the steep envelope/micelle
+region into the fit) and that cutoff (never of the shipped regularized
+map: its prior's amplitude suppression steepens the slope, -150 on
+streptavidin against -77 to -83 from unregularized maps), sharpen, the
+FSC weighting exactly once, then the Butterworth low-pass at the cutoff.
+Exactly once (2026-09-26): an ML-regularized map (support-provenance
+`solve_kind=regularized`, or `gridding_regularized` from a gridding
+reconstruction with `ml_reg=yes`) already carries it -- its prior shrank
+every Fourier component by `rho/(rho + <rho>/(tau SSNR_half))`, about FSC
+per shell -- and is only B-sharpened and Butterworth-filtered; every
+other map (the `imgkind=unfil|solvent` pair averages, base or mixed PCG
+solves, unregularized gridding maps, foreign maps) gets RELION's
+weighting `sqrt(2FSC/(1+FSC))` (Rosenthal & Henderson's C_ref,
+`postprocessing.cpp` `applyFscWeighting`, zero from the first shell with
+FSC < 1e-4). The 2026-09-22 recipe applied the Wiener `2FSC/(1+FSC)` on
+top of the regularized map's own shrinkage, leaving 0.036 of the
+amplitude at FSC=0.143 (0.33 at 0.5): every map over-smoothed. Its
+trigger -- exp_gate a cloud of structured noise under the Butterworth
+alone at an automatic B of -108 while -50 to -75 looked right -- points at
+the B-factor fitted from 20 A, not at the filter. RELION differs in two
+places kept on purpose: it fits B on the FSC-weighted map out to where
+the FSC reaches zero (steeper) and applies no low-pass by default; SIMPLE
+fits the unweighted unfiltered pair up to the FSC=0.143 cutoff (a
+conservative B) and closes with the Butterworth there. No
+density-windowed pair estimate. With
 `pcg_solvent=yes` the `_unfil` pair is the prior-free base pair and the
 sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil` and
 `imgkind=solvent` postprocess the respective pair averages with the same

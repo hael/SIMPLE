@@ -270,13 +270,16 @@ iterations keep the default budget of two iterations from a state-free start
 (the calibrated regime).
 
 Automatic final-map sharpening estimates its Guinier B-factor from the
-unregularized half-pair average. For an automatically postprocessed PCG
-reconstruction, a conservative density envelope is applied only to a
-temporary copy used for that spectral fit. This prevents the broad spherical
-bootstrap background from setting the sharpening slope. The reconstructed
-map, `_lp`, `_pproc`, and mirrored products are not multiplied by that mask;
-the prohibition on post-hoc PCG masking remains absolute. Iteration-time
-postprocessing retains its existing behavior.
+unregularized half-pair average (`_even_unfil/_odd_unfil`, no mask of its
+own since 2026-09-21) between `HPLIM_GUINIER` = 10 A (2026-09-26, RELION's
+`autob_lowres` default; was 20 A) and the FSC=0.143 cutoff. The shipped
+regularized map is B-sharpened and Butterworth-filtered at the cutoff with
+no second FSC weighting, since its ML prior already shrank each shell by
+about its FSC (support-provenance `solve_kind=regularized`; refine3D policy,
+final sharpening). The reconstructed map, `_lp`, `_pproc`, and mirrored
+products are not multiplied by any mask; the prohibition on post-hoc PCG
+masking remains absolute. Iteration-time postprocessing retains its
+existing behavior.
 
 ### Beyond-band diagnostic
 
@@ -610,8 +613,10 @@ it ships. The one-mask contract that came with it:
   the soft spherical support at `msk_crop` exactly once, installed by the
   estimator (PCG) or by the restoration after deapodization (gridding), and
   recorded in the support-provenance sidecar `<vol>_pcg_support.txt`
-  (`solve_kind=gridding` for gridding products; provenance only since the
-  warm starts were retired, 2026-09-10);
+  (`solve_kind=gridding` for gridding products, `gridding_regularized` when
+  `ml_reg=yes` put the FSC-derived prior into the restoration; since
+  2026-09-26 postprocess reads the kind to skip its FSC weighting on
+  ML-regularized maps);
 - `evaluate_halfmap_pair` masks nothing of its own (the envfsc envelope +
   phase-randomization correction is applied only to an unconstrained pair, and
   the mode actually used is logged as `>>> FSC MODE`);

@@ -227,7 +227,12 @@ The half pair still supplies the evidence and the resolution authority.
 A global `fsc2optlp` is deliberately NOT applied: the global FSC averages
 over the map and would erase exactly the core detail the walk validated;
 the Butterworth rolloff at the calibrated local cutoff is the local
-shrinkage surrogate. The v1 restoration layer (ratio boost toward a
+shrinkage surrogate. (2026-09-22: the global FSC weighting is applied
+stretched to each local cutoff, its FSC=0.143 crossing on the voxel's
+cutoff; since 2026-09-26 it is RELION's `sqrt(2FSC/(1+FSC))`
+(`fsc2cref`) rather than the Wiener form, applied once -- the sharpened
+`_unfil`/`_solvent` pair carries no ML shrinkage -- and the Guinier fit
+starts at `HPLIM_GUINIER` = 10 A.) The v1 restoration layer (ratio boost toward a
 regional target) is retired; if v2's single global B proves too blunt
 across regions of very different decay, the recorded upgrade path is the
 local-B fit 2.3(b) -- per-region Guinier, still inside the local

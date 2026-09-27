@@ -94,8 +94,14 @@ contains
         ! The shipped halves and merged volume carry the soft spherical support
         ! at msk_crop (restore_gridding_pair, restore_merged_volume; the legacy
         ! trailing blend mixes two such volumes). Record it beside the volume
-        ! so postprocess does not mask again.
-        call write_support_provenance(volname, .false., 'gridding')
+        ! so postprocess does not mask again, and whether the ML prior shrank
+        ! it (ml_reg: invtau2 in both halves before the merged sum) so
+        ! postprocess does not FSC-weight it a second time.
+        if( params%l_ml_reg )then
+            call write_support_provenance(volname, .false., 'gridding_regularized')
+        else
+            call write_support_provenance(volname, .false., 'gridding')
+        endif
         call cleanup_restore_state()
 
     contains

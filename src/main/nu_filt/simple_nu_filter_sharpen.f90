@@ -17,12 +17,12 @@
 !      the frozen state's evidenced local cutoff (selected_cutoff, from the
 !      Potts-smoothed label optimization), composed exactly like the
 !      production NU filter -- so sharpening never extends beyond the local
-!      passband, which is the classical lesson v1 skipped; and, when the
-!      evidence pair's FSC is supplied, its 2FSC/(1+FSC) weighting inside
-!      each local passband, stretched so that its FSC=0.143 crossing sits at
-!      the voxel's cutoff (2026-09-22): the Butterworth alone let the
-!      low-SNR shoulder pass at full weight under the B-factor, the same
-!      failure as the isotropic postprocess on exp_gate;
+!      passband, which is the classical lesson v1 skipped; and the evidence
+!      pair's FSC weighting inside each local passband, stretched so that
+!      its FSC=0.143 crossing sits at the voxel's cutoff (2026-09-22; the
+!      weighting is RELION's sqrt(2FSC/(1+FSC)) since 2026-09-26, it was the
+!      Wiener 2FSC/(1+FSC)). Applied once: the sharpened pair (_unfil or
+!      _solvent) carries no ML shrinkage of its own;
 !   3. solvent: voxels the calibrated null claims (cutoff 0) and voxels
 !      outside the spherical evidence support flatten to the half-map mean --
 !      the evidence-derived envelope behavior validated in the v1 run.
@@ -45,13 +45,13 @@ contains
 
     !> The policy in one signature: everything is ESTIMATED on the evidence
     !! pair (vol_even/odd, the unregularized base pair: the evidence state it
-    !! matches, the FSC whose 2FSC/(1+FSC) weighting is applied inside every
-    !! local passband stretched so that its FSC=0.143 crossing sits at the
-    !! voxel's evidenced cutoff, and the Guinier B-factor) and APPLIED to the
-    !! apply pair (apply_even/odd, the solvent-prior'd pair when there is one;
-    !! absent, the evidence pair is sharpened). 2026-09-22: the Butterworth
-    !! alone let the low-SNR shoulder pass at full weight under the B-factor,
-    !! the same failure as the isotropic postprocess on exp_gate.
+    !! matches, the FSC whose sqrt(2FSC/(1+FSC)) weighting (Rosenthal &
+    !! Henderson, RELION's default) is applied inside every local passband
+    !! stretched so that its FSC=0.143 crossing sits at the voxel's evidenced
+    !! cutoff, and the Guinier B-factor from HPLIM_GUINIER) and APPLIED to the
+    !! apply pair (apply_even/odd, the solvent-prior'd base pair when there is
+    !! one; absent, the evidence pair is sharpened). Neither pair is
+    !! ML-shrunk, so the weighting is applied exactly once.
     module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp, apply_even, apply_odd )
         type(nu_evidence_state), intent(in)    :: state
         type(image),             intent(in)    :: vol_even, vol_odd
@@ -81,10 +81,7 @@ contains
                 &THROW_HARD('apply pair dimensions do not match the frozen evidence state; nu_evidence_sharpen_vol')
         endif
         if( size(fsc) < nyq ) THROW_HARD('FSC has fewer shells than the volume; nu_evidence_sharpen_vol')
-        allocate(optlp(nyq), source=0.)
-        where( fsc(1:nyq) > 0. ) optlp = 2. * fsc(1:nyq) / (fsc(1:nyq) + 1.)
-        where( fsc(1:nyq) < 0.05 ) optlp = 0.
-        optlp = min(optlp, 0.99999)
+        optlp = fsc2cref(fsc(1:nyq))
         res = get_resarr(ldim(1), summ%smpd)
         call get_resolution(fsc(1:nyq), res, fsc05, fsc0143)
         k0143 = max(1, min(nyq, calc_fourier_index(fsc0143, ldim(1), summ%smpd)))
@@ -151,7 +148,7 @@ contains
             write(logfhandle,'(A,F6.2,A)') '>>> NU SHARPENING B-FACTOR SKIPPED (finest evidenced cutoff ', &
                 &finest, ' A too coarse)'
         endif
-        write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, FSC-weighted (2FSC/(1+FSC) '//&
+        write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, FSC-weighted (sqrt(2FSC/(1+FSC)) '//&
             &'stretched to each local cutoff), then local low-pass'
         if( l_apply ) write(logfhandle,'(A)') '    estimated on the unregularized pair, applied to the solvent-prior pair'
         write(logfhandle,'(A,I0,A)')  '    evidenced local cutoffs: ', ndist, ' distinct'

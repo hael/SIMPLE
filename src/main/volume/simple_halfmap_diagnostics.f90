@@ -163,12 +163,14 @@ contains
     !! (<vol>_pcg_support.txt, the historical name kept for compatibility).
     !! Records the shipped half pair's support kind (sphere, density, NU,
     !! explicit, or mixed) and what kind of estimate the primary pair is: a
-    !! PCG base, regularized or bootstrap-mixed solve, or gridding restoration.
+    !! PCG base, regularized or bootstrap-mixed solve, or a gridding
+    !! restoration without (gridding) or with (gridding_regularized) the
+    !! FSC-derived ML prior in its denominator.
     !! Consumers: the PCG trailing bootstrap reads the support field for its
     !! lag-one FSC pair; postprocess skips its post-hoc mask for any volume
-    !! carrying the sidecar. The solve kind is recorded for provenance (the
-    !! former PCG base warm-start selector that read it went with the
-    !! cross-iteration warm starts, 2026-09-10).
+    !! carrying the sidecar, and skips its FSC weighting for the ML-regularized
+    !! kinds (regularized, gridding_regularized), whose prior already shrank
+    !! every shell by its FSC (2026-09-26).
     function support_provenance_fname( volname ) result( fname )
         type(string), intent(in) :: volname
         type(string) :: fname
@@ -185,7 +187,7 @@ contains
         character(len=16) :: support_kind_here
         integer :: funit
         select case( trim(solve_kind) )
-            case( 'base', 'regularized', 'mixed', 'gridding' )
+            case( 'base', 'regularized', 'mixed', 'gridding', 'gridding_regularized' )
             case default
                 THROW_HARD('invalid solve kind for the support provenance sidecar')
         end select

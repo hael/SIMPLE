@@ -102,7 +102,7 @@ is in use; an explicit `binwidth` wins in either direction). The support
 is the one place a mask enters the estimate; no PCG product is multiplied
 by any mask after the solve (postprocess, `_pproc`, `_mirr` included),
 and the support-provenance sidecar `<vol>_pcg_support.txt`
-(`solve_support=density|sphere`, `solve_kind=base|regularized|mixed|gridding`)
+(`solve_support=density|sphere`, `solve_kind=base|regularized|mixed|gridding|gridding_regularized`)
 records what the shipped pair carries.
 
 **Opt-in soft solvent prior (`pcg_solvent=yes`, default `no`).** None of
@@ -246,7 +246,9 @@ string records which envelope ran.
   regularization of the reference they are scored against), one residual
   sigma pass, then the shipped PCG map at the native box: cold, at least
   five iterations, `filt_mode=none`, `automsk` inherited
-  (so its support matches the refinement's), `postprocess=yes`, with the
+  (so its support matches the refinement's), `postprocess=yes` (the
+  regularized map B-sharpened and Butterworth-filtered at FSC=0.143 with no
+  second FSC weighting, 2026-09-26), with the
   gridding bootstrap map passed as `vol<state>` so the density envelope
   constrains the base pair too and the reported FSC is estimator-constrained
   (2026-09-11; previously the final base pair bootstrapped on the sphere).

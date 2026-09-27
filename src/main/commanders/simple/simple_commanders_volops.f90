@@ -307,7 +307,8 @@ contains
         real    :: fsc0143, fsc05, lplim
         integer :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
-        logical :: l_support_at_source, l_prov_constrained, l_prov_found
+        logical :: l_support_at_source, l_prov_constrained, l_prov_found, l_prov_kind, l_ml_shrunk
+        character(len=32) :: prov_solve_kind
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
@@ -320,16 +321,15 @@ contains
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
         ! Isotropic postprocess protocol (2026-09-21, the postprocess_nu v2
-        ! recipe with one cutoff): the cutoff is the FSC=0.143 of the
-        ! reconstruction's FSC file (the base pair's curve, envfsc-corrected
-        ! where that applies; with the solvent prior it is the prior-free
-        ! pair's), or, when no file is given, of the unfiltered pair beside
-        ! the map computed here; one Guinier B-factor from the map being
-        ! sharpened between HPLIM_GUINIER and that cutoff; sharpen;
-        ! Butterworth low-pass at the cutoff, composed like the NU filter's
-        ! rungs. No FSC optimal filter (it stayed open to FSC=0.05 and left
-        ! the amplified noise uncut: exp_gate/msp1 2026-09-21), no
-        ! density-windowed pair estimate.
+        ! recipe with one cutoff; FSC weighting settled 2026-09-26): the
+        ! cutoff is the FSC=0.143 of the reconstruction's FSC file (the base
+        ! pair's curve, envfsc-corrected where that applies; with the solvent
+        ! prior it is the prior-free pair's), or, when no file is given, of
+        ! the unfiltered pair beside the map computed here; one Guinier
+        ! B-factor of the unfiltered pair average between HPLIM_GUINIER
+        ! (10 A, RELION's autob_lowres) and that cutoff; sharpen; the FSC
+        ! weighting exactly once; Butterworth low-pass at the cutoff, composed
+        ! like the NU filter's rungs. No density-windowed pair estimate.
         has_fsc   = .false.
         do_envfsc = .false.
         res = vol_bfac%get_res()
@@ -416,20 +416,33 @@ contains
             call vol_unfil%kill
             call vol_unfil_odd%kill
         endif
+        ! What kind of estimate the map is, from the support-provenance
+        ! sidecar beside it: an ML-regularized map (PCG solve_kind=regularized,
+        ! gridding with ml_reg) already carries the FSC weighting, since its
+        ! prior shrank every Fourier component by rho/(rho + <rho>/(tau*SSNR)),
+        ! ~FSC per shell (the half-map Wiener filter), voxelwise by sampling.
+        ! A pair average of imgkind=unfil|solvent, a base or mixed solve, an
+        ! unregularized gridding map and a foreign map carry none.
+        prov_solve_kind = ''
+        call read_support_provenance(fname_vol, l_prov_constrained, l_prov_found, &
+            &solve_kind=prov_solve_kind, l_kind_found=l_prov_kind)
+        l_ml_shrunk = l_prov_kind .and. (trim(prov_solve_kind) == 'regularized' .or. &
+            &trim(prov_solve_kind) == 'gridding_regularized')
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
-        ! Close the sharpening with both halves of the classical recipe: the
-        ! FSC weighting 2FSC/(1+FSC) inside the passband, which holds the
-        ! low-SNR shells between FSC=0.5 and 0.143 at 0.25-0.67 (without it a
-        ! B of -108 multiplied exp_gate's shoulder by ~6 at the cutoff and
-        ! the map became a cloud of structured noise, 2026-09-22), and the
-        ! Butterworth at the FSC=0.143 cutoff, the same filter as the NU
-        ! filter's rungs, which the old recipe lacked (its weighting stayed
-        ! open to FSC=0.05).
-        if( has_fsc )then
-            optlp = fsc2optlp(fsc)
-            where( fsc < 0.05 ) optlp = 0.
+        ! Close the sharpening: the FSC weighting exactly once, then the
+        ! Butterworth at the FSC=0.143 cutoff (the same filter as the NU
+        ! filter's rungs). The weighting is RELION's (postprocessing.cpp
+        ! applyFscWeighting, Rosenthal & Henderson 2003), sqrt(2FSC/(1+FSC)),
+        ! applied only to a map that does not carry one: 2026-09-22 added the
+        ! Wiener 2FSC/(1+FSC) on top of the regularized map's own ~FSC
+        ! shrinkage, which left 0.036 of the amplitude at FSC=0.143 and
+        ! over-smoothed every map. exp_gate's noise cloud with the Butterworth
+        ! alone (B -108; -50..-75 looked right) points at the B-factor, fitted
+        ! from 20 A then, through the envelope/micelle region, not at the filter.
+        if( has_fsc .and. .not. l_ml_shrunk )then
+            optlp = fsc2cref(fsc)
             where( res < TINY ) optlp = 0.
             call vol_bfac%apply_filter(optlp)
             call vol_no_bfac%apply_filter(optlp)
@@ -440,9 +453,13 @@ contains
         call vol_bfac%apply_filter(bwfilter)
         call vol_no_bfac%apply_filter(bwfilter)
         deallocate(bwfilter)
-        if( has_fsc )then
-            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, FSC-weighted (2FSC/(1+FSC)), Butterworth low-pass at ', &
-                &lplim, ' A'
+        if( has_fsc .and. l_ml_shrunk )then
+            write(logfhandle,'(A)') '>>> POSTPROCESS: ML-regularized map (solve_kind='//trim(prov_solve_kind)//&
+                &'), its prior already FSC-weighted it: no FSC weighting'
+            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
+        else if( has_fsc )then
+            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, FSC-weighted (sqrt(2FSC/(1+FSC))), '//&
+                &'Butterworth low-pass at ', lplim, ' A'
         else
             write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
         endif
@@ -458,7 +475,6 @@ contains
         ! postprocess of foreign halves) gets the classical mask below. This
         ! also keeps derived _pproc/_mirr maps from silently changing the
         ! estimator after reconstruction.
-        call read_support_provenance(fname_vol, l_prov_constrained, l_prov_found)
         l_support_at_source = trim(params%rec_backend) == 'pcg' .or. l_prov_found
         call vol_bfac%ifft()
         if( l_support_at_source )then
