@@ -1,4 +1,4 @@
-!@descr: unit tests for the pose_cont refine3D adapter (simple_pose_cont_refine3D_adapter, simple_strategy3D_pose_cont)
+!@descr: unit tests for pose_cont refine3D adapter, strategy, outer-objective policy and sigma lifecycle
 ! The layer between refine3D and the Cartesian pose refiner, with no fixture beyond
 ! reference artifacts written to and removed from the run directory: the reference
 ! workspace lifecycle over even/odd half-set artifacts, the observation adapter against
@@ -9,10 +9,13 @@
 ! pose, invalid preparation) and the strategy's seed validity.
 module simple_pose_cont_refine3D_adapter_tester
 use simple_core_module_api,           only: CTFFLAG_NO, ctfparams, dp, euler2m
+use simple_cmdline,                   only: cmdline
 use simple_image,                     only: image
 use simple_ori,                       only: ori
+use simple_parameters,                only: parameters
 use simple_cartesian_pose_refiner,    only: cartesian_pose_refiner
-use simple_strategy3D_pose_cont,      only: pose_cont_seed_is_valid
+use simple_strategy3D_pose_cont,      only: pose_cont_seed_is_valid, &
+    &pose_cont_sigma_is_enabled
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_particle_workspace, &
     &pose_cont_pose, pose_cont_limits, pose_cont_config, pose_cont_particle_spec, &
@@ -28,6 +31,7 @@ use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED, POSE_CONT_NOT_ATTEMPTED, &
     &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 use simple_test_utils
+use simple_type_defs,                 only: OBJFUN_CC, OBJFUN_EUCLID
 implicit none
 private
 public :: run_all_pose_cont_adapter_tests
@@ -39,17 +43,78 @@ contains
 
     subroutine run_all_pose_cont_adapter_tests()
         write(*,'(A)') '**** running all pose_cont adapter tests ****'
+        write(*,'(A)') 'test_outer_cc_parameter_policy'
+        call test_outer_cc_parameter_policy()
         write(*,'(A)') 'test_reference_workspace_lifecycle'
         call test_reference_workspace_lifecycle()
         write(*,'(A)') 'test_observation_and_coordinate_adapters'
         call test_observation_and_coordinate_adapters()
         write(*,'(A)') 'test_inpl_pose_cont_handoff'
         call test_inpl_pose_cont_handoff()
-        write(*,'(A)') 'test_transaction_contracts'
-        call test_transaction_contracts()
+        write(*,'(A)') 'test_route_transaction_contracts'
+        call test_route_transaction_contracts()
+        write(*,'(A)') 'test_rollback_transaction_contracts'
+        call test_rollback_transaction_contracts()
+        write(*,'(A)') 'test_sigma_endpoint_contracts'
+        call test_sigma_endpoint_contracts()
         write(*,'(A)') 'test_strategy_seed_contract'
         call test_strategy_seed_contract()
     end subroutine run_all_pose_cont_adapter_tests
+
+
+    subroutine test_outer_cc_parameter_policy()
+        integer, parameter :: TEST_SEED = 20260923
+        type(cmdline) :: cline
+        type(parameters) :: params
+
+        call cline%set('objfun', 'euclid')
+        call cline%set('pose_cont', 'yes')
+        call params%new(cline, silent=.true.)
+        call set_fixed_seed(TEST_SEED)
+        call assert_int(OBJFUN_EUCLID, params%cc_objfun, &
+            &'Euclidean pose-cont changed the outer objective')
+        call assert_true(trim(params%cc_emit_sigma) == 'no', &
+            &'Euclidean pose-cont unexpectedly changed cc_emit_sigma')
+        call assert_true(pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
+            &'Euclidean pose-cont disabled sigma emission')
+        call cline%kill()
+
+        call cline%set('objfun', 'cc')
+        call cline%set('pose_cont', 'yes')
+        call params%new(cline, silent=.true.)
+        call set_fixed_seed(TEST_SEED)
+        call assert_int(OBJFUN_CC, params%cc_objfun, &
+            &'CC post-matcher pose-cont changed the outer objective')
+        call assert_true(trim(params%cc_emit_sigma) == 'yes', &
+            &'CC post-matcher pose-cont did not enable cc_emit_sigma')
+        call assert_true(pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
+            &'CC post-matcher pose-cont disabled sigma emission')
+        call cline%kill()
+
+        call cline%set('objfun', 'cc')
+        call cline%set('refine', 'pose_cont')
+        call params%new(cline, silent=.true.)
+        call set_fixed_seed(TEST_SEED)
+        call assert_int(OBJFUN_CC, params%cc_objfun, &
+            &'CC standalone pose-cont changed the outer objective')
+        call assert_true(trim(params%cc_emit_sigma) == 'yes', &
+            &'CC standalone pose-cont did not enable cc_emit_sigma')
+        call assert_true(pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
+            &'CC standalone pose-cont disabled sigma emission')
+        call cline%kill()
+
+        call cline%set('objfun', 'cc')
+        call cline%set('pose_cont', 'no')
+        call params%new(cline, silent=.true.)
+        call set_fixed_seed(TEST_SEED)
+        call assert_int(OBJFUN_CC, params%cc_objfun, &
+            &'ordinary CC changed the outer objective')
+        call assert_true(trim(params%cc_emit_sigma) == 'no', &
+            &'ordinary CC unexpectedly enabled cc_emit_sigma')
+        call assert_true(.not. pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
+            &'ordinary CC unexpectedly enabled pose-cont sigma emission')
+        call cline%kill()
+    end subroutine test_outer_cc_parameter_policy
 
 
 
@@ -201,35 +266,18 @@ contains
         call recovered%kill()
     end subroutine test_inpl_pose_cont_handoff
 
-    subroutine test_transaction_contracts()
+    subroutine test_route_transaction_contracts()
         type(cartesian_pose_refiner) :: generator
         type(pose_cont_reference_workspace) :: workspace
-        type(cartesian_pose_data) :: data, invalid_data
+        type(cartesian_pose_data) :: data
         type(pose_cont_transaction_result) :: result
         type(pose_cont_pose) :: seed
         type(pose_cont_config) :: config
         type(pose_cont_limits) :: limits
-        type(pose_cont_particle_spec) :: particle_spec
-        type(ctfparams) :: no_ctf
         real, allocatable :: volume(:, :, :), sigma2_noise(:, :)
-        complex :: observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
-        real(dp) :: truth_rotation(3, 3), initial_rotation(3, 3), truth_shift(2), initial_shift(2)
+        real(dp) :: initial_rotation(3, 3), initial_shift(2)
 
-        call build_test_volume(volume)
-        call write_reference(volume, .true.)
-        call write_reference(volume, .false.)
-        call workspace%new_from_artifacts(1, TEST_BOX, TEST_SMPD)
-        call generator%new_physical_reference(volume)
-        truth_rotation = real(euler2m([19., 37., 28.]), dp)
-        truth_shift = [0.31_dp, -0.24_dp]
-        call generator%predict_unweighted(truth_rotation, truth_shift, observed)
-        allocate (sigma2_noise(2:TEST_BOX/2 - 1, 5:5), source=1.)
-        no_ctf%smpd = TEST_SMPD
-        no_ctf%ctfflag = CTFFLAG_NO
-        particle_spec = pose_cont_particle_spec(state=1, particle=5, &
-            &shell_range=[2, TEST_BOX/2 - 1], even=.true., ctfparms=no_ctf)
-        call workspace%prepare_particle_from_sigma_noise(observed, sigma2_noise, &
-            &particle_spec, data)
+        call prepare_transaction_fixture(generator, workspace, data, volume, sigma2_noise)
         call assert_true(data%is_valid(), &
             &'adapter did not prepare a valid particle')
         call assert_true(all(data%get_shell_range() == [2, TEST_BOX/2 - 1]), &
@@ -262,7 +310,6 @@ contains
             &result%accepts == result%shift_stage%accepts + result%joint_stage%accepts .and. &
             &result%bound_hits == result%shift_stage%bound_hits + result%joint_stage%bound_hits, &
             &'adapter stage accounting does not balance')
-
         config = pose_cont_config_from_route('joint')
         call workspace%refine_particle(1, .true., seed, data, config, limits, result)
         call assert_true(result%status == LM_ACCEPTED_IMPROVEMENT .and. &
@@ -272,8 +319,29 @@ contains
             &result%shift_stage%attempts == 0 .and. result%joint_stage%attempts > 0, &
             &'direct-joint adapter route executed or accounted for a shift-only stage')
 
-        seed = pose_cont_pose(rotmat=truth_rotation, shift=initial_shift)
+        call generator%kill()
+        call workspace%kill()
+        call remove_pose_cont_reference_artifacts(1)
+    end subroutine test_route_transaction_contracts
+
+    subroutine test_rollback_transaction_contracts()
+        type(cartesian_pose_refiner) :: generator
+        type(pose_cont_reference_workspace) :: workspace
+        type(cartesian_pose_data) :: data, invalid_data
+        type(pose_cont_transaction_result) :: result
+        type(pose_cont_pose) :: seed
+        type(pose_cont_config) :: config
+        type(pose_cont_limits) :: limits
+        real, allocatable :: volume(:, :, :), sigma2_noise(:, :)
+        real(dp) :: truth_rotation(3, 3), truth_shift(2), initial_shift(2)
+
+        call prepare_transaction_fixture(generator, workspace, data, volume, &
+            &sigma2_noise, truth_rotation, truth_shift)
+        initial_shift = [-0.08_dp, 0.06_dp]
         config = pose_cont_config_from_route('shift_then_joint')
+        limits = pose_cont_limits_from_boxes(TEST_BOX, TEST_BOX)
+
+        seed = pose_cont_pose(rotmat=truth_rotation, shift=initial_shift)
         limits%max_total_shift = 1.e-30_dp
         call workspace%refine_particle(1, .true., seed, data, config, limits, result)
         call assert_true(result%status == LM_STEP_BOUND_REJECTED .and. result%bound_hits > 0, &
@@ -294,6 +362,7 @@ contains
         call assert_true(all(result%pose%rotmat == truth_rotation) .and. &
             &all(result%pose%shift == truth_shift), &
             &'non-improving adapter transaction changed the input pose')
+
         config = pose_cont_config_from_route('joint')
         call workspace%refine_particle(1, .true., seed, data, config, limits, result)
         call assert_true(result%status == LM_FINITE_NO_IMPROVEMENT .and. &
@@ -302,6 +371,7 @@ contains
         call assert_true(all(result%pose%rotmat == truth_rotation) .and. &
             &all(result%pose%shift == truth_shift), &
             &'direct-joint non-improving transaction changed the input pose')
+
         call workspace%refine_particle(1, .true., seed, invalid_data, config, limits, result)
         call assert_true(result%status == POSE_CONT_INVALID_PREPARATION .and. &
             &all(result%pose%rotmat == truth_rotation) .and. &
@@ -311,7 +381,86 @@ contains
         call generator%kill()
         call workspace%kill()
         call remove_pose_cont_reference_artifacts(1)
-    end subroutine test_transaction_contracts
+    end subroutine test_rollback_transaction_contracts
+
+    subroutine test_sigma_endpoint_contracts()
+        type(cartesian_pose_refiner) :: generator
+        type(pose_cont_reference_workspace) :: workspace
+        type(cartesian_pose_data) :: data
+        type(pose_cont_transaction_result) :: result
+        type(pose_cont_pose) :: seed
+        type(pose_cont_config) :: config
+        type(pose_cont_limits) :: limits
+        real, allocatable :: volume(:, :, :), sigma2_noise(:, :)
+        real, allocatable :: terminal_sigma(:), seed_sigma(:), rollback_sigma(:)
+        real(dp) :: truth_rotation(3, 3), truth_shift(2)
+
+        call prepare_transaction_fixture(generator, workspace, data, volume, &
+            &sigma2_noise, truth_rotation, truth_shift)
+
+        seed = pose_cont_pose(rotmat=real(euler2m([20., 36.2, 28.7]), dp), &
+            &shift=[-0.08_dp, 0.06_dp])
+        config = pose_cont_config_from_route('shift_then_joint')
+        limits = pose_cont_limits_from_boxes(TEST_BOX, TEST_BOX)
+        call workspace%refine_particle(1, .true., seed, data, config, limits, result)
+        call assert_int(LM_ACCEPTED_IMPROVEMENT, result%status, &
+            &'sigma endpoint fixture did not produce an accepted transaction')
+        call workspace%sigma_contribution(1, .true., result%pose, data, terminal_sigma)
+        call workspace%sigma_contribution(1, .true., seed, data, seed_sigma)
+        call assert_int(size(seed_sigma), size(terminal_sigma), &
+            &'accepted terminal sigma has the wrong shell count')
+        call assert_true(all(terminal_sigma >= 0.), &
+            &'accepted terminal sigma contains a negative contribution')
+        call assert_true(any(abs(terminal_sigma-seed_sigma) > 10.*epsilon(1.)), &
+            &'accepted and seed poses produced the same sigma contribution')
+
+        seed = pose_cont_pose(rotmat=truth_rotation, shift=[-0.08_dp, 0.06_dp])
+        limits%max_total_shift = 1.e-30_dp
+        call workspace%refine_particle(1, .true., seed, data, config, limits, result)
+        call assert_int(LM_STEP_BOUND_REJECTED, result%status, &
+            &'sigma rollback fixture did not produce a rejected transaction')
+        call workspace%sigma_contribution(1, .true., result%pose, data, rollback_sigma)
+        call workspace%sigma_contribution(1, .true., seed, data, seed_sigma)
+        call assert_int(size(seed_sigma), size(rollback_sigma), &
+            &'rollback sigma has the wrong shell count')
+        call assert_true(all(rollback_sigma == seed_sigma), &
+            &'rollback pose did not reproduce the seed-pose sigma contribution')
+
+        call generator%kill()
+        call workspace%kill()
+        call remove_pose_cont_reference_artifacts(1)
+    end subroutine test_sigma_endpoint_contracts
+
+    subroutine prepare_transaction_fixture(generator, workspace, data, volume, &
+        &sigma2_noise, truth_rotation, truth_shift)
+        type(cartesian_pose_refiner), intent(inout) :: generator
+        type(pose_cont_reference_workspace), intent(inout) :: workspace
+        type(cartesian_pose_data), intent(out) :: data
+        real, allocatable, intent(out) :: volume(:, :, :), sigma2_noise(:, :)
+        real(dp), optional, intent(out) :: truth_rotation(3, 3), truth_shift(2)
+        type(pose_cont_particle_spec) :: particle_spec
+        type(ctfparams) :: no_ctf
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2, -TEST_BOX/2:TEST_BOX/2)
+        real(dp) :: fixture_rotation(3, 3), fixture_shift(2)
+
+        call build_test_volume(volume)
+        call write_reference(volume, .true.)
+        call write_reference(volume, .false.)
+        call workspace%new_from_artifacts(1, TEST_BOX, TEST_SMPD)
+        call generator%new_physical_reference(volume)
+        fixture_rotation = real(euler2m([19., 37., 28.]), dp)
+        fixture_shift = [0.31_dp, -0.24_dp]
+        if (present(truth_rotation)) truth_rotation = fixture_rotation
+        if (present(truth_shift)) truth_shift = fixture_shift
+        call generator%predict_unweighted(fixture_rotation, fixture_shift, observed)
+        allocate(sigma2_noise(2:TEST_BOX/2 - 1, 5:5), source=1.)
+        no_ctf%smpd = TEST_SMPD
+        no_ctf%ctfflag = CTFFLAG_NO
+        particle_spec = pose_cont_particle_spec(state=1, particle=5, &
+            &shell_range=[2, TEST_BOX/2 - 1], even=.true., ctfparms=no_ctf)
+        call workspace%prepare_particle_from_sigma_noise(observed, sigma2_noise, &
+            &particle_spec, data)
+    end subroutine prepare_transaction_fixture
 
     ! Identity is a valid initialized pose; explicit state/half metadata, not
     ! nonzero Euler coordinates, defines readiness for the standalone class.

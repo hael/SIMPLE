@@ -960,6 +960,12 @@ contains
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
+        ! Outer CC does not ordinarily emit the Euclidean residual sigma
+        ! contribution consumed by Cartesian pose refinement. Enable that
+        ! internal lifecycle only when pose_cont participates.
+        if( self%cc_objfun == OBJFUN_CC .and. &
+            &(trim(self%pose_cont) == 'yes' .or. trim(self%refine) == 'pose_cont') ) &
+            &self%cc_emit_sigma = 'yes'
         select case(trim(self%prob_neigh_mode))
             case('state','geom','shc','snhc')
             case DEFAULT

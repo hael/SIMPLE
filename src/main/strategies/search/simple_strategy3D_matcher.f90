@@ -20,12 +20,14 @@ use simple_strategy3D_greedy_sub,      only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,          only: strategy3D_greedy
 use simple_strategy3D_greedy_inpl,     only: strategy3D_greedy_inpl
 use simple_strategy3D_prob,            only: strategy3D_prob
-use simple_strategy3D_pose_cont,       only: strategy3D_pose_cont, pose_cont_seed_is_valid
+use simple_strategy3D_pose_cont,       only: strategy3D_pose_cont, pose_cont_seed_is_valid, &
+    &pose_cont_sigma_is_enabled
 use simple_strategy3D_shc_smpl,        only: strategy3D_shc_smpl
 use simple_strategy3D_shc,             only: strategy3D_shc
 use simple_strategy3D_snhc_smpl,       only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,            only: strategy3D_spec
 use simple_strategy3D,                 only: strategy3D
+use simple_type_defs,                  only: OBJFUN_CC, OBJFUN_EUCLID
 use simple_pose_cont_run_stats,        only: pose_cont_run_stats
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_pose, pose_cont_config, pose_cont_limits, pose_cont_transaction_result, &
@@ -341,13 +343,13 @@ contains
             ctrl%do_pose_cont_polish   = trim(p_ptr%pose_cont) == 'yes'
             ctrl%do_pose_cont_strategy = ctrl%refine_mode == 'pose_cont'
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
-            ctrl%do_emit_sigma = p_ptr%cc_objfun == OBJFUN_EUCLID .or. trim(p_ptr%cc_emit_sigma) == 'yes'
+            ctrl%do_emit_sigma = pose_cont_sigma_is_enabled(p_ptr%cc_objfun, p_ptr%cc_emit_sigma)
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
             if( ctrl%do_pose_cont_polish .and. ctrl%do_pose_cont_strategy ) &
                 &THROW_HARD('choose either pose_cont=yes or refine=pose_cont, not both')
             if( ctrl%do_pose_cont_polish .or. ctrl%do_pose_cont_strategy )then
-                if( p_ptr%cc_objfun /= OBJFUN_EUCLID ) &
-                    &THROW_HARD('pose_cont requires objfun=euclid')
+                if( p_ptr%cc_objfun /= OBJFUN_EUCLID .and. p_ptr%cc_objfun /= OBJFUN_CC ) &
+                    &THROW_HARD('pose_cont supports only objfun=euclid or objfun=cc')
                 pose_config = pose_cont_config_from_route(p_ptr%pose_cont_route)
                 pose_limits = pose_cont_limits_from_boxes(p_ptr%box, p_ptr%box_crop)
             endif

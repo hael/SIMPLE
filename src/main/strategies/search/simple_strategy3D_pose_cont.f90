@@ -15,13 +15,13 @@ use simple_pose_cont_refine3D_adapter, only: pose_cont_config, pose_cont_limits,
     &pose_cont_pose_to_orientation
 use simple_strategy3D, only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
-use simple_type_defs, only: OBJFUN_EUCLID
+use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID
 implicit none
 private
 
 #include "simple_local_flags.inc"
 
-public :: strategy3D_pose_cont, pose_cont_seed_is_valid
+public :: strategy3D_pose_cont, pose_cont_seed_is_valid, pose_cont_sigma_is_enabled
 
 !> Cartesian-only local search starting from an initialized ptcl3D pose.
 !!
@@ -53,6 +53,15 @@ contains
 end type strategy3D_pose_cont
 
 contains
+
+    !> Use the Euclidean residual sigma lifecycle when the outer objective
+    !! requires it directly or explicitly requests it after CC assignment.
+    pure logical function pose_cont_sigma_is_enabled(objfun, emit_sigma) result(enabled)
+        integer, intent(in) :: objfun
+        character(len=*), intent(in) :: emit_sigma
+
+        enabled = objfun == OBJFUN_EUCLID .or. trim(emit_sigma) == 'yes'
+    end function pose_cont_sigma_is_enabled
 
     !> Return the completed transaction for matcher-level aggregate reporting.
     pure function get_pose_cont_result(self) result(result)
@@ -87,8 +96,8 @@ contains
         call self%kill
         if (trim(params%oritype) /= 'ptcl3D') &
             &THROW_HARD('strategy3D_pose_cont requires oritype=ptcl3D')
-        if (params%cc_objfun /= OBJFUN_EUCLID) &
-            &THROW_HARD('strategy3D_pose_cont requires objfun=euclid')
+        if (params%cc_objfun /= OBJFUN_EUCLID .and. params%cc_objfun /= OBJFUN_CC) &
+            &THROW_HARD('strategy3D_pose_cont supports only objfun=euclid or objfun=cc')
         if (trim(params%inpl_cont) /= 'no') &
             &THROW_HARD('strategy3D_pose_cont cannot execute with inpl_cont=yes')
         if (.not. associated(build%spproj_field)) &
@@ -147,7 +156,7 @@ contains
         complex, allocatable :: observed(:, :)
         real, allocatable :: sigma_contrib(:)
         integer :: eo, state
-        logical :: even
+        logical :: even, do_emit_sigma
 
         if (.not. self%exists .or. .not. self%context_bound) &
             &THROW_HARD('strategy3D_pose_cont requires initialized and bound context')
@@ -199,8 +208,12 @@ contains
             call pose_cont_pose_to_orientation(self%result%pose,self%p_ptr%box, &
                 &self%p_ptr%box_crop,self%output_ori)
         end if
-        call self%refs_ptr%sigma_contribution(state, even, terminal_pose, data, sigma_contrib)
-        call self%b_ptr%esig%set_particle_contribution(self%spec%iptcl, sigma_contrib)
+        do_emit_sigma = pose_cont_sigma_is_enabled(self%p_ptr%cc_objfun, &
+            &self%p_ptr%cc_emit_sigma)
+        if (do_emit_sigma) then
+            call self%refs_ptr%sigma_contribution(state, even, terminal_pose, data, sigma_contrib)
+            call self%b_ptr%esig%set_particle_contribution(self%spec%iptcl, sigma_contrib)
+        end if
         self%searched = .true.
         call self%oris_assign
         call input_ori%kill
