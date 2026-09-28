@@ -6,10 +6,11 @@
 ! with a valid checksum; an input the format cannot hold leaves the manifest
 ! unpublished instead of stopping the run; the registered manifest of a
 ! project (a bare name resolves against the project file's own directory, an
-! absolute one is kept, the registered run identifier must match); the replay
-! of the base run's settings onto a command line; and the frozen-project
-! validation (an eligible add-on output is a frozen input, so add-ons chain)
-! with its negative cases: an ineligible or foreign manifest, a
+! absolute one is kept, the registered run identifier must match); paths longer
+! than 256 characters (an artifact under a deep directory, a path-valued input)
+! kept whole; the replay of the base run's settings onto a command line; and
+! the frozen-project validation (an eligible add-on output is a frozen input,
+! so add-ons chain) with its negative cases: an ineligible or foreign manifest, a
 ! missing state map, a changed particle layout, stack table, optics/CTF
 ! parameters or final map, and another particle count. In-memory projects, one
 ! 8-pixel map and one small sigma2 stand-in file whose name has blanks.
@@ -18,6 +19,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_defs,                only: STDLEN
 use simple_string,              only: string
 use simple_fileio,              only: del_file, file_exists, fopen, fclose
+use simple_syslib,              only: simple_mkdir, simple_rmdir
 use simple_image,               only: image
 use simple_cmdline,             only: cmdline
 use simple_sp_project,          only: sp_project
@@ -44,6 +46,7 @@ contains
         call test_round_trip()
         call test_file_refusals()
         call test_registration()
+        call test_long_paths()
         call test_replay()
         call test_frozen_validation()
         call del_file(VOL_FNAME)
@@ -72,10 +75,11 @@ contains
 
     !> a completed eligible abinitio3D run of nstates over spproj, built the way
     !! exec_abinitio3D builds it; its artifacts are those spproj registers
-    subroutine make_manifest( man, spproj, nstates )
-        type(abinitio3D_manifest), intent(inout) :: man
-        type(sp_project),          intent(inout) :: spproj
-        integer,                   intent(in)    :: nstates
+    subroutine make_manifest( man, spproj, nstates, vol1 )
+        type(abinitio3D_manifest),  intent(inout) :: man
+        type(sp_project),           intent(inout) :: spproj
+        integer,                    intent(in)    :: nstates
+        character(len=*), optional, intent(in)    :: vol1  !< the starting-volume input (a path)
         type(cmdline) :: cl
         call man%new(RUN_ID, 'abinitio3D', .true., spproj, 'raw')
         call man%set_solution(nstates, 'c3', 128, 1.3, 180., 'independent', 6)
@@ -85,7 +89,11 @@ contains
         call cl%set('pgrp',        'c3')
         call cl%set('rec_backend', 'pcg')
         call cl%set('lpstop',      6.)
-        call cl%set('vol1',        '/abs/refs/startvol_state01.mrc')
+        if( present(vol1) )then
+            call cl%set('vol1',    vol1)
+        else
+            call cl%set('vol1',    '/abs/refs/startvol_state01.mrc')
+        endif
         call cl%set('nthr',        8)    ! not a manifest input key
         call man%record_inputs(cl)
         call man%record_artifacts(spproj)
@@ -395,6 +403,55 @@ contains
         call back%kill
         call spproj%kill
     end subroutine test_registration
+
+    ! paths longer than the old 256-character record fields: the sigma2 state under a
+    ! deep directory (an artifact, with blanks in its name) and a long path-valued input
+    ! are recorded, read back and written again whole
+    subroutine test_long_paths()
+        character(len=*), parameter :: DIR1       = 'tmp_abinitio3D_manifest_tester_'//repeat('a', 120)
+        character(len=*), parameter :: DIR2       = DIR1//'/'//repeat('b', 120)
+        character(len=*), parameter :: LONG_SIGMA = DIR2//'/tester sigma2 with blanks.bin'
+        character(len=*), parameter :: LONG_VOL1  = '/abs/'//repeat('refs/', 60)//'startvol_state01.mrc'
+        type(abinitio3D_manifest) :: man, back
+        type(sp_project)          :: spproj
+        type(string)              :: path
+        character(len=STDLEN)     :: msg
+        logical                   :: found
+        integer                   :: status
+        write(*,'(A)') 'test_long_paths'
+        call simple_mkdir(DIR1)
+        call simple_mkdir(DIR2)
+        call make_project(spproj)
+        call write_lines(LONG_SIGMA, [character(len=1024) :: 'sigma2 stand-in under a deep directory'])
+        call spproj%projinfo%set(1, 'sigma2_state', LONG_SIGMA)
+        call make_manifest(man, spproj, 2, vol1=LONG_VOL1)
+        call man%write(string(MAN_FNAME), status, msg)
+        call assert_int(0, status, 'a manifest with paths over 256 characters is written: '//trim(msg))
+        call back%read(string(MAN_FNAME), status, msg)
+        call assert_int(0, status, 'a manifest with paths over 256 characters reads back: '//trim(msg))
+        call back%get_artifact('sigma2_state', 0, path, found)
+        call assert_true(found, 'the sigma2 state under a deep directory is recorded')
+        if( found )then
+            ! the project registers the path absolute, so the recorded one only grows
+            call assert_true(path%strlen() > 256 .and. path%ends_with_substr(LONG_SIGMA), &
+                &'an artifact path over 256 characters round trips whole')
+            call assert_true(back%matches_artifact('sigma2_state', 0, path), &
+                &'the long artifact path names the recorded file')
+        endif
+        call assert_true(file_contains(MAN_FNAME, 'input vol1 '//LONG_VOL1), &
+            &'a path-valued input over 256 characters is recorded whole')
+        call back%write(string(MAN_FNAME2), status, msg)
+        call assert_true(same_text(MAN_FNAME, MAN_FNAME2), 'a manifest with long paths round trips exactly')
+        call del_file(MAN_FNAME)
+        call del_file(MAN_FNAME2)
+        call del_file(LONG_SIGMA)
+        call simple_rmdir(DIR2)
+        call simple_rmdir(DIR1)
+        call man%kill
+        call back%kill
+        call spproj%kill
+        call path%kill
+    end subroutine test_long_paths
 
     subroutine test_replay()
         type(abinitio3D_manifest) :: man

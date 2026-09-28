@@ -27,8 +27,7 @@ integer,          parameter :: MANIFEST_VERSION      = 1
 character(len=*), parameter :: MANIFEST_FNAME        = 'abinitio3D_manifest.txt'
 character(len=*), parameter :: MANIFEST_PROJINFO_KEY = 'abinitio3D_manifest'
 character(len=*), parameter :: RUN_ID_PROJINFO_KEY   = 'abinitio3D_run_id'
-integer,          parameter :: KLEN = 24, VLEN = 256
-integer,          parameter :: LINELEN = 1024 !< one manifest record
+integer,          parameter :: KLEN = 24
 
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
@@ -88,12 +87,12 @@ type :: abinitio3D_manifest
     type(abinitio3D_stage_record), allocatable :: stages(:)
     ! inputs as given
     character(len=KLEN), allocatable :: input_keys(:)
-    character(len=VLEN), allocatable :: input_vals(:)
+    type(string),        allocatable :: input_vals(:)
     ! artifacts: kind, state, digest, path
     character(len=16),   allocatable :: artifact_kind(:)
     integer,             allocatable :: artifact_state(:)
     integer(int64),      allocatable :: artifact_digest(:)
-    character(len=VLEN), allocatable :: artifact_path(:)
+    type(string),        allocatable :: artifact_path(:)
     ! a record the text format cannot hold; write refuses to publish
     character(len=STDLEN) :: defect = ''
   contains
@@ -215,9 +214,9 @@ contains
     end subroutine set_ladder
 
     !> The MANIFEST_INPUT_KEYS given on the run's entry command line, as
-    !! given. A value the text format cannot hold (empty, with blanks or
-    !! longer than a record value) makes the manifest defective: write then
-    !! refuses to publish it, and the completed run is left as it is.
+    !! given. A value the text format cannot hold (empty or with blanks) makes
+    !! the manifest defective: write then refuses to publish it, and the
+    !! completed run is left as it is.
     subroutine record_inputs( self, cline )
         class(abinitio3D_manifest), intent(inout) :: self
         class(cmdline),             intent(in)    :: cline
@@ -231,8 +230,8 @@ contains
             if( .not. descr%isthere(key) ) cycle
             val = descr%get(key)
             raw = trim(val%to_char())
-            if( len(raw) == 0 .or. index(raw, ' ') > 0 .or. len(raw) > VLEN )then
-                if( len_trim(self%defect) == 0 ) self%defect = 'input '//key//' cannot be recorded (empty, blanks or too long)'
+            if( len(raw) == 0 .or. index(raw, ' ') > 0 )then
+                if( len_trim(self%defect) == 0 ) self%defect = 'input '//key//' cannot be recorded (empty or with blanks)'
                 cycle
             endif
             call self%add_input(key, raw)
@@ -253,21 +252,21 @@ contains
         do state = 1, self%nstates
             if( .not. spproj%isthere_in_osout('vol', state) ) cycle
             call spproj%get_vol('vol', state, fname, smpd_vol, box_vol)
-            call self%add_artifact('vol', state, sigma2_state_digest_file(fname), fname%to_char())
+            call self%add_artifact('vol', state, sigma2_state_digest_file(fname), fname)
             halfvol = add2fbody(fname, MRC_EXT, '_even')
             if( file_exists(halfvol) ) &
-                &call self%add_artifact('vol_even', state, sigma2_state_digest_file(halfvol), halfvol%to_char())
+                &call self%add_artifact('vol_even', state, sigma2_state_digest_file(halfvol), halfvol)
             halfvol = add2fbody(fname, MRC_EXT, '_odd')
             if( file_exists(halfvol) ) &
-                &call self%add_artifact('vol_odd', state, sigma2_state_digest_file(halfvol), halfvol%to_char())
+                &call self%add_artifact('vol_odd', state, sigma2_state_digest_file(halfvol), halfvol)
             if( spproj%isthere_in_osout('fsc', state) )then
                 call spproj%get_fsc(state, fname, box_vol)
-                call self%add_artifact('fsc', state, sigma2_state_digest_file(fname), fname%to_char())
+                call self%add_artifact('fsc', state, sigma2_state_digest_file(fname), fname)
             endif
         enddo
         call spproj%get_sigma2_state_path(fname, found)
         if( found .and. file_exists(fname) ) &
-            &call self%add_artifact('sigma2_state', 0, sigma2_state_digest_file(fname), fname%to_char())
+            &call self%add_artifact('sigma2_state', 0, sigma2_state_digest_file(fname), fname)
         call fname%kill
         call halfvol%kill
     end subroutine record_artifacts
@@ -276,8 +275,8 @@ contains
         class(abinitio3D_manifest), intent(inout) :: self
         character(len=*),           intent(in)    :: key, val
         character(len=KLEN), allocatable :: keys(:)
-        character(len=VLEN), allocatable :: vals(:)
-        integer :: n
+        type(string),        allocatable :: vals(:)
+        integer                          :: n
         if( .not. allocated(self%input_keys) )then
             allocate(self%input_keys(0), self%input_vals(0))
         endif
@@ -293,14 +292,15 @@ contains
 
     subroutine add_artifact( self, kind, state, digest, path )
         class(abinitio3D_manifest), intent(inout) :: self
-        character(len=*),           intent(in)    :: kind, path
+        character(len=*),           intent(in)    :: kind
         integer,                    intent(in)    :: state
         integer(int64),             intent(in)    :: digest
-        character(len=16),   allocatable :: kinds(:)
-        integer,             allocatable :: states(:)
-        integer(int64),      allocatable :: digests(:)
-        character(len=VLEN), allocatable :: paths(:)
-        integer :: n
+        class(string),              intent(in)    :: path
+        character(len=16), allocatable :: kinds(:)
+        integer,           allocatable :: states(:)
+        integer(int64),    allocatable :: digests(:)
+        type(string),      allocatable :: paths(:)
+        integer                        :: n
         if( .not. allocated(self%artifact_kind) )then
             allocate(self%artifact_kind(0), self%artifact_state(0), self%artifact_digest(0), self%artifact_path(0))
         endif
@@ -325,21 +325,20 @@ contains
         class(string),              intent(in)  :: fname
         integer,                    intent(out) :: status
         character(len=*),           intent(out) :: msg
-        character(len=LINELEN), allocatable :: lines(:)
-        type(string)   :: tmpname
-        integer(int64) :: checksum
-        integer :: funit, io_stat, i, n
+        type(string), allocatable :: lines(:)
+        type(string)              :: tmpname
+        integer(int64)            :: checksum
+        integer                   :: funit, io_stat, i, n
         status = 1
         msg    = ''
         if( len_trim(self%defect) > 0 )then
             msg = trim(self%defect)
             return
         endif
-        call self%build_lines(lines, msg)
-        if( len_trim(msg) > 0 ) return
+        call self%build_lines(lines)
         checksum = sigma2_state_digest_begin()
         do i = 1, size(lines)
-            call sigma2_state_digest_text(checksum, trim(lines(i)))
+            call sigma2_state_digest_text(checksum, lines(i)%to_char())
         enddo
         tmpname = fname//'.tmp'
         call del_file(tmpname)
@@ -350,7 +349,7 @@ contains
         endif
         n = size(lines)
         do i = 1, n
-            write(funit,'(A)',iostat=io_stat) trim(lines(i))
+            write(funit,'(A)',iostat=io_stat) lines(i)%to_char()
             if( io_stat /= 0 ) exit
         enddo
         if( io_stat == 0 ) write(funit,'(A,1X,A)',iostat=io_stat) 'checksum', trim(int64_str(checksum))
@@ -369,16 +368,14 @@ contains
         call tmpname%kill
     end subroutine write
 
-    !> the records of the manifest; msg names a record too long for the format
-    subroutine build_lines( self, lines, msg )
-        class(abinitio3D_manifest),          intent(in)  :: self
-        character(len=LINELEN), allocatable, intent(out) :: lines(:)
-        character(len=*),                    intent(out) :: msg
-        character(len=LINELEN), allocatable :: buf(:)
-        integer :: n, i
+    !> the records of the manifest
+    subroutine build_lines( self, lines )
+        class(abinitio3D_manifest), intent(in)  :: self
+        type(string), allocatable,  intent(out) :: lines(:)
+        type(string), allocatable     :: buf(:)
+        integer                       :: n, i
         type(abinitio3D_stage_record) :: st
-        n   = 0
-        msg = ''
+        n = 0
         allocate(buf(512))
         call push(MANIFEST_SCHEMA//' '//int2str(MANIFEST_VERSION))
         call push('run_id '//trim(self%run_id))
@@ -419,13 +416,13 @@ contains
         endif
         if( allocated(self%input_keys) )then
             do i = 1, size(self%input_keys)
-                call push('input '//trim(self%input_keys(i))//' '//trim(self%input_vals(i)))
+                call push('input '//trim(self%input_keys(i))//' '//self%input_vals(i)%to_char())
             enddo
         endif
         if( allocated(self%artifact_kind) )then
             do i = 1, size(self%artifact_kind)
                 call push('artifact '//trim(self%artifact_kind(i))//' '//int2str(self%artifact_state(i))//' '// &
-                    &trim(int64_str(self%artifact_digest(i)))//' '//trim(self%artifact_path(i)))
+                    &trim(int64_str(self%artifact_digest(i)))//' '//self%artifact_path(i)%to_char())
             enddo
         endif
         call push('end')
@@ -436,18 +433,14 @@ contains
 
         subroutine push( line )
             character(len=*), intent(in) :: line
-            character(len=LINELEN), allocatable :: grown(:)
-            if( len_trim(line) > LINELEN )then
-                if( len_trim(msg) == 0 ) msg = 'abinitio3D manifest record is too long: '//line(1:32)
-                return
-            endif
+            type(string), allocatable :: grown(:)
             if( n >= size(buf) )then
                 allocate(grown(2*size(buf)))
                 grown(1:n) = buf(1:n)
                 call move_alloc(grown, buf)
             endif
             n = n + 1
-            buf(n) = line
+            buf(n) = trim(line)
         end subroutine push
 
     end subroutine build_lines
@@ -462,12 +455,13 @@ contains
         class(string),              intent(in)    :: fname
         integer,                    intent(out)   :: status
         character(len=*),           intent(out)   :: msg
-        character(len=LINELEN) :: line, rest, val
-        character(len=64)  :: key, word, word2
-        character(len=24)  :: flag
-        integer(int64)     :: checksum, checksum_file
-        integer :: funit, io_stat, io_stat_tail, version, istage, nstages, state, pos
-        logical :: l_end, l_checksum
+        type(string)                  :: rec
+        character(len=:), allocatable :: line, rest, val
+        character(len=64)             :: key, word, word2
+        character(len=24)             :: flag
+        integer(int64)                :: checksum, checksum_file
+        integer                       :: funit, io_stat, io_stat_tail, version, istage, nstages, state, pos
+        logical                       :: l_end, l_checksum
         call self%kill
         status     = 1
         msg        = ''
@@ -484,8 +478,11 @@ contains
             return
         endif
         checksum = sigma2_state_digest_begin()
-        read(funit,'(A)',iostat=io_stat) line
-        if( io_stat == 0 ) read(line,*,iostat=io_stat) word, version
+        call rec%readline(funit, io_stat)
+        if( io_stat == 0 )then
+            line = rec%to_char()
+            read(line,*,iostat=io_stat) word, version
+        endif
         if( io_stat /= 0 .or. trim(word) /= MANIFEST_SCHEMA )then
             msg = 'not an abinitio3D manifest'
             call fclose(funit)
@@ -498,8 +495,9 @@ contains
         endif
         call sigma2_state_digest_text(checksum, trim(line))
         do
-            read(funit,'(A)',iostat=io_stat) line
+            call rec%readline(funit, io_stat)
             if( io_stat /= 0 ) exit
+            line = rec%to_char()
             if( len_trim(line) == 0 ) cycle
             read(line,*,iostat=io_stat) key
             if( io_stat /= 0 ) exit
@@ -583,7 +581,7 @@ contains
                         endif
                         pos = index(rest, trim(word)) + len_trim(word)
                         val = adjustl(rest(pos:))
-                        if( len_trim(val) == 0 .or. index(trim(val), ' ') > 0 .or. len_trim(val) > VLEN )then
+                        if( len_trim(val) == 0 .or. index(trim(val), ' ') > 0 )then
                             io_stat = 1
                         else
                             call self%add_input(trim(word), trim(val))
@@ -594,7 +592,7 @@ contains
                     if( io_stat == 0 )then
                         ! the path is the rest of the record after the digest
                         pos = index(rest, trim(int64_str(checksum_file))) + len_trim(int64_str(checksum_file))
-                        call self%add_artifact(trim(word), state, checksum_file, trim(adjustl(rest(pos:))))
+                        call self%add_artifact(trim(word), state, checksum_file, string(trim(adjustl(rest(pos:)))))
                     endif
                 case('end')
                     l_end = .true.
@@ -609,9 +607,9 @@ contains
         if( l_checksum .and. len_trim(msg) == 0 )then
             ! the checksum line is the last record
             do
-                read(funit,'(A)',iostat=io_stat_tail) line
+                call rec%readline(funit, io_stat_tail)
                 if( io_stat_tail /= 0 ) exit
-                if( len_trim(line) > 0 )then
+                if( rec%strlen_trim() > 0 )then
                     msg = 'abinitio3D manifest has records after its checksum'
                     exit
                 endif
@@ -778,13 +776,14 @@ contains
     subroutine replay( self, cline )
         class(abinitio3D_manifest), intent(in)    :: self
         class(cmdline),             intent(inout) :: cline
-        character(len=VLEN) :: val
-        logical :: found
-        integer :: i
+        type(string) :: val
+        logical      :: found
+        integer      :: i
         do i = 1, size(MANIFEST_REPLAY_KEYS)
             call self%get_input(trim(MANIFEST_REPLAY_KEYS(i)), val, found)
-            if( found ) call cline%set_from_text(trim(MANIFEST_REPLAY_KEYS(i)), trim(val))
+            if( found ) call cline%set_from_text(trim(MANIFEST_REPLAY_KEYS(i)), val%to_char())
         enddo
+        call val%kill
         ! the particle source the frozen solution was reconstructed from, even
         ! when it came from the default
         call cline%set('ptcl_src', trim(self%ptcl_src))
@@ -812,7 +811,7 @@ contains
         call fname%kill
         ind   = self%find_artifact(kind, state)
         found = ind > 0
-        if( found ) fname = trim(self%artifact_path(ind))
+        if( found ) fname = self%artifact_path(ind)
     end subroutine get_artifact
 
     !> the file carries the digest recorded for the artifact (kind, state)
@@ -832,12 +831,12 @@ contains
 
     !> the recorded value of an input key; found=.false. when the base run did not give it
     subroutine get_input( self, key, val, found )
-        class(abinitio3D_manifest), intent(in)  :: self
-        character(len=*),           intent(in)  :: key
-        character(len=*),           intent(out) :: val
-        logical,                    intent(out) :: found
+        class(abinitio3D_manifest), intent(in)    :: self
+        character(len=*),           intent(in)    :: key
+        type(string),               intent(inout) :: val
+        logical,                    intent(out)   :: found
         integer :: i
-        val   = ''
+        call val%kill
         found = .false.
         if( .not. allocated(self%input_keys) ) return
         do i = 1, size(self%input_keys)
