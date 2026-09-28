@@ -208,15 +208,10 @@ class TemplateIntegrationTests(SimpleTestCase):
     def test_file_browser_openers_forward_current_input_path(self):
         jobbuilder = self._read_template("jobbuilder.html")
         newproject = self._read_template("newproject.html")
-        classic_newjob = self._read_template("nice_classic/newjob.html")
-
         self.assertIn('params.set("selectedpath", selectedPath)', jobbuilder)
         self.assertIn('jobsIframe.setAttribute("src", browserUrl + "?" + params.toString())', jobbuilder)
         self.assertIn('onclick="openProjectDirectoryBrowser(this)"', newproject)
         self.assertIn('params.set("selectedpath", selectedPath)', newproject)
-        self.assertIn('onclick="openClassicFileBrowser(this, \'dir\')"', classic_newjob)
-        self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
-        self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
 
     def test_jobbuilder_converts_dropped_file_uris_to_paths(self):
         jobbuilder = self._read_template("jobbuilder.html")
@@ -312,10 +307,9 @@ class TemplateIntegrationTests(SimpleTestCase):
         filebrowser = self._read_template("filebrowser.html")
         jobbuilder = self._read_template("jobbuilder.html")
         newproject = self._read_template("newproject.html")
-        classic_newjob = self._read_template("nice_classic/newjob.html")
 
         self.assertIn('localStorage.setItem(FILE_BROWSER_LAST_DIRECTORY_KEY, directoryToRemember)', filebrowser)
-        for opener in (jobbuilder, newproject, classic_newjob):
+        for opener in (jobbuilder, newproject):
             self.assertIn('localStorage.getItem("niceFileBrowserLastDirectory")', opener)
             self.assertIn('params.set("remembered", "1")', opener)
 
@@ -690,26 +684,33 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(jobbuilder.count('if (actions) actions.classList.remove("hidden");'), 2)
 
     def test_batch_cards_reuse_stream_stop_and_delete_controls(self):
-        batch_card = self._read_template("nice_classic/_batch_card.html")
+        batch_card = self._read_template("nice_batch/includes/_batch_card.html")
         batch_footer = self._read_template("includes/_job_card_footer.html")
         jobs = self._read_template("jobs_cards.html")
         jobs_table = self._read_template("jobs_table.html")
 
-        self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_card)
-        self.assertIn('onclick="stopBatchJob(this)"', batch_card)
-        self.assertIn('<circle cx="8" cy="8" r="6"/>', batch_card)
-        self.assertIn('<rect x="5.5" y="5.5" width="5" height="5"', batch_card)
-        self.assertIn("{% url 'nice_lite:delete_batch' %}", batch_card)
-        self.assertIn('onclick="deleteBatchJob(this)"', batch_card)
-        self.assertIn('<polyline points="2,4 14,4"/>', batch_card)
-        self.assertIn('<path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>', batch_card)
+        self.assertIn(
+            "{% include 'includes/_job_card_footer.html' with card_type='batch' %}",
+            batch_card,
+        )
+        self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_footer)
+        self.assertIn('onclick="stopBatchJob(this)"', batch_footer)
+        self.assertIn('<circle cx="8" cy="8" r="6"/>', batch_footer)
+        self.assertIn('<rect x="5.5" y="5.5" width="5" height="5"', batch_footer)
+        self.assertIn("{% url 'nice_lite:delete_batch' %}", batch_footer)
+        self.assertIn('onclick="deleteBatchJob(this)"', batch_footer)
+        self.assertIn('<polyline points="2,4 14,4"/>', batch_footer)
+        self.assertIn(
+            '<path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>',
+            batch_footer,
+        )
         self.assertIn("const stopBatchJob = (button) => {", jobs)
         self.assertIn("{% url 'nice_lite:finish_batch' %}", batch_footer)
         self.assertIn('onclick="markBatchJobFinished(this)"', batch_footer)
         self.assertIn("const markBatchJobFinished = (button) => {", jobs)
-        self.assertIn("{% url 'nice_lite:clone_batch' %}", batch_card)
-        self.assertIn('target="job_builder_iframe"', batch_card)
-        self.assertIn('<button type="submit"', batch_card)
+        self.assertIn("{% url 'nice_lite:clone_batch' %}", batch_footer)
+        self.assertIn('target="job_builder_iframe"', batch_footer)
+        self.assertIn('<button type="submit"', batch_footer)
         self.assertNotIn("const rerunBatchJob = (button) => {", jobs)
         self.assertIn("{% url 'nice_lite:clone_batch' %}", jobs_table)
         self.assertIn('target="job_builder_iframe"', jobs_table)
@@ -807,33 +808,28 @@ class TemplateIntegrationTests(SimpleTestCase):
         }
 
         context = {"job": job}
-        running = render_to_string("nice_classic/_batch_card.html", context)
+        running = render_to_string("nice_batch/includes/_batch_card.html", context)
         job["status"] = "queued"
-        queued = render_to_string("nice_classic/_batch_card.html", context)
+        queued = render_to_string("nice_batch/includes/_batch_card.html", context)
         job["status"] = "finished"
-        finished = render_to_string("nice_classic/_batch_card.html", context)
-        self.assertIn('title="stop batch job"', running)
-        self.assertNotIn('title="delete batch job"', running)
-        self.assertIn("rounded-full bg-streamaction/10 text-streamaction", running)
-        self.assertNotIn("w-1.5 h-1.5", running)
-        self.assertLess(
-            running.index('title="stop batch job"'),
-            running.index('job directory'),
-        )
-        self.assertNotIn('title="stop batch job"', queued)
-        self.assertNotIn('title="rerun batch job"', queued)
-        self.assertIn('title="delete batch job"', queued)
-        self.assertIn("rounded-full bg-streamline/40 text-streamlabel", queued)
-        self.assertNotIn('title="stop batch job"', finished)
-        self.assertIn('title="rerun batch job"', finished)
-        self.assertIn('title="delete batch job"', finished)
-        self.assertIn("rounded-full bg-streamring/10 text-streamaccent", finished)
-        self.assertLess(
-            finished.index('title="delete batch job"'),
-            finished.index('job directory'),
-        )
+        finished = render_to_string("nice_batch/includes/_batch_card.html", context)
 
-    def test_batch_card_always_links_to_detail_view(self):
+        self.assertIn('title="stop batch job"', running)
+        self.assertIn('title="clone batch job"', running)
+        self.assertNotIn('title="mark batch job finished"', running)
+        self.assertNotIn('title="delete batch job"', running)
+
+        self.assertNotIn('title="stop batch job"', queued)
+        self.assertIn('title="mark batch job finished"', queued)
+        self.assertIn('title="clone batch job"', queued)
+        self.assertIn('title="delete batch job"', queued)
+
+        self.assertNotIn('title="stop batch job"', finished)
+        self.assertNotIn('title="mark batch job finished"', finished)
+        self.assertIn('title="clone batch job"', finished)
+        self.assertIn('title="delete batch job"', finished)
+
+    def test_active_batch_card_submits_to_detail_route(self):
         job = {
             "id": 7,
             "disp": 1,
@@ -846,36 +842,23 @@ class TemplateIntegrationTests(SimpleTestCase):
             "status": "finished",
         }
 
-        rendered = render_to_string("nice_classic/_batch_card.html", {"job": job})
+        rendered = render_to_string(
+            "nice_batch/includes/_batch_card.html",
+            {"job": job},
+        )
 
-        self.assertIn('href="/viewbatch/7"', rendered)
+        self.assertIn('action="/viewbatch/7"', rendered)
         self.assertIn('target="_parent"', rendered)
-        self.assertIn('aria-label="view batch job 1 Import Movie Data"', rendered)
-        self.assertNotIn('<circle cx="8" cy="8" r="3"', rendered)
+        self.assertIn('class="viewform hidden"', rendered)
+        self.assertNotIn("class_selector", rendered)
 
-        job["name"] = "Create 2D Class Averages"
         job["prog"] = "abinitio2D"
         class_average_rendered = render_to_string(
-            "nice_classic/_batch_card.html",
+            "nice_batch/includes/_batch_card.html",
             {"job": job},
         )
-
-        self.assertIn(
-            'href="/viewbatch/7?class_selector=1"',
-            class_average_rendered,
-        )
-
-        job["name"] = "Initial 3D Reconstruction"
-        job["prog"] = "abinitio3D"
-        volume_rendered = render_to_string(
-            "nice_classic/_batch_card.html",
-            {"job": job},
-        )
-
-        self.assertIn(
-            'href="/viewbatch/7?volume_viewer=1#batch_volume_viewer"',
-            volume_rendered,
-        )
+        self.assertIn('action="/viewbatch/7"', class_average_rendered)
+        self.assertNotIn("class_selector", class_average_rendered)
 
     def test_active_abinitio3d_batch_card_opens_volume_output(self):
         job = {
@@ -1008,157 +991,70 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('input.dataset.artifactDropType === artifact.dataType', jobbuilder)
         self.assertIn('applyDroppedFilePath(input, artifact.path);', jobbuilder)
 
-    def test_batch_detail_template_has_common_result_and_log_panels(self):
-        batch_view = self._read_template("nice_classic/batchview.html")
-
-        rendered = render_to_string("nice_classic/batchview.html", {
-            "jobid": 7,
-            "disp": 1,
-            "name": "Import Movie Data",
-            "desc": "",
-            "status": "finished",
-            "created": "today",
-            "package": "simple",
-            "program": "import_movies",
-            "project": "project",
-            "workspace": "workspace",
-            "job_dir": "/project/workspace/1_import_movies",
-            "source_label": "workspace project",
-            "arguments": [
-                {
-                    "key": "nthr",
-                    "label": "Number of threads",
-                    "value": "4",
-                    "origin": "submitted",
-                    "submitted": True,
-                },
-                {
-                    "key": "scale",
-                    "label": "Scale",
-                    "value": 1.5,
-                    "origin": "default",
-                    "submitted": False,
-                },
-                {
-                    "key": "mskdiam",
-                    "label": "Mask diameter",
-                    "value": None,
-                    "origin": "unset",
-                    "submitted": False,
-                },
-            ],
-            "submitted_argument_count": 1,
-            "result_project": None,
-            "project_sections": [],
-            "project_summary_available": False,
-            "logs": [
-                {
-                    "name": "stdout.log",
-                    "label": "standard output",
-                    "exists": True,
-                    "size": 12,
-                    "truncated": False,
-                    "text": "output",
-                },
-                {
-                    "name": "stderr.log",
-                    "label": "standard error",
-                    "exists": False,
-                    "size": 0,
-                    "truncated": False,
-                    "text": "",
-                },
-                {
-                    "name": "nice_status.log",
-                    "label": "NICE status callbacks",
-                    "exists": True,
-                    "size": 8,
-                    "truncated": False,
-                    "text": "running",
-                },
-            ],
-            "artifact_counts": [],
-            "artifact_images": [],
-            "auto_refresh": False,
-        })
-
-        self.assertIn("job overview", batch_view)
-        self.assertIn("submitted arguments", batch_view)
-        self.assertIn("project results", batch_view)
-        self.assertIn("<span>output</span>", batch_view)
-        self.assertIn("{% for log in logs %}", batch_view)
-        self.assertIn("{% if auto_refresh %}", batch_view)
-        self.assertIn("Import Movie Data", rendered)
-        self.assertIn("Number of threads", rendered)
-        self.assertNotIn(">nthr</dt>", rendered)
-        self.assertIn('id="argument_view_toggle"', rendered)
-        self.assertIn('type="checkbox" role="switch"', rendered)
-        self.assertIn('aria-label="show all arguments"', rendered)
-        self.assertIn('data-argument-view-label="all"', rendered)
-        self.assertNotIn('data-argument-view-label="submitted"', rendered)
-        self.assertLess(
-            rendered.index('data-argument-view-label="all"'),
-            rendered.index('id="argument_view_toggle"'),
-        )
-        self.assertNotIn('id="submitted_arguments_button"', rendered)
-        self.assertNotIn('id="all_arguments_button"', rendered)
-        self.assertIn('batchArgumentViewToggle.addEventListener("change"', rendered)
-        self.assertIn('batchArgumentViewToggle.checked ? "all" : "submitted"', rendered)
-        self.assertIn('sessionStorage.getItem(batchArgumentViewStorageKey)', rendered)
-        self.assertIn('data-submitted="false"', rendered)
-        self.assertIn("Scale", rendered)
-        self.assertIn("Mask diameter", rendered)
-        self.assertIn("not set", rendered)
-        self.assertIn("standard output", rendered)
-        self.assertIn("standard error", rendered)
-        self.assertIn("NICE status callbacks", rendered)
-
     def test_active_batch_detail_has_opt_in_molstar_volume_viewer(self):
         batch_view = self._read_template("nice_batch/batchview.html")
-        volume_viewer = self._read_template("includes/_volume_viewer.html")
-        viewer_3d = self._read_template("includes/_3D_viewer.html")
+        cls3d_viewer = self._read_template("includes/_cls3D_viewer.html")
+        state_detail = self._read_template("includes/_cls3D_state_detail.html")
+        volume_viewer = self._read_template("includes/_cls3D_volume_viewer.html")
+        volume_output = {
+            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "name": "recvol_state01.mrc",
+            "stage": "stage1",
+            "state": 1,
+            "kind": "volpath",
+            "width": 256,
+            "height": 256,
+            "depth": 256,
+            "voxel_size": (1.3, 1.3, 1.3),
+            "minimum": -2.0,
+            "maximum": 8.0,
+        }
+        stage = {
+            "key": "stage1",
+            "states": [{"state": 1}],
+            "volume_outputs": [volume_output],
+            "volume_kinds": [{"key": "volpath", "label": "volume"}],
+        }
         context = {
             "jobid": 7,
             "disp": 9,
             "name": "Initial 3D Reconstruction",
             "desc": "",
+            "prog": "abinitio3D",
             "proj": "project",
             "dset": "workspace",
             "args": {},
             "created": "today",
             "folder": "/workspace/9_abinitio3D",
-            "jobstats": {},
+            "jobstats": {"cls3D": {"stage1": [{"state": 1}]}},
+            "cls3d_stages": [stage],
             "log": [],
             "error": None,
             "arguments": [],
             "submitted_argument_count": 0,
             "volume_viewer_requested": True,
-            "volume_outputs": [{
-                "name": "recvol_state01.mrc",
-                "state": 1,
-                "width": 256,
-                "height": 256,
-                "depth": 256,
-                "voxel_size": (1.3, 1.3, 1.3),
-                "minimum": -2.0,
-                "maximum": 8.0,
-            }],
+            "volume_outputs": [volume_output],
         }
 
         rendered = render_to_string("nice_batch/batchview.html", context)
 
-        self.assertIn("{% include 'includes/_volume_viewer.html'", batch_view)
+        self.assertIn("{% include 'includes/_cls3D_viewer.html'", batch_view)
+        self.assertIn(
+            "{% include 'includes/_cls3D_state_detail.html'",
+            cls3d_viewer,
+        )
+        self.assertIn(
+            "{% include 'includes/_cls3D_volume_viewer.html' %}",
+            state_detail,
+        )
+        self.assertIn("{% include 'includes/_slider.html'", volume_viewer)
         self.assertIn('data-panel-target="volume3D"', rendered)
-        self.assertIn("<span>3D volume</span>", rendered)
+        self.assertIn("<span>3D volumes</span>", rendered)
         self.assertIn('data-panel="volume3D"', rendered)
-        self.assertIn('id="batch_volume_viewer"', rendered)
-        self.assertIn("{% include 'includes/_3D_viewer.html' %}", volume_viewer)
-        self.assertIn("{% include 'includes/_slider.html'", viewer_3d)
-        self.assertIn("data-basic-3d-viewer", viewer_3d)
+        self.assertIn("data-basic-3d-viewer", volume_viewer)
         self.assertIn("data-volume-molstar", rendered)
         self.assertIn("data-volume-isovalue", rendered)
         self.assertIn("data-volume-isovalue-text", rendered)
-        self.assertIn('value="/batchvolume/7/recvol_state01.mrc"', rendered)
         self.assertIn("molstar@5.11.0/build/viewer/molstar.css", rendered)
         self.assertIn("molstar@5.11.0/build/viewer/molstar.js", rendered)
         self.assertIn("nice_lite/molstar_volume_viewer.js", rendered)
@@ -1166,8 +1062,10 @@ class TemplateIntegrationTests(SimpleTestCase):
 
         context["volume_viewer_requested"] = False
         context["volume_outputs"] = []
+        stage["volume_outputs"] = []
+        stage["volume_kinds"] = []
         default_off = render_to_string("nice_batch/batchview.html", context)
 
-        self.assertNotIn('data-panel-target="volume3D"', default_off)
-        self.assertNotIn('id="batch_volume_viewer"', default_off)
+        self.assertIn('data-panel-target="volume3D"', default_off)
+        self.assertNotIn("data-volume-molstar", default_off)
         self.assertNotIn("molstar@5.11.0", default_off)

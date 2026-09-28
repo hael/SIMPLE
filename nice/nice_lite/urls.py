@@ -86,11 +86,6 @@ urlpatterns = [
         batch_views.view_batch_class_selection_run,
         name="batch_class_selection_run",
     ),
-    path(
-        "batchclass/<int:jobid>/selection",
-        batch_views.view_batch_class_2D_selection,
-        name="batch_classification_2D_selection",
-    ),
     path("selectbatchmicrograph/<int:jobid>", batch_views.view_batch_micrograph_selection,    name="batch_micrograph_selection"), 
     path("selectbatchcls2d/<int:jobid>",      batch_views.view_batch_class_2D_selection,      name="batch_cls2D_selection"),
     path("selectbatchcls3d/<int:jobid>",      batch_views.view_batch_class_3D_selection,      name="batch_cls3D_selection"),

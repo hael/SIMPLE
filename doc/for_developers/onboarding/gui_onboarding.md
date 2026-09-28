@@ -58,9 +58,6 @@ Start with these files and directories:
 | Classic job object | `nice/nice_lite/data_structures/jobclassic.py` | Owns batch job creation, selection jobs, status updates, deletion. |
 | SIMPLE launcher | `nice/nice_lite/data_structures/simple.py` | Bridges Django to `simple_exec`, `single_exec`, and `simple_stream`. |
 | Classic job form | `nice/nice_lite/app_views/newjobview.py` | Builds the new-job form from Fortran-generated UI JSON. |
-| Classic job panels | `nice/nice_lite/app_views/jobview.py` | Reads `workspace.simple` and renders project stats, micrographs, classes, and logs. |
-| Classic templates | `nice/nice_lite/templates/nice_classic/` | HTML for batch workspace, job, logs, micrograph, and class-average panels. |
-| Classic JS | `nice/nice_lite/static/nice_classic/` | Client-side behavior for batch views. |
 | Stream templates | `nice/nice_lite/templates/nice_stream/` | More developed stream monitoring UI. |
 | Stream JS | `nice/nice_lite/static/nice_stream/` | Useful reference for richer interactive controls. |
 | UI definitions | `src/main/ui/` | Fortran-side definitions of programs and input parameters. |
@@ -115,8 +112,6 @@ Important batch files:
 - `nice/nice_lite/data_structures/jobclassic.py`
 - `nice/nice_lite/data_structures/simple.py`
 - `nice/nice_lite/app_views/newjobview.py`
-- `nice/nice_lite/app_views/jobview.py`
-- `nice/nice_lite/templates/nice_classic/`
 - `src/main/commanders/simple/`
 - `src/main/ui/simple/`
 
