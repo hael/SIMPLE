@@ -174,7 +174,7 @@ contains
     subroutine write_with_checksum( fname, lines )
         character(len=*),    intent(in) :: fname
         character(len=1024), intent(in) :: lines(:)
-        character(len=24) :: str
+        character(len=1024) :: str
         integer(int64)     :: checksum
         integer :: i
         checksum = sigma2_state_digest_begin()
@@ -182,7 +182,8 @@ contains
             call sigma2_state_digest_text(checksum, trim(lines(i)))
         enddo
         write(str,'(I0)') checksum
-        call write_lines(fname, [lines, [character(len=1024) :: 'checksum '//trim(str)]])
+        str = 'checksum '//trim(str)
+        call write_lines(fname, [lines, [str]])
     end subroutine write_with_checksum
 
     !> the text file holds the line
