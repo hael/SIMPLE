@@ -1,4 +1,4 @@
-"""Launchers and project-file helpers for SIMPLE stream and classic workflows."""
+"""Launchers and project-file helpers for SIMPLE Stream and Batch workflows."""
 
 # global imports
 import json
@@ -323,12 +323,12 @@ class SIMPLEStream:
 
 
 # ------------------------------------------------------------------
-# Classic (non-stream) job launcher
+# Batch (non-Stream) job launcher
 # ------------------------------------------------------------------
 
 class SIMPLEBatch:
     """
-    Manages the launch of a single classic SIMPLE job (simple_exec or single_exec).
+    Manages the launch of a single Batch SIMPLE job (simple_exec or single_exec).
 
     Unlike SIMPLEStream, each job corresponds to one program call rather than a
     pipeline. When a project is explicitly selected, project-dependent programs

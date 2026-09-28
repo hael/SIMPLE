@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.test import RequestFactory
 from django.test import SimpleTestCase
+from django.urls import reverse
 
 from ..views import project_views
 
@@ -15,6 +16,9 @@ class _AuthUser:
 class ProjectViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
+
+    def test_new_project_route_has_no_mode_parameter(self):
+        self.assertEqual(reverse("nice_lite:new_project"), "/newproject")
 
     def test_create_project_switches_to_new_project_and_workspace(self):
         request = self.factory.post(

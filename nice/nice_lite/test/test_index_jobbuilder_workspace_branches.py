@@ -92,6 +92,7 @@ class IndexViewBranchTests(SimpleTestCase):
         self.assertEqual(response._ctx["iframeurl"], "rev:nice_lite:new_project")
         self.assertNotIn("selected_project_id", response.cookies)
         self.assertNotIn("selected_workspace_id", response.cookies)
+        self.assertNotIn("mode", response.cookies)
 
     def test_workspace_get_sentinel_does_not_create_workspace(self):
         request = self.factory.get("/")

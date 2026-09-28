@@ -1,4 +1,4 @@
-"""Shared base data structure for NICE stream/classic jobs."""
+"""Shared base data structure for NICE Stream and Batch jobs."""
 
 import os
 

@@ -1,7 +1,7 @@
 """JSON and media API endpoints for NICE Lite.
 
 This module serves:
-- worker heartbeat ingestion endpoints for stream and classic jobs
+- worker heartbeat ingestion endpoints for Stream and Batch jobs
 - authenticated project-scoped image reads for UI payloads
 
 Heartbeat endpoints are intentionally CSRF-exempt because they are called by

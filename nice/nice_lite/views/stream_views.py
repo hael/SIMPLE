@@ -1374,7 +1374,7 @@ def view_stream_update_parameters(request):
 @login_required(login_url="/login")
 @require_POST
 def view_stream_link_particle_set(request, jobid, setid, filename, type):
-    """Tie stream output particle sets to classic jobs."""
+    """Tie Stream output particle sets to Batch jobs."""
     streamjob, jobmodel = _get_accessible_streamjob(request, jobid=jobid, log_context="link_particle_set")
     if streamjob is None:
         return redirect("nice_lite:workspace")
@@ -1387,7 +1387,7 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
         return redirect("nice_lite:view_stream", jobid=jobid)
 
     link_workspace_id = get_integer(request.POST, "link_workspace_id")
-    classicjob = BatchJob()
+    batchjob = BatchJob()
     project = Project(id=jobmodel.dset.proj.id)
     workspace = Workspace(jobmodel.dset.id)
     if not _is_workspace_accessible(workspace, request.user.username):
@@ -1404,7 +1404,7 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
         return redirect("nice_lite:view_stream", jobid=jobid)
 
     if type == "snapshot":
-        # Snapshot links a generated snapshot directory to a new classic particle-set job.
+        # Snapshot links a generated snapshot directory to a new Batch particle-set job.
         set_proj = os.path.join(
             project.dirc,
             workspace.dirc,
@@ -1414,13 +1414,13 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
             pathlib.Path(filename).stem,
             filename,
         )
-        classicjob.linkParticleSet(project, link_workspace, set_proj)
+        batchjob.linkParticleSet(project, link_workspace, set_proj)
     elif type == "final":
         # Final links the selected/deselected final files from classification_2D outputs.
         set_proj = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, "classification_2D", "stream_abinitio2D.simple")
         set_desel = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, filename)
-        classicjob.linkParticleSetFinal(project, link_workspace, set_proj, set_desel)
-    classicjob.set_description("from " + workspace.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))
+        batchjob.linkParticleSetFinal(project, link_workspace, set_proj, set_desel)
+    batchjob.set_description("from " + workspace.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))
     response = redirect("nice_lite:index")
     response.set_cookie(key="selected_project_id", value=project.id)
     response.set_cookie(key="selected_workspace_id", value=link_workspace.id)
@@ -1512,5 +1512,4 @@ def view_stream_select_classification_2D(request):
         print_error(f"select_stream_classification_2D: failed for job {jobid}")
         return redirect("nice_lite:view_stream", jobid=jobid)
     return redirect("nice_lite:workspace")
-
 

@@ -64,7 +64,7 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
 
 
 def _is_batch_job(jobmodel):
-    """Return True for classic jobs stored in the shared JobModel table."""
+    """Return True for Batch jobs stored in the shared JobModel table."""
     return jobmodel.pckg in ("simple", "single")
 
 

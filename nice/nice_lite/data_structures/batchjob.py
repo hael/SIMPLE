@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class BatchJob(Job):
-    """Classic (non-stream) SIMPLE job attached to a workspace."""
+    """Batch (non-Stream) SIMPLE job attached to a workspace."""
 
     TERMINAL_STATUSES = frozenset(("finished", "failed", "stopped"))
     MANUALLY_FINISHABLE_STATUSES = frozenset(("queued", "failed"))

@@ -33,7 +33,7 @@ from ..helpers                   import clear_checksum_cookies, get_string, prin
 def view_create_project(request):
     """
     Create a new project with one empty workspace, set session cookies,
-    and redirect to the new selection in the stream shell.
+    and redirect to the new selection in the NICE shell.
     """
     response = redirect("nice_lite:index")
     username = request.user.username
@@ -85,11 +85,10 @@ def view_create_project(request):
 
 
 @login_required(login_url="/login")
-def view_new_project(request, mode):
+def view_new_project(request):
     """Render the create-new-project page."""
     template = "newproject.html"
-    context = {"mode": mode}
-    response = render(request, template, context)
+    response = render(request, template)
     # New-project page should always clear stale checksums from prior views.
     clear_checksum_cookies(request, response)
     return response

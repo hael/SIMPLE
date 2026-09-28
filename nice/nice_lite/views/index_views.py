@@ -1,4 +1,4 @@
-"""Top-level index and auth views for stream mode.
+"""Top-level index and auth views for NICE Lite.
 
 This module serves:
 - ``login.html`` authentication entry/exit endpoints
@@ -107,7 +107,7 @@ def view_index(request):
     # Sentinel ids from the UI drive special navigation/creation paths.
     if projectid == -1:
         # Project sentinel routes user to the new-project page.
-        iframeurl = reverse("nice_lite:new_project", args=["stream"])
+        iframeurl = reverse("nice_lite:new_project")
     elif workspaceid is not None and workspaceid > 0:
         iframeurl = reverse("nice_lite:workspace", query={"selected_project_id": projectid, "selected_workspace_id": workspaceid})
 
@@ -120,13 +120,12 @@ def view_index(request):
         "iframeurl": iframeurl,
     }
 
-    # Persist current selection to keep the stream UI stateful across requests.
+    # Persist current selection to keep the NICE shell stateful across requests.
     # Opening the new-project form is only a temporary navigation state, so keep
     # the last valid project/workspace cookies for the Back action to restore.
     response = render(request, template, context)
     if projectid != -1:
         response.set_cookie(key="selected_project_id", value=projectid)
         response.set_cookie(key="selected_workspace_id", value=workspaceid)
-    response.set_cookie(key="mode", value="stream")
     clear_checksum_cookies(request, response)
     return response
