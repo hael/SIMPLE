@@ -304,7 +304,7 @@ contains
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(string)     :: fname_even_unfil, fname_odd_unfil
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
-        real    :: fsc0143, fsc05, lplim
+        real    :: fsc0143, fsc05, lplim, cap_gain
         integer :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
         logical :: l_support_at_source, l_prov_constrained, l_prov_found, l_prov_kind, l_ml_shrunk
@@ -431,6 +431,18 @@ contains
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
+        ! The sharpening stops at the cutoff shell: beyond it every shell
+        ! keeps the cutoff shell's gain exp(-B s_c^2/4) and the Butterworth
+        ! alone decides what is left. There is no signal beyond the cutoff to
+        ! restore, and at fine pixels exp(-B s^2/4) outgrows the order-8
+        ! Butterworth from ~1.5 x the cutoff on (2026-09-28, exp_gate at
+        ! 0.822 A/pixel, Nyquist shell: x45 at B -108, x3.4 at -80 uncapped).
+        lp_find  = max(1, min(box/2, calc_fourier_index(lplim, box, smpd)))
+        cap_gain = 1.
+        if( params%bfac < 0. )then
+            call vol_bfac%apply_filter(bfac_cap_filter(vol_bfac%get_filtsz(), box, smpd, params%bfac, lp_find))
+            cap_gain = exp(-(params%bfac / 4.) * (real(lp_find) / (real(box) * smpd))**2)
+        endif
         ! Close the sharpening: the FSC weighting exactly once, then the
         ! Butterworth at the FSC=0.143 cutoff (the same filter as the NU
         ! filter's rungs). The weighting is RELION's (postprocessing.cpp
@@ -438,21 +450,29 @@ contains
         ! applied only to a map that does not carry one: 2026-09-22 added the
         ! Wiener 2FSC/(1+FSC) on top of the regularized map's own ~FSC
         ! shrinkage, which left 0.036 of the amplitude at FSC=0.143 and
-        ! over-smoothed every map. exp_gate's noise cloud with the Butterworth
-        ! alone (B -108; -50..-75 looked right) points at the B-factor, fitted
-        ! from 20 A then, through the envelope/micelle region, not at the filter.
+        ! over-smoothed every map.
         if( has_fsc .and. .not. l_ml_shrunk )then
             optlp = fsc2cref(fsc)
             where( res < TINY ) optlp = 0.
             call vol_bfac%apply_filter(optlp)
             call vol_no_bfac%apply_filter(optlp)
         endif
-        lp_find = max(1, min(box/2, calc_fourier_index(lplim, box, smpd)))
-        allocate(bwfilter(box), source=0.)
+        ! The Butterworth covers the Fourier shells up to Nyquist and no
+        ! further: apply_filter zeroes every component beyond size(filter),
+        ! i.e. the corners of the Fourier cube out to sqrt(3) x Nyquist, where
+        ! apply_bfac's exp(-B s^2/4) is largest. A box-sized array reached
+        ! them with the Butterworth's k^-8 tail only (2026-09-27, exp_gate at
+        ! 0.822 A/pixel: corner gain ~1e5 at B -80 and ~1e8 at B -108, the
+        ! noise cloud outside the molecule on the classical path; the FSC
+        ! weighting, sized to the FSC, had been zeroing them, and the NU
+        ! sharpening's filters are Nyquist-sized).
+        allocate(bwfilter(vol_bfac%get_filtsz()), source=0.)
         call butterworth_filter(lp_find, bwfilter)
         call vol_bfac%apply_filter(bwfilter)
         call vol_no_bfac%apply_filter(bwfilter)
         deallocate(bwfilter)
+        if( params%bfac < 0. ) write(logfhandle,'(A,F8.2,A,F6.2,A,I0,A)') '>>> POSTPROCESS: B ', params%bfac, &
+            &' capped at the cutoff shell: gain ', cap_gain, ' from shell ', lp_find, ' to Nyquist'
         if( has_fsc .and. l_ml_shrunk )then
             write(logfhandle,'(A)') '>>> POSTPROCESS: ML-regularized map (solve_kind='//trim(prov_solve_kind)//&
                 &'), its prior already FSC-weighted it: no FSC weighting'

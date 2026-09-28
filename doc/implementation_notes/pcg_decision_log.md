@@ -900,11 +900,46 @@ new `gridding_regularized` written by the gridding restoration under
 unregularized gridding, foreign maps) and postprocess_nu's stretched
 weighting take `sqrt(2FSC/(1+FSC))` (`fsc2cref`, tested in the lpstages
 suite); `HPLIM_GUINIER` 20 -> 10 A (postprocess, postprocess_nu,
-sharpvol). exp_gate's noise cloud under the Butterworth alone (auto B
--108, -50 to -75 right) is read as a B problem: the 20-10 A range is the
-envelope/micelle falloff, not the Wilson regime. Kept from SIMPLE: B from
+sharpvol). Kept from SIMPLE: B from
 the unweighted unfiltered pair up to the FSC=0.143 cutoff (conservative)
 and the Butterworth at that cutoff. To check on the rerun: `>>> POSTPROCESS:
 ML-regularized map (solve_kind=...)` on the workflow's final postprocess,
 the automatic B on exp_gate against the -50 to -75 it wanted, and whether
-the `_pproc` maps lose the over-smoothed look.
+the `_pproc` maps lose the over-smoothed look. *The exp_gate noise cloud
+was not the B-factor: see 2026-09-27.*
+
+**2026-09-27 -- postprocess Butterworth sized to the Fourier shells; sharpening capped at the cutoff shell (09-28).**
+Observation (Hans): with the FSC weighting off on the regularized map the
+exp_gate noise cloud came back on the classical path only, better than on
+2026-09-22 but still there, all of it well outside the molecule.
+Diagnosis: `postprocess_volume_from_files` allocated the Butterworth with
+`box` entries, and `apply_filter` zeroes only shells beyond
+`size(filter)`, so the corners of the Fourier cube (out to
+`nint(sqrt(3) box/2)`) kept `apply_bfac`'s exp(-B s^2/4) against the
+Butterworth's k^-8 tail. The gain there is exp(3|B|/(16 smpd^2)) times
+that tail: at exp_gate's 0.822 A/pixel (cutoff shell 66 of 144) ~1e8 at
+B -108, ~1e5 at -80, ~4e2 at -60; msp1 (1.073 A, shell 90) ~4e4 at -115,
+streptavidin ~2e2 at -77. What was measured before: on the 2026-09-22
+exp_gate `_lp`/`_pproc` the spectrum is zero (float level) from shell 68 on and
+the implied B is -107.7 on every shell up to 66, so the FSC weighting
+(sized to the FSC, zero below FSC 0.05) had been doing the Nyquist
+truncation; the NU sharpening's filters are Nyquist-sized and never showed
+it; without anything else in the solvent the corner noise is what is left
+above threshold there. Fix: the Butterworth array has `get_filtsz()`
+entries; `test_filter_nyquist_support` in the lpstages suite pins the
+`apply_filter` behavior the fix relies on. Second, inside the Nyquist
+sphere exp(-B s^2/4) still outgrows the order-8 Butterworth beyond about
+1.5 x the cutoff at fine pixels (exp_gate, Nyquist shell: x3.4 at B -80,
+x45 at -108, x0.5 at -60). Decision (Hans, 2026-09-28): cap the
+sharpening gain at the cutoff shell -- there is no signal beyond the
+cutoff to restore. `bfac_cap_filter` (`simple_estimate_ssnr`, tested in
+the lpstages suite) is 1 up to the Butterworth's cutoff shell and
+exp((B/4)(s_k^2 - s_c^2)) beyond, applied after `apply_bfac` for B < 0, so
+every shell beyond the cutoff carries the cutoff gain exp(-B s_c^2/4)
+times the Butterworth and falls as k^-8 (log line `>>> POSTPROCESS: B ...
+capped at the cutoff shell: gain ...`). The exact exp(-B s^2/4) stays
+inside the passband; beyond it the cap is shell-quantized (at most ~6 %
+between neighbouring voxels at Nyquist, under a Butterworth of 1e-3).
+The `_lp` product carries no B and is unchanged. postprocess_nu is not
+capped: its stretched weighting reaches zero at the first shell where the
+global FSC falls below 1e-4, as RELION's does.

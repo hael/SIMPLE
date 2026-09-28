@@ -683,8 +683,22 @@ FSC < 1e-4). The 2026-09-22 recipe applied the Wiener `2FSC/(1+FSC)` on
 top of the regularized map's own shrinkage, leaving 0.036 of the
 amplitude at FSC=0.143 (0.33 at 0.5): every map over-smoothed. Its
 trigger -- exp_gate a cloud of structured noise under the Butterworth
-alone at an automatic B of -108 while -50 to -75 looked right -- points at
-the B-factor fitted from 20 A, not at the filter. RELION differs in two
+alone at an automatic B of -108 while -50 looked right -- was a defect in
+the closing filter (2026-09-27): the Butterworth array was sized to the
+box, so `apply_filter` reached the corners of the Fourier cube (out to
+sqrt(3) x Nyquist), where `apply_bfac`'s exp(-B s^2/4) is largest, with
+only the Butterworth's k^-8 tail against it. At exp_gate's 0.822 A/pixel
+the corner gain is ~1e8 at B -108, ~1e5 at -80, ~4e2 at -60 (msp1 at
+1.073 A: ~4e4 at -115); the noise sits outside the molecule because
+there is no density there to hide it. Any filter sized to the FSC zeroes
+the corners, which is why the FSC weighting and the NU sharpening never
+showed it. The Butterworth now covers the Fourier shells up to Nyquist
+only, and the sharpening is capped at the cutoff shell (2026-09-28): every
+shell beyond the cutoff keeps the cutoff's gain exp(-B s_c^2/4) and the
+Butterworth alone rolls it off (`bfac_cap_filter`), since there is no
+signal beyond the cutoff to restore and at fine pixels exp(-B s^2/4)
+otherwise outgrows the order-8 Butterworth from ~1.5 x the cutoff on
+(exp_gate's Nyquist shell: x45 at B -108 uncapped). RELION differs in two
 places kept on purpose: it fits B on the FSC-weighted map out to where
 the FSC reaches zero (steeper) and applies no low-pass by default; SIMPLE
 fits the unweighted unfiltered pair up to the FSC=0.143 cutoff (a

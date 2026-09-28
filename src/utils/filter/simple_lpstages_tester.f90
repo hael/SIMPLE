@@ -1,17 +1,20 @@
-!@descr: unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims), the FSC weightings (fsc2optlp, fsc2cref) and the Butterworth kernel
+!@descr: unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims), the FSC weightings (fsc2optlp, fsc2cref), the B-factor cap (bfac_cap_filter), the Butterworth kernel and apply_filter's Nyquist support
 ! The clamps that turn a mask diameter into the 2D low-pass limits, the FRC-driven multi-stage schedule
 ! of refinement (stages from the FRC crossings, the linear fallback when the FRC never crosses, the crop
 ! box / sampling / shift-limit bookkeeping through the magic boxes), its two linear cousins, the
 ! postprocess FSC weightings (the Wiener 2FSC/(1+FSC) and RELION's sqrt(2FSC/(1+FSC)) with its
-! truncation at the first FSC < 1e-4), and the order-8 Butterworth transfer function against its
-! closed form. References: lpstages_ref.py (stats batch scratch), a double-precision emulation of the
-! same rules; the FSC weightings are closed forms.
+! truncation at the first FSC < 1e-4), the cap that holds a B-factor sharpening at the gain of the
+! cutoff shell, the order-8 Butterworth transfer function against its
+! closed form, and apply_filter zeroing every shell beyond its filter (the Fourier-cube corners a
+! Nyquist-sized filter removes). References: lpstages_ref.py (stats batch scratch), a
+! double-precision emulation of the same rules; the FSC weightings are closed forms.
 module simple_lpstages_tester
 use simple_test_utils        ! assertions etc.
 use simple_defs              ! sp
 use simple_type_defs,        only: lp_crop_inf
 use simple_string_utils,     only: int2str
-use simple_estimate_ssnr,    only: mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims, fsc2optlp, fsc2cref
+use simple_estimate_ssnr,    only: mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims, fsc2optlp, fsc2cref,&
+                             &bfac_cap_filter
 use simple_butterworth,      only: butterworth_filter
 use simple_image,            only: image
 implicit none
@@ -46,7 +49,9 @@ contains
         call test_lpstages_fast()
         call test_lpstages_setlims()
         call test_fsc_weightings()
+        call test_bfac_cap_filter()
         call test_butterworth()
+        call test_filter_nyquist_support()
     end subroutine run_all_lpstages_tests
 
     pure function frc_curve( k0 ) result( frc )
@@ -268,6 +273,31 @@ contains
         call assert_true(c(2) == 0. .and. c(3) == 0., 'fsc2cref: a negative shell zeroes it and every shell beyond')
     end subroutine test_fsc_weightings
 
+    ! bfac_cap_filter(filtsz=50, box=100, smpd=1, B=-100, kcut=25): 1 up to shell 25, exp((B/4)(s_k^2 - s_25^2))
+    ! beyond with s_k = k/100, so exp(-B s_k^2/4) * filt(k) holds the cutoff gain exp(25 * 0.0625) = 4.770733
+    ! on every shell from 25 to 50; identity for B >= 0 (closed forms)
+    subroutine test_bfac_cap_filter()
+        integer, parameter :: FILTSZ_CAP = 50, BOX_CAP = 100, KCUT = 25
+        real,    parameter :: B_CAP = -100., CUT_GAIN = 4.770733
+        real    :: filt(FILTSZ_CAP), s2
+        integer :: k
+        logical :: l_held
+        write(*,'(A)') 'test_bfac_cap_filter'
+        filt = bfac_cap_filter(FILTSZ_CAP, BOX_CAP, 1., B_CAP, KCUT)
+        call assert_true(all(filt(1:KCUT) == 1.), 'bfac cap: identity up to the cutoff shell')
+        call assert_real(0.880293, filt(26), 1.e-5, 'bfac cap: exp(-25 (0.26^2 - 0.25^2)) one shell beyond')
+        call assert_real(0.087379, filt(40), 1.e-5, 'bfac cap: exp(-25 (0.40^2 - 0.25^2))')
+        call assert_real(0.009210, filt(50), 1.e-5, 'bfac cap: exp(-25 (0.50^2 - 0.25^2)) at Nyquist')
+        l_held = .true.
+        do k = KCUT, FILTSZ_CAP
+            s2 = (real(k) / real(BOX_CAP))**2
+            if( abs(exp(-(B_CAP / 4.) * s2) * filt(k) - CUT_GAIN) > 1.e-3 ) l_held = .false.
+        end do
+        call assert_true(l_held, 'bfac cap: sharpening gain held at the cutoff gain from the cutoff to Nyquist')
+        filt = bfac_cap_filter(FILTSZ_CAP, BOX_CAP, 1., 50., KCUT)
+        call assert_true(all(filt == 1.), 'bfac cap: identity for a blurring (positive) B')
+    end subroutine test_bfac_cap_filter
+
     !---------------- Butterworth ----------------
 
     ! |1/B_8(j s/fc)| = 1/sqrt(1 + (s/fc)^16): unity in the pass band, 1/sqrt(2) at the cut-off, the
@@ -309,5 +339,34 @@ contains
         call assert_true(img%is_ft(), 'image form: the image stays in Fourier space')
         call img%kill
     end subroutine test_butterworth
+
+    ! apply_filter reaches only the shells its filter covers: every Fourier component with nint(|k|) >
+    ! size(filter) is zeroed. A delta filtered by ones keeps the fraction of the cube's lattice points inside
+    ! that radius (its value after filtering is the mean weight over the full cube): all of them for a
+    ! box-sized filter (the corners reach nint(sqrt(3) N/2) = 28 < 32), 18706/32768 for a filter over the
+    ! Fourier shells (filtsz = 16; numpy count over [-16,15]^3). postprocess relies on this to keep
+    ! exp(-B s^2/4) out of the cube corners (2026-09-27, exp_gate).
+    subroutine test_filter_nyquist_support()
+        integer, parameter :: N = 32
+        real,    parameter :: KEPT_FRAC_NYQ = 18706. / 32768.
+        type(image)       :: img
+        real, allocatable :: ones(:)
+        write(*,'(A)') 'test_filter_nyquist_support'
+        call img%new([N,N,N], 1.)
+        call img%set_rmat_at(N/2+1, N/2+1, N/2+1, 1.)
+        allocate(ones(N), source=1.)
+        call img%apply_filter(ones)
+        call assert_real(1., img%get_rmat_at(N/2+1, N/2+1, N/2+1), 1.e-4, &
+            &'box-sized filter: every component kept, corners included')
+        call img%zero_and_unflag_ft
+        call img%set_rmat_at(N/2+1, N/2+1, N/2+1, 1.)
+        deallocate(ones)
+        allocate(ones(img%get_filtsz()), source=1.)
+        call assert_int(N/2, size(ones), 'filtsz = N/2 Fourier shells')
+        call img%apply_filter(ones)
+        call assert_real(KEPT_FRAC_NYQ, img%get_rmat_at(N/2+1, N/2+1, N/2+1), 1.e-4, &
+            &'Nyquist-sized filter: the cube corners beyond N/2 are zeroed')
+        call img%kill
+    end subroutine test_filter_nyquist_support
 
 end module simple_lpstages_tester

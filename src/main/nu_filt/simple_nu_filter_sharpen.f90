@@ -148,8 +148,8 @@ contains
             write(logfhandle,'(A,F6.2,A)') '>>> NU SHARPENING B-FACTOR SKIPPED (finest evidenced cutoff ', &
                 &finest, ' A too coarse)'
         endif
-        write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, FSC-weighted (sqrt(2FSC/(1+FSC)) '//&
-            &'stretched to each local cutoff), then local low-pass'
+        write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, '//&
+            &'FSC-weighted (sqrt(2FSC/(1+FSC)) stretched to each local cutoff), then local low-pass'
         if( l_apply ) write(logfhandle,'(A)') '    estimated on the unregularized pair, applied to the solvent-prior pair'
         write(logfhandle,'(A,I0,A)')  '    evidenced local cutoffs: ', ndist, ' distinct'
         write(logfhandle,'(A,I0)')    '    null-claimed voxels flattened to the mean: ', nnull

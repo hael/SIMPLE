@@ -14,7 +14,7 @@ use simple_fileio
 implicit none
 
 public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2cref, ssnr2fsc, ssnr2optlp
-public :: lowpass_from_klim, gaussian_filter
+public :: lowpass_from_klim, gaussian_filter, bfac_cap_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
 public :: lpstages, lpstages_fast, lpstages_setlims
@@ -159,6 +159,27 @@ contains
             filter(k) = real(exp(-real(k**2) * A))
         enddo
     end subroutine gaussian_filter
+
+    !> \brief  per-shell factor that caps a B-factor sharpening at shell kcut:
+    !!         1 up to kcut and exp((B/4)(s_k^2 - s_kcut^2)) beyond, s_k = k/(box smpd),
+    !!         so that a volume sharpened by apply_bfac(B) (exp(-B s^2/4), B < 0) and then
+    !!         filtered with it carries the cutoff shell's gain exp(-B s_kcut^2/4) on every
+    !!         shell beyond kcut instead of a gain that keeps growing to Nyquist. Identity
+    !!         for B >= 0 (nothing to cap). Shell indices as apply_filter reads them
+    function bfac_cap_filter( filtsz, box, smpd, bfac, kcut ) result( filt )
+        integer, intent(in) :: filtsz, box, kcut
+        real,    intent(in) :: smpd, bfac
+        real    :: filt(filtsz)
+        real    :: s2, s2cut
+        integer :: k
+        filt = 1.
+        if( bfac >= 0. ) return
+        s2cut = (real(max(0,kcut)) / (real(box) * smpd))**2
+        do k = max(1,kcut+1), filtsz
+            s2      = (real(k) / (real(box) * smpd))**2
+            filt(k) = exp((bfac / 4.) * (s2 - s2cut))
+        end do
+    end function bfac_cap_filter
 
     subroutine mskdiam2lplimits( mskdiam, lpstart,lpstop, lpcen )
         real, intent(in)    :: mskdiam
