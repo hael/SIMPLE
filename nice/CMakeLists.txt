@@ -53,9 +53,6 @@ add_custom_target(nice_src ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
           "${CMAKE_CURRENT_SOURCE_DIR}/nice_lite"
           "${NICE_BUILD_DIR}/nice_lite"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-          "${CMAKE_CURRENT_SOURCE_DIR}/test_display"
-          "${NICE_BUILD_DIR}/test_display"
   COMMAND ${CMAKE_COMMAND} -E copy
           "${CMAKE_CURRENT_SOURCE_DIR}/manage.py"
           "${NICE_BUILD_DIR}/manage.py"
