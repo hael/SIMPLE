@@ -73,22 +73,23 @@ contains
         type(stream_watcher)      :: project_buff
         type(sp_project)          :: spproj_glob
         type(qsys_env)            :: qenv
+        type(string)              :: frozen_addon
         type(string), allocatable :: projects(:)
         type(gui_metadata_stream_abinitio3D_multistate) :: meta_abinitio3D_multistate
         type(gui_metadata_vol3D), allocatable            :: meta_states_vol3D(:)
         type(gui_metadata_cavg2D), allocatable            :: meta_reprojtiles(:)
         character(len=:),         allocatable            :: meta_buffer
-        integer                   :: i, nprojects, nimported, nptcls_glob, abinitio_stage, refine_stage
-        integer                   :: envlen, refine_it, nptcls_at_last_refine
+        integer                   :: i, nprojects, nimported, nptcls_glob, abinitio_stage, addon_stage
+        integer                   :: envlen, addon_it, nptcls_at_last_addon
         character(len=STDLEN)     :: preproc_part_env
         logical                   :: l_terminate, l_pause_ingestion
         volatile :: l_terminate ! set asynchronously by sigterm_handler
         l_terminate           = .false.
         abinitio_stage        = 0
-        refine_stage          = 0
+        addon_stage          = 0
         nptcls_glob           = 0
-        refine_it             = 0
-        nptcls_at_last_refine = 0
+        addon_it             = 0
+        nptcls_at_last_addon = 0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
@@ -156,35 +157,39 @@ contains
                   if( file_exists(string('abinitio3D')//'/'//TASK_FINISHED) ) then
                       ! stage complete
                       call finish_abinitio3D(spproj_glob, string('abinitio3D'))
-                      abinitio_stage    = 2
-                      l_pause_ingestion = .false.
+                      abinitio_stage       = 2
+                      nptcls_at_last_addon = spproj_glob%os_ptcl2D%get_noris()
+                      l_pause_ingestion    = .false.
                       call build_and_send_vol3D_states
                   end if
                 end if
             end if
-            ! refine stage
+            ! addon stage
             if( abinitio_stage == 2 .and. spproj_glob%os_ptcl2D%get_noris() /= 0 ) then
-                if( refine_stage == 0 ) then
+                if( addon_stage == 0 ) then
                     ! only enter if the particle count has grown since the last refine stage
-                    if( spproj_glob%os_ptcl2D%get_noris() > nptcls_at_last_refine ) then
-                        refine_it             = refine_it + 1
-                        nptcls_at_last_refine = spproj_glob%os_ptcl2D%get_noris()
-                        write(logfhandle,'(A,I0)')'>>> ENTERING REFINE STAGE ', refine_it
+                    if( spproj_glob%os_ptcl2D%get_noris() > nptcls_at_last_addon ) then
+                        addon_it              = addon_it + 1
+                        nptcls_at_last_addon = spproj_glob%os_ptcl2D%get_noris()
+                        write(logfhandle,'(A,I0)')'>>> ENTERING ADDON STAGE ', addon_it
                         l_pause_ingestion = .true.
-                        ! start refine 3D
-                     !   call start_refine3D(spproj_glob, string('refine3D/it_')//int2str(refine_it), 5000)
-                        call spproj_glob%write(string('refine_') // int2str(refine_it) // METADATA_EXT)
-                        refine_stage = 1
+                        if( addon_it == 1) then
+                            frozen_addon = string(CWD_GLOB)//'/abinitio3D/abinitio3D.simple'
+                        else
+                            frozen_addon = string(CWD_GLOB)//'/abinitio3D_addon/it_'//int2str(addon_it)//'/abinitio3D_addon.simple'
+                        end if
+                        ! start addon 3D
+                        call start_abinitio3D_addon(spproj_glob, frozen_addon, string('abinitio3D_addon/it_')//int2str(addon_it))
+                        addon_stage = 1
                     end if
-                else if( refine_stage == 1 ) then
+                else if( addon_stage == 1 ) then
                     ! Test for refine stage completion
-                !    if( file_exists(string('refine3D/it_')//int2str(refine_it)//'/'//TASK_FINISHED) ) then
-                !        ! stage complete
-                !        call finish_refine3D(spproj_glob, string('refine3D')//int2str(refine_it))
-                !        refine_stage = 0
-                !    end if
-                    l_pause_ingestion = .false.
-                    refine_stage = 0 ! for testing purposes
+                    if( file_exists(string('abinitio3D_addon/it_')//int2str(addon_it)//'/'//TASK_FINISHED) ) then
+                        ! stage complete
+                        call finish_abinitio3D_addon(spproj_glob, string('abinitio3D_addon/it_')//int2str(addon_it))
+                        addon_stage = 0
+                        l_pause_ingestion = .false.
+                    end if
                 end if
             end if
             ! broadcast progress to the GUI
@@ -348,7 +353,7 @@ contains
                     my_stage = string('importing particles')
                 else if( abinitio_stage == 1 ) then
                     my_stage = string('running abinitio3D')
-                else if( refine_stage == 1 ) then
+                else if( addon_stage == 1 ) then
                     my_stage = string('running refine3D')
                 else
                     my_stage = string('idle')
@@ -356,10 +361,10 @@ contains
                 call meta_abinitio3D_multistate%set(                                  &
                     stage                    = my_stage,                              &
                     abinitio3D_stage         = abinitio_stage,                        &
-                    refine_iteration         = refine_it,                             &
+                    refine_iteration         = addon_it,                             &
                     nstates                  = NSTATES3D,                             &
                     particles_imported       = spproj_glob%os_ptcl3D%get_noris(),     &
-                    particles_at_last_refine = nptcls_at_last_refine,                 &
+                    particles_at_last_refine = nptcls_at_last_addon,                 &
                     resolution               = 0.0)
                 if( abinitio_stage == 2 ) then
                     do istate = 1, NSTATES3D
@@ -652,6 +657,47 @@ contains
                 call spproj_stage%read(string('abinitio3D.simple')) ! read the project with abinitio3D output
                 call simple_chdir(cwd)
             end subroutine finish_abinitio3D
+
+            ! Run ab-initio 3D Addon 
+            subroutine start_abinitio3D_addon( spproj_stage, projfile_frozen, outdir )
+                type(sp_project),   intent(inout) :: spproj_stage
+                type(string),          intent(in) :: projfile_frozen, outdir
+                type(cmdline)                     :: cline_abinitio3D_addon
+                type(string)                     :: cwd, cwd_abinitio3D, server_address
+                call simple_getcwd(cwd)
+                call simple_mkdir('abinitio3D_addon')
+                call simple_mkdir(outdir)
+                call simple_chdir(outdir)
+                call simple_getcwd(cwd_abinitio3D)
+                CWD_GLOB       = cwd_abinitio3D%to_char()
+                server_address = qenv%get_persistent_worker_server_address()
+                call spproj_stage%write(string('abinitio3D_addon.simple'))
+                call cline_abinitio3D_addon%kill()
+                call cline_abinitio3D_addon%set('prg',              'abinitio3D_addon')
+                call cline_abinitio3D_addon%set('mkdir',                          'no')
+                call cline_abinitio3D_addon%set('projfile',  'abinitio3D_addon.simple')
+                call cline_abinitio3D_addon%set('projfile_frozen',     projfile_frozen)
+                call cline_abinitio3D_addon%set('nparts',                            4)
+                call cline_abinitio3D_addon%set('nthr',                             16)
+                call cline_abinitio3D_addon%set('worker_priority',              'high')
+                if( server_address%strlen() > 0 ) call cline_abinitio3D_addon%set('worker_server', server_address)
+                call cline_abinitio3D_addon%printline()
+                call qenv%exec_simple_prg_in_queue_async( cline_abinitio3D_addon, string('./distr_abinitio3D_addon'), string('simple_log_abinitio3D_addon'), exec_bin=string('simple_exec') )
+                call simple_chdir(cwd)
+                CWD_GLOB = cwd%to_char()
+            end subroutine start_abinitio3D_addon
+
+            subroutine finish_abinitio3D_addon( spproj_stage, outdir )
+                type(sp_project), intent(inout) :: spproj_stage
+                type(string),        intent(in) :: outdir
+                type(string)                    :: cwd
+                if( .not. file_exists(outdir) ) THROW_HARD('Output directory does not exist: ')
+                call simple_getcwd(cwd)
+                call simple_chdir(outdir)
+                call spproj_stage%kill()
+                call spproj_stage%read(string('abinitio3D_addon.simple')) ! read the project with abinitio3D_addon output
+                call simple_chdir(cwd)
+            end subroutine finish_abinitio3D_addon
 
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()
