@@ -416,11 +416,13 @@ contains
         integer :: i
         hash_strlen = 0
         if( self%hash_index > 0 )then
-            write(str_tmp,*)(self%keys(i)%to_char(), self%values(i), i=1,self%hash_index)
+            ! no to_char() here: gfortran keeps a deferred-length result's length in a static, which races under OpenMP
+            write(str_tmp,*) self%values(:self%hash_index)
             do i=1,len_trim(str_tmp)
                 if( str_tmp(i:i) == ' ' ) cycle
                 hash_strlen = hash_strlen + 1
             enddo
+            hash_strlen = hash_strlen + sum(self%keys(:self%hash_index)%strlen_trim())
             hash_strlen = hash_strlen + self%hash_index   ! for '=' separator
             hash_strlen = hash_strlen + self%hash_index-1 ! for ' ' separator
         endif
