@@ -54,8 +54,12 @@ module unix_pthread
     integer(kind=c_int), parameter :: PTHREAD_MUTEX_ADAPTIVE_NP = 4 ! Adaptive mutex, spins briefly before blocking on lock.
     integer(kind=c_int), parameter :: PTHREAD_MUTEX_DEFAULT     = PTHREAD_MUTEX_ERRORCHECK
 
-    integer, parameter :: PTHREAD_SIZE       = 8 ! 8 Bytes.
+    integer, parameter :: PTHREAD_SIZE = 8 ! 8 Bytes.
+#if defined (MACOSX)
+    integer, parameter :: PTHREAD_MUTEX_SIZE = 64 ! 8-byte signature and 56 opaque bytes.
+#else
     integer, parameter :: PTHREAD_MUTEX_SIZE = 8 ! 8 Bytes.
+#endif
 
 #endif
 
