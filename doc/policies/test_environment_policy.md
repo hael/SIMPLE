@@ -42,7 +42,8 @@ run overnight; high-level tests run only when explicitly selected with CTest.
 **The fast gate is part of the build.** Every `compile_*.sh` build
 runs `scripts/run_fast_gate.sh` between `make` and `make install`. It first
 runs `scripts/check_test_registry.py` (section 4.5), then
-`ctest -L fast` with half the cores, then `scripts/ctest_budget.py`, which
+`ctest -L fast` with half the cores rounded up, then
+`scripts/ctest_budget.py`, which
 fails the build when an entry fails or the gate takes more than 30 s of real
 time. A failed gate installs nothing. The per-entry timings are kept in
 `build/test_runs/ctest_fast.log.timing.txt`; the gate takes about 5 s on the
@@ -53,9 +54,10 @@ and skips the gate, for when only the executables are needed.
 `compile_coarrays.sh` additionally runs the capability-gated
 `coarrays` CTest entry after the fast gate and before installation. A failed
 two-image smoke test therefore prevents a coarray build from being installed.
-The local two-image smoke excludes Open MPI's UCX OSC component through
-`OMPI_MCA_osc=^ucx`; this avoids selecting an unavailable hosted-runner UCX
-transport without changing production coarray executions.
+The local two-image smoke selects Open MPI's portable point-to-point path
+through `OMPI_MCA_osc=pt2pt` and `OMPI_MCA_pml=ob1`. This avoids selecting an
+unavailable hosted-runner UCX transport or hanging during automatic fallback,
+without changing production coarray executions.
 
 **The process budget.** The number of CTest entries is fixed in
 `SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 29: 13 fast,

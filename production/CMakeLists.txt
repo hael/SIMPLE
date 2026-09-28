@@ -325,11 +325,15 @@ if(BUILD_TESTS)
   if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE)
     # Minimal capability check compiled into the coarray-linked private executable:
     # two images synchronize and transfer one known integer. The smoke runs on
-    # one host, so exclude Open MPI's UCX OSC component: hosted Ubuntu runners
-    # may advertise it even when its one-sided transport cannot initialize.
+    # one host, so select the portable point-to-point OSC/PML path explicitly:
+    # hosted Ubuntu runners may advertise UCX even when it cannot initialize,
+    # and allowing an automatic fallback after excluding UCX can hang.
     simple_add_test(coarrays platform 60 1 RUN_SERIAL
       COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${SIMPLE_PRIVATE_EXE}> --coarray-smoke)
-    set_property(TEST coarrays APPEND PROPERTY ENVIRONMENT "OMPI_MCA_osc=^ucx")
+    set_property(TEST coarrays APPEND PROPERTY ENVIRONMENT
+      "OMPI_MCA_osc=pt2pt"
+      "OMPI_MCA_pml=ob1"
+    )
   endif()
 
   # ---- process budget -------------------------------------------------------

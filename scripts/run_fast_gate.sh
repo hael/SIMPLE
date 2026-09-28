@@ -4,8 +4,9 @@
 #
 #   scripts/run_fast_gate.sh [BUILD_DIR]        (default: build)
 #
-# Runs only `ctest -L "fast|provisional"` in BUILD_DIR with half the cores; the
-# long `highlevel` label is intentionally excluded and must be requested explicitly. Tees
+# Runs only `ctest -L "fast|provisional"` in BUILD_DIR with half the cores,
+# rounded up. The long `highlevel` label is intentionally excluded and must be
+# requested explicitly. Tees
 # the output to BUILD_DIR/test_runs/ctest_fast.log and hands it to
 # scripts/ctest_budget.py. What is printed is ctest's own report, as in X;
 # the budget checker is silent when the gate passes within budget and speaks
@@ -29,7 +30,9 @@ BUILD="${1:-$ROOT/build}"
 case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
 [ -f "$BUILD/CTestTestfile.cmake" ] || { echo "run_fast_gate: no CTest configuration in $BUILD (built with --exclude-tests? rebuild without it)" >&2; exit 2; }
 if command -v nproc >/dev/null 2>&1; then ncpu=$(nproc); else ncpu=$(sysctl -n hw.ncpu); fi
-jobs=$(( ncpu / 2 )); [ "$jobs" -lt 1 ] && jobs=1
+# Round up so the standard three-core GitHub macOS runner gets two workers
+# instead of serializing the gate and missing the 30 s wall-time budget.
+jobs=$(( (ncpu + 1) / 2 )); [ "$jobs" -lt 1 ] && jobs=1
 python3 "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1
 mkdir -p "$BUILD/test_runs"
 LOG="$BUILD/test_runs/ctest_fast.log"
