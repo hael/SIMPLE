@@ -324,17 +324,10 @@ if(BUILD_TESTS)
   endif()
   if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE)
     # Minimal capability check compiled into the coarray-linked private executable:
-    # two images synchronize and transfer one known integer. The smoke runs on
-    # one host, so select the portable RDMA OSC/ob1 PML path explicitly:
-    # hosted Ubuntu runners may advertise UCX even when it cannot initialize,
-    # and allowing an automatic fallback after excluding UCX can hang. Modern
-    # Open MPI releases no longer install the legacy pt2pt OSC component.
+    # two images synchronize and transfer one known integer. Use the runtime
+    # selected by the OpenCoarrays installation without backend-specific tuning.
     simple_add_test(coarrays platform 60 1 RUN_SERIAL
       COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${SIMPLE_PRIVATE_EXE}> --coarray-smoke)
-    set_property(TEST coarrays APPEND PROPERTY ENVIRONMENT
-      "OMPI_MCA_osc=rdma"
-      "OMPI_MCA_pml=ob1"
-    )
   endif()
 
   # ---- process budget -------------------------------------------------------

@@ -54,11 +54,11 @@ and skips the gate, for when only the executables are needed.
 `compile_coarrays.sh` additionally runs the capability-gated
 `coarrays` CTest entry after the fast gate and before installation. A failed
 two-image smoke test therefore prevents a coarray build from being installed.
-The local two-image smoke selects Open MPI's portable BTL-backed path through
-`OMPI_MCA_osc=rdma` and `OMPI_MCA_pml=ob1`. This avoids selecting an unavailable
-hosted-runner UCX transport or hanging during automatic fallback, without
-changing production coarray executions. The legacy `pt2pt` OSC component is
-not installed by current Open MPI releases.
+The smoke test does not override MPI runtime components; it exercises the
+backend selected by the OpenCoarrays installation. Ubuntu CI installs the
+matching MPICH-backed OpenCoarrays package, avoiding Open MPI component
+initialization and finalization defects observed on hosted runners. Other
+platforms use their packaged OpenCoarrays backend.
 
 **The process budget.** The number of CTest entries is fixed in
 `SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 29: 13 fast,
