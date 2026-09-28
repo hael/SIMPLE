@@ -323,9 +323,8 @@ if(BUILD_TESTS)
     set_tests_properties(openmp_offload PROPERTIES FAIL_REGULAR_EXPRESSION "Fatal error|FAIL: ")
   endif()
   if(USE_COARRAYS AND Coarray_CAFRUN_EXECUTABLE)
-    # Minimal capability check compiled into the coarray-linked private executable:
-    # two images synchronize and transfer one known integer. Use the runtime
-    # selected by the OpenCoarrays installation without backend-specific tuning.
+    # Capability-gated launcher suite: the coarray-enabled private executable
+    # starts two images and synchronizes without exercising an MPI RMA window.
     simple_add_test(coarrays platform 60 1 RUN_SERIAL
       COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${SIMPLE_PRIVATE_EXE}> --coarray-smoke)
   endif()

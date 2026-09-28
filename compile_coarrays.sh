@@ -16,8 +16,8 @@ mkdir build
 cd build
 cmake -DBUILD_TESTS=${BUILD_TESTS} .. -D USE_COARRAYS=ON
 make -j || exit $?
-# Unless --exclude-tests is given, run both the ordinary fast gate and the
-# capability-gated two-image coarray smoke before installation. Either failure prevents install.
+# Unless --exclude-tests is given, run the ordinary fast gate and the
+# capability-gated coarray smoke test before installation.
 if [ "$BUILD_TESTS" = ON ]; then
     "$ROOT/scripts/run_fast_gate.sh" "$PWD" || GATE_RC=$?
     if [ "${GATE_RC:-0}" = 0 ]; then

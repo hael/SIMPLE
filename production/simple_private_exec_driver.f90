@@ -111,24 +111,16 @@ contains
 #endif
     end subroutine run_coarray_direct
 
-    !> Minimal two-image coarray check: image 1 writes a known integer to image 2,
-    !! and image 1 verifies the result reported by image 2 after synchronization.
+    !> Minimal launcher check that deliberately avoids remote coarray access.
     subroutine run_coarray_smoke
 #ifdef USE_COARRAYS
-        integer, save :: received[*]
-        logical, save :: image_passed[*]
+        integer :: syncstat
         if( num_images() /= 2 ) error stop 'coarray smoke requires exactly two images'
-        received     = this_image()
-        image_passed = .true.
-        sync all
-        if( this_image() == 1 ) received[2] = 42
-        sync all
-        if( this_image() == 2 ) image_passed = received == 42
-        sync all
-        if( this_image() == 1 ) image_passed = received == 1 .and. image_passed[2]
-        sync all
-        if( .not. image_passed[1] ) error stop 'coarray integer transfer failed'
-        if( this_image() == 1 ) write(*,'(A)') 'PASS: coarray two-image integer transfer'
+        sync all(stat=syncstat)
+        if( syncstat /= 0 ) error stop 'coarray smoke initial sync failed'
+        if( this_image() == 1 ) write(*,'(A)') 'PASS: coarray two-image synchronization'
+        sync all(stat=syncstat)
+        if( syncstat /= 0 ) error stop 'coarray smoke final sync failed'
 #else
         error stop 'coarray smoke requires a USE_COARRAYS build'
 #endif

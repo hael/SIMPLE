@@ -34,7 +34,7 @@ labels.
 | `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `highlevel` | 9 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent 6VXX/1JXY suites |
-| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is a two-image integer-transfer smoke |
+| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
 run overnight; high-level tests run only when explicitly selected with CTest.
@@ -51,14 +51,12 @@ reference Mac in Debug. Tests are on by default in every compile script;
 `--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only
 and skips the gate, for when only the executables are needed.
 
-`compile_coarrays.sh` additionally runs the capability-gated
-`coarrays` CTest entry after the fast gate and before installation. A failed
-two-image smoke test therefore prevents a coarray build from being installed.
-The smoke test does not override MPI runtime components; it exercises the
-backend selected by the OpenCoarrays installation. Ubuntu CI installs the
-matching MPICH-backed OpenCoarrays package, avoiding Open MPI component
-initialization and finalization defects observed on hosted runners. Other
-platforms use their packaged OpenCoarrays backend.
+`compile_coarrays.sh` runs the same fast gate as the other build scripts and
+then runs the capability-gated two-image synchronization suite before
+installation. A failure in either gate prevents installation. The coarray
+suite is registered only when `USE_COARRAYS=ON` and an OpenCoarrays launcher is
+found. It can also be rerun explicitly after a coarray build with
+`cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
 `SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 29: 13 fast,
@@ -588,7 +586,7 @@ deletion fall into these groups.
 |---|---|
 | printed or plotted results for eyeballing; nothing to assert that other tests do not assert | `uniform_euler`, `uniform_rot`, `order_corr`, `phasecorr`, `ptcl_center` |
 | benchmarks and timing loops | `rotate_ref`, `eval_polarftcc`, `io`, `io_parallel`, `star_export`, `openacc`, `openmp`, `simd` |
-| duplicates of a route or of a gate sub-suite | `starfile`, `binoris_test`, `binoris_io_test`, `imgfile`, the standalone `mini_stream`, `gui_assembler`, `gui_metadata`, `project_merge` and `coarrays`, `clustering`, `multinomal_test` |
+| duplicates of a route or of a gate sub-suite | `starfile`, `binoris_test`, `binoris_io_test`, `imgfile`, the standalone `mini_stream`, `gui_assembler`, `gui_metadata`, `project_merge`, `clustering`, `multinomal_test` |
 | runners on user data or downloads that asserted nothing | `continuous_inplane_rotation2D`, `continuous_inplane_rotation2D_metadata`, `nu_filter`, `create_gain`, `search_gain_flips`, `atomfit`, `eo_diff`, `opt_lp`, `cif2mrc`, `cif2pdb` |
 | not needed: a production program runs the same code, or replaces the test | `nu_envmask` (`nu_filt3D`), `phase_rand_fsc` (`fsc`), `angres` (now the program `measure_projspace_angres`) |
 | drove code that had no production caller, deleted with it | `subproject_distr`, `ptcls_ppca_subproject_distr`, `socket_client`, `socket_comm_distr`, `socket_io`, `socket_server` |
@@ -620,7 +618,7 @@ written as `sub-suite` (entry).
 | `class_sample`, `class_sample_test` | `class sample I/O` (`unit_core`) |
 | `clustering` | deleted; it called `affinity propagation` (`unit_numerics`) |
 | `cmdline` | `command line` (`unit_core`) |
-| `coarrays` | the capability-gated platform entry `coarrays`; two images transfer one known integer |
+| `coarrays` | the capability-gated platform suite `coarrays`; the coarray-linked private executable runs two images through initial and final synchronization barriers |
 | `continuous_3D_pcg_reconstruction` | `observation noise` (`unit_reconstruction`) and `PCG half-set` (`lib_reconstruction`) |
 | `continuous_inplane_cc_grad`, `continuous_inplane_hybrid_grad`, `continuous_inplane_rotation2D_stage1_validation`, `continuous_inplane_rotation2D_route_identity` | `continuous in-plane` (`unit_pftc_align2D3D`) |
 | `continuous_inplane_refine3D` | `refine3D in-plane state` and `continuous in-plane` (`unit_pftc_align2D3D`) |
