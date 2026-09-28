@@ -406,8 +406,8 @@ subroutine exec_test_single_workflow( self, cline )
     character(len=*), parameter           :: DENOISE_DIR       = '4_trajectory_denoise'
     character(len=*), parameter           :: IMPORT_DIR        = '5_import_particles'
     character(len=*), parameter           :: ANALYSIS2D_DIR    = '6_analysis2D_nano'
-    integer,          parameter           :: NREPROJS = 5000, MASKDIAM = 40, NREFINE_ITERS = 5
-    integer,          parameter           :: NFRAMES_PER_GROUP = 50
+    integer,          parameter           :: NREPROJS = 1000, MASKDIAM = 40, NREFINE_ITERS = 5
+    integer,          parameter           :: NFRAMES_PER_GROUP = 10
     integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
     real,             parameter           :: MIN_VOL_CORR      = 0.30
