@@ -1319,45 +1319,51 @@ contains
         ldim   = cavg_imgs(1)%get_ldim()
         mskrad = real(ldim(1)/2) - COSMSKHALFWIDTH - 1.
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
-        clsinds = (/(icls,icls=1,size(cavg_imgs))/)
-        clsinds = pack(clsinds, mask=l_non_junk)
-        ! re-read non-junk cavg_imgs
-        call dealloc_imgarr(cavg_imgs)
-        cavg_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        mask_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        masked_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ncls_sel  = size(cavg_imgs)
-        ! extract class populations
-        pops      = spproj%os_cls2D%get_all_asint('pop')
-        pops      = pack(pops, mask=l_non_junk)
-        ! Automasking
-        call automask2D(params, mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
-        ! calc integrated intesities and shift
-        allocate(ints(ncls_sel), source=0.)
-        do icls = 1, ncls_sel
-            call masked_imgs(icls)%mul(mask_imgs(icls))
-            ints(icls) = masked_imgs(icls)%get_sum_int()
-            call cavg_imgs(icls)%shift([shifts(icls,1),shifts(icls,2),0.])
-        end do
-        ! order
-        order = (/(i,i=1,ncls_sel)/)
-        call hpsort(order, p1_lt_p2 )
-        call reverse(order) ! largest first
-        ! communicate ranks to project file
+        ncls_sel = count(l_non_junk)
         call spproj%os_cls2D%set_all2single('shape_rank', 0)
-        do irank = 1, ncls_sel
-            icls = clsinds(order(irank))
-            call spproj%os_cls2D%set(icls, 'shape_rank', irank)
-        end do
+        if( ncls_sel > 0 )then
+            clsinds = (/(icls,icls=1,size(cavg_imgs))/)
+            clsinds = pack(clsinds, mask=l_non_junk)
+            ! re-read non-junk cavg_imgs
+            call dealloc_imgarr(cavg_imgs)
+            cavg_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+            mask_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+            masked_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+            ! extract class populations
+            pops = spproj%os_cls2D%get_all_asint('pop')
+            pops = pack(pops, mask=l_non_junk)
+            ! Automasking
+            call automask2D(params, mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+            ! calc integrated intesities and shift
+            allocate(ints(ncls_sel), source=0.)
+            do icls = 1, ncls_sel
+                call masked_imgs(icls)%mul(mask_imgs(icls))
+                ints(icls) = masked_imgs(icls)%get_sum_int()
+                call cavg_imgs(icls)%shift([shifts(icls,1),shifts(icls,2),0.])
+            end do
+            ! order
+            order = (/(i,i=1,ncls_sel)/)
+            call hpsort(order, p1_lt_p2 )
+            call reverse(order) ! largest first
+            ! communicate ranks to project file
+            do irank = 1, ncls_sel
+                icls = clsinds(order(irank))
+                call spproj%os_cls2D%set(icls, 'shape_rank', irank)
+            end do
+            ! write class averages
+            call write_imgarr(cavg_imgs, string(SHAPE_RANKED_CAVGS_MRCNAME), order)
+            call spproj%shape_ranked_cavgs2jpg(cavg_inds, string(SHAPE_RANKED_CAVGS_JPGNAME), xtiles, ytiles)
+        else
+            write(logfhandle,'(A,I0,A)') '>>> NO CLASS AVERAGES PASSED SHAPE-QUALITY FILTERING; ALL ', &
+                &size(cavg_imgs), ' SHAPE RANKS REMAIN ZERO'
+        endif
         ! write ranks to project file
         call spproj%write_segment_inside('cls2D')
-        ! write class averages
-        call write_imgarr(cavg_imgs, string(SHAPE_RANKED_CAVGS_MRCNAME), order)
-        call spproj%shape_ranked_cavgs2jpg(cavg_inds, string(SHAPE_RANKED_CAVGS_JPGNAME), xtiles, ytiles)
         ! kill
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)
         call dealloc_imgarr(mask_imgs)
+        call dealloc_imgarr(masked_imgs)
         if( allocated(cavg_inds)  ) deallocate(cavg_inds)
         if( allocated(clsinds)    ) deallocate(clsinds)
         if( allocated(l_non_junk) ) deallocate(l_non_junk)
