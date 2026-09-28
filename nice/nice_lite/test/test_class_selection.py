@@ -7,8 +7,6 @@ from django.test import SimpleTestCase
 from ..data_structures.class_selection import (
     ClassSelectionError,
     SIMPLEProjectFileReader,
-    class_selection_flags,
-    deselected_class_ids,
     load_batch_class_selection,
 )
 from .test_mrc import _write_mrc_stack
@@ -110,28 +108,6 @@ class BatchClassSelectionTests(SimpleTestCase):
                     self.tempdir.name,
                     job_id=7,
                 )
-
-    def test_deselection_export_uses_canonical_one_based_ids(self):
-        self._write_selection_project()
-        selection = load_batch_class_selection(
-            self.project_path,
-            self.tempdir.name,
-            job_id=7,
-        )
-
-        self.assertEqual(deselected_class_ids(selection, [3, 1]), [2])
-        with self.assertRaisesRegex(ClassSelectionError, "unknown class IDs"):
-            deselected_class_ids(selection, [1, 4])
-
-    def test_selection_flags_follow_project_record_order(self):
-        self._write_selection_project()
-        selection = load_batch_class_selection(
-            self.project_path,
-            self.tempdir.name,
-            job_id=7,
-        )
-
-        self.assertEqual(class_selection_flags(selection, [3, 1]), [1, 0, 1])
 
     def test_parser_preserves_first_duplicate_value(self):
         record = SIMPLEProjectFileReader.parse_record("stk=classes.mrcs stk=0")

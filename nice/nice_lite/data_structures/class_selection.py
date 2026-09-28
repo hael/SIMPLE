@@ -397,48 +397,6 @@ def load_batch_class_selection(project_path, project_root, job_id):
     return selection
 
 
-def batch_class_selection_available(project_path, project_root):
-    """Check for non-empty cls2D metadata without loading pixels or writing files."""
-    safe_project = _safe_regular_file(project_path, project_root)
-    if safe_project is None or safe_project.suffix.lower() != ".simple":
-        return False
-    try:
-        segment = SIMPLEProjectFileReader(safe_project).get_segment("cls2D")
-    except (ClassSelectionError, OSError, OverflowError, struct.error):
-        return False
-    return segment is not None and segment.record_count > 0
-
-
-def deselected_class_ids(selection, selected_class_ids):
-    """Validate browser state and return canonical deselected class IDs."""
-    if not isinstance(selected_class_ids, list):
-        raise ClassSelectionError("Selection data is missing or invalid.")
-    if any(
-        isinstance(value, bool) or not isinstance(value, int)
-        for value in selected_class_ids
-    ):
-        raise ClassSelectionError("Selection contains a non-integer class ID.")
-
-    known_ids = {entry["class_id"] for entry in selection.classes}
-    selected_ids = set(selected_class_ids)
-    unknown_ids = selected_ids - known_ids
-    if unknown_ids:
-        raise ClassSelectionError(
-            f"Selection contains unknown class IDs: {sorted(unknown_ids)}."
-        )
-    return sorted(known_ids - selected_ids)
-
-
-def class_selection_flags(selection, selected_class_ids):
-    """Return project-ordered 1/0 state flags for validated selected classes."""
-    deselected_class_ids(selection, selected_class_ids)
-    selected_ids = set(selected_class_ids)
-    return [
-        1 if entry["class_id"] in selected_ids else 0
-        for entry in selection.classes
-    ]
-
-
 def validate_deselected_class_ids(selection, deselected_ids):
     """Validate browser-supplied deselected class IDs and return them canonically."""
     if not isinstance(deselected_ids, list):

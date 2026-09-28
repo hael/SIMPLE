@@ -66,37 +66,12 @@ urlpatterns = [
         batch_views.view_batch_volume_data,
         name="batch_volume_data",
     ),
-    path(
-        "batchparticle/<int:jobid>/<str:stack_name>/<int:particle_index>",
-        batch_views.view_batch_particle_thumbnail,
-        name="batch_particle_thumbnail",
-    ),
-    path(
-        "batchclass/<int:jobid>/<int:stack_index>",
-        batch_views.view_batch_class_thumbnail,
-        name="batch_class_thumbnail",
-    ),
-    path(
-        "batchclass/<int:jobid>/infile",
-        batch_views.view_batch_class_selection_export,
-        name="batch_class_selection_export",
-    ),
-    path(
-        "batchclass/<int:jobid>/selection",
-        batch_views.view_batch_class_selection_run,
-        name="batch_class_selection_run",
-    ),
     path("selectbatchmicrograph/<int:jobid>", batch_views.view_batch_micrograph_selection,    name="batch_micrograph_selection"), 
     path("selectbatchcls2d/<int:jobid>",      batch_views.view_batch_class_2D_selection,      name="batch_cls2D_selection"),
     path("selectbatchcls3d/<int:jobid>",      batch_views.view_batch_class_3D_selection,      name="batch_cls3D_selection"),
     path("batchmicrographspage/<int:jobid>",  batch_views.view_batch_micrographs_page,        name="view_batch_micrographs_page"),
     path("savebatchmanualpickboxes/<int:jobid>", batch_views.view_batch_save_manual_pick_boxes, name="save_batch_manual_pick_boxes"),
 
-    path(
-        "batchmovie/<int:jobid>/<str:token>",
-        batch_views.view_batch_movie_thumbnail,
-        name="batch_movie_thumbnail",
-    ),
     path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
     path("finishbatch",                        batch_views.view_batch_mark_finished,                name="finish_batch"),
     path("rerunbatch",                         batch_views.view_batch_rerun,                       name="clone_batch"),

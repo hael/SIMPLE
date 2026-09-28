@@ -1,13 +1,10 @@
 # global imports
-import hashlib
-import json
 import logging
 import math
 import os
 import shutil
 import signal
 import struct
-import tempfile
 import time
 from collections import Counter
 
@@ -15,7 +12,6 @@ import psutil
 from PIL import Image
 
 # django imports
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
 
@@ -28,9 +24,7 @@ from .job import Job
 from .mrc import (
     read_mrc_stack_info,
     read_mrc_volume_info,
-    render_mrc_particle_png,
 )
-from .movie import render_movie_webp
 from .workspace import Workspace
 
 
@@ -57,15 +51,8 @@ class BatchJob(Job):
     MOTION_THUMBNAIL_SUFFIX = "_thumb.jpg"
     PICK_INTEGRATED_SUFFIX = "_intg"
     PICK_DENOISED_THUMBNAIL_SUFFIX = "_den.jpg"
-    PARTICLE_STACK_PROGRAMS = frozenset(("extract", "reextract"))
-    MRC_STACK_PREVIEW_PROGRAMS = PARTICLE_STACK_PROGRAMS | frozenset(("reproject",))
     # Programs whose commanders write jobstats["cls3D"] stage volume metadata via add_metadata(oritype='cls3D').
     VOLUME_VIEWER_PROGRAMS = frozenset(("abinitio3D", "refine3D_auto"))
-    IMPORT_MOVIE_EXTENSIONS = frozenset((
-        ".mrc", ".mrcs", ".tif", ".tiff", ".eer",
-    ))
-    MOVIE_THUMBNAIL_CACHE_DIR = ".nice_movie_thumbnails"
-    MOVIE_THUMBNAIL_CACHE_VERSION = 2
     # Path field, display label, in the order shown in the volume-kind toggle
     # (mirrors stream_views._VOLUME_KINDS).
     VOLUME_KINDS = (
@@ -855,255 +842,6 @@ class BatchJob(Job):
                         "maximum": float(maximum),
                     })
         return outputs
-
-    def get_particle_stack_page(self, page=1, page_size=40):
-        """Return one page of addressable images from owned output stacks.
-
-        Only MRC headers are read here. Pixel data is read later by the image
-        endpoint for the thumbnails that the browser actually requests.
-        """
-        empty_page = {
-            "stacks": [],
-            "particles": [],
-            "total": 0,
-            "page": 1,
-            "pages": 0,
-            "page_numbers": [],
-            "ellipsis": Paginator.ELLIPSIS,
-            "has_previous": False,
-            "has_next": False,
-            "first_particle": 0,
-            "last_particle": 0,
-        }
-        if self.prog not in self.MRC_STACK_PREVIEW_PROGRAMS:
-            return empty_page
-        if not isinstance(page, int) or isinstance(page, bool) or page < 1:
-            page = 1
-        if not isinstance(page_size, int) or isinstance(page_size, bool) or page_size < 1:
-            page_size = 40
-        page_size = min(page_size, 100)
-
-        job_dir = self.get_safe_job_dir()
-        if job_dir is None:
-            return empty_page
-        try:
-            with os.scandir(job_dir) as directory_entries:
-                stack_names = sorted(
-                    entry.name
-                    for entry in directory_entries
-                    if entry.name.lower().endswith(".mrcs")
-                    and entry.is_file(follow_symlinks=True)
-                )
-        except OSError:
-            return empty_page
-
-        stacks = []
-        total = 0
-        for stack_name in stack_names:
-            stack_path = self._safe_job_file(stack_name, job_dir)
-            stack_info = read_mrc_stack_info(stack_path) if stack_path is not None else None
-            if stack_info is None:
-                continue
-            stacks.append({
-                "name": stack_name,
-                "count": stack_info.count,
-                "width": stack_info.width,
-                "height": stack_info.height,
-                "first_particle": total + 1,
-            })
-            total += stack_info.count
-
-        if total == 0:
-            return empty_page
-
-        paginator = Paginator(range(total), page_size)
-        page_obj = paginator.get_page(page)
-        first_offset = page_obj.start_index() - 1
-        last_offset = page_obj.end_index()
-        particles = []
-        stack_offset = 0
-        for stack in stacks:
-            stack_last_offset = stack_offset + stack["count"]
-            selected_start = max(first_offset, stack_offset)
-            selected_end = min(last_offset, stack_last_offset)
-            for global_offset in range(selected_start, selected_end):
-                particles.append({
-                    "number": global_offset + 1,
-                    "stack_name": stack["name"],
-                    "stack_index": global_offset - stack_offset + 1,
-                    "width": stack["width"],
-                    "height": stack["height"],
-                })
-            stack_offset = stack_last_offset
-            if stack_offset >= last_offset:
-                break
-
-        return {
-            "stacks": stacks,
-            "particles": particles,
-            "total": total,
-            "page": page_obj.number,
-            "pages": paginator.num_pages,
-            "page_numbers": list(paginator.get_elided_page_range(
-                page_obj.number,
-                on_each_side=2,
-                on_ends=1,
-            )),
-            "ellipsis": Paginator.ELLIPSIS,
-            "has_previous": page_obj.has_previous(),
-            "previous_page": (
-                page_obj.previous_page_number() if page_obj.has_previous() else None
-            ),
-            "has_next": page_obj.has_next(),
-            "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
-            "first_particle": page_obj.start_index(),
-            "last_particle": page_obj.end_index(),
-        }
-
-    def get_particle_thumbnail(self, stack_name, particle_index, max_size=160):
-        """Return one owned output-stack image as in-memory PNG bytes."""
-        if (
-            self.prog not in self.MRC_STACK_PREVIEW_PROGRAMS
-            or not isinstance(stack_name, str)
-            or stack_name != os.path.basename(stack_name)
-            or not stack_name.lower().endswith(".mrcs")
-        ):
-            return None
-        job_dir = self.get_safe_job_dir()
-        stack_path = self._safe_job_file(stack_name, job_dir) if job_dir is not None else None
-        if stack_path is None:
-            return None
-        return render_mrc_particle_png(stack_path, particle_index, max_size=max_size)
-
-    def get_import_movie_thumbnail(self, movie_path, max_size=160):
-        """Return one imported movie thumbnail from an on-demand WebP cache."""
-        if (
-            self.prog != "import_movies"
-            or not isinstance(movie_path, str)
-            or not os.path.isabs(movie_path)
-            or not os.path.isfile(movie_path)
-        ):
-            return None
-
-        cache_path = self._import_movie_thumbnail_cache_path(movie_path, max_size)
-        if cache_path is None:
-            return None
-        try:
-            with open(cache_path, "rb") as cache_file:
-                return cache_file.read()
-        except FileNotFoundError:
-            pass
-        except OSError:
-            return None
-
-        thumbnail = render_movie_webp(movie_path, max_size=max_size)
-        if thumbnail is None:
-            return None
-
-        temporary_path = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="wb",
-                dir=os.path.dirname(cache_path),
-                prefix=".movie-thumbnail-",
-                suffix=".tmp",
-                delete=False,
-            ) as temporary_file:
-                temporary_path = temporary_file.name
-                temporary_file.write(thumbnail)
-            os.replace(temporary_path, cache_path)
-            temporary_path = None
-        except OSError:
-            return thumbnail
-        finally:
-            if temporary_path is not None:
-                try:
-                    os.unlink(temporary_path)
-                except OSError:
-                    pass
-        return thumbnail
-
-    def get_import_movie_paths(self):
-        """Return import candidates from this job's submitted movie source."""
-        if self.prog != "import_movies" or not isinstance(self.args, dict):
-            return []
-
-        directory = str(self.args.get("dir_movies", "") or "").strip()
-        file_table = str(self.args.get("filetab", "") or "").strip()
-        if bool(directory) == bool(file_table):
-            return []
-
-        job_dir = self.get_safe_job_dir()
-        if job_dir is None:
-            return []
-        if directory:
-            if not os.path.isabs(directory):
-                directory = os.path.abspath(os.path.join(job_dir, directory))
-            try:
-                with os.scandir(directory) as entries:
-                    return sorted(
-                        os.path.abspath(entry.path)
-                        for entry in entries
-                        if entry.is_file(follow_symlinks=True)
-                        and os.path.splitext(entry.name)[1].lower()
-                        in self.IMPORT_MOVIE_EXTENSIONS
-                    )
-            except OSError:
-                return []
-
-        if not os.path.isabs(file_table):
-            file_table = os.path.abspath(os.path.join(job_dir, file_table))
-        try:
-            with open(file_table, encoding="utf-8") as source_file:
-                source_lines = source_file.readlines()
-        except OSError:
-            return []
-
-        movie_paths = []
-        for source_line in source_lines:
-            movie_path = source_line.strip()
-            if not movie_path or movie_path.startswith("#"):
-                continue
-            if not os.path.isabs(movie_path):
-                movie_path = os.path.abspath(os.path.join(job_dir, movie_path))
-            if (
-                os.path.splitext(movie_path)[1].lower()
-                in self.IMPORT_MOVIE_EXTENSIONS
-                and os.path.isfile(movie_path)
-            ):
-                movie_paths.append(movie_path)
-        return movie_paths
-
-    def _import_movie_thumbnail_cache_path(self, movie_path, max_size):
-        """Return a safe cache path keyed by source identity and dimensions."""
-        if (
-            not isinstance(max_size, int)
-            or isinstance(max_size, bool)
-            or max_size < 1
-        ):
-            return None
-        job_dir = self.get_safe_job_dir()
-        if job_dir is None:
-            return None
-        cache_dir = os.path.join(job_dir, self.MOVIE_THUMBNAIL_CACHE_DIR)
-        if os.path.islink(cache_dir) or not ensure_directory(cache_dir):
-            return None
-        try:
-            if os.path.commonpath((job_dir, os.path.realpath(cache_dir))) != job_dir:
-                return None
-            source_stat = os.stat(movie_path)
-        except (OSError, ValueError):
-            return None
-
-        cache_identity = "\0".join((
-            str(self.MOVIE_THUMBNAIL_CACHE_VERSION),
-            os.path.realpath(movie_path),
-            str(source_stat.st_size),
-            str(source_stat.st_mtime_ns),
-            str(max_size),
-        ))
-        cache_name = hashlib.sha256(cache_identity.encode("utf-8")).hexdigest()
-        return os.path.join(cache_dir, cache_name + ".webp")
 
     # ------------------------------------------------------------------
     # Internal helpers

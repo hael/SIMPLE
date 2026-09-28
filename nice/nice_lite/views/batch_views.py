@@ -5,11 +5,9 @@ import logging
 import math
 import os
 import struct
-import tempfile
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core import signing
 from django.http import FileResponse, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
@@ -20,11 +18,9 @@ from django.views.decorators.http import require_GET, require_POST
 from ..data_structures.batchjob import BatchJob
 from ..data_structures.class_selection import (
     ClassSelectionError,
-    class_selection_flags,
     load_batch_class_selection,
     validate_deselected_class_ids,
 )
-from ..data_structures.mrc import render_mrc_particle_png
 from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch
 from ..data_structures.workspace import Workspace
@@ -36,8 +32,6 @@ logger = logging.getLogger(__name__)
 
 _BATCH_LAUNCHER_KEYS = {"prg", "projfile", "mkdir", "niceprocid", "niceserver"}
 _BATCH_MICROGRAPH_PAGE_SIZE = 50
-_BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
-_BATCH_CLASS_SELECTION_FILENAME = "class_selection.txt"
 # manual picking has no established particle box size yet; use a fixed placeholder for written box files.
 _MANUALPICK_BOX_SIZE_PX = 100
 
@@ -223,10 +217,6 @@ def _positive_tile_width(request):
 def _volume_viewer_requested(request):
     """Return True only for the explicit, default-off volume-viewer key."""
     return request.GET.get("volume_viewer") == "1"
-
-
-def _batch_detail_redirect(job_id):
-    return reverse("nice_lite:view_batch", args=(job_id,))
 
 
 def _deselected_class_ids(request):
@@ -503,194 +493,6 @@ def view_batch_volume_data(request, jobid, volume_name):
 
 
 @login_required(login_url="/login")
-@require_GET
-@cache_control(private=True, max_age=300, no_transform=True)
-def view_batch_class_thumbnail(request, jobid, stack_index):
-    """Render one class average from an owned finished batch result."""
-    batch_job, jobmodel = _get_accessible_batch_job(
-        request,
-        "view_batch_class_thumbnail",
-        job_id=jobid,
-    )
-    if batch_job is None or jobmodel.status != "finished":
-        return HttpResponse(status=404)
-
-    result_project = batch_job.get_result_project_path()
-    try:
-        selection = load_batch_class_selection(
-            result_project,
-            jobmodel.dset.proj.dirc,
-            jobmodel.id,
-        )
-    except (ClassSelectionError, OSError, OverflowError, struct.error):
-        return HttpResponse(status=404)
-    if stack_index not in {
-        entry["stack_index"] for entry in selection.classes
-    }:
-        return HttpResponse(status=404)
-
-    thumbnail = render_mrc_particle_png(
-        selection.stack_path,
-        stack_index,
-        max_size=512,
-    )
-    if thumbnail is None:
-        return HttpResponse(status=404)
-    response = HttpResponse(thumbnail, content_type="image/png")
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
-
-
-@login_required(login_url="/login")
-@require_POST
-def view_batch_class_selection_export(request, jobid):
-    """Download validated, project-ordered 1/0 class-selection state."""
-    batch_job, jobmodel = _get_accessible_batch_job(
-        request,
-        "view_batch_class_selection_export",
-        job_id=jobid,
-    )
-    if batch_job is None or jobmodel.status != "finished":
-        messages.add_message(request, messages.ERROR, "invalid batch job selection")
-        return redirect("nice_lite:workspace")
-
-    try:
-        selection = load_batch_class_selection(
-            batch_job.get_result_project_path(),
-            jobmodel.dset.proj.dirc,
-            jobmodel.id,
-        )
-        selection_flags = class_selection_flags(
-            selection,
-            _deselected_class_ids(request),
-        )
-    except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
-        logger.warning(
-            "batch class selection export failed for job %s: %s",
-            jobmodel.id,
-            error,
-        )
-        messages.add_message(request, messages.ERROR, f"selection export failed: {error}")
-        return redirect(_batch_detail_redirect(jobmodel.id))
-
-    response = HttpResponse(
-        "".join(f"{state}\n" for state in selection_flags),
-        content_type="text/plain; charset=utf-8",
-    )
-    response["Content-Disposition"] = (
-        f'attachment; filename="batch_{jobmodel.id}_class_selection.txt"'
-    )
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
-
-
-def _save_batch_class_selection_infile(batch_job, selection_flags):
-    """Atomically replace the fixed class-selection infile in its source job."""
-    job_dir = batch_job.get_safe_job_dir()
-    if job_dir is None:
-        raise ClassSelectionError("The ab initio 2D job directory is unavailable.")
-
-    infile_path = os.path.abspath(
-        os.path.join(job_dir, _BATCH_CLASS_SELECTION_FILENAME)
-    )
-    resolved_infile = os.path.realpath(infile_path)
-    try:
-        infile_is_safe = os.path.commonpath((job_dir, resolved_infile)) == job_dir
-    except ValueError:
-        infile_is_safe = False
-    if not infile_is_safe:
-        raise ClassSelectionError("The class-selection infile path is unsafe.")
-
-    temporary_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            prefix=".class_selection.",
-            dir=job_dir,
-            delete=False,
-        ) as temporary_file:
-            temporary_path = temporary_file.name
-            temporary_file.write(
-                "".join(f"{state}\n" for state in selection_flags)
-            )
-        os.replace(temporary_path, infile_path)
-    except OSError:
-        if temporary_path is not None:
-            try:
-                os.unlink(temporary_path)
-            except OSError:
-                pass
-        raise
-    return infile_path
-
-
-@login_required(login_url="/login")
-@require_POST
-def view_batch_class_selection_run(request, jobid):
-    """Save class state beside ab initio 2D output and prefill selection."""
-    batch_job, jobmodel = _get_accessible_batch_job(
-        request,
-        "run_batch_class_selection",
-        job_id=jobid,
-    )
-    if batch_job is None:
-        messages.add_message(request, messages.ERROR, "invalid batch job selection")
-        return redirect("nice_lite:workspace")
-
-    if (
-        jobmodel.status != "finished"
-        or jobmodel.pckg != "simple"
-        or jobmodel.prog != "abinitio2D"
-    ):
-        messages.add_message(
-            request,
-            messages.ERROR,
-            "2D class selection requires a finished ab initio 2D job",
-        )
-        return redirect(_batch_detail_redirect(jobmodel.id))
-
-    result_project = batch_job.get_result_project_path()
-    try:
-        selection = load_batch_class_selection(
-            result_project,
-            jobmodel.dset.proj.dirc,
-            jobmodel.id,
-        )
-        selected_ids = _deselected_class_ids(request)
-        selection_flags = class_selection_flags(selection, selected_ids)
-        if not selected_ids:
-            raise ClassSelectionError(
-                "Select at least one class before running a selection job."
-            )
-        _save_batch_class_selection_infile(batch_job, selection_flags)
-    except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
-        logger.warning(
-            "batch class selection job validation failed for job %s: %s",
-            jobmodel.id,
-            error,
-        )
-        messages.add_message(request, messages.ERROR, f"selection job failed: {error}")
-        return redirect(_batch_detail_redirect(jobmodel.id))
-
-    messages.add_message(
-        request,
-        messages.SUCCESS,
-        "class selection infile saved; review and start the selection job",
-    )
-    return redirect(reverse(
-        "nice_lite:workspace",
-        query={
-            "selected_job_id": jobmodel.id,
-            "class_selection": "1",
-            "selected_project_id": jobmodel.dset.proj_id,
-            "selected_workspace_id": jobmodel.dset_id,
-        },
-    ))
-
-
-@login_required(login_url="/login")
 @require_POST
 def view_batch_class_2D_selection(request, jobid):
     """Create and launch a new cls2D-deselection batch job from the current selection."""
@@ -964,57 +766,6 @@ def view_batch_save_manual_pick_boxes(request, jobid):
 
     return JsonResponse({"saved": True, "count": len(coordinates)})
 
-
-@login_required(login_url="/login")
-@require_GET
-@cache_control(private=True, max_age=300, no_transform=True)
-def view_batch_particle_thumbnail(request, jobid, stack_name, particle_index):
-    """Render one owned output-stack image on demand without writing a thumbnail."""
-    batch_job, _ = _get_accessible_batch_job(
-        request,
-        "view_batch_particle_thumbnail",
-        job_id=jobid,
-    )
-    if batch_job is None:
-        return HttpResponse(status=404)
-
-    thumbnail = batch_job.get_particle_thumbnail(stack_name, particle_index)
-    if thumbnail is None:
-        return HttpResponse(status=404)
-    return HttpResponse(thumbnail, content_type="image/png")
-
-
-@login_required(login_url="/login")
-@require_GET
-@cache_control(private=True, max_age=300, no_transform=True)
-def view_batch_movie_thumbnail(request, jobid, token):
-    """Return one signed import movie from the on-demand WebP cache."""
-    batch_job, _ = _get_accessible_batch_job(
-        request,
-        "view_batch_movie_thumbnail",
-        job_id=jobid,
-    )
-    if batch_job is None:
-        return HttpResponse(status=404)
-
-    try:
-        payload = signing.Signer(
-            salt=_BATCH_MOVIE_THUMBNAIL_SALT,
-        ).unsign_object(token)
-    except signing.BadSignature:
-        return HttpResponse(status=404)
-    if (
-        not isinstance(payload, dict)
-        or payload.get("job_id") != jobid
-        or not isinstance(payload.get("path"), str)
-        or payload.get("version") != BatchJob.MOVIE_THUMBNAIL_CACHE_VERSION
-    ):
-        return HttpResponse(status=404)
-
-    thumbnail = batch_job.get_import_movie_thumbnail(payload["path"])
-    if thumbnail is None:
-        return HttpResponse(status=404)
-    return HttpResponse(thumbnail, content_type="image/webp")
 
 @login_required(login_url="/login")
 @require_POST
