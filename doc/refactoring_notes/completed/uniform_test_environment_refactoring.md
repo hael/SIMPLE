@@ -1649,7 +1649,11 @@ independence, exact iteration counts, reproduction of a solve by a fresh
 operator (relative L2 < 1e-5 rather than bit identity, since the operator
 reduces under OpenMP), finite gridding and PCG half maps that differ, the
 FSC contract (bounded, low-shell mean > 0.4, decay of at least 0.1 towards
-Nyquist), noiseless recovery of the supported truth (corr > 0.85), and on
+Nyquist), noiseless recovery of the supported truth (corr > 0.85; the first
+nightly run, 2026-09-28, found the 24-view solve under-determined, 0.82 at
+40 iterations against 0.98 at 48 views, so the FSC test runs 96 views per
+half and the bar is 0.97; the lambda sweep is cut to six values around the
+optimum, 0.1 to 100), and on
 the 48-view matrix a noisy raw-L2 lambda optimum interior to the sweep
 that beats the gridding control. The phantom fingerprints stay as one
 small test of the fixture. `rec3D_backend` (in CI) is `merge into

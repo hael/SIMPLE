@@ -6,7 +6,10 @@
 ! across operator instances, the half-map FSC contract (bounded, low-frequency agreement,
 ! decay towards Nyquist), strong noiseless recovery, and on the 48-view matrix the
 ! lambda sweep bracketing a noisy-error optimum that beats the gridding control.
-! Nightly (lib_reconstruction): about a hundred PCG solves at box 24.
+! Nightly (lib_reconstruction): about a hundred PCG solves at box 24. Both solve tests are
+! well-determined (96 and 48 views per half): at 24 views the noiseless solve crept to 0.82 at
+! 40 iterations for lack of Fourier coverage, while 48 views recover 0.98 (2026-09-28), so the
+! noiseless bar is 0.97 and tests the solver, not the sampling.
 module simple_pcg_halfset_tester
 use simple_defs,              only: dp, OSMPL_PAD_FAC
 use simple_image,             only: image
@@ -47,7 +50,7 @@ integer, parameter :: N_LOW_SHELLS   = 3
 integer, parameter :: N_HIGH_SHELLS  = 3
 real(dp), parameter :: SNR_RELTOL         = 0.12_dp
 real(dp), parameter :: NOISE_CORR_TOL     = 0.08_dp
-real(dp), parameter :: CLEAN_CORR_MIN     = 0.85_dp
+real(dp), parameter :: CLEAN_CORR_MIN     = 0.97_dp ! 48 views: 0.984/0.987 at 40 iterations (2026-09-28)
 real(dp), parameter :: LOW_FSC_MIN        = 0.40_dp
 real(dp), parameter :: FSC_LOW_HIGH_GAP   = 0.10_dp
 real(dp), parameter :: FSC_BOUND_SLACK    = 1.e-5_dp
@@ -59,7 +62,7 @@ contains
         call test_truth_volume_fixture()
         call test_disjoint_half_ownership()
         call test_independent_observations()
-        call test_halfset_fsc_24()
+        call test_halfset_fsc_96()
         call test_halfset_matrix_48()
     end subroutine run_all_pcg_halfset_tests
 
@@ -471,9 +474,10 @@ contains
         call odd_oris%kill()
     end subroutine test_independent_observations
 
-    !> 24 views per half: PCG halves versus gridding halves, the FSC contract
-    subroutine test_halfset_fsc_24()
-        integer, parameter :: NHALF = 24
+    !> 96 views per half, a well-determined system: PCG halves versus gridding halves, the
+    !! FSC contract, noiseless recovery (24 views left the solve under-determined: 0.82)
+    subroutine test_halfset_fsc_96()
+        integer, parameter :: NHALF = 96
         integer, parameter :: TRAJ_ITS(6) = [1, 2, 4, 8, 16, 40]
         type(oris) :: even_oris, odd_oris
         type(reconstructor_pcg) :: sampler
@@ -487,7 +491,7 @@ contains
         real(dp) :: even_snr, odd_snr, low, high, glow, ghigh
         real(dp) :: traj_corr(2,6)
         integer  :: ec_n, oc_n, e_n, o_n, i
-        write(*,'(A)') 'test_halfset_fsc_24'
+        write(*,'(A)') 'test_halfset_fsc_96'
         call build_disjoint_halves(NHALF, even_oris, odd_oris, even_ids, odd_ids)
         call sampler%new(BOX, SMPD, LAMBDA)
         call build_observations(sampler, even_oris, EVEN_SEED, OBS_SNR, even_planes, even_clean, ec_img, en_img, even_noise, even_snr)
@@ -527,7 +531,7 @@ contains
         enddo
         call assert_true(all(ieee_is_finite(traj_corr)), 'trajectory correlations are finite')
         call assert_true(maxval(traj_corr(1,:)) > CLEAN_CORR_MIN .and. maxval(traj_corr(2,:)) > CLEAN_CORR_MIN, &
-            &'noiseless PCG halves recover the supported truth (corr > 0.85)')
+            &'96-view noiseless PCG halves recover the supported truth (corr > 0.97)')
         call calc_fsc(even_vol, odd_vol, fsc)
         call apply_support(g_even)
         call apply_support(g_odd)
@@ -542,11 +546,12 @@ contains
         call assert_true(low - high > FSC_LOW_HIGH_GAP, 'FSC decays from low to high frequency')
         write(*,'(A,2(ES12.4,1X))') '  realised even/odd SNR:        ', even_snr, odd_snr
         write(*,'(A,6(F7.4,1X))')   '  clean even corr vs iterations:', traj_corr(1,:)
+        write(*,'(A,6(F7.4,1X))')   '  clean odd  corr vs iterations:', traj_corr(2,:)
         write(*,'(A,2(F7.4,1X))')   '  PCG low/high FSC:             ', low, high
         write(*,'(A,2(F7.4,1X))')   '  gridding low/high FSC:        ', glow, ghigh
         call even_oris%kill()
         call odd_oris%kill()
-    end subroutine test_halfset_fsc_24
+    end subroutine test_halfset_fsc_96
 
     !> 48 views per half: iteration trajectories with and without support, the lambda sweep,
     !! and the gridding control; the noisy raw-L2 optimum must be interior to the sweep and
@@ -555,9 +560,11 @@ contains
         integer, parameter :: NHALF = 48
         integer, parameter :: TRAJ_ITS(6) = [1, 2, 4, 8, 16, 40]
         integer, parameter :: OPEN_ITS(3) = [4, 8, 40]
-        integer, parameter :: NLAMBDA = 13
-        real,    parameter :: LAMBDAS(NLAMBDA) = [1.e-3, 1.e-2, 1.e-1, 1., 10., 100., &
-            &1.e3, 2.e3, 3.e3, 5.e3, 1.e4, 1.e5, 1.e6]
+        ! six values around the noisy raw-L2 optimum (lambda 10 on both halves, 2026-09-28: rel L2
+        ! 0.656/0.657, against 1.13/1.15 at 0.1 and 0.767/0.771 at 100), enough to bracket it; the
+        ! 13-value sweep from 1e-3 to 1e6 cost ~2000 of the suite's solver iterations
+        integer, parameter :: NLAMBDA = 6
+        real,    parameter :: LAMBDAS(NLAMBDA) = [0.1, 1., 3., 10., 30., 100.]
         type(oris) :: even_oris, odd_oris
         type(reconstructor_pcg) :: sampler
         complex, allocatable :: even_planes(:,:,:), even_clean(:,:,:), odd_planes(:,:,:), odd_clean(:,:,:)
@@ -647,7 +654,7 @@ contains
             &all(ieee_is_finite(grid_corr)) .and. all(ieee_is_finite(grid_err)) .and. all(ieee_is_finite(grid_fsc)), &
             &'every matrix statistic is finite')
         call assert_true(maxval(traj_corr(1,:)) > CLEAN_CORR_MIN .and. maxval(traj_corr(2,:)) > CLEAN_CORR_MIN, &
-            &'48-view noiseless PCG halves recover the supported truth (corr > 0.85)')
+            &'48-view noiseless PCG halves recover the supported truth (corr > 0.97)')
         call assert_true(interior_minimum(lambda_err(3,:)) .and. interior_minimum(lambda_err(4,:)), &
             &'the noisy raw-L2 lambda optimum is bracketed by the sweep')
         call assert_true(lambda_err(3,best(1)) < grid_err(3) .and. lambda_err(4,best(2)) < grid_err(4), &
