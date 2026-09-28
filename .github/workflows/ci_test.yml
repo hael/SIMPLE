@@ -55,6 +55,6 @@ jobs:
              echo "-------------------- PLATFORM TESTS -------------------------"
              ctest -L platform --no-tests=error --output-on-failure
              echo "-------------------- LIBRARY TESTS --------------------------"
-             ctest -L library --no-test=error --output-on-failure
+             ctest -L library --no-tests=error --output-on-failure
              echo "-------------------- HIGH-LEVEL TESTS -----------------------"
-             ctest -L highlevel --no-test=error --output-on-failure
+             ctest -L highlevel --no-tests=error --output-on-failure

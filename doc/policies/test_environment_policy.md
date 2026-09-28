@@ -53,6 +53,9 @@ and skips the gate, for when only the executables are needed.
 `compile_coarrays.sh` additionally runs the capability-gated
 `coarrays` CTest entry after the fast gate and before installation. A failed
 two-image smoke test therefore prevents a coarray build from being installed.
+The local two-image smoke excludes Open MPI's UCX OSC component through
+`OMPI_MCA_osc=^ucx`; this avoids selecting an unavailable hosted-runner UCX
+transport without changing production coarray executions.
 
 **The process budget.** The number of CTest entries is fixed in
 `SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 29: 13 fast,
