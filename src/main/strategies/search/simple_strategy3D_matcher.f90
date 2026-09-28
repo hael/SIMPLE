@@ -114,9 +114,10 @@ contains
         if( ctrl%do_pose_cont_strategy ) call validate_pose_cont_strategy_seeds()
         call sample_particles_for_update( pinds, nptcls2update )
         if( nptcls2update < 1 )then
-            ! An empty partition: no missing particle to update, or no active
-            ! or sampled particle in the range (a distributed partition of
-            ! state-0 rows only, e.g. the frozen rows of abinitio3D_addon).
+            ! An empty partition: no missing particle to update, or (in a
+            ! distributed worker only) no active particle in the range or none
+            ! of a sample drawn over the whole project. Partitions balance the
+            ! active particles, so this is rare, but it is valid.
             ! The master still expects every partition's outputs, so emit the
             ! unchanged committed sigma2 slice (canonical consolidation needs
             ! one range per partition), the range's orientations
@@ -414,14 +415,17 @@ contains
                 if( p_ptr%l_update_missing )then
                     THROW_HARD('update_missing requires matcher-owned assignment; use a non-probabilistic refine mode')
                 endif
-                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, allow_empty=.true.)
+                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
+                    &allow_empty=p_ptr%l_distr_worker)
             else
                 if( p_ptr%l_update_missing )then
                     call sample_ptcls4missing3D(b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
                 else if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
-                    call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
+                    call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local, &
+                        &allow_empty=p_ptr%l_distr_worker)
                 else
-                    call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
+                    call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local, &
+                        &allow_empty=p_ptr%l_distr_worker)
                 endif
             endif
         end subroutine sample_particles_for_update

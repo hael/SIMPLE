@@ -60,7 +60,8 @@ contains
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
         if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, allow_empty=.true.)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, &
+                &allow_empty=params%l_distr_worker)
         else
             THROW_HARD('exec_prob_tab requires particle sampling from exec_prob_align')
         endif
@@ -126,7 +127,8 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, allow_empty=.true.)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, &
+                &allow_empty=params%l_distr_worker)
         else
             THROW_HARD('exec_prob_tab_neigh requires particle sampling from exec_prob_align')
         endif

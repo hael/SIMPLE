@@ -102,13 +102,14 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_rnd
 
-    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled )
+    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
+        logical, optional,    intent(in)    :: allow_empty
         integer, allocatable :: states(:), updatecnts(:), candidates(:), selected(:)
         integer :: i, cnt, nptcls, ucnt
         integer :: ncandidates, nfill, nselected
@@ -124,7 +125,14 @@ contains
             inds(cnt)       = i
             if( states(cnt) > 0 ) nptcls = nptcls + 1
         end do
-        if( nptcls == 0 ) THROW_HARD('no active particles to sample')
+        if( nptcls == 0 )then
+            ! a distributed partition may hold no active particle
+            if( .not. empty_allowed(allow_empty) ) THROW_HARD('no active particles to sample')
+            nsamples = 0
+            deallocate(inds)
+            allocate(inds(0))
+            return
+        endif
         inds       = pack(inds,       mask=states > 0)
         updatecnts = pack(updatecnts, mask=states > 0)
         deallocate(states)
@@ -151,7 +159,7 @@ contains
     end subroutine sample4update_cnt
 
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, &
-        &frac_best, sampled_only )
+        &frac_best, sampled_only, allow_empty )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
@@ -160,7 +168,7 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
-        logical, optional,    intent(in)    :: sampled_only
+        logical, optional,    intent(in)    :: sampled_only, allow_empty
         integer, allocatable :: states(:), eligible(:), updatecnts(:), sampleinds(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
         integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
@@ -244,7 +252,9 @@ contains
             inds(cnt)    = i
         end do
         nsamples = count(states > 0)
-        if( nsamples == 0 ) THROW_HARD('no active particles to sample')
+        ! the class-balanced sample is drawn over the whole project, so a distributed
+        ! partition may receive none of it
+        if( nsamples == 0 .and. .not. empty_allowed(allow_empty) ) THROW_HARD('no active particles to sample')
         inds     = pack(inds, mask=states > 0)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_class
@@ -261,7 +271,6 @@ contains
         logical, optional,    intent(in)    :: allow_empty
         integer, allocatable :: sampled(:)
         integer :: i, cnt, nptcls, sample_ind
-        logical :: l_allow_empty
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), sampled(nptcls), source=0)
@@ -274,9 +283,7 @@ contains
             sampled(cnt) = self%o(i)%get_sampled()
         end do
         nsamples = count(sampled == sample_ind)
-        l_allow_empty = .false.
-        if( present(allow_empty) ) l_allow_empty = allow_empty
-        if( nsamples == 0 .and. .not. l_allow_empty ) THROW_HARD('no particles sampled in previous sampling')
+        if( nsamples == 0 .and. .not. empty_allowed(allow_empty) ) THROW_HARD('no particles sampled in previous sampling')
         inds     = pack(inds, mask=sampled == sample_ind)
     end subroutine sample4update_reprod
 
@@ -304,13 +311,14 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_updated
 
-    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled )
+    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
+        logical, optional,    intent(in)    :: allow_empty
         integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:), inds_fill(:)
         integer :: i, cnt, nptcls, nptcls_active, maxucnt, nfill, ucnt
         nptcls = fromto(2) - fromto(1) + 1
@@ -324,7 +332,14 @@ contains
             updatecnts(cnt) = self%o(i)%get_updatecnt()
         end do
         nptcls_active = count(states > 0)
-        if( nptcls_active == 0 ) THROW_HARD('no active particles to sample for fill-in')
+        if( nptcls_active == 0 )then
+            ! a distributed partition may hold no active particle
+            if( .not. empty_allowed(allow_empty) ) THROW_HARD('no active particles to sample for fill-in')
+            nsamples = 0
+            deallocate(inds)
+            allocate(inds(0))
+            return
+        endif
         updatecnts_active = pack(updatecnts, mask=states > 0)
         maxucnt           = maxval(updatecnts_active)
         nsamples          = min(nptcls_active, max(1, nint(update_frac * real(nptcls_active))))
@@ -591,5 +606,13 @@ contains
             if( varflag2_present ) call self%o(i)%delete_entry(varflag2)
         enddo
     end subroutine clean_entry
+
+    !> an absent allow_empty keeps the hard stop on an empty sample; a distributed
+    !! partition passes .true., since its range may hold nothing to update
+    pure logical function empty_allowed( allow_empty )
+        logical, optional, intent(in) :: allow_empty
+        empty_allowed = .false.
+        if( present(allow_empty) ) empty_allowed = allow_empty
+    end function empty_allowed
 
 end submodule simple_oris_sampling

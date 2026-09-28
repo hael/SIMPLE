@@ -15,6 +15,7 @@ contains
         call test_extract_and_copy()
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
+        call test_empty_partition_sampling()
         call test_randomization_and_symmetry()
         call test_proj_space_and_remap()
         call test_stats_and_ordering()
@@ -295,6 +296,47 @@ contains
         if (allocated(inds)) deallocate(inds)
         call test_sample4update_cnt_large()
     end subroutine test_sampling_and_updatecnt
+
+    ! A distributed partition may have nothing to update: its range holds no active particle, or its
+    ! active particles get none of a class-balanced sample drawn over the whole project. With
+    ! allow_empty the samplers return an empty sample and stamp nothing (without it they stop the run)
+    subroutine test_empty_partition_sampling()
+        type(oris)                      :: os
+        type(class_sample), allocatable :: clssmp(:)
+        integer,            allocatable :: inds(:)
+        integer                         :: i, nsamp
+        write(*,'(A)') 'test_empty_partition_sampling'
+        call os%new(10, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 0.0)
+        call os%set_all2single('sampled',   0.0)
+        ! rows 1-6 masked, as the frozen rows of an add-on: the partition [1,6] holds no active particle
+        do i = 1, 6
+            call os%set_state(i, 0)
+        end do
+        call os%sample4update_cnt([1, 6], 0.5, nsamp, inds, .true., allow_empty=.true.)
+        call assert_int(0, nsamp,      'sample4update_cnt: a partition without active particles samples nothing')
+        call assert_int(0, size(inds), 'sample4update_cnt: no indices')
+        call os%sample4update_fillin([1, 6], 0.5, nsamp, inds, .true., allow_empty=.true.)
+        call assert_int(0, nsamp,      'sample4update_fillin: a partition without active particles samples nothing')
+        call assert_int(0, size(inds), 'sample4update_fillin: no indices')
+        ! class-balanced: one class holds rows 9 and 10, and half of the 4 active particles is 2, so the
+        ! sample is rows 9 and 10; the partition [5,8] has active rows 7 and 8 but none of the sample
+        allocate(clssmp(1))
+        clssmp(1)%clsind = 1
+        clssmp(1)%pop    = 2
+        allocate(clssmp(1)%pinds(2), source=[9,10])
+        allocate(clssmp(1)%ccs(2),   source=[2.,1.])
+        call os%sample4update_class(clssmp, [5, 8], 0.5, nsamp, inds, .true., .false., allow_empty=.true.)
+        call assert_int(0, nsamp,      'sample4update_class: a partition outside the global sample samples nothing')
+        call assert_int(0, size(inds), 'sample4update_class: no indices')
+        ! nothing was stamped: no sampled mark and no update count anywhere
+        call assert_false(os%has_been_sampled(), 'an empty sample stamps no particle')
+        call assert_true(all([(os%get(i, 'updatecnt') == 0., i=1,10)]), 'an empty sample counts no update')
+        deallocate(clssmp(1)%pinds, clssmp(1)%ccs)
+        deallocate(clssmp)
+        call os%kill
+    end subroutine test_empty_partition_sampling
 
     !---------------------------------------------------------------
     ! Large-population regression and timing test.

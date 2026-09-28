@@ -242,12 +242,16 @@ No consumer assumes a particular split: the master merges the orientation
 documents by each document's own range (`merge_algndocs`), and the sigma2,
 probability-table and power-spectrum merges read the ranges from their files.
 
-A partition without sampled particles remains a valid transaction, at a small
-update fraction or with fewer active rows than partitions. `prob_tab` and
-`prob_tab_neigh` write a table without candidates, which `prob_align` reads;
-the refine3D matcher emits the unchanged committed sigma2 slice, the range's
-orientations, zero PCG accumulators when partial reconstructions are written,
-and `JOB_FINISHED`.
+A partition without sampled particles remains a valid transaction: with fewer
+active rows than partitions, or when a sample drawn over the whole project
+(class-balanced or probabilistic) misses a partition. In a distributed worker
+(`part` set) every per-partition sampler returns an empty sample instead of
+stopping (`allow_empty`: probabilistic reproduction, class-balanced,
+update-count and fill-in sampling); a shared-memory run still stops on an
+empty sample. `prob_tab` and `prob_tab_neigh` write a table without
+candidates, which `prob_align` reads; the refine3D matcher emits the unchanged
+committed sigma2 slice, the range's orientations, zero PCG accumulators when
+partial reconstructions are written, and `JOB_FINISHED`.
 
 The local queue checks no exit status: a worker that stops without
 `JOB_FINISHED` leaves the master waiting.

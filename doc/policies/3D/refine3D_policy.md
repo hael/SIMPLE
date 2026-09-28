@@ -69,6 +69,12 @@ Strategy selection is command-line shaped:
   `split_nobjs_active`); with every row active this is the even split. The
   master merges the partition documents by their own ranges (`merge_algndocs`),
   so no consumer assumes a particular split
+- a worker whose partition samples nothing (fewer active particles than
+  partitions, or none of a class-balanced or probabilistic sample drawn over
+  the whole project) completes an empty transaction: its samplers accept an
+  empty sample only when `part` is set (`allow_empty`), and it writes its
+  unchanged sigma2 slice, its range's orientations, zero PCG accumulators and
+  `JOB_FINISHED`
 
 `maxits` is the number of iterations to run in the current invocation.
 `which_iter` starts at `startit`, and `extr_iter` follows the same per-call

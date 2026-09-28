@@ -204,13 +204,14 @@ contains
         call build%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
 
-    subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds )
+    subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
         integer,              intent(in)    :: pfromto(2)
         logical,              intent(in)    :: l_incr_sampl
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
+        logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
         type(class_sample),   allocatable   :: clssmp(:)
         type(string) :: fname
         fname = CLASS_SAMPLING_FILE
@@ -228,18 +229,18 @@ contains
                 endif
                 ! balanced class sampling
                 if( params%l_frac_best )then
-                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best,&
-                    &sampled_only=params%l_sticky_class_sampling)
+                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
+                        &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best, &
+                        &sampled_only=params%l_sticky_class_sampling, allow_empty=allow_empty)
                 else
-                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, &
-                    &sampled_only=params%l_sticky_class_sampling)
+                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
+                        &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, &
+                        &sampled_only=params%l_sticky_class_sampling, allow_empty=allow_empty)
                 endif
                 call deallocate_class_samples(clssmp)
             else
-                call build%spproj_field%sample4update_cnt(pfromto, params%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl)
+                call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, &
+                    &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty)
             endif
         else
             ! we sample all state > 0
@@ -248,14 +249,16 @@ contains
         call fname%kill
     end subroutine sample_ptcls4update3D
 
-    subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds )
+    subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
         integer,              intent(in)    :: pfromto(2)
         logical,              intent(in)    :: l_incr_sampl
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
-        call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl)
+        logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
+        call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl, &
+            &allow_empty=allow_empty)
     end subroutine sample_ptcls4fillin
 
     subroutine sample_ptcls4missing3D( build, pfromto, l_incr_sampl, nptcls2update, pinds )
