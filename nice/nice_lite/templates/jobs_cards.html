@@ -13,6 +13,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="{% static 'nice_lite/job_card_actions.js' %}" defer></script>
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans">
   <div id="jobs_scroll_container" class="flex flex-wrap gap-3 content-start flex-1 overflow-y-auto scrollbar-hidden px-5 py-4 ">
@@ -31,6 +32,9 @@
 
         <script>
           let lastinteraction = Date.now();
+          window.noteJobCardInteraction = () => {
+            lastinteraction = Date.now();
+          };
 
           // Reloads below replace this document entirely, so scroll position is saved here and restored on the next load.
           const JOBS_SCROLL_STORAGE_KEY = "nice_lite.jobs_cards.scrollTop";
@@ -47,69 +51,6 @@
           };
 
           restoreScrollPosition();
-
-          const getValue = (el, key, fallback = "") => {
-            if (!el) return fallback;
-            if (el.dataset && el.dataset[key] !== undefined) return el.dataset[key];
-            if (el.workspace && el.workspace[key] !== undefined) return el.workspace[key];
-            return fallback;
-          };
-
-          const deleteStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to delete stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const terminateStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to terminate all processes in stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const restartStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to restart stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const killDeleteStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to kill and delete stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const stopBatchJob = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to stop batch job " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const markBatchJobFinished = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Mark batch job " + jobid + " as finished? This changes only its recorded status.")) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const deleteBatchJob = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to permanently delete batch job " + jobid + ". This cannot be undone.")) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
 
           const BATCH_PROJECT_DRAG_TYPE = "application/x-nice-batch-project";
 
@@ -130,74 +71,6 @@
             event.dataTransfer.effectAllowed = "copy";
             lastinteraction = Date.now();
           };
-
-          // Drag source for the per-job data-type icon row. Output paths are
-          // attached only to icons backed by an existing finished-job artifact.
-          // Uses a scaled-up, detached clone of the icon's SVG as the drag image
-          // so the icon itself is clearly visible next to the cursor while dragging.
-          const dragArtifact = (event, jobId, dataType) => {
-            const path = event.currentTarget.dataset.artifactPath || "";
-            const payload = JSON.stringify({ jobId, dataType, path });
-            event.dataTransfer.setData("application/json", payload);
-            event.dataTransfer.setData("text/plain", payload);
-            event.dataTransfer.effectAllowed = "copy";
-
-            const svgSource = event.currentTarget.querySelector("svg");
-            if (svgSource) {
-              const ghost = svgSource.cloneNode(true);
-              ghost.removeAttribute("class");
-              ghost.style.width = "28px";
-              ghost.style.height = "28px";
-              ghost.style.color = getComputedStyle(event.currentTarget).color;
-              ghost.style.position = "fixed";
-              ghost.style.top = "-200px";
-              ghost.style.left = "-200px";
-              ghost.style.pointerEvents = "none";
-              document.body.appendChild(ghost);
-              event.dataTransfer.setDragImage(ghost, 14, 14);
-              setTimeout(() => ghost.remove(), 0);
-            }
-
-            lastinteraction = Date.now();
-          };
-
-          // The data-type icon overlay only makes sense while the job builder
-          // (a sibling iframe in the parent window) is open, since that's the
-          // only current drop target. Poll its visibility rather than reload,
-          // since job builder being open already suppresses the idle-reload below.
-          // Note: check the DOM directly rather than calling a function on
-          // window.parent — top-level const/let declarations in a <script>
-          // (like isJobBuilderVisible in workspace.html) are not attached to
-          // window, so they aren't reachable as window.parent.<name>.
-          const isJobBuilderActive = () => {
-            try {
-              const iframe = window.parent && window.parent.document && window.parent.document.getElementById("job_builder_iframe");
-              if (!iframe) return false;
-              if (iframe.classList.contains("hidden")) return false;
-              return window.parent.getComputedStyle(iframe).display !== "none";
-            } catch (e) {
-              return false;
-            }
-          };
-
-          const syncArtifactRows = () => {
-            const active = isJobBuilderActive();
-            document.querySelectorAll(".artifact-drag-row").forEach((el) => {
-              el.classList.toggle("hidden", !active);
-            });
-
-            document.querySelectorAll("[data-batch-project-path]").forEach((card) => {
-              card.draggable = active;
-              card.classList.toggle("cursor-pointer", !active);
-              card.classList.toggle("cursor-grab", active);
-              card.classList.toggle("active:cursor-grabbing", active);
-              if (active) card.setAttribute("title", "drag to input project");
-              else card.removeAttribute("title");
-            });
-          };
-
-          syncArtifactRows();
-          setInterval(syncArtifactRows, 500);
 
           window.addEventListener("visibilitychange", () => {
             if (document.visibilityState !== "hidden") {

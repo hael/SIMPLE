@@ -2,7 +2,8 @@
 
 This module serves two coupled HTML payloads:
 - ``workspace.html``: parent shell containing metadata, controls, and the jobs iframe.
-- ``jobs_cards.html``: iframe payload containing stream cards.
+- ``jobs_cards.html``, ``jobs_table.html``, and ``jobs_flow.html``: workspace-job
+  iframe payloads.
 
 It also exposes write endpoints for workspace delete/rename/description updates.
 The refresh endpoint reconciles externally removed job directories, cards, and
@@ -66,6 +67,51 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
 def _is_batch_job(jobmodel):
     """Return True for Batch jobs stored in the shared JobModel table."""
     return jobmodel.pckg in ("simple", "single")
+
+
+def _build_job_flow_graph(jobs, workspace_id):
+    """Build a graph using only same-workspace ``JobModel.parent`` edges."""
+    jobs = sorted(jobs, key=lambda job: (job.disp, job.id))
+    job_ids = {job.id for job in jobs}
+    nodes = [
+        {
+            "data": {
+                "id": f"job-{jobmodel.id}",
+                "order": order,
+            }
+        }
+        for order, jobmodel in enumerate(jobs)
+    ]
+    edges = []
+
+    for order, jobmodel in enumerate(jobs):
+        parent = jobmodel.parent
+        if (
+            not isinstance(parent, int)
+            or isinstance(parent, bool)
+            or parent < 1
+            or parent == jobmodel.id
+            or parent not in job_ids
+        ):
+            continue
+
+        edges.append({
+            "data": {
+                "id": f"job-{parent}-to-job-{jobmodel.id}",
+                "source": f"job-{parent}",
+                "target": f"job-{jobmodel.id}",
+                "order": order,
+            }
+        })
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "summary": {
+            "jobs": len(nodes),
+            "workspaceId": workspace_id,
+        },
+    }
 
 
 def _remove_missing_job_records(workspace_obj):
@@ -305,34 +351,43 @@ def view_workspace_jobs(request):
     template      = {"list": "jobs_table.html", "flow": "jobs_flow.html"}.get(view_mode, "jobs_cards.html")
 
     if not _is_workspace_accessible(workspace_obj, project_id, request.user.username):
-        return render(request, template, {"jobs": []})
+        context = {"jobs": []}
+        if template == "jobs_flow.html":
+            context["flow_graph"] = _build_job_flow_graph([], workspace_id)
+        return render(request, template, context)
 
     jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
     batch_project_sources = []
+    artifact_sources = []
     if template == "jobs_cards.html":
         batch_project_sources = _annotate_batch_project_drag_paths(
             jobs,
             workspace_obj.get_absdir(),
         )
-        _annotate_batch_artifact_drag_paths(
+    if template in ("jobs_cards.html", "jobs_flow.html"):
+        artifact_sources = _annotate_batch_artifact_drag_paths(
             jobs,
             workspace_obj.get_absdir(),
         )
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
     # Include the template name and draggable project availability so switching
-    # view modes or adding/removing a result project always forces a redraw.
+    # view modes or adding/removing a draggable result always forces a redraw.
     checksum_payload = {
         "jobs": list(jobs.values()),
         "template": template,
         "batch_project_sources": batch_project_sources,
+        "artifact_sources": artifact_sources,
     }
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
     force_render = request.GET.get("force") == "1"
     if force_render or old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
-        response = render(request, template, {"jobs": jobs})
+        context = {"jobs": jobs}
+        if template == "jobs_flow.html":
+            context["flow_graph"] = _build_job_flow_graph(jobs, workspace_id)
+        response = render(request, template, context)
         response.set_cookie(key="workspace_jobs_checksum", value=checksum)
 
     return response

@@ -41,6 +41,41 @@ class _FakeQueryset:
         return iter(self._jobs)
 
 
+class WorkspaceFlowGraphTests(SimpleTestCase):
+    @staticmethod
+    def _job(job_id, **overrides):
+        values = {
+            "id": job_id,
+            "disp": job_id,
+            "parent": 0,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_flow_graph_uses_only_valid_same_workspace_parent_edges(self):
+        jobs = [
+            self._job(1, disp=1),
+            self._job(2, disp=2, name="Preprocess Movies", parent=1),
+            self._job(3, disp=3, parent=3),
+            self._job(4, disp=4, parent=99),
+        ]
+
+        graph = workspace_views._build_job_flow_graph(jobs, workspace_id=12)
+
+        self.assertEqual(graph["edges"], [{
+            "data": {
+                "id": "job-1-to-job-2",
+                "source": "job-1",
+                "target": "job-2",
+                "order": 1,
+            }
+        }])
+        self.assertEqual(graph["summary"], {
+            "jobs": 4,
+            "workspaceId": 12,
+        })
+
+
 class WorkspaceJobsViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -74,12 +109,36 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         )
         mock_normalize.assert_called_once_with(fake_queryset)
 
+    def test_workspace_jobs_flow_renders_validated_graph_payload(self):
+        request = self.factory.get("/workspacejobs", {"view": "flow"})
+        request.user = _AuthUser()
+
+        fake_workspace = SimpleNamespace(id=1, get_absdir=lambda: "/workspace")
+        fake_queryset = _FakeQueryset(
+            [{"id": 1, "status": "finished", "parent": 0}],
+            jobs=[WorkspaceFlowGraphTests._job(1)],
+        )
+        flow_graph = {"nodes": [], "edges": [], "summary": {"jobs": 0}}
+
+        with patch.object(workspace_views, "get_workspace_id", return_value=1), patch.object(workspace_views, "get_project_id", return_value=2), patch.object(workspace_views, "Workspace", return_value=fake_workspace), patch.object(workspace_views, "_is_workspace_accessible", return_value=True), patch.object(workspace_views.JobModel.objects, "filter", return_value=fake_queryset), patch.object(workspace_views, "_build_job_flow_graph", return_value=flow_graph) as build_graph, patch.object(workspace_views, "_annotate_batch_artifact_drag_paths", return_value=[(1, "volume3D", "/workspace/outvol.mrc")]) as annotate_artifacts, patch.object(workspace_views, "render", return_value=HttpResponse("jobs")) as mock_render, patch.object(workspace_views, "_normalize_latest_cls2d"):
+            response = workspace_views.view_workspace_jobs(request)
+
+        self.assertEqual(response.status_code, 200)
+        build_graph.assert_called_once_with(fake_queryset, 1)
+        annotate_artifacts.assert_called_once_with(fake_queryset, "/workspace")
+        mock_render.assert_called_once_with(
+            request,
+            "jobs_flow.html",
+            {"jobs": fake_queryset, "flow_graph": flow_graph},
+        )
+
     def test_workspace_jobs_returns_204_when_checksum_matches(self):
         payload = [{"id": 1, "status": "running"}]
         checksum_payload = {
             "jobs": payload,
             "template": "jobs_cards.html",
             "batch_project_sources": [],
+            "artifact_sources": [],
         }
         checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -103,6 +162,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
             "jobs": payload,
             "template": "jobs_cards.html",
             "batch_project_sources": [],
+            "artifact_sources": [],
         }
         checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
 

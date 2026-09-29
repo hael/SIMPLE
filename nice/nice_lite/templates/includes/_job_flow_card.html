@@ -1,0 +1,16 @@
+{% comment %}
+  _job_flow_card.html — compact Flow representation of a job card.
+  It deliberately reuses the Card view's shared header and footer partials and
+  omits the body and description editor.
+{% endcomment %}
+<div data-flow-node-id="job-{{ job.id }}"
+     class="absolute top-0 left-0 z-10 bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20{% else %}border-streamring/20{% endif %} flex flex-col overflow-hidden w-[260px] cursor-pointer pointer-events-auto"
+     onclick="this.querySelector('form.viewform').submit();">
+    {% if job.pckg == "simple" or job.pckg == "single" %}
+        {% include 'includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" "|add:job.pckg|add:" "|add:job.prog status=job.status hide_actions=True active_persistent_workers=job.master_stats.master.active_persistent_workers %}
+        {% include 'includes/_job_card_footer.html' with card_type='batch' %}
+    {% else %}
+        {% include 'includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True active_persistent_workers=job.master_stats.master.active_persistent_workers %}
+        {% include 'includes/_job_card_footer.html' with card_type='stream' %}
+    {% endif %}
+</div>

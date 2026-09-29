@@ -1,0 +1,4 @@
+Package: cytoscape
+Version: 3.34.3
+Source: https://unpkg.com/cytoscape@3.34.3/dist/cytoscape.min.js
+SHA-256: 5f3b5b529546d5af1fc5628590af033b74511a5b6f789f5f4682845863228b91

@@ -1,0 +1,4 @@
+Package: cytoscape-dagre
+Version: 4.0.1
+Source: https://unpkg.com/cytoscape-dagre@4.0.1/dist/cytoscape-dagre.min.js
+SHA-256: ec671a41d2bfcac580352e2997797793949e3489cecaf347fc48670d4bd456b0

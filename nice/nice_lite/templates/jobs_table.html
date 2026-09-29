@@ -13,6 +13,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="{% static 'nice_lite/job_card_actions.js' %}" defer></script>
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans">
   <div class="flex-1 overflow-y-auto scrollbar-hidden px-5 py-4">
@@ -189,59 +190,7 @@
 
         <script>
           let lastinteraction = Date.now();
-
-          const getValue = (el, key, fallback = "") => {
-            if (!el) return fallback;
-            if (el.dataset && el.dataset[key] !== undefined) return el.dataset[key];
-            if (el.workspace && el.workspace[key] !== undefined) return el.workspace[key];
-            return fallback;
-          };
-
-          const deleteStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to delete stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const terminateStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to terminate all processes in stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const restartStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to restart stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const killDeleteStream = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to kill and delete stream " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const stopBatchJob = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to stop batch job " + jobid)) {
-              button.closest("form")?.submit();
-            }
-            lastinteraction = Date.now();
-          };
-
-          const deleteBatchJob = (button) => {
-            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
-            if (confirm("Please confirm that you wish to permanently delete batch job " + jobid + ". This cannot be undone.")) {
-              button.closest("form")?.submit();
-            }
+          window.noteJobCardInteraction = () => {
             lastinteraction = Date.now();
           };
 

@@ -1,6 +1,10 @@
 {% comment %}
-  jobs_flow.html — placeholder for the flow view, loaded inside the jobs_iframe
-  by workspace.html. Not implemented yet.
+  jobs_flow.html — interactive workspace job flow, loaded inside the jobs_iframe
+  by workspace.html. Connections are derived exclusively from JobModel.parent.
+
+  Context variables:
+    jobs       — queryset of jobs in the current workspace
+    flow_graph — minimal Cytoscape node/edge payload and summary
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
@@ -9,10 +13,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="{% static 'vendor/cytoscape/3.34.3/cytoscape.min.js' %}" defer></script>
+    <script src="{% static 'vendor/cytoscape-dagre/4.0.1/cytoscape-dagre.min.js' %}" defer></script>
+    <script src="{% static 'nice_lite/job_card_actions.js' %}" defer></script>
+    <script src="{% static 'nice_lite/workspace_flow.js' %}" defer></script>
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans">
-    <div class="flex-1 flex items-center justify-center text-streamlabel text-sm">
-        flow view not implemented yet
-    </div>
+    <main class="relative flex-1 min-h-0 overflow-hidden">
+        <div id="workspace_flow_graph" class="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" aria-hidden="true"></div>
+        <div id="workspace_flow_cards" class="hidden absolute inset-0 z-10 pointer-events-none">
+            {% for job in jobs %}
+                {% include 'includes/_job_flow_card.html' %}
+            {% endfor %}
+        </div>
+
+        <div class="absolute top-0 right-0 z-20 m-3 inline-flex rounded-lg border border-streamline divide-x divide-streamline overflow-hidden bg-streambar shadow-lg">
+            <button id="workspace_flow_zoom_out" type="button" title="zoom out" aria-label="zoom out"
+                    class="w-7 h-7 flex items-center justify-center text-streamicon bg-streamsurface hover:text-streamsubtle transition-colors">
+                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M3 8h10"/>
+                </svg>
+            </button>
+            <button id="workspace_flow_fit" type="button" title="fit workflow" aria-label="fit workflow"
+                    class="w-7 h-7 flex items-center justify-center text-streamicon bg-streamsurface hover:text-streamsubtle transition-colors">
+                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 2H2v4M10 2h4v4M14 10v4h-4M6 14H2v-4"/>
+                </svg>
+            </button>
+            <button id="workspace_flow_zoom_in" type="button" title="zoom in" aria-label="zoom in"
+                    class="w-7 h-7 flex items-center justify-center text-streamicon bg-streamsurface hover:text-streamsubtle transition-colors">
+                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M3 8h10M8 3v10"/>
+                </svg>
+            </button>
+        </div>
+
+        <div id="workspace_flow_message"
+             class="{% if flow_graph.summary.jobs %}hidden {% endif %}absolute inset-0 flex items-center justify-center text-streamlabel text-sm pointer-events-none">
+            no jobs yet — click new stream to create one
+        </div>
+
+    </main>
+
+    {{ flow_graph|json_script:"workspace_flow_data" }}
 </body>
 </html>

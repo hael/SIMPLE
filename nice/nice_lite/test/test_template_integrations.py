@@ -35,6 +35,34 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("isJobBuilderVisible", content)
         self.assertIn("&& !isJobBuilderVisible()", content)
 
+    def test_workspace_flow_uses_vendored_vertical_interactive_graph(self):
+        flow = self._read_template("jobs_flow.html")
+        base_dir = Path(__file__).resolve().parents[1]
+        flow_script = (
+            base_dir / "static" / "nice_lite" / "workspace_flow.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("flow_graph|json_script", flow)
+        self.assertIn("vendor/cytoscape/3.34.3/cytoscape.min.js", flow)
+        self.assertIn(
+            "vendor/cytoscape-dagre/4.0.1/cytoscape-dagre.min.js",
+            flow,
+        )
+        self.assertIn("nice_lite/job_card_actions.js", flow)
+        self.assertIn("nice_lite/workspace_flow.js", flow)
+        self.assertIn('id="workspace_flow_graph"', flow)
+        self.assertIn("{% include 'includes/_job_flow_card.html' %}", flow)
+        flow_card = self._read_template("includes/_job_flow_card.html")
+        self.assertIn("{% include 'includes/_panel_header.html'", flow_card)
+        self.assertIn("{% include 'includes/_job_card_footer.html'", flow_card)
+        self.assertIn("this.querySelector('form.viewform').submit()", flow_card)
+        self.assertNotIn("read_only", flow_card)
+        self.assertNotIn("show_description_editor=True", flow_card)
+        self.assertIn('name: "dagre"', flow_script)
+        self.assertIn('rankDir: "TB"', flow_script)
+        self.assertIn('card.dataset.flowNodeId', flow_script)
+        self.assertIn("cy.fit", flow_script)
+
     def test_job_builder_button_closes_visible_builder_and_opens_hidden_builder(self):
         workspace = self._read_template("workspace.html")
 
@@ -688,6 +716,10 @@ class TemplateIntegrationTests(SimpleTestCase):
         batch_footer = self._read_template("includes/_job_card_footer.html")
         jobs = self._read_template("jobs_cards.html")
         jobs_table = self._read_template("jobs_table.html")
+        base_dir = Path(__file__).resolve().parents[1]
+        actions = (
+            base_dir / "static" / "nice_lite" / "job_card_actions.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn(
             "{% include 'includes/_job_card_footer.html' with card_type='batch' %}",
@@ -704,20 +736,24 @@ class TemplateIntegrationTests(SimpleTestCase):
             '<path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>',
             batch_footer,
         )
-        self.assertIn("const stopBatchJob = (button) => {", jobs)
+        self.assertIn("nice_lite/job_card_actions.js", jobs)
+        self.assertIn("nice_lite/job_card_actions.js", jobs_table)
+        self.assertIn("window.stopBatchJob = (button) => {", actions)
         self.assertIn("{% url 'nice_lite:finish_batch' %}", batch_footer)
         self.assertIn('onclick="markBatchJobFinished(this)"', batch_footer)
-        self.assertIn("const markBatchJobFinished = (button) => {", jobs)
+        self.assertIn("window.markBatchJobFinished = (button) => {", actions)
         self.assertIn("{% url 'nice_lite:clone_batch' %}", batch_footer)
         self.assertIn('target="job_builder_iframe"', batch_footer)
         self.assertIn('<button type="submit"', batch_footer)
-        self.assertNotIn("const rerunBatchJob = (button) => {", jobs)
+        self.assertNotIn("window.rerunBatchJob", actions)
         self.assertIn("{% url 'nice_lite:clone_batch' %}", jobs_table)
         self.assertIn('target="job_builder_iframe"', jobs_table)
         self.assertNotIn("const rerunBatchJob = (button) => {", jobs_table)
-        self.assertIn("const deleteBatchJob = (button) => {", jobs)
-        self.assertIn("permanently delete batch job", jobs)
-        self.assertIn("This cannot be undone.", jobs)
+        self.assertNotIn("const stopBatchJob = (button) => {", jobs_table)
+        self.assertNotIn("const deleteStream = (button) => {", jobs_table)
+        self.assertIn("window.deleteBatchJob = (button) => {", actions)
+        self.assertIn("permanently delete batch job", actions)
+        self.assertIn("This cannot be undone.", actions)
 
     def test_batch_footer_marks_only_queued_or_failed_jobs_finished(self):
         job = {
@@ -925,16 +961,21 @@ class TemplateIntegrationTests(SimpleTestCase):
 
     def test_job_card_project_drag_keeps_artifact_payload_separate(self):
         jobs = self._read_template("jobs_cards.html")
+        base_dir = Path(__file__).resolve().parents[1]
+        actions = (
+            base_dir / "static" / "nice_lite" / "job_card_actions.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn('const dragBatchProject = (event) => {', jobs)
         self.assertIn('source.closest(".artifact-drag-row [draggable=\'true\']")', jobs)
         self.assertIn('event.dataTransfer.setData(BATCH_PROJECT_DRAG_TYPE, projectPath);', jobs)
-        self.assertIn('event.dataTransfer.setData("application/json", payload);', jobs)
-        self.assertIn('event.dataTransfer.setData("text/plain", payload);', jobs)
-        self.assertIn('const isJobBuilderActive = () => {', jobs)
-        self.assertIn('card.draggable = active;', jobs)
-        self.assertIn('card.classList.toggle("cursor-pointer", !active);', jobs)
-        self.assertIn('card.classList.toggle("cursor-grab", active);', jobs)
+        self.assertIn('window.dragArtifact = (event, jobIdValue, dataType) => {', actions)
+        self.assertIn('event.dataTransfer.setData("application/json", payload);', actions)
+        self.assertIn('event.dataTransfer.setData("text/plain", payload);', actions)
+        self.assertIn('const isJobBuilderActive = () => {', actions)
+        self.assertIn('card.draggable = active;', actions)
+        self.assertIn('card.classList.toggle("cursor-pointer", !active);', actions)
+        self.assertIn('card.classList.toggle("cursor-grab", active);', actions)
 
     def test_job_builder_artifact_icons_overlay_only_job_card_footers(self):
         stream_card = self._read_template("nice_stream/includes/_stream_card.html")
@@ -952,6 +993,7 @@ class TemplateIntegrationTests(SimpleTestCase):
             'class="artifact-drag-row hidden absolute inset-0',
             artifact_row,
         )
+        self.assertIn("nice_lite/job_card_actions.js", self._read_template("jobs_flow.html"))
         self.assertEqual(artifact_row.count(" title="), 6)
         self.assertEqual(artifact_row.count(" aria-label="), 6)
         self.assertNotIn("group-hover:", artifact_row)
