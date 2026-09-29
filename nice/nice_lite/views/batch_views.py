@@ -25,6 +25,7 @@ from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch
 from ..data_structures.workspace import Workspace
 from ..helpers import clear_checksum_cookies, get_job_id
+from ..models import JobModel
 
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,87 @@ def _commander_arguments(package, program):
     return arguments
 
 
+def _recorded_project_file(jobmodel):
+    """Return the workspace-relative project source recorded for one job."""
+    if (
+        getattr(jobmodel, "pckg", None) == "simple"
+        and getattr(jobmodel, "prog", None) in ("new_project", "reproject")
+    ):
+        # SIMPLE dispatch deliberately omits projfile for these programs.
+        return None
+
+    metadata = getattr(jobmodel, "master_stats", None)
+    if not isinstance(metadata, dict):
+        return None
+    source = metadata.get("source")
+    if not isinstance(source, dict):
+        return None
+
+    source_type = source.get("type")
+    if source_type == "project_file":
+        filename = source.get("filename")
+        if isinstance(filename, str) and filename.strip():
+            return filename
+        return None
+    if source_type == "workspace":
+        return "workspace.simple"
+    if source_type not in ("batch_job", "stream_snapshot"):
+        return None
+
+    source_id_key = (
+        "batch_job_id" if source_type == "batch_job" else "stream_job_id"
+    )
+    source_id = source.get(source_id_key)
+    workspace_id = getattr(jobmodel, "dset_id", None)
+    if (
+        not isinstance(source_id, int)
+        or isinstance(source_id, bool)
+        or source_id <= 0
+        or not isinstance(workspace_id, int)
+        or isinstance(workspace_id, bool)
+        or workspace_id <= 0
+    ):
+        return None
+
+    source_job = JobModel.objects.filter(
+        id=source_id,
+        dset_id=workspace_id,
+    ).first()
+    source_dir = getattr(source_job, "dirc", None)
+    if (
+        not isinstance(source_dir, str)
+        or source_dir in ("", ".", "..")
+        or source_dir != os.path.basename(source_dir)
+    ):
+        return None
+
+    if source_type == "batch_job":
+        if getattr(source_job, "pckg", None) not in ("simple", "single"):
+            return None
+        return os.path.join(source_dir, "workspace.simple")
+
+    filename = source.get("filename")
+    particle_set_id = source.get("particle_set_id")
+    if (
+        getattr(source_job, "pckg", None) in ("simple", "single")
+        or not isinstance(filename, str)
+        or filename != os.path.basename(filename)
+        or not filename.endswith(".simple")
+        or not isinstance(particle_set_id, int)
+        or isinstance(particle_set_id, bool)
+        or particle_set_id <= 0
+    ):
+        return None
+    snapshot_dir = os.path.splitext(filename)[0]
+    return os.path.join(
+        source_dir,
+        "classification_2D",
+        "snapshots",
+        snapshot_dir,
+        filename,
+    )
+
+
 def _argument_rows(jobmodel):
     """Build submitted/default/unset rows from saved args and commander UI."""
     raw_saved_args = jobmodel.args if isinstance(jobmodel.args, dict) else {}
@@ -119,6 +201,19 @@ def _argument_rows(jobmodel):
     )
     arguments = []
     known_keys = set()
+
+    project_file = _recorded_project_file(jobmodel)
+    if project_file is not None:
+        arguments.append({
+            "key": "projfile",
+            "label": "Project file",
+            "value": project_file,
+            "origin": "submitted",
+            "submitted": True,
+            "visibility": "standard",
+        })
+        known_keys.add("projfile")
+
     for definition in definitions:
         key = definition["key"]
         known_keys.add(key)

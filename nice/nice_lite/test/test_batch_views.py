@@ -83,7 +83,13 @@ class BatchViewTests(SimpleTestCase):
             args={"nthr": "4"},
             pckg="simple",
             prog="import_movies",
-            master_stats={"project_metadata": {"nmics": 24}},
+            master_stats={
+                "project_metadata": {"nmics": 24},
+                "source": {
+                    "type": "project_file",
+                    "filename": "inputs/particles.simple",
+                },
+            },
             dset=workspace,
             dset_id=workspace.id,
         )
@@ -138,6 +144,14 @@ class BatchViewTests(SimpleTestCase):
         self.assertEqual(context["folder"], "/project/workspace/2_import_movies")
         self.assertEqual(context["arguments"], [
             {
+                "key": "projfile",
+                "label": "Project file",
+                "value": "inputs/particles.simple",
+                "origin": "submitted",
+                "submitted": True,
+                "visibility": "standard",
+            },
+            {
                 "key": "nthr",
                 "label": "Number of threads",
                 "value": "4",
@@ -154,7 +168,7 @@ class BatchViewTests(SimpleTestCase):
                 "visibility": "standard",
             },
         ])
-        self.assertEqual(context["submitted_argument_count"], 1)
+        self.assertEqual(context["submitted_argument_count"], 2)
         self.assertEqual(response.cookies["selected_project_id"].value, "3")
         self.assertEqual(response.cookies["selected_workspace_id"].value, "4")
         self.assertEqual(response.cookies["workspace_checksum"]["max-age"], 0)
@@ -175,6 +189,106 @@ class BatchViewTests(SimpleTestCase):
             "submitted": True,
             "visibility": "standard",
         }])
+
+    def test_argument_rows_omit_missing_or_projectless_recorded_sources(self):
+        launcher = Mock()
+        launcher.get_ui.return_value = None
+
+        for source in (
+            None,
+            {"type": "none"},
+            {"type": "project_file", "filename": ""},
+        ):
+            with self.subTest(source=source):
+                metadata = {} if source is None else {"source": source}
+                jobmodel = SimpleNamespace(
+                    args={},
+                    pckg="simple",
+                    prog="import_movies",
+                    master_stats=metadata,
+                )
+
+                with patch.object(batch_views, "SIMPLEBatch", return_value=launcher):
+                    self.assertEqual(batch_views._argument_rows(jobmodel), [])
+
+    def test_argument_rows_resolve_recorded_batch_and_snapshot_projects(self):
+        launcher = Mock()
+        launcher.get_ui.return_value = None
+        cases = (
+            (
+                {"type": "batch_job", "batch_job_id": 8},
+                SimpleNamespace(dirc="7_abinitio2D", pckg="simple"),
+                "7_abinitio2D/workspace.simple",
+            ),
+            (
+                {
+                    "type": "stream_snapshot",
+                    "stream_job_id": 5,
+                    "particle_set_id": 2,
+                    "filename": "snapshot_2.simple",
+                },
+                SimpleNamespace(dirc="3_simple_stream", pckg="simple_stream"),
+                "3_simple_stream/classification_2D/snapshots/"
+                "snapshot_2/snapshot_2.simple",
+            ),
+        )
+
+        for source, source_job, expected in cases:
+            with self.subTest(source=source):
+                jobmodel = SimpleNamespace(
+                    args={},
+                    pckg="simple",
+                    prog="cluster2D",
+                    dset_id=4,
+                    master_stats={"source": source},
+                )
+                source_jobs = Mock()
+                source_jobs.first.return_value = source_job
+
+                with (
+                    patch.object(batch_views, "SIMPLEBatch", return_value=launcher),
+                    patch.object(
+                        batch_views.JobModel.objects,
+                        "filter",
+                        return_value=source_jobs,
+                    ) as filter_jobs,
+                ):
+                    arguments = batch_views._argument_rows(jobmodel)
+
+                self.assertEqual(arguments, [{
+                    "key": "projfile",
+                    "label": "Project file",
+                    "value": expected,
+                    "origin": "submitted",
+                    "submitted": True,
+                    "visibility": "standard",
+                }])
+                expected_source_id = source.get(
+                    "batch_job_id",
+                    source.get("stream_job_id"),
+                )
+                filter_jobs.assert_called_once_with(id=expected_source_id, dset_id=4)
+
+    def test_argument_rows_omit_project_ignored_by_simple_dispatch(self):
+        launcher = Mock()
+        launcher.get_ui.return_value = None
+
+        for program in ("new_project", "reproject"):
+            with self.subTest(program=program):
+                jobmodel = SimpleNamespace(
+                    args={},
+                    pckg="simple",
+                    prog=program,
+                    master_stats={
+                        "source": {
+                            "type": "project_file",
+                            "filename": "input.simple",
+                        },
+                    },
+                )
+
+                with patch.object(batch_views, "SIMPLEBatch", return_value=launcher):
+                    self.assertEqual(batch_views._argument_rows(jobmodel), [])
 
     def test_active_batch_volume_viewer_is_explicit_and_abinitio3d_only(self):
         jobmodel = SimpleNamespace(
