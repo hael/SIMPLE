@@ -1,16 +1,17 @@
 # SIMPLE hardware resource planning
 
-**Status:** DRAFT for user and system-administrator review, 2026-09-28
+**Status:** DRAFT for user and system-administrator review, 2026-09-29
 
 ## 1. Purpose
 
 This document defines a reproducible way to translate available hardware and a
-SIMPLE workload into four execution settings:
+SIMPLE workload into batch and streaming execution settings:
 
 - `nthr`: OpenMP threads used by each worker or partition;
 - `ncunits`: maximum workers or partition jobs allowed to run concurrently;
 - `nparts`: total number of pieces into which the work is divided;
-- `job_memory_per_task`: scheduler memory request for one concurrent worker.
+- `job_memory_per_task`: scheduler memory request for one concurrent worker;
+- stage-specific persistent-worker counts and threads for streaming.
 
 The immediate goal is guidance and a future planning tool. This draft does not
 change SIMPLE defaults or automatically submit jobs.
@@ -18,7 +19,9 @@ change SIMPLE defaults or automatically submit jobs.
 Memory alone cannot determine `nparts`. CPU capacity limits concurrency, the
 dataset determines useful partition granularity, and the scheduler determines
 placement. GPU capacity, local storage, network throughput, and wall-time
-limits may impose additional constraints.
+limits may impose additional constraints. For streaming, the acquisition rate
+also imposes a service-rate requirement: processing must keep up with incoming
+movies without an unbounded backlog.
 
 ## 2. Existing SIMPLE behavior
 
@@ -144,6 +147,9 @@ Before choosing execution settings, record:
 | `R_reserve` | RAM reserved for the OS, filesystem cache, launcher, and master |
 | `D_local` | usable local scratch capacity and throughput |
 | `E_kind` | execution environment: workstation, cluster, or hybrid cluster |
+| `S_kind` | scheduler family or `local` |
+| `S_version` | scheduler and site-adapter version |
+| `S_memscope` | memory accounting scope: job, node, task, slot, or unresolved |
 | `P_place` | scheduler/process placement policy across nodes, sockets, GPUs, and NUMA domains |
 
 The inventory schema must be extensible. In addition to these common values,
@@ -167,13 +173,72 @@ R_reserve = max(4096 MiB, 0.10 * R_node)
 This is an initial administrative policy, not a calibrated SIMPLE constant.
 Shared machines and filesystem-heavy stages may require a larger reserve.
 
+### 4.1 Scheduler capability profile
+
+Cluster planning must not assume that every site uses SLURM. Initial coverage
+should include at least:
+
+- SLURM;
+- IBM Spectrum LSF and sites retaining legacy IBM queue interfaces such as
+  LoadLeveler or local wrappers;
+- PBS Pro, OpenPBS, and Torque-family deployments;
+- Sun/Grid Engine and Univa Grid Engine deployments;
+- direct local execution; and
+- an administrator-configurable adapter for other schedulers.
+
+This list defines coverage targets, not a claim that their command-line flags
+are interchangeable. CPU, memory, task, node, GPU, array, and wall-time
+requests have different meanings across schedulers and even across local site
+configurations of the same scheduler. For example, memory may be enforced per
+job, per node, per task, or per requested slot. A planner must never translate
+`job_memory_per_task` into a native option until the adapter has established
+the site's accounting convention.
+
+Every scheduler adapter should expose the same normalized capability contract:
+
+- scheduler identity, version, queues or partitions, and site configuration;
+- submission, status, cancellation, and exit-status propagation;
+- physical-core, hardware-thread, task, node, socket, and NUMA allocation;
+- memory request and enforcement scope;
+- GPU type, count, sharing, and device-binding semantics;
+- wall-time, job-array, dependency, retry, requeue, and preemption behavior;
+- maximum active and queued jobs, array throttling, and site fair-use limits;
+- environment modules, containers, launchers, local scratch, and exported
+  environment variables;
+- stdout/stderr locations and the accounting records needed by telemetry.
+
+Capabilities should be discovered where possible and confirmed by the system
+administrator. Site overrides must be explicit, versioned, and retained in the
+site profile. An unknown scheduler or unresolved memory/CPU convention must
+disable automatic submission and return a rendered recommendation for review;
+it must not silently fall back to SLURM semantics.
+
+Scheduler support should be tracked through a coverage matrix with three
+levels:
+
+1. **Render coverage:** SIMPLE can generate and display the native request.
+2. **Execution coverage:** submission, monitoring, cancellation, dependencies,
+   arrays, and exit codes have passed adapter qualification.
+3. **Resource coverage:** CPU, memory, GPU, placement, and concurrency requests
+   have been verified against scheduler accounting on a real site.
+
+Only resource-qualified adapters may apply automatically generated production
+settings. The matrix must record scheduler and adapter versions, the tested
+site, supported capabilities, known limitations, and the date of the last
+qualification.
+
 ## 5. Workload inventory
 
 Record the inputs that can materially change cost:
 
 - commander or workflow stage;
 - number of active work objects `N_work`;
-- movie dimensions, frame count, and effective downscaled dimensions;
+- detector manufacturer and model, sensor generation, and readout mode;
+- movie format, compression, bit depth or event representation, and file size;
+- physical and super-resolution movie dimensions, frame count, and effective
+  downscaled dimensions;
+- movie acquisition rate, normal and peak inter-arrival times, burst size, and
+  permitted processing lag;
 - particle box size and sampled-particle count;
 - number of classes, references, states, and iterations;
 - sampling distance, mask diameter, symmetry, and reconstruction backend;
@@ -183,6 +248,33 @@ Record the inputs that can materially change cost:
 
 Inputs outside a memory model's calibration range must be treated as
 extrapolations and validated with telemetry before production use.
+
+### 5.1 Acquisition and detector profile
+
+The detector name alone is not a sufficient predictor. The same detector can
+produce different costs in counting, super-resolution, dose-fractionated, or
+event-based modes. Record the values that determine actual input volume:
+
+- detector model and active sensor area;
+- output format, including MRC, TIFF, EER, or another event representation;
+- stored width and height, physical-pixel width and height, frames or events,
+  and sampling distance;
+- average and high-percentile compressed file size;
+- sustained movie rate `lambda_avg` and peak rate `lambda_peak`;
+- burst duration, microscope pauses, and the largest acceptable backlog or
+  end-to-end latency.
+
+For a movie with stored dimensions `Nx` by `Ny`, `Nf` frames, and effective
+storage `Bpp` bytes per pixel, the uncompressed input size is approximately:
+
+```text
+B_movie = Nx * Ny * Nf * Bpp
+R_input = lambda * B_movie
+```
+
+Event formats and compression require measured `B_movie`; their cost must not
+be inferred from decoded dimensions alone. Both decoded compute cost and
+on-disk I/O rate belong in the model.
 
 ## 6. Determine concurrency
 
@@ -272,6 +364,53 @@ Omit `U_gpu` for CPU-only stages and omit any other limit that is genuinely
 not applicable. Never omit an unknown constraint by silently treating it as
 unlimited; report it as unresolved.
 
+### 6.5 Streaming rate and persistent-worker pools
+
+Streaming is a staged service, not one batch command. Preprocessing,
+reference-picking/extraction, particle sieving, pool 2D, and later 3D work have
+different units of work and may use different persistent or partition-worker
+pools. The planner must recommend workers per stage and identify the stage
+that limits sustained throughput. A global `workers` or `ncunits` value must
+not conceal a slower downstream stage.
+
+For stage `s`, measure its effective service rate with `W` workers:
+
+```text
+mu_s(W) = completed input movies per second at stage s
+```
+
+The smallest acceptable worker count is the smallest measured `W` satisfying:
+
+```text
+mu_s(W) >= safety_rate * lambda_peak
+```
+
+where `safety_rate` covers runtime variance and short acquisition bursts. This
+condition is necessary but not sufficient. The worker pool must also satisfy
+the per-node CPU, memory, GPU, local-scratch, and I/O constraints from section
+6. Because workers contend for memory bandwidth and storage, do not assume
+`mu_s(W) = W * mu_s(1)`; benchmark nearby counts until marginal throughput no
+longer justifies another worker.
+
+The planner should model the backlog explicitly:
+
+```text
+backlog(t + dt) = max(0, backlog(t) + arrivals(dt) - completions(dt))
+drain_time      = backlog / max(mu_bottleneck - lambda_avg, epsilon)
+```
+
+Recommendations should include steady-state utilization, peak backlog,
+predicted drain time after a burst, and reserved idle capacity. A configuration
+that eventually finishes but falls continuously behind acquisition is a
+failed stream configuration.
+
+The current stream implementation already exposes different controls at stage
+boundaries: preprocessing and reference-picking use partition concurrency,
+particle sieving derives persistent workers from `nchunks`, and the master can
+start a persistent-worker server. Calibration must preserve these distinct
+semantics and test restart behavior; it must not replace them with one batch
+formula.
+
 ## 7. Determine the number of parts
 
 After concurrency is known, choose `nparts`. The initial requirements are:
@@ -360,15 +499,16 @@ cannot distinguish a genuine resource relationship from a property of that
 particular specimen or acquisition.
 
 The calibration corpus `D_cal` is therefore an input to model fitting. Each
-observation should record four feature groups and the measured outcomes:
+observation should record the following feature groups and measured outcomes:
 
 | Feature group | Examples |
 | --- | --- |
 | Dataset | image dimensions, frames, particles, box size, classes, sampling, states, active work objects |
+| Acquisition | detector and mode, format, compressed bytes per movie, sustained and peak movie rate, burst length and latency target |
 | SIMPLE parameters | commander, `nthr`, `nparts`, `ncunits`, backend, iterations, masks, filters, cache and GPU settings |
 | Hardware and scheduler | environment kind, CPUs, RAM, GPUs and GPU RAM, nodes, NUMA layout, local storage, queue limits and placement |
 | Software environment | SIMPLE revision, model version, compiler, FFT and math libraries, MPI/coarray runtime, operating system |
-| Outcomes | success or failure, peak worker and process-tree memory, elapsed time, throughput, CPU/GPU utilization, I/O and merge time |
+| Outcomes | success or failure, peak worker and process-tree memory, elapsed time, throughput, CPU/GPU utilization, I/O, merge time, backlog and latency |
 
 Training runs should deliberately vary both the data and the parameters. They
 must include small, medium, and large cases; parameter combinations near
@@ -381,6 +521,12 @@ universal model is acceptable only if validation demonstrates that it predicts
 each supported commander as well as the dedicated models. Memory, elapsed time,
 and throughput are separate targets; the setting with the lowest memory is not
 necessarily the setting with the shortest elapsed time.
+
+Streaming models should additionally be fitted per stage and worker-pool
+topology. They must predict both service rate and resource use as persistent
+worker count changes. The optimization target is the smallest safe pool that
+meets the acquisition-rate and latency objectives, not the largest pool the
+machine can launch.
 
 Workstation, distributed cluster, and hybrid-cluster observations must be
 identified explicitly. A model may share portable workload-size terms across
@@ -430,6 +576,48 @@ validation shows that it is at least as safe within the site's supported
 range. Raw scientific data need not be retained when the recorded features and
 resource telemetry are sufficient for fitting.
 
+### 9.3 Administrator-run reference benchmark
+
+SIMPLE should publish a versioned reference benchmark that a system
+administrator can run before selecting site defaults. The benchmark needs two
+related but distinct artifacts:
+
+1. An immutable input bundle containing openly licensed real data, compact
+   desktop-sized subsets, manifests, checksums, provenance, and expected
+   scientific outputs. A DOI-backed archive such as Zenodo is appropriate for
+   distributing and identifying each released bundle.
+2. An append-only results corpus containing the input fingerprint, SIMPLE and
+   model versions, hardware and software profile, acquisition metadata,
+   parameter vector, telemetry, correctness result, and failure reason for
+   every run.
+
+The input bundle is not itself the results database. Keeping them separate
+allows the data release to remain immutable while benchmark observations grow
+across machines and software versions. Results contributed to a shared corpus
+must exclude raw user data, credentials, hostnames, and other site-sensitive
+metadata unless the administrator explicitly approves them.
+
+The normal qualification workflow should be:
+
+1. Download a named benchmark release and verify its checksums.
+2. Run its local execution adapter on a dedicated desktop or workstation,
+   without requiring a scheduler or cluster account.
+3. Sweep a bounded set of thread, partition, concurrent-worker, and persistent
+   stream-worker settings within declared time, memory, and storage budgets.
+4. Verify the expected scientific outputs while collecting resource and
+   throughput telemetry.
+5. Compare the observations with the shipped model and generate a versioned
+   site correction with uncertainty and supported ranges.
+6. Optionally validate that correction on cluster nodes using the real
+   scheduler, network, and shared filesystem before enabling cluster-wide
+   recommendations.
+
+The shipped corpus supplies broad prior evidence; the local benchmark supplies
+the correction for the administrator's actual machine. Extrapolation is
+permitted only inside declared workload and hardware ranges. A local benchmark
+that falls outside them must request another calibration point or return "no
+recommendation" rather than extending a fitted curve without evidence.
+
 ## 10. Measurement and parameter-optimization framework
 
 The project needs one framework that can run controlled experiments, collect
@@ -439,23 +627,28 @@ memory-estimator scripts rather than create an unrelated performance system.
 
 ### 10.1 Framework components
 
-The proposed framework has six parts:
+The proposed framework has seven parts:
 
 1. **Experiment manifest.** A versioned YAML or JSON file identifies the
-   dataset, SIMPLE revision, command, parameter ranges, hardware requirements,
-   repetitions, timeout, and expected outputs.
+   dataset, SIMPLE revision, command, parameter ranges, detector and acquisition
+   profile, hardware requirements, local resource budget, repetitions, timeout,
+   and expected outputs.
 2. **Campaign generator.** It expands the manifest into explicit runs while
    respecting invalid combinations and a maximum CPU-hour or GPU-hour budget.
-3. **Execution adapters.** The same experiment can run locally or through
-   SLURM, PBS, LSF, SGE, persistent workers, or coarrays without changing its
-   scientific inputs.
+3. **Execution adapters.** Direct local execution is the portable default. The
+   same experiment can optionally run through SLURM, PBS, LSF, SGE, persistent
+   workers, or coarrays without changing its scientific inputs.
 4. **Telemetry collector.** It records process-tree memory, CPU and GPU use,
-   elapsed time, I/O, scheduler placement, exit status, and SIMPLE's own
+   elapsed time, I/O, scheduler placement, stream arrival and completion rates,
+   stage backlog, persistent-worker occupancy, exit status, and SIMPLE's own
    metrics in a common schema.
-5. **Feature and model pipeline.** It converts measurements into `D_cal`, fits
-   commander/backend models, evaluates held-out datasets and machines, and
-   publishes a versioned model bundle.
-6. **Advisor and report.** It combines a model bundle, site profile, and actual
+5. **Reference-data and results manager.** It downloads and verifies immutable
+   benchmark bundles and writes scrubbed observations to an append-only local
+   or shared results store.
+6. **Feature and model pipeline.** It converts measurements into `D_cal`, fits
+   commander/backend and stream-stage service models, evaluates held-out
+   datasets and machines, and publishes a versioned model bundle.
+7. **Advisor and report.** It combines a model bundle, site profile, and actual
    workload to explain recommended values and unresolved constraints.
 
 Every generated run needs a stable experiment ID derived from the manifest,
@@ -469,10 +662,10 @@ Different evidence belongs at different frequencies and on different hosts:
 
 | Layer | Where and when | Purpose |
 | --- | --- | --- |
-| Fast probes | build CI and optional installation qualification; seconds | detect large regressions and characterize basic CPU, FFT, memory, I/O, launcher, and thread behavior |
-| Bullet runs | installation qualification or an administrator-selected node; seconds to a few minutes | sample a small number of nearby parameter settings and estimate local scaling slopes |
-| Representative pilots | the target queue and storage path before a large run; minutes | correct the shipped model for the actual dataset and site |
-| Calibration campaigns | dedicated nightly or scheduled benchmark nodes | fill the multi-dataset corpus and refit released models |
+| Fast probes | build CI and optional local installation qualification; seconds | detect large regressions and characterize basic CPU, FFT, memory, I/O, launcher, and thread behavior |
+| Bullet runs | a dedicated local desktop, workstation, or administrator-selected host; seconds to a few minutes | sample a small number of nearby parameter settings and estimate local scaling slopes |
+| Representative pilots | the target workstation by default, or the target queue and storage path when qualifying a cluster; minutes | correct the shipped model for the actual dataset and site |
+| Calibration campaigns | dedicated desktop/workstation by default; an optional controlled cluster node for cluster-specific behavior | fill the multi-dataset corpus and refit released models |
 | Production telemetry | opt-in, sampled, and scrubbed of scientific data | detect drift and propose future calibration points |
 
 CI runners are shared and noisy, so their absolute timings must not determine
@@ -480,13 +673,117 @@ production resource requests. They are useful for detecting discontinuities
 and verifying that the measurement machinery still works. Published models
 must rely on controlled hosts plus representative site pilots.
 
+The portable benchmark must complete through the local adapter without a
+batch queue, privileged administrator operations, or shared cluster storage.
+Its manifests must cap elapsed time, peak storage, memory, and CPU/GPU use so a
+system administrator can select a subset appropriate for an ordinary desktop.
+Queue-based runs are additional evidence only when SIMPLE will be deployed on
+a cluster. They measure placement, network, launcher, and shared-filesystem
+effects; queue delay and unrelated cluster load must not define portable
+kernel or CPU coefficients.
+
 For clusters, bullet runs should include both one-node shared-memory probes and
 multi-node distributed probes. This separates thread scaling within a node
 from worker scaling across nodes and exposes shared-filesystem or network
 bottlenecks. Workstation qualification normally omits multi-node probes but
 must measure contention between concurrent local workers.
 
-### 10.3 Fast tests and bullet-run scaling theory
+### 10.3 Low-level resource qualification
+
+Before running a full reference workflow, SIMPLE should run a short,
+scheduler-free qualification campaign that establishes a conservative operating
+envelope for the local machine. These are performance and capacity probes, not
+unit tests: scientific correctness is still a mandatory gate, but a shared or
+slower machine must not fail merely because an absolute timing differs from a
+reference host.
+
+The campaign should isolate one scaling dimension at a time:
+
+| Probe | Controlled sweep | Quantities measured |
+| --- | --- | --- |
+| Baseline | one worker and one thread | fixed startup, memory, I/O, and elapsed-time costs |
+| Thread scaling | `nthr=1,2,4,...` up to physical-core capacity | throughput, CPU efficiency, memory growth, and the thread-scaling knee |
+| Worker scaling | 1, 2, 4, ... concurrent workers at candidate `nthr` values | aggregate throughput, process-tree memory, I/O contention, and oversubscription |
+| Partition scaling | increasing `nparts` at fixed concurrency | launch, merge, imbalance, and minimum useful task duration |
+| Stream scaling | controlled movie replay while varying one stage pool at a time | per-stage service rate, utilization, backlog, latency, and drain time |
+| Scheduler adapter | one tiny job, a bounded array, a dependency, and a placement probe | request semantics, task placement, accounting, exit codes, cancellation, and launch overhead |
+
+Each point should be repeated enough to estimate runtime variability. Resource
+decisions must use conservative bounds rather than the best observed run:
+
+```text
+Q_low(c) = lower confidence bound for throughput at configuration c
+M_high(c) = upper confidence bound for peak process-tree memory at c
+```
+
+A configuration is inside the safe envelope only when all applicable
+conditions hold:
+
+```text
+scientific correctness checks pass
+M_high(c) <= (1 - reserve_mem) * usable_memory
+threads(c) <= allocated_physical_cores - reserve_cores
+GPU memory and ownership limits are satisfied
+temporary storage remains below its reserved capacity
+measured I/O demand remains below the sustainable local limit
+```
+
+For a stream configuration, also require:
+
+```text
+mu_low,s(c) >= rate_headroom * lambda_peak    for every required stage s
+predicted peak backlog <= backlog_limit
+predicted drain time <= drain_time_limit
+```
+
+The reserve values are policies, not universal constants. A dedicated compute
+node may reserve less CPU than an interactive workstation, while an unknown or
+noisy environment should use larger memory, throughput, and rate margins. The
+qualification report must state the selected margins.
+
+For a batch stage, let `Q_best` be the best conservative throughput among safe
+configurations. Rather than selecting the largest configuration, form a
+near-optimal set:
+
+```text
+C_near = {c in C_safe : Q_low(c) >= (1 - throughput_tolerance) * Q_best}
+```
+
+Choose from `C_near` the configuration using the fewest cores, workers, GPU
+slots, and memory. This identifies the scaling knee: it preserves nearly all
+measured throughput while avoiding resources whose marginal benefit is small.
+For a stream stage, choose the smallest safe worker pool that meets the peak
+arrival and latency contract. Nearby larger settings may be reported as burst
+options, but should not become defaults without a measured benefit.
+
+The campaign should proceed incrementally. Start from the one-worker baseline,
+increase one dimension, stop before a predicted capacity boundary, and retain
+the last two safe points around each scaling knee. Never deliberately drive the
+machine into swapping, GPU out-of-memory, filesystem exhaustion, or sustained
+stream backlog merely to discover a failure point. Boundary behavior should be
+inferred from telemetry and approached with bounded steps.
+
+The resulting low-level site profile should contain:
+
+- recommended and maximum-safe `nthr` per representative kernel or commander;
+- recommended and maximum-safe local concurrency;
+- per-worker and process-tree memory bounds;
+- the useful `nparts` range and minimum useful part duration;
+- sustainable sequential and concurrent I/O rates;
+- recommended persistent-worker counts and measured service-rate headroom per
+  stream stage;
+- confidence intervals, reserve policies, environment fingerprint, and the
+  conditions that require requalification.
+
+When qualifying a cluster, scheduler probes should use negligible scientific
+work and safe resource requests. They should verify the resources actually
+granted from scheduler accounting and the job environment, rather than testing
+enforcement by intentionally exceeding memory or wall time. Queue wait time
+must be reported separately from launch overhead and execution time. A failed
+adapter probe blocks automatic submission for that scheduler but does not
+invalidate the scheduler-free local hardware profile.
+
+### 10.3.1 Fast probes and bullet-run scaling theory
 
 Very fast tests can provide clues about scaling even when they are too small
 to predict an entire workflow. The framework should treat these as short
@@ -504,6 +801,10 @@ Useful probes include:
 - process, MPI/coarray image, and scheduler-task startup latency;
 - one small partition at several `nthr` values;
 - two or more concurrent small partitions to expose memory and I/O contention;
+- replaying detector-specific movies at controlled sustained and burst arrival
+  rates while varying each stream stage's persistent-worker pool;
+- measuring stage service rate, worker occupancy, peak backlog, and backlog
+  drain time for representative movie dimensions and formats;
 - GPU initialization, transfer, kernel throughput, and device-memory peaks
   where applicable.
 
@@ -539,6 +840,95 @@ contention; nearly constant time per work object under proportional resource
 and dataset growth suggests useful weak scaling. Full pilots remain necessary
 because startup, merging, cache effects, and contention may be absent from a
 small probe.
+
+### 10.3.2 Minimum viable SIMPLE qualification
+
+The first executable qualification should use one deterministic synthetic
+movie and the existing `motion_correct` memory harness. Motion correction is a
+useful first probe because it exercises SIMPLE startup, MRC I/O, FFT work,
+OpenMP scaling, and native process-memory telemetry without requiring a user
+dataset. It does not characterize every commander, GPU behavior, distributed
+execution, or all stream stages.
+
+The minimum procedure is:
+
+1. Record CPU topology, NUMA nodes, physical and logical cores, available RAM,
+   swap activity, storage capacity, operating system, SIMPLE revision, and the
+   executable paths.
+2. Pin the probe to physical cores in one NUMA domain. Record the binding and
+   avoid hardware threads for the initial sweep.
+3. Generate a deterministic movie large enough that the measured command lasts
+   at least about one second at the highest candidate thread count. Very short
+   cases are smoke tests only.
+4. Run `nthr=1,2,4,...` up to the physical cores available in that NUMA domain,
+   with at least three repetitions. Require successful completion and valid
+   memory telemetry for every point.
+5. Select the smallest `nthr` within the agreed throughput tolerance of the
+   best median result. Reject higher settings whose marginal throughput does
+   not justify their additional cores or memory.
+6. Run 1, 2, and then the proposed number of workers concurrently. Bind every
+   worker to disjoint physical cores and verify per-worker elapsed time,
+   aggregate throughput, process-tree memory, and swap activity.
+7. Choose `ncunits` no larger than the measured safe concurrency. On a shared
+   workstation, retain an explicit CPU and RAM reserve for the operating system
+   and other users.
+8. Set an initial `nparts` to one or two waves of measured concurrency when the
+   workload contains enough work objects. Increase it only when a separate
+   partition probe demonstrates better load balance or restart behavior.
+9. Round the observed upper memory bound upward using the declared uncertainty
+   and reserve policy. Do not reuse the fixture's memory request for larger
+   movies; query the calibrated workload model and verify it with a pilot.
+10. Repeat the selected configuration once as a final verification and save
+    the manifest, raw CSV, logs, telemetry, environment fingerprint, and
+    derived recommendation.
+
+The first result is a conservative local baseline for `nthr`, `ncunits`, and
+fixture memory. It is not yet a universal SIMPLE configuration. A second-level
+qualification must cover representative detector dimensions, concurrent I/O,
+and the stream-stage service rates required by the intended acquisition.
+
+### 10.3.3 Initial run on the reference workstation
+
+The minimum qualification was exercised on 2026-09-29 on a two-socket Intel
+Xeon Gold 6242R workstation with 20 physical cores per socket, two hardware
+threads per core, two NUMA nodes, and approximately 251 GiB of RAM. The probe
+was pinned to physical CPUs in one socket and used a deterministic
+2048-by-2048, eight-frame movie at 1.3 Angstrom per pixel. Each thread setting
+was repeated three times.
+
+| `nthr` | Median elapsed (s) | Worst elapsed (s) | Median speedup | Thread efficiency | Highest peak RSS (MiB) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 4.355 | 4.405 | 1.00 | 1.000 | 415.6 |
+| 2 | 2.656 | 2.698 | 1.64 | 0.820 | 409.6 |
+| 4 | 1.672 | 1.687 | 2.60 | 0.651 | 415.9 |
+| 8 | 1.149 | 1.427 | 3.79 | 0.474 | 414.0 |
+| 16 | 1.122 | 1.160 | 3.88 | 0.243 | 523.2 |
+
+Sixteen threads improved median elapsed time by only 2.4 percent over eight
+threads while consuming twice as many cores and increasing the highest
+observed peak RSS by about 26 percent. Eight threads are therefore the
+provisional scaling knee for this fixture.
+
+Two concurrent eight-thread workers completed in 1.363 and 1.466 seconds. Four
+workers pinned to disjoint groups of eight physical cores completed in 1.125
+to 1.205 seconds, with peak RSS between 411.7 and 412.1 MiB per worker. The
+four-worker result supports this provisional shared-workstation baseline:
+
+```text
+nthr=8
+ncunits=4
+nparts=8 when at least eight work objects are available
+job_memory_per_task=1024 MiB for this 2048x2048x8 fixture only
+```
+
+This uses 32 of 40 physical cores and leaves eight cores as an interactive
+reserve. The memory request is deliberately rounded well above the observed
+peak, but it must not be used for production detector-sized movies. The host
+had a system load near 16 during the measurements, and each concurrent-worker
+configuration was run as only one wave. These results demonstrate the
+procedure and establish provisional parameters; repeated concurrency waves,
+I/O probes, and representative-movie pilots remain required before promoting a
+site profile.
 
 ### 10.4 Filling calibration gaps
 
@@ -629,7 +1019,10 @@ Before using a plan for a large production run:
 6. Confirm `ncunits * nthr` does not oversubscribe allocated CPUs.
 7. Measure wall time per work object, I/O throughput, and merge overhead.
 8. Recalculate `P_time`, `P_size`, `ncunits`, and `nparts` from the pilot.
-9. Repeat after changes to SIMPLE, compiler, FFT library, allocator, operating
+9. For streaming, replay the expected sustained and peak acquisition rates and
+   confirm that every stage remains stable, peak backlog is bounded, and the
+   backlog drains within the declared latency target.
+10. Repeat after changes to SIMPLE, compiler, FFT library, allocator, operating
    system, GPU stack, or important workflow settings.
 
 The plan must fail closed: an unsupported commander or missing memory target
@@ -654,6 +1047,19 @@ Memory per task: 4608 MiB
 Warnings: none
 ```
 
+A stream recommendation should additionally report the acquisition contract
+and each stage's pool rather than collapsing them into one worker count:
+
+```text
+Acquisition: detector=<model/mode>, movie=4096x4096x40, peak=0.50 movies/s
+Sustainable input rate: 0.65 movies/s [30% headroom]
+Limiting stage: preprocessing
+Persistent workers: preprocessing=4, picking=2, sieving=2, pool2D=2
+Predicted peak backlog: 8 movies
+Predicted backlog drain time: 54 s
+Warnings: detector mode is locally calibrated; burst duration is extrapolated
+```
+
 Machine-readable output should also include the model version, calibration
 range, safety factor, reserve policy, formulas, every candidate limit, and all
 warnings. This makes the recommendation auditable by a system administrator.
@@ -670,7 +1076,11 @@ Automatic `nparts` or `ncunits` selection should not become a default until:
   calibrated;
 - restart behavior when `nparts` changes is safe for the owning workflows;
 - scheduler placement and memory semantics are validated for SLURM, PBS, LSF,
-  SGE, local, persistent-worker, and coarray execution;
+  legacy IBM queue interfaces, SGE, local, persistent-worker, and coarray
+  execution;
+- scheduler coverage is reported separately for request rendering, execution
+  lifecycle, and verified resource semantics, with unknown adapters failing
+  closed;
 - GPU count and device-memory rules are available for GPU stages;
 - the planner distinguishes physical cores, logical threads, sockets, and
   NUMA locality;
@@ -686,8 +1096,21 @@ Automatic `nparts` or `ncunits` selection should not become a default until:
   aggregate RAM and CPU counts;
 - fast probes, representative pilots, and calibration campaigns use one
   versioned experiment and telemetry schema;
+- scheduler-free low-level probes establish conservative confidence bounds,
+  safe capacity limits, and the throughput-scaling knee before selecting local
+  defaults;
 - model coverage reports identify unsupported regions and drive the next
   measurements;
+- detector, movie-format, dimension, sustained-rate, and burst-rate families
+  are represented in the stream calibration corpus;
+- stream models distinguish stage-specific persistent-worker pools, service
+  rates, backlog growth, and drain time;
+- a versioned public benchmark bundle provides checksummed real inputs and
+  expected scientific outputs independently of the append-only results corpus;
+- the reference benchmark and bounded calibration sweeps work on a local
+  desktop or workstation without a scheduler;
+- cluster-specific network, placement, launcher, and shared-filesystem effects
+  are qualified separately from the scheduler-free portable baseline;
 - hardware profiles use extensible capability descriptions rather than fixed
   device-name tables;
 - an unknown hardware class fails closed until correctness, bullet probes, and
@@ -725,3 +1148,24 @@ line values but leave the final decision with the user or system administrator.
     remain constrained to one shared-memory node?
 14. Which placement policies should the planner support first: one worker per
     node, one per socket, or several workers per node?
+15. Which detector generations, readout modes, movie dimensions, and storage
+    formats must the first stream calibration release cover?
+16. What acquisition-rate safety factor, maximum backlog, and backlog-drain
+    target define a successful stream configuration?
+17. Which real benchmark datasets can be redistributed with clear provenance,
+    licenses, checksums, and long-term versioning through Zenodo or an
+    equivalent archive?
+18. What elapsed-time, memory, CPU/GPU, download, and temporary-storage budgets
+    keep the reference qualification practical on an ordinary desktop?
+19. Who maintains the shared results schema, reviews contributed observations,
+    and promotes a new version of the shipped model?
+20. Which stream stages expose independently tunable persistent-worker pools,
+    and which counts must remain fixed by the current implementation?
+21. What throughput tolerance defines the near-optimal set from which the
+    least resource-intensive configuration is selected?
+22. How many repetitions and what confidence level are required before a
+    low-level measurement can define a conservative site limit?
+23. Which scheduler families and versions must be resource-qualified for the
+    first release, and which may initially provide render-only coverage?
+24. Which scheduler capabilities are mandatory for stream operation, including
+    persistent workers, dependencies, requeue behavior, and array throttling?

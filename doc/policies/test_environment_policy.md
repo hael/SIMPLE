@@ -296,8 +296,12 @@ you: **before you push, build with `./compile_debug.sh` and
 let the gate pass.** This is a strong recommendation, not a lock: nothing in
 Git or CI blocks a push, because sometimes a push only moves code to another
 machine (a cluster node, say). Then run the gate before the work counts as
-done. The nightly CI builds and gates master on Linux and macOS, in Debug and
-Release, and shows the next morning what slipped through. Do not keep work on a branch in the
+done. The nightly GitHub Actions workflows build and gate master on Linux and
+macOS using clean Release, Debug, NICE GUI, and coarray configurations, and
+they run the broader platform, library, and high-level CTest labels. A separate
+benchmark-dataset workflow runs short real-data subsets and publishes its FSC
+and resolution gates. The README badges and linked workflow/report pages show
+the next morning what slipped through. Do not keep work on a branch in the
 online repository: nobody checks it, it drifts away from master, and the
 merge gets harder every day it waits. A branch pushed to the online
 repository is the exception and needs a strong reason (for example a
@@ -519,27 +523,112 @@ benchmarks, and anything that cannot fail.
 - **It fails on a missed floor**, with a message naming the metric, its value
   and the floor, and it is reproducible: `SIMPLE_SEED` fixes every draw.
 
-### 6.3 The nightly run
+### 6.3 The nightly GitHub Actions runs
 
-The runner (Phase 5 of the plan, designed and written by Ruben:
-`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`)
-does the following on the dedicated machine:
+Nightly integration runs on GitHub-hosted Linux and macOS runners through two
+scheduled workflows. Both workflows can also be started manually with
+`workflow_dispatch`.
 
-1. Takes a lock, so two runs never overlap.
-2. Builds a known commit with `./compile_clean.sh`, which
-   also runs the fast gate. A failed gate stops the night.
-3. Runs `ctest -L library` (the library suites may run side by side), then
-   `ctest -L platform` where the machine has the capability. High-level tests
-   are excluded and run only by an explicit `ctest -L highlevel` command.
-4. Writes a dated summary outside `build/` with the commit, host, compiler,
-   the status and time of every entry, every metric against its floor, and
-   the tail of every failing log. It appends to a history file, so that a
-   regression can be dated and a growing runtime seen.
-5. Reports briefly where the team looks.
+The build workflow, `.github/workflows/ci_build.yml`, checks that the supported
+build configurations remain viable:
 
-Every entry keeps its CTest `TIMEOUT` and the whole run must fit the night.
-An entry that grows past its share is reported, and trimming it is a reviewed
-change, as for the fast gate.
+1. It checks out the selected commit and installs the platform dependencies.
+2. It builds SIMPLE in Debug mode with `./compile_debug.sh`.
+3. It builds the NICE SIMPLE GUI with `./compile_gui.sh`.
+4. In a separate matrix job, it builds the coarray-enabled configuration with
+   `./compile_coarrays.sh` where the platform dependencies are available.
+5. Each build script includes the test code and runs the `fast` CTest gate by
+   default before installation. A compilation or fast-gate failure makes that
+   matrix job and the build workflow fail.
+
+The test workflow, `.github/workflows/ci_test.yml`, owns the broader CTest
+execution:
+
+1. It checks out the same branch on GitHub-hosted Linux and macOS runners and
+   installs the platform dependencies.
+2. It performs a clean release build with `./compile_clean.sh`. This build runs
+   the `fast` gate before installation; a failure stops the job, so none of the
+   longer labels run against a failed build.
+3. From `build/`, it runs the capability-dependent platform entries with
+   `ctest -L platform --no-tests=error --output-on-failure`.
+4. It runs the longer in-process library suites with
+   `ctest -L library --no-tests=error --output-on-failure`.
+5. It explicitly runs the end-to-end workflow gates with
+   `ctest -L highlevel --no-tests=error --output-on-failure`.
+
+The build and test workflows are separate scheduled workflows and may execute
+at the same time. The high-level gate is ordered after—and depends on—the clean
+build and fast gate inside `ci_test.yml`; it does not wait for the independent
+Debug, NICE GUI, or coarray jobs in `ci_build.yml`.
+
+GitHub Actions retains the command output, CTest failure output, duration, job
+status, commit, operating system, and dependency-installation log for each
+matrix entry. A nonzero build-script or CTest status fails the corresponding
+job and therefore the workflow. Tests must not use `continue-on-error` or shell
+constructs that hide those exit codes.
+
+The repository README reports the nightly state through two workflow badges:
+
+- **Build SIMPLE** links to `ci_build.yml` and summarizes the Debug, NICE GUI,
+  and coarray build workflow.
+- **Test SIMPLE** links to `ci_test.yml` and summarizes the clean build, fast
+  gate, platform, library, and high-level test workflow.
+
+The badges are workflow-level summaries for the `master` branch. Detailed
+results remain on the linked GitHub Actions pages; a badge does not replace the
+per-job Linux/macOS results or the metric output produced by a high-level gate.
+Every CTest entry retains its declared `TIMEOUT`, and changes that weaken a
+timeout or scientific threshold require review.
+
+### 6.4 Benchmark-dataset workflow and webpage
+
+The repository-level build and CTest workflows are complemented by the
+`SIMPLE_data_testing` workflow linked under **Benchmark Datasets** in the
+README. This is a separate real-data integration layer: it exercises installed
+SIMPLE workflows on representative cryo-EM datasets and publishes the results
+through the linked GitHub Pages report.
+
+These dataset runs are intentionally short enough for routine automation. Most
+datasets are trimmed to 50 micrographs, with the exact subset and order fixed
+in the dataset manifest. The report must identify any different limit. Trimming
+keeps download, preprocessing, particle extraction, classification, and
+reconstruction costs bounded while retaining real detector data and an
+end-to-end workflow. It does not make the subset representative of full-scale
+production throughput or final biological resolution.
+
+For each dataset, the workflow should record and publish at least:
+
+- dataset and immutable subset identity, including the number of micrographs;
+- SIMPLE commit or release, workflow parameters, and execution environment;
+- completion status and the stage that failed, if any;
+- imported and accepted micrograph and particle counts;
+- final-map dimensions, sampling distance, symmetry, and particle count;
+- the final FSC curve, the declared FSC criterion, and the resolution obtained
+  at that criterion;
+- the dataset-specific resolution limit and an explicit FSC **PASS** or
+  **FAIL** result;
+- important runtime and resource measurements needed to recognize a major
+  performance regression.
+
+The FSC decision must be quantitative. The dataset manifest declares the FSC
+criterion, commonly 0.143, and the maximum acceptable resolution in Angstrom.
+The result passes only when the FSC data are finite and valid, the threshold
+crossing can be determined, and the measured resolution is no worse than the
+declared dataset-specific limit. A missing curve, invalid crossing, or missed
+resolution limit is a failure. Changing that limit requires the same review
+and justification as changing a high-level test floor.
+
+Dataset status must not be report-only. A failed workflow stage, invalid
+scientific output, or FSC failure must produce a nonzero status that fails the
+`SIMPLE_data_testing` GitHub Actions workflow. Its README badge therefore
+summarizes the actual benchmark-dataset gate, while the published webpage
+provides the per-dataset FSC plot, resolution, threshold, PASS/FAIL decision,
+and supporting metrics.
+
+These real-data runs do not replace the hermetic fast, library, platform, or
+high-level suites. CTest supplies reproducible generated-data gates within the
+SIMPLE repository; the benchmark-dataset workflow supplies short real-data
+evidence in its separately versioned data and reporting repository.
 
 ## 7. Why tests are no longer standalone programs
 
