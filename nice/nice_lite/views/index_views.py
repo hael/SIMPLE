@@ -10,13 +10,14 @@ from django.contrib                 import messages
 from django.contrib.auth            import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms      import AuthenticationForm
+from django.db.models               import Exists, OuterRef
 from django.shortcuts               import redirect, render
 from django.urls                    import reverse
 from django.views.decorators.http   import require_POST
 
 # local imports
 from ..helpers                   import clear_checksum_cookies, get_project_id, get_workspace_id
-from ..models                    import ProjectModel, WorkspaceModel
+from ..models                    import JobModel, ProjectModel, WorkspaceModel
 
 
 # ------------------------------------------------------------------
@@ -88,7 +89,15 @@ def view_index(request):
             messages.add_message(request, messages.INFO, "please select a project")
     elif projectid > 0:
         projectmodel = projects.filter(id=projectid).first()
-        workspaces = WorkspaceModel.objects.filter(proj=projectid, user=username)
+        workspace_jobs = JobModel.objects.filter(dset_id=OuterRef("pk"))
+        workspaces = WorkspaceModel.objects.filter(
+            proj=projectid,
+            user=username,
+        ).annotate(
+            has_jobs=Exists(workspace_jobs),
+            has_running_job=Exists(workspace_jobs.filter(status="running")),
+            has_non_finished_job=Exists(workspace_jobs.exclude(status="finished")),
+        )
 
     if workspaceid is None:
         if projectid is not None:

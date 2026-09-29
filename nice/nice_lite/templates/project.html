@@ -19,15 +19,21 @@
                        title="open workspace {{ workspace.name }}"
                        class="bg-streambar rounded-xl border border-streamring/20 hover:border-streamring flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor-pointer">
 
-                        <!-- Header: workspace title · open indicator · description -->
+                        <!-- Header: workspace title · status indicator · description -->
                         <div class="flex flex-col border-b border-streamdivider">
                             <div class="flex items-center gap-2 px-3 pt-2 pb-0 flex-shrink-0">
                                 <span class="text-[10px] font-medium text-streamtext uppercase tracking-widest flex-1 truncate">
                                     {{ workspace.name }}
                                 </span>
-                                <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
-                                    open
-                                </span>
+                                {% if workspace.has_running_job %}
+                                    <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction">
+                                        running
+                                    </span>
+                                {% elif workspace.has_jobs and not workspace.has_non_finished_job %}
+                                    <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
+                                        finished
+                                    </span>
+                                {% endif %}
                             </div>
                             <div class="flex items-center gap-1 px-3 pb-1 min-w-0">
                                 <span class="w-full text-[10px] text-streamlabel truncate">

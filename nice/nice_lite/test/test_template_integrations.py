@@ -222,6 +222,14 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("border-b border-streamdivider", projects)
         self.assertIn("border-t border-streamdivider", projects)
         self.assertIn("workspace folder", projects)
+        self.assertIn("bg-streamaction/10 text-streamaction", projects)
+        self.assertIn("bg-streamring/10 text-streamaccent", projects)
+        self.assertIn("{% if workspace.has_running_job %}", projects)
+        self.assertIn(
+            "{% elif workspace.has_jobs and not workspace.has_non_finished_job %}",
+            projects,
+        )
+        self.assertNotIn("{% else %}open{% endif %}", projects)
         self.assertIn("includes/_nav_header.html", projects)
         self.assertNotIn('<header class="bg-streambar', projects)
         self.assertNotIn("<!DOCTYPE html>", projects)

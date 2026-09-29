@@ -43,6 +43,16 @@ class _FakeProjectQuery:
         return len(self._ids)
 
 
+class _FakeWorkspaceQuery(list):
+    def __init__(self, values):
+        super().__init__(values)
+        self.annotations = {}
+
+    def annotate(self, **annotations):
+        self.annotations.update(annotations)
+        return self
+
+
 def _render_with_context(_request, _template, context):
     response = HttpResponse("ok")
     response._ctx = context
@@ -111,8 +121,9 @@ class IndexViewBranchTests(SimpleTestCase):
     def test_selected_project_without_workspace_renders_project_page(self):
         request = self.factory.get("/")
         request.user = _AuthUser()
+        workspace_query = _FakeWorkspaceQuery([])
 
-        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=None), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=[]), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
+        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", return_value=None), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=workspace_query), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
             response = index_views.view_index(request)
 
         self.assertEqual(response.status_code, 200)
@@ -120,14 +131,19 @@ class IndexViewBranchTests(SimpleTestCase):
         self.assertIsNone(response._ctx["current_workspace_id"])
         self.assertEqual(response._ctx["project"].id, 1)
         self.assertIsNone(response._ctx["iframeurl"])
+        self.assertEqual(
+            set(response._ctx["workspaces"].annotations),
+            {"has_jobs", "has_running_job", "has_non_finished_job"},
+        )
 
     def test_explicit_project_url_ignores_remembered_workspace_cookie(self):
         request = self.factory.get("/", {"selected_project_id": "1"})
         request.user = _AuthUser()
         request.COOKIES["selected_workspace_id"] = "8"
         workspace_id = Mock(return_value=8)
+        workspace_query = _FakeWorkspaceQuery([object()])
 
-        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", workspace_id), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=[object()]), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
+        with patch.object(index_views, "get_project_id", return_value=1), patch.object(index_views, "get_workspace_id", workspace_id), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=workspace_query), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
             response = index_views.view_index(request)
 
         workspace_id.assert_not_called()
