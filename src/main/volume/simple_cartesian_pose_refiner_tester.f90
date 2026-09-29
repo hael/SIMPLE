@@ -7,8 +7,9 @@
 ! Cartesian gather against the PFTC projector kernel at a matched boundary, and the
 ! right rotation increment keeping orthogonality. The solvers: shift-only LM recovery
 ! within its step bound, joint LM recovery of a known pose, exact poses retained,
-! active-parameter masks, the cumulative guard, the NCC solver on a gain-scaled
-! particle, and invalid or unobservable inputs leaving the pose untouched.
+! active-parameter masks, cumulative and rejection guards, the accepted-relative-
+! reduction stop, the NCC solver on a gain-scaled particle, and invalid or
+! unobservable inputs leaving the pose untouched.
 module simple_cartesian_pose_refiner_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
 use simple_defs,                   only: dp, sp, DPI, KBALPHA, KBWINSZ, OSMPL_PAD_FAC
@@ -28,7 +29,7 @@ implicit none
 private
 public :: run_all_cartesian_pose_refiner_tests
 
-integer,  parameter :: TEST_BOX = 24
+integer, parameter :: TEST_BOX         = 24
 real(dp), parameter :: GRADIENT_TOL    = 3.e-2_dp
 real(dp), parameter :: ORTHOGONAL_TOL  = 2.e-12_dp
 real(dp), parameter :: NCC_FORMULA_TOL = 20._dp*real(epsilon(1.), dp)
@@ -38,50 +39,48 @@ real(dp), parameter :: SHIFT_TOL       = 2.e-3_dp
 contains
 
     subroutine run_all_cartesian_pose_refiner_tests()
-        write(*,'(A)') '**** running all Cartesian pose refiner tests ****'
+        write (*, '(A)') '**** running all Cartesian pose refiner tests ****'
         call run_pose_cont_numerics()
         call run_pose_cont_solver()
     end subroutine run_all_cartesian_pose_refiner_tests
 
-
-
     subroutine build_test_volume(volume)
-        real, allocatable, intent(out) :: volume(:,:,:)
-        real, parameter :: centres(3,4) = reshape([ &
-            &-5.,-3., 2., 4., 5.,-3., 0.,-6.,-5., 3.,-2., 6.],[3,4])
-        real, parameter :: sigmas(4) = [2.,2.5,1.8,2.2]
-        real, parameter :: amplitudes(4) = [1.,0.8,0.6,0.5]
+        real, allocatable, intent(out) :: volume(:, :, :)
+        real, parameter :: centres(3, 4) = reshape([ &
+            &-5., -3., 2., 4., 5., -3., 0., -6., -5., 3., -2., 6.], [3, 4])
+        real, parameter :: sigmas(4) = [2., 2.5, 1.8, 2.2]
+        real, parameter :: amplitudes(4) = [1., 0.8, 0.6, 0.5]
         real :: centre, dx, dy, dz
         integer :: blob, i, j, k
 
-        allocate(volume(TEST_BOX,TEST_BOX,TEST_BOX),source=0.)
+        allocate (volume(TEST_BOX, TEST_BOX, TEST_BOX), source=0.)
         centre = real(TEST_BOX)/2.+0.5
         do k = 1, TEST_BOX
             do j = 1, TEST_BOX
                 do i = 1, TEST_BOX
                     do blob = 1, 4
-                        dx = real(i)-centre-centres(1,blob)
-                        dy = real(j)-centre-centres(2,blob)
-                        dz = real(k)-centre-centres(3,blob)
-                        volume(i,j,k) = volume(i,j,k)+amplitudes(blob)* &
-                            &exp(-(dx*dx+dy*dy+dz*dz)/(2.*sigmas(blob)**2))
-                    enddo
-                enddo
-            enddo
-        enddo
+                        dx = real(i) - centre - centres(1, blob)
+                        dy = real(j) - centre - centres(2, blob)
+                        dz = real(k) - centre - centres(3, blob)
+                        volume(i, j, k) = volume(i, j, k) + amplitudes(blob)* &
+                            &exp(-(dx*dx + dy*dy + dz*dz)/(2.*sigmas(blob)**2))
+                    end do
+                end do
+            end do
+        end do
     end subroutine build_test_volume
 
     pure function identity_rotation() result(rotation)
-        real(dp) :: rotation(3,3)
+        real(dp) :: rotation(3, 3)
         rotation = 0._dp
-        rotation(1,1) = 1._dp
-        rotation(2,2) = 1._dp
-        rotation(3,3) = 1._dp
+        rotation(1, 1) = 1._dp
+        rotation(2, 2) = 1._dp
+        rotation(3, 3) = 1._dp
     end function identity_rotation
 
-    subroutine prepare_unweighted_particle(workspace,observed,data,shell_range)
+    subroutine prepare_unweighted_particle(workspace, observed, data, shell_range)
         type(cartesian_pose_refiner), intent(in) :: workspace
-        complex, intent(in) :: observed(-TEST_BOX/2:,-TEST_BOX/2:)
+        complex, intent(in) :: observed(-TEST_BOX/2:, -TEST_BOX/2:)
         type(cartesian_pose_data), intent(out) :: data
         integer, intent(in), optional :: shell_range(2)
         type(ctfparams) :: no_ctf
@@ -90,35 +89,34 @@ contains
 
         no_ctf%ctfflag = CTFFLAG_NO
         sigma2 = 1.
-        active_range = [2,TEST_BOX/2]
-        if( present(shell_range) ) active_range = shell_range
-        call workspace%prepare_particle(observed,no_ctf,sigma2,active_range,data)
+        active_range = [2, TEST_BOX/2]
+        if (present(shell_range)) active_range = shell_range
+        call workspace%prepare_particle(observed, no_ctf, sigma2, active_range, data)
     end subroutine prepare_unweighted_particle
 
-    pure function rotation_distance(left,right) result(distance)
-        real(dp), intent(in) :: left(3,3), right(3,3)
+    pure function rotation_distance(left, right) result(distance)
+        real(dp), intent(in) :: left(3, 3), right(3, 3)
         real(dp) :: distance, cosine
-        cosine = 0.5_dp*(sum(left*right)-1._dp)
-        distance = acos(max(-1._dp,min(1._dp,cosine)))
+        cosine = 0.5_dp*(sum(left*right) - 1._dp)
+        distance = acos(max(-1._dp, min(1._dp, cosine)))
     end function rotation_distance
 
-
     subroutine run_pose_cont_numerics()
-        write(*,'(A)') 'test_particle_preparation_contract'
+        write (*, '(A)') 'test_particle_preparation_contract'
         call test_particle_preparation_contract()
-        write(*,'(A)') 'test_sigma_shell_contract'
+        write (*, '(A)') 'test_sigma_shell_contract'
         call test_sigma_shell_contract()
-        write(*,'(A)') 'test_reference_envelope_contract'
+        write (*, '(A)') 'test_reference_envelope_contract'
         call test_reference_envelope_contract()
-        write(*,'(A)') 'test_shift_phase_sign'
+        write (*, '(A)') 'test_shift_phase_sign'
         call test_shift_phase_sign()
-        write(*,'(A)') 'test_ncc_objective_formula'
+        write (*, '(A)') 'test_ncc_objective_formula'
         call test_ncc_objective_formula()
-        write(*,'(A)') 'test_five_parameter_gradient'
+        write (*, '(A)') 'test_five_parameter_gradient'
         call test_five_parameter_gradient()
-        write(*,'(A)') 'test_matched_projector_boundary'
+        write (*, '(A)') 'test_matched_projector_boundary'
         call test_matched_projector_boundary()
-        write(*,'(A)') 'test_rotation_increment'
+        write (*, '(A)') 'test_rotation_increment'
         call test_rotation_increment()
     end subroutine run_pose_cont_numerics
 
@@ -502,17 +500,16 @@ contains
             &matrix(1, 3)*(matrix(2, 1)*matrix(3, 2) - matrix(2, 2)*matrix(3, 1))
     end function determinant3
 
-
     subroutine run_pose_cont_solver()
-        write(*,'(A)') 'test_shift_solver'
+        write (*, '(A)') 'test_shift_solver'
         call test_shift_solver()
-        write(*,'(A)') 'test_joint_solver'
+        write (*, '(A)') 'test_joint_solver'
         call test_joint_solver()
-        write(*,'(A)') 'test_tiny_accepted_reduction_stop'
+        write (*, '(A)') 'test_tiny_accepted_reduction_stop'
         call test_tiny_accepted_reduction_stop()
-        write(*,'(A)') 'test_ncc_solver'
+        write (*, '(A)') 'test_ncc_solver'
         call test_ncc_solver()
-        write(*,'(A)') 'test_invalid_and_unobservable_inputs'
+        write (*, '(A)') 'test_invalid_and_unobservable_inputs'
         call test_invalid_and_unobservable_inputs()
     end subroutine run_pose_cont_solver
 

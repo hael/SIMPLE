@@ -66,6 +66,9 @@ use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_cartesian_pose_refiner_tester,    only: run_all_cartesian_pose_refiner_tests
 use simple_pose_cont_refine3D_adapter_tester, only: run_all_pose_cont_adapter_tests
+use simple_strategy3D_pose_cont_tester,      only: run_all_strategy3D_pose_cont_tests
+use simple_pose_cont_run_stats_tester,       only: run_all_pose_cont_run_stats_tests
+use simple_refine3D_pose_cont_workflow_tester, only: run_all_refine3D_pose_cont_workflow_tests
 use simple_pose_cont_1jyx_tester,            only: run_all_pose_cont_1jyx_tests
 use simple_cartesian_fourier_tester,         only: run_all_cartesian_fourier_tests
 use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
@@ -391,6 +394,9 @@ contains
         call add_suite(s, n, 'Cartesian Fourier', run_all_cartesian_fourier_tests)
         call add_suite(s, n, 'pose refiner',      run_all_cartesian_pose_refiner_tests)
         call add_suite(s, n, 'pose adapter',      run_all_pose_cont_adapter_tests)
+        call add_suite(s, n, 'pose strategy',     run_all_strategy3D_pose_cont_tests)
+        call add_suite(s, n, 'pose statistics',   run_all_pose_cont_run_stats_tests)
+        call add_suite(s, n, 'pose workflow',     run_all_refine3D_pose_cont_workflow_tests)
     end subroutine suites_cart_align3D
 
     !> nightly: 5 000 simulated 1JYX particles through the pose refiner, minutes

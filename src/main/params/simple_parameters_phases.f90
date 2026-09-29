@@ -818,7 +818,8 @@ contains
                 ! reported once, by the workflow driver; every subprocess
                 ! applies the same rule silently
                 select case(trim(self%prg%to_char()))
-                    case('refine3D_auto','abinitio3D','abinitio3D_cavgs','refine3D_states','classify3D_refs')
+                    case('refine3D_auto','refine3D_pose_cont','abinitio3D','abinitio3D_cavgs', &
+                        &'refine3D_states','classify3D_refs')
                         write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> DENSITY ENVELOPE DILATION: ', binwidth_min, &
                             &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
                 end select
@@ -844,6 +845,24 @@ contains
             case DEFAULT
                 THROW_HARD('pose_cont_route must be shift_then_joint or joint')
         end select
+        select case(trim(self%pose_cont_mode))
+            case('off','post_matcher','standalone_final')
+            case DEFAULT
+                THROW_HARD('pose_cont_mode must be off, post_matcher or standalone_final')
+        end select
+        if( trim(self%prg%to_char()) == 'refine3D_pose_cont' .and. &
+            &trim(self%pose_cont_mode) == 'off' ) &
+            THROW_HARD('refine3D_pose_cont requires pose_cont_mode')
+        if( trim(self%prg%to_char()) /= 'refine3D_pose_cont' .and. &
+            &trim(self%pose_cont_mode) /= 'off' ) &
+            THROW_HARD('pose_cont_mode is only valid for refine3D_pose_cont')
+        if( trim(self%prg%to_char()) == 'refine3D_pose_cont' )then
+            select case(trim(self%objfun))
+                case('euclid','cc')
+                case DEFAULT
+                    THROW_HARD('refine3D_pose_cont objfun must be euclid or cc')
+            end select
+        endif
         self%l_dose_weight = cline%defined('total_dose')
         if( self%fraction_dose_target < 0.01 )then
             THROW_HARD('Invalid : fraction_dose_target'//real2str(self%fraction_dose_target))

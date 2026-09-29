@@ -17,6 +17,8 @@ use simple_sigma2_state,        only: sigma2_state_candidate_path, sigma2_state_
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
+use simple_pose_cont_run_stats, only: aggregate_pose_cont_stats_files
+use simple_pose_cont_refine3D_adapter, only: pose_cont_config_from_route
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -1207,6 +1209,10 @@ contains
         endif
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
+        if (trim(params%pose_cont) == 'yes' .or. trim(params%refine) == 'pose_cont') then
+            call aggregate_pose_cont_stats_files( &
+                &pose_cont_config_from_route(params%pose_cont_route), iter, params%nparts)
+        end if
         ! merge alignment docs (a residual-only sigma pass, refine=sigma,
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) &

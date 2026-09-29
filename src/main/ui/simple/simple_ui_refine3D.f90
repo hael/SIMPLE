@@ -1,6 +1,7 @@
 !@descr: module defining the user interfaces for 3D refinement programs in the simple_exec suite
 module simple_ui_refine3D
 use simple_ui_modules
+use simple_ui_refine3D_pose_cont, only: construct_refine3D_pose_cont_program
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine3d', 'Refine 3D Workflows', 60)
@@ -13,6 +14,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_refine3D(prgtab)
         call new_refine3D_auto(prgtab)
+        call construct_refine3D_pose_cont_program(prgtab, UI_CATEGORY)
     end subroutine construct_refine3D_programs
 
     subroutine new_refine3D( prgtab )

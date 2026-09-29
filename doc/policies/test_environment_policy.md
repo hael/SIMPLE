@@ -87,7 +87,7 @@ tester module (section 4.1).
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator, frozen accumulator, volume pair metrics |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, sigma2 bootstrap, cavg registration |
-| `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter |
+| `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter, pose strategy, pose statistics, pose workflow |
 | `unit_heterogeneity` | flex PCA, flex PCG operator |
 | `unit_parallel` | qsys control, qsys environment |
 | `unit_single` | atoms, cif2mrc, C-alpha finder |
@@ -674,7 +674,7 @@ written as `sub-suite` (entry).
 | `phshift_policy`, `ui_visibility` | `UI visibility` (`unit_ui`) |
 | `phshift_star` | `STAR project` (`unit_project`) |
 | `pick_extract` | `pick and extract` (`lib_stream`) |
-| `pose_cont_refine3D_adapter` | `pose adapter` (`unit_cart_align3D`) and `pose 1JYX recovery` (`lib_cart_align3D`) |
+| `pose_cont_refine3D_adapter` | `pose adapter`, `pose strategy`, `pose statistics`, `pose workflow` (`unit_cart_align3D`) and `pose 1JYX recovery` (`lib_cart_align3D`) |
 | `pose_cont_refinement` | `pose refiner` (`unit_cart_align3D`) |
 | `preproc` | the high-level workflow entry `stream_preproc` |
 | `project_merge` | `project merge` (`unit_project`) |

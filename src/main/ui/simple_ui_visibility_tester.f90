@@ -3,11 +3,12 @@
 ! descriptor text, unit-aware and generated placeholders, structured choices, CLI summaries);
 ! program descriptors (display names, categories, input visibility, groups, activation,
 ! choice and placeholder overrides, requirement groups); the registered programs' categories,
-! requirements and CLI summaries; the registered test programs; and the phase-shift contract
-! of the five CTF-fitting programs (fit_phshift binary, default no; phshift_min/max/step).
+! requirements and CLI summaries; the registered test programs; the phase-shift contract
+! of the five CTF-fitting programs; and the public refine3D_pose_cont workflow controls.
 module simple_ui_visibility_tester
 use simple_test_utils
 use simple_linked_list,   only: linked_list, list_iterator
+use simple_parameters,    only: parameters
 use simple_string,        only: string
 use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr, count_prgs_in_category
 use simple_ui_param,      only: UI_PLACEHOLDER_MAX_LEN, ui_param
@@ -35,6 +36,7 @@ contains
         call test_registered_programs()
         call test_registered_test_programs()
         call test_phshift_contract()
+        call test_refine3D_pose_cont_policy()
     end subroutine run_all_ui_visibility_tests
 
     subroutine test_visibility_levels()
@@ -270,6 +272,39 @@ contains
         enddo
     end subroutine test_phshift_contract
 
+    !> the dedicated pose-cont workflow owns its stage policy and does not expose
+    !! the mutually contradictory low-level refine3D matcher controls
+    subroutine test_refine3D_pose_cont_policy()
+        character(len=16), parameter :: EXPECTED_MODES(2) = [character(len=16) :: &
+            &'post_matcher', 'standalone_final']
+        character(len=6), parameter :: EXPECTED_OBJECTIVES(2) = [character(len=6) :: &
+            &'euclid', 'cc']
+        type(parameters) :: defaults
+
+        write(*,'(A)') 'test_refine3D_pose_cont_policy'
+        call assert_char('off', trim(defaults%pose_cont_mode), 'global pose_cont_mode default')
+        call make_ui
+        program_name = 'refine3D_pose_cont'
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), 'refine3D_pose_cont is registered')
+        if( .not. associated(registered_prg) ) return
+        call assert_int(UI_VIS_DEVELOPER, registered_prg%visibility, &
+            &'refine3D_pose_cont remains a developer workflow')
+
+        call assert_ui_param(registered_prg%srch_ctrls, 'pose_cont_mode', 'refine3D_pose_cont', &
+            &expected_type='multi', expected_default='post_matcher', expected_choices=EXPECTED_MODES)
+        call assert_ui_param(registered_prg%srch_ctrls, 'objfun', 'refine3D_pose_cont', &
+            &expected_type='multi', expected_default='euclid', expected_choices=EXPECTED_OBJECTIVES)
+        call assert_false(program_has_input(registered_prg, 'refine'), &
+            &'refine3D_pose_cont does not expose refine')
+        call assert_false(program_has_input(registered_prg, 'pose_cont'), &
+            &'refine3D_pose_cont does not expose pose_cont')
+        call assert_false(program_has_input(registered_prg, 'inpl_cont'), &
+            &'refine3D_pose_cont does not expose inpl_cont')
+        call assert_false(program_has_input(registered_prg, 'pose_cont_route'), &
+            &'refine3D_pose_cont does not expose pose_cont_route')
+    end subroutine test_refine3D_pose_cont_policy
+
     subroutine assert_true_all_valid
         call assert_true(ui_visibility_is_valid(UI_VIS_STANDARD),  'standard visibility is valid')
         call assert_true(ui_visibility_is_valid(UI_VIS_ADVANCED),  'advanced visibility is valid')
@@ -491,13 +526,15 @@ contains
     end subroutine assert_input_binding
 
     !> the input `key` exists in `params`, with the expected type and default when given
-    subroutine assert_ui_param( params, key, prg_name, expected_type, expected_default )
+    subroutine assert_ui_param( params, key, prg_name, expected_type, expected_default, expected_choices )
         type(linked_list), intent(in) :: params
         character(len=*),  intent(in) :: key, prg_name
         character(len=*),  intent(in), optional :: expected_type, expected_default
+        character(len=*),  intent(in), optional :: expected_choices(:)
         type(list_iterator)   :: iterator
         class(*), allocatable :: value
-        logical :: found
+        integer :: i
+        logical :: found, choices_match
         found    = .false.
         iterator = params%begin()
         do while( iterator%has_value() )
@@ -514,6 +551,19 @@ contains
                             call assert_char(expected_default, param%param%cval_default%to_char(), &
                                 &trim(prg_name)//': '//key//' default')
                         endif
+                        if( present(expected_choices) )then
+                            choices_match = allocated(param%param%choices)
+                            if( choices_match ) choices_match = size(param%param%choices) == size(expected_choices)
+                            if( choices_match )then
+                                do i = 1, size(expected_choices)
+                                    if( param%param%choices(i)%value%to_char() /= expected_choices(i) )then
+                                        choices_match = .false.
+                                        exit
+                                    endif
+                                enddo
+                            endif
+                            call assert_true(choices_match, trim(prg_name)//': '//key//' choices')
+                        endif
                     endif
                 class default
                     call assert_true(.false., trim(prg_name)//': UI parameter-list entry is a ui_program_input')
@@ -524,5 +574,34 @@ contains
         enddo
         call assert_true(found, trim(prg_name)//': UI parameter '//key//' exists')
     end subroutine assert_ui_param
+
+    logical function program_has_input( program, key ) result(found)
+        type(ui_program), intent(in) :: program
+        character(len=*), intent(in) :: key
+        found = list_has_input(program%img_ios, key) .or. list_has_input(program%file_ios, key) .or. &
+            &list_has_input(program%parm_ios, key) .or. list_has_input(program%srch_ctrls, key) .or. &
+            &list_has_input(program%filt_ctrls, key) .or. list_has_input(program%mask_ctrls, key) .or. &
+            &list_has_input(program%comp_ctrls, key)
+    end function program_has_input
+
+    logical function list_has_input( inputs, key ) result(found)
+        type(linked_list), intent(in) :: inputs
+        character(len=*), intent(in) :: key
+        type(list_iterator) :: iterator
+        class(*), allocatable :: value
+
+        found = .false.
+        iterator = inputs%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type(input => value)
+                type is(ui_program_input)
+                    found = input%param%key%to_char() == key
+            end select
+            if( allocated(value) ) deallocate(value)
+            if( found ) return
+            call iterator%next()
+        enddo
+    end function list_has_input
 
 end module simple_ui_visibility_tester

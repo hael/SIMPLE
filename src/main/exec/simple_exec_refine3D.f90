@@ -6,8 +6,9 @@ use simple_exec_helpers,         only: restarted_exec
 use simple_commanders_mask,      only: commander_automask
 use simple_commanders_volops,    only: commander_postprocess
 use simple_commanders_rec,       only: commander_rec3D
-use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto, commander_refine3D_states, &
-    &commander_classify3D_refs, commander_bootstrap_rec3D
+use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto, &
+    &commander_refine3D_states, commander_classify3D_refs, commander_bootstrap_rec3D
+use simple_commander_refine3D_pose_cont, only: commander_refine3D_pose_cont
 implicit none
 
 public :: exec_refine3D_commander
@@ -18,6 +19,7 @@ type(commander_postprocess)     :: xpostprocess
 type(commander_rec3D)           :: xrec3D
 type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
 type(commander_refine3D_auto)   :: xrefine3D_auto
+type(commander_refine3D_pose_cont) :: xrefine3D_pose_cont
 type(commander_refine3D_states) :: xrefine3D_states
 type(commander_classify3D_refs) :: xclassify3D_refs
 type(commander_refine3D)        :: xrefine3D
@@ -52,6 +54,12 @@ contains
                     call restarted_exec(cline, string('refine3D_auto'), string('simple_exec'))
                 else
                     call xrefine3D_auto%execute(cline)
+                endif
+            case( 'refine3D_pose_cont' )
+                if( cline%defined('nrestarts') )then
+                    call restarted_exec(cline, string('refine3D_pose_cont'), string('simple_exec'))
+                else
+                    call xrefine3D_pose_cont%execute(cline)
                 endif
             case( 'refine3D_states' )
                 if( cline%defined('nrestarts') )then

@@ -136,6 +136,8 @@ contains
                 call prep_sigmas_objfun(p_ptr, b_ptr, cartesian_only=ctrl%do_pose_cont_strategy)
                 call b_ptr%esig%write_sigma2
             endif
+            if( ctrl%do_pose_cont_polish .or. ctrl%do_pose_cont_strategy ) &
+                &call pose_stats_total%report(pose_config,which_iter,p_ptr%part,p_ptr%nparts)
             call maybe_write_orientations()
             if( ctrl%do_write_partial_recs .and. trim(params%rec_backend) == 'pcg' ) &
                 &call execute_rec3D_pcg_worker(params, build, cline, pinds)
@@ -225,7 +227,7 @@ contains
             do ithr = 1,size(pose_stats)
                 call pose_stats_total%merge(pose_stats(ithr))
             enddo
-            call pose_stats_total%report(pose_config,which_iter)
+            call pose_stats_total%report(pose_config,which_iter,p_ptr%part,p_ptr%nparts)
         endif
         if( ctrl%do_emit_sigma ) call b_ptr%esig%write_sigma2
         if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)

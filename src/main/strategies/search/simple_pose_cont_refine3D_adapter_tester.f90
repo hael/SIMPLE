@@ -1,4 +1,4 @@
-!@descr: unit tests for pose_cont refine3D adapter, strategy, outer-objective policy and sigma lifecycle
+!@descr: unit tests for the pose_cont refine3D adapter and its sigma lifecycle
 ! The layer between refine3D and the Cartesian pose refiner, with no fixture beyond
 ! reference artifacts written to and removed from the run directory: the reference
 ! workspace lifecycle over even/odd half-set artifacts, the observation adapter against
@@ -6,16 +6,12 @@
 ! native/cropped shift conversion, the inpl_cont winner to pose_cont seed handoff and
 ! its round trip with metadata intact, the transaction contracts of the shift-then-joint
 ! and joint routes (stage accounting, bound rejection and no-improvement preserving the
-! pose, invalid preparation) and the strategy's seed validity.
+! pose and invalid preparation), and accepted/rollback sigma contributions.
 module simple_pose_cont_refine3D_adapter_tester
 use simple_core_module_api,           only: CTFFLAG_NO, ctfparams, dp, euler2m
-use simple_cmdline,                   only: cmdline
 use simple_image,                     only: image
 use simple_ori,                       only: ori
-use simple_parameters,                only: parameters
 use simple_cartesian_pose_refiner,    only: cartesian_pose_refiner
-use simple_strategy3D_pose_cont,      only: pose_cont_seed_is_valid, &
-    &pose_cont_sigma_is_enabled
 use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &pose_cont_particle_workspace, &
     &pose_cont_pose, pose_cont_limits, pose_cont_config, pose_cont_particle_spec, &
@@ -31,7 +27,6 @@ use simple_pose_cont_refine3D_adapter, only: pose_cont_reference_workspace, &
     &LM_FINITE_NO_IMPROVEMENT, LM_STEP_BOUND_REJECTED, POSE_CONT_NOT_ATTEMPTED, &
     &POSE_CONT_ROUTE_SHIFT_THEN_JOINT, POSE_CONT_ROUTE_JOINT
 use simple_test_utils
-use simple_type_defs,                 only: OBJFUN_CC, OBJFUN_EUCLID
 implicit none
 private
 public :: run_all_pose_cont_adapter_tests
@@ -43,8 +38,6 @@ contains
 
     subroutine run_all_pose_cont_adapter_tests()
         write(*,'(A)') '**** running all pose_cont adapter tests ****'
-        write(*,'(A)') 'test_outer_cc_parameter_policy'
-        call test_outer_cc_parameter_policy()
         write(*,'(A)') 'test_reference_workspace_lifecycle'
         call test_reference_workspace_lifecycle()
         write(*,'(A)') 'test_observation_and_coordinate_adapters'
@@ -57,64 +50,7 @@ contains
         call test_rollback_transaction_contracts()
         write(*,'(A)') 'test_sigma_endpoint_contracts'
         call test_sigma_endpoint_contracts()
-        write(*,'(A)') 'test_strategy_seed_contract'
-        call test_strategy_seed_contract()
     end subroutine run_all_pose_cont_adapter_tests
-
-
-    subroutine test_outer_cc_parameter_policy()
-        integer, parameter :: TEST_SEED = 20260923
-        type(cmdline) :: cline
-        type(parameters) :: params
-
-        call cline%set('objfun', 'euclid')
-        call cline%set('pose_cont', 'yes')
-        call params%new(cline, silent=.true.)
-        call set_fixed_seed(TEST_SEED)
-        call assert_int(OBJFUN_EUCLID, params%cc_objfun, &
-            &'Euclidean pose-cont changed the outer objective')
-        call assert_true(trim(params%cc_emit_sigma) == 'no', &
-            &'Euclidean pose-cont unexpectedly changed cc_emit_sigma')
-        call assert_true(pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
-            &'Euclidean pose-cont disabled sigma emission')
-        call cline%kill()
-
-        call cline%set('objfun', 'cc')
-        call cline%set('pose_cont', 'yes')
-        call params%new(cline, silent=.true.)
-        call set_fixed_seed(TEST_SEED)
-        call assert_int(OBJFUN_CC, params%cc_objfun, &
-            &'CC post-matcher pose-cont changed the outer objective')
-        call assert_true(trim(params%cc_emit_sigma) == 'yes', &
-            &'CC post-matcher pose-cont did not enable cc_emit_sigma')
-        call assert_true(pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
-            &'CC post-matcher pose-cont disabled sigma emission')
-        call cline%kill()
-
-        call cline%set('objfun', 'cc')
-        call cline%set('refine', 'pose_cont')
-        call params%new(cline, silent=.true.)
-        call set_fixed_seed(TEST_SEED)
-        call assert_int(OBJFUN_CC, params%cc_objfun, &
-            &'CC standalone pose-cont changed the outer objective')
-        call assert_true(trim(params%cc_emit_sigma) == 'yes', &
-            &'CC standalone pose-cont did not enable cc_emit_sigma')
-        call assert_true(pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
-            &'CC standalone pose-cont disabled sigma emission')
-        call cline%kill()
-
-        call cline%set('objfun', 'cc')
-        call cline%set('pose_cont', 'no')
-        call params%new(cline, silent=.true.)
-        call set_fixed_seed(TEST_SEED)
-        call assert_int(OBJFUN_CC, params%cc_objfun, &
-            &'ordinary CC changed the outer objective')
-        call assert_true(trim(params%cc_emit_sigma) == 'no', &
-            &'ordinary CC unexpectedly enabled cc_emit_sigma')
-        call assert_true(.not. pose_cont_sigma_is_enabled(params%cc_objfun, params%cc_emit_sigma), &
-            &'ordinary CC unexpectedly enabled pose-cont sigma emission')
-        call cline%kill()
-    end subroutine test_outer_cc_parameter_policy
 
 
 
@@ -209,7 +145,6 @@ contains
         call work%kill()
         call oracle_work%kill()
         call preserved_work%kill()
-        call particles%kill()
         call particles%kill()
     end subroutine test_observation_and_coordinate_adapters
 
@@ -461,24 +396,6 @@ contains
         call workspace%prepare_particle_from_sigma_noise(observed, sigma2_noise, &
             &particle_spec, data)
     end subroutine prepare_transaction_fixture
-
-    ! Identity is a valid initialized pose; explicit state/half metadata, not
-    ! nonzero Euler coordinates, defines readiness for the standalone class.
-    subroutine test_strategy_seed_contract()
-        type(ori) :: seed
-
-        call seed%set_euler([0., 0., 0.])
-        call seed%set_shift([1.25, -0.75])
-        call seed%set('state', 1.)
-        call seed%set('eo', 0.)
-        call seed%set('proj', 1.)
-        call assert_true(pose_cont_seed_is_valid(seed), &
-            &'standalone pose strategy rejected a valid identity seed')
-        call seed%set('proj', 0.)
-        call assert_true(.not. pose_cont_seed_is_valid(seed), &
-            &'standalone pose strategy accepted a missing projection seed')
-        call seed%kill()
-    end subroutine test_strategy_seed_contract
 
     subroutine write_reference(volume, even)
         real, intent(in) :: volume(:, :, :)

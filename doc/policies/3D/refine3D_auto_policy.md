@@ -13,6 +13,10 @@ conservative defaults, prepares a starting reference when needed, runs base
 It is not a separate matcher implementation. Once startup material is ready,
 the refinement iterations are delegated to `commander_refine3D`.
 
+The related `refine3D_pose_cont` program reuses this lifecycle while making
+Cartesian pose refinement mandatory; its mode and lifecycle contract are in
+[refine3D_pose_cont_policy.md](refine3D_pose_cont_policy.md).
+
 ## 2. Defaults
 
 `refine3D_auto` sets hard workflow defaults:

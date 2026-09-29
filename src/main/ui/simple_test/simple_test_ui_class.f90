@@ -201,11 +201,12 @@ contains
         call unit_cart_align3D%new(&
         &'unit_cart_align3D',&
         &'unit tests: Cartesian (continuous) 3D registration',&
-        &'is the fast-gate unit suite for Cartesian 3D registration: the neutral Cartesian Fourier layer, the five-parameter pose refiner and its refine3D adapter',&
+        &'is the fast-gate unit suite for Cartesian 3D registration: Fourier operations, pose refinement, '//&
+        &'refine3D integration, reporting and workflow policy',&
         &'simple_test_exec',&
         &.false.)
         call unit_cart_align3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (cartesian_fourier, pose_refiner, pose_adapter)', '', .false., '')
+            &'One sub-suite of this area to run alone (cartesian_fourier, pose_refiner, pose_adapter, pose_strategy, pose_statistics, pose_workflow)', '', .false., '')
         call add_ui_program('unit_cart_align3D', unit_cart_align3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_cart_align3D
 
