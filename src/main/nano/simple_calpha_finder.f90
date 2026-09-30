@@ -34,7 +34,7 @@ end type calpha_finder
 
 contains
 
-    subroutine new(self, smpd, radius)
+    subroutine new( self, smpd, radius )
         class(calpha_finder), intent(inout) :: self
         real,                 intent(in)    :: smpd, radius
         real    :: atom_sites(3,3), amplitudes(3), offset(3), delta(3)
@@ -53,7 +53,7 @@ contains
         allocate(self%target_weight(self%nside,self%nside,self%nside), source=0.)
 
         ! Canonical frame: CA at the origin, CA-C on +x, and N in the xy plane.
-        bond_angle = N_CA_C_ANGLE * PI_LOCAL / 180.
+        bond_angle      = N_CA_C_ANGLE * PI_LOCAL / 180.
         atom_sites(:,1) = [0.,0.,0.]
         atom_sites(:,2) = [N_CA_BOND*cos(bond_angle), N_CA_BOND*sin(bond_angle), 0.]
         atom_sites(:,3) = [CA_C_BOND,0.,0.]
@@ -72,7 +72,7 @@ contains
                         value = value + amplitudes(iatom) * &
                             exp(-0.5 * sum(delta * delta) / (sigma * sigma))
                     enddo
-                    self%target_mean(ix,iy,iz) = value
+                    self%target_mean(ix,iy,iz)   = value
                     self%target_weight(ix,iy,iz) = 0.5 * &
                         (1. + cos(PI_LOCAL * distance / radius))
                 enddo
@@ -191,7 +191,7 @@ contains
         search_region(:,:,ldim(3)-border+1:ldim(3)) = .false.
     end subroutine clear_search_border
 
-    subroutine interpolation_cell(pos, ldim, base, frac, valid)
+    subroutine interpolation_cell( pos, ldim, base, frac, valid )
         real,    intent(in)  :: pos(3)
         integer, intent(in)  :: ldim(3)
         integer, intent(out) :: base(3)
@@ -214,7 +214,7 @@ contains
         enddo
     end subroutine interpolation_cell
 
-    real(dp) function trilinear_value(array, base, frac)
+    real(dp) function trilinear_value( array, base, frac )
         real(kind=c_float), intent(in) :: array(:,:,:)
         integer,            intent(in) :: base(3)
         real,               intent(in) :: frac(3)
@@ -234,7 +234,7 @@ contains
         enddo
     end function trilinear_value
 
-    subroutine build_rotation_grid(angstep, rotations)
+    subroutine build_rotation_grid( angstep, rotations )
         real,              intent(in)  :: angstep
         real, allocatable, intent(out) :: rotations(:,:,:)
         type(oris) :: sphere_dirs
@@ -428,16 +428,16 @@ contains
 
         nfound = 0
         do icandidate = neligible, 1, -1
-            linear_index  = eligible_indices(icandidate)
-            location(3)   = (linear_index - 1) / (ldim(1) * ldim(2)) + 1
-            plane_index   = mod(linear_index - 1, ldim(1) * ldim(2))
-            location(2)   = plane_index / ldim(1) + 1
-            location(1)   = mod(plane_index, ldim(1)) + 1
+            linear_index         = eligible_indices(icandidate)
+            location(3)          = (linear_index - 1) / (ldim(1) * ldim(2)) + 1
+            plane_index          = mod(linear_index - 1, ldim(1) * ldim(2))
+            location(2)          = plane_index / ldim(1) + 1
+            location(1)          = mod(plane_index, ldim(1)) + 1
             if(selection(location(1),location(2),location(3)) < threshold) cycle
-            irot          = best_rotation(location(1),location(2),location(3))
+            irot                 = best_rotation(location(1),location(2),location(3))
             if(irot <= 0) cycle
-            nfound        = nfound + 1
-            xyz(:,nfound) = real(location - 1) * self%smpd
+            nfound               = nfound + 1
+            xyz(:,nfound)        = real(location - 1) * self%smpd
             found_scores(nfound) = selection(location(1),location(2),location(3))
             found_rotations(:,:,nfound) = rotations(:,:,irot)
             call suppress_neighborhood(selection, location, 2.0 / self%smpd)
@@ -511,7 +511,7 @@ contains
 
     subroutine kill( self )
         class(calpha_finder), intent(inout) :: self
-        if(allocated(self%target_mean)) deallocate(self%target_mean)
+        if(allocated(self%target_mean))   deallocate(self%target_mean)
         if(allocated(self%target_weight)) deallocate(self%target_weight)
         self%smpd      = 0.
         self%radius    = 0.

@@ -298,7 +298,7 @@ contains
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         class(commander_trajectory_reconstruct3D_distr), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),                                  intent(inout) :: cline
         type(string),          allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
         integer,               allocatable :: parts(:,:)
