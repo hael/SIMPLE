@@ -723,6 +723,7 @@ contains
         call publish_result(cline_run%get_carg('projfile'))
         call cline%set('projfile', projfile)
         call cline_run%kill
+        call simple_touch(TASK_FINISHED)
 
     contains
 
