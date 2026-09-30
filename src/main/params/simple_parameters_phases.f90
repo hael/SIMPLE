@@ -585,7 +585,7 @@ contains
             endif
             if( self%msk < 0.1 )then
                 if( msk_default > 0. )then
-                    THROW_WARN('Mask diameter zero, falling back on default value')
+                    THROW_WARN('Mask diameter zero, falling back on default value: '//trim(real2str(mskdiam_default))//' A')
                     self%mskdiam = mskdiam_default
                     self%msk     = msk_default
                 endif
