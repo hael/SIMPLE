@@ -410,11 +410,12 @@ subroutine exec_test_single_workflow( self, cline )
     integer,          parameter           :: NFRAMES_PER_GROUP = 10
     integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
-    real,             parameter           :: MIN_VOL_CORR      = 0.30
+    real,             parameter           :: MIN_VOL_CORR      = 0.90
     real,             parameter           :: MAX_FSC0143       = 5.0
     real,             parameter           :: DOCK_HP           = 100.0
     real,             parameter           :: DOCK_LP           = 5.0
     real                               :: volume_corr, volume_fsc0143
+    real                               :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     logical                            :: volume_ok
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
     if( .not. cline%defined('smpd') )    call cline%set('smpd', 0.358)
@@ -512,10 +513,13 @@ subroutine exec_test_single_workflow( self, cline )
     final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
         &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
     call validate_reconstructed_volume(simulated_vol, final_volume, params%smpd, BOX, 0.001, real(MOLDIAM), &
-        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, volume_ok)
+        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, &
+        &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)
     call return_to_project_dir
     if( .not. volume_ok ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: final-volume validation failed')
-    write(logfhandle,'(a,f7.4,a,f7.2,a)') 'PASS: single_workflow whole-volume correlation=', volume_corr, &
+    write(logfhandle,'(a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') &
+        &'PASS: single_workflow docking correlation direct=', dock_corr_direct, ', mirrored=', dock_corr_mirrored, &
+        &', selected=', dock_corr_selected, ', soft-masked correlation to 5 A=', volume_corr, &
         &', FSC=0.143 at ', volume_fsc0143, ' A'
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')
 

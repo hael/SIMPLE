@@ -1,8 +1,9 @@
 !@descr: workflow-gate metrics against a simulation truth: maps docked in both hands, correlation, masked FSC and frame-free pose error
 ! Ab initio maps have an arbitrary orientation and hand: dock_both_hands docks a
 ! map and its x-mirror onto a reference and keeps the better; compare_to_truth
-! scores two maps in one frame (whole-volume Pearson correlation and the FSC of
-! the soft-masked maps, resolutions no finer than Nyquist);
+! scores two maps in one frame (whole-volume Pearson correlation, or optionally
+! a common-mask/common-band correlation, plus the FSC of the soft-masked maps,
+! with resolutions no finer than Nyquist);
 ! validate_reconstructed_volume is both, with the geometry checks and the floors
 ! of a workflow gate. pair_pose_error scores poses against the simulation truth
 ! without docking: the median over seeded particle pairs of the difference
@@ -74,14 +75,16 @@ contains
         call docked_mirror%kill
     end subroutine dock_both_hands
 
-    !> Two maps in one frame: the whole-volume Pearson correlation, and the
+    !> Two maps in one frame: the whole-volume Pearson correlation by default,
+    !! or the common-mask correlation through corr_lp when supplied, and the
     !! FSC=0.5 and FSC=0.143 resolutions (A) of the maps soft-masked to
     !! mskdiam, no finer than Nyquist. A missing map or a non-finite FSC gives
     !! corr 0 and resolutions -1.
-    subroutine compare_to_truth( truth_fname, map_fname, mskdiam, corr, fsc05, fsc0143 )
+    subroutine compare_to_truth( truth_fname, map_fname, mskdiam, corr, fsc05, fsc0143, corr_lp )
         class(string), intent(in)  :: truth_fname, map_fname
         real,          intent(in)  :: mskdiam
         real,          intent(out) :: corr, fsc05, fsc0143
+        real, optional, intent(in) :: corr_lp
         type(image) :: truth, map
         real, allocatable :: fsc(:), res(:)
         real    :: smpd, corr_band
@@ -93,15 +96,20 @@ contains
         if( .not. file_exists(truth_fname) .or. .not. file_exists(map_fname) ) return
         call find_ldim_nptcls(map_fname, ldim, nsections)
         smpd = find_img_smpd(map_fname)
-        call truth%new(ldim, smpd, wthreads=.false.)
-        call map%new(ldim, smpd, wthreads=.false.)
-        call truth%read(truth_fname)
-        call map%read(map_fname)
-        corr = truth%real_corr(map)
-        call truth%kill
-        call map%kill
-        call compare_volpair(truth_fname, map_fname, mskdiam, 0., corr_band, fsc, res, ok)
+        if( present(corr_lp) )then
+            call compare_volpair(truth_fname, map_fname, mskdiam, corr_lp, corr_band, fsc, res, ok)
+        else
+            call truth%new(ldim, smpd, wthreads=.false.)
+            call map%new(ldim, smpd, wthreads=.false.)
+            call truth%read(truth_fname)
+            call map%read(map_fname)
+            corr = truth%real_corr(map)
+            call truth%kill
+            call map%kill
+            call compare_volpair(truth_fname, map_fname, mskdiam, 0., corr_band, fsc, res, ok)
+        endif
         if( ok )then
+            if( present(corr_lp) ) corr = corr_band
             call get_resolution(fsc, res, fsc05, fsc0143)
             if( fsc05   > 0. ) fsc05   = max(fsc05,   2. * smpd)
             if( fsc0143 > 0. ) fsc0143 = max(fsc0143, 2. * smpd)
@@ -111,21 +119,29 @@ contains
     !> The final map of a workflow against its simulation truth: the expected
     !! cubic box and sampling (within smpd_tol), docking in both hands (band
     !! dock_hp..dock_lp), a whole-volume correlation of at least min_corr and a
-    !! masked FSC=0.143 resolution no worse than max_fsc0143
+    !! masked FSC=0.143 resolution no worse than max_fsc0143. When corr_lp is
+    !! present, the normalized correlation uses maps identically
+    !! soft-masked to mask_diameter and low-pass filtered to corr_lp.
     subroutine validate_reconstructed_volume( truth_fname, reconstruction_fname, expected_smpd, expected_box, &
-        &smpd_tol, mask_diameter, dock_hp, dock_lp, min_corr, max_fsc0143, corr, fsc0143, passed )
+        &smpd_tol, mask_diameter, dock_hp, dock_lp, min_corr, max_fsc0143, corr, fsc0143, &
+        &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, passed, corr_lp )
         class(string), intent(in)  :: truth_fname, reconstruction_fname
         real,          intent(in)  :: expected_smpd, smpd_tol, mask_diameter, dock_hp, dock_lp, min_corr, max_fsc0143
         integer,       intent(in)  :: expected_box
         real,          intent(out) :: corr, fsc0143
+        real,          intent(out) :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
         logical,       intent(out) :: passed
+        real, optional, intent(in)  :: corr_lp
         character(len=*), parameter :: DOCKED = 'workflow_reconstruction_docked.mrc'
         integer :: truth_ldim(3), reconstruction_ldim(3), nsections
-        real    :: truth_smpd, reconstruction_smpd, cc_direct, cc_mirror, fsc05
+        real    :: truth_smpd, reconstruction_smpd, fsc05
         logical :: corr_ok, fsc_ok
         passed  = .false.
         corr    = 0.
         fsc0143 = 0.
+        dock_corr_direct   = 0.
+        dock_corr_mirrored = 0.
+        dock_corr_selected = 0.
         if( .not. file_exists(truth_fname) )then
             write(logfhandle,'(a)') '    FAIL: simulated truth volume was not generated'
             return
@@ -159,13 +175,22 @@ contains
             return
         endif
         call dock_both_hands(truth_fname, reconstruction_fname, mask_diameter, dock_hp, dock_lp, 'workflow_reconstruction', &
-            &string(DOCKED), cc_direct, cc_mirror)
-        call compare_to_truth(truth_fname, string(DOCKED), mask_diameter, corr, fsc05, fsc0143)
-        write(logfhandle,'(a,f7.4,a,f7.4)') '>>> Registered whole-volume Pearson correlation: ', corr, &
-            &'; minimum ', min_corr
+            &string(DOCKED), dock_corr_direct, dock_corr_mirrored)
+        dock_corr_selected = max(dock_corr_direct, dock_corr_mirrored)
+        write(logfhandle,'(a,f7.4,a,f7.2,a,f7.2,a)') '>>> Selected docking correlation: ', dock_corr_selected, &
+            &'; band ', dock_hp, '-', dock_lp, ' A'
+        if( present(corr_lp) )then
+            call compare_to_truth(truth_fname, string(DOCKED), mask_diameter, corr, fsc05, fsc0143, corr_lp)
+            write(logfhandle,'(a,f7.2,a,f7.4,a,f7.4)') '>>> Registered soft-masked band correlation to ', &
+                &corr_lp, ' A: ', corr, '; minimum ', min_corr
+        else
+            call compare_to_truth(truth_fname, string(DOCKED), mask_diameter, corr, fsc05, fsc0143)
+            write(logfhandle,'(a,f7.4,a,f7.4)') '>>> Registered whole-volume Pearson correlation: ', corr, &
+                &'; minimum ', min_corr
+        endif
         corr_ok = ieee_is_finite(corr) .and. corr >= min_corr
         if( .not. corr_ok )then
-            write(logfhandle,'(a)') '    FAIL: final-volume Pearson correlation is below the required minimum'
+            write(logfhandle,'(a)') '    FAIL: final-volume correlation is below the required minimum'
         endif
         write(logfhandle,'(a,f7.2,a,f7.2,a,f7.2,a)') '>>> Masked truth FSC: 0.500 at ', fsc05, &
             &' A; 0.143 at ', fsc0143, ' A; maximum ', max_fsc0143, ' A'

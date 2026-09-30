@@ -827,7 +827,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: NMOVIES        = 10
     integer,          parameter :: EXTRACT_BOX    = 192
     integer,          parameter :: NTHR           = 4
-    real,             parameter :: MIN_VOL_CORR   = 0.20
+    real,             parameter :: MIN_VOL_CORR   = 0.80
     real,             parameter :: MAX_FSC0143    = 40.0
     real,             parameter :: DOCK_HP        = 100.0
     real,             parameter :: DOCK_LP        = 20.0
@@ -858,6 +858,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
     real                                :: pickref_smpd, pickref_width
     real                                :: volume_corr, volume_fsc0143
+    real                                :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     integer                             :: rnd_defocus
     logical                             :: volume_ok
 
@@ -1126,6 +1127,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio3D%set('projfile',           project_path)
     call cline_abinitio3D%set('mkdir',                     'yes')
     call cline_abinitio3D%set('pgrp',                       pgrp)
+    if( system_name == '1jxy' ) call cline_abinitio3D%set('pgrp_start', pgrp)
     call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
     call cline_abinitio3D%set('nthr',                       NTHR)
     call xabinitio3D%execute(cline_abinitio3D)
@@ -1133,13 +1135,16 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio3D%kill()
     final_volume = filepath(abinitio_dir, refine3D_state_vol_fname(1))
     call validate_reconstructed_volume(truth_volume, final_volume, SMPD, EXTRACT_BOX, 0.01, MSKDIAM, &
-        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, volume_ok)
+        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, &
+        &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok)
 
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('Could not restore the original working directory')
     if( .not. volume_ok ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: final-volume validation failed')
-    write(logfhandle,'(a,a,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', system_name%to_char(), &
-        &' whole-volume correlation=', volume_corr, ', FSC=0.143 at ', volume_fsc0143, ' A'
+    write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', &
+        &system_name%to_char(), ' docking correlation direct=', dock_corr_direct, ', mirrored=', dock_corr_mirrored, &
+        &', selected=', dock_corr_selected, ', whole-volume correlation=', volume_corr, &
+        &', FSC=0.143 at ', volume_fsc0143, ' A'
     call simple_end('**** SIMPLE_TEST_SIMULATED_WORKFLOW NORMAL STOP ****')
 
   contains
