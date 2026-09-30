@@ -125,7 +125,8 @@
  
                                     {% if keytype == "int" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
-                                            type="number" min="0" step="1"
+                                            {# DEFAULT_EXTRACT_BOX is 128 in simple_stream_p04_refpick_extract_new.f90. #}
+                                            type="number" min="{% if input.key == "box_extract" %}128{% else %}0{% endif %}" step="1"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value|format_int }}"{% elif "has_default" in input and input.has_default %}placeholder="{{ input.default|format_int }}"{% endif %}
                                             class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent focus:outline-none focus:ring-1 focus:ring-streamring">

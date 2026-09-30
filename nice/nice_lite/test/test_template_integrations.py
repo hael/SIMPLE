@@ -505,6 +505,43 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(jobbuilder.count('data-batch-package='), 2)
         self.assertIn('document.querySelectorAll("form[data-batch-package]")', jobbuilder)
 
+    def test_stream_force_box_warns_below_default_extract_box(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [
+                {
+                    "key": "box_extract",
+                    "keytype": "int",
+                    "label": "Force box size (px, optional)",
+                    "required": False,
+                    "visibility": "standard",
+                },
+                {
+                    "key": "threads",
+                    "keytype": "int",
+                    "label": "Threads",
+                    "required": False,
+                    "visibility": "standard",
+                },
+            ],
+            "simple_programs": [],
+            "simple_program_inputs": [],
+            "single_programs": [],
+            "single_program_inputs": [],
+            "default_batch_project_file": "",
+        })
+
+        self.assertRegex(
+            rendered,
+            r'<input id="field_box_extract"[^>]*type="number" min="128" step="1"',
+        )
+        self.assertRegex(
+            rendered,
+            r'<input id="field_threads"[^>]*type="number" min="0" step="1"',
+        )
+        self.assertNotIn("warnForSmallForceBox", jobbuilder)
+
     def test_batch_project_file_selector_starts_empty_without_prefill(self):
         rendered = render_to_string("jobbuilder.html", {
             "stream_user_inputs": [],

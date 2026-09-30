@@ -31,6 +31,7 @@ use, intrinsic :: iso_c_binding,  only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api         
 use simple_stream_state,          only: ipc_pipe_refpick_in, ipc_pipe_refpick_out
 use simple_commanders_pick,       only: commander_make_pickrefs
+use simple_ptcl_sieve,            only: DEFAULT_COARSE_BOX
 use simple_timer,                 only: simple_gettime, cast_time_char, timer_int_kind, tic, toc
 use simple_gui_metadata_api,      only: gui_metadata_micrograph, gui_metadata_cavg2D,               &
                                         gui_metadata_stream_picking, sprite_sheet_pos,              &
@@ -42,6 +43,8 @@ implicit none
 public :: stream_p04_refpick_extract
 private
 #include "simple_local_flags.inc"
+
+integer, parameter :: DEFAULT_EXTRACT_BOX = DEFAULT_COARSE_BOX
 
 type, extends(commander_base) :: stream_p04_refpick_extract
   contains
@@ -209,6 +212,9 @@ contains
         end if
         ! command line for execution
         cline_pick_extract = cline
+        if( cline%defined('box_extract') )then
+            call cline_pick_extract%set('box_extract', max(params%box_extract, DEFAULT_EXTRACT_BOX))
+        endif
         call cline_pick_extract%set('prg','pick_extract')
         call cline_pick_extract%set('dir', PATH_PARENT)
         call cline_pick_extract%set('extract','yes')
