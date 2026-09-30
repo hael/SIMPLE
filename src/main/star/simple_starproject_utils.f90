@@ -6,7 +6,7 @@ implicit none
 
 public :: LEN_FLAG, RELION_PHASE_DEG2RAD, stk_map, star_flag, star_data, star_file, tilt_info
 public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
-public :: split_dataline, h_clust, find_separators, get_value_from_ptcls
+public :: split_dataline, h_clust, find_separators, resolve_stack_path, get_value_from_ptcls
 public :: VERBOSE_OUTPUT
 private
 #include "simple_local_flags.inc"
@@ -151,24 +151,30 @@ contains
         end do
     end subroutine get_rlnflagindex
 
-    subroutine split_dataline(line, splitline)
+    subroutine split_dataline(line, splitline, fieldmask)
         class(string),  intent(in)    :: line
         class(string),  intent(inout) :: splitline(:)
+        logical, optional, intent(in) :: fieldmask(:)
+        character(len=2), parameter :: DELIMITERS = ' '//achar(9)
         character(len=:), allocatable :: linechar
-        integer :: iend, istart, flagid, end
+        integer :: istart, flagid, lineend, delimiter
+        logical :: copyfield
         flagid = 1
-        iend   = 1
         istart = 1
-        end      = line%strlen_trim()
-        linechar = line%to_char()
-        do while( (flagid <= size(splitline)) .and. (istart < end) )
-            do while (linechar(istart:istart + 1) .eq. " ")
-                istart = istart + 1
-            end do
-            iend = index(linechar(istart + 1:end), ' ') + istart
-            splitline(flagid) = trim(linechar(istart:iend))
-            istart = iend + 1
-            flagid = flagid + 1
+        linechar = line%raw()
+        lineend = len(linechar)
+        do while( (flagid <= size(splitline)) .and. (istart <= lineend) )
+            copyfield = .true.
+            if( present(fieldmask) ) copyfield = fieldmask(flagid)
+            delimiter = scan(linechar(istart:lineend), DELIMITERS)
+            if( delimiter == 0 )then
+                if( copyfield ) splitline(flagid) = linechar(istart:lineend)
+                exit
+            else if( delimiter > 1 )then
+                if( copyfield ) splitline(flagid) = linechar(istart:istart + delimiter - 2)
+                flagid = flagid + 1
+            endif
+            istart = istart + delimiter
         end do
     end subroutine split_dataline
 
@@ -304,6 +310,31 @@ contains
             if(path%to_char([i,i]) == "/") seppos = [seppos, i]
         end do
     end subroutine find_separators
+
+    subroutine resolve_stack_path(path, exists)
+        class(string), intent(inout) :: path
+        logical,       intent(out)   :: exists
+        type(string) :: candidate
+        integer, allocatable :: seppos(:)
+        integer :: sepstart, sepend
+        exists = file_exists(path)
+        if( exists ) return
+        allocate(seppos(0))
+        call find_separators(seppos, path)
+        outer: do sepstart = 1, size(seppos) - 1
+            do sepend = sepstart + 1, size(seppos)
+                candidate = path%to_char([1,seppos(sepstart)]) // &
+                    &path%to_char([seppos(sepend) + 1,path%strlen_trim()])
+                if( file_exists(candidate) )then
+                    path   = candidate
+                    exists = .true.
+                    exit outer
+                endif
+            enddo
+        enddo outer
+        call candidate%kill
+        deallocate(seppos)
+    end subroutine resolve_stack_path
     
     real function get_value_from_ptcls(sporis, fromp, top, key)
         class(oris),      intent(inout) :: sporis

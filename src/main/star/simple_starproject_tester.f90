@@ -57,6 +57,8 @@ contains
         call test_relion_write_micrographs_star()
         call test_relion_write_particles2D_star()
         call test_relion_phase_shift()
+        call test_split_dataline_terminal_field()
+        call test_resolve_stack_path()
         write(*,'(A)') "**** Completed PART 2/4 (simple_relion tests) ****"
         write(*,'(A)') "**** Running OpenMP tests (Part 3/4) ****"
         call test_large_particle_table_export()
@@ -93,6 +95,50 @@ contains
         call assert_real(BEYOND_PI_DEG, phase_exported, 1.e-4, &
             &'a phase shift beyond 180 degrees round-trips back to RELION degrees')
     end subroutine test_relion_phase_shift
+
+    subroutine test_split_dataline_terminal_field()
+        type(string) :: line, splitline(3)
+        logical      :: fieldmask(3)
+        write(*,'(A)') 'test_split_dataline_terminal_field'
+        line = 'particle.mrc 1 29'
+        call split_dataline(line, splitline)
+        call assert_char('particle.mrc', splitline(1)%to_char(), 'split_dataline: first field without trailing whitespace')
+        call assert_char('1',            splitline(2)%to_char(), 'split_dataline: middle field without trailing whitespace')
+        call assert_char('29',           splitline(3)%to_char(), 'split_dataline: multi-character final field')
+        line = 'particle.mrc 2 4'
+        call split_dataline(line, splitline)
+        call assert_char('4', splitline(3)%to_char(), 'split_dataline: one-character final field')
+        line = 'particle.mrc'//achar(9)//'3 22 '
+        call split_dataline(line, splitline)
+        call assert_char('particle.mrc', splitline(1)%to_char(), 'split_dataline: tab delimiter')
+        call assert_char('22',           splitline(3)%to_char(), 'split_dataline: trailing whitespace')
+        splitline(2) = 'not copied'
+        fieldmask = [.true., .false., .true.]
+        line = 'particle.mrc 4 29'
+        call split_dataline(line, splitline, fieldmask)
+        call assert_char('not copied', splitline(2)%to_char(), 'split_dataline: field mask skips unneeded strings')
+        call assert_char('29',         splitline(3)%to_char(), 'split_dataline: field mask preserves final field')
+        call line%kill
+        call splitline(:)%kill
+    end subroutine test_split_dataline_terminal_field
+
+    subroutine test_resolve_stack_path()
+        type(string) :: path
+        logical      :: exists
+        write(*,'(A)') 'test_resolve_stack_path'
+        call write_textfile(TMPDIR//'/stack.mrc', 'dummy')
+        path = TMPDIR//'/missing/stack.mrc'
+        call resolve_stack_path(path, exists)
+        call assert_true(exists, 'resolve_stack_path: repairs a path with an extra directory')
+        call assert_char(TMPDIR//'/stack.mrc', path%to_char(), 'resolve_stack_path: returns repaired path')
+        path = TMPDIR//'/missing/first.mrc'
+        call resolve_stack_path(path, exists)
+        call assert_false(exists, 'resolve_stack_path: first missing stack remains missing')
+        path = TMPDIR//'/missing/second.mrc'
+        call resolve_stack_path(path, exists)
+        call assert_false(exists, 'resolve_stack_path: consecutive missing stacks remain bounds-safe')
+        call path%kill
+    end subroutine test_resolve_stack_path
 
     !=======================================================================
     !  TEST ENVIRONMENT HELPERS

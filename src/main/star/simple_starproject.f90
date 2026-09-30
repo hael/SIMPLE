@@ -310,13 +310,18 @@ contains
         class(oris),           intent(inout) :: sporis
         class(oris), optional, intent(inout) :: spoptics
         type(string), allocatable :: splitline(:)
+        logical,      allocatable :: fieldmask(:)
         type(string) :: cwd, line, entrystr, splitimage, fname
         type(ori)    :: opticsori, spori
         logical      :: isptcl
         real         :: rval
         integer      :: ios, flagsindex, lineindex, ival, ogid, ogmapid, projindex, fhandle
         call simple_getcwd(cwd)
-        allocate(splitline(stardata%flagscount))
+        allocate(splitline(stardata%flagscount), fieldmask(stardata%flagscount))
+        fieldmask = .false.
+        do flagsindex = 1,size(stardata%flags)
+            if( stardata%flags(flagsindex)%present ) fieldmask(stardata%flags(flagsindex)%ind) = .true.
+        enddo
         if(isptcl) then
             call sporis%new(self%starfile%stkptclcount, .true.)
             do ival = 1, self%starfile%stkptclcount
@@ -336,7 +341,7 @@ contains
                 projindex = lineindex
             end if
             call line%readline(fhandle, ios)
-            call split_dataline(line, splitline)
+            call split_dataline(line, splitline, fieldmask)
             do flagsindex = 1,size(stardata%flags)
                 if(stardata%flags(flagsindex)%present) then
                     if(stardata%flags(flagsindex)%imagesplit) then
@@ -400,7 +405,7 @@ contains
         end do
         call fclose(fhandle)
         call splitline(:)%kill
-        deallocate(splitline)
+        deallocate(splitline, fieldmask)
         call opticsori%kill
         call spori%kill
         call cwd%kill
@@ -415,17 +420,15 @@ contains
         class(oris),        intent(inout)    :: stkoris
         class(oris),        intent(inout)    :: opticsoris
         type(string), allocatable :: stknames(:), stks(:)
-        integer,      allocatable :: stkzmax(:), stkoriids(:), seppos(:)
-        type(string) :: entrystr, searchstr, stkname
+        integer,      allocatable :: stkzmax(:), stkoriids(:)
+        type(string) :: entrystr, stkname
         type(oris)   :: stktmp
         type(ori)    :: oritmpin, oritmpout
-        integer      :: ldim(3),i, j, top, fromp, sepstart, sepend, stkind, nstks, nptcls_stk
+        integer      :: ldim(3),i, j, top, fromp, stkind, nstks, nptcls_stk
         logical      :: newstack, stkexists
         allocate(stknames(0))
         allocate(stkzmax(0))
         allocate(stkoriids(0))
-        sepstart = 1
-        sepend   = 1
         call self%import_stardata(self%starfile%stacks, stktmp, .false., opticsoris)
         nstks = stktmp%get_noris()
         allocate(self%starfile%stkmap(nstks, 2), stks(nstks))
@@ -464,27 +467,8 @@ contains
             call oritmpout%append_ori(oritmpin)
             call stkoris%set_ori(i, oritmpout)
             ! test each stk path. Fix wrong. State=0 missing
-            stkexists = .false.
-            allocate(seppos(0))
             entrystr = stkoris%get_str(i, "stk")
-            call find_separators(seppos, entrystr)
-            ! test using last sepstart and seppos. If file doesn't exist, re-search
-            searchstr = entrystr%to_char([1,seppos(sepstart)]) // entrystr%to_char([seppos(sepend) + 1,entrystr%strlen_trim()])
-            if( file_exists(searchstr) )then
-                entrystr = searchstr
-                stkexists = .true.
-            else
-                outer: do sepstart = 1, size(seppos) - 1
-                    do sepend = sepstart + 1, size(seppos)
-                        searchstr = entrystr%to_char([1,seppos(sepstart)]) // entrystr%to_char([seppos(sepend) + 1,entrystr%strlen_trim()])
-                        if(file_exists(searchstr)) then
-                            entrystr = searchstr
-                            stkexists = .true.
-                            exit outer
-                        end if
-                    end do
-                end do outer
-            end if
+            call resolve_stack_path(entrystr, stkexists)
             if(stkexists) then
                 call stkoris%set(i, "stk", entrystr)
                 call stkoris%set_state(i, 1)
@@ -494,15 +478,16 @@ contains
                 call stkoris%set_state(i, 0)
                 self%starfile%stkstates(i) = 0
             end if
-            if(allocated(seppos)) deallocate(seppos)
         end do
         fromp = 1
         self%starfile%stkptclcount = 0
         do i = 1, nstks
             top = fromp + stkzmax(i)
-            stkname = stkoris%get_str(i, 'stk')
-            call find_ldim_nptcls(stkname, ldim, nptcls_stk)
-            call stkoris%set(i, 'nptcls_stk', nptcls_stk)
+            if( self%starfile%stkstates(i) > 0 )then
+                stkname = stkoris%get_str(i, 'stk')
+                call find_ldim_nptcls(stkname, ldim, nptcls_stk)
+                call stkoris%set(i, 'nptcls_stk', nptcls_stk)
+            endif
             call stkoris%set(i, 'nptcls',     stkzmax(i))
             call stkoris%set(i, 'fromp',      fromp)
             call stkoris%set(i, 'top',        top - 1)
@@ -521,7 +506,6 @@ contains
         end do
         ! cleanup
         call entrystr%kill
-        call searchstr%kill
         call stkname%kill
         call stknames(:)%kill
         deallocate(stknames)
@@ -530,7 +514,6 @@ contains
         call oritmpout%kill
         if(allocated(stkzmax))   deallocate(stkzmax)
         if(allocated(stkoriids)) deallocate(stkoriids)
-        if(allocated(seppos))    deallocate(seppos)
     end subroutine populate_stkmap
 
     subroutine read_starheaders( self )
