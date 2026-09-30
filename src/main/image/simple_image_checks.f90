@@ -1,5 +1,6 @@
 !@descr: checking image stuff
 submodule (simple_image) simple_image_checks
+use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_value, ieee_quiet_nan
 implicit none
 #include "simple_local_flags.inc"
 
@@ -69,5 +70,23 @@ contains
         minmax = self%minmax()
         is     = is_equal(minmax(2)-minmax(1),0.) ! empty image
     end function is_empty
+
+    !>  \brief  largest magnitude in the padding of the real-space array, that is, in the rows
+    !!          ldim(1)+1 .. 2*fdim(ldim(1)) of its first dimension (two for an even box, one for
+    !!          an odd box), which the in-place transforms need and which are not part of the
+    !!          image. NaN if any value there is NaN. In real space the padding holds zeros, so
+    !!          this returns zero; in Fourier space those rows hold the last Fourier column and
+    !!          the value says nothing
+    module pure function max_abs_padding( self ) result( val )
+        class(image), intent(in) :: self
+        real    :: val
+        integer :: n1
+        n1 = self%ldim(1)
+        if( any(ieee_is_nan(self%rmat(n1+1:,:,:))) )then
+            val = ieee_value(val, ieee_quiet_nan)
+        else
+            val = maxval(abs(self%rmat(n1+1:,:,:)))
+        endif
+    end function max_abs_padding
 
 end submodule simple_image_checks

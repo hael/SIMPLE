@@ -57,7 +57,6 @@ contains
             call assert_real(SMPD, smpd_out, 1.0e-6, 'cif2mrc preserves the requested sampling distance')
             call volume%new(ldim, smpd_out)
             call volume%read(string(MRC_FILE))
-            ! the rmat pointer is the padded array (extra rows for the in-place FFT): bound it by ldim
             call volume%get_rmat_ptr(rmat)
             density => rmat(:ldim(1),:ldim(2),:ldim(3))
             call build_analytical_reference(ldim, reference)

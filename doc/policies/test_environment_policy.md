@@ -436,12 +436,20 @@ Two kinds of code need a check that is easy to leave out:
   `-Winteger-division` warning; write the value.
 - Comparing whole images after an interpolating rotation includes the
   circular wrap of `rtsq` at the corners; compare inside the inscribed disc.
-- An `rmat` pointer (`get_rmat_ptr`) is the padded array, with extra rows in
-  the first dimension for the in-place FFT; bound it by `ldim`,
-  `rmat(:ldim(1),:ldim(2),:ldim(3))`, before a whole-array expression. The
-  unbounded pointer does not conform with a box-sized array: bounds checking
-  stops on it, and without bounds checking it can pass by luck (the `cif2mrc`
-  tester, 2026-09-25). `get_rmat()` returns a copy of the box.
+- An `rmat` pointer (`get_rmat_ptr`) is the box, `ldim(1) x ldim(2) x ldim(3)`
+  (since 2026-09-30): a whole-array expression on it is an expression on the
+  image and conforms with a box-sized array, and `get_rmat()` returns a copy
+  of the same box. Until then the pointer was the padded buffer of the
+  in-place FFT, with extra rows in the first dimension; an unbounded
+  whole-array expression on it did not conform with a box-sized array, which
+  bounds checking stops and which passes by luck without it (the `cif2mrc`
+  tester, 2026-09-25), and a whole-array reduction took the padding in. What
+  is left of the trap: the box is not contiguous in memory, so pass the
+  pointer to assumed-shape or pointer dummies (an explicit-shape dummy gets a
+  copy), and an index past `ldim(1)` is now out of bounds. In real space the
+  padding holds zeros; a test reads it through `max_abs_padding()`, never
+  through `get_rmat_ptr_padded`, which is for the one caller that hands
+  Fourier data on in the FFT layout.
 
 ## 5. Library support for tests
 

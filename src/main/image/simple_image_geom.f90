@@ -295,6 +295,7 @@ contains
             x = x+1.
         end do
         self%ft = .false.
+        call self%zero_padding
     end subroutine gauimg_1
 
     module subroutine gauimg_2( self, wsz, offx,offy)
@@ -323,6 +324,7 @@ contains
             x = x+1.
         end do
         self%ft = .false.
+        call self%zero_padding
     end subroutine gauimg_2
 
     module subroutine gauimg2D( self, xsigma, ysigma, cutoff )
@@ -345,6 +347,7 @@ contains
             enddo
         enddo
         self%ft = .false.
+        call self%zero_padding
     end subroutine gauimg2D
 
     module subroutine gauimg3D( self, xsigma, ysigma, zsigma, cutoff )
@@ -375,26 +378,8 @@ contains
             enddo
         enddo
         self%ft = .false.
+        call self%zero_padding
     end subroutine gauimg3D
-
-    module subroutine reshape2cube( self, self_out )
-        class(image), intent(inout) :: self
-        class(image), intent(out)   :: self_out
-        logical :: isvol
-        integer :: ldim(3), ldim_max
-        real    :: smpd
-        smpd  = self%get_smpd()
-        isvol = self%is_3d()
-        if(.not.isvol) THROW_HARD('this is only for volumes; reshape2cube')
-        ldim  = self%ldim
-        if( ldim(1) == ldim(2) .and. ldim(2) == ldim(3) ) return
-        ldim_max      = max(ldim(1),ldim(2),ldim(3))
-        call self_out%new([ldim_max,ldim_max,ldim_max], self%smpd, wthreads=self%wthreads)
-        self_out%rmat = 0.
-        self_out%rmat = self%rmat
-        self_out%ft   = .false.
-        call self_out%set_smpd(smpd)
-    end subroutine reshape2cube
 
     !>  \brief square just a binary square for testing purposes
     !! \param sqrad half width of square
@@ -486,11 +471,8 @@ contains
                     starts(3) = 1
                     stops(3)  = 1
                 endif
-                if( present(backgr) )then
-                    self_out%rmat = backgr
-                else
-                    self_out%rmat = 0.
-                endif
+                self_out%rmat = 0.
+                if( present(backgr) ) self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3)) = backgr
                 self_out%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3)) =&
                 self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3))
                 self_out%ft = .false.
@@ -638,6 +620,7 @@ contains
                 self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3))&
                 &= self_in%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3))
                 self_out%ft = .false.
+                call self_out%zero_padding
             endif
         endif
     end subroutine clip
@@ -934,6 +917,7 @@ contains
             endif
             self_out%rmat(:self_in%ldim(1),:self_in%ldim(2),1) = mat_out
             self_out%ft = .false.
+            call self_out%zero_padding
         else
             self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),1) = mat_out
             self_in%ft = .false.

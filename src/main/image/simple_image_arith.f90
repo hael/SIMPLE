@@ -16,8 +16,9 @@ contains
     module subroutine assign_r2img( self, realin )
         class(image), intent(inout) :: self
         real,         intent(in)    :: realin
-        self%rmat = realin
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = realin
         self%ft = .false.
+        call self%zero_padding
     end subroutine assign_r2img
 
     module subroutine assign_c2img( self, compin )
@@ -67,7 +68,11 @@ contains
         real,         intent(in) :: rconst
         type(image) :: self
         call self%new(self1%ldim, self1%smpd)
-        self%rmat = self1%rmat+rconst
+        if( self1%ft )then
+            self%rmat = self1%rmat+rconst
+        else
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))+rconst
+        endif
         self%ft = self1%ft
     end function addition_const_real
 
@@ -135,7 +140,8 @@ contains
                 self%cmat = self1%cmat/self2%cmat
                 self%ft = .true.
             else if( self1%ft .eqv. self2%ft )then
-                self%rmat = self1%rmat/self2%rmat
+                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))&
+                    &/self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))
                 self%ft = .false.
             else if(self1%ft)then
                 self%cmat = self1%cmat/self2%rmat
@@ -222,7 +228,7 @@ contains
         if( self%ft )then
             self%cmat = self%cmat+cmplx(c,0.)
         else
-            self%rmat = self%rmat+c
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))+c
         endif
     end subroutine add_5
 
@@ -379,7 +385,11 @@ contains
     module subroutine subtr_4( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
-        self%rmat = self%rmat-c
+        if( self%ft )then
+            self%rmat = self%rmat-c
+        else
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-c
+        endif
     end subroutine subtr_4
 
     !===============================

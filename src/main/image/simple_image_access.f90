@@ -76,11 +76,25 @@ contains
         allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
     end function get_rmat
 
+    !>  \brief  pointer to the real-space image: the box, ldim(1) x ldim(2) x ldim(3), with lower
+    !!          bounds 1. The padding rows of the in-place FFT buffer are not part of it, so a
+    !!          whole-array expression on the pointer is an expression on the image. The box is
+    !!          not contiguous in memory (the stride of the second dimension is that of the
+    !!          padded buffer): pass it to assumed-shape or pointer dummies
     module subroutine get_rmat_ptr( self, rmat_ptr )
         class(image), target,        intent(in)  :: self
         real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
-        rmat_ptr => self%rmat
+        rmat_ptr => self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
     end subroutine get_rmat_ptr
+
+    !>  \brief  pointer to the whole in-place FFT buffer, 2*fdim(ldim(1)) x ldim(2) x ldim(3): the
+    !!          box and the padding rows of the first dimension. Only for a caller that needs the
+    !!          FFT layout (Fourier data handed on as reals); everything else uses get_rmat_ptr
+    module subroutine get_rmat_ptr_padded( self, rmat_ptr )
+        class(image), target,        intent(in)  :: self
+        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+        rmat_ptr => self%rmat
+    end subroutine get_rmat_ptr_padded
 
     module pure subroutine get_rmat_sub( self, rmat )
         class(image), intent(in)  :: self

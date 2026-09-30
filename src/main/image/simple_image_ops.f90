@@ -117,6 +117,7 @@ contains
             end do
         end do
         self%ft = .false.
+        call self%zero_padding
         if( present(b) ) self%rmat = self%rmat * b
     end subroutine ran
 
@@ -132,6 +133,7 @@ contains
             end do
         end do
         self%ft = .false.
+        call self%zero_padding
     end subroutine gauran
 
     module subroutine add_gauran( self, snr )
@@ -425,7 +427,8 @@ contains
         class(image), intent(inout) :: self
         real :: minv
         minv = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        if( minv < 0. )self%rmat = self%rmat + abs(minv)
+        if( minv < 0. ) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) + abs(minv)
     end subroutine remove_neg
 
     module subroutine neg( self )
@@ -478,6 +481,16 @@ contains
         self%ft   = .false.
     end subroutine zero_and_unflag_ft
 
+    !>  \brief  zeroes the padding of the real-space array (the rows ldim(1)+1 .. 2*fdim(ldim(1)) of
+    !!          the first dimension: at most 2 x ldim(2) x ldim(3) stores). In real space the padding
+    !!          holds zeros; this is called wherever an image comes to real space with something
+    !!          else there: after a complex-to-real transform, whose output padding FFTW leaves
+    !!          undefined, and after the box of a buffer that held Fourier data is filled
+    module pure subroutine zero_padding( self )
+        class(image), intent(inout) :: self
+        self%rmat(self%ldim(1)+1:,:,:) = 0.
+    end subroutine zero_padding
+
     ! estimates median of background along edges of box and subtracts it to flatten the background
     ! modifies pixels along the edges of the box, which ought to be safe as we are masking
     module subroutine zero_background( self )
@@ -523,7 +536,8 @@ contains
             med = edge_sum / 12.
         endif
         deallocate(edge_x, edge_y, edge_z)
-        if(abs(med) > TINY) self%rmat = self%rmat - med
+        if(abs(med) > TINY) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
 
     contains
 
@@ -566,7 +580,8 @@ contains
         edges_sum = edges_sum + sum(self%rmat(1,1:self%ldim(2),1))
         edges_sum = edges_sum + sum(self%rmat(self%ldim(1),1:self%ldim(2),1))
         edges_ave = edges_sum / real( 2*(self%ldim(1)+self%ldim(2)) )
-        if( abs(edges_ave) > TINY )self%rmat = self%rmat - edges_ave
+        if( abs(edges_ave) > TINY ) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - edges_ave
     end subroutine zero_edgeavg
 
     ! substracts median of background defined by an envelope mask (eg 0< <1)
@@ -601,7 +616,8 @@ contains
             enddo
         enddo
         med = median_nocopy(vals)
-        if(abs(med) > TINY) self%rmat = self%rmat - med
+        if(abs(med) > TINY) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         deallocate(vals)
     end subroutine zero_env_background
 

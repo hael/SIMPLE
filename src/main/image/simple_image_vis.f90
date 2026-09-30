@@ -151,15 +151,15 @@ contains
         ldim(3)  = 1
         ldim_col = [2*ldim(1)+border, ldim(2), 1]
         call img_out%new(ldim_col,1.)
-        img_out%rmat = background
+        img_out%rmat(:ldim_col(1),:ldim_col(2),1) = background
         ! pad & copy left image
         call img_pad%new(ldim,self1%get_smpd())
-        img_pad%rmat = background
+        img_pad%rmat(:ldim(1),:ldim(2),1) = background
         call self1%norm4viz
         call self1%pad(img_pad, backgr=background)
         img_out%rmat(:ldim(1),:ldim(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         ! pad & copy right image
-        img_pad%rmat = background
+        img_pad%rmat(:ldim(1),:ldim(2),1) = background
         call self2%norm4viz
         call img_pad%set_smpd(self2%get_smpd())
         call self2%pad(img_pad, backgr=background)

@@ -322,10 +322,6 @@ contains
                     ! shell of the fitted band
                     call dfl_basis(idfl)%bp(res_lo, res_hi, width=1.0)
                     call dfl_basis(idfl)%ifft
-                    ! padding columns are not guaranteed zero after an ifft, and the inner
-                    ! products below run over the whole padded array
-                    call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
-                    rm_dfl(params%box_crop+1:,:,:) = 0.
                     ! band-passing spreads density outside the particle and the deflated
                     ! volumes are soft-masked, so the shells must be too; not applied at ndfl=1
                     call flex_window_apply(dfl_basis(idfl), params)

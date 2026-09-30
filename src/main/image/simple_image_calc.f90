@@ -767,9 +767,9 @@ contains
         class(image), intent(in) :: self
         integer :: i, j, k
         contains_nans = .false.
-        do i=1,size(self%rmat,1)
-            do j=1,size(self%rmat,2)
-                do k=1,size(self%rmat,3)
+        do i=1,self%ldim(1)
+            do j=1,self%ldim(2)
+                do k=1,self%ldim(3)
                     if( .not. is_a_number(self%rmat(i,j,k)) )then
                         contains_nans = .true.
                         return
@@ -784,7 +784,7 @@ contains
         if( self%ft )then
             call check4nans3D(self%cmat)
         else
-            call check4nans3D(self%rmat)
+            call check4nans3D(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         endif
     end subroutine checkimg4nans
 
@@ -821,7 +821,7 @@ contains
         ave       = ave/real(npix)
         maxv      = maxval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
         minv      = minval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
-        self%rmat = self%rmat - ave
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave
         ! calc sum of devs and sum of devs squared
         ep = 0.
         var = 0.
@@ -1622,7 +1622,7 @@ contains
         real :: npix, ave, var
         npix      = real(product(self%ldim))
         ave       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        self%rmat = self%rmat - ave
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave
         var       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
         if( var > TINY )then
             self%rmat = self%rmat / sqrt(var)

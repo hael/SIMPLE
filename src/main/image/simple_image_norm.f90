@@ -25,7 +25,7 @@ contains
         real    :: ave, var, ep
         npix   = product(self%ldim)
         ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        self%rmat = self%rmat - ave
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave
         ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
         var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
@@ -34,7 +34,7 @@ contains
         endif
         if( present(a_s) )then
             self%rmat = self%rmat * a_s(2)
-            self%rmat = self%rmat + a_s(1)
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) + a_s(1)
         endif
     end subroutine norm
 
@@ -87,7 +87,8 @@ contains
             THROW_WARN('cannot normalize FTs; norm_ext')
             return
         endif
-        if( abs(avg) > TINY ) self%rmat = self%rmat - avg
+        if( abs(avg) > TINY ) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
         if( sdev     > 0.   ) self%rmat = self%rmat / sdev
     end subroutine norm_ext
 
@@ -100,7 +101,8 @@ contains
         real    :: ave, var, ep
         npix = product(self%ldim) - count(lmsk) ! # background pixels
         ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! background average
-        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        if( abs(ave) > TINY ) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave
         ep         = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
         var        = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)
         var        = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
@@ -118,7 +120,7 @@ contains
         real :: npix, ax, sxx
         npix = real(count(mask))
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        self%rmat = self%rmat - ax
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
         sxx  = sxx/real(npix)
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)

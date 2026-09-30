@@ -992,8 +992,6 @@ contains
                 call dfl_basis(idfl)%fft
                 call dfl_basis(idfl)%bp(res_lo, res_hi, width=1.0)
                 call dfl_basis(idfl)%ifft
-                call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
-                rm_dfl(params%box_crop+1:,:,:) = 0.
                 call flex_window_apply(dfl_basis(idfl), params)
             endif
         end do

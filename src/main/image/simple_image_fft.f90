@@ -31,6 +31,7 @@ contains
         if( self%ft )then
             call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
             self%ft = .false.
+            call self%zero_padding
             call self%shift_phorig
         endif
     end subroutine bwd_ft
@@ -1624,6 +1625,7 @@ contains
         ! ============================================================
         call fftwf_execute_dft_c2r(self%plan_bwd, self%cmat, self%rmat)
         self%ft = .false.
+        call self%zero_padding ! self stays in real space
         ! ============================================================
         ! 2) SHIFT TO PHASE ORIGIN (fftshift)
         ! ============================================================

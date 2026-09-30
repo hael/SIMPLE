@@ -4,15 +4,18 @@
 ! image basics that only the deleted ptcl_center test touched: get_nyq, masscen, shift2Dserial,
 ! roavg, power_spectrum and fproject (plan, section 9.7, the open items, 2026-09-25). Expected values
 ! are closed forms or exact array operations written here; the image files are removed at the end.
+! The padding tests pin the contract of doc/refactoring_notes/planned/image_rmat_padding_encapsulation.md
+! (section 2): in real space the padding of the in-place FFT buffer holds zeros.
 module simple_image_tester
 use, intrinsic :: ieee_exceptions, only: ieee_get_flag, ieee_set_flag, ieee_divide_by_zero
+use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan
 use simple_test_utils
 use simple_defs
 use simple_linalg,       only: hyp
 use simple_string,       only: string
 use simple_string_utils, only: int2str
 use simple_syslib,       only: del_file
-use simple_image,        only: image
+use simple_image,        only: image, unmemoize_mask_coords
 use simple_projector,    only: projector
 use simple_ori,          only: ori
 implicit none
@@ -27,6 +30,10 @@ character(len=*), parameter :: STK_SPI2 = 'tmp_image_tester_squares_converted.sp
 character(len=*), parameter :: STK_MRC2 = 'tmp_image_tester_squares_converted.mrc'
 character(len=*), parameter :: VOL_SPI  = 'tmp_image_tester_cube.spi'
 character(len=*), parameter :: VOL_MRC  = 'tmp_image_tester_cube.mrc'
+! the padding tests: two 2D and two 3D boxes, even (two padding rows) and odd (one padding row)
+integer, parameter :: NPAD2D = 2, NPAD3D = 2
+integer, parameter :: PAD_DIMS2D(3,NPAD2D) = reshape([64,64,1, 63,63,1],     [3,NPAD2D])
+integer, parameter :: PAD_DIMS3D(3,NPAD3D) = reshape([24,24,24, 23,23,23], [3,NPAD3D])
 
 contains
 
@@ -46,6 +53,13 @@ contains
         call test_file_roundtrip()
         call test_file_roundtrip_sizes()
         call test_fproject()
+        call test_padding_query()
+        call test_padding_after_transforms()
+        call test_padding_after_entering_real_space()
+        call test_padding_after_arithmetic()
+        call test_padding_after_binary_ops()
+        call test_padding_after_pad_and_collage()
+        call test_rmat_ptr_is_box()
     end subroutine run_all_image_tests
 
     !---------------- construction and access ----------------
@@ -673,7 +687,321 @@ contains
         call proj2d%kill
     end subroutine test_fproject
 
+    !---------------- the padding of the real-space array ----------------
+
+    ! The real array of an image is the in-place FFTW buffer: 2*(n1/2+1) rows in the first
+    ! dimension, two more than the box for an even n1 and one more for an odd n1. In real space
+    ! that padding holds zeros, and max_abs_padding, the largest magnitude in it, returns zero.
+    ! Zero is exact, so every tolerance below is 0. fft and ifft shift the phase origin and accept
+    ! even boxes only (shift_phorig), so the tests that only need an image in Fourier space get
+    ! there with fft_noshift, which takes any box.
+
+    ! the query itself: zero for a new image, the magnitude of a value planted in the last padding
+    ! row (set_rmat_at does not bound its indices by the box), NaN for a NaN there, and, as the
+    ! control that the rows are looked at, nonzero in Fourier space, where they hold the last
+    ! Fourier column of a noise image
+    subroutine test_padding_query()
+        real, parameter :: PLANTED = -3.
+        type(image) :: img
+        character(len=:), allocatable :: tag
+        integer :: id, ldim(3), ilast
+        real    :: val
+        write(*,'(A)') 'test_padding_query'
+        do id = 1,NPAD2D + NPAD3D
+            ldim = pad_dims(id)
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding of a new image is zero')
+            ilast = 2*(ldim(1)/2 + 1) ! the last row of the buffer: n1+2 for an even n1, n1+1 for an odd n1
+            call img%set_rmat_at(ilast, ldim(2), ldim(3), PLANTED)
+            call assert_real(abs(PLANTED), img%max_abs_padding(), 0., tag//': max_abs_padding is the magnitude of a planted value')
+            call img%set_rmat_at(ilast, ldim(2), ldim(3), ieee_value(val, ieee_quiet_nan))
+            call assert_true(ieee_is_nan(img%max_abs_padding()), tag//': max_abs_padding is NaN when the padding holds a NaN')
+            call assert_false(img%contains_nans(), tag//': contains_nans looks at the box, not at the padding')
+            call img%set_rmat_at(ilast, ldim(2), ldim(3), 0.)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img%fft_noshift
+            call assert_true(img%max_abs_padding() > 0., tag//': in Fourier space the padding rows hold the last Fourier column')
+        end do
+        call img%kill
+    end subroutine test_padding_query
+
+    ! back to real space through a transform: FFTW leaves the padding of an in-place
+    ! complex-to-real output undefined, so ifft (even boxes, 2D and 3D) and ifft_mask_pad_fft
+    ! (for self; 2D, even and odd: it shifts the origin itself) clear it
+    subroutine test_padding_after_transforms()
+        real, parameter :: MSKRAD = 20.
+        type(image) :: img, img_pd
+        character(len=:), allocatable :: tag
+        integer :: id, ldim(3)
+        write(*,'(A)') 'test_padding_after_transforms'
+        do id = 1,NPAD2D + NPAD3D
+            ldim = pad_dims(id)
+            if( mod(ldim(1),2) /= 0 ) cycle
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img%fft
+            call img%ifft
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after fft and ifft')
+        end do
+        do id = 1,NPAD2D
+            ldim = PAD_DIMS2D(:,id)
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call img_pd%new([2*ldim(1),2*ldim(2),1], SMPD, wthreads=.false.)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img%memoize_mask_coords
+            call img%fft_noshift
+            call img%ifft_mask_pad_fft(MSKRAD, img_pd)
+            call assert_false(img%is_ft(),   tag//': ifft_mask_pad_fft leaves self in real space')
+            call assert_true(img_pd%is_ft(), tag//': ifft_mask_pad_fft leaves the padded output in Fourier space')
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding of self is zero after ifft_mask_pad_fft')
+            call unmemoize_mask_coords ! leave no module state behind
+        end do
+        call img%kill
+        call img_pd%kill
+    end subroutine test_padding_after_transforms
+
+    ! into real space without a transform: a read fills the box, and ran, gauran and gauimg write
+    ! the box, of a buffer that held Fourier coefficients
+    subroutine test_padding_after_entering_real_space()
+        character(len=4), parameter :: EXTS(2) = ['.mrc', '.spi']
+        type(image) :: img, back
+        character(len=:), allocatable :: tag, fname
+        real, allocatable :: ref(:,:,:)
+        integer :: id, ie, ldim(3)
+        write(*,'(A)') 'test_padding_after_entering_real_space'
+        do id = 1,NPAD2D + NPAD3D
+            ldim = pad_dims(id)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call back%new(ldim, SMPD, wthreads=.false.)
+            do ie = 1,size(EXTS)
+                tag   = pad_tag(ldim)//' '//EXTS(ie)
+                fname = 'tmp_image_tester_padding'//EXTS(ie)
+                call del_file(fname)
+                call set_fixed_seed(20260930 + id)
+                call img%gauran(0., 1.)
+                ref = img%get_rmat()
+                if( ldim(3) == 1 )then
+                    call img%write(string(fname), 1)
+                    call img%write(string(fname), 2)
+                    call back%read(string(fname), 1)
+                    call back%fft_noshift
+                    call back%read(string(fname), 2)
+                else
+                    call img%write(string(fname))
+                    call back%read(string(fname))
+                    call back%fft_noshift
+                    call back%read(string(fname))
+                endif
+                call assert_true(all(back%get_rmat() == ref), tag//': read, fft, read returns the image')
+                call assert_real(0., back%max_abs_padding(), 0., tag//': the padding is zero after read, fft, read')
+                call del_file(fname)
+            end do
+            tag = pad_tag(ldim)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img%fft_noshift
+            call img%ran
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after ran on an image in Fourier space')
+            call img%fft_noshift
+            call img%gauran(0., 1.)
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after gauran on an image in Fourier space')
+            call img%fft_noshift
+            call img%gauimg(10)
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after gauimg on an image in Fourier space')
+        end do
+        call img%kill
+        call back%kill
+    end subroutine test_padding_after_entering_real_space
+
+    ! real-space arithmetic with a nonzero value at zero: a scalar assignment, adding and
+    ! subtracting a constant, the mean subtraction of norm, and an image division (0/0 in the
+    ! padding when the whole buffer is divided)
+    subroutine test_padding_after_arithmetic()
+        type(image) :: img, img2, img3
+        character(len=:), allocatable :: tag
+        integer :: id, ldim(3)
+        write(*,'(A)') 'test_padding_after_arithmetic'
+        do id = 1,NPAD2D + NPAD3D
+            ldim = pad_dims(id)
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            img = 1.
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after a scalar assignment')
+            call assert_true(all(img%get_rmat() == 1.),     tag//': a scalar assignment fills the box')
+            call img%add(2.)
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after adding a constant (add)')
+            call assert_true(all(img%get_rmat() == 3.),     tag//': adding a constant (add) adds it to the box')
+            call img%subtr(1.)
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after subtracting a constant (subtr)')
+            call assert_true(all(img%get_rmat() == 2.),     tag//': subtracting a constant (subtr) subtracts it from the box')
+            img2 = img + 3.
+            call assert_real(0., img2%max_abs_padding(), 0., tag//': the padding is zero after adding a constant (operator)')
+            call assert_true(all(img2%get_rmat() == 5.),     tag//': adding a constant (operator) adds it to the box')
+            img3 = img2 / img
+            call assert_real(0., img3%max_abs_padding(), 0., tag//': the padding is zero after an image division')
+            call assert_true(all(img3%get_rmat() == 2.5),    tag//': an image division divides the box')
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(5., 2.)
+            call img%norm
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after norm')
+            call img%gauran(5., 2.)
+            call img%norm([3., 2.])
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after norm to a given mean and deviation')
+        end do
+        call img%kill
+        call img2%kill
+        call img3%kill
+    end subroutine test_padding_after_arithmetic
+
+    ! maps and masked assignments that send zero to a nonzero value: bin_inv (0 becomes 1),
+    ! binarize at a threshold of zero and ring with an inner radius of zero. The number of pixels
+    ! of the ring is counted here by brute force over the box, with the centre n/2+1 of cendist
+    subroutine test_padding_after_binary_ops()
+        real, parameter :: OUTER_RADIUS = 10., INNER_RADIUS = 0.
+        type(image) :: img, img2
+        character(len=:), allocatable :: tag
+        real, allocatable :: rmat(:,:,:)
+        integer :: id, ldim(3), npix, npix_expected, i, j, k
+        real    :: centre(3), d
+        write(*,'(A)') 'test_padding_after_binary_ops'
+        do id = 1,NPAD2D + NPAD3D
+            ldim = pad_dims(id)
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call img2%new(ldim, SMPD, wthreads=.false.)
+            ! a binary image: a centred square (or cube) of ones
+            call img%square(8)
+            call img%bin_inv
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after bin_inv')
+            rmat = img%get_rmat()
+            call assert_real(real(product(ldim) - 16**count(ldim > 1)), sum(rmat), 0., tag//': bin_inv inverts the box')
+            ! noise binarised at zero, in place and into another image
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img%binarize(0., img2)
+            call assert_real(0., img2%max_abs_padding(), 0., tag//': the padding of the output is zero after binarize at zero')
+            call img%binarize(0.)
+            call assert_real(0., img%max_abs_padding(), 0.,  tag//': the padding is zero after binarize at zero in place')
+            ! a disc as a ring of inner radius zero
+            npix = 0
+            call img%ring(ldim, SMPD, OUTER_RADIUS, INNER_RADIUS, npix)
+            call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after ring with an inner radius of zero')
+            centre        = real(ldim)/2. + 1.
+            npix_expected = 0
+            do k = 1,ldim(3)
+                do j = 1,ldim(2)
+                    do i = 1,ldim(1)
+                        d = (real(i) - centre(1))**2 + (real(j) - centre(2))**2
+                        if( ldim(3) > 1 ) d = d + (real(k) - centre(3))**2
+                        d = sqrt(d)
+                        if( d <= OUTER_RADIUS .and. d >= INNER_RADIUS ) npix_expected = npix_expected + 1
+                    end do
+                end do
+            end do
+            call assert_int(npix_expected, npix,               tag//': npix of ring counts the pixels of the box')
+            call assert_int(npix_expected, img%nforeground(),  tag//': ring sets npix pixels of the box')
+        end do
+        call img%kill
+        call img2%kill
+    end subroutine test_padding_after_binary_ops
+
+    ! background fills: pad with a background value, and collage, which fills with 128
+    subroutine test_padding_after_pad_and_collage()
+        real, parameter :: BACKGR = 5.
+        type(image) :: img, img2, img_pd, img_col
+        character(len=:), allocatable :: tag
+        integer :: id, ldim(3), ldim_pd(3)
+        write(*,'(A)') 'test_padding_after_pad_and_collage'
+        do id = 1,NPAD2D + NPAD3D
+            ldim    = pad_dims(id)
+            tag     = pad_tag(ldim)
+            ldim_pd = ldim + 8
+            if( ldim(3) == 1 ) ldim_pd(3) = 1
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call img_pd%new(ldim_pd, SMPD, wthreads=.false.)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img%pad(img_pd, backgr=BACKGR)
+            call assert_real(0., img_pd%max_abs_padding(), 0., tag//': the padding is zero after pad with a background')
+            call assert_real(BACKGR, img_pd%get([1,1,1]), 0., tag//': pad fills the box outside the image with the background')
+        end do
+        do id = 1,NPAD2D
+            ldim = PAD_DIMS2D(:,id)
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call img2%new(ldim, SMPD, wthreads=.false.)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            call img2%gauran(0., 1.)
+            call img%collage(img2, img_col)
+            call assert_real(0., img_col%max_abs_padding(), 0., tag//': the padding is zero after collage')
+            ! the one-pixel border between the two panels keeps the background of 128
+            call assert_real(128., img_col%get([ldim(1)+1,1,1]), 0., tag//': collage fills the border between the panels with 128')
+        end do
+        call img%kill
+        call img2%kill
+        call img_pd%kill
+        call img_col%kill
+    end subroutine test_padding_after_pad_and_collage
+
+    ! get_rmat_ptr is the box, whatever the parity: it has the shape of the image and lower bounds
+    ! 1, it conforms with the copy get_rmat returns, a whole-array assignment through it fills the
+    ! box and leaves the padding at zero, a whole-array sum over it is the sum over the box
+    ! (2 x the number of pixels here, exact in single precision), and it is the image, not a copy
+    subroutine test_rmat_ptr_is_box()
+        real, parameter :: FILL = 2., MARK = 7.
+        type(image)   :: img
+        real, pointer :: rmat(:,:,:)
+        real, allocatable :: ref(:,:,:)
+        character(len=:), allocatable :: tag
+        integer :: id, ldim(3)
+        write(*,'(A)') 'test_rmat_ptr_is_box'
+        do id = 1,NPAD2D + NPAD3D
+            ldim = pad_dims(id)
+            tag  = pad_tag(ldim)
+            call img%new(ldim, SMPD, wthreads=.false.)
+            call set_fixed_seed(20260930 + id)
+            call img%gauran(0., 1.)
+            ref = img%get_rmat()
+            call img%get_rmat_ptr(rmat)
+            call assert_true(all(shape(rmat) == ldim), tag//': the rmat pointer has the shape of the box')
+            call assert_true(all(lbound(rmat) == 1),   tag//': the rmat pointer has lower bounds 1')
+            call assert_true(all(rmat == ref),         tag//': the rmat pointer conforms with and equals the box')
+            rmat = FILL
+            call assert_real(0., img%max_abs_padding(), 0., tag//': an assignment to the whole pointer leaves the padding at zero')
+            call assert_true(all(img%get_rmat() == FILL),   tag//': an assignment to the whole pointer fills the box')
+            call assert_real(FILL*real(product(ldim)), sum(rmat), 0., tag//': a sum over the whole pointer is the sum over the box')
+            rmat(ldim(1),ldim(2),ldim(3)) = MARK
+            call assert_real(MARK, img%get(ldim), 0., tag//': a write through the pointer is a write to the image')
+            nullify(rmat)
+        end do
+        call img%kill
+    end subroutine test_rmat_ptr_is_box
+
     !---------------- helpers ----------------
+
+    ! the id-th box of the padding tests: the 2D boxes first, then the 3D boxes
+    pure function pad_dims( id ) result( ldim )
+        integer, intent(in) :: id
+        integer :: ldim(3)
+        if( id <= NPAD2D )then
+            ldim = PAD_DIMS2D(:,id)
+        else
+            ldim = PAD_DIMS3D(:,id-NPAD2D)
+        endif
+    end function pad_dims
+
+    function pad_tag( ldim ) result( tag )
+        integer, intent(in) :: ldim(3)
+        character(len=:), allocatable :: tag
+        tag = int2str(ldim(1))//'x'//int2str(ldim(2))//'x'//int2str(ldim(3))
+    end function pad_tag
 
     ! zero-mean Gaussian noise, Gaussian low-passed: smooth enough for interpolation and shifts
     subroutine smooth_noise( img, seed )

@@ -24,21 +24,21 @@ contains
         real,                   intent(in)    :: thres
         class(image), optional, intent(inout) :: self_out
         integer :: n_foreground
-        n_foreground = count(self_in%rmat > thres)
+        n_foreground = count(self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) > thres)
         if( n_foreground < 1 ) THROW_HARD('Binarization produces empty image!')
         if( self_in%ft ) THROW_HARD('only for real images; bin_1')
         if( present(self_out) )then
             if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; binarize_1')
-            where( self_in%rmat >= thres )
-                self_out%rmat  = 1.
+            where( self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) >= thres )
+                self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3)) = 1.
             elsewhere
-                self_out%rmat  = 0.
+                self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3)) = 0.
             end where
         else
-            where( self_in%rmat >= thres )
-                self_in%rmat = 1.
+            where( self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) >= thres )
+                self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) = 1.
             elsewhere
-                self_in%rmat = 0.
+                self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) = 0.
             end where
         endif
     end subroutine binarize_1
@@ -92,7 +92,7 @@ contains
                 self%rmat(i,:,1) = self%rmat(i,:,1) + (real(i)-centre(1))**2.
             enddo
             do i=1,self%ldim(2)
-                self%rmat(:,i,1) = self%rmat(:,i,1) + (real(i)-centre(2))**2.
+                self%rmat(:self%ldim(1),i,1) = self%rmat(:self%ldim(1),i,1) + (real(i)-centre(2))**2.
             enddo
         else
             ! 3D
@@ -100,10 +100,10 @@ contains
                 self%rmat(i,:,:) = self%rmat(i,:,:) + (real(i)-centre(1))**2.
             enddo
             do i=1,self%ldim(2)
-                self%rmat(:,i,:) = self%rmat(:,i,:) + (real(i)-centre(2))**2.
+                self%rmat(:self%ldim(1),i,:) = self%rmat(:self%ldim(1),i,:) + (real(i)-centre(2))**2.
             enddo
             do i=1,self%ldim(3)
-                self%rmat(:,:,i) = self%rmat(:,:,i) + (real(i)-centre(3))**2.
+                self%rmat(:self%ldim(1),:,i) = self%rmat(:self%ldim(1),:,i) + (real(i)-centre(3))**2.
             enddo
         endif
         self%rmat = sqrt(self%rmat)
@@ -198,13 +198,14 @@ contains
 
     module subroutine bin_inv( self )
         class(image), intent(inout) :: self
-        self%rmat = -1.*(self%rmat-1.)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = -1.*(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-1.)
     end subroutine bin_inv
 
     module subroutine remove_edge( self )
         class(image), intent(inout) :: self
         if( self%ft ) THROW_HARD('only for real binary images (not FTed ones); remove_edge')
-        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+        if( any(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 1.0001) .or.&
+            &any(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.) )&
             THROW_HARD('input to remove edge not binary; remove_edge')
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
@@ -224,7 +225,8 @@ contains
     module subroutine one_at_edge( self )
         class(image), intent(inout) :: self
         if( self%ft ) THROW_HARD('only for real binary images (not FTed ones); one_at_edge')
-        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+        if( any(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 1.0001) .or.&
+            &any(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.) )&
             THROW_HARD('input to one_at_edge not binary')
         where( self%rmat < 0.999 .and. self%rmat > TINY ) self%rmat = 1.
     end subroutine one_at_edge

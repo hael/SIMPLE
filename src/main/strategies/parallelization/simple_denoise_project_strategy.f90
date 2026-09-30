@@ -1238,7 +1238,8 @@ contains
         ldim = img%get_ldim()
         ldim(3) = 1
         call ioimg%open(fname, ldim, img%get_smpd(), formatchar='M', readhead=file_exists(fname))
-        call img%get_rmat_ptr(rmat_ptr)
+        ! the whole buffer: the image may hold Fourier data, which wmrcSlices takes in the FFT layout
+        call img%get_rmat_ptr_padded(rmat_ptr)
         call ioimg%wmrcSlices(indstk, indstk, rmat_ptr, ldim, img%is_ft())
         call ioimg%close
         rmat_ptr => null()

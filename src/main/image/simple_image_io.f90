@@ -89,6 +89,7 @@ contains
         endif
         call ioimg%rSlices(first_slice,last_slice,self%rmat,is_mrc=form.eq.'M')
         call ioimg%close
+        if( .not. self%ft ) call self%zero_padding
     end subroutine read
 
     ! For fast serial i/o of a square Fourier volume in mrc format (cf reconstructor)
@@ -96,6 +97,7 @@ contains
         class(image),   intent(inout) :: self
         class(imgfile), intent(inout) :: ioimg  ! is assumed externally open
         call ioimg%rSlices(1, self%ldim(1), self%rmat, is_mrc=.true.)
+        if( .not. self%ft ) call self%zero_padding
     end subroutine read_raw_mrc
 
     ! For fast serial i/o of a square slice from a stack in mrc format
@@ -104,6 +106,7 @@ contains
         class(imgfile), intent(inout) :: ioimg  ! is assumed externally open
         integer,        intent(in)    :: index
         call ioimg%rSlices(index, index, self%rmat(1:self%ldim(1),1:self%ldim(2),1:1), is_mrc=.true.)
+        if( .not. self%ft ) call self%zero_padding
     end subroutine read_single_mrc_image
 
     !===========================

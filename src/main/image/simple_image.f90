@@ -151,7 +151,8 @@ contains
     ! Getters
     procedure          :: get
     procedure          :: get_rmat
-    procedure          :: get_rmat_ptr ! VIOLATES ENCAPSULATION
+    procedure          :: get_rmat_ptr
+    procedure          :: get_rmat_ptr_padded
     procedure          :: get_rmat_sub
     procedure          :: get_rmat_at
     procedure          :: get_cmat
@@ -201,6 +202,7 @@ contains
     generic            :: operator(.eqsmpd.) => same_smpd
     procedure          :: is_ft
     procedure          :: is_empty
+    procedure          :: max_abs_padding
     ! FILTERS/DENOISE, file: simple_image_filt.f90
     procedure          :: bp
     procedure          :: lp_background
@@ -370,6 +372,7 @@ contains
     procedure          :: zero
     procedure          :: zero_and_flag_ft
     procedure          :: zero_and_unflag_ft
+    procedure, private :: zero_padding
     procedure          :: zero_background
     procedure          :: zero_below
     procedure          :: zero_edgeavg
@@ -400,7 +403,6 @@ contains
     generic            :: gauimg => gauimg_1, gauimg_2
     procedure          :: gauimg2D
     procedure          :: gauimg3D
-    procedure          :: reshape2cube
     procedure          :: square
     ! pad/clip/crop
     procedure          :: pad
@@ -1039,6 +1041,11 @@ interface
         real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
     end subroutine get_rmat_ptr
 
+    module subroutine get_rmat_ptr_padded( self, rmat_ptr )
+        class(image), target,        intent(in)  :: self
+        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+    end subroutine get_rmat_ptr_padded
+
     module pure subroutine get_rmat_sub( self, rmat )
         class(image), intent(in)  :: self
         real,         intent(out) :: rmat(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -1296,6 +1303,11 @@ interface
         real    :: minmax(2)
         logical :: is
     end function is_empty
+
+    module pure function max_abs_padding( self ) result( val )
+        class(image), intent(in) :: self
+        real :: val
+    end function max_abs_padding
 
     ! ===== filter procedure interfaces =====
 
@@ -2300,6 +2312,10 @@ interface
         class(image), intent(inout) :: self
     end subroutine zero_and_unflag_ft
 
+    module pure subroutine zero_padding( self )
+        class(image), intent(inout) :: self
+    end subroutine zero_padding
+
     module subroutine zero_background( self )
         class(image), intent(inout) :: self
     end subroutine zero_background
@@ -2443,11 +2459,6 @@ interface
         real, optional, intent(in)    :: cutoff
     end subroutine gauimg3D
     
-    module subroutine reshape2cube( self, self_out )
-        class(image), intent(inout) :: self
-        class(image), intent(out)   :: self_out
-    end subroutine reshape2cube
-
     module subroutine square( self, sqrad )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: sqrad
