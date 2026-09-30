@@ -2,7 +2,7 @@
 module simple_matcher_pftc_prep
 use simple_core_module_api
 use simple_builder,              only: builder
-use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd, cavger_shift_partial_eosum
+use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd, cavger_set_center_offset
 use simple_image,                only: image
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
 use simple_parameters,           only: parameters
@@ -16,13 +16,12 @@ private
 contains
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
-    subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_frac_restore, nmany_refs )
+    subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, nmany_refs )
         use simple_matcher_2Dprep, only: prep2dref, calc_2Dref_offset
         class(parameters),          intent(inout) :: params
         class(builder),             intent(inout) :: build
         type(image),                intent(inout) :: ptcl_match_imgs_pad(:)
         integer,                    intent(in)    :: batchsz_max, which_iter
-        logical,                    intent(in)    :: l_frac_restore
         integer,          optional, intent(in)    :: nmany_refs
         type(image), allocatable :: match_imgs(:)
         real         :: xyz(3)
@@ -70,10 +69,9 @@ contains
                 else
                     xyz = 0.0
                 endif
-                if( l_frac_restore )then
-                    ! Shifts e/o class sum used during fractional restoration
-                    if( arg(xyz) > CENTHRESH ) call cavger_shift_partial_eosum(xyz(1:2), icls)
-                endif
+                ! the assembly owner shifts the carried e/o class sums by this offset
+                ! once, before the fractional blend
+                call cavger_set_center_offset(xyz(1:2), icls)
                 ! Prepare the references
                 if( l_use_merged_ref )then
                     ! merged class average in both even and odd positions

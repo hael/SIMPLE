@@ -4,7 +4,7 @@ use simple_ori_api
 use simple_ori, only: ori
 implicit none
 
-public :: oris
+public :: oris, population_blend_weights
 private
 #include "simple_local_flags.inc"
 
@@ -91,8 +91,8 @@ type :: oris
     procedure          :: any_state_zero
     procedure          :: is_first_update
     procedure          :: get_update_frac
+    procedure          :: get_group_update_counts
     procedure          :: get_state_update_fracs
-    procedure          :: get_class_update_fracs
     procedure          :: get_class_sample_stats
     procedure          :: get_proj_sample_stats
     !======================================================================
@@ -170,6 +170,7 @@ type :: oris
     !======================================================================
     procedure          :: select_particles_set
     procedure          :: sample4rec
+    procedure          :: get_state_rec_pops
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
     procedure          :: sample4update_cnt
@@ -759,17 +760,18 @@ interface
         real :: update_frac
     end function get_update_frac
 
+    module subroutine get_group_update_counts( self, label, ngroups, nrep, nsmp )
+        class(oris),          intent(inout) :: self
+        character(len=*),     intent(in)    :: label
+        integer,              intent(in)    :: ngroups
+        integer, allocatable, intent(inout) :: nrep(:), nsmp(:)
+    end subroutine get_group_update_counts
+
     module subroutine get_state_update_fracs( self, nstates, rho )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: nstates
         real, allocatable,               intent(inout) :: rho(:)
     end subroutine get_state_update_fracs
-
-    module subroutine get_class_update_fracs( self, ncls, rho )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: ncls
-        real, allocatable,               intent(inout) :: rho(:)
-    end subroutine get_class_update_fracs
 
     module subroutine get_class_sample_stats( self, clsinds, clssmp, label )
         class(oris),                     intent(inout) :: self
@@ -1219,6 +1221,12 @@ interface
         integer, allocatable, intent(inout) :: inds(:)
     end subroutine sample4rec
 
+    module subroutine get_state_rec_pops( self, nstates, pops )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: nstates
+        integer, allocatable, intent(inout) :: pops(:)
+    end subroutine get_state_rec_pops
+
     module subroutine sample4update_all( self, fromto, nsamples, inds, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1361,6 +1369,15 @@ interface
         character(len=*),            intent(in)    :: varflag1
         character(len=*),  optional, intent(in)    :: varflag2
     end subroutine clean_entry
+
+    ! Population rule of the fractional blends (2D class sums, 3D trailing chains). Not
+    ! type-bound: it acts on the counts of get_group_update_counts, not on rows.
+    elemental module subroutine population_blend_weights( nrep, nsmp, mrep, s, w, mnew, ufrac )
+        integer,        intent(in)  :: nrep, nsmp
+        real,           intent(in)  :: mrep
+        real,           intent(out) :: s, w, mnew
+        real, optional, intent(in)  :: ufrac
+    end subroutine population_blend_weights
 
     !======================================================================
     ! DISTANCES (simple_oris_dist.f90)

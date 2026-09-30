@@ -2,8 +2,9 @@
 ! Covers the image primitives scale_mats and sum_reduce_mats and the weighting contracts of
 ! blend_trailing_accumulators (simple_commanders_rec_distr), on tiny synthetic accumulators with known answers.
 module simple_accum_blend_tester
-use simple_test_utils, only: assert_real
+use simple_test_utils, only: assert_real, assert_true
 use simple_image,      only: image
+use simple_oris,       only: population_blend_weights
 implicit none
 private
 public :: run_all_accum_blend_tests
@@ -21,6 +22,7 @@ contains
     subroutine run_all_accum_blend_tests()
         write(*,'(A)') '**** running all trailing-reconstruction blend tests ****'
         call test_trail_rec_blend()
+        call test_trail_rec_population()
     end subroutine run_all_accum_blend_tests
 
     subroutine test_trail_rec_blend()
@@ -127,5 +129,84 @@ contains
         end subroutine run_bootstrap_then_update
 
     end subroutine test_trail_rec_blend
+
+    !> Population rule on the accumulator primitives: one unit of sampling density per
+    !! particle, a chain representing M particles of the previous map and current partials
+    !! of n particles of the current map. For each population change the blended density
+    !! equals N, the population now represented, and the restored current-map coefficient
+    !! is the applied fraction u; without a population change the weights are the former
+    !! ones (1 - u on the chain). The former rule is kept as a control: it loses density
+    !! when first-time particles join. Expected values follow from s = u/f, w = (1-u)*N/M.
+    subroutine test_trail_rec_population()
+        real, parameter :: V_CUR  = 3.0
+        real, parameter :: V_PREV = 1.0
+        real, parameter :: TOL    = 1.e-4
+        ! N, n, M: first-time rows, deactivation, re-activation, no change, n = N
+        integer, parameter :: CASES(3,5) = reshape([130, 40, 100,  &
+                                                     80, 20, 100,  &
+                                                    120, 10, 100,  &
+                                                    100, 25, 100,  &
+                                                     60, 60,  90], [3,5])
+        real    :: s, w, mnew, dens, restored, f, u
+        integer :: icase
+        write(*,'(A)') 'test_trail_rec_population'
+        do icase = 1, size(CASES, 2)
+            f = real(CASES(2,icase)) / real(CASES(1,icase))
+            ! default u = f, then a ufrac_trec-like override
+            u = f
+            call population_blend_weights(CASES(1,icase), CASES(2,icase), real(CASES(3,icase)), s, w, mnew)
+            call blend(s, w, CASES(2,icase), CASES(3,icase), dens, restored)
+            call assert_real(real(CASES(1,icase)), dens, TOL, 'population rule: blended density = N')
+            call assert_real(real(CASES(1,icase)), mnew, TOL, 'population rule: recorded M = N')
+            call assert_real(u, (restored - V_PREV) / (V_CUR - V_PREV), TOL, 'population rule: current-map coefficient = f')
+            if( CASES(1,icase) == CASES(3,icase) ) call assert_real(1.0 - f, w, TOL, 'no population change: chain weight 1 - f')
+            if( CASES(2,icase) < CASES(1,icase) )then
+                u = 0.5 * f
+                call population_blend_weights(CASES(1,icase), CASES(2,icase), real(CASES(3,icase)), s, w, mnew, ufrac=u)
+                call blend(s, w, CASES(2,icase), CASES(3,icase), dens, restored)
+                call assert_real(real(CASES(1,icase)), dens, TOL, 'population rule with ufrac: blended density = N')
+                call assert_real(u, (restored - V_PREV) / (V_CUR - V_PREV), TOL, 'population rule: current-map coefficient = u')
+            endif
+        enddo
+        ! control: the former weights (s = 1, chain 1 - f) on the first case (N 130, n 40, M 100:
+        ! 30 first-time particles)
+        call blend(1.0, 1.0 - 40./130., 40, 100, dens, restored)
+        call assert_real(40. + (1. - 40./130.) * 100., dens, TOL, 'former rule: density n + (1 - f) M')
+        call assert_true(dens < 130. - 1., 'former rule loses density when first-time particles join')
+
+    contains
+
+        subroutine blend( s_in, w_in, n_in, m_in, dens_out, restored_out )
+            real,    intent(in)  :: s_in, w_in
+            integer, intent(in)  :: n_in, m_in
+            real,    intent(out) :: dens_out, restored_out
+            type(image)       :: cur, chain
+            real, allocatable :: rho_cur(:,:,:), rho_chain(:,:,:)
+            call make_unit_accum(cur,   rho_cur,   V_CUR,  real(n_in))
+            call make_unit_accum(chain, rho_chain, V_PREV, real(m_in))
+            call cur%scale_mats(rho_cur, s_in)
+            call chain%scale_mats(rho_chain, w_in)
+            call cur%sum_reduce_mats(chain, rho_cur, rho_chain)
+            dens_out     = rho_cur(1,1,1)
+            restored_out = real(cur%get_cmat_at(1,1,1)) / rho_cur(1,1,1)
+            call cur%kill
+            call chain%kill
+            deallocate(rho_cur, rho_chain)
+        end subroutine blend
+
+        subroutine make_unit_accum( img, rho, map_value, density )
+            type(image),       intent(inout) :: img
+            real, allocatable, intent(inout) :: rho(:,:,:)
+            real,              intent(in)    :: map_value, density
+            integer :: shp(3)
+            call img%new([8,8,8], 1.0)
+            call img%set_ft(.true.)
+            call img%set_cmat(cmplx(map_value * density, 0.))
+            shp = img%get_array_shape()
+            if( allocated(rho) ) deallocate(rho)
+            allocate(rho(shp(1),shp(2),shp(3)), source=density)
+        end subroutine make_unit_accum
+
+    end subroutine test_trail_rec_population
 
 end module simple_accum_blend_tester

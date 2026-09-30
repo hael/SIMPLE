@@ -18,7 +18,7 @@ contains
         logical, optional, intent(in) :: keep2D
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         logical :: l_keep2D
-        integer :: nparts, nstates
+        integer :: nparts, nstates, ipart
         l_keep2D = .true.
         if(present(keep2D)) l_keep2D = keep2D
         nparts  = params%nparts
@@ -39,12 +39,12 @@ contains
         call del_files('algndoc_cavgs_',       nparts, ext=trim(METADATA_EXT))
         call del_files(JOB_FINISHED_FBODY,     nparts)
         call del_files('distr_simple_script_', nparts)
-        ! optionally deletes 2D analysis temporary files
+        ! optionally deletes the 2D class sums: worker contributions and the carried set
         if( .not.l_keep2D )then
-            call del_files('cavgs_even_part',     nparts, ext=MRC_EXT)
-            call del_files('cavgs_odd_part',      nparts, ext=MRC_EXT)
-            call del_files('ctfsqsums_even_part', nparts, ext=MRC_EXT)
-            call del_files('ctfsqsums_odd_part',  nparts, ext=MRC_EXT)
+            do ipart = 1, nparts
+                call del_file(CAVG_CONTRIB_FBODY//int2str(ipart)//BIN_EXT)
+            enddo
+            call del_file(CAVG_STATE_FILE)
         endif
         ! flush the log filehandle to avoid delayed printing
         call flush(logfhandle)

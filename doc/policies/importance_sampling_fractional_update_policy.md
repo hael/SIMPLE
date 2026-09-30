@@ -82,9 +82,15 @@ trailing from the current `sampled` round, state labels, and particles with
 `updatecnt > 0`. `get_update_frac` remains available for callers that need the
 legacy global summary.
 
-`get_class_update_fracs` returns per-class realized update fractions for 2D
-class-average carry-over. It uses active particles, current class assignments,
-the latest `sampled` round, and `updatecnt > 0`.
+`get_group_update_counts` returns the counts behind the realized fraction
+`f = n/N` of each group, shared by 2D (label `class`) and 3D (label `state`):
+`N(g)` active rows of the group with `updatecnt > 0`, and `n(g)` those carrying
+the latest `sampled` marker. `get_state_update_fracs` is `n/N` per state. The
+assembly owners (2D class-average owner, `volassemble`, the distributed PCG
+master) compute them from the merged project; workers never do.
+
+`sample4rec` decides "nothing updated yet" over the whole project: when any
+active row has `updatecnt > 0`, every range reconstructs only its updated rows.
 
 The nominal `update_frac` is a target used by sampling. The realized fraction in
 `simple_oris` is the downstream restoration and trailing contract.
@@ -156,16 +162,22 @@ Current stage policy:
   disabled, refreshing class, in-plane, and shift parameters before final
   class-average generation
 
-Fractional 2D restoration is class-local. `cavger_init_online` reads or centers
-previous partial sums when fractional update is active, obtains per-class
-realized fractions through `get_class_update_fracs`, and weights previous
-even/odd class sums and CTF-squared sums independently for each class. This is
-the 2D analogue of respecting independently updated objects in 3D.
+Fractional 2D restoration is class-local and happens once, at the assembly
+owner. Workers and the shared-memory matcher accumulate the current sample from
+zero; distributed workers write `cavg_contrib_part<N>.bin` with their sums and
+the class-centering offsets they applied. The owner sums the contributions in
+ascending part order, reads the one partless carried set `cavg_state.bin`,
+shifts it once by the centering offsets, and blends each class with the
+population rule (Section 7), independently for the even/odd numerators and
+CTF-squared sums. This is the 2D analogue of respecting independently updated
+objects in 3D.
 
-Distributed cleanup must preserve class-average partial sums while fractional
-restoration still needs them as carry-over input. Assignment and distance
-artifacts are per-iteration handoffs and may be removed before the next
-iteration writes replacements.
+Distributed cleanup removes assignment, distance and class-sum contribution
+files before each iteration; the owner deletes the contributions after the
+blend. The carried set is never partition-shaped and is owned by the assembly
+step only. When an iteration would blend but the carried set is missing,
+unreadable or disagrees with the run (class count, `box_crop`, `smpd_crop`),
+the master runs that iteration as a full update.
 
 ## 5. Abinitio3D and Refine3D
 
@@ -309,31 +321,48 @@ particle set is already fixed before they run.
 
 ## 7. Restoration and Assembly
 
-2D class-average restoration consumes class-local realized update fractions:
+Both the 2D and the 3D blends follow the population rule (class-average state
+note, Section 4.1). Each stored set records `M(g)`, the population its sums
+represent. With `N(g)` and `n(g)` from the merged project, `f = n/N`, and `u = f`
+or an applied override:
 
-- previous class contribution: `1 - rho(class)`
-- current class contribution: the new partial sums for that class
+- current contribution scaled by `s = u / f` (1 by default)
+- previous contribution scaled by `w = (1 - u) * N / M` (`(N - n) / M` by default)
+- the new set records `M <- s*n + w*M`, which is `N` whenever `M > 0`
 
-Classes with no active updated particles keep a zero realized fraction. Classes
-with full sampled participation replace previous sums.
+The carried mass after the blend is therefore the represented population `N`
+whatever joined or left the group: first-time particles add mass without
+displacing old mass, deactivated rows take their share of old mass with them,
+and returning rows get theirs back (`w > 1` is allowed). With no population
+change `w = 1 - u`, the former recurrence. The rule keeps the mass right, not
+the membership: the aggregate is the state of a stochastic recurrence, not an
+exact sum over the current class or state members. Classes or states with no
+active updated particles carry nothing; full sampled participation replaces the
+previous sums.
+
+2D class-average restoration applies the rule per class at the assembly owner
+(Section 4); the restored averages use the represented even/odd populations.
 
 3D volume assembly performs trailing in the accumulator domain, mirroring the
 2D scheme. The persistent per-state chain (`trailrec_stateNN_{even,odd}` plus
 rho files and a `trailrec_stateNN.txt` manifest) holds blended, unregularized
-e/o Fourier sums and sampling densities at full-dataset sampling mass. Two
-fractions govern the blend:
+e/o Fourier sums and sampling densities at the mass of the population it
+represents, `M(s)`, which the manifest records. Two fractions govern the blend:
 
 - `f` — the realized state-local fraction that produced the current partials
   (`get_state_update_fracs`); always computed
 - `u` — the applied map-update weight; equals `f` unless a single-state
   `ufrac_trec` override is provided
 
-The recurrence keeps the chain at full mass `D` and makes `u` the restored
-current-map coefficient, preserving the historical `ufrac_trec` meaning:
+The recurrence keeps the chain at the mass of the represented population `N`
+and makes `u` the restored current-map coefficient, preserving the historical
+`ufrac_trec` meaning:
 
-- current contribution: partial sums and rho scaled by `u / f`
-  (mass `(u/f) * f * D = u * D`)
-- previous chain contribution: sums and rho scaled by `1 - u`
+- current contribution: partial sums and rho scaled by `s = u / f`
+  (mass `u * N`)
+- previous chain contribution: sums and rho scaled by `w = (1 - u) * N / M`
+  (mass `(1 - u) * N`); with an unchanged population `w = 1 - u`
+- the chain records `M <- N`
 - a single sampling-density correction after the blend restores the trailed
   halves, so each Fourier component is weighted by its accumulated sampling
   density; the FSC is estimated post-blend and describes the on-disk artifact
@@ -346,12 +375,18 @@ full-dataset mass and the next iteration's effective update weight is the
 requested fraction (an unnormalized fractional seed would make a 10 percent
 request act like a ~53 percent update). Stage-boundary full reconstructions
 seed the chain at full-dataset weight through the internal `trail_seed`
-handshake, but only when the consuming stage actually trails.
+handshake, but only when the consuming stage actually trails. Every seed records
+the population it represents: `N` for the bootstrap seed (`1/f` scaling), and the
+rows `sample4rec` reconstructs for a stage-boundary seed. The distributed PCG
+chain applies the same weights; its represented population is the particle
+count in the raw header of each half (chain identity `pcgtrail-v3`).
 
 The four accumulator files plus manifest form one artifact set. The manifest is
 deleted before and rewritten after the data files with per-component byte
-sizes, generation counter, and provenance (box, sampling, particle population,
-state layout), so interrupted writes never validate. Readers accept a chain
+sizes, generation counter, provenance (box, sampling, particle population,
+state layout), a format version and the represented population `M(s)`, so
+interrupted writes never validate. A chain written by an older build, whose
+manifest has no represented population, is discarded and re-seeded. Readers accept a chain
 only when the manifest parses, provenance matches the current project, every
 component size matches, and the grid is not larger than the current one with
 the same physical extent; smaller grids are zero-padded on read (downsampling

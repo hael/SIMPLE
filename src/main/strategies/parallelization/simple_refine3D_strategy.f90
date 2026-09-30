@@ -864,10 +864,9 @@ contains
         type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
         type(string)  :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
-        type(string), allocatable :: list(:)
         real    :: smpd
-        integer :: state, box, nfiles
-        logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
+        integer :: state, box
+        logical :: fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -955,13 +954,6 @@ contains
                     fsc_file  = refine3D_fsc_fname(state)
                     if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//fsc_file%to_char())
                 end do
-                if( params%l_update_frac .and. trim(params%rec_backend) /= 'pcg' )then
-                    call simple_list_files(refine3D_partial_rec_glob(prev_refine_path%to_char()), list)
-                    nfiles = size(list)
-                    err = params%nparts * 4 /= nfiles
-                    if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
-                    deallocate(list)
-                endif
                 if( params%l_trail_rec .and. trim(params%rec_backend) == 'pcg' )then
                     do state = 1, params%nstates
                         chain_files(1) = refine3D_pcg_trail_accum_fname(state, 'even')

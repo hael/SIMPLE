@@ -24,6 +24,10 @@ contains
         endif
     end subroutine select_particles_set
 
+    ! Active rows of fromto to reconstruct: those with updatecnt > 0 when any
+    ! active row of the whole project has been updated, else every active row.
+    ! The coverage decision is global, so that all partitions of a distributed
+    ! reconstruction select from the same population.
     module subroutine sample4rec( self, fromto, nsamples, inds )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -31,6 +35,8 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         integer, allocatable :: states(:), updatecnts(:)
         integer :: i, cnt, nptcls
+        logical :: l_any_updated
+        l_any_updated = any_active_updated(self)
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
@@ -41,7 +47,7 @@ contains
             updatecnts(cnt) = self%o(i)%get_int('updatecnt')
             inds(cnt)       = i
         end do
-        if( any(updatecnts > 0) )then
+        if( l_any_updated )then
             nsamples = count(states > 0 .and. updatecnts > 0)
             inds     = pack(inds, mask=states > 0 .and. updatecnts > 0)
         else
@@ -49,6 +55,79 @@ contains
             inds     = pack(inds, mask=states > 0)
         endif
     end subroutine sample4rec
+
+    ! Per-state populations of the rows sample4rec reconstructs over the whole
+    ! project: the population a full reconstruction (a trailing-chain seed) represents
+    module subroutine get_state_rec_pops( self, nstates, pops )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: nstates
+        integer, allocatable, intent(inout) :: pops(:)
+        integer :: i, s
+        logical :: l_any_updated
+        if( allocated(pops) ) deallocate(pops)
+        allocate(pops(nstates), source=0)
+        l_any_updated = any_active_updated(self)
+        do i = 1, self%n
+            s = self%o(i)%get_state()
+            if( s < 1 .or. s > nstates ) cycle
+            if( l_any_updated .and. self%o(i)%get_int('updatecnt') <= 0 ) cycle
+            pops(s) = pops(s) + 1
+        end do
+    end subroutine get_state_rec_pops
+
+    ! Population rule of the fractional blends. The stored sums of a group g (2D class,
+    ! 3D state) record M(g), the population they represent. With N(g) and n(g) from
+    ! get_group_update_counts, the owner blends
+    !   new = s * current + w * previous,   f = n/N,   u = f or an applied override,
+    !   s = u/f,   w = (1 - u) * N/M
+    ! so that the carried mass, s*n + w*M, equals the represented population N whatever
+    ! joined or left the group. The rule keeps the mass right, not the membership: old
+    ! contributions are removed in proportion, not particle by particle.
+    !> Population-rule weights of one group.
+    !!   nrep  N(g): active, updated rows of the group now
+    !!   nsmp  n(g): those sampled this round (in the current sums)
+    !!   mrep  M(g): population the stored sums represent (0 when there are none)
+    !!   ufrac optional applied map-update weight u in [0,1]; default u = f = n/N
+    !!   s     current scale, w previous weight
+    !!   mnew  population the blended sums represent, s*n + w*M: N whenever M > 0 or
+    !!         n = N, otherwise the mass actually stored (no previous mass to scale)
+    !! Special cases: N = 0 gives s = w = 0; n = 0 keeps the previous sums at mass N
+    !! (w = N/M); M = 0 gives w = 0. w exceeds 1 when rows return to the group.
+    elemental module subroutine population_blend_weights( nrep, nsmp, mrep, s, w, mnew, ufrac )
+        integer,        intent(in)  :: nrep, nsmp
+        real,           intent(in)  :: mrep
+        real,           intent(out) :: s, w, mnew
+        real, optional, intent(in)  :: ufrac
+        real :: f, u
+        s    = 0.
+        w    = 0.
+        mnew = 0.
+        if( nrep <= 0 ) return
+        if( nsmp <= 0 )then
+            ! nothing sampled in the group: keep the previous sums at mass N
+            if( mrep > 0. ) w = real(nrep) / mrep
+        else
+            f = real(min(nsmp, nrep)) / real(nrep)
+            u = f
+            if( present(ufrac) ) u = max(0., min(1., ufrac))
+            s = u / f
+            if( mrep > 0. ) w = (1. - u) * real(nrep) / mrep
+        endif
+        mnew = s * real(min(nsmp, nrep)) + w * mrep
+    end subroutine population_blend_weights
+
+    ! whether any active row of the project has been updated (sample4rec's coverage decision)
+    logical function any_active_updated( self )
+        class(oris), intent(in) :: self
+        integer :: i
+        any_active_updated = .false.
+        do i = 1, self%n
+            if( self%o(i)%get_state() > 0 .and. self%o(i)%get_int('updatecnt') > 0 )then
+                any_active_updated = .true.
+                return
+            endif
+        end do
+    end function any_active_updated
 
     module subroutine sample4update_all( self, fromto, nsamples, inds, incr_sampled )
         class(oris),          intent(inout) :: self

@@ -903,56 +903,56 @@ contains
         update_frac = real(count(sampled == sampled_max .and. states > 0)) / real(count(updatecnts > 0 .and. states > 0))
     end function get_update_frac
 
+    ! Counts behind the realized fractional-update fraction f = n/N of each group
+    ! (label 'class': 2D classes; 'state': 3D states), shared by 2D and 3D:
+    !   nrep(g) = N(g): active rows of group g with updatecnt > 0
+    !   nsmp(g) = n(g): those carrying the current sampling marker, the maximum
+    !             'sampled' value over the whole project
+    module subroutine get_group_update_counts( self, label, ngroups, nrep, nsmp )
+        class(oris),          intent(inout) :: self
+        character(len=*),     intent(in)    :: label
+        integer,              intent(in)    :: ngroups
+        integer, allocatable, intent(inout) :: nrep(:), nsmp(:)
+        integer, allocatable :: updatecnts(:), sampled(:), states(:), groups(:)
+        integer :: sampled_max, updatecnt_max, i, g
+        select case(trim(label))
+            case('class','state')
+            case DEFAULT
+                THROW_HARD('unsupported group label: '//trim(label))
+        end select
+        if( allocated(nrep) ) deallocate(nrep)
+        if( allocated(nsmp) ) deallocate(nsmp)
+        allocate(nrep(ngroups), nsmp(ngroups), source=0)
+        updatecnts = self%get_all_asint('updatecnt')
+        sampled    = self%get_all_asint('sampled')
+        states     = nint(self%get_all('state'))
+        if( trim(label) == 'class' )then
+            groups = nint(self%get_all('class'))
+        else
+            groups = states
+        endif
+        sampled_max   = maxval(sampled)
+        updatecnt_max = maxval(updatecnts)
+        if( sampled_max   == 0 ) THROW_HARD('requires previous sampling')
+        if( updatecnt_max == 0 ) THROW_HARD('requires previous update')
+        do i = 1, self%n
+            if( states(i) <= 0 .or. updatecnts(i) <= 0 ) cycle
+            g = groups(i)
+            if( g < 1 .or. g > ngroups ) cycle
+            nrep(g) = nrep(g) + 1
+            if( sampled(i) == sampled_max ) nsmp(g) = nsmp(g) + 1
+        enddo
+        deallocate(updatecnts, sampled, states, groups)
+    end subroutine get_group_update_counts
+
     module subroutine get_state_update_fracs( self, nstates, rho )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: nstates
         real, allocatable,               intent(inout) :: rho(:)
-        integer, allocatable :: updatecnts(:), sampled(:), states(:)
-        integer :: sampled_max, updatecnt_max, istate
-        integer :: nactive_state, nsampled_state
-        if( allocated(rho) ) deallocate(rho)
-        allocate(rho(nstates), source=0.0)
-        allocate(updatecnts(self%n), sampled(self%n), states(self%n))
-        updatecnts = self%get_all_asint('updatecnt')
-        sampled    = self%get_all_asint('sampled')
-        states     = nint(self%get_all('state'))
-        sampled_max   = maxval(sampled)
-        updatecnt_max = maxval(updatecnts)
-        if( sampled_max   == 0 ) THROW_HARD('requires previous sampling')
-        if( updatecnt_max == 0 ) THROW_HARD('requires previous update')
-        do istate = 1, nstates
-            nactive_state  = count(states == istate .and. updatecnts > 0)
-            nsampled_state = count(states == istate .and. updatecnts > 0 .and. sampled == sampled_max)
-            if( nactive_state > 0 ) rho(istate) = real(nsampled_state) / real(nactive_state)
-        enddo
-        deallocate(updatecnts, sampled, states)
+        integer, allocatable :: nrep(:), nsmp(:)
+        call self%get_group_update_counts('state', nstates, nrep, nsmp)
+        call counts2fracs(nrep, nsmp, rho)
     end subroutine get_state_update_fracs
-
-    module subroutine get_class_update_fracs( self, ncls, rho )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: ncls
-        real, allocatable,               intent(inout) :: rho(:)
-        integer, allocatable :: updatecnts(:), sampled(:), states(:), classes(:)
-        integer :: sampled_max, updatecnt_max, icls
-        integer :: nactive_cls, nsampled_cls
-        if( allocated(rho) ) deallocate(rho)
-        allocate(rho(ncls), source=0.0)
-        allocate(updatecnts(self%n), sampled(self%n), states(self%n), classes(self%n))
-        updatecnts = self%get_all_asint('updatecnt')
-        sampled    = self%get_all_asint('sampled')
-        states     = nint(self%get_all('state'))
-        classes    = nint(self%get_all('class'))
-        sampled_max   = maxval(sampled)
-        updatecnt_max = maxval(updatecnts)
-        if( sampled_max   == 0 ) THROW_HARD('requires previous sampling')
-        if( updatecnt_max == 0 ) THROW_HARD('requires previous update')
-        do icls = 1, ncls
-            nactive_cls  = count(classes == icls .and. states > 0 .and. updatecnts > 0)
-            nsampled_cls = count(classes == icls .and. states > 0 .and. updatecnts > 0 .and. sampled == sampled_max)
-            if( nactive_cls > 0 ) rho(icls) = real(nsampled_cls) / real(nactive_cls)
-        enddo
-        deallocate(updatecnts, sampled, states, classes)
-    end subroutine get_class_update_fracs
 
     module subroutine get_class_sample_stats( self, clsinds, clssmp, label )
         class(oris),                     intent(inout) :: self
@@ -1013,5 +1013,14 @@ contains
         call self_copy%get_class_sample_stats(clsinds, clssmp)
         call self_copy%kill
     end subroutine get_proj_sample_stats
+
+    ! f = n/N per group, 0 for an empty group
+    subroutine counts2fracs( nrep, nsmp, rho )
+        integer,           intent(in)    :: nrep(:), nsmp(:)
+        real, allocatable, intent(inout) :: rho(:)
+        if( allocated(rho) ) deallocate(rho)
+        allocate(rho(size(nrep)), source=0.0)
+        where( nrep > 0 ) rho = real(nsmp) / real(nrep)
+    end subroutine counts2fracs
 
 end submodule simple_oris_getters

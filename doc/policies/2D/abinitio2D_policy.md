@@ -217,7 +217,7 @@ Stage policy:
   `fillin` disabled, refreshing class, in-plane, and shift parameters before
   final class-average generation
 
-The desired restoration model is class-local: each class average should carry forward previous sums according to the realized sampled fraction for that class. The current implementation has moved toward this policy; changes in this area should preserve class-local semantics where available and avoid reintroducing a single ambiguous global owner for sampled-update state.
+The restoration model is class-local: each class carries forward its previous sums under the population rule of the [class-average state note](../../refactoring_notes/planned/class_average_and_reconstruct3d_partials_refactoring.md) (Section 4.1). The carried set records `M(c)`, the population its sums represent; the assembly owner counts `N(c)` (active, updated rows of the class) and `n(c)` (those sampled this round) on the merged project and blends `new = current + w * shift(previous)` with `w = (N - n) / M`, recording `M <- N`. The carried mass therefore equals the represented population whatever joined or left the class; without a population change `w = 1 - f`. The rule keeps the mass right, not the membership: the carried sums are an approximation (a stochastic recurrence), not an exact sum over the current class members, and old contributions are removed in proportion, not particle by particle. Shared memory is the reference behaviour; distributed runs give the same result, independent of `nparts`.
 
 ### Continuous in-plane policy
 
@@ -281,14 +281,16 @@ Stable 2D workflow artifacts include:
 
 - `assignment_part*.dat` and `assignment.dat`
 - `dist_part*.dat` and `dist.dat`
-- `cavgs_even_part*.mrc`, `cavgs_odd_part*.mrc`
-- `ctfsqsums_even_part*.mrc`, `ctfsqsums_odd_part*.mrc`
+- `cavg_contrib_part<N>.bin`: one worker's current-iteration class sums (four
+  unregularized accumulators, centering offsets, populations), accumulated from zero
+- `cavg_state.bin`: the carried class sums of the run, written only by the
+  assembly owner, with `M(c)` per class; no part number
 - `cavgs_iterNNN.mrc`, `cavgs_iterNNN_even.mrc`, `cavgs_iterNNN_odd.mrc`
 - `FRCS_FILE`
 - `sigma2` iteration files
 - `ptcl2D`, `cls2D`, `cls3D`, and `out` project segments
 
-Partition-local probabilistic assignment/dist files are per-iteration artifacts and should be removed before the next distributed iteration writes new ones. Class-average partial sums are different when fractional restoration is active: they are the carry-over input for the next iteration and must be preserved until the worker has read and updated them.
+Partition-local probabilistic assignment/dist files and the class-sum contributions are per-iteration artifacts: the master removes them before the next distributed iteration writes new ones, and the assembly owner deletes the contributions after the blend. Workers never read carried state. The carried set `cavg_state.bin` is the only durable source of class-average carry-over: the owner (the `cavgassemble` step in distributed runs, the matcher's restoration finalisation in shared memory) reads it, applies the class-centering shifts the workers report once, blends, and publishes the new set through a temporary name and a rename. When an iteration would blend but the carried set is missing, unreadable, or disagrees with the run on class count, `box_crop` or `smpd_crop`, the master runs that iteration as a full update (every particle, no carry-over). Legacy `cavgs_*_partN.mrc` / `ctfsqsums_*_partN.mrc` files are never read; a run continued from such a directory starts with one full update. Changing `nparts` or the execution mode across `continue=yes` needs nothing else.
 
 ## 7. Review Checklist
 
@@ -304,7 +306,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Does probabilistic table construction stay batch-bounded in workers, avoid
   worker/global overlap, and keep sparse global storage proportional to the
   evaluated candidate count?
-- Are stale distributed handoffs removed without deleting fractional class-average carry-over inputs?
+- Are stale distributed handoffs (assignment, dist and class-sum contribution files) removed, while the carried set `cavg_state.bin` is left to its owner?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Is `fillin=yes` treated as a full-assignment coverage guard unless the
   implementation is deliberately changed to missing-only assignment?
@@ -336,7 +338,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not reuse stale assignment files as valid current-iteration inputs.
 - Do not re-read particle stacks in the online matcher/restoration path when the
   raw batch images are already available.
-- Do not delete class-average partial sums at the start of a fractional-update iteration; workers need them as previous-sum carry-over.
+- Do not let workers read or write the carried class sums, and do not reintroduce partition-shaped carry-over: workers accumulate the current sample from zero; only the assembly owner blends and publishes `cavg_state.bin`.
 - Do not add fractional in-plane coordinates to probabilistic assignment
   artifacts; rerun the joint optimizer after final assignment instead.
 - Do not invoke the legacy angle callback from any `inpl_cont=yes` failure or

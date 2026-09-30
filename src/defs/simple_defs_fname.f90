@@ -103,6 +103,8 @@ character(len=*), parameter :: DIR_PREPROC                   = './'
 ! REG CORR/ASSIGNMENT
 character(len=*), parameter :: DIST_FBODY                    = 'dist_part'
 character(len=*), parameter :: ASSIGNMENT_FBODY              = 'assignment_part'
+character(len=*), parameter :: CAVG_STATE_FILE               = 'cavg_state'//BIN_EXT        ! carried 2D class sums
+character(len=*), parameter :: CAVG_CONTRIB_FBODY            = 'cavg_contrib_part'          ! per-worker 2D class sums
 ! STREAMING
 character(len=*), parameter :: PREPROCESS_PREFIX             = 'preprocess_'
 character(len=*), parameter :: STREAM_SPPROJFILES            = './stream_spprojfiles.txt'

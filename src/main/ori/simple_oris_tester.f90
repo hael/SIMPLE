@@ -2,6 +2,7 @@
 module simple_oris_tester
 use simple_core_module_api
 use simple_test_utils    ! for assert_* utilities and counters
+use simple_oris,        only: population_blend_weights
 implicit none
 private
 public :: run_all_oris_tests
@@ -16,6 +17,10 @@ contains
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
         call test_empty_partition_sampling()
+        call test_sample4rec_global_coverage()
+        call test_group_update_counts()
+        call test_blend_weight_cases()
+        call test_blend_mass_scripted()
         call test_randomization_and_symmetry()
         call test_proj_space_and_remap()
         call test_stats_and_ordering()
@@ -337,6 +342,233 @@ contains
         deallocate(clssmp)
         call os%kill
     end subroutine test_empty_partition_sampling
+
+    ! sample4rec decides "nothing updated yet" over the whole project: when only
+    ! the range [1,5] holds updated rows, the range [6,10] must return none of its
+    ! never-updated rows, and a project without updated rows returns every active row
+    subroutine test_sample4rec_global_coverage()
+        type(oris)           :: os
+        integer, allocatable :: inds(:), pops(:)
+        integer              :: i, nsamp
+        write(*,'(A)') 'test_sample4rec_global_coverage'
+        call os%new(10, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 0.0)
+        call os%set(2, 'updatecnt', 1.)
+        call os%set(4, 'updatecnt', 3.)
+        call os%set_state(5, 0)
+        call os%set(5, 'updatecnt', 2.)   ! inactive: never selected
+        call os%set_state(7, 0)
+        call os%sample4rec([1, 5], nsamp, inds)
+        call assert_int(2, nsamp, 'sample4rec: updated range selects its updated active rows')
+        if( size(inds) == 2 )then
+            call assert_true(all(inds == [2,4]), 'sample4rec: updated range indices')
+        else
+            call assert_true(.false., 'sample4rec: updated range indices')
+        endif
+        call os%sample4rec([6, 10], nsamp, inds)
+        call assert_int(0, nsamp,      'sample4rec: a range without updated rows selects nothing when others are updated')
+        call assert_int(0, size(inds), 'sample4rec: no never-updated indices')
+        ! the population a full reconstruction represents: rows 2 and 4
+        call os%get_state_rec_pops(1, pops)
+        call assert_int(2, pops(1), 'state rec pops: updated active rows when any is updated')
+        ! no active updated row anywhere (row 5 is inactive): every active row of the range
+        call os%set(2, 'updatecnt', 0.)
+        call os%set(4, 'updatecnt', 0.)
+        call os%sample4rec([6, 10], nsamp, inds)
+        call assert_int(4, nsamp, 'sample4rec: nothing updated selects every active row')
+        call os%get_state_rec_pops(1, pops)
+        call assert_int(8, pops(1), 'state rec pops: every active row when nothing is updated')
+        if( size(inds) == 4 )then
+            call assert_true(all(inds == [6,8,9,10]), 'sample4rec: nothing updated indices')
+        else
+            call assert_true(.false., 'sample4rec: nothing updated indices')
+        endif
+        call assert_true(all([(os%get(i, 'updatecnt') == merge(2., 0., i == 5), i=1,10)]), 'sample4rec stamps nothing')
+        call os%kill
+    end subroutine test_sample4rec_global_coverage
+
+    ! The counts behind the realized fraction f = n/N, shared by 2D (class) and 3D (state).
+    ! Fixture: class 1 = rows 1,2,5,6; class 2 = rows 3,4,7,8; row 8 inactive, row 6 never
+    ! updated; state 1 = rows 1-4, state 2 = rows 5-8; current marker (2) on rows 1,2,3,8.
+    ! Counted by hand: class N = [3, 3], n = [2, 1]; state N = [4, 2], n = [3, 0].
+    subroutine test_group_update_counts()
+        integer, parameter :: NREP_CLS(2) = [3, 3], NSMP_CLS(2) = [2, 1]
+        integer, parameter :: NREP_ST(2)  = [4, 2], NSMP_ST(2)  = [3, 0]
+        type(oris)           :: os
+        integer, allocatable :: nrep(:), nsmp(:)
+        real,    allocatable :: rho(:)
+        integer              :: i
+        write(*,'(A)') 'test_group_update_counts'
+        call os%new(8, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 1.0)
+        call os%set_all2single('sampled',   1.0)
+        do i = 1, 8
+            call os%set(i, 'class', merge(1., 2., any(i == [1,2,5,6])))
+        end do
+        call os%set(6, 'updatecnt', 0.)
+        call os%set_state(8, 0)
+        do i = 1, 3
+            call os%set(i, 'sampled', 2.)
+        end do
+        call os%set(8, 'sampled', 2.)
+        call os%get_group_update_counts('class', 2, nrep, nsmp)
+        call assert_true(all(nrep == NREP_CLS) .and. all(nsmp == NSMP_CLS), 'group update counts: classes')
+        do i = 5, 8
+            call os%set_state(i, 2)
+        end do
+        call os%set_state(8, 0)
+        call os%get_group_update_counts('state', 2, nrep, nsmp)
+        call assert_true(all(nrep == NREP_ST) .and. all(nsmp == NSMP_ST), 'group update counts: states')
+        call os%get_state_update_fracs(2, rho)
+        call assert_true(all(abs(rho - [0.75, 0.]) < 1.e-6), 'state update fractions = n/N')
+        call os%kill
+    end subroutine test_group_update_counts
+
+    ! Closed-form cases of population_blend_weights, each worked out by hand from
+    ! s = u/f, w = (1-u)*N/M, mass = s*n + w*M (note Section 4.1)
+    subroutine test_blend_weight_cases()
+        ! note Section 3.3 example: stored sums represent 100, 10 resampled + 30 first-time
+        real, parameter :: W_NOTE    = 0.9     ! (130-40)/100
+        real, parameter :: MASS_OLD  = 40. + (90./130.) * 100.  ! current rule, 109.23 (the note rounds to 109)
+        ! ufrac override: N = M = 100, n = 10, u = 0.5 -> s = 5, w = 0.5, current share 50/100
+        real, parameter :: S_UFRAC   = 5.0
+        real, parameter :: W_UFRAC   = 0.5
+        real, parameter :: TOL       = 1.e-5
+        real :: s, w, mnew, f
+        integer :: n
+        write(*,'(A)') 'test_blend_weight_cases'
+        call population_blend_weights(130, 40, 100., s, w, mnew)
+        call assert_real(1.0,    s,    TOL, 'note example: s = 1 by default')
+        call assert_real(W_NOTE, w,    TOL, 'note example: w = (N-n)/M')
+        call assert_real(130.,   mnew, TOL, 'note example: mass after blend = N')
+        f = 40. / 130.
+        call assert_real(MASS_OLD, 40. + (1. - f) * 100., TOL, 'note example: the current rule loses mass')
+        ! no population change (M = N): the rule is the current recurrence w = 1 - f
+        do n = 0, 100, 10
+            call population_blend_weights(100, n, 100., s, w, mnew)
+            call assert_real(1. - real(n) / 100., w, TOL, 'no population change: w = 1 - f')
+            call assert_real(100., mnew, TOL, 'no population change: mass = N')
+        end do
+        ! f = 1: replace
+        call population_blend_weights(50, 50, 80., s, w, mnew)
+        call assert_real(1.,  s,    TOL, 'f = 1: s = 1')
+        call assert_real(0.,  w,    TOL, 'f = 1: w = 0')
+        call assert_real(50., mnew, TOL, 'f = 1: mass = N')
+        ! n = 0 (f = 0): keep the previous sums at mass N, w > 1 when rows returned
+        call population_blend_weights(60, 0, 40., s, w, mnew)
+        call assert_real(0.,  s,    TOL, 'n = 0: no current contribution')
+        call assert_real(1.5, w,    TOL, 'n = 0: w = N/M')
+        call assert_real(60., mnew, TOL, 'n = 0: mass = N')
+        ! M = 0: nothing to carry
+        call population_blend_weights(60, 20, 0., s, w, mnew)
+        call assert_real(1.,  s,    TOL, 'M = 0: s = 1')
+        call assert_real(0.,  w,    TOL, 'M = 0: w = 0')
+        call assert_real(20., mnew, TOL, 'M = 0: mass is what is stored, n')
+        ! empty group
+        call population_blend_weights(0, 0, 25., s, w, mnew)
+        call assert_real(0., s + w + mnew, TOL, 'N = 0: s = w = mass = 0')
+        ! ufrac override: current-map coefficient stays u, mass stays N
+        call population_blend_weights(100, 10, 100., s, w, mnew, ufrac=0.5)
+        call assert_real(S_UFRAC, s,    TOL, 'ufrac: s = u/f')
+        call assert_real(W_UFRAC, w,    TOL, 'ufrac: w = (1-u)*N/M')
+        call assert_real(100.,    mnew, TOL, 'ufrac: mass = N')
+        call assert_real(0.5, s * 10. / mnew, TOL, 'ufrac: current-map coefficient = u')
+        ! ufrac override with a changed population: 30 first-time rows, N = 130, M = 100
+        call population_blend_weights(130, 40, 100., s, w, mnew, ufrac=0.2)
+        call assert_real(130., mnew, TOL, 'ufrac with population change: mass = N')
+        call assert_real(0.2, s * 40. / mnew, TOL, 'ufrac with population change: coefficient = u')
+        ! u = 1 replaces the stored sums
+        call population_blend_weights(100, 25, 100., s, w, mnew, ufrac=1.0)
+        call assert_real(0.,   w,    TOL, 'u = 1: w = 0')
+        call assert_real(100., mnew, TOL, 'u = 1: mass = N')
+    end subroutine test_blend_weight_cases
+
+    ! Scripted rounds on a project with unit mass per particle contribution: each
+    ! round samples rows (new 'sampled' marker, updatecnt + 1) and changes the
+    ! population: group moves, first-time rows, appends, deactivation and
+    ! re-activation. The counts come from oris%get_group_update_counts, as in
+    ! production. Under the population rule the carried mass of every group equals
+    ! N(g) after every blend; the current rule (w = 1 - f) is run as a control and
+    ! loses mass on the first-time round (hand-computed value).
+    subroutine test_blend_mass_scripted()
+        integer, parameter :: NG = 2
+        ! control, group 1 by hand: round 1 mass 6; round 2 N = 5 (row 2 left), n = 1,
+        ! mass 1 + (1 - 1/5)*6 = 5.8; round 3 N = 7 (first-time rows 13, 14), n = 3,
+        ! mass 3 + (1 - 3/7)*5.8 = 6.314 < 7
+        real, parameter :: MASS_OLD_R3 = 3. + (1. - 3./7.) * (1. + (1. - 1./5.) * 6.)
+        real, parameter :: TOL         = 1.e-5
+        type(oris)           :: os
+        integer, allocatable :: nrep(:), nsmp(:)
+        real    :: mstored(NG), mold(NG), s, w, mnew, f
+        integer :: round, g, i
+        write(*,'(A)') 'test_blend_mass_scripted'
+        call os%new(12, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 0.0)
+        call os%set_all2single('sampled',   0.0)
+        do i = 1, 12
+            call os%set(i, 'class', merge(1., 2., i <= 6))
+        end do
+        mstored = 0.
+        mold    = 0.
+        do round = 1, 6
+            select case(round)
+                case(1) ! full first update
+                    call sample([(i, i=1,12)])
+                case(2) ! resampling, row 2 moves to group 2
+                    call os%set(2, 'class', 2.)
+                    call sample([1,2,7])
+                case(3) ! append rows 13-16 to group 1, first-time rows 13 and 14
+                    call os%reallocate(16)
+                    do i = 13, 16
+                        call os%set_state(i, 1)
+                        call os%set(i, 'class',     1.)
+                        call os%set(i, 'updatecnt', 0.)
+                        call os%set(i, 'sampled',   0.)
+                    end do
+                    call sample([3,13,14])
+                case(4) ! deactivate rows 4 and 5
+                    call os%set_state(4, 0)
+                    call os%set_state(5, 0)
+                    call sample([6])
+                case(5) ! re-activate rows 4 and 5
+                    call os%set_state(4, 1)
+                    call os%set_state(5, 1)
+                    call sample([8])
+                case(6) ! nothing sampled in group 1
+                    call sample([9,10])
+            end select
+            call os%get_group_update_counts('class', NG, nrep, nsmp)
+            do g = 1, NG
+                call population_blend_weights(nrep(g), nsmp(g), mstored(g), s, w, mnew)
+                ! blend unit-mass sums: current mass is the number of sampled rows
+                mstored(g) = s * real(nsmp(g)) + w * mstored(g)
+                call assert_real(real(nrep(g)), mstored(g), TOL, 'population rule: carried mass = N(g)')
+                call assert_real(mnew, mstored(g), TOL, 'population rule: recorded M = carried mass')
+                ! control: the current rule
+                f = 0.
+                if( nrep(g) > 0 ) f = real(nsmp(g)) / real(nrep(g))
+                mold(g) = real(nsmp(g)) + (1. - f) * mold(g)
+            end do
+            if( round == 3 ) call assert_real(MASS_OLD_R3, mold(1), TOL, 'control: the current rule loses mass')
+        end do
+        call os%kill
+
+    contains
+
+        ! stamp the rows with a new sampled marker and count their update
+        subroutine sample( rows )
+            integer, intent(in) :: rows(:)
+            integer :: j
+            do j = 1, size(rows)
+                call os%set(rows(j), 'sampled',   real(round))
+                call os%set(rows(j), 'updatecnt', os%get(rows(j), 'updatecnt') + 1.)
+            end do
+        end subroutine sample
+
+    end subroutine test_blend_mass_scripted
 
     !---------------------------------------------------------------
     ! Large-population regression and timing test.

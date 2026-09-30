@@ -3,7 +3,6 @@ module simple_stream_chunk
 use simple_core_module_api
 use simple_defs_environment
 use simple_cmdline,      only: cmdline
-use simple_image,        only: image
 use simple_parameters,   only: parameters
 use simple_qsys_env,     only: qsys_env
 use simple_sp_project,   only: sp_project
@@ -43,7 +42,6 @@ type stream_chunk
     procedure          :: get_projfile_fname
     procedure          :: calc_sigma2
     procedure          :: analyze2D
-    procedure          :: read
     procedure, private :: gen_final_cavgs
     procedure          :: remove_folder
     procedure          :: display_iter
@@ -298,56 +296,6 @@ contains
         call self%qenv%kill
         call debug_print('end calc_sigma2')
     end subroutine calc_sigma2
-
-    ! read project and deals with arrays used for fractional update
-    subroutine read( self, box )
-        class(stream_chunk), intent(inout) :: self
-        integer,             intent(in)    :: box
-        type(image)  :: img, avg
-        type(string) :: projfile
-        call debug_print('in chunk%read '//int2str(self%id))
-        if( .not.self%converged )THROW_HARD('cannot read chunk prior to convergence')
-        ! doc & parameters
-        projfile = self%path//self%projfile_out
-        call self%spproj%read(projfile)
-        ! classes, to account for nparts /= nparts_chunk
-        if( self%toanalyze2D )then
-            call img%new([box,box,1],1.0)
-            call avg%new([box,box,1],1.0)
-            call average_into(self%path//'cavgs_even_part')
-            call average_into(self%path//'cavgs_odd_part')
-            call average_into(self%path//'ctfsqsums_even_part')
-            call average_into(self%path//'ctfsqsums_odd_part')
-            call img%kill
-            call avg%kill
-        endif
-        call debug_print('end chunk%read '//int2str(self%id))
-        contains
-
-            subroutine average_into( tmpl )
-                class(string), intent(in) :: tmpl
-                type(string) :: fname
-                integer      :: icls, ipart, numlen_chunk
-                if( self%p_ptr%nparts_chunk > 1  )then
-                    numlen_chunk = len(int2str(self%p_ptr%nparts_chunk)) ! as per parameters
-                    call img%zero_and_flag_ft
-                    do icls = 1,self%p_ptr%ncls_start
-                        call avg%zero_and_flag_ft
-                        do ipart = 1,self%p_ptr%nparts_chunk
-                            fname = tmpl//int2str_pad(ipart,numlen_chunk)//MRC_EXT
-                            call img%read(fname,icls)
-                            call avg%add(img)
-                        enddo
-                        call avg%div(real(self%p_ptr%nparts_chunk))
-                        call avg%write(tmpl//MRC_EXT,icls)
-                    enddo
-                else
-                    fname = tmpl//'1'//MRC_EXT
-                    call simple_rename(fname,tmpl//MRC_EXT)
-                endif
-            end subroutine average_into
-
-    end subroutine read
 
     ! classes generation at original sampling
     subroutine gen_final_cavgs( self, clines )

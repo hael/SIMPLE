@@ -1,8 +1,10 @@
 !@descr: Routines to perform the classes restoration and processing
 submodule (simple_classaverager) simple_classaverager_restore
 use simple_imgarr_utils,     only: alloc_imgarr, dealloc_imgarr
-use simple_strategy2D_utils, only: calc_cavg_offset
 use simple_gridding,         only: prep2D_inv_instrfun4mul
+use simple_oris,             only: population_blend_weights
+use simple_cavg_sums,        only: cavg_sums, CAVG_SUMS_STATE, CAVG_SUMS_CONTRIB, CAVG_SUMS_OK,&
+                                  &cavg_contrib_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -28,6 +30,8 @@ contains
         call cavgs%new_set(ldim_crop(1:2), ncls)
         ! populations
         allocate(eo_pops(2,ncls),source=0)
+        ! class-centering offsets of the references, applied once to the carried sums
+        allocate(center_offsets(2,ncls),source=0.)
     end subroutine cavger_new
 
     ! setters/getters
@@ -143,24 +147,19 @@ contains
 
     ! Calculators
 
-    ! Initialize objects for on-the-fly classes update
-    module subroutine cavger_init_online( maxbatchsz, do_frac_update, cropped_ptcls )
+    ! Initialize objects for on-the-fly classes update. The sums always start from zero:
+    ! workers and the shared-memory matcher accumulate the current sample only, and the
+    ! assembly owner blends the carried sums (cavger_commit_carryover)
+    module subroutine cavger_init_online( maxbatchsz, cropped_ptcls )
         integer,           intent(in) :: maxbatchsz
-        logical,           intent(in) :: do_frac_update
         logical, optional, intent(in) :: cropped_ptcls
-        real, allocatable :: class_update_fracs(:)
         ! Whether cavger_update_sums will be fed box_crop particles (from the
         ! downscaled cache) rather than the full-size originals. Set explicitly by
         ! the caller rather than inferred, so the offline assembly path is unaffected.
         l_cropped_ptcls = .false.
         if( present(cropped_ptcls) ) l_cropped_ptcls = cropped_ptcls
-        ! Zero sums or set to previous with weight
+        ! Zero sums
         call cavgs%zero_set(.true.)
-        if( do_frac_update )then
-            call cavger_readwrite_partial_sums('read')
-            call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
-            call apply_weights2cavgs(class_update_fracs)
-        endif
         ! Work images. box_croppd and boxpd cover the same physical extent, so their
         ! Fourier grids share a spacing and index hp means the same spatial frequency
         ! in both; stack_accumulate_fplane only ever reads |hp| <= 2*nyq of the class
@@ -178,84 +177,6 @@ contains
         ! Memoization for cropped padded image, will be overwritten during search
         call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
     end subroutine cavger_init_online
-
-    subroutine calc_class_center_shift( icls, cavg_img, xyz )
-        integer,      intent(in)    :: icls
-        class(image), intent(inout) :: cavg_img
-        real,         intent(out)   :: xyz(3)
-        real :: xy_cavg(2), shift2d(2), crop_factor
-        crop_factor = real(p_ptr%box_crop) / real(p_ptr%box)
-        select case(trim(p_ptr%center_type))
-        case('params')
-            call b_ptr%spproj_field%calc_avg_offset2D(icls, xy_cavg)
-            if( arg(xy_cavg) < CENTHRESH )then
-                xyz = 0.
-            else if( arg(xy_cavg) > MAXCENTHRESH2D )then
-                xyz(1:2) = xy_cavg * crop_factor
-                xyz(3)   = 0.
-            else
-                xyz = cavg_img%calc_shiftcen_serial(p_ptr%cenlp, p_ptr%msk_crop)
-                if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
-            endif
-        case('seg')
-            call calc_cavg_offset(cavg_img, p_ptr%cenlp, p_ptr%msk_crop, shift2d)
-            xyz = [shift2d(1), shift2d(2), 0.]
-        case('mass')
-            xyz = cavg_img%calc_shiftcen_serial(p_ptr%cenlp, p_ptr%msk_crop)
-        case default
-            xyz = 0.
-        end select
-        if( arg(xyz) < CENTHRESH ) xyz = 0.0
-    end subroutine calc_class_center_shift
-
-    subroutine shift_stack_slice2D( cavg_stack, icls, shift2d )
-        class(stack), intent(inout) :: cavg_stack
-        integer,      intent(in)    :: icls
-        real,         intent(in)    :: shift2d(2)
-        real(dp), allocatable :: hcos(:), hsin(:)
-        real(dp) :: sh(2), phase, ck, sk
-        integer  :: h, k, hphys, kphys, lims(3,2)
-        if( arg(shift2d) <= CENTHRESH ) return
-        lims = cavg_stack%fit%loop_lims(2)
-        sh   = real(shift2d,dp)
-        if( cavg_stack%ldim(1) > 1 )then
-            if( is_even(cavg_stack%ldim(1)) )then
-                sh(1) = sh(1) * PI / real(cavg_stack%ldim(1) / 2, dp)
-            else
-                sh(1) = sh(1) * PI / real((cavg_stack%ldim(1) - 1) / 2, dp)
-            endif
-        else
-            sh(1) = 0.0_dp
-        endif
-        if( cavg_stack%ldim(2) > 1 )then
-            if( is_even(cavg_stack%ldim(2)) )then
-                sh(2) = sh(2) * PI / real(cavg_stack%ldim(2) / 2, dp)
-            else
-                sh(2) = sh(2) * PI / real((cavg_stack%ldim(2) - 1) / 2, dp)
-            endif
-        else
-            sh(2) = 0.0_dp
-        endif
-        allocate(hcos(lims(1,1):lims(1,2)), hsin(lims(1,1):lims(1,2)))
-        do h = lims(1,1), lims(1,2)
-            phase = real(h,dp) * sh(1)
-            hcos(h) = dcos(phase)
-            hsin(h) = dsin(phase)
-        enddo
-        do k = lims(2,1), lims(2,2)
-            kphys = k + 1 + merge(cavg_stack%ldim(2),0,k<0)
-            phase = real(k,dp) * sh(2)
-            ck    = dcos(phase)
-            sk    = dsin(phase)
-            do h = lims(1,1), lims(1,2)
-                hphys = h + 1
-                cavg_stack%cmat(hphys,kphys,icls) = cavg_stack%cmat(hphys,kphys,icls) * &
-                    cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h), sp)
-            end do
-        end do
-        cavg_stack%slices(icls)%ft     = .true.
-        deallocate(hcos, hsin)
-    end subroutine shift_stack_slice2D
 
     ! Deallocate objects  on-the-fly classes update
     module subroutine cavger_dealloc_online()
@@ -350,9 +271,8 @@ contains
     end subroutine cavger_update_sums
 
     !>  \brief  is for generating class averages offline
-    module subroutine cavger_assemble_sums( do_frac_update )
+    module subroutine cavger_assemble_sums()
         use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
-        logical,  intent(in) :: do_frac_update
         class(oris), pointer :: spproj_field
         type(string)         :: source_stk
         integer :: pinds(READBUFFSZ)
@@ -361,7 +281,7 @@ contains
         ! fetch data from project
         call b_ptr%spproj%ptr2oritype(p_ptr%oritype, spproj_field)
         ! Initialize temporary arrays
-        call cavger_init_online(READBUFFSZ, do_frac_update)
+        call cavger_init_online(READBUFFSZ)
         ! Prep for image reading
         call prepimgbatch(p_ptr, b_ptr, READBUFFSZ)
         ! Stack & batch loops
@@ -586,152 +506,198 @@ contains
         nullify(pcavgs)
     end subroutine read_cavgs
 
-    !>  \brief  writes partial class averages to disk (distributed execution)
-    module subroutine cavger_readwrite_partial_sums( which )
-        character(len=*), intent(in)  :: which
-        type(string)   :: cae, cao, cte, cto
-        cae   = 'cavgs_even_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
-        cao   = 'cavgs_odd_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
-        cte   = 'ctfsqsums_even_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
-        cto   = 'ctfsqsums_odd_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
-        select case(trim(which))
-            case('read')
-                call cavgs%even%read_cmat(cae)
-                call cavgs%odd%read_cmat(cao)
-                call cavgs%even%read_ctfsq(cte)
-                call cavgs%odd%read_ctfsq(cto)
-            case('write')
-                call cavgs%even%write(cae,.true.)
-                call cavgs%odd%write(cao,.true.)
-                call cavgs%even%write_ctfsq(cte)
-                call cavgs%odd%write_ctfsq(cto)
-            case DEFAULT
-                THROW_HARD('unknown which flag; only read & write supported; cavger_readwrite_partial_sums')
-        end select
-        call cae%kill
-        call cao%kill
-        call cte%kill
-        call cto%kill
-    end subroutine cavger_readwrite_partial_sums
+    !>  \brief  writes this worker's current-iteration class sums, accumulated from zero, with
+    !!         its class-centering offsets and populations (distributed execution). Workers never
+    !!         read carried state; the assembly owner blends (cavger_assemble_sums_from_parts)
+    module subroutine cavger_write_contribution( l_frac )
+        logical, intent(in) :: l_frac
+        type(cavg_sums) :: contrib
+        call contrib%new(CAVG_SUMS_CONTRIB, ncls, ldim_crop(1), smpd_crop, part=p_ptr%part)
+        call cavgs2sums(contrib)
+        call contrib%set_contrib_meta(center_offsets, eo_pops, l_frac)
+        call contrib%write(cavg_contrib_fname(p_ptr%part))
+        call contrib%kill
+    end subroutine cavger_write_contribution
 
-    !>  \brief  pad partial & ctf squared arrays
-    module subroutine cavger_pad_partial_sums( old_box, new_box, n, nparts, numlen )
-        integer, intent(in) :: old_box, new_box, n, nparts, numlen
-        type(string)        :: ca, ct, str
-        type(stack)         :: old, new
-        integer :: ipart
-        call old%new_stack([old_box, old_box], n, .true.)
-        call new%new_stack([new_box, new_box], n, .true.)
-        do ipart = 1,nparts
-            str = int2str_pad(ipart, numlen)
-            ca = string('cavgs_even_part')//str//MRC_EXT
-            ct = string('ctfsqsums_even_part')//str//MRC_EXT
-            call old%read_cmat(ca)
-            call old%read_ctfsq(ct)
-            call old%pad(new)
-            call new%write(ca,.true.)
-            call new%write_ctfsq(ct)
-            ca = string('cavgs_odd_part')//str//MRC_EXT
-            ct = string('ctfsqsums_odd_part')//str//MRC_EXT
-            call old%read_cmat(ca)
-            call old%read_ctfsq(ct)
-            call old%pad(new)
-            call new%write(ca,.true.)
-            call new%write_ctfsq(ct)
-        enddo
-        call old%kill_stack
-        call new%kill_stack
-        call ca%kill; call ct%kill
-    end subroutine cavger_pad_partial_sums
+    !>  \brief  shared-memory assembly owner: blends the carried sums into the current ones
+    !!         (when l_frac), publishes the new carried set and leaves the blended sums and
+    !!         their populations in place for cavger_restore_cavgs
+    module subroutine cavger_commit_carryover( l_frac )
+        logical, intent(in) :: l_frac
+        type(cavg_sums) :: cur
+        integer         :: acc_pops(2,ncls)
+        call cur%new(CAVG_SUMS_STATE, ncls, ldim_crop(1), smpd_crop)
+        call cavgs2sums(cur)
+        acc_pops = eo_pops
+        call commit_carryover(cur, l_frac, acc_pops)
+        call cur%kill
+    end subroutine cavger_commit_carryover
 
-    !>  \brief  shift partial eo sums (fractional update)
-    module subroutine cavger_shift_partial_eosum( offset, icls )
+    ! The owner blend of Section 4.1 of the class-average state note. cur holds the current
+    ! sums of the whole sample (all parts summed). With l_frac the previous set is read,
+    ! shifted once by the class-centering offsets, and blended with the population rule:
+    ! new = s*current + w*shift(previous), M <- s*n + w*M, with N(c) and n(c) counted on the
+    ! merged project. Without l_frac, or when no usable previous set exists, the current sums
+    ! are the new set and M is the accumulated population. The new set is published, copied
+    ! back into cavgs, and eo_pops is set to the population the restored sums represent.
+    subroutine commit_carryover( cur, l_frac, acc_pops )
+        type(cavg_sums), intent(inout) :: cur
+        logical,         intent(in)    :: l_frac
+        integer,         intent(in)    :: acc_pops(2,ncls)
+        type(cavg_sums)       :: prev
+        real,     allocatable :: mprev(:)
+        real(dp), allocatable :: mass(:), mass_cur(:)
+        integer,  allocatable :: nrep(:), nsmp(:)
+        real    :: s(ncls), w(ncls), mnew(ncls)
+        integer :: icls, iptcl, status, eo
+        logical :: l_blend
+        l_blend = .false.
+        if( l_frac )then
+            call prev%read(string(CAVG_STATE_FILE), CAVG_SUMS_STATE, status)
+            if( status == CAVG_SUMS_OK )then
+                l_blend = prev%matches(ncls, ldim_crop(1), smpd_crop)
+            endif
+            if( .not. l_blend ) THROW_WARN('no usable previous class sums; restoring from the current sample only')
+        endif
+        ! sampling mass of the current sample, per particle, for the carried-mass log
+        call cur%class_mass(mass_cur)
+        if( l_blend )then
+            call prev%get_mrep(mprev)
+            call b_ptr%spproj_field%get_group_update_counts('class', ncls, nrep, nsmp)
+            do icls = 1, ncls
+                if( arg(center_offsets(:,icls)) > CENTHRESH ) call prev%shift_class(icls, center_offsets(:,icls))
+            enddo
+            call population_blend_weights(nrep, nsmp, mprev, s, w, mnew)
+            call cur%blend(prev, s, w)
+            ! the restored sums represent the active, updated particles of each class
+            eo_pops = 0
+            do iptcl = 1, b_ptr%spproj_field%get_noris()
+                if( b_ptr%spproj_field%get_state(iptcl) == 0 )     cycle
+                if( b_ptr%spproj_field%get_updatecnt(iptcl) <= 0 ) cycle
+                icls = b_ptr%spproj_field%get_class(iptcl)
+                if( icls < 1 .or. icls > ncls ) cycle
+                eo = merge(2, 1, b_ptr%spproj_field%get_eo(iptcl) == 1)
+                eo_pops(eo,icls) = eo_pops(eo,icls) + 1
+            enddo
+        else
+            mnew    = real(sum(acc_pops, dim=1))
+            eo_pops = acc_pops
+        endif
+        call cur%set_mrep(mnew)
+        call cur%write(string(CAVG_STATE_FILE))
+        call sums2cavgs(cur)
+        ! one summary line per iteration: counts, weights, and the carried mass per represented
+        ! particle relative to the current sample's mass per particle (1 without drift)
+        call cur%class_mass(mass)
+        if( l_blend )then
+            write(logfhandle,'(A,4I9,4F8.4,2ES12.4,F8.4)') '>>> CAVG CARRY-OVER N n MPREV MNEW / W AVG MIN MAX / S / '//&
+                &'MASS PER M, PER n / RATIO:', sum(nrep), sum(nsmp), nint(sum(mprev)), nint(sum(mnew)),&
+                &sum(w, mask=nrep>0) / real(max(1,count(nrep>0))), minval(w, mask=nrep>0), maxval(w, mask=nrep>0),&
+                &sum(s, mask=nsmp>0) / real(max(1,count(nsmp>0))), real(sum(mass)) / max(1., sum(mnew)),&
+                &real(sum(mass_cur)) / real(max(1, sum(nsmp))),&
+                &(real(sum(mass)) / max(1., sum(mnew))) / max(TINY, real(sum(mass_cur)) / real(max(1, sum(nsmp))))
+        else
+            write(logfhandle,'(A,I9,ES12.4)') '>>> CAVG CARRY-OVER NONE (CURRENT SAMPLE ONLY) M_NEW / MASS PER M: ', &
+                &nint(sum(mnew)), real(sum(mass)) / max(1., sum(mnew))
+        endif
+        call prev%kill
+    end subroutine commit_carryover
+
+    ! copy the module's even/odd accumulators into a cavg_sums container
+    subroutine cavgs2sums( sums )
+        type(cavg_sums), intent(inout) :: sums
+        call sums%set_sums(cavgs%even%cmat, cavgs%odd%cmat, cavgs%even%ctfsq, cavgs%odd%ctfsq)
+    end subroutine cavgs2sums
+
+    ! copy a cavg_sums container into the module's even/odd accumulators (Fourier space)
+    subroutine sums2cavgs( sums )
+        type(cavg_sums), intent(in) :: sums
+        call sums%get_sums(cavgs%even%cmat, cavgs%odd%cmat, cavgs%even%ctfsq, cavgs%odd%ctfsq)
+        cavgs%even%slices(:)%ft = .true.
+        cavgs%odd%slices(:)%ft  = .true.
+    end subroutine sums2cavgs
+
+    !>  \brief  Fourier-pads the carried class sums in the current directory once to a larger crop
+    !!         box of the same physical extent (the streaming pool's crop-box upsample). Without a
+    !!         usable carried set there is nothing to pad: the next iteration is a full update.
+    module subroutine cavger_pad_carried_sums( box_crop, smpd_crop )
+        integer, intent(in) :: box_crop
+        real,    intent(in) :: smpd_crop
+        type(cavg_sums) :: carried
+        integer         :: status
+        call carried%read(string(CAVG_STATE_FILE), CAVG_SUMS_STATE, status)
+        if( status == CAVG_SUMS_OK )then
+            call carried%pad_to(box_crop, smpd_crop)
+            call carried%write(string(CAVG_STATE_FILE))
+        endif
+        call carried%kill
+    end subroutine cavger_pad_carried_sums
+
+    !>  \brief  records the class-centering offset applied to the reference of class icls, so that
+    !!         the assembly owner shifts the carried sums once, before blending
+    module subroutine cavger_set_center_offset( offset, icls )
         real,    intent(in) :: offset(2)
         integer, intent(in) :: icls
-        call cavgs%shift_eo(offset, icls)
-    end subroutine cavger_shift_partial_eosum
+        center_offsets(:,icls) = offset
+    end subroutine cavger_set_center_offset
 
-    module subroutine apply_weights2cavgs( class_update_fracs )
-        real, intent(in) :: class_update_fracs(:)
-        real :: w
-        integer :: icls
-        !$omp parallel do default(shared) private(icls,w) schedule(static) proc_bind(close)
-        do icls = 1, min(ncls, size(class_update_fracs))
-            w = 1.0 - max(0.0, min(1.0, class_update_fracs(icls)))
-            cavgs%even%cmat(:,:,icls)  = w * cavgs%even%cmat(:,:,icls)
-            cavgs%even%ctfsq(:,:,icls) = w * cavgs%even%ctfsq(:,:,icls)
-            cavgs%odd%cmat(:,:,icls)   = w * cavgs%odd%cmat(:,:,icls)
-            cavgs%odd%ctfsq(:,:,icls)  = w * cavgs%odd%ctfsq(:,:,icls)
-        enddo
-        !$omp end parallel do
-    end subroutine apply_weights2cavgs
-
-    !>  \brief  generates the cavgs parts after distributed execution
+    !>  \brief  distributed assembly owner: sums the workers' current contributions in ascending
+    !!         part order, checks that they agree on the class-centering offsets and on the
+    !!         carry-over mode, blends and publishes the carried sums, restores the class averages
+    !!         and deletes the contributions
     module subroutine cavger_assemble_sums_from_parts
-        integer(timer_int_kind) ::  t_init,  t_io,  t_sum, t_merge_eos_and_norm,  t_tot
-        real(timer_int_kind)    :: rt_init, rt_io, rt_sum, rt_merge_eos_and_norm, rt_tot
-        type(string) :: cae, cao, cte, cto, benchfname
-        type(stack)  :: cavgs4reade, cavgs4reado
-        integer      :: iptcl, eo, icls, ipart, fnr
+        integer(timer_int_kind) ::  t_init,  t_io,  t_merge_eos_and_norm,  t_tot
+        real(timer_int_kind)    :: rt_init, rt_io, rt_merge_eos_and_norm, rt_tot
+        type(cavg_sums)      :: total, part_sums
+        type(string)         :: benchfname
+        real,    allocatable :: offsets(:,:)
+        integer, allocatable :: part_pops(:,:)
+        real    :: offsets_ref(2,ncls)
+        integer :: ipart, fnr, status, acc_pops(2,ncls)
+        logical :: l_frac
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
-        ! Calculate populations for restore_cavgs
-        !$omp parallel do default(shared) private(iptcl,eo,icls)&
-        !$omp proc_bind(close) reduction(+:eo_pops)
-        do iptcl = p_ptr%fromp, p_ptr%top
-            if( b_ptr%spproj_field%get_state(iptcl) == 0 ) cycle
-            eo   = b_ptr%spproj_field%get_eo(iptcl) + 1
-            icls = b_ptr%spproj_field%get_class(iptcl)
-            if( icls < 1 .or. icls > ncls ) cycle
-            eo_pops(eo, icls) = eo_pops(eo, icls) + 1
-        enddo
-        !$omp end parallel do
-        ! Assemble class contributions
-        call cavgs%zero_set(.true.)
-        call cavgs4reade%new_stack(ldim_crop(1:2), ncls)
-        call cavgs4reado%new_stack(ldim_crop(1:2), ncls)
+        call total%new(CAVG_SUMS_STATE, ncls, ldim_crop(1), smpd_crop)
+        acc_pops = 0
+        l_frac   = .false.
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
-            rt_io   = 0.
-            rt_sum  = 0.
+            t_io    = tic()
         endif
-        do ipart=1,p_ptr%nparts
-            if( L_BENCH_GLOB ) t_io = tic()
-            ! filenames
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
-            ! read arrays
-            call cavgs4reade%read_cmat(cae)
-            call cavgs4reade%read_ctfsq(cte)
-            call cavgs4reado%read_cmat(cao)
-            call cavgs4reado%read_ctfsq(cto)
-            if( L_BENCH_GLOB )then
-                rt_io = rt_io + toc(t_io)
-                t_sum = tic()
+        do ipart = 1, p_ptr%nparts
+            call part_sums%read(cavg_contrib_fname(ipart), CAVG_SUMS_CONTRIB, status)
+            if( status /= CAVG_SUMS_OK ) THROW_HARD('missing or unreadable class-sum contribution of part '//int2str(ipart))
+            if( .not. part_sums%matches(ncls, ldim_crop(1), smpd_crop) )then
+                THROW_HARD('class-sum contribution of part '//int2str(ipart)//' does not match the run geometry')
             endif
-            ! sum arrays
-            !$omp parallel workshare proc_bind(close)
-            cavgs%even%cmat  = cavgs%even%cmat  + cavgs4reade%cmat
-            cavgs%even%ctfsq = cavgs%even%ctfsq + cavgs4reade%ctfsq
-            cavgs%odd%cmat   = cavgs%odd%cmat   + cavgs4reado%cmat
-            cavgs%odd%ctfsq  = cavgs%odd%ctfsq  + cavgs4reado%ctfsq
-            !$omp end parallel workshare
-            if( L_BENCH_GLOB ) rt_sum = rt_sum + toc(t_sum)
+            call part_sums%get_offsets(offsets)
+            if( ipart == 1 )then
+                l_frac      = part_sums%get_l_frac()
+                offsets_ref = offsets
+            else
+                if( part_sums%get_l_frac() .neqv. l_frac ) THROW_HARD('workers disagree on the class carry-over mode')
+                if( any(abs(offsets - offsets_ref) > 1.e-3) )then
+                    THROW_WARN('workers disagree on class-centering offsets; the offsets of part 1 are applied')
+                endif
+            endif
+            call part_sums%get_eo_pops(part_pops)
+            acc_pops = acc_pops + part_pops
+            call total%accumulate(part_sums)
         enddo
-        call cae%kill
-        call cao%kill
-        call cte%kill
-        call cto%kill
-        call cavgs4reade%kill_stack
-        call cavgs4reado%kill_stack
+        call part_sums%kill
+        center_offsets = offsets_ref
+        call commit_carryover(total, l_frac, acc_pops)
+        call total%kill
+        do ipart = 1, p_ptr%nparts
+            call del_file(cavg_contrib_fname(ipart))
+        enddo
+        if( L_BENCH_GLOB ) rt_io = toc(t_io)
         ! Restoration of e/o/merged classes
         if( L_BENCH_GLOB ) t_merge_eos_and_norm = tic()
         call cavger_restore_cavgs(p_ptr%frcs)
-        ! Benchmarck
+        ! Benchmark
         if( L_BENCH_GLOB )then
             rt_merge_eos_and_norm = toc(t_merge_eos_and_norm)
             rt_tot                = toc(t_tot)
@@ -739,18 +705,16 @@ contains
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'initialisation       :', rt_init
-            write(fnr,'(a,1x,f0.2)') 'I/O                  :', rt_io
-            write(fnr,'(a,1x,f0.2)') 'workshare sum        :', rt_sum
+            write(fnr,'(a,1x,f0.2)') 'I/O, sum and blend   :', rt_io
             write(fnr,'(a,1x,f0.2)') 'merge eo-pairs & norm:', rt_merge_eos_and_norm
             write(fnr,'(a,1x,f0.2)') 'total time           :', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
             write(fnr,'(a,1x,f0.2)') 'initialisation        :', (rt_init/rt_tot)               * 100.
-            write(fnr,'(a,1x,f0.2)') 'I/O                   :', (rt_io/rt_tot)                 * 100.
-            write(fnr,'(a,1x,f0.2)') 'workshare sum         :', (rt_sum/rt_tot)                * 100.
+            write(fnr,'(a,1x,f0.2)') 'I/O, sum and blend    :', (rt_io/rt_tot)                 * 100.
             write(fnr,'(a,1x,f0.2)') 'merge eo-pairs & norm :', (rt_merge_eos_and_norm/rt_tot) * 100.
             write(fnr,'(a,1x,f0.2)') '% accounted for       :',&
-            &((rt_init+rt_io+rt_sum+rt_merge_eos_and_norm)/rt_tot) * 100.
+            &((rt_init+rt_io+rt_merge_eos_and_norm)/rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine cavger_assemble_sums_from_parts
@@ -760,7 +724,8 @@ contains
     !>  \brief  is a destructor
     module subroutine cavger_kill()
         call dealloc_cavgs
-        if( allocated(eo_pops) ) deallocate(eo_pops)
+        if( allocated(eo_pops)        ) deallocate(eo_pops)
+        if( allocated(center_offsets) ) deallocate(center_offsets)
     end subroutine cavger_kill
 
     !>  \brief submodule private destructor utility

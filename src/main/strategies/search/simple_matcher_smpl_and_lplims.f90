@@ -8,7 +8,7 @@ implicit none
 
 public :: set_bp_range3D, set_bp_range2D
 public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update2D
-public :: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned
+public :: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned, cluster2D_blends_carryover
 private
 #include "simple_local_flags.inc"
 
@@ -297,6 +297,20 @@ contains
             call build%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)
         endif
     end subroutine sample_ptcls4update2D
+
+    !> Whether a cluster2D iteration blends carried class sums (fractional class-average
+    !! restoration): a fractional update past a fresh start, or, in streaming, any iteration
+    !! after the first with an update fraction below 0.99. Shared by the matcher and by the
+    !! masters that check the carried set before the iteration.
+    logical function cluster2D_blends_carryover( params, which_iter ) result( l_blend )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: which_iter
+        if( trim(params%stream2d) == 'yes' )then
+            l_blend = (which_iter > 1) .and. (params%update_frac < 0.99)
+        else
+            l_blend = params%l_update_frac .and. (params%startit /= 1)
+        endif
+    end function cluster2D_blends_carryover
 
     logical function cluster2D_requires_full_assignment( params ) result( l_required )
         class(parameters), intent(in) :: params

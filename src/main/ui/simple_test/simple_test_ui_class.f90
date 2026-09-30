@@ -166,7 +166,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_accumulator, frozen_accumulator, volume_pair_metrics)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_accumulator, class_average_carry_over, trailing_chain_identity, frozen_accumulator, volume_pair_metrics)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 

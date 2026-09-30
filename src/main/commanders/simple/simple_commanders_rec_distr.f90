@@ -6,6 +6,9 @@ use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolutio
     &refine3D_volassemble_bench_fname, refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
     &refine3D_trail_rho_fname, refine3D_trail_manifest_fname, refine3D_cfar_summary_fname
 use simple_frozen_accum,    only: frozen_accum
+use simple_oris,            only: population_blend_weights
+use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, &
+    &TRAIL_MANIFEST_OLD_FORMAT
 implicit none
 private
 public :: commander_volassemble, filter_pcg_nonuniform_maps
@@ -25,6 +28,12 @@ type :: restore_timings_t
     real(timer_int_kind) :: trail_restored_halves          = 0.
 end type restore_timings_t
 
+! trailing-chain counts of one state handed to restore_state_from_parts
+integer, parameter :: TC_NREP  = 1  ! N: active, updated rows (the population the blend represents)
+integer, parameter :: TC_NSMP  = 2  ! n: rows of the current sample
+integer, parameter :: TC_NNEW  = 3  ! first-time rows of the current sample (updatecnt = 1)
+integer, parameter :: TC_NSEED = 4  ! rows a full reconstruction contains (sample4rec), a seed's population
+
 contains
 
     !> Reduce one state's Cartesian partial reconstructions and restore dense
@@ -34,7 +43,8 @@ contains
     !> auxiliary inputs before even/odd low-resolution insertion.
     subroutine restore_state_from_parts( params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
         &sum_rec, state, numlen_part, &
-        &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
+        &update_frac_trail_rec, realized_update_frac, trail_counts, &
+        &vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed )
         use simple_reconstructor,       only: reconstructor, gridding_half_restore
@@ -47,6 +57,7 @@ contains
         integer,                intent(in)    :: state, numlen_part
         real,                   intent(in)    :: update_frac_trail_rec !< applied map-update weight u (ufrac_trec override or realized)
         real,                   intent(in)    :: realized_update_frac  !< realized fraction f that produced the current partials
+        integer,                intent(in)    :: trail_counts(4)       !< TC_NREP, TC_NSMP, TC_NNEW, TC_NSEED of this state
         type(image),            intent(inout) :: vol_prev_even, vol_prev_odd, vol_merged
         type(image),            intent(inout) :: vol_nu_base_even, vol_nu_base_odd
         type(image),            intent(inout) :: vol_nu_aux_even, vol_nu_aux_odd
@@ -58,7 +69,7 @@ contains
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd
         type(string) :: fsc_txt_file, trail_fbody
         type(halfmap_diagnostics_result) :: pair_diagnostics
-        real    :: weight_prev
+        real    :: weight_prev, trail_chain_mrep, trail_mrep_new
         integer :: ldim(3), trail_chain_gen
         logical :: l_trail_chain
         integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
@@ -127,10 +138,11 @@ contains
         end subroutine set_state_filenames
 
         subroutine blend_trailing_accumulators()
-            real :: cur_scale
-            l_trail_chain   = .false.
-            trail_chain_gen = 0
-            trail_fbody     = refine3D_trail_rec_fbody(state)
+            real :: cur_scale, mnew
+            l_trail_chain    = .false.
+            trail_chain_gen  = 0
+            trail_chain_mrep = 0.
+            trail_fbody      = refine3D_trail_rec_fbody(state)
             if( .not. params%l_trail_rec )then
                 if( present(frozen_seed) )then
                     ! abinitio3D_addon producer: the frozen particles' full
@@ -142,11 +154,14 @@ contains
                 ! reconstruct3D can seed the chain with full-dataset weight via
                 ! the internal trail_seed handshake, so the consuming trailing
                 ! stage starts from complete statistics instead of warming up.
+                ! The seed represents the rows the full reconstruction contains.
                 if( cline%defined('trail_seed') )then
                     if( cline%get_carg('trail_seed') .eq. 'yes' )then
+                        trail_mrep_new = real(trail_counts(TC_NSEED))
                         call write_trail_chain_set()
-                        write(logfhandle,'(A,I0)') &
-                            &'>>> VOLASSEMBLE: WROTE FULL-WEIGHT TRAILING CHAIN SEED, STATE ', state
+                        write(logfhandle,'(A,I0,A,I0)') &
+                            &'>>> VOLASSEMBLE: WROTE FULL-WEIGHT TRAILING CHAIN SEED, STATE ', state, &
+                            &', REPRESENTED POPULATION ', trail_counts(TC_NSEED)
                     endif
                 endif
                 return
@@ -174,15 +189,19 @@ contains
                 l_trail_chain = .false.
                 return
             endif
-            weight_prev = 1.0 - update_frac_trail_rec
-            if( l_trail_chain .and. weight_prev > 0.01 )then
+            if( l_trail_chain .and. 1.0 - update_frac_trail_rec > 0.01 )then
                 if( L_BENCH_GLOB ) t_trail_blend = tic()
-                ! ufrac_trec contract: the applied fraction u must be the restored
-                ! current-map coefficient even when it differs from the realized
-                ! fraction f that produced the partials. Scaling the current
-                ! accumulators by u/f achieves that and keeps the chain at full
-                ! sampling mass: (u/f)*(f*D) + (1-u)*D = D.
-                cur_scale = update_frac_trail_rec / realized_update_frac
+                ! Population rule (class-average and reconstruct3D partials note,
+                ! Section 4.1): the chain records M, the population it represents;
+                ! with N active updated rows now and n of them in the current
+                ! partials, current *= s = u/f and chain *= w = (1-u)*N/M, so the
+                ! blended mass is s*n + w*M = u*N + (1-u)*N = N whatever joined or
+                ! left the state, and the restored current-map coefficient is
+                ! exactly u (ufrac_trec contract). With N = M this is the former
+                ! recurrence, chain weight 1 - u. The rule keeps the mass right, not
+                ! the membership: old contributions are removed in proportion.
+                call population_blend_weights(trail_counts(TC_NREP), trail_counts(TC_NSMP), trail_chain_mrep, &
+                    &cur_scale, weight_prev, mnew, ufrac=update_frac_trail_rec)
                 if( abs(cur_scale - 1.0) > 0.001 )then
                     call even_rec%apply_weight_sums(cur_scale)
                     call odd_rec%apply_weight_sums(cur_scale)
@@ -193,10 +212,13 @@ contains
                 call read_odd_rec%apply_weight_sums(weight_prev)
                 call even_rec%sum_reduce(read_even_rec)
                 call odd_rec%sum_reduce(read_odd_rec)
+                trail_mrep_new = mnew
                 call write_trail_chain_set()
-                write(logfhandle,'(A,I0,A,F8.4,A,F8.4)') &
+                write(logfhandle,'(A,I0,A,F8.4,A,F8.4,A,F8.4,A,4I9,A,I9)') &
                     &'>>> VOLASSEMBLE: TRAILING ACCUMULATOR BLEND, STATE ', state, &
-                    &', PREVIOUS-CHAIN WEIGHT ', weight_prev, ', CURRENT SCALE ', cur_scale
+                    &', PREVIOUS-CHAIN WEIGHT ', weight_prev, ', CURRENT SCALE ', cur_scale, &
+                    &', FORMER WEIGHT 1-U ', 1.0 - update_frac_trail_rec, ', N n M MNEW', trail_counts(TC_NREP), &
+                    &trail_counts(TC_NSMP), nint(trail_chain_mrep), nint(mnew), ', FIRST-TIME', trail_counts(TC_NNEW)
                 if( L_BENCH_GLOB ) timings%trail_blend_accums = &
                     timings%trail_blend_accums + toc(t_trail_blend)
             else
@@ -205,19 +227,20 @@ contains
                 ! this iteration's outputs) or the applied fraction is ~1 (full
                 ! replacement of the model). Either way the persisted chain must
                 ! represent full-dataset sampling mass: fractional partials are
-                ! scaled by 1/f for the write and restored afterwards. Without
-                ! this, a chain seeded at fractional mass f makes the next
-                ! iteration's effective update weight f/(f + (1-f)*f), far above
-                ! the requested fraction.
+                ! scaled by 1/f for the write and restored afterwards, and the
+                ! chain records M = N. Without this, a chain seeded at fractional
+                ! mass f makes the next iteration's effective update weight
+                ! f/(f + (1-f)*f), far above the requested fraction.
                 call even_rec%apply_weight_sums(1.0 / realized_update_frac)
                 call odd_rec%apply_weight_sums(1.0 / realized_update_frac)
+                trail_mrep_new = real(trail_counts(TC_NREP))
                 call write_trail_chain_set()
                 call even_rec%apply_weight_sums(realized_update_frac)
                 call odd_rec%apply_weight_sums(realized_update_frac)
                 if( .not. l_trail_chain )then
-                    write(logfhandle,'(A,I0,A)') &
+                    write(logfhandle,'(A,I0,A,I0,A)') &
                         &'>>> VOLASSEMBLE: SEEDED FULL-MASS TRAILING CHAIN, STATE ', state, &
-                        &'; USING LEGACY PREVIOUS-HALFMAP BLEND THIS ITERATION'
+                        &', REPRESENTED POPULATION ', trail_counts(TC_NREP), '; USING LEGACY PREVIOUS-HALFMAP BLEND THIS ITERATION'
                 endif
             endif
         end subroutine blend_trailing_accumulators
@@ -284,23 +307,21 @@ contains
         !! interrupted write leaves no valid manifest and the mixed-generation
         !! remnants are rejected and discarded by the next validation.
         subroutine write_trail_chain_set()
+            type(trail_chain_manifest) :: man
             type(string)    :: manifest
             integer(kind=8) :: sizes(4)
-            integer         :: funit, io_stat, ifile
+            integer         :: io_stat, ifile
             manifest = refine3D_trail_manifest_fname(state)
             call del_file(manifest)
             call write_gridding_pair_accumulators(even_rec, odd_rec, trail_fbody)
             do ifile = 1, 4
                 sizes(ifile) = trail_chain_file_size(trail_chain_component(ifile))
             enddo
-            call fopen(funit, file=manifest, status='REPLACE', action='WRITE', iostat=io_stat)
-            if( io_stat == 0 )then
-                write(funit,*) params%box_crop, params%smpd_crop, build%spproj_field%get_noris(), &
-                    &params%nstates, state, trail_chain_gen + 1, sizes
-                call fclose(funit)
-            else
-                THROW_WARN('failed to write trailing chain manifest; chain will be re-seeded next iteration')
-            endif
+            call man%new(params%box_crop, params%smpd_crop, build%spproj_field%get_noris(), params%nstates, state, &
+                &trail_chain_gen + 1, sizes, trail_mrep_new)
+            call man%write(manifest, io_stat)
+            if( io_stat /= 0 ) THROW_WARN('failed to write trailing chain manifest; chain will be re-seeded next iteration')
+            call man%kill
             call manifest%kill
         end subroutine write_trail_chain_set
 
@@ -311,53 +332,49 @@ contains
         !! grids are zero-padded by the reader (autoscale ramp). Any failure
         !! discards the complete set and re-seeds instead of failing the run.
         logical function validate_trail_chain() result( l_valid )
-            type(string)    :: manifest
-            integer(kind=8) :: sizes_chain(4)
-            integer         :: funit, io_stat, ifile
-            integer         :: box_chain, nptcls_chain, nstates_chain, state_chain, gen_chain
-            real            :: smpd_chain, extent_chain, extent_cur
+            type(trail_chain_manifest) :: man
+            type(string) :: manifest
+            integer      :: status, ifile
+            real         :: extent_chain, extent_cur
             l_valid  = .false.
             manifest = refine3D_trail_manifest_fname(state)
-            if( .not. file_exists(manifest) )then
-                call discard_trail_chain_set() ! remove orphaned components quietly
-                call manifest%kill
-                return
-            endif
-            call fopen(funit, file=manifest, status='OLD', action='READ', iostat=io_stat)
-            if( io_stat /= 0 )then
-                call discard_trail_chain_set('unreadable manifest')
-                call manifest%kill
-                return
-            endif
-            read(funit,*,iostat=io_stat) box_chain, smpd_chain, nptcls_chain, nstates_chain, &
-                &state_chain, gen_chain, sizes_chain
-            call fclose(funit)
+            call man%read(manifest, status)
             call manifest%kill
-            if( io_stat /= 0 )then
-                call discard_trail_chain_set('corrupt manifest')
-                return
-            endif
-            trail_chain_gen = gen_chain
-            if( nptcls_chain /= build%spproj_field%get_noris() )then
+            select case(status)
+                case(TRAIL_MANIFEST_OK)
+                case(TRAIL_MANIFEST_MISSING)
+                    call discard_trail_chain_set() ! remove orphaned components quietly
+                    return
+                case(TRAIL_MANIFEST_OLD_FORMAT)
+                    ! an older build's chain records no represented population
+                    call discard_trail_chain_set('older-format manifest without represented population')
+                    return
+                case DEFAULT
+                    call discard_trail_chain_set('unreadable or corrupt manifest')
+                    return
+            end select
+            trail_chain_gen  = man%get_gen()
+            trail_chain_mrep = man%get_mrep()
+            if( man%get_nptcls() /= build%spproj_field%get_noris() )then
                 call discard_trail_chain_set('particle population mismatch')
                 return
             endif
-            if( nstates_chain /= params%nstates .or. state_chain /= state )then
+            if( man%get_nstates() /= params%nstates .or. man%get_state() /= state )then
                 call discard_trail_chain_set('state layout mismatch')
                 return
             endif
-            if( box_chain > params%box_crop )then
+            if( man%get_box() > params%box_crop )then
                 call discard_trail_chain_set('larger grid than current reconstruction')
                 return
             endif
-            extent_chain = real(box_chain)      * smpd_chain
+            extent_chain = real(man%get_box())   * man%get_smpd()
             extent_cur   = real(params%box_crop) * params%smpd_crop
             if( abs(extent_chain - extent_cur) > 0.01 * extent_cur )then
                 call discard_trail_chain_set('physical extent mismatch')
                 return
             endif
             do ifile = 1, 4
-                if( trail_chain_file_size(trail_chain_component(ifile)) /= sizes_chain(ifile) )then
+                if( trail_chain_file_size(trail_chain_component(ifile)) /= man%get_size(ifile) )then
                     call discard_trail_chain_set('component size mismatch (mixed generations)')
                     return
                 endif
@@ -942,6 +959,7 @@ contains
         real, allocatable             :: res0143s(:), res05s(:), cfars(:)
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:), realized_update_fracs(:)
+        integer, allocatable          :: trail_counts(:,:)
         type(frozen_accum)            :: frozen_ctx
         logical                       :: l_frozen_rec, l_frozen_seed
         integer                       :: state, numlen_part
@@ -1032,6 +1050,7 @@ contains
             update_frac_trail_recs = 1.0
             allocate(realized_update_fracs(params%nstates))
             realized_update_fracs = 1.0
+            allocate(trail_counts(4,params%nstates), source=0)
             allocate(state_pops(params%nstates))
             state_pops = 0
         end subroutine initialize_context
@@ -1114,11 +1133,36 @@ contains
         !! runs. The accumulator blend needs both: u sets the previous-chain
         !! decay and f normalizes the current partials to weight u.
         subroutine determine_trailing_update_fraction()
+            integer, allocatable :: nrep(:), nsmp(:), nseed(:)
+            integer :: istate, iptcl, sampled_max
             update_frac_trail_recs = 1.0
             realized_update_fracs  = 1.0
+            trail_counts           = 0
+            if( cline%defined('trail_seed') .and. .not. params%l_trail_rec )then
+                ! a full-reconstruction seed represents the rows sample4rec selects
+                call build%spproj%read_segment(params%oritype, params%projfile)
+                call build%spproj%os_ptcl3D%get_state_rec_pops(params%nstates, nseed)
+                trail_counts(TC_NSEED,:) = nseed
+            endif
             if( .not. params%l_trail_rec ) return
             call build%spproj%read_segment(params%oritype, params%projfile)
+            ! N(s) and n(s) of the population rule; f = n/N
+            call build%spproj%os_ptcl3D%get_group_update_counts('state', params%nstates, nrep, nsmp)
             call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, realized_update_fracs)
+            trail_counts(TC_NREP,:) = nrep
+            trail_counts(TC_NSMP,:) = nsmp
+            ! first-time rows of the current sample, for the trailing log
+            sampled_max = 0
+            do iptcl = 1, build%spproj%os_ptcl3D%get_noris()
+                sampled_max = max(sampled_max, build%spproj%os_ptcl3D%get_sampled(iptcl))
+            enddo
+            do iptcl = 1, build%spproj%os_ptcl3D%get_noris()
+                istate = build%spproj%os_ptcl3D%get_state(iptcl)
+                if( istate < 1 .or. istate > params%nstates ) cycle
+                if( build%spproj%os_ptcl3D%get_sampled(iptcl) /= sampled_max ) cycle
+                if( build%spproj%os_ptcl3D%get_updatecnt(iptcl) == 1 ) trail_counts(TC_NNEW,istate) = &
+                    &trail_counts(TC_NNEW,istate) + 1
+            enddo
             update_frac_trail_recs = realized_update_fracs
             if( params%l_ufrac_trec_defined )then
                 if( params%nstates == 1 )then
@@ -1135,7 +1179,7 @@ contains
             if( l_frozen_rec )then
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
-                    &update_frac_trail_recs(state), realized_update_fracs(state), &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
                     &vol_prev_even, vol_prev_odd, vol_merged, &
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
@@ -1143,7 +1187,7 @@ contains
             else if( l_frozen_seed )then
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
-                    &update_frac_trail_recs(state), realized_update_fracs(state), &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
                     &vol_prev_even, vol_prev_odd, vol_merged, &
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
@@ -1151,7 +1195,7 @@ contains
             else
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
-                    &update_frac_trail_recs(state), realized_update_fracs(state), &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
                     &vol_prev_even, vol_prev_odd, vol_merged, &
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings)
@@ -1294,6 +1338,7 @@ contains
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             if( allocated(realized_update_fracs)  ) deallocate(realized_update_fracs)
+            if( allocated(trail_counts)           ) deallocate(trail_counts)
             call frozen_ctx%kill
             call volname%kill
             call eonames(1)%kill

@@ -165,21 +165,36 @@ global search band, and to rank classes.
 ## Fractional restoration
 
 When only a subset of particles is updated in an iteration, the previous
-accumulators are carried forward class by class. If `rho_k` is the fraction of
-class `k`'s active members that were updated,
+accumulators are carried forward class by class under the population rule. The
+carried set records `M_k`, the number of particles its sums represent. With
+`N_k` the active members of class `k` that have ever been updated and `n_k` those
+updated in this iteration (both counted on the merged project after the
+search),
 
 ```text
-B_k <- B_k^partial + (1 - rho_k) B_k^previous,
-D_k <- D_k^partial + (1 - rho_k) D_k^previous.
+B_k <- B_k^current + w_k shift_k(B_k^previous),
+D_k <- D_k^current + w_k D_k^previous,        w_k = (N_k - n_k) / M_k,
+M_k <- N_k.
 ```
 
-A class with no updated members keeps its previous estimate intact, a fully
-updated class replaces it, and the blend is exact in the sense that the total
-sampling density remains that of the full dataset. Using the realized
-per-class fraction rather than the requested global one matters because
-balanced sampling gives different classes different fractions. Stage 1 of
-`abinitio2D` runs without this memory so that random initial references are
-overwritten rather than blended.
+`shift_k` is the class-centering shift applied to the reference of class `k`
+in this iteration. The sampling density after the blend is that of the `N_k`
+represented particles whatever joined or left the class: particles updated for
+the first time add density without displacing the old, deactivated particles
+take their share of the old density with them, and with no change in the
+represented population `w_k = 1 - rho_k`, where `rho_k = n_k / N_k` is the
+realized per-class fraction. A class with no updated members keeps its previous
+estimate (rescaled to its represented population), a fully updated class
+replaces it. The blend keeps the mass right, not the membership: old
+contributions are removed in proportion, not particle by particle, so the
+carried sums are an approximation, not the exact sum over the current members.
+Using the realized per-class counts rather than the requested global fraction
+matters because balanced sampling gives different classes different fractions.
+
+The blend happens once, at the assembly owner, on the sums of all workers; the
+result does not depend on the number of partitions or on the execution mode.
+Stage 1 of `abinitio2D` runs without this memory so that random initial
+references are overwritten rather than blended.
 
 ## Convergence
 

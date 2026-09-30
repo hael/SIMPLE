@@ -6,7 +6,9 @@ use simple_parameters,  only: parameters
 use simple_cmdline,     only: cmdline
 use simple_qsys_env,    only: qsys_env
 use simple_convergence, only: convergence
-use simple_matcher_smpl_and_lplims, only: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned
+use simple_matcher_smpl_and_lplims, only: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned, &
+    &cluster2D_blends_carryover
+use simple_cavg_sums,   only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CAVG_SUMS_OK
 use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
@@ -154,15 +156,26 @@ contains
         type(commander_prob_align2D)      :: xprob_align2D
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
+        real              :: update_frac_req
+        logical           :: l_full_update, l_update_frac_req
         call self%conv%print_iteration(params%which_iter)
         call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
+        ! without usable carried class sums this iteration updates every particle
+        l_full_update = carryover_needs_full_update(params)
+        if( l_full_update )then
+            update_frac_req     = params%update_frac
+            l_update_frac_req   = params%l_update_frac
+            params%update_frac   = 1.0
+            params%l_update_frac = .false.
+        endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
+            if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call build%spproj%write_segment_inside(params%oritype)
             call xprob_align2D%execute(cline_prob_align)
             call build%spproj%read_segment(params%oritype, params%projfile)
@@ -172,6 +185,10 @@ contains
             call prepare_canonical_sigma_update(params, build)
         endif
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
+        if( l_full_update )then
+            params%update_frac   = update_frac_req
+            params%l_update_frac = l_update_frac_req
+        endif
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
             call cline%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
@@ -263,9 +280,10 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align2D)      :: xprob_align2D
         type(cmdline)                     :: cline_calc_sigma, cline_prob_align
+        type(string)                      :: update_frac_req
         real                              :: frac_srch_space
         integer                           :: n_unassigned
-        logical                           :: l_full_assignment
+        logical                           :: l_full_assignment, l_full_update, l_update_frac_key
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
@@ -279,11 +297,19 @@ contains
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
         call self%job_descr%set('frcs',       FRCS_FILE)
         call cleanup_distributed_iteration_artifacts(params)
+        ! without usable carried class sums this iteration updates every particle
+        l_full_update     = carryover_needs_full_update(params)
+        l_update_frac_key = self%job_descr%isthere('update_frac')
+        if( l_full_update )then
+            if( l_update_frac_key ) update_frac_req = self%job_descr%get('update_frac')
+            call self%job_descr%set('update_frac', '1.0')
+        endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
+            if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call build%spproj%write_segment_inside(params%oritype)
             call xprob_align2D%execute(cline_prob_align)
             call build%spproj%read_segment(params%oritype, params%projfile)
@@ -302,6 +328,13 @@ contains
                                                      array=L_USE_SLURM_ARR, &
                                                      extra_params=params)
         call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
+        if( l_full_update )then
+            if( l_update_frac_key )then
+                call self%job_descr%set('update_frac', update_frac_req%to_char())
+            else
+                call self%job_descr%delete('update_frac')
+            endif
+        endif
         ! Merge alignment docs
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
         ! Assemble class averages
@@ -452,17 +485,34 @@ contains
 
     subroutine cleanup_distributed_iteration_artifacts( params )
         type(parameters), intent(in) :: params
+        integer :: ipart
         call del_files(DIST_FBODY,      params%nparts, ext='.dat')
         call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
         call del_file(DIST_FBODY//'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
-        if( trim(params%restore_cavgs) == 'yes' .and. (params%startit <= 1 .or. .not. params%l_update_frac) )then
-            call del_files('cavgs_even_part',     params%nparts, ext=MRC_EXT)
-            call del_files('cavgs_odd_part',      params%nparts, ext=MRC_EXT)
-            call del_files('ctfsqsums_even_part', params%nparts, ext=MRC_EXT)
-            call del_files('ctfsqsums_odd_part',  params%nparts, ext=MRC_EXT)
-        endif
+        ! stale current-iteration class-sum contributions; the carried set stays
+        do ipart = 1, params%nparts
+            call del_file(cavg_contrib_fname(ipart))
+        enddo
     end subroutine cleanup_distributed_iteration_artifacts
+
+    !> A cluster2D iteration that blends carried class sums needs a usable carried set: one
+    !! that exists, reads back whole and matches the run's classes, box and sampling. Without
+    !! one the iteration runs as a full update (every particle, no carry-over), as a fresh start
+    !! does. Owner-side check: workers never read carried state.
+    logical function carryover_needs_full_update( params ) result( l_full )
+        type(parameters), intent(in) :: params
+        type(cavg_sums) :: carried
+        integer         :: status
+        l_full = .false.
+        if( trim(params%restore_cavgs) /= 'yes' ) return
+        if( .not. cluster2D_blends_carryover(params, params%which_iter) ) return
+        call carried%read(string(CAVG_STATE_FILE), CAVG_SUMS_STATE, status)
+        if( status == CAVG_SUMS_OK ) l_full = .not. carried%matches(params%ncls, params%box_crop, params%smpd_crop)
+        if( status /= CAVG_SUMS_OK ) l_full = .true.
+        call carried%kill
+        if( l_full ) write(logfhandle,'(A)') '>>> CLUSTER2D: NO USABLE CARRIED CLASS SUMS; THIS ITERATION IS A FULL UPDATE'
+    end function carryover_needs_full_update
 
     subroutine run_distributed_cavg_assembly( params, cline, nthr_master )
         use simple_commanders_mkcavgs, only: commander_cavgassemble

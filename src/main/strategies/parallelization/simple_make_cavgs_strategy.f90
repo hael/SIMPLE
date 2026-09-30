@@ -6,7 +6,7 @@ use simple_cmdline,    only: cmdline
 use simple_builder,    only: builder
 use simple_classaverager, only: cavger_new, cavger_transf_oridat, cavger_read_euclid_sigma2, cavger_assemble_sums, &
                               cavger_restore_cavgs, cavger_gen2Dclassdoc, cavger_write_all, cavger_kill, &
-                              cavger_readwrite_partial_sums
+                              cavger_write_contribution
 use simple_qsys_env,   only: qsys_env
 use simple_qsys_funs,  only: qsys_job_finished, qsys_cleanup
 use simple_exec_helpers, only: set_shmem_flag, set_master_num_threads
@@ -237,7 +237,7 @@ contains
         type(builder),    intent(inout) :: build
         call cavger_new(params, build)
         call cavger_read_euclid_sigma2
-        call cavger_assemble_sums(.false.)
+        call cavger_assemble_sums()
     end subroutine cavger_prepare_and_assemble
 
     subroutine print_raw_source_verification(params, build, context)
@@ -362,7 +362,7 @@ contains
         call cavger_prepare_and_assemble(params, self%build)
         ! ------------------------------------------
         ! ---- WORKER TAIL (differs from shmem) ----
-        call cavger_readwrite_partial_sums('write')
+        call cavger_write_contribution(.false.)
         call cavger_kill
         ! ------------------------------------------
     end subroutine worker_execute

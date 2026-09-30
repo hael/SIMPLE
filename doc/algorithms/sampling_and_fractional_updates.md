@@ -122,22 +122,39 @@ rho_k = #{updated and active in k} / #{active in k},
 
 for each 2D class `k`, or each 3D state.
 
-**2D.** Class accumulators are carried forward with weight `1 - rho_k`
+Here "updated" means sampled in the current round (`n_k`), and the denominator
+counts the active members with `updatecnt > 0` (`N_k`).
+
+**Population rule.** Every carried set records `M_k`, the population its sums
+represent. With `u` the applied update weight (`u = rho_k` unless overridden)
+the owner blends
+
+```text
+A_new = (u/rho_k) A_current + (1 - u) (N_k/M_k) A_previous,    M_k <- N_k,
+```
+
+so the sampling mass after the blend is `u N_k + (1 - u) N_k = N_k`, the
+represented population, whatever joined or left the group. With an unchanged
+population (`M_k = N_k`) this is the familiar `(u/rho_k) A_current + (1 - u)
+A_previous`. The rule keeps the mass right, not the membership.
+
+**2D.** Class accumulators are carried forward with weight `(N_k - n_k)/M_k`
 ([Cluster2D](cluster2d_class_averaging.md)).
 
 **3D trailing reconstruction.** A persistent chain stores, per state and half,
-the unregularized Fourier numerator and sampling density at full-dataset mass.
-With `f` the realized fraction that produced the current partial sums and `u`
-the desired update weight (`u = f` unless overridden), the blend in the
-accumulator domain is
+the unregularized Fourier numerator and sampling density at the mass of the
+population it represents. With `f` the realized fraction that produced the
+current partial sums and `u` the desired update weight (`u = f` unless
+overridden), the blend in the accumulator domain is
 
 ```text
-A_new = (u/f) A_current + (1 - u) A_previous,
+A_new = (u/f) A_current + (1 - u) (N/M) A_previous,
 ```
 
 applied identically to numerator and density. The factor `u/f` rescales the
 partial sums so the current data carry weight `u` while total sampling mass is
-conserved: `(u/f)(f D) + (1-u) D = D`. One density division after the blend
+that of the represented population: `(u/f)(f D) + (1-u)(N/M) M d = D` for a
+per-particle density `d` and `D = N d`. One density division after the blend
 therefore restores a correctly normalized map. Blending in the accumulator
 domain rather than between restored volumes keeps the FSC computed on the
 blended halves honest, because both halves are still ratios of sums.

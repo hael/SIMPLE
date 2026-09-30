@@ -21,7 +21,6 @@ public :: refine3D_resolution_txt_fbody
 public :: refine3D_iter_refs_fname
 public :: refine3D_iter_vol_fname
 public :: refine3D_partial_rec_fbody
-public :: refine3D_partial_rec_glob
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
 public :: refine3D_pcg_raw_accum_fname
@@ -161,16 +160,6 @@ contains
         integer, intent(in) :: state, part, numlen
         fname = refine3D_state_vol_fbody(state)//'_part'//part_tag(part, numlen)
     end function refine3D_partial_rec_fbody
-
-    function refine3D_partial_rec_glob( path ) result(pattern)
-        character(len=*), intent(in), optional :: path
-        character(len=:), allocatable :: pattern
-        if( present(path) )then
-            pattern = trim(path)//'*'//VOL_FBODY//'*part*'
-        else
-            pattern = '*'//VOL_FBODY//'*part*'
-        endif
-    end function refine3D_partial_rec_glob
 
     type(string) function refine3D_partial_rec_fname( state, part, numlen, half ) result(fname)
         integer,          intent(in) :: state, part, numlen

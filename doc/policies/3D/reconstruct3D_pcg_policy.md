@@ -45,9 +45,13 @@ Box cropping is supported under the constant-field-of-view contract
 deliberately rejects `projrec=yes`, fractional/trailing reconstruction, and
 `conical_fsc=yes` regularization; those cases must not silently fall back to
 gridding or matrix-free PCG. The distributed master integrates the
-fractional/trailing algebra — raw `(B,D)` chains blended as
-`(u/f) current + (1-u) previous` at full mass, priors applied only after the
-blend (`test=pcg_frac_update` is the equivalence gate). The persisted chain is
+fractional/trailing algebra — raw `(B,D)` chains blended under the population
+rule as `(u/f) current + (1-u)(N/M) previous`, where `M(s)` is the population
+the chain represents (the header particle counts of its two halves) and `N(s)`
+the state's active updated rows, so the chain keeps the mass of the represented
+population; priors are applied only after the blend (`test=pcg_frac_update` is
+the equivalence gate). A chain of an older identity version (before
+`pcgtrail-v3`) is discarded and re-seeded. The persisted chain is
 continuous across constant-FOV crop growth: consecutive padded lattices share
 their frequency step, so the smaller previous grid is an index-aligned central
 subset and `add_raw_accum_weighted` embeds it by zero-extension — the PCG

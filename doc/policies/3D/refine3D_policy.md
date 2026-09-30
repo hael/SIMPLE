@@ -81,8 +81,12 @@ Strategy selection is command-line shaped:
 counter unless supplied by a caller.
 
 Shared-memory `refine3D` currently rejects `continue=yes`. Distributed
-`continue=yes` resumes from project-carried output volumes, FSC files, and
-run-local artifacts that match the requested partitioning and sigma mode.
+`continue=yes` resumes from project-carried output volumes, FSC files, the
+trailing chains and the sigma mode. It does not depend on the previous
+partitioning: the partial reconstructions of the previous run are transient
+(removed before every round) and are never read on continuation, so no
+partial-file count is checked; a state without particles in a part writes no
+partial, which is a zero contribution.
 
 ## 3. Ownership
 

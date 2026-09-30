@@ -789,7 +789,7 @@ contains
     ! Deals with pool dimensions & resolution update
     subroutine update_pool_dims( params )
         use simple_procimgstk,    only: scale_imgfile
-        use simple_classaverager, only: cavger_pad_partial_sums
+        use simple_classaverager, only: cavger_pad_carried_sums
         class(parameters), intent(inout) :: params
         type(scaled_dims) :: new_dims, prev_dims
         type(oris)        :: os
@@ -851,8 +851,8 @@ contains
         str  = add2fbody(refs_glob, MRC_EXT,'_odd')
         call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,str)
-        ! upsample cavgs matrices
-        call cavger_pad_partial_sums(prev_dims%box, pool_dims%box, ncls_glob, params%nparts_pool, numlen)
+        ! upsample the carried class sums, one set
+        call cavger_pad_carried_sums(pool_dims%box, pool_dims%smpd)
         ! update cls2D field
         os = pool_proj%os_cls2D
         call pool_proj%os_out%kill

@@ -12,7 +12,7 @@ use simple_syslib,                   only: get_peak_rss_bytes
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, cluster2D_requires_full_assignment, &
-                                           all_active_ptcls_2D_assigned
+                                           all_active_ptcls_2D_assigned, cluster2D_blends_carryover
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
 use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_imgarr_utils,             only: alloc_imgarr
@@ -204,15 +204,12 @@ contains
             ctrl%l_greedy          = str_has_substr(ctrl%refine_flag, 'greedy')
             ctrl%l_stream          = (trim(p_ptr%stream2d) == 'yes')
             ctrl%l_sample_updates  = p_ptr%l_update_frac
-            ctrl%l_frac_restore    = ctrl%l_sample_updates
+            ctrl%l_frac_restore    = cluster2D_blends_carryover(p_ptr, which_iter)
             ctrl%l_prob_align      = p_ptr%l_prob_align_mode
             ctrl%l_restore_cavgs   = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_require_full_assignment = cluster2D_requires_full_assignment(p_ptr)
             ctrl%l_np_cls_defined  = cline%defined('nptcls_per_cls')
             ctrl%do_bench          = L_BENCH_GLOB
-            if( p_ptr%startit == 1 )then
-                ctrl%l_frac_restore = .false.
-            endif
             if( p_ptr%extr_iter == 1 )then
                 ctrl%l_greedy       = .true.
                 ctrl%l_snhc         = .false.
@@ -220,15 +217,13 @@ contains
                 if( trim(ctrl%refine_flag) == 'snhc_smpl' ) ctrl%refine_flag = 'snhc'
             endif
             if( ctrl%l_stream )then
-                if( (which_iter > 1) .and. (p_ptr%update_frac < 0.99) )then
+                if( ctrl%l_frac_restore )then
                     p_ptr%l_update_frac   = .true.
                     ctrl%l_sample_updates = .true.
-                    ctrl%l_frac_restore   = .true.
                 else
                     p_ptr%update_frac     = 1.0
                     p_ptr%l_update_frac   = .false.
                     ctrl%l_sample_updates = .false.
-                    ctrl%l_frac_restore   = .false.
                 endif
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
             endif
@@ -291,17 +286,16 @@ contains
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
             call cavger_read_all
-            call cavger_init_online(batchsz_max, ctrl%l_frac_restore, cropped_ptcls=ctrl%l_cached)
+            call cavger_init_online(batchsz_max, cropped_ptcls=ctrl%l_cached)
         end subroutine prepare_class_averages_and_restoration
 
         subroutine prepare_alignment_references(batchsz_max)
             integer, intent(in) :: batchsz_max
             if( str_has_substr(ctrl%refine_flag, '_many') )then
                 call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, &
-                                        &ctrl%l_frac_restore, nmany_refs=s2D%snhc_nrefs_bound)
+                                        &nmany_refs=s2D%snhc_nrefs_bound)
             else
-                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, &
-                                        &ctrl%l_frac_restore)
+                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter)
             endif
         end subroutine prepare_alignment_references
 
@@ -417,7 +411,7 @@ contains
             logical :: l_full_assignment
             if( l_distr_worker_glob )then
                 if( ctrl%l_restore_cavgs )then
-                    call cavger_readwrite_partial_sums('write')
+                    call cavger_write_contribution(ctrl%l_frac_restore)
                 endif
                 call cavger_kill
             else
@@ -429,7 +423,7 @@ contains
                     else
                         THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                     endif
-                    call cavger_readwrite_partial_sums('write')
+                    call cavger_commit_carryover(ctrl%l_frac_restore)
                     call cavger_restore_cavgs( p_ptr%frcs )
                     call cavger_gen2Dclassdoc
                     call cavger_write_merged( p_ptr%refs )

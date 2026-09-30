@@ -7,7 +7,7 @@ use simple_cmdline,             only: cmdline
 use simple_parameters,          only: parameters
 use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA, &
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
-    &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map
+    &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
 use simple_matcher_ptcl_io,     only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, &
     &killimgbatch, prep_rec_observation
 use simple_sigma2_files,        only: load_sigma2_groups
@@ -23,6 +23,7 @@ use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_sta
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
 use simple_frozen_accum,        only: frozen_accum
+use simple_oris,                only: population_blend_weights
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
 !$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
@@ -402,7 +403,8 @@ contains
         type(string) :: fname_restxt, eonames(2)
         type(halfmap_diagnostics_result) :: hm_diag
         real, allocatable :: fsc(:), res0143s(:), res05s(:), align_lps(:)
-        real, allocatable :: realized_fractions(:), update_weights(:)
+        real, allocatable :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
+        integer, allocatable :: nrep(:), nsmp(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
@@ -469,7 +471,11 @@ contains
         enddo
         allocate(realized_fractions(params%nstates), source=1.0)
         allocate(update_weights(params%nstates), source=1.0)
+        allocate(chain_weights(params%nstates),  source=0.0)
+        allocate(current_scales(params%nstates), source=1.0)
         if( params%l_trail_rec )then
+            ! N(s) and n(s) of the population rule; f = n/N
+            call build%spproj%os_ptcl3D%get_group_update_counts('state', params%nstates, nrep, nsmp)
             call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, realized_fractions)
             update_weights = realized_fractions
             if( params%l_ufrac_trec_defined )then
@@ -497,6 +503,7 @@ contains
                 ! add-on mode never enters the legacy union-volume bootstrap
                 if( l_bootstrap .and. l_frozen_rec ) &
                     &THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
+                if( .not. l_bootstrap ) call set_chain_blend_weights(state)
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
             ! one solve support per state (build_pcg_state_support)
@@ -766,9 +773,60 @@ contains
         call state_support_msk%kill_bimg
         call frozen_ctx%kill
         deallocate(res0143s, res05s, state_written, realized_fractions, update_weights, align_lps)
+        deallocate(chain_weights, current_scales)
+        if( allocated(nrep) ) deallocate(nrep, nsmp)
         !$ call omp_set_num_threads(params%nthr)
 
     contains
+
+        !> Population-rule weights of one state's chain pair (class-average and
+        !! reconstruct3D partials note, Section 4.1). The chain's represented
+        !! population M(s) is the sum of the particle counts in its two headers,
+        !! written as the represented population of each half; with N(s) active
+        !! updated rows and n(s) in the current sample, current *= s = u/f and
+        !! chain *= w = (1-u)*N/M, so the blended mass is N whatever joined or left
+        !! the state, and the current-map coefficient stays u. With N = M this is
+        !! the former chain weight 1 - u.
+        subroutine set_chain_blend_weights( state_here )
+            integer, intent(in) :: state_here
+            type(string) :: chain_fname
+            character(len=256) :: prov_here
+            real    :: smpd_here, mnew
+            integer :: ieo, st_here, eo_here, part_here, nparts_here, npop, box_here, status, mrep, nnew
+            character(len=4), parameter :: HALVES(2) = ['even', 'odd ']
+            mrep = 0
+            do ieo = 1, 2
+                chain_fname = refine3D_pcg_trail_accum_fname(state_here, trim(HALVES(ieo)))
+                call read_pcg_raw_accum_header(chain_fname, st_here, eo_here, part_here, nparts_here, npop, &
+                    &box_here, smpd_here, prov_here, status)
+                if( status /= 0 ) THROW_HARD('unreadable PCG trailing chain header')
+                mrep = mrep + npop
+                call chain_fname%kill
+            enddo
+            call population_blend_weights(nrep(state_here), nsmp(state_here), real(mrep), &
+                &current_scales(state_here), chain_weights(state_here), mnew, ufrac=update_weights(state_here))
+            nnew = count_first_time(state_here)
+            write(logfhandle,'(A,I0,A,F8.4,A,F8.4,A,F8.4,A,4I9,A,I9)') '>>> PCG TRAILING BLEND, STATE ', state_here, &
+                &', PREVIOUS-CHAIN WEIGHT ', chain_weights(state_here), ', CURRENT SCALE ', current_scales(state_here), &
+                &', FORMER WEIGHT 1-U ', 1.0 - update_weights(state_here), ', N n M MNEW', nrep(state_here), &
+                &nsmp(state_here), mrep, nint(mnew), ', FIRST-TIME', nnew
+        end subroutine set_chain_blend_weights
+
+        !> first-time rows (updatecnt = 1) of the current sample of a state
+        integer function count_first_time( state_here ) result( nnew )
+            integer, intent(in) :: state_here
+            integer :: p, sample_ind
+            sample_ind = 0
+            do p = 1, build%spproj_field%get_noris()
+                sample_ind = max(sample_ind, build%spproj_field%get_sampled(p))
+            enddo
+            nnew = 0
+            do p = 1, build%spproj_field%get_noris()
+                if( build%spproj_field%get_state(p) /= state_here ) cycle
+                if( build%spproj_field%get_sampled(p) /= sample_ind ) cycle
+                if( build%spproj_field%get_updatecnt(p) == 1 ) nnew = nnew + 1
+            enddo
+        end function count_first_time
 
         subroutine count_state_sampling( state_here, n_active, n_sampled )
             integer, intent(in)  :: state_here
@@ -1056,7 +1114,7 @@ contains
                         else
                             if( 1.0-update_weights(state_here) > 0.01 ) &
                                 &call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                                &chain_provenance, 1.0-update_weights(state_here), n_part)
+                                &chain_provenance, chain_weights(state_here), n_part)
                             call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, &
                                 &count_full_state_half(state_here, eo_here), chain_provenance)
                         endif
@@ -1079,10 +1137,11 @@ contains
                     if( realized_fraction <= 0.0 ) &
                         &THROW_HARD('PCG trailing update has zero realized state fraction')
                     if( l_chain_exists .and. 1.0-update_weight > 0.01 )then
-                        current_scale = update_weight / realized_fraction
+                        ! population rule: set_chain_blend_weights
+                        current_scale = current_scales(state_here)
                         call job%pcgop%scale_raw_accum(current_scale)
                         call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                            &chain_provenance, 1.0-update_weight, n_part)
+                            &chain_provenance, chain_weights(state_here), n_part)
                     else
                         current_scale = 1.0 / realized_fraction
                         call job%pcgop%scale_raw_accum(current_scale)
@@ -1431,11 +1490,13 @@ contains
     end function pcg_raw_provenance
 
     !> Chain identity: native geometry, objective and particle source; neither
-    !! the iteration nor the crop, so the chain survives stage transitions
+    !! the iteration nor the crop, so the chain survives stage transitions.
+    !! v3: the header particle count of each half is its represented population,
+    !! the M(s) of the population rule; an older chain is discarded and re-seeded
     function pcg_chain_provenance( params ) result(provenance)
         type(parameters), intent(in) :: params
         character(len=256) :: provenance
-        provenance = 'pcgtrail-v2|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
+        provenance = 'pcgtrail-v3|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
             &'|ptcl_src='//trim(params%ptcl_src)//'|box='//trim(int2str(params%box))// &
             &'|smpd='//trim(real2str(params%smpd))// &
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)

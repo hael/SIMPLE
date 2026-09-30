@@ -19,10 +19,10 @@ public :: cavger_read_euclid_sigma2, cavger_kill
 ! Interpolation & restoration
 public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online
 public :: cavger_assemble_sums, cavger_restore_cavgs
-! I/O & handling of distributed sums
+! I/O & handling of distributed sums and of the carried (fractional-update) sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
-public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
-public :: cavger_pad_partial_sums, cavger_shift_partial_eosum
+public :: cavger_write_contribution, cavger_commit_carryover, cavger_assemble_sums_from_parts
+public :: cavger_pad_carried_sums, cavger_set_center_offset
 ! Reusable reciprocal-space 2D sums (no restoration or real-space conversion)
 public :: fourier_2d_accumulator
 ! Stacks used for alignment
@@ -72,7 +72,6 @@ type :: stack
     procedure          :: frc
     procedure          :: ctf_dens_correct
     procedure          :: softmask
-    procedure          :: shift
     procedure          :: insert_lowres_serial
     procedure          :: add_invnoisepower2rho
     procedure, private :: accumulate_fplane => stack_accumulate_fplane
@@ -106,7 +105,6 @@ type cavgs_set
     procedure          :: new_set
     procedure          :: zero_set
     procedure          :: copy_fast
-    procedure          :: shift_eo
     procedure          :: kill_set
 end type cavgs_set
 
@@ -136,6 +134,7 @@ type(cavgs_set)                  :: cavgs                     !< Class averages
 type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
 integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
+real,                allocatable :: center_offsets(:,:)       !< Class-centering offsets of the references (2,ncls)
 integer                          :: ncls       = 0            !< # classes
 integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
 integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image
@@ -167,12 +166,6 @@ interface
         integer,         intent(in)    :: is
         logical,         intent(in)    :: ft
     end subroutine
-
-    module subroutine shift_eo( self, offset, is )
-        class(cavgs_set), intent(inout) :: self
-        real,             intent(in)    :: offset(2)
-        integer,          intent(in)    :: is
-    end subroutine shift_eo
 
     module subroutine kill_set( self )
         class(cavgs_set), intent(inout) :: self
@@ -271,12 +264,6 @@ interface
         integer,      intent(in)    :: is
     end subroutine softmask
 
-    module subroutine shift( self, offset, is )
-        class(stack), intent(inout) :: self
-        real,         intent(in)    :: offset(2)
-        integer,      intent(in)    :: is
-    end subroutine shift
-
     module subroutine insert_lowres_serial( self, self2insert, is, find )
         class(stack), intent(inout) :: self
         class(stack), intent(in)    :: self2insert
@@ -360,9 +347,8 @@ interface
 
     ! Restoration
 
-    module subroutine cavger_init_online( maxbatchsz, do_frac_update, cropped_ptcls )
+    module subroutine cavger_init_online( maxbatchsz, cropped_ptcls )
         integer,           intent(in) :: maxbatchsz
-        logical,           intent(in) :: do_frac_update
         logical, optional, intent(in) :: cropped_ptcls
     end subroutine cavger_init_online
 
@@ -374,9 +360,7 @@ interface
         class(image), intent(inout) :: ptcl_imgs(nptcls)
     end subroutine cavger_update_sums
 
-    module subroutine cavger_assemble_sums( do_frac_update )
-        use simple_matcher_ptcl_io, only: prepimgbatch
-        logical,           intent(in)    :: do_frac_update
+    module subroutine cavger_assemble_sums()
     end subroutine cavger_assemble_sums
 
     module subroutine cavger_restore_cavgs( frcs_fname )
@@ -401,21 +385,26 @@ interface
     module subroutine cavger_read_all()
     end subroutine cavger_read_all
 
-    module subroutine cavger_readwrite_partial_sums( which )
-        character(len=*), intent(in)  :: which
-    end subroutine cavger_readwrite_partial_sums
+    module subroutine cavger_write_contribution( l_frac )
+        logical, intent(in) :: l_frac
+    end subroutine cavger_write_contribution
+
+    module subroutine cavger_commit_carryover( l_frac )
+        logical, intent(in) :: l_frac
+    end subroutine cavger_commit_carryover
 
     module subroutine cavger_assemble_sums_from_parts
     end subroutine cavger_assemble_sums_from_parts
 
-    module subroutine cavger_pad_partial_sums( old_box, new_box, n, nparts, numlen )
-        integer, intent(in) :: old_box, new_box, n, nparts, numlen
-    end subroutine cavger_pad_partial_sums
+    module subroutine cavger_pad_carried_sums( box_crop, smpd_crop )
+        integer, intent(in) :: box_crop
+        real,    intent(in) :: smpd_crop
+    end subroutine cavger_pad_carried_sums
 
-    module subroutine cavger_shift_partial_eosum( offset, icls )
+    module subroutine cavger_set_center_offset( offset, icls )
         real,    intent(in) :: offset(2)
         integer, intent(in) :: icls
-    end subroutine cavger_shift_partial_eosum
+    end subroutine cavger_set_center_offset
 
     ! Destructors
 
