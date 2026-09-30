@@ -222,6 +222,7 @@ contains
         call assert_registered_cli_summary('import_movies', 'fraca', 'Amplitude contrast fraction; e.g. 0.1')
         call assert_registered_cli_summary('import_movies', 'kv', 'Acceleration voltage; e.g. 300 kV')
         call assert_registered_cli_summary('extract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
+        call assert_registered_cli_summary('refine_motion_model', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
         call assert_registered_cli_summary('reextract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
         call assert_registered_cli_summary('extract_subproj', 'subprojname', 'Subproject name; e.g. myproject.simple')
         call assert_registered_search_cli_summary('ctf_estimate', 'dfmin', 'Expected minimum defocus; e.g. 0.2 microns')

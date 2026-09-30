@@ -2,7 +2,6 @@
 module simple_commanders_motion
 include "starfile_enum.inc"
 use simple_commanders_api
-use simple_gui_communicator, only: gui_communicator
 implicit none
 
 public :: commander_refine_motion_model
@@ -38,17 +37,13 @@ contains
         class(cmdline),                       intent(inout) :: cline
         class(refine_motion_model_strategy), allocatable :: strategy
         type(parameters)                                   :: params
-        type(gui_communicator)                             :: gui_comm
         call cline%set('prg', 'refine_motion_model')
         strategy = create_refine_motion_model_strategy(cline)
         call strategy%apply_defaults(cline)
         call strategy%initialize(params, cline)
-        call gui_comm%new(params)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
-        call gui_comm%add_metadata(params%projfile, oritype='ptcl')
-        call gui_comm%kill()
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_refine_motion_model

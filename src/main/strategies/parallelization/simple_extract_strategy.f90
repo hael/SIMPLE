@@ -239,12 +239,7 @@ contains
                 call spproj%os_mic%set_ori(cnt, o_tmp)
             enddo
             prog_write = .true.
-            if( cline%defined('part') ) then
-                prog_part = .true.
-                ! call progressfile_init_part(cline%get_iarg('part'))
-            else
-                ! call progressfile_init()
-            endif
+            prog_part  = cline%defined('part')
             call spproj_in%kill
         endif
         ! input boxes

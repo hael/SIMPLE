@@ -472,6 +472,7 @@ contains
         call reg%add_int('startit', self%startit)
         call reg%add_int('stage', self%stage)
         call reg%add_int('state', self%state)
+        call reg%add_int('stepf', self%stepf)
         call reg%add_int('stepsz', self%stepsz)
         call reg%add_int('top', self%top)
         call reg%add_int('tof', self%tof)

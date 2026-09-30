@@ -182,6 +182,7 @@ type(ui_param) :: user_project
 type(ui_param) :: vol_dim
 type(ui_param) :: walltime
 type(ui_param) :: wcrit
+type(ui_param) :: wfloat16
 type(ui_param) :: width
 type(ui_param) :: winsz
 
@@ -900,6 +901,10 @@ subroutine set_ui_params
     call wcrit%set_param(          'wcrit',           'multi',  'Correlation to weights conversion scheme', &
                                    'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}','', .false., 'softmax', &
     &choices=ui_choices([character(len=7) :: 'softmax', 'zscore', 'sum', 'cen', 'exp', 'inv', 'uniform', 'no']))
+
+    call wfloat16%set_param(       'wfloat16',        'binary', 'Write float16 particle stacks', &
+                                   'Write particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call width%set_param(          'width',           'num',    'Falloff of inner mask', &
                                    'Number of cosine edge pixels of inner mask in pixels', &

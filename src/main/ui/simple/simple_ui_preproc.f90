@@ -148,9 +148,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call extract%add_input(UI_PARM, backgr_subtr, group="extract", &
         &visibility=UI_VIS_ADVANCED)
-        call extract%add_input(UI_PARM, 'wfloat16', 'binary', 'Write float16 particle stacks', &
-        &'Write extracted particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="extract", visibility=UI_VIS_ADVANCED)
+        call extract%add_input(UI_PARM, wfloat16, group="extract", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -186,9 +184,16 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, backgr_subtr, &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, 'wfloat16', 'binary', 'Write float16 particle stacks', &
-        &'Write re-extracted particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="refine3D", visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
+        & 'Starting movie frame for particle re-extraction', 'frame index{1}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
+        & 'Final movie frame for particle re-extraction(0=all)', 'frame index{0}', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, 'stepf', 'num', 'Incremental frame step size', &
+        & 'Incremental frame step size', 'frame increment{5}', .false., 5.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_motion_model%add_input(UI_PARM, wfloat16, group="refine3D", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -554,9 +559,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call reextract%add_input(UI_PARM, outside, &
         &visibility=UI_VIS_ADVANCED)
-        call reextract%add_input(UI_PARM, 'wfloat16', 'binary', 'Write float16 particle stacks', &
-        &'Write re-extracted particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="reextract", visibility=UI_VIS_ADVANCED)
+        call reextract%add_input(UI_PARM, wfloat16, group="reextract", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

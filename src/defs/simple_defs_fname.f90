@@ -77,6 +77,8 @@ character(len=*), parameter :: ARRAY_SCRIPT                  = 'simple_script_ar
 character(len=*), parameter :: POLARIZED_PTCLS               = 'polar_ptcls'
 character(len=*), parameter :: POLARIZED_CTFS                = 'polar_ctfs'
 character(len=*), parameter :: POLAR_REFS_FBODY              = 'polar_refs'
+character(len=*), parameter :: SHAPE_RANKED_CAVGS_MRCNAME    = 'shaped_ranked_cavgs.mrcs'
+character(len=*), parameter :: SHAPE_RANKED_CAVGS_JPGNAME    = 'shaped_ranked_cavgs.jpg'
 ! STATS
 character(len=*), parameter :: STATS_FILE                    = 'simple_stats'//trim(TXT_EXT)
 character(len=*), parameter :: ITERSTATS_FILE                = 'simple_iter_stats'//trim(TXT_EXT)
@@ -88,8 +90,7 @@ character(len=*), parameter :: RANKPROJPARTFBODY             = 'rank_group'
 character(len=*), parameter :: PICKREFS_FBODY                = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY             = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY          = 'extract_params_'
-character(len=*), parameter :: SHAPE_RANKED_CAVGS_MRCNAME    = 'shaped_ranked_cavgs.mrcs'
-character(len=*), parameter :: SHAPE_RANKED_CAVGS_JPGNAME    = 'shaped_ranked_cavgs.jpg'
+character(len=*), parameter :: PTCLS_FRACTIONS_FBODY         = 'ptcls_fractions_'
 character(len=*), parameter :: GAIN_THUMBNAIL                = 'gain_thumb'//trim(JPG_EXT)
 ! OLD DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR                 = 'stderrout/'

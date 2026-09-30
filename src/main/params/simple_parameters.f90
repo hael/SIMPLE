@@ -514,6 +514,7 @@ type :: parameters
     integer :: startit=1           !< start iterating from here
     integer :: stage=0
     integer :: state=1             !< state to extract
+    integer :: stepf=5             !< Incremental frame step size{5}
     integer :: stepsz=1            !< size of step{1}
     integer :: tofny=0
     integer :: top=1

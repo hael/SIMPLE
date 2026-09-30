@@ -17,6 +17,7 @@ contains
     subroutine run_all_motion_model_tests()
         write(*,'(A)') '**** running all motion model tests ****'
         call test_binary_roundtrip_with_optional_arrays()
+        call test_binary_roundtrip_with_rejected_patch()
         call test_binary_roundtrip_without_optional_arrays()
     end subroutine run_all_motion_model_tests
 
@@ -25,20 +26,28 @@ contains
         call test_binary_roundtrip(&
             &string('tmp_motion_model_patched_input.bin'),&
             &string('tmp_motion_model_patched_output.bin'),&
-            &string('tmp_motion_model_patched_output.star'), .true.)
+            &string('tmp_motion_model_patched_output.star'), .true., .true.)
     end subroutine test_binary_roundtrip_with_optional_arrays
+
+    subroutine test_binary_roundtrip_with_rejected_patch()
+        write(*,'(A)') 'test_binary_roundtrip_with_rejected_patch'
+        call test_binary_roundtrip(&
+            &string('tmp_motion_model_rejected_patch_input.bin'),&
+            &string('tmp_motion_model_rejected_patch_output.bin'),&
+            &string('tmp_motion_model_rejected_patch_output.star'), .true., .false.)
+    end subroutine test_binary_roundtrip_with_rejected_patch
 
     subroutine test_binary_roundtrip_without_optional_arrays()
         write(*,'(A)') 'test_binary_roundtrip_without_optional_arrays'
         call test_binary_roundtrip(&
             &string('tmp_motion_model_minimal_input.bin'),&
             &string('tmp_motion_model_minimal_output.bin'),&
-            &string('tmp_motion_model_minimal_output.star'), .false.)
+            &string('tmp_motion_model_minimal_output.star'), .false., .false.)
     end subroutine test_binary_roundtrip_without_optional_arrays
 
-    subroutine test_binary_roundtrip( input_bin, output_bin, output_star, with_optional_arrays )
+    subroutine test_binary_roundtrip( input_bin, output_bin, output_star, with_optional_arrays, patch_accepted )
         type(string), intent(in) :: input_bin, output_bin, output_star
-        logical,      intent(in) :: with_optional_arrays
+        logical,      intent(in) :: with_optional_arrays, patch_accepted
         type(motion_model)       :: model
         type(parameters), target :: params
         type(cmdline)            :: cline
@@ -57,9 +66,11 @@ contains
         call del_file(input_bin)
         call del_file(output_bin)
         call del_file(output_star)
-        call write_reference_binary(input_bin, with_optional_arrays)
+        call write_reference_binary(input_bin, with_optional_arrays, patch_accepted)
         call model%read(input_bin, params)
-        call model%write(output_star, output_bin, .true.)
+        call assert_true(model%patch_accepted .eqv. patch_accepted,&
+            &'motion model read preserves patch acceptance')
+        call model%write(output_star, output_bin, patch_accepted)
         call assert_true(file_exists(output_bin), 'motion model roundtrip writes a binary model')
         call assert_true(binary_files_equal(input_bin, output_bin),&
             &'motion model read/write preserves the independently generated binary payload')
@@ -70,15 +81,15 @@ contains
         call cline%kill()
     end subroutine test_binary_roundtrip
 
-    subroutine write_reference_binary( fname, with_optional_arrays )
+    subroutine write_reference_binary( fname, with_optional_arrays, patch_accepted )
         type(string), intent(in) :: fname
-        logical,      intent(in) :: with_optional_arrays
+        logical,      intent(in) :: with_optional_arrays, patch_accepted
         integer(int8) :: flag
         integer       :: funit, ios, i, noutliers
         integer       :: file_version, model_version
         integer       :: ldim_movie(2), ldim(2), ldim_patch(2)
         integer       :: nframes, total_nframes, npatch, nx_patch, ny_patch
-        integer       :: fixed_frame, eer_fraction
+        integer       :: fixed_frame, eer_fraction, eer_upsampling
         integer, allocatable :: patch_bounds(:,:,:,:), outlier_coords(:,:)
         real          :: smpd_movie, smpd, binning
         real          :: voltage, dose_per_frame, target_dose_per_frame
@@ -104,6 +115,7 @@ contains
         rmsd_fit             = [0.125, 0.25]
         fixed_frame          = 2
         eer_fraction         = 0
+        eer_upsampling       = 1
         ldim_patch           = [4, 4]
         allocate(drift_x(nframes), drift_y(nframes), frameweights(nframes))
         drift_x              = [0.0, 0.25, -0.5]
@@ -147,8 +159,11 @@ contains
         write(funit) flag
         flag = 0_int8
         write(funit) flag
-        write(funit) eer_fraction
-        write(funit) drift_x, drift_y, frameweights
+        flag = merge(1_int8, 0_int8, patch_accepted)
+        write(funit) flag
+        write(funit) eer_fraction, eer_upsampling
+        write(funit) drift_x, drift_y
+        write(funit) frameweights
         write(funit) npatch, nx_patch, ny_patch, ldim_patch
         if( with_optional_arrays )then
             write(funit) patch_bounds, patch_coords
