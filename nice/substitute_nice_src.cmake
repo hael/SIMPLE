@@ -15,6 +15,8 @@ configure_file(nice_project/settings_production.py.in nice_project/settings.py @
 file(REMOVE nice_project/settings_production.py.in)
 configure_file(example_templates/slurm.sh.in example_templates/slurm.sh @ONLY)
 file(REMOVE example_templates/slurm.sh.in)
+configure_file(example_templates/slurm_worker.sh.in example_templates/slurm_worker.sh @ONLY)
+file(REMOVE example_templates/slurm_worker.sh.in)
 configure_file(example_templates/lsf.sh.in example_templates/lsf.sh @ONLY)
 file(REMOVE example_templates/lsf.sh.in)
 configure_file(example_systemd/simple_nice.service.in example_systemd/simple_nice.service @ONLY)
