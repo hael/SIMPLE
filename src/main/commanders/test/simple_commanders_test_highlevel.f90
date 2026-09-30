@@ -889,7 +889,7 @@ subroutine exec_test_simulated_workflow( self, cline )
         case('1jxy')
             vol_file    = '1JXY.mrc'
             reproj_file = 'reprojs_1JXY.mrcs'
-            pgrp        = 'c1'
+            pgrp        = 'd2'
         case default
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
@@ -945,7 +945,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     call projection%new(ldim, SMPD)
 
     write(logfhandle,'(a,i0,a,i0,a,i0,a)') '>>> Step 3: generate ', NMOVIES, &
-        &' simulated movies with ', NFRAMES, ' frames and ', NPER_MOVIE, ' random projections each'
+        &' simulated movies with ', NFRAMES, ' frames and ', NPER_MOVIE, ' shuffled spiral projections each'
     if( NPROJS /= NMOVIES * NPER_MOVIE ) THROW_HARD('Projection count must divide equally among simulated movies')
     do i = 1, NPROJS
         projection_order(i) = i

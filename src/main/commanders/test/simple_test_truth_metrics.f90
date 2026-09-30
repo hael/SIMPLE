@@ -122,6 +122,7 @@ contains
         character(len=*), parameter :: DOCKED = 'workflow_reconstruction_docked.mrc'
         integer :: truth_ldim(3), reconstruction_ldim(3), nsections
         real    :: truth_smpd, reconstruction_smpd, cc_direct, cc_mirror, fsc05
+        logical :: corr_ok, fsc_ok
         passed  = .false.
         corr    = 0.
         fsc0143 = 0.
@@ -162,14 +163,15 @@ contains
         call compare_to_truth(truth_fname, string(DOCKED), mask_diameter, corr, fsc05, fsc0143)
         write(logfhandle,'(a,f7.4,a,f7.4)') '>>> Registered whole-volume Pearson correlation: ', corr, &
             &'; minimum ', min_corr
-        if( .not. ieee_is_finite(corr) .or. corr < min_corr )then
+        corr_ok = ieee_is_finite(corr) .and. corr >= min_corr
+        if( .not. corr_ok )then
             write(logfhandle,'(a)') '    FAIL: final-volume Pearson correlation is below the required minimum'
-            return
         endif
         write(logfhandle,'(a,f7.2,a,f7.2,a,f7.2,a)') '>>> Masked truth FSC: 0.500 at ', fsc05, &
             &' A; 0.143 at ', fsc0143, ' A; maximum ', max_fsc0143, ' A'
-        passed = ieee_is_finite(fsc0143) .and. fsc0143 > 0. .and. fsc0143 <= max_fsc0143
-        if( .not. passed ) write(logfhandle,'(a)') '    FAIL: final-volume FSC resolution is outside the accepted range'
+        fsc_ok = ieee_is_finite(fsc0143) .and. fsc0143 > 0. .and. fsc0143 <= max_fsc0143
+        if( .not. fsc_ok ) write(logfhandle,'(a)') '    FAIL: final-volume FSC resolution is outside the accepted range'
+        passed = corr_ok .and. fsc_ok
     end subroutine validate_reconstructed_volume
 
     !> Median over npairs seeded pairs (i from a, j from b, i /= j) of the
