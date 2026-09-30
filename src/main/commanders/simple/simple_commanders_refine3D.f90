@@ -2018,7 +2018,7 @@ contains
         ! local defaults (kept consistent with previous distributed master)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
-        call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%set('prg', 'refine3D')
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)

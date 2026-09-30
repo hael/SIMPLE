@@ -284,7 +284,7 @@ contains
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',          0.5)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',           30)
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')
-        call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
         call cline%set('objfun', 'cc') ! best objfun for this kind of data
         call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
