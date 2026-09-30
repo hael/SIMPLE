@@ -73,7 +73,7 @@ contains
         type(stream_watcher)      :: project_buff
         type(sp_project)          :: spproj_glob
         type(qsys_env)            :: qenv
-        type(string)              :: frozen_addon
+        type(string)              :: frozen_addon, cwd_main
         type(string), allocatable :: projects(:)
         type(gui_metadata_stream_abinitio3D_multistate) :: meta_abinitio3D_multistate
         type(gui_metadata_vol3D), allocatable            :: meta_states_vol3D(:)
@@ -173,10 +173,11 @@ contains
                         nptcls_at_last_addon = spproj_glob%os_ptcl2D%get_noris()
                         write(logfhandle,'(A,I0)')'>>> ENTERING ADDON STAGE ', addon_it
                         l_pause_ingestion = .true.
+                        call simple_getcwd(cwd_main)
                         if( addon_it == 1) then
-                            frozen_addon = string(CWD_GLOB)//'/abinitio3D/abinitio3D.simple'
+                            frozen_addon = cwd_main//'/abinitio3D/abinitio3D.simple'
                         else
-                            frozen_addon = string(CWD_GLOB)//'/abinitio3D_addon/it_'//int2str(addon_it)//'/abinitio3D_addon.simple'
+                            frozen_addon = cwd_main//'/abinitio3D_addon/it_'//int2str(addon_it - 1)//'/abinitio3D_addon.simple'
                         end if
                         ! start addon 3D
                         call start_abinitio3D_addon(spproj_glob, frozen_addon, string('abinitio3D_addon/it_')//int2str(addon_it))
@@ -244,8 +245,8 @@ contains
                     call cline_quality%set('projfile',       basename(crec%projfile))
                     call cline_quality%set('mskdiam',        params%mskdiam)
                     call cline_quality%set('quality_mode',   'apply')
-                    call cline_quality%set('rejection_type', 'pool')
-                    call cline_quality%set('mkdir',          'no')
+                    call cline_quality%set('quality_model',   'pool')
+                    call cline_quality%set('mkdir',             'no')
                     call simple_getcwd(cwd_before)
                     call simple_chdir(quality_dir)
                     call xmodel_cavgs_rejection%execute(cline_quality)
@@ -634,8 +635,8 @@ contains
                 call cline_abinitio3D%set('lpstop',                     10) ! 6
                 call cline_abinitio3D%set('force_lp_range',          'yes')
                 call cline_abinitio3D%set('mskdiam',            mskdiam_in)
-                call cline_abinitio3D%set('nparts',                      4)
-                call cline_abinitio3D%set('nthr',                       16)
+                call cline_abinitio3D%set('nparts',                      8)
+                call cline_abinitio3D%set('nthr',                        8)
                 call cline_abinitio3D%set('nstages',             NSTAGES3D)
                 call cline_abinitio3D%set('projfile',  'abinitio3D.simple')
                 call cline_abinitio3D%set('worker_priority',        'high')
@@ -677,8 +678,8 @@ contains
                 call cline_abinitio3D_addon%set('mkdir',                          'no')
                 call cline_abinitio3D_addon%set('projfile',  'abinitio3D_addon.simple')
                 call cline_abinitio3D_addon%set('projfile_frozen',     projfile_frozen)
-                call cline_abinitio3D_addon%set('nparts',                            4)
-                call cline_abinitio3D_addon%set('nthr',                             16)
+                call cline_abinitio3D_addon%set('nparts',                            8)
+                call cline_abinitio3D_addon%set('nthr',                              8)
                 call cline_abinitio3D_addon%set('worker_priority',              'high')
                 if( server_address%strlen() > 0 ) call cline_abinitio3D_addon%set('worker_server', server_address)
                 call cline_abinitio3D_addon%printline()

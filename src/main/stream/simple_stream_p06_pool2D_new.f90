@@ -64,7 +64,7 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter :: L_ITERATION_SNAPSHOTS     = .false.
-integer, parameter :: EXPORT_3D_START_ITERATION = 5
+integer, parameter :: EXPORT_3D_START_ITERATION = 25
 
 type, extends(commander_base) :: stream_p06_pool2D
   contains

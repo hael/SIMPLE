@@ -299,7 +299,7 @@ contains
         if( c_pthread_mutex_init(terminate_mutex, c_null_ptr) /= 0 ) THROW_HARD('failed to initialise terminate mutex')
         ! start persistent worker server if requested by params
         params%qsys_name = '' ! force qsys_env to read from env vars so we can control with params
-        params%ncunits   = 8  ! set to 8 for now to ensure enough threads for stream processes; can be overridden by env var or compenv
+        params%ncunits   = 16  ! set to 8 for now to ensure enough threads for stream processes; can be overridden by env var or compenv
         call qsys%new(params, 1, qsys_nthr=16, stream=.true.)
         ! init update metadata
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
