@@ -81,8 +81,7 @@ part I/O; the commander owns the defaults. The execution contract is
    generation, digest and `nstates` across one delivery. Consumers go
    through `flex_weights_consumable` / `flex_weights_load_state` (one
    state) or `flex_weights_load_all` (the set, cross-checked).
-6. `simple_flex_pca_polar.f90` (the polar E-step bank), `simple_flex_gpu.f90`
-   (device kernels, `USE_FLEX_CUDA`) and
+6. `simple_flex_pca_polar.f90` (the polar E-step bank) and
    `simple_flex_reconstructor_latent_ops.f90` (the projection-aware latent
    model: Fourier projection/backprojection, particle prep, the coupled
    M-step solve).

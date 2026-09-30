@@ -51,7 +51,7 @@ contains
         integer :: ipart, pn_part
         real(dp), parameter   :: RHO_FLOOR = 1.d-3
         real(dp) :: rho_max, rrel
-        logical :: l_relprior, l_stats_only, l_from_parts, l_devprep, l_cache_stats, l_pcache
+        logical :: l_relprior, l_stats_only, l_from_parts, l_cache_stats, l_pcache
         integer :: ihf
         integer :: batchlims(2), batchsz, ibatch, i, q, r, ithr, nthr, ia, row
         integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
@@ -150,7 +150,6 @@ contains
         endif
         write(logfhandle,'(A)') '>>> FLEX_PCA CONTRAST-AWARE EMBEDDING'
         call flush(logfhandle)
-        call cov_dev_prep_start(params, build, l_devprep)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
@@ -281,7 +280,6 @@ contains
                 call flush(logfhandle)
             endif
         end do
-        call cov_dev_prep_stop(l_devprep)
         ! the reducing master lands here rather than after the diagnostics, so it still frees the
         ! per-thread Gram workspace; gcnt_thr is all zero when no batch loop ran, so the per-particle
         ! spectrum report below skips itself

@@ -418,7 +418,7 @@ labels.</p>
 </tr>
 <tr>
 <td><code>platform</code></td>
-<td><code>forked_process</code>, plus <code>coarrays</code>, <code>flex_gpu</code>, <code>openmp_offload</code> when CMake finds the capability</td>
+<td><code>forked_process</code>, plus <code>coarrays</code>, <code>openmp_offload</code> when CMake finds the capability</td>
 <td>by hand, or nightly where the machine has the capability</td>
 <td>tests that need child processes, a launcher or a device</td>
 </tr>
@@ -815,9 +815,8 @@ moved the self-tests of <code>image</code>, <code>imghead</code>, <code>atoms</c
 <code>ftexp_shsrch</code>, <code>bspline_smoother</code>, <code>online_var</code> and <code>aff_prop</code>, the flex
 PCA, UI hash, cavg-quality and class-average registration self-tests out of
 their production modules, and deleted those of unused code (<code>hclust</code>,
-<code>srchspace_map2D_io</code>) and the dead ones (<code>CPlot2D</code>, <code>jpg</code>). The only self-tests
-left in production modules are this white-box one and the five <code>flex_gpu</code>
-tests of the GPU platform entry.</p>
+<code>srchspace_map2D_io</code>) and the dead ones (<code>CPlot2D</code>, <code>jpg</code>). The only self-test
+left in production modules is this white-box one.</p>
 <h3 id="44-a-workflow-or-platform-test">4.4 A workflow or platform test</h3>
 <p>A test that runs a pipeline is a commander: its type and <code>exec_test_&lt;name&gt;</code>
 routine in <code>src/main/commanders/test/simple_commanders_test_&lt;area&gt;.f90</code>, a
@@ -1207,7 +1206,7 @@ written as <code>sub-suite</code> (entry).</p>
 </tr>
 <tr>
 <td><code>flex_gpu</code></td>
-<td>the platform entry <code>flex_gpu</code></td>
+<td>deleted with the flex GPU implementation</td>
 </tr>
 <tr>
 <td><code>flex_pca</code></td>

@@ -5,9 +5,6 @@ use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
 use simple_flex_reconstructor_latent_ops, only: latent_projection_weights, weighted_expanded_cmat,&
     &LATENT_WDIM
 use simple_flex_reconstructor_latent_ops, only: prep_imgs4projected_model
-use simple_flex_gpu,        only: flex_gpu_available, flex_gpu_prep_begin_f, flex_gpu_prep_free_f,&
-    &flex_gpu_psample_begin_f, flex_gpu_psample_batch_f, flex_gpu_psample_free_f,&
-    &flex_gpu_psample_batch_res_f
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_sample_particle, polar_relative_inplane, polar_assign_directions, polar_sample_at_pose,&
     &polar_apply_shift, polar_dir_neighbours
@@ -104,52 +101,6 @@ contains
     end function sum_dp_safe
 
     !> thin wrapper so the OpenMP body stays readable; folds sqrt(wq) into the stored samples
-    !> resample a stored half-plane by an in-plane rotation into the bank frame: unit-tap 2D KB
-    !! at pf-multiples with per-tap Friedel, per-axis normalized weights, OOB taps dropped --
-    !! the polar former's interpolation scheme (polar_interp_plane) on the Cartesian lattice.
-    !! Positions outside the nyq disk come back ZERO (nothing downstream reads them).
-    module subroutine align_halfplane_inplane( frlims, nyq_eff, src, ca, sa, dst )
-        integer, intent(in)  :: frlims(3,2), nyq_eff
-        complex, intent(in)  :: src(frlims(1,1):frlims(1,2), frlims(2,1):0)
-        real,    intent(in)  :: ca, sa
-        complex, intent(out) :: dst(frlims(1,1):frlims(1,2), frlims(2,1):0)
-        type(kbinterpol) :: kbwin
-        real    :: hu, ku, w, wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        integer :: win(2,3), h, k, hlo2, hhi2, klo2, hx, ky, ix, iy, nd, pf
-        complex :: acc, cv
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        pf    = OSMPL_PAD_FAC
-        hlo2  = ceil_div (frlims(1,1), pf); hhi2 = floor_div(frlims(1,2), pf)
-        klo2  = ceil_div (frlims(2,1), pf)
-        nd    = nyq_eff*(nyq_eff+1)
-        dst   = CMPLX_ZERO
-        do k = klo2, 0
-            do h = hlo2, hhi2
-                if( h*h + k*k > nd ) cycle
-                hu =  h*ca + k*sa
-                ku = -h*sa + k*ca
-                call latent_projection_weights(kbwin, [hu, ku, 0.], win, wx, wy, wz)
-                acc = CMPLX_ZERO
-                do iy = 1, LATENT_WDIM
-                    ky = win(1,2) + iy - 1
-                    do ix = 1, LATENT_WDIM
-                        hx = win(1,1) + ix - 1
-                        w  = wx(ix)*wy(iy)
-                        if( pf*ky <= 0 )then
-                            if( pf*hx < frlims(1,1) .or. pf*hx > frlims(1,2) .or. pf*ky < frlims(2,1) ) cycle
-                            cv = src(pf*hx, pf*ky)
-                        else
-                            if( -pf*hx < frlims(1,1) .or. -pf*hx > frlims(1,2) .or. -pf*ky < frlims(2,1) ) cycle
-                            cv = conjg(src(-pf*hx, -pf*ky))
-                        endif
-                        acc = acc + w*cv
-                    end do
-                end do
-                dst(pf*h, pf*k) = acc
-            end do
-        end do
-    end subroutine align_halfplane_inplane
-
     module subroutine polar_sample_particle_packed( fpl, pg, ca, sa, xws, wr, hfpw, hfcnt, tazim, xws1, xws2 )
         type(fplane_type),  intent(in)    :: fpl
         type(polar_grid_t), intent(in)    :: pg

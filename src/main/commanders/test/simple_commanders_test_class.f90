@@ -76,8 +76,6 @@ use simple_cartesian_fourier_tester,         only: run_all_cartesian_fourier_tes
 use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
 use simple_flex_pcg_tester,                  only: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, &
     &run_all_flex_pcg_sweep_tests
-use simple_flex_gpu,                         only: test_flex_gpu_insert, test_flex_gpu_coupled, &
-    &test_flex_gpu_coupled_banked, test_flex_gpu_psample, test_flex_gpu_estep
 use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
 use simple_http_post_tester,                 only: run_all_http_post_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
@@ -121,8 +119,6 @@ implicit none
 !   test=forked_process              real child processes, clock polling (forked
 !                                    process, stream heartbeat): excluded from
 !                                    the build, label `platform`
-!   test=flex_gpu                    CUDA-C flex kernels against the CPU path:
-!                                    label `platform`, registered with USE_FLEX_CUDA
 !   test=openmp_offload              OpenMP target offload, cuFFT, cuBLAS on a device
 !                                    (nthr= device=): label `platform`, registered
 !                                    with USE_OPENMP_OFFLOAD
@@ -228,11 +224,6 @@ type, extends(commander_base) :: commander_test_lib_heterogeneity
   contains
     procedure :: execute      => exec_test_lib_heterogeneity
 end type commander_test_lib_heterogeneity
-
-type, extends(commander_base) :: commander_test_flex_gpu
-  contains
-    procedure :: execute      => exec_test_flex_gpu
-end type commander_test_flex_gpu
 
 type, extends(commander_base) :: commander_test_openmp_offload
   contains
@@ -676,22 +667,6 @@ contains
         call suites_lib_heterogeneity(s, n)
         call run_unit_suites('lib_heterogeneity', cline, s(1:n))
     end subroutine exec_test_lib_heterogeneity
-
-    !> the CUDA-C flex kernels against the CPU batch path; each routine skips itself
-    !! without a USE_FLEX_CUDA build or a device and fails by THROW_HARD
-    subroutine exec_test_flex_gpu( self, cline )
-        class(commander_test_flex_gpu), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(unit_suite) :: s(5)
-        integer :: n
-        n = 0
-        call add_suite(s, n, 'flex GPU insert',         test_flex_gpu_insert)
-        call add_suite(s, n, 'flex GPU coupled',        test_flex_gpu_coupled)
-        call add_suite(s, n, 'flex GPU coupled banked', test_flex_gpu_coupled_banked)
-        call add_suite(s, n, 'flex GPU psample',        test_flex_gpu_psample)
-        call add_suite(s, n, 'flex GPU estep',          test_flex_gpu_estep)
-        call run_unit_suites('flex_gpu', cline, s(1:n))
-    end subroutine exec_test_flex_gpu
 
     !> OpenMP target offload on a device (Cyril's): setup, persistence, async, cuFFT against
     !! FFTW, cuBLAS, the KB device forms; nthr= and device= on the command line; label `platform`,

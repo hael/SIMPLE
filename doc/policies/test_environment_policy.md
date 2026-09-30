@@ -34,7 +34,7 @@ labels.
 | `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `highlevel` | 9 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent 6VXX/1JXY suites |
-| `platform` | `forked_process`, plus `coarrays`, `flex_gpu`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
+| `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
 run overnight; high-level tests run only when explicitly selected with CTest.
@@ -384,9 +384,8 @@ moved the self-tests of `image`, `imghead`, `atoms`, `oris`, `ftiter`,
 `ftexp_shsrch`, `bspline_smoother`, `online_var` and `aff_prop`, the flex
 PCA, UI hash, cavg-quality and class-average registration self-tests out of
 their production modules, and deleted those of unused code (`hclust`,
-`srchspace_map2D_io`) and the dead ones (`CPlot2D`, `jpg`). The only self-tests
-left in production modules are this white-box one and the five `flex_gpu`
-tests of the GPU platform entry.
+`srchspace_map2D_io`) and the dead ones (`CPlot2D`, `jpg`). The only self-test
+left in production modules is this white-box one.
 
 ### 4.4 A workflow or platform test
 
@@ -724,7 +723,7 @@ written as `sub-suite` (entry).
 | `eo_diff`, `opt_lp` | deleted (needed refine3D volumes or a download; asserted nothing) |
 | `eul_prob_tab2D_io` | `2D probability table I/O` (`unit_pftc_align2D3D`) |
 | `extr_frac` | `decay schedules` (`unit_numerics`) |
-| `flex_gpu` | the platform entry `flex_gpu` |
+| `flex_gpu` | deleted with the flex GPU implementation |
 | `flex_pca` | `flex PCA` (`unit_heterogeneity`) |
 | `flex_pcg` | `flex PCG operator` (`unit_heterogeneity`), `flex PCG operator 64` and `flex PCG solve sweep` (`lib_heterogeneity`) |
 | `forked_process` | the platform entry `forked_process` |

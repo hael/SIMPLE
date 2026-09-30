@@ -29,7 +29,7 @@ numbers.
 | `fast` | 13 area suites `unit_<area>`, about 5 s together | every `compile_*.sh` build (`scripts/run_fast_gate.sh`) |
 | `library` | `lib_reconstruction`, `lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream` | nobody yet: the nightly run |
 | `workflow` | `simulated_workflow_6vxx`, `simulated_workflow_1jxy`, `single_workflow`, `pcg_recon`, `simulate_particles`, `stream_preproc` | nobody yet: the nightly run |
-| `platform` | `forked_process`, plus `coarrays`, `flex_gpu` and `openmp_offload` when the build has the capability | by hand, or by the nightly run where the machine has the capability |
+| `platform` | `forked_process`, plus `coarrays` and `openmp_offload` when the build has the capability | by hand, or by the nightly run where the machine has the capability |
 
 None of the library or workflow entries has run in its current form, so none has a recorded
 runtime. The first nightly run records them.

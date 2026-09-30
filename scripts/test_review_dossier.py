@@ -54,7 +54,7 @@ NOT_PRODUCTION = {'simple_core_module_api', 'simple_commanders_api', 'simple_tes
 NOT_OBJECT = {'self', 'cline', 'params', 'p', 'cline_', 'spproj', 'build', 'b'}   # objects whose calls say little about coverage
 PLATFORM = [('coarray', r'\bcoarray|\bco_(sum|max|min|broadcast)\b|\bsync\s+(all|images)\b|\bthis_image\s*\(|\bnum_images\s*\(|codimension|\w\[\s*\w+\s*\]\s*[=%]'), ('mpi', r'\bmpi_'),
             ('offload', r'omp target|openmp_offload|USE_OPENMP_OFFLOAD'), ('openacc', r'!\$acc|openacc'),
-            ('cuda', r'\bcuda|flex_gpu'), ('socket', r'socket|tcp_'), ('openmp', r'!\$omp')]
+            ('cuda', r'\bcuda'), ('socket', r'socket|tcp_'), ('openmp', r'!\$omp')]
 DOWNLOAD = re.compile(r'\bcurl\b|\bwget\b|https?://', re.I)
 GENERATED = re.compile(r'simulate_(particles|movie|nanoparticle|noise)|molecule_data|betagal_1jyx|sars_cov2|%simulate|make_random|gauran|ran3|%ran\b|random_number|spiral', re.I)
 COMMITTED = re.compile(r"\.txt'|\.pdb'|\.cif'|\.star'|test_data|fixture", re.I)

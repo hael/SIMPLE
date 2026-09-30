@@ -19,25 +19,8 @@ public :: latent_projection_weights, weighted_expanded_cmat, LATENT_WDIM
 !> the projection-aware latent model (merged from simple_flex_projected_latent_model)
 public :: prep_imgs4projected_model, solve_coupled_basis_exp, projected_model_kfromto
 public :: add_invtausq2rho_coupled, pair_index
-public :: cap_fplane_for_projected_model, flex_dev_prep_hook
+public :: cap_fplane_for_projected_model
 private
-!> Device prep hook. The device variant of prep_imgs4projected_model lives in simple_flex_gpu,
-!! which itself uses this module; the hook (set by flex_gpu_prep_begin_f, cleared by
-!! flex_gpu_prep_free_f) lets the shared prep funnel take the device branch without a
-!! module dependency cycle. Unassociated = CPU prep.
-abstract interface
-    subroutine flex_dev_prep_iface( params, build, nptcls, ptcl_imgs, pinds, fplanes, fetch )
-        import :: parameters, builder, image, fplane_type
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls
-        class(image),      intent(inout) :: ptcl_imgs(nptcls)
-        integer,           intent(in)    :: pinds(nptcls)
-        type(fplane_type), intent(inout) :: fplanes(nptcls)
-        logical, optional, intent(in)    :: fetch
-    end subroutine flex_dev_prep_iface
-end interface
-procedure(flex_dev_prep_iface), pointer :: flex_dev_prep_hook => null()
 #include "simple_local_flags.inc"
 
 integer, parameter :: LATENT_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
@@ -824,7 +807,7 @@ contains
     !! prior), the only form a per-component cross-fit FSC curve can inform.
     !! Deliberately a mutate-rho routine rather than an optional argument threaded into
     !! solve_coupled_basis_exp: it matches the precedent's semantics, keeps the solve signature
-    !! stable for the GPU/branch surface, and lets the dead-voxel floor (COUPLED_DENSITY_FLOOR) and
+    !! stable, and lets the dead-voxel floor (COUPLED_DENSITY_FLOOR) and
     !! the Cholesky-failure fallback see the regularized diagonal. The tiny relative ridge
     !! (COUPLED_MSTEP_RIDGE_REL) stays: it is a conditioning floor with a different job, invisible
     !! at 1e-8 next to any real invtau2.
@@ -930,7 +913,7 @@ contains
     !!  noise in every per-image inner product drops by roughly the same factor. Left absent
     !!  the behaviour is exactly as before.
     subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, &
-        &mskrad, force_cpu, resident, cached )
+        &mskrad, cached )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls
@@ -938,19 +921,13 @@ contains
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
         real, optional,    intent(in)    :: mskrad
-        logical, optional, intent(in)    :: force_cpu   !< cross-check reference building
-        logical, optional, intent(in)    :: resident    !< device path: leave planes resident only
         logical, optional, intent(in)    :: cached      !< serve reads from the downscaled cache
         type(ctfparams) :: ctfparms(nthr_glob)
         real    :: shift(2), crop_factor
         integer :: iptcl, i, ithr, kfromto(2)
-        logical :: l_mask, l_cpu, l_res, l_cached
+        logical :: l_mask, l_cached
         l_mask = .false.
         if( present(mskrad) ) l_mask = mskrad > 0.0
-        l_cpu = .false.
-        if( present(force_cpu) ) l_cpu = force_cpu
-        l_res = .false.
-        if( present(resident) ) l_res = resident
         l_cached = .false.
         if( present(cached) ) l_cached = cached
         ! A cache entry is the noise-normalised, Fourier-cropped particle at box_crop. That prefix
@@ -959,15 +936,6 @@ contains
         ! would noise-normalise a second time. Refuse rather than change the numerics silently.
         if( l_cached .and. l_mask ) THROW_HARD('particle cache is incompatible with image masking &
             &(COV_MASK_IMAGES); prep_imgs4projected_model')
-        ! device path: when a stage driver has begun the GPU prep lifecycle, the whole
-        ! taper->norm->pad->FFT->plane chain runs on device and the planes are fetched packed
-        ! (taper variant only; the mask variant stays on the CPU)
-        if( associated(flex_dev_prep_hook) .and. .not. l_mask .and. .not. l_cpu .and. .not. l_cached )then
-            call flex_dev_prep_hook(params, build, nptcls, ptcl_imgs, pinds, &
-                &fplanes, fetch=.not. l_res)
-            return
-        endif
-        if( l_res ) THROW_HARD('resident prep requested without the device prep lifecycle')
         ! logical/physical address mapping for padded Fourier planes: a cached particle already
         ! lives on the cropped grid, so the pad heap and the map must both be box_croppd
         if( l_cached )then

@@ -49,7 +49,7 @@ contains
         type(image)  :: gridcorr_img
         type(string) :: fname
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, used
-        logical :: l_devprep, l_pcache
+        logical :: l_pcache
         integer(timer_int_kind) :: t_phase
         call init_basis_reconstructor(params, build, mean_rec)
         ! one read path for every pass of the run: the downscaled cache when it is in use
@@ -60,7 +60,6 @@ contains
         else
             call prepimgbatch(params, build, MAXIMGBATCHSZ)
         endif
-        call cov_dev_prep_start(params, build, l_devprep)
         used    = 0
         t_phase = tic()
         write(logfhandle,'(A)') '>>> FLEX_PCA MEAN ESTIMATION (eq. S.1 kernel regression)'
@@ -79,7 +78,6 @@ contains
                 used = used + 1
             end do
         end do
-        call cov_dev_prep_stop(l_devprep)
         call orientation%kill
         call cleanup_plane(num_fpl)
         call cleanup_rec_buffers(build, fpls)
@@ -143,7 +141,7 @@ contains
         real(dp), allocatable :: smy_sh(:), smm_sh(:), sprof(:)
         real(dp), allocatable :: s_my_t(:), s_mm_t(:), smy_sh_t(:,:), smm_sh_t(:,:)
         real,     allocatable :: filt(:)
-        logical  :: l_devprep, l_pcache
+        logical  :: l_pcache
         nyq = max(1, fdim(params%box_crop) - 1)
         allocate(smy_sh(0:nyq), smm_sh(0:nyq), source=0.d0)
         stride = max(1, nptcls / NSAMPLE)
@@ -165,7 +163,6 @@ contains
         else
             call prepimgbatch(params, build, MAXIMGBATCHSZ)
         endif
-        call cov_dev_prep_start(params, build, l_devprep)
         ! Select the strided sample UP FRONT, not inside the batch loop -- otherwise every particle is
         ! read, normalised, padded, FFT'd and CTF-evaluated before ~(1 - 1/stride) of that is discarded.
         ! Same particles in the same order as the serial code; only the summation grouping is per-thread.
@@ -199,7 +196,6 @@ contains
             end do
             !$omp end parallel do
         end do
-        call cov_dev_prep_stop(l_devprep)
         deallocate(sub_pinds)
         do t = 1, nthr_here
             s_my   = s_my + s_my_t(t)

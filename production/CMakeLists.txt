@@ -308,11 +308,6 @@ if(BUILD_TESTS)
   simple_add_test(forked_process platform 300 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
   # Registered only when CMake has the capability and the launcher.
-  if(USE_FLEX_CUDA)
-    # CUDA-C flex kernels against the CPU batch path; needs a device at run time
-    simple_add_test(flex_gpu platform 1200 1 RUN_SERIAL
-      COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_gpu)
-  endif()
   if(USE_OPENMP_OFFLOAD)
     # OpenMP target offload, cuFFT against FFTW, cuBLAS, the KB device forms (Cyril's,
     # simple_openmp_offload_tester since the utils review); a failed check stops
@@ -333,14 +328,11 @@ if(BUILD_TESTS)
   # A CTest entry is an isolation unit, not an assertion: checks grow inside
   # existing suites, a new process needs a stated reason, and this number only
   # goes down. Raising it is an owner decision recorded in the plan. Entries
-  # that depend on a capability (coarrays, flex_gpu, openmp_offload) are counted only
+  # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
   set(SIMPLE_CTEST_BUDGET 29)   # 13 fast + 1 platform + 10 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
-    math(EXPR _simple_expected "${_simple_expected} + 1")
-  endif()
-  if(TEST flex_gpu)
     math(EXPR _simple_expected "${_simple_expected} + 1")
   endif()
   if(TEST openmp_offload)

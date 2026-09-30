@@ -12,13 +12,6 @@ use simple_flex_pca_crossfsc, only: crossfsc_file, crossfsc_record, crossfsc_loa
     &crossfsc_append, crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2,&
     &crossfsc_harvest_h, crossfsc_stop_stat, crossfsc_inband_mean, crossfsc_khi_deepest,&
     &crossfsc_assert_paired, COV_XFSC_FNAME
-use simple_flex_gpu,        only: flex_gpu_available, flex_gpu_coupled_begin_f,&
-    &flex_gpu_coupled_batch_raw_f, flex_gpu_coupled_end_f, flex_gpu_coupled_bank_f,&
-    &flex_gpu_coupled_batch_banked_f, flex_gpu_coupled_bank_free_f, flex_gpu_estep_vols_f,&
-    &flex_gpu_estep_batch_f, flex_gpu_estep_resid_f, flex_gpu_estep_free_f,&
-    &flex_gpu_coupled_batch_banked_res_f, flex_gpu_prep_begin_f, flex_gpu_prep_batch_f,&
-    &flex_gpu_prep_free_f, flex_gpu_estep_batch_res_f, flex_gpu_prep_check_f,&
-    &flex_gpu_poles_begin_f, flex_gpu_poles_bank_f, flex_gpu_poles_batch_f, flex_gpu_poles_free_f
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_relative_inplane, polar_assign_directions, polar_sample_particle_fused
 implicit none
@@ -29,15 +22,13 @@ contains
     !> Polar E-step bank for one fit: grid geometry + pose-fixed direction assignment (once per
     !! stage), then the per-iteration shared-direction bank + ring Gram tables at the fit's
     !! current rank, restricted to the directions the fit's current window touches.
-    module subroutine fit_polar_bank_build( params, build, fit, mean_rec, fpl1, nthr, l_dev_geom )
+    module subroutine fit_polar_bank_build( params, build, fit, mean_rec, fpl1, nthr )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(probe_fit_t),   intent(inout) :: fit
         type(reconstructor), intent(inout) :: mean_rec
         type(fplane_type),   intent(in)    :: fpl1
         integer,             intent(in)    :: nthr
-        !> device polar E-step requests its per-stage ring geometry (driver-owned selector)
-        logical,             intent(in)    :: l_dev_geom
         type(oris) :: dirs_es
         type(ori)  :: o_es
         real,    allocatable :: rmatp_es(:,:,:), nrmp_es(:,:)
@@ -130,9 +121,6 @@ contains
                         end do
                         deallocate(rmatp_es, nrmp_es)
                         allocate(fit%dused_es(fit%ndir_es))
-                        ! device ring geometry, once per stage (the grid is pose- and band-fixed)
-                        if( l_dev_geom ) call flex_gpu_poles_begin_f(fit%pg_es%rad, fit%pg_es%cs, &
-                            &fit%pg_es%sn, fit%pg_es%sqwq, fit%pg_es%rbeg, fit%pg_es%rend, fit%nsamp_es, fit%nk_es)
                         fit%l_pol_grid = .true.
                         write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.1,A,F8.1,A)') &
                             &'>>> FLEX_PCA POLAR ESTEP BANK: ',fit%ncomp+1,' volumes x ',fit%ndir_es, &
@@ -530,7 +518,7 @@ contains
                 if( fits(f)%l_pol_es .and. .not. fits(f)%l_pol_bank_it )then
                     t_bank = tic()
                     call fit_polar_bank_build(params, build, fits(f), fits(f)%mean_rec, &
-                        &fpls(1), nthr, .false.)
+                        &fpls(1), nthr)
                     fits(f)%sec_bank      = fits(f)%sec_bank + real(toc(t_bank))
                     fits(f)%l_pol_bank_it = .true.
                     write(logfhandle,'(A,I0,A,A,A,I0,A,I0,A,F7.1)') &

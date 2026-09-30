@@ -10,13 +10,6 @@ use simple_flex_pca_crossfsc, only: crossfsc_file, crossfsc_record, crossfsc_loa
     &crossfsc_append, crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2,&
     &crossfsc_harvest_h, crossfsc_stop_stat, crossfsc_inband_mean, crossfsc_khi_deepest,&
     &crossfsc_assert_paired, COV_XFSC_FNAME
-use simple_flex_gpu,        only: flex_gpu_available, flex_gpu_coupled_begin_f,&
-    &flex_gpu_coupled_batch_raw_f, flex_gpu_coupled_end_f, flex_gpu_coupled_bank_f,&
-    &flex_gpu_coupled_batch_banked_f, flex_gpu_coupled_bank_free_f, flex_gpu_estep_vols_f,&
-    &flex_gpu_estep_batch_f, flex_gpu_estep_resid_f, flex_gpu_estep_free_f,&
-    &flex_gpu_coupled_batch_banked_res_f, flex_gpu_prep_begin_f, flex_gpu_prep_batch_f,&
-    &flex_gpu_prep_free_f, flex_gpu_estep_batch_res_f, flex_gpu_prep_check_f,&
-    &flex_gpu_poles_begin_f, flex_gpu_poles_bank_f, flex_gpu_poles_batch_f, flex_gpu_poles_free_f
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_relative_inplane, polar_assign_directions, polar_sample_particle_fused
 implicit none

@@ -1,7 +1,5 @@
 !@descr: flex_pca EM: environment overrides, memory/dimension budgets and run-stage subsampling
 submodule (simple_flex_pca_em) simple_flex_pca_em_env
-use simple_flex_gpu,        only: flex_gpu_available, flex_gpu_prep_begin_f, flex_gpu_prep_free_f,&
-    &flex_gpu_prep_ready
 implicit none
 #include "simple_local_flags.inc"
 
@@ -183,40 +181,6 @@ contains
         ! d(d+1)/2 = sqrt(BUDGET/8)  =>  d = (-1 + sqrt(1 + 8*sqrt(BUDGET/8)))/2
         d = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(COV_ATHR_BUDGET/8.d0)))/2.d0))
     end function cov_dim_budget
-
-    !> begin the device prep lifecycle for a stage batch loop when the GPU is present and
-    !! enabled; the shared prep funnel (prep_imgs4projected_model) then takes its device
-    !! branch for every batch. No-op (l_on=.false.) when an outer lifecycle already owns it.
-    module subroutine cov_dev_prep_start( params, build, l_on )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        logical,           intent(out)   :: l_on
-        integer :: vprep
-        l_on = .false.
-        if( .not. flex_gpu_available() ) return
-        if( flex_gpu_prep_ready() )      return   ! outer owner
-        ! OPT-IN (SIMPLE_COV_GPU_PREP_STAGES=1): measured on the 4-worker Ribosembly arm, the
-        ! fetch+unpack funnel is slower than the 6.4 s threaded CPU prep at these stages (8.4 s
-        ! under device contention), and its 1e-6-level numerics nudged the probe convergence
-        ! rule from 3 to 5 rounds (+31 s wall). The probe's own resident prep (no fetch) and
-        ! the STATEREC resident hand-off are the configurations that pay.
-        vprep = 0
-        call cov_env_int('SIMPLE_COV_GPU_PREP_STAGES', vprep)
-        if( vprep <= 0 ) return
-        if( params%l_ml_reg )then
-            ! whitening path needs the loaded sigma2 spectra (CPU prep THROWs without them)
-            if( .not. allocated(build%esig%sigma2_noise) ) return
-        endif
-        if( cov_image_mask_radius(params) > 0. ) return   ! mask variant stays on the CPU
-        call flex_gpu_prep_begin_f(build%lmsk, params%box, params%boxpd, MAXIMGBATCHSZ, &
-            &0.0, .true.)
-        l_on = .true.
-    end subroutine cov_dev_prep_start
-
-    module subroutine cov_dev_prep_stop( l_on )
-        logical, intent(in) :: l_on
-        if( l_on ) call flex_gpu_prep_free_f
-    end subroutine cov_dev_prep_stop
 
     !> Sampling precision of the MAP latent estimate, Q = A*Gtil^+*A with A = Gtil + diag(prior). This is
     !! the precision of the ESTIMATOR z_hat, not the posterior precision A, so distances measured with it

@@ -24,7 +24,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # OpenMP is effectively required (always ON by default)
 option(USE_OPENMP         "Use OpenMP for parallelization" ON)
 option(USE_OPENMP_OFFLOAD "Use OpenMP device offloading" OFF)
-option(USE_FLEX_CUDA      "Build CUDA-C flex kernels (requires nvcc)" OFF)
 
 # Future / optional parallel models
 option(USE_COARRAYS "Use Fortran coarrays for parallelization (experimental)" OFF)

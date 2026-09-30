@@ -84,8 +84,8 @@ Before any change, so that what steps 1 and 2 change is known:
 - `get_rmat_ptr` returns the box view, and the `! VIOLATES ENCAPSULATION` flag goes. A new, explicitly
   named accessor for the whole buffer (for example `get_rmat_ptr_padded`) serves the callers that need
   the FFT layout. From the survey that is one caller: `simple_denoise_project_strategy.f90`, which hands
-  the buffer and the Fourier-space flag to `imgfile%wmrcSlices`. `simple_stack_io.f90` and
-  `simple_flex_gpu.f90` slice to `ldim` and work with the box view.
+  the buffer and the Fourier-space flag to `imgfile%wmrcSlices`. `simple_stack_io.f90` slices to
+  `ldim` and works with the box view.
 - **The callers, file by file.** Explicit indexing within `ldim` needs no change; whole-array
   reductions and updates become box reductions by construction.
 
@@ -97,7 +97,7 @@ Before any change, so that what steps 1 and 2 change is known:
   | `simple_calpha_finder` | 12 | indexed; passes it to `suppress_neighborhood` |
   | `simple_nanoparticle` | 2 | passes it to `calc_isotropic_disp` and `calc_anisotropic_disp` |
   | `simple_segmentation`, `simple_ctf_estimate_fit` | 8 | indexed; whole-array `where` clipping (box by construction) |
-  | `simple_stack_io`, `simple_flex_gpu` | 4 | slice to `ldim`: no change |
+  | `simple_stack_io` | 3 | slices to `ldim`: no change |
   | `simple_denoise_project_strategy` | 1 | the padded accessor (Fourier data to `wmrcSlices`) |
   | testers and `simple_commanders_test_highlevel` | 24 | whole-array fills, `background_mean`, `ls_scale_profile`: box by construction |
 

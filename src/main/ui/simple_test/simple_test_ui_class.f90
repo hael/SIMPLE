@@ -23,7 +23,6 @@ type(ui_program), target :: unit_single
 type(ui_program), target :: lib_single
 type(ui_program), target :: lib_stream
 type(ui_program), target :: lib_heterogeneity
-type(ui_program), target :: flex_gpu
 type(ui_program), target :: openmp_offload
 type(ui_program), target :: forked_process
 
@@ -50,7 +49,6 @@ contains
         call new_unit_single(tsttab)
         call new_lib_single(tsttab)
         call new_lib_stream(tsttab)
-        call new_flex_gpu(tsttab)
         call new_openmp_offload(tsttab)
         call new_forked_process(tsttab)
     end subroutine construct_test_class_programs
@@ -300,19 +298,6 @@ contains
             &'One sub-suite of this suite to run alone (flex_pca_deconvolution_20k, flex_pcg_operator_64, flex_pcg_solve_sweep)', '', .false., '')
         call add_ui_program('lib_heterogeneity', lib_heterogeneity, tsttab, UI_CATEGORY)
     end subroutine new_lib_heterogeneity
-
-    subroutine new_flex_gpu( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        call flex_gpu%new(&
-        &'flex_gpu',&
-        &'CUDA-C flex kernels against the CPU batch path',&
-        &'compares the CUDA-C flex insertion, coupled, banked, psample and E-step kernels with the CPU path; needs a USE_FLEX_CUDA build and a device, platform label',&
-        &'simple_test_exec',&
-        &.false.)
-        call flex_gpu%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (flex_gpu_insert, flex_gpu_coupled, flex_gpu_coupled_banked, flex_gpu_psample, flex_gpu_estep)', '', .false., '')
-        call add_ui_program('flex_gpu', flex_gpu, tsttab, UI_CATEGORY)
-    end subroutine new_flex_gpu
 
     subroutine new_openmp_offload( tsttab )
         class(ui_hash), intent(inout) :: tsttab

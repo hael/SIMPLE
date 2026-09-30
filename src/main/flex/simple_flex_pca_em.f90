@@ -37,12 +37,6 @@ public :: run_flex_pca_paired, run_flex_pca_paired_worker
 ! Density observability floor, matching simple_image_arith::div_cmat_at_1 and the projected-latent coupled
 ! solve.
 real(dp), parameter :: COV_DENSITY_FLOOR = 1.0d-6
-! Resident-volume capacity of the fused device E-step. MUST match the `ncomp1 > 64` guard and
-! the u_re/u_im extents in cuda/simple_flex_gpu_kernels.cu; exceeding it returns a hard error.
-! Raised 24 -> 64 (2026-08-18): the per-thread arrays are dynamically indexed, hence in local
-! memory either way -- 24 was a stack-frame guess, not a register wall. neigs=40 now rides the
-! device path; parity/speed vs the CPU E-step is validated per-rank by the phase-12 A/B.
-integer,  parameter :: COV_GPU_ESTEP_MAXVOLS = 64
 ! Relative ridge used ONLY for the covariance diagonal in the S.B SNR proxy, which runs before the S.C
 ! weights exist (Algorithm 1 precedes Algorithm 2).
 real,     parameter :: COV_RIDGE_REL     = 5.0e-2
@@ -393,14 +387,13 @@ interface
         integer,             intent(in)    :: it_eff, niters_eff, nthr
     end subroutine fit_iter_begin
 
-    module subroutine fit_polar_bank_build( params, build, fit, mean_rec, fpl1, nthr, l_dev_geom )
+    module subroutine fit_polar_bank_build( params, build, fit, mean_rec, fpl1, nthr )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(probe_fit_t),   intent(inout) :: fit
         type(reconstructor), intent(inout) :: mean_rec
         type(fplane_type),   intent(in)    :: fpl1
         integer,             intent(in)    :: nthr
-        logical,             intent(in)    :: l_dev_geom
     end subroutine fit_polar_bank_build
 
     module subroutine fit_estep_former_polar( fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv )
@@ -560,16 +553,6 @@ interface
 
     pure integer module function cov_dim_budget() result( d )
     end function cov_dim_budget
-
-    module subroutine cov_dev_prep_start( params, build, l_on )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        logical,           intent(out)   :: l_on
-    end subroutine cov_dev_prep_start
-
-    module subroutine cov_dev_prep_stop( l_on )
-        logical, intent(in) :: l_on
-    end subroutine cov_dev_prep_stop
 
     module subroutine map_sampling_precision( Gtil, prior, n, Qout )
         integer,  intent(in)  :: n
@@ -917,13 +900,6 @@ interface
         real(dp), intent(in) :: acc
         integer,  intent(in) :: n
     end function sum_dp_safe
-
-    module subroutine align_halfplane_inplane( frlims, nyq_eff, src, ca, sa, dst )
-        integer, intent(in)  :: frlims(3,2), nyq_eff
-        complex, intent(in)  :: src(frlims(1,1):frlims(1,2), frlims(2,1):0)
-        real,    intent(in)  :: ca, sa
-        complex, intent(out) :: dst(frlims(1,1):frlims(1,2), frlims(2,1):0)
-    end subroutine align_halfplane_inplane
 
     module subroutine polar_sample_particle_packed( fpl, pg, ca, sa, xws, wr, hfpw, hfcnt, tazim, xws1, xws2 )
         type(fplane_type),  intent(in)    :: fpl
