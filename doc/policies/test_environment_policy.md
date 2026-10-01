@@ -33,7 +33,7 @@ labels.
 |---|---|---|---|
 | `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 9 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent 6VXX/1JXY suites |
+| `highlevel` | 11 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
@@ -59,8 +59,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 29: 13 fast,
-5 library, 10 highlevel, 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 30: 13 fast,
+5 library, 11 highlevel, 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -106,7 +106,7 @@ convenience and deliberately not a CTest entry.
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
 | `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `abinitio2D`, `abinitio3D` |
-| `single_workflow` | highlevel | the SINGLE pipeline on a simulated Pt nanoparticle |
+| `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles |
 | `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
 | `abinitio3D_addon` | highlevel | `abinitio3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `abinitio3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
@@ -783,7 +783,7 @@ written as `sub-suite` (entry).
 | `sigma2_state` | `sigma2 state` (`unit_pftc_align2D3D`) |
 | `simulate_particles` | the workflow entry `simulate_particles` |
 | `simulated_workflow` | the workflow entries `simulated_workflow_6vxx`, `simulated_workflow_1jxy` |
-| `single_workflow` | the workflow entry `single_workflow` |
+| `single_workflow` | the workflow entries `single_workflow_fcc`, `single_workflow_wurtzite` |
 | `socket_client`, `socket_comm_distr`, `socket_io`, `socket_server` | deleted with the socket modules; `IPC TCP socket` (`unit_ipc`) tests the live transport |
 | `sp_project` | `project records` (`unit_project`) |
 | `starfile`, `starfile_test` | `STAR file` (`unit_project`) |

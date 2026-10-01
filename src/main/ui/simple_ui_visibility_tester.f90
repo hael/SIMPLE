@@ -234,7 +234,8 @@ contains
         write(*,'(A)') 'test_registered_test_programs'
         call make_test_ui
         call assert_registered_test_category('single_atoms_stats','highlevel','High-level tests', 40)
-        call assert_registered_test_category('single_workflow','highlevel','High-level tests', 40)
+        call assert_registered_test_category('simulated_workflow','highlevel','High-level tests', 40, 'suite')
+        call assert_registered_test_category('single_workflow','highlevel','High-level tests', 40, 'suite')
         call assert_registered_test_category('stream_preproc', 'highlevel','High-level tests', 40)
         call assert_registered_test_category('lib_stream',     'class',    'Unit tests', 10)
         call assert_registered_test_category('openmp_offload', 'class',    'Unit tests', 10)
@@ -334,9 +335,13 @@ contains
         call assert_true(.not. associated(registered_prg), trim(name)//' is not registered')
     end subroutine assert_program_not_registered
 
-    subroutine assert_registered_test_category( name, expected_category, expected_display_name, expected_order )
+    subroutine assert_registered_test_category( name, expected_category, expected_display_name, expected_order, &
+        &expected_required_key )
         character(len=*), intent(in) :: name, expected_category, expected_display_name
         integer,          intent(in) :: expected_order
+        character(len=*), intent(in), optional :: expected_required_key
+        type(string), allocatable :: required_keys(:)
+        integer :: nrequired
         program_name = name
         call get_test_prg_ptr(program_name, registered_prg)
         call assert_true(associated(registered_prg), trim(name)//' test is registered')
@@ -346,7 +351,16 @@ contains
                 &trim(name)//' test category display name')
             call assert_int(expected_order, registered_prg%category_order, trim(name)//' test category order')
             call assert_char('simple_test_exec', registered_prg%executable%to_char(), trim(name)//' test executable')
-            call assert_int(0, registered_prg%get_nrequired_keys(), trim(name)//' test has no required inputs')
+            if( present(expected_required_key) )then
+                nrequired = registered_prg%get_nrequired_keys()
+                call assert_int(1, nrequired, trim(name)//' test required input count')
+                if( nrequired == 1 )then
+                    required_keys = registered_prg%get_required_keys()
+                    call assert_char(expected_required_key, required_keys(1)%to_char(), trim(name)//' required input')
+                endif
+            else
+                call assert_int(0, registered_prg%get_nrequired_keys(), trim(name)//' test has no required inputs')
+            endif
         endif
     end subroutine assert_registered_test_category
 

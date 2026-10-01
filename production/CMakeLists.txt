@@ -275,8 +275,12 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=6vxx)
   simple_add_test(simulated_workflow_1jxy highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
-  simple_add_test(single_workflow highlevel 7200 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow smpd=0.358 element=Pt)
+  # The FCC Pt and wurtzite CdSe fixtures are independent crystal-system
+  # workflows and therefore receive isolated working directories and verdicts.
+  simple_add_test(single_workflow_fcc highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=fcc smpd=0.358)
+  simple_add_test(single_workflow_wurtzite highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=wurtzite smpd=0.358)
   simple_add_test(pcg_recon highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
   # reproject + simulate_particles on the embedded 6VXX volume; the only
@@ -330,7 +334,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 29)   # 13 fast + 1 platform + 10 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 30)   # 13 fast + 1 platform + 11 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

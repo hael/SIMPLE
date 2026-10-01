@@ -393,7 +393,7 @@ subroutine exec_test_single_workflow( self, cline )
     type(commander_import_particles)      :: ximptcls
     type(commander_analysis2D_nano)       :: xan2Dnano
     type(commander_autorefine3D_nano)     :: xaref3Dnano
-    type(string)                          :: projname, projfile, project_dir, startvol
+    type(string)                          :: suite_name, projname, projfile, project_dir, startvol
     type(string)                          :: simulated_vol, reprojections, trajectory, denoised_trajectory
     type(string)                          :: autorefine_dir, final_volume
     character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
@@ -418,9 +418,25 @@ subroutine exec_test_single_workflow( self, cline )
     real                               :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     logical                            :: volume_ok
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
-    if( .not. cline%defined('smpd') )    call cline%set('smpd', 0.358)
-    if( .not. cline%defined('element') ) call cline%set('element', 'Pt')
-    projname = 'test_single_workflow'
+    if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=fcc or suite=wurtzite')
+    suite_name = cline%get_carg('suite')
+    suite_name = lowercase(suite_name%to_char())
+    if( suite_name == 'list' )then
+        write(logfhandle,'(a)') 'Available suites for single_workflow:'
+        write(logfhandle,'(a)') '  fcc'
+        write(logfhandle,'(a)') '  wurtzite'
+        return
+    endif
+    select case(suite_name%to_char())
+        case('fcc')
+            call cline%set('element', 'Pt')
+        case('wurtzite')
+            call cline%set('element', 'CdSeW')
+        case default
+            THROW_HARD('no sub-suite '//suite_name%to_char()//' in single_workflow; use suite=list')
+    end select
+    if( .not. cline%defined('smpd') ) call cline%set('smpd', 0.358)
+    projname = 'test_single_workflow_'//suite_name%to_char()
     call params%new(cline)
     projfile = projname%to_char()//'.simple'
     call cline_nproj%set('prg',                       'new_project')
@@ -517,8 +533,9 @@ subroutine exec_test_single_workflow( self, cline )
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)
     call return_to_project_dir
     if( .not. volume_ok ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: final-volume validation failed')
-    write(logfhandle,'(a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') &
-        &'PASS: single_workflow docking correlation direct=', dock_corr_direct, ', mirrored=', dock_corr_mirrored, &
+    write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') &
+        &'PASS: single_workflow ', suite_name%to_char(), ' docking correlation direct=', dock_corr_direct, &
+        &', mirrored=', dock_corr_mirrored, &
         &', selected=', dock_corr_selected, ', soft-masked correlation to 5 A=', volume_corr, &
         &', FSC=0.143 at ', volume_fsc0143, ' A'
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')

@@ -271,14 +271,15 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call single_workflow%new(&
         &'single_workflow',&
-        &'quantitatively validate the SINGLE reconstruction workflow',&
-        &'runs the simulated nanoparticle pipeline and validates the final map against the known truth',&
+        &'validate SINGLE reconstruction for FCC Pt and wurtzite CdSe',&
+        &'runs focused Pt and CdSeW nanoparticle suites and validates each final map against its known truth',&
         &'simple_test_exec',&
         &.false.)
+        call single_workflow%add_input(UI_PARM, 'suite', 'str', 'Run one nanoparticle suite', &
+        &'Choose fcc (platinum) or wurtzite (CdSe); use list to print the accepted names', &
+        &'', .true., '')
         call single_workflow%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
         &'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms{0.358}', .false., 0.358)
-        call single_workflow%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', &
-        &'Atom element name: Au, Pt etc.', 'atom composition{Pt}', .false., 'Pt')
         call add_ui_program('single_workflow', single_workflow, tsttab, UI_CATEGORY)
     end subroutine new_single_workflow
 

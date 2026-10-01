@@ -22,7 +22,7 @@
 #   --route    which route(s) to run (default: both)
 #   --only     comma-separated test names to run (default: all)
 #   --args     per-test argument table, "name<TAB>args" per line
-#              (default: scripts/test_args.tsv if present)
+#              (default: scripts/test_args.tsv)
 #
 # Output: build_test_runs/<label>/results.tsv with the columns
 #   route  name  status  wall_s  exit  args
@@ -47,6 +47,7 @@ while [ $# -gt 0 ]; do
         *) echo "test_timing_run: unknown option $1" >&2; exit 1 ;;
     esac
 done
+[ -z "$argsfile" ] || [ -f "$argsfile" ] || { echo "test_timing_run: argument table not found: $argsfile" >&2; exit 1; }
 [ -x "$BIN/simple_test_exec" ] || { echo "test_timing_run: $BIN/simple_test_exec not found; build without --exclude-tests first" >&2; exit 1; }
 
 OUT="$ROOT/build_test_runs/$label"
@@ -69,7 +70,7 @@ wanted() {   # name -> 0 if selected
     return 1
 }
 args_for() { # name -> args from the table, if any
-    [ -f "$argsfile" ] || return 0
+    [ -n "$argsfile" ] || return 0
     awk -F'\t' -v n="$1" '$1 == n { print $2; exit }' "$argsfile"
 }
 
