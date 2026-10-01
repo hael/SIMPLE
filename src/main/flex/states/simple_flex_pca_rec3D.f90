@@ -59,10 +59,7 @@ contains
         endif
         ! rec_states_backend=pcg: the same weighted least-squares problems on reconstructor_pcg with the
         ! support inside the solve; the weights round and the stage fan-out are shared with the gridding
-        ! path. This is deliberately NOT rec_backend: the M-step and the state maps are separate
-        ! decisions (doc/refactoring_notes/flex_pca_branch_reconciliation_2026_09_15.md 4.3 -- PCG wins
-        ! the basis, gridding wins the state maps), so the default here is gridding even under
-        ! rec_backend=pcg.
+        ! path. Deliberately independent of rec_backend (the M-step): the default stays gridding.
         if( trim(params%rec_states_backend) == 'pcg' )then
             write(logfhandle,'(A)') '>>> FLEX STATE RECONSTRUCTION: kernel PCG backend (rec_states_backend=pcg)'
             call flush(logfhandle)

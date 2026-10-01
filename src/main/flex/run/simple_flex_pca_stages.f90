@@ -46,9 +46,8 @@ end type flex_stage_request
 
 contains
 
-    !> The ONE mod-4 split rule, shared by the two-job pcafit harness (validate_covariance_inputs)
-    !! and the paired engine's driver -- so the two instruments partition the selection identically
-    !! by construction. Pairing 1 (default) puts row residues {0,1} in half A; pairing 3 puts
+    !> The ONE mod-4 split rule, shared by the paired engine's master driver and its workers so both
+    !! partition the selection identically. Pairing 1 (default) puts row residues {0,1} in half A; pairing 3 puts
     !! {0,3}. Both pair one even-row residue with one odd-row residue, so each half keeps both
     !! internal e/o classes under the row-alternating project eo split. Pairing 2 ({0,2}|{1,3})
     !! is eo-degenerate by construction and is REFUSED where the pairing is validated --

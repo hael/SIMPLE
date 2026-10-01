@@ -268,23 +268,19 @@ contains
             states%bandwidths(state) = real(h)
             states%neff(state)       = real(sumw*sumw/max(sumw2,DTINY))
         end do
-        ! Tied-covariance mixture by default; SIMPLE_COV_GMM=0 recovers the kernel. The kernel loop above
+        ! Tied-covariance mixture unless the targets are equal-mass (below). The kernel loop above
         ! still runs: dist_out feeds cv_select_bandwidths and its quantiles diagnose the chi2 scale.
         l_gmm = .true.
-        ! EQUAL-MASS PLACEMENT IS NOT A GMM INITIALISATION. The tied-covariance mixture is a
-        ! discrete-state model: it re-fits the means, and on a continuum with one dense mode every
-        ! component slides into that mode -- which silently UNDOES the equal-occupancy placement that
-        ! was just constructed (measured on the RNA data: sextiles in, one state holding 88% of the
-        ! particles out). Where the targets carry equal mass by construction, keep them and let the
-        ! along-path kernel deliver the frames. SIMPLE_COV_GMM=1 forces the refit back on for A/B.
+        ! EQUAL-MASS PLACEMENT IS NOT A GMM INITIALISATION: the mixture re-fits the means, and on a
+        ! continuum with one dense mode every component slides into it. Equal-mass targets keep the kernel.
         if( l_relpath )then
             write(logfhandle,'(A)') '>>> FLEX_PCA equal-mass states%targets: GMM refit SKIPPED &
                 &(it would re-fit the means onto the dominant mode); along-path kernel states%weights kept'
             l_gmm = .false.
         endif
         if( l_gmm )then
-            ! Hierarchical placement (default ON, SIMPLE_COV_GMM_AUTO=0 opts out): detect discrete
-            ! islands vs continuum in the mixture itself and give each its own share of the budget.
+            ! Hierarchical placement (hard-wired on, nstates >= 3): detect discrete islands vs
+            ! continuum in the mixture itself and give each its own share of the budget.
             l_gmm_auto = .true.
             if( l_gmm_auto .and. nstates >= 3 )then
                 call gmm_auto_state_weights(latent%z, nptcls, ncomp, nk, nstates, tcen, wcomp, min_neff, states%weights, &

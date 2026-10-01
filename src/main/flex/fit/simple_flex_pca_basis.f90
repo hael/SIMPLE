@@ -36,7 +36,10 @@ public :: COV_DEFAULT_DTILDE, COV_SAMPLES_PER_PARAM, COV_UNIT_CONTRAST, COV_MEAN
 public :: COV_MASK_MARGIN, COV_PROBE_META
 
 real(dp), parameter :: COV_EIG_REL_FLOOR = 1.0d-6
+! Rank cap on the orthonormalised representative subspace (orthonormalize_representatives).
 integer,  parameter :: COV_MAX_DTILDE    = 320
+! Default column-subspace dimension, applied as a min against the memory budget so the rank follows
+! the data rather than free RAM.
 integer,  parameter :: COV_DEFAULT_DTILDE = 128
 real(dp), parameter :: COV_SAMPLES_PER_PARAM = 10.0d0
 logical,  parameter :: COV_UNIT_CONTRAST  = .true.
@@ -47,8 +50,6 @@ character(len=*), parameter :: COV_PROBE_META   = 'flex_pca_probe.txt'
 
 character(len=*), parameter :: MEAN_SCALE_FNAME = 'flex_pca_mean_scale.bin'
 
-! Runtime override of COV_UNIT_CONTRAST (SIMPLE_COV_CONTRAST=1): accumulate deviations against the
-! per-particle fitted scale instead of unit contrast. Set once before any parallel region.
 
 contains
 
@@ -339,17 +340,9 @@ contains
         num%shconst = fpl%shconst
     end subroutine form_reconstruction_plane
 
-    !> Which of the two split halves a lattice point (ih,ik) of the unpadded plane belongs to.
-    !!
-    !! The former rule, parity of ih+ik (a checkerboard), is a half-box shift in disguise:
-    !! sum over parity 1 minus sum over parity 2 of conj(U)*y equals <U, y circularly shifted by
-    !! (N/2,N/2)>. That is nonzero whenever the object is wider than N/(2*sqrt(2)) -- always at
-    !! box_crop=64 with a 320 A mask, and the particle images are not masked at all -- and it is
-    !! pose-dependent, so it enters the two half-data solves with OPPOSITE signs. Measured on
-    !! 10028 (2026-09-06): every basis except a long single fit gave split-half correlations of
-    !! -0.13..-0.24, which the reliability prior turned into a 1000x over-shrinkage of the latents.
-    !! A deterministic integer hash assigns lattice points to halves with no spatial structure, so
-    !! half1 - half2 carries no coherent term and the correlation estimates signal/(signal+noise).
+    !> Split half (1 or 2) of lattice point (ih,ik) of the unpadded plane, by an integer hash with no
+    !! spatial structure, so half1 - half2 carries no coherent term. A structured split such as ih+ik
+    !! parity acts as a half-box shift of y, a pose-dependent term entering the halves with opposite signs.
     pure integer function cov_half_parity( ih, ik ) result( par )
         integer, intent(in) :: ih, ik
         integer(kind=8) :: key
@@ -362,6 +355,8 @@ contains
         par = int(iand(ishft(key, -9), 1_8)) + 1
     end function cov_half_parity
 
+    !> Complex inner product over the native k<=0 half-plane (stored half-plane, k in [kmin,0]) inside the
+    !! shared nyq disc; the optional half (1 or 2) restricts it to one cov_half_parity split half.
     function cov_herm_inner( lhs, rhs, half ) result( val )
         type(fplane_type), intent(in) :: lhs, rhs
         integer, optional, intent(in) :: half

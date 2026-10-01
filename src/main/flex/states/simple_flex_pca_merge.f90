@@ -1,25 +1,8 @@
 !@descr: Two-gate agglomerative merge of over-provisioned flex_pca states.
-!
-!        Latent criteria (BIC, ICL) score the mixture in the space it was fitted in, so components
-!        that partition particles but reconstruct to the same density still score as distinct. The
-!        question here -- how many distinguishable maps the data support -- is therefore asked of
-!        the orientations and of the maps instead.
-!
-!        Gate 1, orientation (cheap): the latent comes from 2D projections, so viewing direction is
-!        its largest confound and a component whose viewing-axis distribution departs from the
-!        global one is a view cluster rather than a state. Gate 1 fires on failure of a null, not on
-!        improvement -- pooling always improves view coverage, so an improvement rule would run to
-!        K=1.
-!
-!        Gate 2, volume (expensive, pairs surviving gate 1): catches several components landing on
-!        one true state with full view coverage each, which gate 1 cannot see. Tested against each
-!        state's own half-map reproducibility.
-!
-!        Single pass: the pairwise relation is computed once on the delivered maps and closed under
-!        COMPLETE linkage; the caller re-reconstructs once at the converged count.
-!
-!        Off by default; the run settings turn it on (SIMPLE_COV_MERGE=1, or implicitly under the
-!        auto state ceiling; SIMPLE_COV_MERGE=0 always wins). Every gate lever arrives resolved.
+!        Gate 1 (orientation): a state whose viewing-axis distribution stands out from its peers is a view
+!        cluster, folded into a sufficiently similar map. Gate 2 (volume): pairs whose deviation maps agree within
+!        their own half-map reproducibility fuse under complete linkage. Latent distance never merges.
+!        On when SIMPLE_COV_MERGE is non-zero or preimage_auto=yes; SIMPLE_COV_MERGE=0 always wins.
 module simple_flex_pca_merge
 use simple_core_module_api
 use simple_flex_pca_records, only: flex_state_set

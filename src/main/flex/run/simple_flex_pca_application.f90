@@ -106,11 +106,8 @@ contains
         endif
 
         sess%neigs_req  = max(1, min(48, params%neigs))
-        ! No ceiling on the state count: over-provisioning is the only regime in which the merge recovers K.
-        ! npreimages=0 selects the automatic ceiling; anything else is taken as the requested ceiling.
-        ! npreimages is the ceiling; preimage_auto raises it and enables the collapse that makes a
-        ! ceiling meaningful. An explicit npreimages alongside preimage_auto=yes is honoured as the
-        ! ceiling -- auto then contributes only the merge.
+        ! npreimages = state ceiling (>= MIN_NSTATES); preimage_auto=yes raises it to AUTO_NSTATES unless
+        ! npreimages is given, and turns the merge on.
         sess%states%nstates = max(MIN_NSTATES, params%npreimages)
         ! population floor (min_state_frac > 0): exactly npreimages hard-labelled states, each above
         ! the floor; it cannot be combined with the automatic ceiling or the two-gate merge
@@ -192,6 +189,8 @@ contains
                         &rounds%nparts(), ' parts, one part per worker per iteration'
                     call flush(logfhandle)
                 endif
+                ! Paired fit (every non-compose run): two mod-4-half fits advanced together, merged, polished once,
+                ! embedded on all N.
                 call run_flex_pca_paired(params, sess%cfg, build, sess%sel, sess%col_sep, sess%neigs_req, sess%model, rounds=rounds)
                 sess%l_paired_states = .true.
             endif
@@ -328,13 +327,7 @@ contains
                 &macro_in=sess%deconv_labels, equal_occ=trim(params%state_placement) == 'equal_occ')
         endif
 
-        ! ---- OCCUPANCY FLOOR ----
-        ! min_neff is the minimum EFFECTIVE sample size of a state; until 2026-09-12 it only set the
-        ! kernel bandwidth, so a seat that ended up with a handful of particles was still reconstructed.
-        ! Measured on 10028: two of eight delivered states held 232 and 284 particles and their box-360
-        ! maps were reconstruction artifacts (directional striping, a uniform amplitude offset), while
-        ! every state above the floor was a clean map. A state below the floor carries no information
-        ! its macro-cluster does not already carry, so it is dropped before any map is reconstructed.
+        ! Drop states below min_neff before reconstruction (they gave artefact maps).
         call prune_underpopulated_states(sess%min_neff, sess%states)
 
         ! MUST precede cv_select_bandwidths, which reconstructs trial half maps through the same backend.
@@ -525,8 +518,7 @@ contains
         call cfg%kill
     end subroutine execute_worker_stage
 
-    !> Cost of the requested state count in resident reconstructors. REPORT ONLY: a former hard 64 GB
-    !! refusal blocked runs that fit and missed ones that did not.
+    !> Cost of the requested state count in resident reconstructors. REPORT ONLY.
     subroutine report_state_memory( params, nstates )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nstates
@@ -546,11 +538,6 @@ contains
             &process x ',nproc,' processes = ',gb,' GB machine-wide'
         write(logfhandle,'(A)') '>>> FLEX_PCA the knobs that move it are npreimages (linear) and &
             &box_crop (cubic)'
-        ! the reconstructors rarely hurt: the reduced solve's accumulator is sized against COV_ATHR_BUDGET,
-        ! likewise per process, so a distributed run multiplies it by nproc. SIMPLE_COV_DTILDE moves it.
-        if( params%nparts > 1 ) write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the reduced-solve &
-            &accumulator is also per process; at nparts=',params%nparts,' it is paid that many times &
-            &over. Cap it with SIMPLE_COV_DTILDE if the machine is tight.'
         call flush(logfhandle)
     end subroutine report_state_memory
 

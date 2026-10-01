@@ -51,8 +51,8 @@ contains
         integer :: state
         call self%kill
         call self%set_selection(pinds, state_weights, nstates, l_fuse, l_floor_rho, box_rec, smpd_rec)
-        ! the delivered state maps are always low-passed at their own eo-FSC(0.143) resolution
-        ! (user decision 2026-09-16): a poorly determined state must look poorly determined
+        ! the delivered state maps are always low-passed at their own eo-FSC(0.143) resolution:
+        ! a poorly determined state must look poorly determined
         write(logfhandle,'(A)') '>>> FLEX_PCA state maps delivered under a per-state low-pass at each state''s own &
             &eo-FSC(0.143) resolution'
         allocate(self%state_recs(nstates))

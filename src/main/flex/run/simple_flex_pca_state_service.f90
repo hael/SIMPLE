@@ -22,8 +22,8 @@ public :: auto_box_crop, auto_min_neff, auto_state_count
 public :: infile_path, infile_dir
 public :: FLEX_AUTO_K_START, FLEX_AUTO_K_MIN, AUTO_NSTATES
 
-!> Over-provisioning level for npreimages=0. Bounded by cost, not accuracy: 24 and 32 converge to
-!! the same answer, while gate 2 compares K(K-1)/2 map pairs.
+!> Cap and floor of auto_state_count (tester only; preimage_auto's ceiling is AUTO_NSTATES). The cap
+!! is bounded by cost: gate 2 of the state merge compares K(K-1)/2 map pairs.
 integer, parameter :: FLEX_AUTO_K_START = 32
 integer, parameter :: FLEX_AUTO_K_MIN   = 8
 !> Nyquist margin for a derived box_crop; columns are selected inside that band.
@@ -34,8 +34,8 @@ real,    parameter :: FLEX_AUTO_NEFF_OCCUPANCY = 0.10
 ! npreimages is a PROVISION CEILING, not a target: state placement lays down that many kernels and
 ! the two-gate merge collapses the indistinct ones, so the recovered K is only ever <= it.
 ! preimage_auto=yes raises that ceiling to AUTO_NSTATES and turns the merge on, since over-provisioning
-! is the only regime in which the merge can recover K at all. Measured on Ribosembly: ceiling 32 with
-! the complete-linkage merge recovered 14 states at ARI 0.947 (14/16 GT states covered).
+! is the only regime in which the merge can recover K at all.
+!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex=yes); independent of AUTO_NSTATES
 integer, parameter :: AUTO_NSTATES = 8
 !> provision cap of the population floor (min_state_frac > 0, refine3D_states flex=yes); independent of AUTO_NSTATES
 integer, parameter :: POP_FLOOR_MAX_NSTATES = 32
@@ -44,7 +44,7 @@ contains
 
     !> Calibrate the per-particle noise (from the even/odd half solutions when the run has them,
     !! else from the scale file the original run wrote) and replace z / precision by the posterior
-    !! means / precisions under the deconvolved mixture prior. applied=.false. when SIMPLE_COV_DECONV=0.
+    !! means / precisions under the deconvolved mixture prior.
     subroutine apply_latent_deconvolution( latent, model, sel, box_crop, smpd_crop, applied, labels, resume, adopted, srcdir, srcfile )
         type(flex_latent),    intent(inout) :: latent  !< z and precision deconvolved in place; zhalf consumed
         type(flex_fit_model), intent(in)    :: model
@@ -319,7 +319,7 @@ contains
         mn = max(20, min(nptcls, max(n_snr, n_occ)))
     end function auto_min_neff
 
-    !> Over-provisioned starting count for npreimages=0; see the call site for why 32 and not more.
+    !> Over-provisioned state count: FLEX_AUTO_K_START, capped by nptcls/(4*min_neff) and floored at FLEX_AUTO_K_MIN.
     pure integer function auto_state_count( nptcls, min_neff ) result( k )
         integer, intent(in) :: nptcls, min_neff
         k = FLEX_AUTO_K_START

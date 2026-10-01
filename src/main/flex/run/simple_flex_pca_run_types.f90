@@ -18,11 +18,10 @@ private
 
 public :: flex_run_settings, flex_run_session
 
-!> stage particle caps: 0 = off (every particle); a positive SIMPLE_COV_PROBE_MAX / SIMPLE_COV_CALIB_MAX
-!! overrides. The probe cap is off because capping traded a recovered conformation for speed
-!! (doc/policies/flex_pca_policy.md); the calibration pass estimates two scalars whose precision
-!! improves as 1/sqrt(N), so 20k particles suffice.
+! Probe-stage particle cap, a total across processes; 0 = off (SIMPLE_COV_PROBE_MAX overrides).
 integer,  parameter :: COV_PROBE_MAX_PTCLS = 0
+! Particle cap for em_calibrate_noise_prior (SIMPLE_COV_CALIB_MAX overrides): it estimates only two
+! global scalars (sig2, Gamma^0), whose precision improves as 1/sqrt(N), and runs on the master alone.
 integer,  parameter :: COV_CALIB_MAX_PTCLS = 20000
 
 type :: flex_run_settings

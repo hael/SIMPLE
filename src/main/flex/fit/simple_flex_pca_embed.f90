@@ -35,25 +35,10 @@ logical,  parameter :: COV_EMBED_CONTRAST_GRID = .false.
 integer,  parameter :: GRAM_DIAG_STRIDE = 200   ! subsample for the projected-Gram spectrum
 integer, parameter :: EMBED_STATS_VERSION = 1
 
-!!
-!! PCA at one band returns the leading eigenvectors of the covariance PROJECTED onto that band, and
-!! the eigenvectors of a projection are not the projection of the eigenvectors: a mode that ranks
-!! third at 30 A can fall below the rank cut at 16 A, and a mode that needs 20 A detail has no
-!! power at 30 A. Marching one basis through the bands (refit or extension) re-orders it at every
-!! stage and was measured to erode the coarse-band structure. Composition keeps every band's basis
-!! as delivered: the columns of each finished run are loaded on their own grid, Fourier-padded to
-!! the composing box (a coarse column stays exactly zero beyond
-!! its own band -- it is never noise-fitted in shells it never saw), orthonormalised coarse-first
-!! (a fine column keeps only what is new relative to the coarse subspace), and embedded ONCE with
-!! the union basis. The latent prior variance of each column follows its rescaling, so the
-!! embedding's MAP shrinkage is unchanged in the coarse directions.
-!!
-!! SIMPLE_COV_COMPOSE=<dir>[,<dir>...]: finished flex_pca run directories; any order (sorted by
-!! their crop box, coarse first). Per run the polished namespace is preferred, then merged, then
-!! the plain flex_pca_pc*.mrc, each with its own probe meta (rank, sig2, prior variances).
-!! Measured and rejected (2026-09-10): per-shell cross-half weighting of each column gutted the
-!! leading axes (two 50k-particle half fits disagree beyond 80 A); fine-first ordering was neutral;
-!! a per-component half-fit FSC >= 0.5 gate dropped union structure without buying any.
+!! SIMPLE_COV_COMPOSE=<dir>[,<dir>...]: finished runs; per run polished > merged > plain namespace.
+!! Columns are Fourier-padded to box_crop (zero beyond their band), Gram-Schmidt'ed coarse box first;
+!! residuals below COMPOSE_R2_FLOOR drop, prior variances follow the rescaling. compose_cut_reembed
+!! then cuts the union to its signal subspace (SIMPLE_COV_COMPOSE_CUT=0 skips it).
 
 !> a finished run's delivered basis: namespace, rank, grid, prior variances
 type compose_src_t
@@ -131,21 +116,8 @@ contains
         l_from_parts = .false.
         if( present(stats_only) ) l_stats_only = stats_only
         if( present(from_parts) ) l_from_parts = from_parts
-        ! RELPRIOR=0 no longer forces the stage in-process. The distributed flow ships G/b/c
-        ! and the split-half solves so the master can re-solve under the reliability-scaled
-        ! prior; with the prior PLAIN the same re-solve applies 1/Gamma_q instead, so the
-        ! caches are kept and only the rho computation is skipped. Measured motivation: two
-        ! nparts=1-matched pairs read +0.037/+0.024 and +0.025/+0.022 (ARI/AMI) for the plain
-        ! prior on the EM arm -- the rho^2 rescaling over-shrinks the reproducible directions
-        ! 5-8 whose rho sits at 0.46-0.55.
+        ! the caches flow whenever stats do; under the plain prior the re-solve applies 1/Gamma_q, no rho
         l_cache_stats = l_relprior .or. l_stats_only .or. l_from_parts .or. l_zhalf
-        ! Per-half fitted contrast in the split-half solves (SIMPLE_COV_HALF_CONTRAST=0 opts out).
-        ! The delivered z keeps a=1. WHY: the basis is deflated against the mean, so the FULL-plane
-        ! <TU,Tmu> nearly cancels while its two half-plane parts do not (they are +-D_i, pose
-        ! dependent, and Tmu dwarfs TUz). With a fixed a=1 the residual carries (a_i-1)*Tmu, which
-        ! therefore enters the two half solves with OPPOSITE signs and drives the split-half
-        ! correlation negative (measured -0.13..-0.24 on 10028, 2026-09-07). Fitting a per half
-        ! removes that term from the reliability estimate without touching the delivered latents.
         if( l_relprior )then
             write(logfhandle,'(A)') '>>> FLEX_PCA split-half solves: per-half fitted contrast'
             call flush(logfhandle)
@@ -304,7 +276,8 @@ contains
                     Gcache(:,:,row) = Gth(:,:,ithr)
                     bcache(:,row)   = bth(:,ithr)
                     ccache(:,row)   = cth(:,ithr)
-                    ! and the two half-data solves, each at its OWN fitted contrast 
+                    ! and the two half-data solves, each at its OWN fitted contrast (the delivered z keeps a=1):
+                    ! at a=1 the residual (a_i-1)*Tmu enters the halves with opposite signs (basis deflated vs the mean)
                     do ihf = 1, 2
                         ah = myhf(ihf,ithr) / max(emmhf(ihf,ithr), DTINY)
                         ah = max(0.1d0, min(5.d0, ah))

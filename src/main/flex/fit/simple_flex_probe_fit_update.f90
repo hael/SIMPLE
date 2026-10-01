@@ -18,28 +18,6 @@ use , intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 #include "simple_local_flags.inc"
 
-!!
-!! The paired fits ARE the production fit; the final stage is a delivery replay, never a fresh
-!! EM. Under SIMPLE_COV_PAIRED_MERGE=1 the paired driver stashes each fit's LAST-iteration raw
-!! M-step sufficient statistics (numerators Y + packed coupled per-voxel densities rho, pre-ridge
-!! pre-solve) plus the entry-frame basis those statistics are expressed in; this submodule then
-!!   1. frame-aligns fit B into fit A: R = the orthogonal polar factor of the entry-frame
-!!      cross-Gram M_BA(p,q) = <uB_p, uA_q> (align_basis_to_reference + the
-!!      Procrustes precedent). polar(M) IS the signed permutation from matching composed with
-!!      the in-span rotation: for any signed permutation P, P * polar(P^T M) = polar(M).
-!!   2. rotates fit B's statistics into A's frame -- numerators linearly (Y' = Y.R over the
-!!      cmat_exp grids), packed densities quadratically (rho' = R^T rho R in pair-index space;
-!!      zB = M_BA zA, so E[zA zA'] = R^T E[zB zB'] R) -- sums the four quarter-sets (A-even,
-!!      A-odd, B'-even, B'-odd) into a merged even/odd pair, harvests the per-shell sampling H
-!!      from each half's pair diagonals and adds the ridge from the honest cross-fit FSC in the
-!!      sampling-aware Gilles-Singer S.11 form with the SUMMED H (crossfsc_to_invtau2 +
-!!      add_invtausq2rho_coupled -- the refine3D ml_reg add_invtausq2rho precedent: per-half
-!!      invtau2 added to each half equals summed-H invtau2 added once to the sum), then runs ONE
-!!      joint per-voxel coupled solve on the summed statistics and realizes the merged basis
-!!      through the existing tail (gridcorr, band-limit at the inherited band, mask,
-!!      orthonormalize). Merged eigenvolumes: flex_pca_merged_pc*.mrc; meta:
-!!      flex_pca_probe_merged.txt. The S.13 fixed-point iteration of the conversion is NOT run
-!!      (single-shot S.11).
 
 character(len=*), parameter :: MERGED_PC_FBODY  = 'flex_pca_merged_pc'
 character(len=*), parameter :: MERGED_META      = 'flex_pca_probe_merged.txt'
@@ -243,12 +221,8 @@ contains
             call eimgs(q)%kill; call oimgs(q)%kill
         end do
         deallocate(eimgs, oimgs)
-        ! Mean-shaped deflation (SIMPLE_COV_EM_DEFLATE=n): a_i is a scalar contrast fit, so any
-        ! frequency-dependent per-image scale (envelope/B-factor spread) lands in the residual as
-        ! a consensus-shaped term coherent across particles and would take a whole component.
-        ! n=1 removes the mean direction; n>1 removes n resolution shells of the consensus, which
-        ! covers any scale that varies smoothly with frequency. Soft masking breaks the Parseval
-        ! orthogonality of disjoint bands, so the shells are explicitly orthonormalised.
+        ! Mean-shaped deflation: the scalar contrast a_i leaves any frequency-dependent per-image scale in the
+        ! residual as a consensus-shaped term; vdfl resolution shells of the consensus (1 = the mean) remove it.
         if( fit%spec%l_deflate_mean )then
             ndfl = max(1, fit%spec%vdfl)
             ! the flat-in-mask background template is part of the deflation set by default (the
@@ -446,9 +420,6 @@ contains
         ! from one iteration's M-step to the next E-step, and are freed only by kill_probe_fit
         ! (the resize block at iteration start handles dimension changes).
         if( allocated(fit%diag%gam_dbg) ) deallocate(fit%diag%gam_dbg)
-        ! the update agreement is a diagnostic, not a stopping rule: it decays from the first
-        ! iteration while the basis keeps improving (non-reproducible update directions can
-        ! still carry a reproducible bias)
 
     end subroutine fit_iter_finish
 
@@ -476,20 +447,10 @@ contains
                 &supplies G/b/c; data-plane prep and M-step insertion stay Cartesian'
             call flush(logfhandle)
         endif
-        ! ---- MCFA (SIMPLE_COV_EM_MIX=K): tied-covariance K-component mixture latent prior ----
-        ! Mixtures of common factor analysers (Baek, McLachlan & Flack, IEEE TPAMI 32:1298,
-        ! 2010): ONE shared basis, K Gaussian components in the latent space, fitted in the same
-        ! EM as the basis itself. The structural point: a direction earns rank in U only if it
-        ! improves the fit under a MULTI-MODAL prior, so purely continuous nuisance variation --
-        ! fit equally well by any single component -- gains nothing. This is the one thing a
-        ! moment estimator cannot reproduce, because responsibilities are posterior objects.
-        ! K=1 pins the component at the origin with a diagonal covariance, which reduces EXACTLY
-        ! to the plain PPCA EM -- that is the mandated regression test, not a feature.
+        ! MCFA: one basis, K latent Gaussians (Baek et al., IEEE TPAMI 2010); K=1 is plain PPCA EM.
         fit%spec%kmix   = COV_EM_MIX
         fit%spec%l_mix_req = fit%spec%kmix >= 1
-        ! v2 (2026-08-21): the four MCFA accumulators are additive sufficient statistics and now
-        ! ride in the probe part files (PROBE_PART_VERSION 3), together with a bounded latent
-        ! subsample so the master can seed mcfa_init. nparts>1 is therefore supported.
+        ! the MCFA accumulators and a bounded latent subsample (mcfa_init's seed) ride in the probe part files
         fit%spec%n_mix_warm = 1
         fit%history%l_mix_active = .false.
         fit%history%l_mix_used   = .false.
@@ -501,29 +462,12 @@ contains
             allocate(fit%diag%sec_proj_thr(nthr), fit%diag%sec_gram_thr(nthr), source=0.d0)
         endif
         fit%history%nll_prev    = 0.d0
-        ! ON by default. The consensus-shaped term is one the model provably cannot represent:
-        ! the contrast coefficient is pinned at 1, so a particle of true amplitude a_i leaves
-        ! (a_i - 1) * T_i P(R_i) mu behind, rank one along the consensus and identical in every
-        ! particle. Deflating it costs a projection per basis volume per iteration and was
-        ! positive in all four cells measured at K=20 on EMPIAR-10076 -- moment 0.1756 -> 0.1906,
-        ! EM 0.1193 -> 0.1764, and positive again with latent whitening layered on both arms.
-        ! It removes 34.6% of the basis energy on the first EM iteration and 16.2% at convergence.
-        ! Validated on 10076 only so far; SIMPLE_COV_EM_DEFLATE=0 restores the old behaviour.
+        ! mean-shaped deflation: the per-particle scalar contrast cannot absorb a frequency-dependent
+        ! scale, which would otherwise take a whole consensus-shaped component
         fit%spec%vdfl           = COV_EM_DEFLATE
         fit%spec%l_deflate_mean = .true.
-        ! ---- per-particle contrast INSIDE the EM (a_i in the basis loop) ----
-        ! The probe has always fit a scale a_i = <m,y>/||m||^2 per particle per iteration and
-        ! subtracted a_i*(T mu) from the residual -- the claim that the EM path has no scale
-        ! parameter was about a different routine. What the historical path does NOT do:
-        !   1. refine a_i against the basis: the projection fit ignores B z, which biases a_i
-        !      wherever the basis is not orthogonal to the consensus (deflation removes most of
-        !      that, which is one reason the two compose), and
-        !   2. carry a_i into the M-step: the residual y - a m ~ a B z + n is inserted with
-        !      weight z and density E[zz'], where the ML weighting is a z and a^2 E[zz'].
-        ! 3DVA fits its alpha_i jointly in the M-step, which is both of these at once.
-        ! SIMPLE_COV_PROBE_CONTRAST=n enables n ECM alternations per particle (fixes 1);
-        ! SIMPLE_COV_PROBE_MLSCALE=1 enables the consistent M-step weighting (fixes 2).
-        ! Both off by default; the polar statistics path keeps the fixed polar-fit contrast.
+        ! per-particle contrast a_i = <m,y>/||m||^2 (clamped to [0.1,5]) is held fixed: no ECM
+        ! refinement against the basis, no a-scaled M-step insertion
         fit%spec%n_probe_cm  = 0
         fit%spec%nml_plain   = 0
         fit%spec%l_probe_mls = .false.
@@ -610,8 +554,8 @@ contains
     !> Snapshot one fit's LAST-iteration raw M-step sufficient statistics + entry frame.
     !! Called by the paired driver after the batch loop and reductions, BEFORE fit_iter_finish
     !! (which ridges rho, mutates the numerators in the coupled solve, and frees everything).
-    !! Overwrites every iteration: convergence and the crossfsc stop are evaluated after the
-    !! tails, so any iteration can turn out to be the last. prev_real at this point holds the
+    !! Overwrites every iteration: convergence is evaluated after the tails, so any iteration can
+    !! turn out to be the last. prev_real at this point holds the
     !! PREVIOUS iteration's delivered basis == the frame the statistics' latents live in.
     module subroutine probe_fit_merge_stash( fit )
         class(flex_probe_fit), intent(inout) :: fit

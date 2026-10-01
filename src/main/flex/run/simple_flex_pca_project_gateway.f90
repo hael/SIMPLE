@@ -141,7 +141,7 @@ contains
             ! fromp/top to every particle so the table covers the whole project, restore after):
             ! esig%new also registers the table with the polar calculator; a bare allocate of the
             ! component inside a never-constructed object leaves the consumers with an
-            ! inconsistent object (gate crash in the mean-stage prep, 2026-09-08)
+            ! inconsistent object
             params%fromp = 1
             params%top   = noris
             call build%esig%new(params, build%pftc, string('flex_pca_unit_sigma2.dat'), params%box)

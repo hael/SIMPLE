@@ -1,4 +1,8 @@
-!@descr: flex_pca: the paired-engine final stage: frame-align the two half fits, merge their raw M-step statistics, one joint solve, merged delivery
+!@descr: flex_pca paired engine final stage: merge the two fits' statistics, don't refit
+!! Each fit stashes its last-iteration raw M-step statistics and entry-frame basis. B is rotated into
+!! A's frame (R = polar factor of the entry cross-Gram; Y.R, R^T rho R), the four quarter-sets are
+!! summed, the cross-fit-FSC ridge is added with the summed H, and one joint coupled solve runs;
+!! deflation, orthonormalisation and a gauge fix to A's frame follow.
 module simple_flex_pca_pairmerge
 use simple_core_module_api
 use simple_flex_pca_records, only: flex_fit_model
@@ -22,28 +26,6 @@ private
 
 public :: probe_paired_merge
 
-!!
-!! The paired fits ARE the production fit; the final stage is a delivery replay, never a fresh
-!! EM. Under SIMPLE_COV_PAIRED_MERGE=1 the paired driver stashes each fit's LAST-iteration raw
-!! M-step sufficient statistics (numerators Y + packed coupled per-voxel densities rho, pre-ridge
-!! pre-solve) plus the entry-frame basis those statistics are expressed in; this submodule then
-!!   1. frame-aligns fit B into fit A: R = the orthogonal polar factor of the entry-frame
-!!      cross-Gram M_BA(p,q) = <uB_p, uA_q> (align_basis_to_reference + the
-!!      Procrustes precedent). polar(M) IS the signed permutation from matching composed with
-!!      the in-span rotation: for any signed permutation P, P * polar(P^T M) = polar(M).
-!!   2. rotates fit B's statistics into A's frame -- numerators linearly (Y' = Y.R over the
-!!      cmat_exp grids), packed densities quadratically (rho' = R^T rho R in pair-index space;
-!!      zB = M_BA zA, so E[zA zA'] = R^T E[zB zB'] R) -- sums the four quarter-sets (A-even,
-!!      A-odd, B'-even, B'-odd) into a merged even/odd pair, harvests the per-shell sampling H
-!!      from each half's pair diagonals and adds the ridge from the honest cross-fit FSC in the
-!!      sampling-aware Gilles-Singer S.11 form with the SUMMED H (crossfsc_to_invtau2 +
-!!      add_invtausq2rho_coupled -- the refine3D ml_reg add_invtausq2rho precedent: per-half
-!!      invtau2 added to each half equals summed-H invtau2 added once to the sum), then runs ONE
-!!      joint per-voxel coupled solve on the summed statistics and realizes the merged basis
-!!      through the existing tail (gridcorr, band-limit at the inherited band, mask,
-!!      orthonormalize). Merged eigenvolumes: flex_pca_merged_pc*.mrc; meta:
-!!      flex_pca_probe_merged.txt. The S.13 fixed-point iteration of the conversion is NOT run
-!!      (single-shot S.11).
 
 character(len=*), parameter :: MERGED_PC_FBODY  = 'flex_pca_merged_pc'
 character(len=*), parameter :: MERGED_META      = 'flex_pca_probe_merged.txt'
@@ -178,13 +160,15 @@ contains
         ok = .true.
     end subroutine init_deflated_matchcos
 
+    !> The merge: consumes the two fits' stashes and delivered state; returns the merged model
+    !! and the match cosines, and writes the merged eigenvolumes, meta and manifest lines.
     subroutine probe_paired_merge( params, build, fits, model, m_matchcos )
         type(flex_fit_model), intent(inout) :: model   !< the merged basis, prior variances, rank and noise level
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(flex_probe_fit),   intent(inout) :: fits(2)
-        !> per merged component: |cos| of the A<-B match (the reproducibility signal the rank
-        !! gate consumes)
+        !> per merged component: the init-deflated subspace cosine (raw A<-B match |cos| when no
+        !! it000 stamps exist); the caller turns it into axis weights
         real(dp), allocatable, intent(out)            :: m_matchcos(:)
         type(reconstructor), allocatable :: Ymrg(:), utilde(:)
         type(image),         allocatable :: realvols(:), utilde_real(:)
@@ -213,7 +197,6 @@ contains
         ncA_del = fits(1)%model%ncomp
         ncB_del = fits(2)%model%ncomp
         filtsz  = max(1, fdim(params%box_crop) - 1)
-        ! ================= mode 1: accumulator-level merge =================
         if( .not. (fits(1)%mstep%l_mg_stash .and. fits(2)%mstep%l_mg_stash) ) &
             &THROW_HARD('paired merge: no stashed M-step statistics (driver gate error)')
         if( .not. (allocated(fits(1)%mstep%mg_prev) .and. allocated(fits(2)%mstep%mg_prev)) ) &
@@ -289,7 +272,7 @@ contains
                 end do
                 write(logfhandle,*)
                 call flush(logfhandle)
-                ! the rank gate and the axis weights consume the SUBSPACE cosine
+                    ! the axis weights use the SUBSPACE cosine (rotation-insensitive, unlike the matched one)
                 m_matchcos(1:ncm) = scos(1:ncm)
                 deallocate(dcos, scos, pcos)
             else
@@ -827,14 +810,9 @@ contains
         call flush(logfhandle)
     end subroutine merge_pair_algebra_selfcheck
 
-    !> Mean-shaped (contrast) + background (+ optional pose-derivative) deflation of the merged
-    !! solve output, mirroring the per-fit tail's per-iteration deflation statement for
-    !! statement (simple_flex_probe_fit_update::fit_iter_finish, SIMPLE_COV_EM_DEFLATE block):
-    !! consensus shells split in resolution, optional flat-in-mask background template
-    !! (SIMPLE_COV_DEFLATE_BG), modified Gram-Schmidt with the relative-norm floor, then
-    !! projection out of every merged component. Config comes from the same sources the tail
-    !! uses: fit%spec%l_deflate_mean / fit%spec%vdfl / fit%spec%dstep_ann (per-fit stage config; identical
-    !! across fits) and the two env gates.
+    !> Mean-shaped deflation of the merged solve output, as fit_iter_finish applies it per fit: vdfl
+    !! consensus shells plus the background and dilation templates (always on here: SIMPLE_COV_DEFLATE_BG
+    !! and _DILATION are not read), modified Gram-Schmidt, then projection out of every merged component.
     subroutine merge_deflate_mean_shaped( params, fit, realvols, nvols )
         class(parameters), intent(inout) :: params
         type(flex_probe_fit), intent(in)    :: fit

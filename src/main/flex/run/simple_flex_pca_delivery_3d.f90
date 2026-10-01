@@ -206,7 +206,7 @@ contains
         character(len=:), allocatable :: fn
         integer :: q, u
         fn = 'flex_pca_eigenvalues.txt'
-        ! the eigenvolume MRCs are written by form_eigenbasis_from_reduced; only the table is written here
+        ! only the eigenvalue table is written here; the eigenvolume MRCs are not
         call del_file(fn)
         open(newunit=u,file=fn,status='replace',action='write')
         write(u,'(A)') '# component eigenvalue'
@@ -250,10 +250,8 @@ contains
         write(u,'(A,I0)') 'minimum_state_neff=',min_neff
         write(u,'(A)') 'half_maps=combined_even_odd'
         write(u,'(A)') 'validation=inspect_half_map_agreement_nuisance_correlations_and_heldout_residuals'
-        ! ---- cross-fit-FSC provenance (spec par.4.2): a run whose fits consumed the crossfsc
-        ! ridge is marked COUPLED, because the coupling deflates the cross-fit statistic's
-        ! independence the same bounded way gold-standard FSC regularization does. Lines appear
-        ! only when SIMPLE_COV_XFSC_REG is set, so the default manifest is unchanged.
+        ! cross-fit-FSC provenance, always written (the ridge is hard-wired on): COUPLED, because the ridge
+        ! deflates the cross-fit statistic's independence as gold-standard FSC regularization does
         write(u,'(A,I0)') 'crossfsc_reg_mode=',1
         write(u,'(A,L1)') 'crossfsc_coupled=',.true.
         close(u)

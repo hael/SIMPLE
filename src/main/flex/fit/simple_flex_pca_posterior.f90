@@ -114,6 +114,8 @@ contains
     end subroutine spd_solve_dp
 
 
+    !> SPD inverse by Cholesky, same rescaling and ridge escalation as spd_solve_dp; zeros if all
+    !! attempts fail. A is overwritten.
     subroutine spd_inv_dp( A, Ainv, n )
         integer,  intent(in)    :: n
         real(dp), intent(inout) :: A(n,n)

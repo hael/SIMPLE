@@ -12,16 +12,14 @@ use simple_flex_pca_fit_types, only: xfsc_ctx_t
 implicit none
 #include "simple_local_flags.inc"
 
-!> par.5.2 deepest-crossing criterion for the per-fit internal-FSC bands recorded in the artifact
+!> FSC criterion of the deepest-crossing per-fit internal-FSC bands recorded in the artifact
 real, parameter :: XFSC_CRIT = 0.143
 
 contains
 
-    !> Read the SIMPLE_COV_XFSC_REG arm (default 0: internal e/o Wiener only), reload the
-    !! artifact when the ridge or the paired writer is live (restart-complete series -- the
-    !! load_probe_state idiom) and fail fast on the contract violations. Master-only state:
-    !! workers pass l_master=.false. and the whole subsystem stays inert on them (the ridge
-    !! and the writer are master M-step / master-loop operations).
+    !> Arm the cross-fit FSC ridge (arm 1, hard-wired; no switch selects another arm), reload the
+    !! artifact when the ridge or the paired writer is live, and fail fast on contract violations.
+    !! Master-only: workers pass l_master=.false. and stay inert.
     module subroutine xfsc_setup( ctx, params, cfg, kfr_ann, l_paired, l_master )
         type(xfsc_ctx_t),  intent(inout) :: ctx
         class(parameters), intent(in)    :: params
@@ -30,18 +28,17 @@ contains
         logical,           intent(in)    :: l_paired, l_master
         ctx%v_reg      = 1     ! the cross-fit FSC ridge (the internal e/o arm was the scaffolding)
         ctx%l_paired   = l_paired
-        ! the paired master writes honest paired=1 records EVERY iteration (spec par.2.2: the
-        ! artifact is the engine's lasting product); the single-fit engine writes none
+        ! the paired master writes honest paired=1 records EVERY iteration; the single-fit engine writes none
         ctx%l_writer   = l_paired .and. l_master
         ctx%pairing_id = 0
         if( l_paired )then
-            ! one-time env read (hazard 7: never mid-loop); the driver already validated 1|3
+            ! one-time env read (never mid-loop); the driver already validated 1|3
             ctx%pairing_id = cfg%mod4_pairing
         endif
         ctx%l_any      = ctx%l_writer .or. ctx%v_reg > 0
         ctx%l_loaded   = .false.
         ctx%filtsz     = max(1, fdim(params%box_crop) - 1)
-        ! crossfsc low-resolution exemption index: the reslim_ind analog (spec par.3.1 step 5)
+        ! crossfsc low-resolution exemption index: the reslim_ind analog
         ctx%klo        = max(6, kfr_ann(1))
         if( .not. l_master )then
             ctx%l_any    = .false.
@@ -166,20 +163,9 @@ contains
         call crossfsc_kill(ctx%xf)
     end subroutine xfsc_teardown
 
-    !> CROSSFSC artifact writer, PAIRED mode (spec par.2.2): one honest paired=1 record per
-    !! iteration, appended after BOTH fits' master tails complete -- the impl-map step-3 hook in
-    !! the paired loop. Per-fit blocks come from each fit's own stashes (internal e/o FSC curves
-    !! + Gamma at the BAND/RANK site; H = the fit's own e+o harvest sum per spec par.2.3).
-    !!
-    !! MATCHED BLOCKS, v1-minimal (documented deviation from the full par.5 contract): the signed
-    !! pairing is GREEDY |cos| matching on the two fits' realized in-memory bases
-    !! (fit%history%prev_real -- the delivered orthonormal basis of this iteration, band-limited to the
-    !! working band and soft-masked identically in both fits, so the raw real-space cosine IS the
-    !! comparison-band masked cosine), rather than mask-mean-subtracted per-half varimax +
-    !! exhaustive/Hungarian matching. fsc_cross is then the honest cross-fit FSC between fit A's
-    !! component and sign * fit B's matched component (image%fsc, the em_iter Wiener-site call).
-    !! The offline instrument (~/ribo_local/rank_criterion.py) remains the reference for rank
-    !! decisions; upgrading the in-engine matching to matched varimax is step-3 follow-up work.
+    !> Append one paired=1 crossfsc record per iteration, after both fits' tails: per-fit internal
+    !! FSC, Gamma and own e+o H, plus greedy signed |cos| matching on the delivered bases (prev_real)
+    !! and each matched pair's cross-fit FSC. Greedy, not varimax+Hungarian.
     module subroutine xfsc_paired_record( ctx, params, fits, it_eff )
         type(xfsc_ctx_t),  intent(inout) :: ctx
         class(parameters), intent(in)    :: params

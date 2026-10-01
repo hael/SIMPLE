@@ -272,11 +272,10 @@ contains
         write(funit, iostat=io_stat) subhdr
         call fileiochk('write_probe_part_v5_fit; sub-header', io_stat)
         ! the coupled rho rows must live on the SAME lattice as the basis accumulators, otherwise
-        ! one band box cannot describe both and the boxed payload would be mis-scattered
+        ! one index list cannot describe both and the gathered payload would be mis-scattered
         if( size(part%rho_e,2) /= size(part%cmat_e,1) .or. size(part%rho_e,3) /= size(part%cmat_e,2) .or. &
             &size(part%rho_e,4) /= size(part%cmat_e,3) ) &
             &THROW_HARD('write_probe_part_v5_fit: rho_e lattice differs from the basis lattice')
-        ! one nonzero bounding box for the whole crop lattice (see "band boxing" above)
         ! index list of every populated lattice point, unioned over the six shipped arrays
         allocate(pm(size(part%cmat_e,1),size(part%cmat_e,2),size(part%cmat_e,3)), source=.false.)
         call pk_mask_c1(part%cmat_e, pm)
@@ -324,6 +323,11 @@ contains
         endif
         call write_probe_part_kernels(funit, part%kpk_e, part%kpk_o, part%rpk_e, part%rpk_o, 'write_probe_part_v5_fit')
     end subroutine write_probe_part_v5_fit
+
+    ! ---- index-list packing --------------------------------------------------------------------
+    ! Part payloads are nonzero only inside the covariance band, so only the populated lattice points
+    ! ship: one index list per fit from the union of the shipped arrays' nonzeros (omitted voxels are
+    ! exact zeros, so the fold is bit-identical). The PCG kernels and rhs ship packed on the band list.
 
     subroutine pk_mask_r2( a, m )
         real,    intent(in)    :: a(:,:,:,:)
@@ -519,7 +523,7 @@ contains
         if( subhdr(1) /= part%ncomp          ) THROW_HARD('v5 probe part per-fit ncomp mismatch')
         if( subhdr(5) /= size(part%rho_e,1)  ) THROW_HARD('v5 probe part per-fit npairs mismatch')
         ! the lattice dims MUST be validated, not just ncomp/npairs: a part written on a different
-        ! expanded lattice yields an in-range band box whose voxels land at the wrong addresses,
+        ! expanded lattice yields an in-range index list whose voxels land at the wrong addresses,
         ! i.e. silently misplaced mass instead of a loud failure
         if( subhdr(2) /= size(part%cmat_e,1) .or. subhdr(3) /= size(part%cmat_e,2) .or. &
             &subhdr(4) /= size(part%cmat_e,3) ) &
@@ -647,29 +651,8 @@ contains
         fits(1)%model%sig2_eff = model%sig2_eff
         fits(1)%model%sig2     = max(model%sig2_eff, DTINY)
         means(1)%p => model%mean_rec
-        ! ---- optional STRIDE subsample, for the basis refinement only ----
-        ! The probe refines ncomp band-limited, FSC-regularised volumes, and every iteration costs a
-        ! full pass over the data -- far more particles than that many parameters need. A stride keeps
-        ! both halfsets and every state proportionally represented; fromp/top would NOT, because
-        ! particles are commonly ordered by state (on Ribosembly a contiguous window selects whole
-        ! states). The embedding stage that follows still uses every particle: only the basis
-        ! refinement is subsampled.
-        ! The stride MUST be applied within each halfset, not across the particle list. `eo` alternates
-        ! strictly by particle index (0,1,0,1,...), so a plain stride of 2 selects one halfset entirely
-        ! and leaves the other empty -- and every probe M-step is regularised by an even/odd FSC, which
-        ! is then computed against nothing. Measured: the Wiener filter kills the basis and the run dies
-        ! at the "embedding collapsed" guard. Striding per halfset keeps both populated at any stride.
-        ! ---- absolute cap, not a fixed ratio ----
-        ! The probe refines ncomp band-limited, FSC-regularised volumes, and that parameter count
-        ! does not grow with the dataset, so the particles needed to determine it do not either. A
-        ! constant stride would leave the probe scaling linearly and dominating the run; capping the
-        ! count makes it O(1) in dataset size.
-        !
-        ! COV_PROBE_MAX_PTCLS is the total across all processes, so each takes its share -- a worker
-        ! sees only its own partition and would otherwise take the whole budget nparts times over.
-        ! Only a WORKER divides the total by nparts: it holds one fromp/top partition. The master
-        ! holds every particle, so passing nparts there divides twice and inflates the stride by
-        ! exactly nparts. See cov_stage_subsample, which the initialiser shares.
+        ! Optional probe-stage cap (SIMPLE_COV_PROBE_MAX, default off), applied per halfset; embedding
+        ! still uses every particle. The cap is a cross-process total: only a worker divides it by nparts.
         nparts_sub = 1
         if( rounds%is_worker() ) nparts_sub = params%nparts
         call cov_stage_subsample(build, fits(1)%spec%sel%pinds, fits(1)%spec%sel%nptcls, nparts_sub, cfg%probe_max, 'PROBE', &
@@ -715,8 +698,8 @@ contains
         !> paired final stage (par.7 "merge, don't refit"): snapshot each fit's raw M-step
         !! sufficient statistics + entry frame every iteration, pre-ridge pre-solve
         logical,             intent(in)    :: l_merge_stash
-        !> cross-fit-FSC driver context: the paired master writes honest paired=1 records every
-        !! iteration; the single-fit engine writes none; the ridge consumers act per their gates
+        !> cross-fit-FSC driver context: the paired master writes paired=1 records every
+        !! iteration (the single-fit engine writes none); the ridge is their only consumer
         type(xfsc_ctx_t) :: xfctx
         character(len=:), allocatable :: xtag
         integer  :: it, it_eff, niters_eff, f, nthr

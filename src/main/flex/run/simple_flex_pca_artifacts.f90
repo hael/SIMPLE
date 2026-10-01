@@ -50,9 +50,8 @@ contains
         endif
     end subroutine flex_pca_set_part_dir
 
-    !> Node-local part directory for the local queue system: parts are written and reduced once
-    !! per round (5-54 s per iteration and ~90 s in the states stage over the network on
-    !! 2026-09-08), so they go to the disk the user already declared local through cache_dir.
+    !> Node-local part directory for the local queue system: parts are written and reduced every
+    !! round, so they go to the disk the user already declared local through cache_dir.
     !! Master and workers derive the SAME name from the run directory (no new key travels), which
     !! is safe because local workers run on the master's node in the master's directory. Empty
     !! (= run directory) for any other queue system, when cache_dir is not given, or in shared

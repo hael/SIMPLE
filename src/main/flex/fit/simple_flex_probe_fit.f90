@@ -15,8 +15,14 @@ private
 
 public :: flex_probe_fit, flex_mean_ref, probe_subspace_iteration, fit_engine_iterate
 
+!> Mean principal-angle cosine vs the previous basis at which a rank-1 fit stops early. Higher ranks
+!! run the full n_probe_iters budget (the paired merge needs the last two iterations' frames).
 real(dp), parameter :: COV_PROBE_CONV    = 0.999999d0
+!> mixture width of the MCFA E-step: the deconvolution picks the macro-clusters downstream, so this
+!> is only the E-step's flexibility budget
 integer,  parameter :: COV_EM_MIX        = 16
+!> consensus resolution shells deflated out of every basis volume each M-step (the background and
+!> dilation templates are added on top)
 integer,  parameter :: COV_EM_DEFLATE    = 4
 integer, parameter :: PROBE_PART_VERSION  = 12  ! rho rows are always the full packed triangle; trailing PCG kernel + rhs blocks on the shared band list (slot for slot, no per-part index list)
 integer, parameter :: PROBE_PART_VERSION5 = 10  ! v5 layout, payloads band-boxed (nonzero bounding box per lattice) + trailing PCG kernel + rhs blocks per fit

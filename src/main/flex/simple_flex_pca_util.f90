@@ -17,6 +17,7 @@ public :: corr_dp, cov_signal_rank, cov_stage_subsample, cov_accum_bytes, cov_di
 !> safety cap on kernel bandwidth growth when a state's support falls below min_neff
 integer, parameter :: COV_MAX_BW_GROW = 4
 real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
+! Byte budget behind the d_tilde memory cap (cov_dim_budget); no current solve allocates the modelled array.
 real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
 
 
@@ -296,7 +297,7 @@ contains
         endif
     end subroutine cov_stage_subsample
 
-    !>  Bytes in the reduced solve's ONE shared accumulator at column dimension d.
+    !>  Bytes of the packed [d(d+1)/2]^2 array model that cov_dim_budget sizes d against.
     pure real(dp) function cov_accum_bytes( d ) result( nbytes )
         integer, intent(in) :: d
         real(dp) :: n
@@ -304,8 +305,7 @@ contains
         nbytes = 8.d0*n*n
     end function cov_accum_bytes
 
-    !>  Largest d whose accumulator fits COV_ATHR_BUDGET under the model the solve will ACTUALLY use,
-    !!  i.e. cov_accum_bytes(d, packed) <= COV_ATHR_BUDGET.
+    !>  Largest d with cov_accum_bytes(d) <= COV_ATHR_BUDGET.
     pure integer function cov_dim_budget() result( d )
         ! d(d+1)/2 = sqrt(BUDGET/8)  =>  d = (-1 + sqrt(1 + 8*sqrt(BUDGET/8)))/2
         d = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(COV_ATHR_BUDGET/8.d0)))/2.d0))

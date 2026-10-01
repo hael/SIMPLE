@@ -23,14 +23,9 @@ public :: run_flex_pca_paired, probe_worker_pass, embed_worker_pass
 
 contains
 
-    !> PAIRED-ENGINE ENTRY (SIMPLE_COV_PAIRED=1; plan step 1-2, shared-memory probe-only v1):
-    !! two resident probe fits over the mod-4 disjoint halves of the master's selection,
-    !! advanced by ONE shared master loop (fit_engine_iterate with nfits=2). Per-fit initialisation mirrors the single-fit order:
-    !! mean copy + mean scale on the fit's own half, deterministic data-free basis (identical
-    !! geometry both fits) with per-fit noise/prior calibration, probe-stage subsample.
-    !! Delivery is probe-only: fit A keeps the legacy namespaces (flex_pca_pc*/flex_pca_probe.txt)
-    !! so every downstream consumer keeps working; fit B writes flex_pca_fitB_pc* +
-    !! flex_pca_probe_fitB.txt (naming precedent: the bagA/bagB pools).
+    !> Paired engine: two resident probe fits over the mod-4 halves of the selection, advanced by one
+    !! shared loop (fit_engine_iterate with nfits=2) from identical data-free bases, then merged by
+    !! probe_paired_merge. Fit A writes flex_pca_pc*/flex_pca_probe.txt, fit B flex_pca_fitB_pc*/flex_pca_probe_fitB.txt.
     subroutine run_flex_pca_paired( params, cfg, build, sel, col_sep, neigs_req, model , rounds)
         type(flex_selection), intent(in)    :: sel
         type(flex_fit_model), intent(inout) :: model   !< the merged product: basis, prior variances, rank, noise level
@@ -49,7 +44,7 @@ contains
         if( params%n_probe_iters < 2 ) THROW_HARD('the paired merge needs n_probe_iters >= 2: the final iteration''s statistics are expressed in the previous iteration''s delivered frame')
         model%ncomp = 0
         model%sig2_eff  = 0.d0
-        ! ---- the split: the ONE rule, shared with the two-job pcafit harness ----
+        ! ---- the split: the ONE rule (flex_pca_half_of), shared with the paired workers ----
         vpair = cfg%mod4_pairing
         if( vpair == 2 ) THROW_HARD('SIMPLE_COV_MOD4_PAIRING=2 groups same-parity rows: both halves lose one eo class under the row-alternating project eo split. Use pairing 1 or 3.')
         if( vpair /= 1 .and. vpair /= 3 ) THROW_HARD('SIMPLE_COV_MOD4_PAIRING must be 1, 2 or 3')
@@ -132,19 +127,11 @@ contains
             &ncomp A=',fits(1)%model%ncomp,' B=',fits(2)%model%ncomp,'  sig2 A=',fits(1)%model%sig2_eff, &
             &' B=',fits(2)%model%sig2_eff
         call flush(logfhandle)
-        ! ---- FINAL STAGE (par.7): frame-align + accumulator merge + ONE joint solve (mode 1)
-        ! merged eigenvolumes/meta/manifest written inside.
-        ! The fits' own delivery above is untouched -- the merge is an ADDITIONAL product.
+        ! ---- final stage: frame-align, accumulator merge and one joint solve; the merged eigenvolumes,
+        ! meta and manifest lines are an additional product next to the fits' own delivery ----
         call probe_paired_merge(params, build, fits, model, mergecos)
         if( .not. allocated(model%basis_recs) .or. model%ncomp < 1 ) THROW_HARD('paired merge returned no merged basis')
-        ! ---- FSC-DOCTRINE AXIS WEIGHTING: the per-axis cross-half match cosine is an FSC-per-component,
-        ! and SIMPLE's house treatment of reproducibility is per-shell WEIGHTING,
-        ! never hard truncation -- fsc2optlp doctrine, merged-estimate correction
-        ! w = 2c/(1+c) (Rosenthal-Henderson). Axes below the 0.143 information
-        ! floor are dropped (nothing is there); everything else is down-weighted
-        ! through its prior variance, which handles a smooth no-cliff spectrum
-        ! (measured on 10028) the way hard thresholds cannot. 0.5 remains the
-        ! REPORTING bar for interpretable axes, logged per component below.
+                    ! Axis weight from cross-half match cosine c: prior variance x 2c/(1+c), ~0 below 0.143.
         block
             integer  :: qq
             real(dp) :: cq, wq
@@ -173,23 +160,20 @@ contains
                 call flush(logfhandle)
             endif
         end block
-        ! ---- FULL-SET POLISH: after the merge froze rank, axes and convergence on the
-        ! half pair, ONE unmonitored full-selection EM iteration from the merged basis
-        ! (the eo-combine-then-polish convention). Depth stays at 1: deeper polish has no
-        ! held-out signal and was measured to erode the island (2026-09-01 harness).
-        ! Writes under the polished namespace so the per-fit deliveries stay intact.
+                    ! Full-set polish: one unmonitored full-selection EM iteration from the merged basis, written
+                    ! under the polished namespace so the per-fit deliveries stay intact.
         block
             integer, parameter :: NPOLISH = 1
             write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MERGE POLISH: ', &
                 &NPOLISH,' full-selection EM iteration(s) over ',sel%nptcls, &
                 &' particles from the merged basis'
             call flush(logfhandle)
-            ! materialize the ENTRY basis under the polished namespace BEFORE the
-            ! loop: a distributed round-1 worker loads the current basis from disk
-            ! (the stamped prefix), and the merged basis lives only in memory here
-            ! -- the merged eigenvolumes on disk carry the same content, so copy
-            ! them into the polished names (they are overwritten every iteration
-            ! by fit_iter_finish thereafter)
+                        ! materialize the ENTRY basis under the polished namespace BEFORE the
+                        ! loop: a distributed round-1 worker loads the current basis from disk
+                        ! (the stamped prefix), and the merged basis lives only in memory here
+                        ! -- the merged eigenvolumes on disk carry the same content, so copy
+                        ! them into the polished names (they are overwritten every iteration
+                        ! by fit_iter_finish thereafter)
             block
                 type(image)  :: vcp
                 type(string) :: fsrc, fdst

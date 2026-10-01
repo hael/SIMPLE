@@ -23,22 +23,9 @@ public :: flex_probe_part, probe_part_borrow, probe_part_restore
 public :: xfsc_ctx_t
 public :: cleanup_plane
 
-!> Per-fit state of one probe EM fit (the paired-engine state hoist, proposal §4 step 0/1).
-!!
-!! probe_subspace_iteration used to keep everything that survives from EM iteration N to N+1 as
-!! subroutine-local variables of the one long call -- which is exactly why a distributed probe
-!! worker (relaunched with niters=1 every round) destroys its MCFA state, prev_real
-!! and polar caches each round, and why two alternating single-fit calls could never
-!! implement the paired engine. This type is that state, hoisted, so one master-loop iteration
-!! can advance two resident fits.
-!!
-!! LIFECYCLE CONTRACT (the MCFA free-on-iteration crash, em_iter teardown note, verbatim
-!! archetype): the mixture state (mix_*) and its work arrays (rhs0th etc) must survive from one
-!! iteration's M-step to the next iteration's E-step. They are freed ONLY by kill_probe_fit or
-!! by the basis-rank-change resize at iteration start -- never by per-iteration cleanup. The
-!! historical bug: iteration 3 initialised the mixture, per-iteration cleanup freed it,
-!! l_mix_active stayed true, and iteration 4's E-step walked into an unallocated mix_Ominv (a
-!! null descriptor, invisible to -fcheck=bounds, every thread segfaulting on the same line).
+!> Per-fit EM state, owned by the driver so one loop can advance two resident fits.
+!! Lifecycle: mix_* and their work arrays (rhs0th, mkth, lwth, rkth, mxa_*) live across
+!! iterations; only kill_probe_fit or the rank-change resize in fit_iter_begin may free them.
 !> identity, selection, artifact namespaces and the resolved per-fit policy (never mutated by an iteration)
 type :: flex_fit_spec
     integer :: id = 0  !< 1 = fit A, 2 = fit B, 0 = single-fit (legacy)
@@ -109,6 +96,9 @@ type :: flex_fit_diag
     real(dp), allocatable :: gam_dbg(:,:)
     real(dp), allocatable :: sec_proj_thr(:), sec_gram_thr(:)
     integer :: khi_fit = 0  !< per-fit band, written by the BAND/RANK diagnostic;
+    ! ---- cross-fit-FSC (crossfsc) per-fit hooks; the driver (xfsc_ctx_t) owns every decision ----
+    ! fit_iter_finish harvests the writer payloads when l_xf_harvest is set (H before any ridge touches rho)
+    ! and applies xf_invtau2 (record t-1, xfsc_prep_iter) to the rho_e/rho_o diagonals before the solves, once.
     logical :: l_xf_harvest = .false.
     real,     allocatable :: xf_h_e(:,:), xf_h_o(:,:)  !< (filtsz,ncomp) per-shell H, pre-ridge
     integer,  allocatable :: xf_cnt(:)  !< (filtsz) shared per-shell voxel counts
@@ -178,16 +168,10 @@ type :: flex_fit
 end type flex_fit
 
 
-!> ---- CROSS-FIT-FSC driver context (artifact writer + SSNR ridge) ----
-!! Spec: doc/for_developers/ideas/flex_pca_crossfsc_shrinkage_marching_spec.md (the marching and
-!! stopping consumers of that spec were removed 2026-09-07; only the artifact and the ridge remain).
-!! The ridge defaults OFF (SIMPLE_COV_XFSC_REG=0). One context is owned by each driver loop
-!! (fit_engine_iterate, entered through probe_subspace_iteration or run_flex_pca_paired); the per-fit payloads the
-!! writer needs (H profiles harvested from the rho pair diagonals, internal FSC curves, Gamma) are
-!! stashed in probe_fit_t by fit_iter_finish, so the phase procedure stays ignorant of the artifact
-!! and the driver owns every consumer decision. Only the paired engine writes records (paired=1,
-!! one per iteration: the artifact is its lasting product); the single-fit engine can consume a
-!! paired artifact left in the directory (pcafit names its side).
+!> Cross-fit-FSC driver context, one per driver loop (fit_engine_iterate, entered through
+!! probe_subspace_iteration or run_flex_pca_paired): the paired master's per-iteration record
+!! writer and the SSNR ridge (arm 1, hard-wired in xfsc_setup) built from record t-1. fit_iter_finish
+!! stashes the writer payloads in probe_fit_t; the driver owns every consumer decision.
 type :: xfsc_ctx_t
     logical  :: l_writer   = .false.   !< this driver writes records (paired master)
     logical  :: l_any      = .false.   !< ridge or writer live -> artifact state resident
