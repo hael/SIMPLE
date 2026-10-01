@@ -3,6 +3,7 @@
 !! label. Axis limits are the 0.5-99.5 percentiles of the points, so outliers never set the scale.
 module simple_flex_pca_plot
 use simple_core_module_api
+use simple_math, only: gcd
 use simple_jpg, only: write_rgb_jpeg
 implicit none
 private
@@ -30,7 +31,7 @@ contains
         character(len=*),  intent(in) :: fname
         real,              intent(in) :: x(:), y(:), z1(:), z2(:)
         integer,           intent(in) :: n
-        integer, optional, intent(in) :: labels(:)
+        integer,           intent(in) :: labels(:)
         integer, optional, intent(in) :: nlab
         real,    allocatable :: rgb(:,:,:)
         integer, allocatable :: lab(:)
@@ -38,10 +39,8 @@ contains
         if( n < 10 ) return
         allocate(lab(n), source=0)
         nl = 0
-        if( present(labels) )then
-            lab(1:n) = labels(1:n)
-            nl = maxval(lab); if( present(nlab) ) nl = nlab
-        endif
+        lab(1:n) = labels(1:n)
+        nl = maxval(lab); if( present(nlab) ) nl = nlab
         W = 3*PANEL + 4*GUTTER; H = PANEL + 2*GUTTER
         allocate(rgb(3,W,H), source=1.0)
         x0 = GUTTER
@@ -200,13 +199,4 @@ contains
         end do
         val = a(k); deallocate(a)
     end function kth_smallest
-
-    pure integer function gcd( a, b )
-        integer, intent(in) :: a, b
-        integer :: x, y, t
-        x = abs(a); y = abs(b)
-        do while( y /= 0 ); t = mod(x, y); x = y; y = t; end do
-        gcd = max(x, 1)
-    end function gcd
-
 end module simple_flex_pca_plot

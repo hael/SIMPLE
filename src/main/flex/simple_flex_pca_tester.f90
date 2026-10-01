@@ -1,11 +1,13 @@
-!@descr: unit tests for the flex_pca latent model, state weights and deconvolution (simple_flex_pca_model, _weights, _util, _deconv)
+!@descr: unit tests for the flex_pca embedding cache, state service, state weights and deconvolution
 ! Resume cache round trip, derived settings, population-floor placement, kernel and state weights, and
 ! latent deconvolution (noise scale, held-out K, posterior means). Fixed seeds. The fast suite
 ! deconvolves 4000 particles; the library suite 20000 at realistic noise.
 module simple_flex_pca_tester
 use simple_core_module_api,  only: dp, DPI
 use simple_syslib,           only: del_file
-use simple_flex_pca_model,   only: write_embedding_cache, read_embedding_cache, place_states_with_population_floor, &
+use simple_flex_pca_embedding_io,  only: write_embedding_cache, read_embedding_cache
+use simple_flex_pca_records, only: flex_selection, flex_fit_model, flex_latent, flex_state_set
+use simple_flex_pca_state_service, only: place_states_with_population_floor, &
     &auto_box_crop, auto_min_neff, auto_state_count, FLEX_AUTO_K_MIN, FLEX_AUTO_K_START
 use simple_flex_pca_util,    only: kernel_weights_at_bandwidth, COV_MAX_BW_GROW
 use simple_flex_pca_weights, only: build_covariance_state_weights
@@ -40,6 +42,9 @@ contains
         real(dp) :: z(NP,NC), eigvals(NC), contrast(NP), re(NP), rme(NP)
         real(dp) :: prec(NC,NC,NP), sig2, sig2_rd
         real(dp), allocatable :: z_rd(:,:), eig_rd(:), con_rd(:), re_rd(:), rme_rd(:), prec_rd(:,:,:)
+        type(flex_selection) :: sel
+        type(flex_fit_model) :: model, model_rd
+        type(flex_latent)    :: latent, latent_rd
         write(*,'(A)') 'test_embedding_cache_io'
         do i = 1, NP
             pinds(i)    = 3*i + 1                   ! non-contiguous, as a real selection is
@@ -57,8 +62,14 @@ contains
             eigvals(q) = 10.d0/real(q,dp)
         end do
         sig2 = 0.137d0
-        call write_embedding_cache(FN, pinds, NP, NC, z, eigvals, contrast, re, rme, prec, sig2)
-        call read_embedding_cache(FN, pinds, NP, ncomp_rd, z_rd, eig_rd, con_rd, re_rd, rme_rd, prec_rd, sig2_rd)
+        sel%pinds = pinds; sel%nptcls = NP
+        model%ncomp = NC; model%eigvals = eigvals; model%sig2_eff = sig2
+        latent%z = z; latent%contrast = contrast; latent%resid_energy = re; latent%resid_mean_energy = rme; latent%precision = prec
+        call write_embedding_cache(FN, 0, 0., sel, model, latent)
+        call read_embedding_cache(FN, 0, 0., sel, model_rd, latent_rd)
+        ncomp_rd = model_rd%ncomp; sig2_rd = model_rd%sig2_eff
+        call move_alloc(latent_rd%z, z_rd); call move_alloc(model_rd%eigvals, eig_rd); call move_alloc(latent_rd%contrast, con_rd)
+        call move_alloc(latent_rd%resid_energy, re_rd); call move_alloc(latent_rd%resid_mean_energy, rme_rd); call move_alloc(latent_rd%precision, prec_rd)
         call assert_int(NC, ncomp_rd, 'cache round trip keeps the component count')
         call assert_true(all(z == z_rd),             'cache round trip: latents bit-exact')
         call assert_true(all(eigvals == eig_rd),     'cache round trip: eigenvalues bit-exact')
@@ -98,6 +109,9 @@ contains
         real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer,  allocatable :: labels(:)
         logical  :: indicators, neff_match, floor_met
+        type(flex_latent)    :: latent
+        type(flex_fit_model) :: model
+        type(flex_state_set) :: st
         write(*,'(A)') 'test_population_floor'
         call set_fixed_seed(20260923)
         do i = 1, NA
@@ -119,8 +133,10 @@ contains
                 prec(q,q,i) = 1.d0
             end do
         end do
-        call place_states_with_population_floor(z, NP, NC, NC, NST, 0, 10, FRAC, eigvals, prec, &
-            &weights, targets, bandwidths, neff, labels)
+        latent%z = z; latent%precision = prec; model%eigvals = eigvals; st%nstates = NST
+        call place_states_with_population_floor(latent, model, NC, 0, 10, FRAC, st)
+        call move_alloc(st%weights, weights); call move_alloc(st%targets, targets); call move_alloc(st%bandwidths, bandwidths)
+        call move_alloc(st%neff, neff); call move_alloc(st%labels, labels)
         nmin = max(1, nint(FRAC*real(NP)))
         call assert_int(NP, size(labels), 'one label per particle')
         call assert_true(all(labels >= 1) .and. all(labels <= NST), 'every particle has a delivered state')
@@ -177,6 +193,8 @@ contains
         real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer,  allocatable :: labels(:)
         logical  :: in_hull
+        type(flex_latent)    :: latent
+        type(flex_state_set) :: st
         write(*,'(A)') 'test_state_weights'
         do i = 1, NPC
             z(i,     1) = -5.d0 + 0.01d0*real(mod(i,7),dp)
@@ -191,8 +209,10 @@ contains
                 prec(q,q,i) = 1.d0                  ! identity posterior precision
             end do
         end do
-        call build_covariance_state_weights(z, NP, NC, NC, NST, 0, 10, eigvals, prec, &
-            &weights, targets, bandwidths, neff, labels)
+        latent%z = z; latent%precision = prec; st%nstates = NST
+        call build_covariance_state_weights(latent, NC, 0, 10, st)
+        call move_alloc(st%weights, weights); call move_alloc(st%targets, targets); call move_alloc(st%bandwidths, bandwidths)
+        call move_alloc(st%neff, neff); call move_alloc(st%labels, labels)
         call assert_true(size(weights,1) == NP .and. size(weights,2) == NST, 'weights are particles x states')
         call assert_int(NP, size(labels), 'one label per particle')
         call assert_true(all(labels >= 0) .and. all(labels <= NST), 'labels lie in 0..nstates')
@@ -254,7 +274,7 @@ contains
             end do
         end do
         z0 = z
-        call calibrate_noise_scale(z, zhalf, prec, prior, n, D, a, a_comp)
+        call calibrate_noise_scale(zhalf, prec, prior, n, D, a, a_comp)
         call assert_true(abs(a - 1.d0) <= 0.15d0, trim(tag)//' the noise scale calibrates to 1 (within 0.15)')
         call deconvolve_latent(z, prec, prior, n, D, a, 4, k_out)
         call assert_int(2, k_out, trim(tag)//' the held-out rule picks K = 2')

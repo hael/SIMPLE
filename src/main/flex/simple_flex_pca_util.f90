@@ -1,88 +1,27 @@
-!@descr: flex_pca shared helpers: environment switches, chi-squared median, unimodality test
+!@descr: flex_pca shared helpers: chi-squared median, unimodality test, kernel weights, delivery naming
 module simple_flex_pca_util
 use simple_core_module_api
 use simple_image, only: image
 use simple_parameters, only: parameters
+use simple_builder, only: builder
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: cov_env_int, cov_env_int_pub, cov_env_flag_on, cov_env_flag_off, cov_env_dp
 public :: chi2_median, punit, two_gauss_unimodal
 public :: kernel_weights_at_bandwidth, project_onto_target_polyline, dilation_template
 public :: flex_pca_write_state
-public :: COV_MAX_BW_GROW
+public :: COV_MAX_BW_GROW, COV_SIGNAL_FACTOR, COV_ATHR_BUDGET
+public :: corr_dp, cov_signal_rank, cov_stage_subsample, cov_accum_bytes, cov_dim_budget
 
 !> safety cap on kernel bandwidth growth when a state's support falls below min_neff
 integer, parameter :: COV_MAX_BW_GROW = 4
+real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
+real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
 
 
 contains
 
-    !>  Override an integer from the environment, if the variable is set and parses (values > 0 only).
-    subroutine cov_env_int( name, val )
-        character(len=*), intent(in)    :: name
-        integer,          intent(inout) :: val
-        character(len=32) :: envval
-        integer :: stat, ln, ival
-        call get_environment_variable(name, envval, ln, stat)
-        if( stat /= 0 .or. ln < 1 ) return
-        read(envval(:ln), *, iostat=stat) ival
-        if( stat == 0 .and. ival > 0 )then
-            val = ival
-            write(logfhandle,'(A,A,A,I0)') '>>> FLEX_PCA ',trim(name),' override: ',ival
-            call flush(logfhandle)
-        endif
-    end subroutine cov_env_int
-
-    !>  Override an integer from the environment, if the variable is set and parses.
-    subroutine cov_env_int_pub( name, val )
-        character(len=*), intent(in)    :: name
-        integer,          intent(inout) :: val
-        call cov_env_int(name, val)
-    end subroutine cov_env_int_pub
-
-
-    !>  True only when an environment flag is set to a nonzero integer (an opt-IN switch).
-    logical function cov_env_flag_on( name ) result(on)
-        character(len=*), intent(in) :: name
-        character(len=32) :: envval
-        integer :: stat, ln, ival
-        on = .false.
-        call get_environment_variable(name, envval, ln, stat)
-        if( stat /= 0 .or. ln < 1 ) return
-        read(envval(:ln), *, iostat=stat) ival
-        if( stat == 0 ) on = ival /= 0
-    end function cov_env_flag_on
-
-    !>  True only when an environment flag is explicitly set to zero (an opt-OUT switch).
-    logical function cov_env_flag_off( name ) result(off)
-        character(len=*), intent(in) :: name
-        character(len=32) :: envval
-        integer :: stat, ln, ival
-        off = .false.
-        call get_environment_variable(name, envval, ln, stat)
-        if( stat /= 0 .or. ln < 1 ) return
-        read(envval(:ln), *, iostat=stat) ival
-        if( stat == 0 ) off = ival == 0
-    end function cov_env_flag_off
-
-    !>  Real-valued environment override, leaving `val` untouched when unset. Companion to cov_env_int.
-    subroutine cov_env_dp( name, val )
-        character(len=*), intent(in)    :: name
-        real(dp),         intent(inout) :: val
-        character(len=32) :: envval
-        integer  :: stat, ln_env
-        real(dp) :: rval
-        call get_environment_variable(name, envval, ln_env, stat)
-        if( stat /= 0 .or. ln_env < 1 ) return
-        read(envval(:ln_env), *, iostat=stat) rval
-        if( stat == 0 )then
-            val = rval
-            write(logfhandle,'(A,A,A,ES12.4)') '>>> FLEX_PCA ',trim(name),' override: ',rval
-            call flush(logfhandle)
-        endif
-    end subroutine cov_env_dp
 
     !> Median of chi-squared with k dof, Wilson-Hilferty: k*(1 - 2/(9k))^3. Good to 3 % at k=1, which is
     !! far inside the tolerance of a bandwidth FLOOR and needs no gamma inverse.
@@ -261,5 +200,115 @@ contains
         call prefix%kill
         call ext%kill
     end subroutine flex_pca_write_state
+
+    !> Pearson correlation of two double vectors.
+    real(dp) function corr_dp( a, b, n ) result( r )
+        integer,  intent(in) :: n
+        real(dp), intent(in) :: a(n), b(n)
+        real(dp) :: ma, mb, sa, sb, sab
+        integer  :: i
+        r  = 0.d0
+        if( n < 3 ) return
+        ma = sum(a)/real(n,dp); mb = sum(b)/real(n,dp)
+        sa = 0.d0; sb = 0.d0; sab = 0.d0
+        do i = 1, n
+            sa  = sa  + (a(i)-ma)**2
+            sb  = sb  + (b(i)-mb)**2
+            sab = sab + (a(i)-ma)*(b(i)-mb)
+        end do
+        if( sa <= DTINY .or. sb <= DTINY ) return
+        r = sab / sqrt(sa*sb)
+    end function corr_dp
+
+    ! Rank at which the Gram spectrum enters its noise bulk. Noise level = median of the lower half,
+    ! so the leading signal directions cannot inflate it. Scale-free.
+    pure integer function cov_signal_rank( eval, n ) result( d )
+        integer,  intent(in) :: n
+        real(dp), intent(in) :: eval(n)          !< DESCENDING eigenvalues
+        real(dp) :: noise
+        integer  :: lo, m
+        d = 1
+        if( n < 4 ) return
+        lo    = n/2 + 1
+        m     = n - lo + 1
+        noise = eval(lo + m/2)
+        if( noise <= DTINY )then
+            d = n
+            return
+        endif
+        d = 0
+        do while( d < n )
+            if( eval(d+1) <= COV_SIGNAL_FACTOR*noise ) exit
+            d = d + 1
+        end do
+        d = max(1, min(n, d))
+    end function cov_signal_rank
+
+    ! Halfset-safe capped subsample, shared by the column-subspace initialiser and the probe EM.
+    ! `eo` alternates strictly by particle index, so a plain stride of 2 selects one halfset entirely
+    ! and the even/odd FSC that regularises every M-step is then computed against nothing; stride
+    ! WITHIN each halfset instead. `maxtot` is a total across processes, so only a WORKER passes
+    ! nparts -- the master holds every particle and dividing there inflates the stride by nparts.
+    subroutine cov_stage_subsample( build, pinds, nptcls, nparts, maxtot, label, spinds, nsel )
+        type(builder),        intent(inout) :: build
+        integer,              intent(in)    :: pinds(:), nptcls, nparts, maxtot
+        character(len=*),     intent(in)    :: label
+        integer, allocatable, intent(out)   :: spinds(:)
+        integer,              intent(out)   :: nsel
+        integer :: nmax_tot, nmax_part, ihalf, i, nkept, n_half, ntgt
+        nmax_tot = maxtot
+        ! cap off (the default): hand back every particle, in project order
+        if( nmax_tot < 1 )then
+            allocate(spinds(nptcls), source=pinds(:nptcls))
+            nsel = nptcls
+            call hpsort(spinds)
+            return
+        endif
+        nmax_part = max(1, nmax_tot / max(1, nparts))
+        allocate(spinds(nptcls))
+        nsel = 0
+        do ihalf = 0, 1
+            n_half = 0
+            do i = 1, nptcls
+                if( build%spproj_field%get_eo(pinds(i)) == ihalf ) n_half = n_half + 1
+            end do
+            if( n_half < 1 ) cycle
+            ! split the per-part budget evenly between halfsets, never starving one
+            ntgt  = min(n_half, max(1, (nmax_part + 1 - ihalf)/2))
+            nkept = 0
+            do i = 1, nptcls
+                if( build%spproj_field%get_eo(pinds(i)) /= ihalf ) cycle
+                ! real(dp) rather than integer products: nkept*ntgt overflows int32 at these sizes
+                if( int(real(nkept+1,dp)*real(ntgt,dp)/real(n_half,dp)) > &
+                   &int(real(nkept,  dp)*real(ntgt,dp)/real(n_half,dp)) )then
+                    nsel = nsel + 1
+                    spinds(nsel) = pinds(i)
+                endif
+                nkept = nkept + 1
+            end do
+        end do
+        if( nsel < 2 ) THROW_HARD('stage subsample left too few particles; raise the '//trim(label)//' particle cap')
+        call hpsort(spinds(:nsel))   ! restore project order so batched image reads stay sequential
+        if( nsel < nptcls )then
+            write(logfhandle,'(A,A,A,I0,A,I0,A)') '>>> FLEX_PCA ',trim(label),' subsample: using ', &
+                &nsel,' of ',nptcls,' particles'
+            call flush(logfhandle)
+        endif
+    end subroutine cov_stage_subsample
+
+    !>  Bytes in the reduced solve's ONE shared accumulator at column dimension d.
+    pure real(dp) function cov_accum_bytes( d ) result( nbytes )
+        integer, intent(in) :: d
+        real(dp) :: n
+        n = real(d,dp)*real(d+1,dp)/2.d0   ! Mspk(npk,npk), npk = d(d+1)/2
+        nbytes = 8.d0*n*n
+    end function cov_accum_bytes
+
+    !>  Largest d whose accumulator fits COV_ATHR_BUDGET under the model the solve will ACTUALLY use,
+    !!  i.e. cov_accum_bytes(d, packed) <= COV_ATHR_BUDGET.
+    pure integer function cov_dim_budget() result( d )
+        ! d(d+1)/2 = sqrt(BUDGET/8)  =>  d = (-1 + sqrt(1 + 8*sqrt(BUDGET/8)))/2
+        d = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(COV_ATHR_BUDGET/8.d0)))/2.d0))
+    end function cov_dim_budget
 
 end module simple_flex_pca_util

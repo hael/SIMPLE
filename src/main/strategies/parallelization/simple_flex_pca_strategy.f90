@@ -13,10 +13,11 @@ use simple_builder,         only: builder
 use simple_cmdline,         only: cmdline
 use simple_parameters,      only: parameters
 use simple_qsys_env,        only: qsys_env
-use simple_flex_pca_rounds, only: flex_pca_rounds, flex_pca_rounds_shmem, FLEX_FIT_ALL, &
-    &flex_pca_set_part_dir, flex_pca_local_part_dir, &
+use simple_flex_pca_rounds,    only: flex_pca_rounds, flex_pca_rounds_shmem
+use simple_flex_pca_stages,    only: flex_stage_request, FLEX_FIT_ALL, &
     &PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED, PCA_STAGE_STATES
-use simple_flex_pca_model,  only: run_flex_pca, run_flex_pca_worker
+use simple_flex_pca_artifacts, only: flex_pca_set_part_dir, flex_pca_local_part_dir
+use simple_flex_pca_application, only: flex_pca_application
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -147,7 +148,8 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        call run_flex_pca(params, build, cline, self%rounds)
+        type(flex_pca_application) :: app
+        call app%run(params, build, cline, self%rounds)
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
@@ -242,9 +244,10 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
+        type(flex_pca_application) :: app
         ! the master runs the shared-memory control flow; each distributable phase fans its
         ! particle partition out as one qsys round through self%rounds and reduces the parts
-        call run_flex_pca(params, build, cline, self%rounds)
+        call app%run(params, build, cline, self%rounds)
     end subroutine master_execute
 
     subroutine master_finalize_run( self, params, build, cline )
@@ -310,33 +313,27 @@ contains
         call flush(logfhandle)
     end subroutine master_plan_partitions
 
-    !> One qsys round. Round state travels in job_descr under registered keys (the refine3D
-    !! idiom): stage, pcafit, which_iter (the global EM iteration), maxits (the budget) and nfits
-    !! (1 single fit, 2 paired halves). extra_params=params has the scheduler clear the previous
-    !! round's sentinels itself.
-    subroutine master_run_stage( self, params, stage_id, label, which_iter, maxits, nfits )
+    !> One qsys round. The request's control state travels in job_descr under registered keys
+    !! (the refine3D idiom): stage, pcafit, which_iter (the global EM iteration), maxits (the
+    !! budget) and nfits (1 single fit, 2 paired halves). extra_params=params has the scheduler
+    !! clear the previous round's sentinels itself.
+    subroutine master_run_stage( self, params, req )
         class(flex_pca_master_rounds), intent(inout) :: self
         type(parameters),              intent(in)    :: params
-        integer,                       intent(in)    :: stage_id
-        character(len=*),              intent(in)    :: label
-        integer, optional,             intent(in)    :: which_iter, maxits, nfits
+        type(flex_stage_request),      intent(in)    :: req
         integer(timer_int_kind) :: t_round
-        integer :: it_here, maxits_here, nfits_here
         if( .not. allocated(self%part_params) ) THROW_HARD('flex_pca run_stage before plan_partitions')
         t_round = tic()
-        it_here = 0;     if( present(which_iter) ) it_here     = which_iter
-        maxits_here = 0; if( present(maxits) )     maxits_here = maxits
-        nfits_here = 1;  if( present(nfits) )      nfits_here  = nfits
-        call self%job_descr%set('stage',      int2str(stage_id))
+        call self%job_descr%set('stage',      int2str(req%stage))
         call self%job_descr%set('pcafit',     int2str(self%fit_sel))
-        call self%job_descr%set('which_iter', int2str(it_here))
-        call self%job_descr%set('maxits',     int2str(maxits_here))
-        call self%job_descr%set('nfits',      int2str(nfits_here))
-        write(logfhandle,'(A,A,A,I0,A)') '>>> FLEX_PCA distributing ',label,' over ',self%nparts_run,' parts'
+        call self%job_descr%set('which_iter', int2str(req%which_iter))
+        call self%job_descr%set('maxits',     int2str(req%maxits))
+        call self%job_descr%set('nfits',      int2str(req%nfits))
+        write(logfhandle,'(A,A,A,I0,A)') '>>> FLEX_PCA distributing ',trim(req%label),' over ',self%nparts_run,' parts'
         call flush(logfhandle)
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, part_params=self%part_params, &
             &array=L_USE_SLURM_ARR, extra_params=params)
-        write(logfhandle,'(A,A,A,F8.1)') '>>> FLEX_PCA ',label,' qsys round seconds=',toc(t_round)
+        write(logfhandle,'(A,A,A,F8.1)') '>>> FLEX_PCA ',trim(req%label),' qsys round seconds=',toc(t_round)
         call flush(logfhandle)
     end subroutine master_run_stage
 
@@ -375,7 +372,8 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        call run_flex_pca_worker(params, build, cline, self%rounds)
+        type(flex_pca_application) :: app
+        call app%run_worker(params, build, cline, self%rounds)
         call qsys_job_finished(params, string('simple_flex_pca_strategy :: worker_execute'))
     end subroutine worker_execute
 
