@@ -26,7 +26,7 @@ contains
     !! bandwidth is floored so at least min_neff particles fall inside its support.
     subroutine build_covariance_state_weights( z, nptcls, ncomp, nkern, nstates, axis, min_neff, &
         &eigvals, precision, weights, targets, bandwidths, neff, labels, dist_out, bfloor_out, targets_in, &
-        &zmetric, comp_rho, macro_in )
+        &zmetric, comp_rho, macro_in, equal_occ )
         integer,  intent(in) :: nptcls, ncomp, nkern, nstates, axis, min_neff
         real(dp), intent(in) :: z(nptcls,ncomp), eigvals(ncomp)
         real(dp), intent(in) :: precision(ncomp,ncomp,nptcls)   ! per-particle latent precision Pi_i
@@ -42,6 +42,8 @@ contains
         real(dp), optional,    intent(in) :: comp_rho(ncomp)
         ! macro-cluster label per particle from the latent deconvolution's mixture; replaces GMM AUTO's discovery fit
         integer,  optional,    intent(in) :: macro_in(:)
+        ! state_placement=equal_occ: at axis=0 the reliability-ordered equal-occupancy path replaces diffusion k-center
+        logical,  optional,    intent(in) :: equal_occ
         ! per-particle viewing AXIS; only needed for the GMM's orientation-coverage term
         real,     allocatable :: sorted(:)
         real(dp), allocatable :: wcomp(:), tvec(:), tcen(:,:), dist(:), dvec(:), mvec(:)
@@ -52,9 +54,11 @@ contains
         integer  :: ispace
         integer  :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
         integer  :: nk, errflg
-        logical  :: l_relpath, l_diffuse, l_gmm, l_gmm_auto
+        logical  :: l_relpath, l_diffuse, l_gmm, l_gmm_auto, l_equal_occ
         character(len=12) :: bwsrc
         nk = max(1, min(ncomp, nkern))
+        l_equal_occ = .false.
+        if( present(equal_occ) ) l_equal_occ = equal_occ
         allocate(wcomp(nk), tvec(nk), tcen(nk,nstates), dist(nptcls), dvec(nk), mvec(nk))
         wcomp = 1.d0
         ! STANDARDIZED PLACEMENT. Eigenvalue weighting would concentrate every target along the
@@ -128,14 +132,21 @@ contains
         else if( axis == 0 .and. present(comp_rho) )then
             ! DEFAULT: diffusion k-center. Handles a continuous reaction coordinate and branched compositional
             ! states with the same constants, because a curve is a degenerate graph.
-            call diffusion_kcenter_targets(z(:,1:nk), nptcls, nk, nstates, wcomp, comp_rho(1:nk), &
-                &tcen, l_diffuse)
+            ! state_placement=equal_occ skips it and takes the reliability-path fallback (equal-count slices)
+            l_diffuse = .false.
+            if( .not. l_equal_occ ) call diffusion_kcenter_targets(z(:,1:nk), nptcls, nk, nstates, wcomp, &
+                &comp_rho(1:nk), tcen, l_diffuse)
             if( l_diffuse )then
                 write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA state targets: diffusion k-center over ', &
                     &nk,' components, points=',nstates
             else
-                write(logfhandle,'(A)') '>>> FLEX_PCA diffusion k-center unavailable; falling back &
-                    &to the reliability-ordered path'
+                if( l_equal_occ )then
+                    write(logfhandle,'(A)') '>>> FLEX_PCA state_placement=equal_occ: reliability-ordered &
+                        &equal-occupancy path'
+                else
+                    write(logfhandle,'(A)') '>>> FLEX_PCA diffusion k-center unavailable; falling back &
+                        &to the reliability-ordered path'
+                endif
                 allocate(ppath(nptcls), tpath(nstates))
                 call reliability_path_targets(z(:,1:nk), nptcls, nk, nstates, wcomp, comp_rho(1:nk), tcen, &
                     &proj_out=ppath, tproj_out=tpath)

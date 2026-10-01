@@ -783,6 +783,14 @@ contains
             case DEFAULT
                 THROW_HARD('rec_states_backend must be gridding or pcg')
         end select
+        select case(trim(self%state_placement))
+            case('kcenter','equal_occ')
+            case DEFAULT
+                THROW_HARD('state_placement must be kcenter or equal_occ')
+        end select
+        if( trim(self%state_placement) == 'equal_occ' .and. self%state_axis < 0 )then
+            THROW_HARD('state_placement=equal_occ needs state_axis >= 0; a negative state_axis selects the density-spread path')
+        endif
         select case(trim(self%rec_states))
             case('yes','no')
             case DEFAULT

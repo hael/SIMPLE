@@ -7,12 +7,12 @@ implicit none
 
 ! 2*smpd_crop is the working Nyquist; the 1.25 safety factor keeps the covariance band clear of it
 real,    parameter :: COV_LP_OVER_NYQUIST   = 2.5
-real,    parameter :: COV_LP_DEFAULT = 16.0   !< default lp (A); smpd_target = lp / COV_LP_OVER_NYQUIST
+real,    parameter :: COV_LP_DEFAULT = 16.0   !< default lp (A); smpd_target = lp / COV_LP_OVER_NYQUIST; the flex_pca UI declares the same value
 !> smallest working box
 integer, parameter :: COV_MINBOX = 64
 
 !> rec_backend=pcg defaults: fixed 4-iteration budget of the warm-started basis M-step (rtol=0 disarms the rtol
-!! and FLEX_PCG_XTOL stops). NOTE: differs from the UI defaults (gridding, 20, 1e-3). State solves use FLEX_PCG_STATE_MAXITS.
+!! and FLEX_PCG_XTOL stops). Matches the flex_pca UI declaration. State solves use FLEX_PCG_STATE_MAXITS.
 integer, parameter :: FLEX_PCG_MAXITS_DEFAULT = 4
 real,    parameter :: FLEX_PCG_RTOL_DEFAULT   = 0.0
 
@@ -81,7 +81,7 @@ contains
         if( .not.cline%defined('npreimages') .and. .not.flex_pca_auto_states(cline) ) &
             &call cline%set('npreimages',4)
         if( .not.cline%defined('neigs') )       call cline%set('neigs',10)
-        ! an UPPER BOUND, not an iteration count: the probe stops itself on COV_PROBE_CONV
+        ! half-set EM iterations; the merge adds one joint iteration (cnga1 optimum, 2026-09-14)
         if( .not.cline%defined('n_probe_iters') ) call cline%set('n_probe_iters',4)
         call pickup_project_consensus_volume(cline)
         call derive_flex_pca_sampling(cline)

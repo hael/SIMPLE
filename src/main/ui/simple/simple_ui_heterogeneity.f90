@@ -41,15 +41,16 @@ contains
             '# components', .false., 10.0, &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'npreimages', 'num', &
-            'Max state volumes (default 4)', &
+            'Max state volumes (default 4; 8 with preimage_auto)', &
             'Upper bound on the kernel-regression targets in latent space; with the default state_axis=0 &
-            &these are diffusion k-centers over all retained components. The two-gate merge collapses &
-            &indistinct states, so the recovered count is <= this', &
+            &and state_placement=kcenter these are diffusion k-centers over all retained components. The two-gate merge collapses &
+            &indistinct states, so the recovered count is <= this. Left blank, it is 4, or 8 with preimage_auto=yes; &
+            &a value given with preimage_auto=yes is honoured as the ceiling', &
             'max # states 3-32', .false., 4.0, &
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call flex_pca%add_input(UI_FILT, 'preimage_auto', 'binary', &
             'Determine the state count automatically (default no)', &
-            'Raises the state ceiling to 32 (unless npreimages is given) and enables the two-gate merge, &
+            'Raises the state ceiling to 8 (unless npreimages is given) and enables the two-gate merge, &
             &so the delivered state count is recovered from the data rather than requested(yes|no){no}', &
             '', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -61,19 +62,23 @@ contains
             '', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_STANDARD)
-        call flex_pca%add_input(UI_FILT, 'niter', 'num', &
-            'Covariance fit iterations (default 5)', 'Alternating projection/backprojection covariance-factor iterations', &
-            '# iterations 1-20', .false., 5.0, &
-        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, 'state_axis', 'num', &
-            'Latent axis for state targets (default 0 = diffusion k-center)', &
-            'With 0 the state targets are diffusion k-centers over ALL retained covariance components, &
-            &which covers a continuous reaction coordinate and branched compositional states with the &
-            &same constants. A negative value places them along a density-spread path instead. &
-            &A positive value places them along that single component, &
-            &which discards the other components and tends to concentrate the particles on one state', &
+            'Latent axis for state targets (default 0 = all components)', &
+            'With 0 the state targets are placed over ALL retained covariance components by state_placement. &
+            &A negative value places them along a density-spread path instead. A positive value cuts &
+            &equal-occupancy slices along that single component, which discards the other components', &
             'component index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
+        call flex_pca%add_input(UI_FILT, 'state_placement', 'multi', &
+            'State target placement (default kcenter)', &
+            'kcenter places the state targets at diffusion k-centers over all retained components, which &
+            &covers a continuous reaction coordinate and branched compositional states with the same &
+            &constants. equal_occ cuts a reliability-ordered path through the latent space into slices &
+            &holding equal particle counts, so every state gets the same occupancy; use it when the latent &
+            &clusters are not well separated. Applies with state_axis=0(kcenter|equal_occ){kcenter}', &
+            '', .false., 'kcenter', &
+        &choices=ui_choices([character(len=9) :: 'kcenter', 'equal_occ']), &
+        &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'nkern', 'num', &
             'Latent components entering the state kernel (default 0 = all)', &
             'Decouples the state stage from neigs. neigs sets how many eigenvolumes are estimated; &
@@ -119,22 +124,30 @@ contains
             'grid units', .false., 2.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_SRCH, 'n_probe_iters', 'num', &
-            'Probe subspace-iteration refinements (default 5)', &
-            'EM / probe subspace iterations refining the column basis. Probe volumes aggregate the whole &
-            &slice instead of one Fourier voxel, which is the main lever on per-particle latent quality. &
-            &An upper bound rather than a fixed count: a rank-1 fit stops early once its basis cosine to the &
-            &previous iteration reaches 0.999999; higher ranks run the full count. Set 0 to disable', &
-            '# iterations', .false., 5.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_FILT, lp, required_override=.false., &
-            label_override='Low-pass limit (derived: 2.5*smpd_crop)', &
-            group="regularization", visibility=UI_VIS_STANDARD)
+            'Half-set EM iterations (default 4)', &
+            'EM iterations refining the covariance basis. Two fits on disjoint particle halves each run &
+            &this many iterations; after their merge, one joint EM iteration over all particles follows, &
+            &which this count does not include. More iterations raise the likelihood but lowered cross-half &
+            &reproducibility on low-SNR data. At least 2, as the half-set merge needs', &
+            '# iterations >= 2', .false., 4.0, &
+        &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
+        ! lp/smpd_target/box_crop are derived from the project (derive_flex_pca_sampling); preserve_default
+        ! keeps the declared values (lp 16 A = COV_LP_DEFAULT)
+        call flex_pca%add_input(UI_FILT, 'lp', 'num', &
+            'Variance resolution limit (default 16 A)', &
+            'Resolution to which the variability is resolved. It sets the working sampling to lp/2.5 and the &
+            &working box from it (magic-box autoscale, never finer than the data, floor 64). With an explicit &
+            &box_crop, lp instead defaults to 2.5*smpd_crop', &
+            'low-pass limit in Angstroms', .false., 16.0, &
+        &group="regularization", visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call flex_pca%add_input(UI_PARM, smpd_target, required_override=.false., &
-            label_override='Target sampling distance of the covariance lattice (default 2.2 A)', &
-            group="regularization", visibility=UI_VIS_STANDARD)
+            label_override='Working sampling distance (expert alias of lp; default lp/2.5)', &
+            help_override='Sampling distance of the covariance lattice in Angstroms. Ignored when lp is given; &
+            &the default is lp/2.5 = 6.4 A', &
+            group="regularization", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call flex_pca%add_input(UI_PARM, 'box_crop', 'num', &
-            'Working box size (override; default from smpd_target)', 'Even box used for covariance fitting and &
-            &the latent embedding. Normally derived from smpd_target through the magic-box autoscale (never finer &
+            'Working box size (override; default from lp)', 'Even box used for covariance fitting and &
+            &the latent embedding. Normally derived from lp (sampling lp/2.5) through the magic-box autoscale (never finer &
             &than the data, floor 64); set it only to pin a box for tests', &
             'pixels', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
@@ -159,20 +172,22 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_MASK, mskdiam, required_override=.false., &
             group="mask", visibility=UI_VIS_STANDARD)
+        ! preserve_default: these defaults live in apply_flex_pca_defaults, which default_audit.py does not trace
         call flex_pca%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
-        &'Backend of the coupled M-step basis solve (the state maps follow rec_states_backend); PCG solves the &
-        &same weighted least-squares problem with the support constraint inside the solve(gridding|pcg){gridding}', &
-        &'', .false., 'gridding', &
+        &'Backend of the coupled M-step basis solve (the state maps follow rec_states_backend); PCG solves &
+        &the same weighted least-squares problem with the support constraint inside the solve(gridding|pcg){pcg}', &
+        &'', .false., 'pcg', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         call flex_pca%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
-        &'Iteration cap of the flex PCG solves; used only when rec_backend=pcg', 'iterations{20}', .false., 20., &
-        &visibility=UI_VIS_ADVANCED, &
+        &'Iterations of each warm-started PCG basis solve (every M-step and the merge''s joint solve); &
+        &used only when rec_backend=pcg', 'iterations{4}', .false., 4., &
+        &visibility=UI_VIS_ADVANCED, preserve_default=.true., &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call flex_pca%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual (a diminishing-returns stop on the update applies too); &
-        &use <=0 for exactly maxits_pcg iterations', 'tolerance{1e-3}', &
-        &.false., 1.0e-3, visibility=UI_VIS_ADVANCED, &
+        &<=0, the default, runs exactly maxits_pcg iterations', 'tolerance{0}', &
+        &.false., 0.0, visibility=UI_VIS_ADVANCED, preserve_default=.true., &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call flex_pca%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
         &'Real-space [0,1] mask volume at the project box installed as the hard support of every PCG solve &

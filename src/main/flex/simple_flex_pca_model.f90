@@ -74,7 +74,9 @@ integer,          parameter :: MIN_NSTATES       = 3
 ! the two-gate merge collapses the indistinct ones, so the recovered K is only ever <= it.
 ! preimage_auto=yes raises that ceiling to AUTO_NSTATES and turns the merge on, since over-provisioning
 ! is the only regime in which the merge can recover K at all.
-integer,          parameter :: AUTO_NSTATES      = 32
+integer,          parameter :: AUTO_NSTATES      = 8
+!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex=yes); independent of AUTO_NSTATES
+integer,          parameter :: POP_FLOOR_MAX_NSTATES = 32
 
 contains
 
@@ -93,6 +95,7 @@ contains
         integer,  allocatable :: deconv_labels(:)
         logical  :: l_deconv_applied, l_deconv_adopted, l_state_rec
         logical  :: l_pop_floor
+        logical  :: l_equal_occ       ! state_placement=equal_occ: equal-occupancy path instead of diffusion k-center
         logical  :: l_merged          ! the two-gate merge collapsed states: the delivered table is a merged one
         logical  :: l_paired_states   ! paired merge delivered the basis+embedding; fall through to the state stage
         real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
@@ -158,7 +161,8 @@ contains
         ! the minimum effective sample size of a delivered state: the kernel bandwidth floor AND
         ! the occupancy floor that decides whether a state is reconstructed at all
         min_neff = max(20, min(nptcls, params%min_neff))
-        state_axis = params%state_axis      ! <0 path, 0 k-means, >=1 legacy single axis
+        state_axis = params%state_axis      ! <0 path, 0 state_placement (diffusion k-center | equal_occ), >=1 single axis
+        l_equal_occ = trim(params%state_placement) == 'equal_occ'
         ! nkern decouples the number of components the STATE STAGE uses from neigs, the number estimated.
         nkern      = params%nkern
         if( nkern <= 0 ) nkern = ishft(huge(1), -1) ! clamped against ncomp once the fit is known
@@ -166,8 +170,8 @@ contains
 
         write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA particles=',nptcls, &
             &' requested_components=',neigs_req
-        write(logfhandle,'(A,L1,A,I0,A,I0)') '>>> FLEX_PCA sigma_whitened=',sigma_loaded, &
-            &' state_axis=',state_axis,' minimum_state_neff=',min_neff
+        write(logfhandle,'(A,L1,A,I0,A,A,A,I0)') '>>> FLEX_PCA sigma_whitened=',sigma_loaded, &
+            &' state_axis=',state_axis,' state_placement=',trim(params%state_placement),' minimum_state_neff=',min_neff
         ! A low-pass finer than the working Nyquist (2*smpd_crop) cannot be honoured
         if( params%lp <= 2.0*params%smpd_crop + TINY )then
             write(logfhandle,'(A,F8.3,A,F8.3,A)') '>>> FLEX_PCA WARNING: lp=',params%lp, &
@@ -427,11 +431,12 @@ contains
             l_pop_floor = .true.
             call place_states_with_population_floor(z, nptcls, ncomp, nkern, nstates, state_axis, min_neff, &
                 &params%min_state_frac, eigvals, latent_second, state_weights, targets, bandwidths, neff, &
-                &labels, comp_rho=comp_rho)
+                &labels, comp_rho=comp_rho, equal_occ=l_equal_occ)
         else
             call build_covariance_state_weights(z, nptcls, ncomp, nkern, nstates, state_axis, min_neff, &
                 &eigvals, latent_second, state_weights, targets, bandwidths, neff, labels, &
-                &dist_out=kdist, bfloor_out=kfloor, comp_rho=comp_rho, macro_in=deconv_labels)
+                &dist_out=kdist, bfloor_out=kfloor, comp_rho=comp_rho, macro_in=deconv_labels, &
+                &equal_occ=l_equal_occ)
         endif
 
         ! Drop states below min_neff before reconstruction (they gave artefact maps).
@@ -1466,8 +1471,12 @@ contains
         write(u,'(A,L1)') 'lowpass_active=',(params%lp > 2.0*params%smpd_crop)
         write(u,'(A,I0)') 'components=',ncomp
         write(u,'(A,I0)') 'states=',nstates
-        if( axis <= 0 )then
-            write(u,'(A)')    'state_placement=kmeans_full_latent_space'
+        if( axis < 0 )then
+            write(u,'(A)')    'state_placement=density_spread_path'
+        else if( axis == 0 .and. trim(params%state_placement) == 'equal_occ' )then
+            write(u,'(A)')    'state_placement=equal_occupancy_path'
+        else if( axis == 0 )then
+            write(u,'(A)')    'state_placement=diffusion_kcenter'
         else
             write(u,'(A)')    'state_placement=single_axis_quantiles'
         endif
@@ -1521,7 +1530,7 @@ contains
     end function auto_state_count
 
     subroutine place_states_with_population_floor( z, nptcls, ncomp, nkern, nstates_req, axis, min_neff, &
-        &min_state_frac, eigvals, precision, weights, targets, bandwidths, neff, labels, comp_rho )
+        &min_state_frac, eigvals, precision, weights, targets, bandwidths, neff, labels, comp_rho, equal_occ )
         use simple_rnd, only: irnd_uni
         integer,  intent(in) :: nptcls, ncomp, nkern, nstates_req, axis, min_neff
         real,     intent(in) :: min_state_frac
@@ -1529,6 +1538,7 @@ contains
         real,    allocatable, intent(out) :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer, allocatable, intent(out) :: labels(:)
         real(dp), optional,   intent(in)  :: comp_rho(ncomp)
+        logical,  optional,   intent(in)  :: equal_occ
         integer,  parameter :: ROUND_CAP = 8
         real,     allocatable :: w_r(:,:), t_r(:,:), bw_r(:), nf_r(:)
         real(dp), allocatable :: z_r(:,:), p_r(:,:,:), sdv(:)
@@ -1565,7 +1575,7 @@ contains
             end do
                 call build_covariance_state_weights(z_r, nret, ncomp, nkern, K, axis, &
                     &max(20, min(min_neff, nret/2)), eigvals, p_r, w_r, t_r, bw_r, nf_r, lab_r, &
-                    &comp_rho=comp_rho)
+                    &comp_rho=comp_rho, equal_occ=equal_occ)
             deallocate(z_r, p_r)
             if( allocated(occ) ) deallocate(occ, qualifies)
             allocate(occ(K), source=0)
@@ -1594,16 +1604,16 @@ contains
                 write(logfhandle,'(A)') '>>> FLEX_PCA POPULATION FLOOR: the retained mass can no longer hold the floors'
                 exit
             endif
-            if( K >= AUTO_NSTATES )then
+            if( K >= POP_FLOOR_MAX_NSTATES )then
                 write(logfhandle,'(A)') '>>> FLEX_PCA POPULATION FLOOR: provision cap reached'
                 exit
             endif
-            K = min(AUTO_NSTATES, K + (nstates_req - nqual))
+            K = min(POP_FLOOR_MAX_NSTATES, K + (nstates_req - nqual))
         end do
         if( .not. l_success )then
             THROW_WARN('flex_pca population floor not reached for every requested state; keeping the most populated clusters')
         endif
-        ! clusters ordered by population, descending (K <= AUTO_NSTATES, selection sort)
+        ! clusters ordered by population, descending (K <= POP_FLOOR_MAX_NSTATES, selection sort)
         allocate(order(K))
         order = [(s, s=1,K)]
         do s = 1, K-1

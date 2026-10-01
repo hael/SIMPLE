@@ -72,10 +72,16 @@ Y_q = sum_i E[z_iq] backproject_i(r_i),   solved against sum_i E[z_i z_i'] (x) D
 ```
 
 then re-orthonormalized into the next basis, and `Gamma` is set from the
-posterior second moment. Even and odd particle halves maintain separate
+posterior second moment. By default (`rec_backend=pcg`) the coupled solve is
+a support-constrained PCG solve of `maxits_pcg=4` iterations, warm-started
+from the per-voxel (gridding) solution; `rec_backend=gridding` keeps the
+per-voxel solution. Even and odd particle halves maintain separate
 half-bases so that agreement between them can be measured.
 
-**Convergence.** `n_probe_iters` bounds the iteration count. The only early
+**Iterations.** Two fits run on disjoint particle halves, each for
+`n_probe_iters` EM iterations (default 4). Their bases are frame-aligned and
+merged with one joint solve on the summed statistics, and one joint EM
+iteration over all particles follows from the merged basis. The only early
 stop applies to a rank-1 fit: it ends once the mean principal-angle cosine
 between successive bases reaches 0.999999. With two or more components the
 non-reproducing tail dominates that mean, so the fit runs to the bound.
@@ -96,10 +102,22 @@ model provenance match.
 ## From latent coordinates to states
 
 **Targets.** State centers `t_s` are placed in the reliable subspace, with
-components standardized by their variance. The default places `nstates`
-centers at equal-occupancy quantiles along a chosen component (or along a
-reliability-ordered path), taking each slice's mean over all components as
-the target; k-means and diffusion k-center are alternatives.
+components standardized by their variance. The default
+(`state_placement=kcenter`) places `nstates` centers by greedy farthest-point
+k-center on a reliability-weighted diffusion map of all retained components,
+which covers a continuous reaction coordinate and branched compositional
+states with the same constants. The centers then initialize a
+tied-covariance Gaussian mixture whose responsibilities become the state
+weights. `state_placement=equal_occ` instead cuts a reliability-ordered path
+through the latent space into `nstates` slices of equal particle count,
+taking each slice's mean over all components as the target, so every state
+gets the same occupancy; use it when the latent clusters are not well
+separated. The same path is the fallback when the diffusion map cannot be
+built. `state_axis > 0` cuts equal-occupancy slices along that single
+component, and `state_axis < 0` places centers along a density-spread path.
+Equal-occupancy placements skip the mixture refit, which would pull the
+means onto the dominant mode, and weight particles with the kernel below,
+measured along the path.
 
 **Kernel weights.** Particle `i` contributes to state `s` with an
 Epanechnikov weight in the particle's own posterior metric,

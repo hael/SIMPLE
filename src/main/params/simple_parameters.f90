@@ -305,6 +305,7 @@ type :: parameters
     character(len=STDLEN)     :: pcgop='kernel'       !< PCG operator; production reconstruct3D requires kernel
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
     character(len=STDLEN)     :: rec_states_backend='gridding' !< flex_pca final state-map backend; independent of rec_backend, which governs the M-step(gridding|pcg){gridding}
+    character(len=STDLEN)     :: state_placement='kcenter' !< flex_pca state targets at state_axis=0: diffusion k-center or equal-occupancy path(kcenter|equal_occ){kcenter}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
