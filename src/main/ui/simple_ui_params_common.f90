@@ -776,8 +776,8 @@ subroutine set_ui_params
                                    'shift error in pixels', .false., 0.)
 
     call sigma_est%set_param(      'sigma_est',       'multi',  'Sigma estimation method', &
-                                   'Sigma estimation method(group|global){group}','', .false., 'group', &
-    &choices=ui_choices([character(len=6) :: 'group', 'global']))
+                                   'Sigma estimation method(global|group){global}','', .false., 'global', &
+    &choices=ui_choices([character(len=6) :: 'global', 'group']))
 
     call smpd%set_param(           'smpd',            'num',    'Sampling distance', &
                                    'Distance between neighbouring pixels in Angstroms', &

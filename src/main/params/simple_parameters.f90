@@ -330,7 +330,7 @@ type :: parameters
     character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|shc_smpl|snhc_smpl|neigh|greedy|prob|prob_state|prob_neigh|pose_cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
-    character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
+    character(len=STDLEN)     :: sigma_est='global'   !< sigma estimation kind (global|group){global}
     character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|parts_import|star_export)
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
