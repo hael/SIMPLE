@@ -25,6 +25,36 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("sortClsByResolution(finalStage || slider);", viewer)
         self.assertNotIn("stageGroups.forEach(sortClsByResolution);", viewer)
 
+    def test_2d_class_display_filters_exclude_selection_overlays(self):
+        shared_tile = self._read_template("includes/_cls2D_selection_element.html")
+        sieve = self._read_template("nice_stream/zoomsieveparticles.html")
+        filtered_outer = (
+            "filter:contrast(var(--classification2D-contrast)) "
+            'brightness(var(--classification2D-brightness));" class="cls2Dimg'
+        )
+
+        for template, raster_count in ((shared_tile, 1), (sieve, 2)):
+            self.assertEqual(template.count("cls2Draster absolute inset-0"), raster_count)
+            self.assertEqual(
+                template.count("filter:contrast(var(--classification2D-contrast))"),
+                raster_count,
+            )
+            self.assertNotIn(filtered_outer, template)
+
+        self.assertIn("mskcanvas absolute inset-0 z-1", shared_tile)
+        self.assertIn("clscheck absolute z-2", shared_tile)
+        self.assertEqual(sieve.count("xmark hidden absolute inset-0 z-2"), 2)
+
+    def test_2d_class_context_menus_stack_above_overlays(self):
+        shared_controls = self._read_template(
+            "includes/_cls2D_selection_controls.html"
+        )
+        sieve = self._read_template("nice_stream/zoomsieveparticles.html")
+        menu_layer = 'name="selectmenu" class="hidden fixed z-20'
+
+        self.assertIn(menu_layer, shared_controls)
+        self.assertEqual(sieve.count(menu_layer), 2)
+
     def test_zoom_log_template_uses_dataset_not_workspace_property(self):
         content = self._read_template("nice_stream/includes/_zoom_log_errors_parts_body.html")
         self.assertNotIn("panel.workspace", content)
