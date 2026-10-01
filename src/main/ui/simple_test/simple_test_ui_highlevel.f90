@@ -8,6 +8,7 @@ type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
 type(ui_program), target :: abinitio3D_addon
+type(ui_program), target :: abinitio3D_addon_snapshots
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
@@ -22,6 +23,7 @@ contains
         call new_mini_stream(tsttab)
         call new_simulate_particles(tsttab)
         call new_abinitio3D_addon(tsttab)
+        call new_abinitio3D_addon_snapshots(tsttab)
         call new_simulated_workflow(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
@@ -37,6 +39,7 @@ contains
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') abinitio3D_addon%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_addon_snapshots%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
@@ -106,6 +109,21 @@ contains
         ! add to ui_hash
         call add_ui_program('abinitio3D_addon', abinitio3D_addon, tsttab, UI_CATEGORY)
     end subroutine new_abinitio3D_addon
+
+    subroutine new_abinitio3D_addon_snapshots( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call abinitio3D_addon_snapshots%new(&
+        &'abinitio3D_addon_snapshots',&
+        &'generate cumulative projects for abinitio3D_addon stream tests',&
+        &'splits all input particle images into append-only physical stacks and writes snapshot1.simple through snapshotN.simple',&
+        &'simple_test_exec',&
+        &.true.)
+        call abinitio3D_addon_snapshots%add_input(UI_PARM, 'nptcls_base', 'num', 'Base particle count', &
+            &'Particles in snapshot1 and the parent abinitio3D run', 'particles', .true., 0.)
+        call abinitio3D_addon_snapshots%add_input(UI_PARM, 'nsnapshots', 'num', 'Snapshot count', &
+            &'Number of cumulative projects, including the base project', 'projects', .true., 0.)
+        call add_ui_program('abinitio3D_addon_snapshots', abinitio3D_addon_snapshots, tsttab, UI_CATEGORY)
+    end subroutine new_abinitio3D_addon_snapshots
 
     subroutine new_simulated_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab

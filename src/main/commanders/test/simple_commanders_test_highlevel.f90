@@ -31,6 +31,11 @@ type, extends(commander_base) :: commander_test_abinitio3D_addon
     procedure :: execute      => exec_test_abinitio3D_addon
 end type commander_test_abinitio3D_addon
 
+type, extends(commander_base) :: commander_generate_abinitio3D_addon_snapshots
+    contains
+        procedure :: execute      => exec_generate_abinitio3D_addon_snapshots
+end type commander_generate_abinitio3D_addon_snapshots
+
 type, extends(commander_base) :: commander_test_simulated_workflow
   contains
     procedure :: execute      => exec_test_simulated_workflow
@@ -3406,6 +3411,121 @@ subroutine exec_test_abinitio3D_addon( self, cline )
         THROW_HARD('TEST_ABINITIO3D_ADDON FAILED')
     endif
 end subroutine exec_test_abinitio3D_addon
+
+!> Generates append-only cumulative projects for stream/add-on integration tests.
+subroutine exec_generate_abinitio3D_addon_snapshots( self, cline )
+    class(commander_generate_abinitio3D_addon_snapshots), intent(inout) :: self
+    class(cmdline),                                        intent(inout) :: cline
+    type(parameters) :: params
+    type(sp_project) :: source, generated, snapshot
+    type(image)      :: img
+    type(string)     :: source_stk, stack_fname, project_fname, project_name
+    integer, allocatable :: chunk_first(:), chunk_last(:), chunk_stkind(:), chunk_snapshot(:), snapshot_last(:)
+    integer :: nptcls, nremaining, naddons, naddon_base, naddon_extra
+    integer :: nchunks, nchunks_snapshot, numlen
+    integer :: iptcl, ind_in_stk, stkind, previous_stkind, isnapshot, previous_snapshot
+    integer :: ichunk, local_ind
+    call cline%set('mkdir', 'no')
+    call params%new(cline)
+    call source%read(params%projfile)
+    nptcls = source%os_ptcl3D%get_noris()
+    if( source%os_ptcl2D%get_noris() /= nptcls ) THROW_HARD('ptcl2D and ptcl3D lengths differ')
+    if( nptcls < 1 ) THROW_HARD('input project has no particles')
+    if( params%nsnapshots < 2 ) THROW_HARD('nsnapshots must be at least 2')
+    if( params%nptcls_base < 1 .or. params%nptcls_base >= nptcls ) THROW_HARD('nptcls_base must lie within the input particle range')
+    nremaining = nptcls - params%nptcls_base
+    naddons     = params%nsnapshots - 1
+    if( nremaining < naddons ) THROW_HARD('each addon snapshot must contribute at least one particle')
+    naddon_base  = nremaining / naddons
+    naddon_extra = mod(nremaining, naddons)
+    allocate(snapshot_last(params%nsnapshots))
+    snapshot_last(1) = params%nptcls_base
+    do isnapshot = 2, params%nsnapshots
+        snapshot_last(isnapshot) = snapshot_last(isnapshot - 1) + naddon_base
+        if( isnapshot - 1 <= naddon_extra ) snapshot_last(isnapshot) = snapshot_last(isnapshot) + 1
+    enddo
+    allocate(chunk_first(nptcls), chunk_last(nptcls), chunk_stkind(nptcls), chunk_snapshot(nptcls))
+    nchunks          = 0
+    previous_stkind = 0
+    previous_snapshot = 0
+    isnapshot = 1
+    do iptcl = 1, nptcls
+        if( iptcl > snapshot_last(isnapshot) ) isnapshot = isnapshot + 1
+        call source%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, ind_in_stk)
+        if( isnapshot /= previous_snapshot .or. stkind /= previous_stkind )then
+            nchunks = nchunks + 1
+            chunk_first(nchunks)    = iptcl
+            chunk_stkind(nchunks)   = stkind
+            chunk_snapshot(nchunks) = isnapshot
+            if( nchunks > 1 ) chunk_last(nchunks - 1) = iptcl - 1
+            previous_snapshot = isnapshot
+            previous_stkind   = stkind
+        endif
+    enddo
+    chunk_last(nchunks) = nptcls
+    generated = source
+    call generated%os_mic%kill
+    call generated%os_stk%kill
+    call generated%os_ptcl2D%kill
+    call generated%os_ptcl3D%kill
+    call generated%os_cls2D%kill
+    call generated%os_cls3D%kill
+    call generated%os_out%kill
+    call generated%jobproc%kill
+    if( generated%projinfo%isthere(1, 'sigma2_state') ) call generated%projinfo%delete_entry('sigma2_state')
+    if( generated%projinfo%isthere(1, 'abinitio3D_manifest') ) call generated%projinfo%delete_entry('abinitio3D_manifest')
+    if( generated%projinfo%isthere(1, 'abinitio3D_run_id') ) call generated%projinfo%delete_entry('abinitio3D_run_id')
+    call generated%os_stk%new(nchunks, is_ptcl=.false.)
+    call generated%os_ptcl2D%new(nptcls, is_ptcl=.true.)
+    call generated%os_ptcl3D%new(nptcls, is_ptcl=.true.)
+    call img%new([source%get_box(), source%get_box(), 1], source%get_smpd(), wthreads=.false.)
+    numlen = len(int2str(nchunks))
+    do ichunk = 1, nchunks
+        stack_fname = simple_abspath(string('snapshot_stack'//int2str_pad(ichunk, numlen)//STK_EXT), check_exists=.false.)
+        call generated%os_stk%transfer_ori(ichunk, source%os_stk, chunk_stkind(ichunk))
+        call generated%os_stk%set(ichunk, 'stk',        stack_fname)
+        call generated%os_stk%set(ichunk, 'fromp',      chunk_first(ichunk))
+        call generated%os_stk%set(ichunk, 'top',        chunk_last(ichunk))
+        call generated%os_stk%set(ichunk, 'nptcls',     chunk_last(ichunk) - chunk_first(ichunk) + 1)
+        call generated%os_stk%set(ichunk, 'nptcls_stk', chunk_last(ichunk) - chunk_first(ichunk) + 1)
+        if( generated%os_stk%isthere(ichunk, 'stk_den') ) call generated%os_stk%delete_entry(ichunk, 'stk_den')
+        local_ind = 0
+        do iptcl = chunk_first(ichunk), chunk_last(ichunk)
+            local_ind = local_ind + 1
+            call source%get_stkname_and_ind('ptcl2D', iptcl, source_stk, ind_in_stk)
+            call img%read(source_stk, ind_in_stk)
+            call img%write(stack_fname, local_ind, del_if_exists=(local_ind == 1))
+            call generated%os_ptcl2D%transfer_ori(iptcl, source%os_ptcl2D, iptcl)
+            call generated%os_ptcl3D%transfer_ori(iptcl, source%os_ptcl3D, iptcl)
+            call generated%os_ptcl2D%set(iptcl, 'stkind', ichunk)
+            call generated%os_ptcl3D%set(iptcl, 'stkind', ichunk)
+            call generated%os_ptcl2D%set(iptcl, 'indstk', local_ind)
+            call generated%os_ptcl3D%set(iptcl, 'indstk', local_ind)
+            call generated%os_ptcl2D%set(iptcl, 'pind', iptcl)
+            call generated%os_ptcl3D%set(iptcl, 'pind', iptcl)
+        enddo
+    enddo
+    call img%kill
+    do isnapshot = 1, params%nsnapshots
+        nchunks_snapshot = count(chunk_snapshot(1:nchunks) <= isnapshot)
+        snapshot = generated
+        snapshot%os_stk    = generated%os_stk%extract_subset(1, nchunks_snapshot)
+        snapshot%os_ptcl2D = generated%os_ptcl2D%extract_subset(1, snapshot_last(isnapshot))
+        snapshot%os_ptcl3D = generated%os_ptcl3D%extract_subset(1, snapshot_last(isnapshot))
+        project_name  = 'snapshot'//int2str(isnapshot)
+        project_fname = simple_abspath(project_name//METADATA_EXT, check_exists=.false.)
+        call snapshot%projinfo%set(1, 'projname', project_name)
+        call snapshot%projinfo%set(1, 'projfile', project_fname)
+        call snapshot%write(project_fname)
+        write(logfhandle,'(a,i0,a,i0,a,a)') '>>> SNAPSHOT ', isnapshot, ': ', snapshot_last(isnapshot), &
+            &' particles; ', project_fname%to_char()
+        call snapshot%kill
+    enddo
+    write(logfhandle,'(a,i0,a,i0,a,i0)') '>>> BASE PARTICLES: ', params%nptcls_base, &
+        &'; ADDON PARTICLES: ', naddon_base, ' OR ', naddon_base + min(1, naddon_extra)
+    call generated%kill
+    call source%kill
+end subroutine exec_generate_abinitio3D_addon_snapshots
 
 !> abinitio3D_addon gate on symmetry-broken 6VXX particles: abinitio3D on a seeded selection of the
 !  first NBASE rows, then the add-on on all NPTCLS rows (same project basename). Gates frozen-input

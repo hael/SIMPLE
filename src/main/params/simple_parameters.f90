@@ -433,6 +433,7 @@ type :: parameters
     integer :: npeaks_inpl=NPEAKS_INPL_DEFAULT !< # multi-neighborhood search peaks to refine with L-BFGS
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
+    integer :: nptcls_base=0       !< # particles in the initial abinitio3D snapshot
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
@@ -458,6 +459,7 @@ type :: parameters
     integer :: nsample_coarse=0    !< # particles to sample in refinement with fractional update, coarse search
     integer :: nsample_fine=0      !< # particles to sample in refinement with fractional update, fine search
     integer :: nsearch=40          !< # search grid points{40}
+    integer :: nsnapshots=0        !< # cumulative project snapshots
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nspace_max=1500     !< Maximum # of projection directions
