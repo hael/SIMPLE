@@ -689,8 +689,9 @@ contains
         ! one particle index space, the superset relation, the membership
         call superset%new(spproj_cur, spproj_frz, man%get_nstates(), status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> ABINITIO3D_ADDON FROZEN/COHORT/NEVER-UPDATED/STATES: ', &
-            &superset%get_nfrozen(), '/', superset%get_ncohort(), '/', superset%get_nnever_updated(), '/', man%get_nstates()
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0)') '>>> ABINITIO3D_ADDON FROZEN/COHORT/NEVER-UPDATED/RETIRED/STATES: ', &
+            &superset%get_nfrozen(), '/', superset%get_ncohort(), '/', superset%get_nnever_updated(), '/', &
+            &superset%get_nretired(), '/', man%get_nstates()
         if( superset%is_small_cohort() ) THROW_WARN('the cohort is below '//int2str(nint(100.*COHORT_WARN_FRAC))//'% of the frozen population')
         call superset%kill
         call spproj_cur%kill
@@ -1366,6 +1367,7 @@ contains
             call spproj_frz%read(params%projfile_frozen)
             call superset%new(spproj, spproj_frz, man_addon%get_nstates(), status, msg)
             if( status /= 0 ) THROW_HARD(trim(msg))
+            call superset%retire_from_frozen(spproj_frz)
             call man_addon%get_artifact('sigma2_state', 0, sigma_src, found)
             if( .not. found ) THROW_HARD('the frozen run recorded no committed residual sigma2 state')
             call simple_mkdir(FROZEN_COPY_DIR)
@@ -1379,8 +1381,9 @@ contains
             call superset%mask(spproj)
             call spproj%write_segment_inside('ptcl2D', params%projfile)
             call spproj%write_segment_inside('ptcl3D', params%projfile)
-            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> ABINITIO3D_ADDON MASKED FROZEN/COHORT/NEVER-UPDATED: ', &
-                &superset%get_nfrozen(), '/', superset%get_ncohort(), '/', superset%get_nnever_updated()
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> ABINITIO3D_ADDON MASKED FROZEN/COHORT/NEVER-UPDATED/RETIRED: ', &
+                &superset%get_nfrozen(), '/', superset%get_ncohort(), '/', superset%get_nnever_updated(), '/', &
+                &superset%get_nretired()
             write(logfhandle,'(A,A)') '>>> ABINITIO3D_ADDON FROZEN COPY: ', frozen_copy%to_char()
             call sigma_src%kill
         end subroutine addon_prologue

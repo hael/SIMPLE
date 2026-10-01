@@ -1,7 +1,7 @@
 !@descr: abinitio3D_addon superset relation of a current and a frozen project: identity, frozen/cohort membership, masking and restoration
 ! Current and frozen projects share row indices; shared rows must name the same image (and CTF/optics
 ! for frozen rows), appended rows come from new stacks. frozen = frozen ptcl3D state>0 & updatecnt>0;
-! cohort = current ptcl2D state>0 & not frozen. mask zeroes frozen rows; restore brings them back.
+! current-inactive frozen rows are retired. mask zeroes frozen/retired rows; restore keeps retired rows inactive.
 ! Contract: doc/policies/3D/abinitio3D_addon_policy.md sec. 4.
 module simple_project_superset
 use simple_core_module_api
@@ -16,22 +16,24 @@ integer, parameter :: MIN_COHORT_STATE_POP = 5    !< hard floor: cohort particle
 real,    parameter :: COHORT_WARN_FRAC     = 0.05 !< warn below this fraction of the frozen population
 
 !> the validated superset relation of a current and a frozen project: the
-!! frozen rows, the cohort, and the current ptcl2D states saved by masking
+!! active frozen rows, retired rows, the cohort, and saved current ptcl2D states
 type :: project_superset
     private
     integer :: nrows = 0, nrows_frozen = 0, nstates = 0 !< row counts of the current and the frozen project
-    integer :: nfrozen = 0, ncohort = 0, nnever_updated = 0
-    logical, allocatable :: l_frozen(:)
+    integer :: nfrozen = 0, ncohort = 0, nnever_updated = 0, nretired = 0
+    logical, allocatable :: l_frozen(:), l_retired(:)
     integer, allocatable :: nfrozen_state(:)
     integer, allocatable :: saved_state2D(:)   !< current ptcl2D states before masking
   contains
     procedure :: new
     procedure :: validate_cohort_states
     procedure :: mask
+    procedure :: retire_from_frozen
     procedure :: restore
     procedure :: get_nfrozen
     procedure :: get_ncohort
     procedure :: get_nnever_updated
+    procedure :: get_nretired
     procedure :: get_nfrozen_state
     procedure :: is_small_cohort
     procedure :: kill
@@ -62,10 +64,15 @@ contains
         self%nrows        = n
         self%nrows_frozen = frozen%os_ptcl3D%get_noris()
         self%nstates      = nstates
-        allocate(self%l_frozen(n), l_cohort(n), source=.false.)
+        allocate(self%l_frozen(n), self%l_retired(n), l_cohort(n), source=.false.)
         allocate(self%nfrozen_state(nstates), source=0)
         do i = 1, n
             if( i <= self%nrows_frozen ) self%l_frozen(i) = is_frozen_row(frozen, i)
+            if( self%l_frozen(i) .and. cur%os_ptcl2D%get_state(i) <= 0 )then
+                self%l_frozen(i)  = .false.
+                self%l_retired(i) = .true.
+                self%nretired     = self%nretired + 1
+            endif
             if( self%l_frozen(i) )then
                 s = frozen%os_ptcl3D%get_state(i)
                 if( s > nstates )then
@@ -140,17 +147,31 @@ contains
         allocate(self%saved_state2D(self%nrows))
         do i = 1, self%nrows
             self%saved_state2D(i) = spproj%os_ptcl2D%get_state(i)
-            if( self%l_frozen(i) )then
+            if( self%l_frozen(i) .or. self%l_retired(i) )then
                 call spproj%os_ptcl2D%set_state(i, 0)
                 call spproj%os_ptcl3D%set_state(i, 0)
             endif
         enddo
     end subroutine mask
 
-    !> Restore the frozen rows from the frozen project (projection, correlation,
-    !! fraction, sampled, updatecnt, eo, Euler angles, shifts and state) and
-    !! every row's saved ptcl2D state; cohort 3D records, appended rows'
-    !! included, are left as they are
+    !> Remove current-project rejections from the private frozen copy before
+    !! its accumulators are generated; row identity and numbering stay intact.
+    subroutine retire_from_frozen( self, frozen )
+        class(project_superset), intent(in)    :: self
+        class(sp_project),       intent(inout) :: frozen
+        integer :: i
+        if( .not. allocated(self%l_retired) ) THROW_HARD('the superset relation was never established')
+        if( frozen%os_ptcl2D%get_noris() /= self%nrows_frozen .or. &
+            &frozen%os_ptcl3D%get_noris() /= self%nrows_frozen ) THROW_HARD('retired-row mask does not match the frozen project')
+        do i = 1, self%nrows_frozen
+            if( .not. self%l_retired(i) ) cycle
+            call frozen%os_ptcl2D%set_state(i, 0)
+            call frozen%os_ptcl3D%set_state(i, 0)
+        enddo
+    end subroutine retire_from_frozen
+
+    !> Restore active frozen rows and every saved ptcl2D state; retired rows
+    !! stay inactive and cohort 3D records stay as refined.
     subroutine restore( self, spproj, frozen )
         class(project_superset), intent(in)    :: self
         class(sp_project),       intent(inout) :: spproj
@@ -161,6 +182,10 @@ contains
             &THROW_HARD('frozen-row restore does not match the working project')
         do i = 1, self%nrows
             call spproj%os_ptcl2D%set_state(i, self%saved_state2D(i))
+            if( self%l_retired(i) )then
+                call spproj%os_ptcl3D%set_state(i, 0)
+                cycle
+            endif
             if( .not. self%l_frozen(i) ) cycle
             call spproj%os_ptcl3D%transfer_3Dparams(i, frozen%os_ptcl3D, i)
             call spproj%os_ptcl3D%set_state(i, frozen%os_ptcl3D%get_state(i))
@@ -183,6 +208,11 @@ contains
         n = self%nnever_updated
     end function get_nnever_updated
 
+    integer function get_nretired( self ) result( n )
+        class(project_superset), intent(in) :: self
+        n = self%nretired
+    end function get_nretired
+
     !> frozen particles of one inherited state
     integer function get_nfrozen_state( self, state ) result( n )
         class(project_superset), intent(in) :: self
@@ -200,8 +230,9 @@ contains
     subroutine kill( self )
         class(project_superset), intent(inout) :: self
         self%nrows = 0; self%nrows_frozen = 0; self%nstates = 0
-        self%nfrozen = 0; self%ncohort = 0; self%nnever_updated = 0
+        self%nfrozen = 0; self%ncohort = 0; self%nnever_updated = 0; self%nretired = 0
         if( allocated(self%l_frozen)      ) deallocate(self%l_frozen)
+        if( allocated(self%l_retired)     ) deallocate(self%l_retired)
         if( allocated(self%nfrozen_state) ) deallocate(self%nfrozen_state)
         if( allocated(self%saved_state2D) ) deallocate(self%saved_state2D)
     end subroutine kill
@@ -278,11 +309,6 @@ contains
             ! a frozen member must be active where the fresh-start selection is made
             if( frozen%os_ptcl2D%get_state(i) <= 0 )then
                 msg = 'a frozen particle is deselected in the frozen project ptcl2D (ptcl2D/ptcl3D selection mismatch)'
-                call name_particle(i)
-                return
-            endif
-            if( cur%os_ptcl2D%get_state(i) <= 0 )then
-                msg = 'a frozen particle is inactive in the current project ptcl2D'
                 call name_particle(i)
                 return
             endif

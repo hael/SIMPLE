@@ -166,12 +166,8 @@ contains
         call make_frozen(ref, frozen, 2)
         call frozen%os_ptcl2D%set_state(5, 0)
         call expect_refusal(cur, frozen, 'a ptcl2D/ptcl3D selection mismatch of a frozen particle', 5)
-        ! a frozen member inactive in the current project
-        call make_frozen(ref, frozen, 2)
-        cur = ref
-        call cur%os_ptcl2D%set_state(9, 0)
-        call expect_refusal(cur, frozen, 'a frozen member inactive in the current project', 9)
         ! a CTF mismatch on a frozen particle; on a cohort row it does not matter
+        call make_frozen(ref, frozen, 2)
         cur = ref
         call cur%os_ptcl3D%set(15, 'dfx', 3.3)
         call superset%new(cur, frozen, 2, status, msg)
@@ -218,6 +214,7 @@ contains
         call assert_int(10, superset%get_nfrozen(),        'frozen = frozen state > 0 and updatecnt > 0')
         call assert_int(10, superset%get_ncohort(),        'cohort = current active and not frozen')
         call assert_int(2,  superset%get_nnever_updated(), 'never-updated frozen-project rows are counted')
+        call assert_int(0,  superset%get_nretired(),       'no frozen particles are retired initially')
         call assert_int(5,  superset%get_nfrozen_state(1), 'frozen particles of state 1 (even rows)')
         call assert_int(5,  superset%get_nfrozen_state(2), 'frozen particles of state 2 (odd rows)')
         call assert_false(superset%is_small_cohort(), 'a cohort as large as the frozen population raises no warning')
@@ -239,7 +236,20 @@ contains
         call superset%new(cur, frozen, 1, status, msg)
         call assert_int(0, status, 'a cohort of 9 is above the floor of one state: '//trim(msg))
         call assert_int(9, superset%get_ncohort(), 'an inactive current particle is not in the cohort')
+        ! a previously frozen row rejected by the current project is retired
+        call make_current(cur)
+        call make_frozen(cur, frozen, 1)
+        call cur%os_ptcl2D%set_state(9, 0)
+        call superset%new(cur, frozen, 1, 'raw', status, msg)
+        call assert_int(0, status, 'a rejected frozen particle is accepted as retired: '//trim(msg))
+        call assert_int(9, superset%get_nfrozen(), 'a retired particle leaves the frozen membership')
+        call assert_int(10, superset%get_ncohort(), 'a retired particle does not enter the active cohort')
+        call assert_int(1, superset%get_nretired(), 'a rejected frozen particle is counted as retired')
+        call superset%retire_from_frozen(frozen)
+        call assert_int(0, frozen%os_ptcl2D%get_state(9), 'a retired particle is inactive in the frozen 2D copy')
+        call assert_int(0, frozen%os_ptcl3D%get_state(9), 'a retired particle is inactive in the frozen 3D copy')
         ! the per-state floor: 2 states need at least 10 cohort particles
+        call cur%os_ptcl2D%set_state(20, 0)
         call make_frozen(cur, frozen, 2)
         call superset%new(cur, frozen, 2, status, msg)
         call assert_true(status /= 0, 'a cohort below 5 particles per inherited state is refused')
@@ -275,6 +285,7 @@ contains
         logical :: l_ok
         write(*,'(A)') 'test_mask_and_restore'
         call make_current(cur)
+        call cur%os_ptcl2D%set_state(9, 0)    ! a previously frozen row is retired
         call cur%os_ptcl2D%set_state(20, 0)   ! a row the user deselected stays deselected
         call make_frozen(cur, frozen, 1)
         call superset%new(cur, frozen, 1, status, msg)
@@ -310,6 +321,10 @@ contains
         l_ok = .true.
         do i = 1, NPTCLS
             l_ok = l_ok .and. work%os_ptcl2D%get_state(i) == cur%os_ptcl2D%get_state(i)
+            if( i == 9 )then
+                l_ok = l_ok .and. work%os_ptcl3D%get_state(i) == 0
+                cycle
+            endif
             if( i > 10 ) cycle
             e_work  = work%os_ptcl3D%get_euler(i)
             e_frz   = frozen%os_ptcl3D%get_euler(i)
@@ -321,7 +336,7 @@ contains
                 &work%os_ptcl3D%get_eo(i) == frozen%os_ptcl3D%get_eo(i) .and. &
                 &abs(work%os_ptcl3D%get(i, 'corr') - frozen%os_ptcl3D%get(i, 'corr')) < 1.e-6
         enddo
-        call assert_true(l_ok, 'restoration brings back every frozen 3D record and every saved ptcl2D state')
+        call assert_true(l_ok, 'restoration brings back active frozen records while retired rows stay inactive')
         e_work = work%os_ptcl3D%get_euler(15)
         call assert_true(all(abs(e_work - [1., 2., 3.]) < 1.e-4), 'restoration leaves cohort poses as refined')
         call superset%kill

@@ -106,9 +106,11 @@ particle image in both wherever both hold a row `i`. They may differ in size.
   `ptcl2D` and `ptcl3D`.
 - A frozen project longer than the current one is accepted when no frozen
   particle lies past the current project's last row.
-- Every frozen particle must be active in the current project's `ptcl2D` and
-  in the frozen project's `ptcl2D`, with the same CTF parameters and optics
-  group in both projects.
+- A frozen particle rejected in the current project's `ptcl2D` is retired:
+  its row stays in place, but it contributes to neither the frozen term nor
+  the cohort and remains inactive in the final union. Other frozen particles
+  must be active in the frozen project's `ptcl2D`, with the same CTF
+  parameters and optics group in both projects.
 
 Every refusal names the first offending particle and is raised before any
 project is written. A permutation of rows (a pruned or reordered project) is
@@ -119,6 +121,7 @@ Membership is defined once:
 
 ```text
 frozen = frozen project ptcl3D state > 0 .and. updatecnt > 0
+          .and. current project ptcl2D state > 0
 cohort = current project ptcl2D state > 0 .and. .not. frozen
 ```
 
@@ -131,9 +134,9 @@ inherited state are refused.
 ## 5. Run Structure
 
 - **Masking.** The commander saves the working copy's `ptcl2D` states and sets
-  `state=0` in `ptcl2D` and `ptcl3D` for every frozen row, so every counting,
-  sampling and labelling routine of the established workflow sees the cohort
-  alone, with no add-on branch. The working copy's inherited sigma2
+  `state=0` in `ptcl2D` and `ptcl3D` for every frozen or retired row, so every
+  counting, sampling and labelling routine of the established workflow sees
+  the cohort alone, with no add-on branch. The working copy's inherited sigma2
   registration is dropped; the run estimates the cohort's own.
 - **Frozen sets.** One frozen accumulation per distinct stage box of the
   inherited ladder, plus the native box, each a `reconstruct3D` on the frozen
@@ -314,8 +317,9 @@ For `stream_p07_abinitio3D_multistate` or any driver that grows a pool:
   frozen project; the next update's pool is a new project file.
 - **Chaining.** Update 1 is frozen on the base run, update `n+1` on update
   `n`'s output: each update searches only its new sets.
-- **Selection.** Frozen particles must stay active in every later pool; a 2D
-  rejection or prune of a frozen particle is refused by name.
+- **Selection.** A later 2D rejection may retire a frozen particle by setting
+  its current `ptcl2D` state to zero. Rows must remain present and ordered;
+  pruning or renumbering is still refused by identity validation.
 - **Execution.** `mkdir=no` in each update's own directory; `nparts`,
   `worker_server` and `worker_priority` pass through.
 
