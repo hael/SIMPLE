@@ -1,5 +1,0 @@
-simulated_workflow	suite=6vxx
-single_workflow	suite=fcc
-atoms_stats	element=Pt
-detect_atoms	element=Pt
-simulate_nanoparticle	element=Pt

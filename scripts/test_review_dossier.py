@@ -5,8 +5,8 @@ Phase 0 and section 9 of doc/refactoring_notes/completed/uniform_test_environmen
 
 Reads the tree (production/tests -- gone since the utils review, the standalone
 programs are retired --, src/main/commanders/test, the test UI and
-routers, CI, scripts, doc) and optional timing runs from
-scripts/test_timing_run.sh, and writes
+routers, CI, scripts, doc) and optional Phase 0 timing-result TSV files, and
+writes
 
   * one dossier per test identity (Markdown) under --dossiers, and
   * the inventory, one table per area, at --inventory, with the verdicts, notes
@@ -542,7 +542,7 @@ def coverage_after(tests, path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--timing', nargs='*', default=[], help='results.tsv files from test_timing_run.sh')
+    ap.add_argument('--timing', nargs='*', default=[], help='Phase 0 timing results.tsv files')
     ap.add_argument('--inventory', default=os.path.join(ROOT, 'doc', 'code_overview', 'test_inventory.md'))
     ap.add_argument('--record', default=os.path.join(ROOT, 'doc', 'refactoring_notes', 'completed', 'test_review_record.md'),
                     help='the hand-written review record: verdicts, notes and the retired-tests table')
