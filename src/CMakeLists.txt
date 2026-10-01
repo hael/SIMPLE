@@ -192,7 +192,6 @@ set(SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cmdline.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject_stream.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_cls_split_strategy.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_denoise_project_strategy.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_watcher.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_pcg.f90"
 )

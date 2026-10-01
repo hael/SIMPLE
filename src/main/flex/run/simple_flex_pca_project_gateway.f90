@@ -65,7 +65,6 @@ contains
         if( .not. cfg%l_vol1_explicit )then
             THROW_HARD('flex_pca requires a consensus mean map: pass vol1 or register one in the project out segment')
         endif
-        if( trim(params%ptcl_src) /= 'raw' ) THROW_HARD('flex_pca currently requires ptcl_src=raw')
         ! a run writes its state labels into its project copy, so a rerun must start from the original
         ! project (a subset is selected with pindfile=, never with the labels)
         if( build%spproj_field%get_n('state') /= 1 ) THROW_HARD('flex_pca works on one population but the project carries several state labels (a delivered copy): rerun from the original project, selecting particles with pindfile= if needed')

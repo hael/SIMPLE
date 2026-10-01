@@ -128,7 +128,8 @@ objfun=euclid AND .not. l_objfun_den
 ```
 
 This is a separate issue from the default-off regression, but it has the same
-root cause: capability and activation were inferred too indirectly.
+root cause: capability and activation were inferred too indirectly. (The
+hybrid objective and `l_objfun_den` were later removed, 2026-10-01.)
 
 ## Why the tests did not catch it
 

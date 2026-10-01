@@ -40,7 +40,6 @@ contains
         ! auxiliary member of the filter competition when present
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
-        call cline%delete('ptcl_src')
         call params%new(cline)
         call spproj%read_segment(params%oritype, params%projfile)
         state = 1

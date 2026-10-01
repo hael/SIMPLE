@@ -64,12 +64,10 @@ contains
         self%plaintexttab=''      !< plain text file of input parameters
         self%prg=''               !< SIMPLE program being executed
         self%projfile=''          !< SIMPLE *.simple project file
-        self%projfile_den=''      !< denoise_project child SIMPLE project file with assignments
         self%projfile_orig=''     !< original SIMPLE *.simple project file
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
         self%projfile_out=''      !< output SIMPLE project file for non-destructive updates
-        self%projfile_raw=''      !< raw SIMPLE project used as input to denoise_project
         self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
         self%projfile_frozen=''   !< abinitio3D_addon: the frozen solution's project file
@@ -86,12 +84,10 @@ contains
         self%star_model=''        !< STAR-formatted EM file (model.star)
         self%star_ptcl=''         !< STAR-formatted EM file (data.star)
         self%starfile=''          !< STAR-formatted EM file (proj.star)
-        self%stk_den=''           !< denoised particle stack paired with stk
         self%stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
         self%stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
         self%stk=''               !< particle stack with all images(ptcls.ext)
         self%stk_backgr=''        !< stack with image for background subtraction
-        self%stktab_den=''        !< list of denoised per-micrograph stacks paired with stktab
         self%stktab=''            !< list of per-micrograph stacks
         self%subprojname=''       !< SIMPLE  subproject name
         self%vol=''

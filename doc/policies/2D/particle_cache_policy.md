@@ -112,8 +112,6 @@ The cache is refused, uniformly and at every decision level (`in_use`,
 `assert_ready`, `ensure`), when:
 
 - `box_crop >= box` (nothing to gain);
-- the primary particle source is the denoised stack (`ptcl_src=den`) — the
-  entries derive from the raw stacks and would be the wrong pixels;
 - `oritype` is not `ptcl2D`/`ptcl3D` — cls3D "particles" are class averages
   in `os_out`, which the stack fingerprint cannot see.
 
@@ -146,5 +144,3 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   existing uniform fallback.
 - **UI promotion**: `cache`/`cache_dir` are `UI_VIS_DEVELOPER`; promote after
   validation, and consider defaulting `cache=yes` for `abinitio2D`.
-- **Denoised-source entries**: per-source cache entries would lift the
-  `ptcl_src=den` exclusion if that path becomes I/O-bound in practice.

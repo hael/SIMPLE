@@ -28,11 +28,11 @@ integer,          parameter :: KLEN = 24
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
 !! search policy plus the entry routes (provenance)
-character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(40) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(36) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'nstates', 'multivol_mode', 'split_stage', 'nstages', 'rec_backend', 'maxits_pcg', &
     &'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'filt_mode', 'automsk', 'envfsc', 'envmsklp', &
-    &'conical_fsc', 'projrec', 'objfun', 'sigma_est', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
-    &'objfun_den', 'objfun_den_w', 'inpl_cont', 'ptcl_src', 'prob_athres', 'bfac', 'gauref', 'partition', &
+    &'projrec', 'objfun', 'sigma_est', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
+    &'inpl_cont', 'prob_athres', 'bfac', 'gauref', 'partition', &
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']
 
 !> The subset abinitio3D_addon replays as given: everything that describes the
@@ -40,11 +40,19 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(40) = [character(len=KLEN)
 !! layout and mode (derived from the completed solution), the stage range
 !! (from the ladder), centring (forced off) and the compute/convergence keys
 !! the add-on accepts from its own command line are not replayed.
-character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(30) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(26) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', &
-    &'filt_mode', 'automsk', 'envfsc', 'envmsklp', 'conical_fsc', 'projrec', 'objfun', 'sigma_est', 'hp', &
-    &'lp', 'lpstart', 'lpstop', 'force_lp_range', 'objfun_den', 'objfun_den_w', 'inpl_cont', 'ptcl_src', &
+    &'filt_mode', 'automsk', 'envfsc', 'envmsklp', 'projrec', 'objfun', 'sigma_est', 'hp', &
+    &'lp', 'lpstart', 'lpstop', 'force_lp_range', 'inpl_cont', &
     &'prob_athres', 'bfac', 'gauref', 'partition', 'lpstart_ini3D', 'lpstop_ini3D']
+
+!> Field and input keys of retired features: the denoised particle source
+!! (ptcl_src, objfun_den, objfun_den_w) and conical FSC regularization
+!! (conical_fsc). Manifests written before their removal carry them: the
+!! inputs are ignored, and the ptcl_src field must say raw, because a
+!! solution reconstructed from denoised particles cannot be extended.
+character(len=KLEN), parameter :: MANIFEST_RETIRED_KEYS(4) = [character(len=KLEN) :: &
+    &'ptcl_src', 'objfun_den', 'objfun_den_w', 'conical_fsc']
 
 !> one stage of the ladder: the planned record and the limits actually
 !! emitted (0 = not on the stage line, -1 = a stage the run never ran)
@@ -66,7 +74,6 @@ type :: abinitio3D_manifest
     ! project and particle-layout identity
     integer            :: nrows = 0
     integer(int64)     :: layout_digest = 0_int64, stack_digest = 0_int64, optics_digest = 0_int64
-    character(len=16)  :: ptcl_src = ''      !< the particle source the run reconstructed from (raw|den)
     ! the solution
     integer            :: nstates = 0, box = 0, split_stage = 0
     real               :: smpd = 0., mskdiam = 0.
@@ -118,7 +125,6 @@ type :: abinitio3D_manifest
     ! getters
     procedure          :: get_fname
     procedure          :: get_run_id
-    procedure          :: get_ptcl_src
     procedure          :: get_nstates
     procedure          :: get_box
     procedure          :: get_smpd
@@ -140,13 +146,13 @@ contains
     ! CONSTRUCTION
 
     !> A completed run of program_name over the particle layout of spproj:
-    !! the identity of its rows, its stack table, its optics/CTF parameters
-    !! and the particle source it reconstructed from. The records follow:
+    !! the identity of its rows, its stack table and its optics/CTF
+    !! parameters. The records follow:
     !! set_solution (before record_artifacts), set_sampling, set_stage_line,
     !! set_ladder, record_inputs.
-    subroutine new( self, run_id, program_name, eligible, spproj, ptcl_src )
+    subroutine new( self, run_id, program_name, eligible, spproj )
         class(abinitio3D_manifest), intent(inout) :: self
-        character(len=*),           intent(in)    :: run_id, program_name, ptcl_src
+        character(len=*),           intent(in)    :: run_id, program_name
         logical,                    intent(in)    :: eligible
         class(sp_project),          intent(inout) :: spproj
         call self%kill
@@ -158,7 +164,6 @@ contains
         self%layout_digest = sigma2_state_project_layout_digest(spproj, spproj%os_ptcl3D)
         self%stack_digest  = stack_table_digest(spproj)
         self%optics_digest = optics_ctf_digest(spproj)
-        self%ptcl_src      = ptcl_src
     end subroutine new
 
     !> the completed solution: state layout, point group, native grid and mask
@@ -382,7 +387,6 @@ contains
         call push('layout_digest '//trim(int64_str(self%layout_digest)))
         call push('stack_digest '//trim(int64_str(self%stack_digest)))
         call push('optics_digest '//trim(int64_str(self%optics_digest)))
-        call push('ptcl_src '//trim(self%ptcl_src))
         call push('nstates '//int2str(self%nstates))
         call push('pgrp '//trim(self%pgrp))
         call push('box '//int2str(self%box))
@@ -521,7 +525,15 @@ contains
                 case('layout_digest'); read(rest,*,iostat=io_stat) self%layout_digest
                 case('stack_digest');  read(rest,*,iostat=io_stat) self%stack_digest
                 case('optics_digest'); read(rest,*,iostat=io_stat) self%optics_digest
-                case('ptcl_src');      read(rest,*,iostat=io_stat) self%ptcl_src
+                case('ptcl_src')
+                    ! retired field (see MANIFEST_RETIRED_KEYS)
+                    read(rest,*,iostat=io_stat) word
+                    if( io_stat == 0 .and. trim(word) /= 'raw' )then
+                        msg = 'abinitio3D manifest of a solution reconstructed from denoised particles (no longer supported)'
+                        call fclose(funit)
+                        call self%kill
+                        return
+                    endif
                 case('nstates');       read(rest,*,iostat=io_stat) self%nstates
                 case('pgrp');          read(rest,*,iostat=io_stat) self%pgrp
                 case('box');           read(rest,*,iostat=io_stat) self%box
@@ -568,7 +580,9 @@ contains
                     ! the value is the rest of the record after its key: a
                     ! list-directed read would end a path at its first '/'
                     read(rest,*,iostat=io_stat) word
-                    if( io_stat == 0 )then
+                    if( io_stat == 0 .and. any(MANIFEST_RETIRED_KEYS == word) )then
+                        ! a retired input key: read and ignored
+                    else if( io_stat == 0 )then
                         if( .not. any(MANIFEST_INPUT_KEYS == word) )then
                             msg = 'unknown abinitio3D manifest input key: '//trim(word)
                             call fclose(funit)
@@ -630,8 +644,6 @@ contains
             msg = 'abinitio3D manifest does not describe a completed run'
         else if( len_trim(self%run_id) == 0 .or. self%nrows < 1 .or. self%nstates < 1 .or. self%box < 1 )then
             msg = 'abinitio3D manifest is incomplete'
-        else if( trim(self%ptcl_src) /= 'raw' .and. trim(self%ptcl_src) /= 'den' )then
-            msg = 'abinitio3D manifest records no valid particle source'
         else if( .not. allocated(self%stages) )then
             msg = 'abinitio3D manifest has no ladder'
         else if( self%first_stage < 1 .or. self%last_stage < self%first_stage .or. self%last_stage > size(self%stages) )then
@@ -766,7 +778,7 @@ contains
     end subroutine validate_frozen
 
     !> The base run's settings onto a command line: the replayed inputs as
-    !! given, the effective particle source, the stage command line's shape at
+    !! given, the stage command line's shape at
     !! planning time (not the input text), and the completed solution (state
     !! layout and mode, point group, mask, ladder end and effective nsample)
     subroutine replay( self, cline )
@@ -780,9 +792,6 @@ contains
             if( found ) call cline%set_from_text(trim(MANIFEST_REPLAY_KEYS(i)), val%to_char())
         enddo
         call val%kill
-        ! the particle source the frozen solution was reconstructed from, even
-        ! when it came from the default
-        call cline%set('ptcl_src', trim(self%ptcl_src))
         call cline%delete('lp')
         call cline%delete('lpstop')
         if( self%lp_on_line )     call cline%set('lp',     self%lp_line)
@@ -874,13 +883,6 @@ contains
         run_id = self%run_id
     end function get_run_id
 
-    !> the particle source of the solution (raw|den)
-    function get_ptcl_src( self ) result( ptcl_src )
-        class(abinitio3D_manifest), intent(in) :: self
-        character(len=16) :: ptcl_src
-        ptcl_src = self%ptcl_src
-    end function get_ptcl_src
-
     integer function get_nstates( self ) result( nstates )
         class(abinitio3D_manifest), intent(in) :: self
         nstates = self%nstates
@@ -930,7 +932,6 @@ contains
         self%layout_digest  = 0_int64
         self%stack_digest   = 0_int64
         self%optics_digest  = 0_int64
-        self%ptcl_src       = ''
         self%nstates        = 0
         self%box            = 0
         self%split_stage    = 0

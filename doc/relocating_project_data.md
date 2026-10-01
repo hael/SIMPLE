@@ -15,11 +15,11 @@ The global roots are used as a fallback for four path scopes:
 | Scope | Project fields |
 | --- | --- |
 | Micrographs | `mic.movie`, `mic.intg`, `mic.boxfile` |
-| Particles | `stk.stk`, `stk.stk_den`, `stk.boxfile` |
+| Particles | `stk.stk`, `stk.boxfile` |
 | Class averages | `out.stk`, `out.stkpath`, `out.frcs` (`frc2D`), `out.sigma2` |
 | Volumes | `out.vol`, `out.fsc`, `out.frcs` (`frc3D`) |
 
-`ptcl2D` and `ptcl3D` rows refer to raw or denoised images through the `stk`
+`ptcl2D` and `ptcl3D` rows refer to images through the `stk`
 segment, so particle remapping updates the stack paths used by both segments.
 
 ## Data stored under different roots

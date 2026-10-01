@@ -260,7 +260,7 @@ contains
     !!  part_ids, ranges part_ranges, written per partition for calc_pspec_assemble. Images are read once in batches over
     !!  the selection; each batch reduces per partition run (sel_pinds sorted, ranges disjoint), so partitions never contend.
     subroutine compute_pspec_partitions( params, build, part_ids, part_ranges, sel_pinds, sig2_mul )
-        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
+        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         integer,          intent(in)    :: part_ids(:)
@@ -315,12 +315,7 @@ contains
             do i = 1, n_work, batchsz_max
                 batchlims = [i, min(i+batchsz_max-1, n_work)]
                 nbatch    = batchlims(2) - batchlims(1) + 1
-                if( params%l_ptcl_src_den )then
-                    call discrete_read_imgbatch_source(params, build, 'den', nbatch, work_pinds(batchlims(1):batchlims(2)), &
-                        [1,nbatch], build%imgbatch(:nbatch))
-                else
-                    call discrete_read_imgbatch(params, build, nbatch, work_pinds(batchlims(1):batchlims(2)), [1,nbatch])
-                endif
+                call discrete_read_imgbatch(params, build, nbatch, work_pinds(batchlims(1):batchlims(2)), [1,nbatch])
                 ! reduce the batch one partition-run at a time
                 do islot = 1,nslots
                     if( slot_from(islot) == 0 ) cycle

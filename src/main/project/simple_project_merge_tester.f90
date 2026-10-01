@@ -226,7 +226,7 @@ contains
         type(sp_project) :: proj
         type(string) :: root, mic_root, ptcl_root, cavg_root, cavg_path, vol_root
         type(string) :: movie_file, intg_file, mic_box_file
-        type(string) :: stk_file, stk_den_file, stk_box_file
+        type(string) :: stk_file, stk_box_file
         type(string) :: cavg_file, frcs2D_file, sigma2_file, vol_file, fsc_file, frcs3D_file
         integer :: nremapped, status
         write(*,'(A)') 'test_remap_project_paths_scoped_roots'
@@ -246,7 +246,6 @@ contains
         intg_file    = mic_root//'intg.mrc'
         mic_box_file = mic_root//'mic.box'
         stk_file     = ptcl_root//'raw.mrcs'
-        stk_den_file = ptcl_root//'den.mrcs'
         stk_box_file = ptcl_root//'ptcl.box'
         cavg_file    = cavg_root//'classes.mrcs'
         frcs2D_file  = cavg_root//'frcs2D.bin'
@@ -258,7 +257,6 @@ contains
         call create_empty_file(intg_file)
         call create_empty_file(mic_box_file)
         call create_empty_file(stk_file)
-        call create_empty_file(stk_den_file)
         call create_empty_file(stk_box_file)
         call create_empty_file(cavg_file)
         call create_empty_file(frcs2D_file)
@@ -272,7 +270,6 @@ contains
         call proj%os_mic%set(1, 'boxfile', '/legacy/mic/mic.box')
         call proj%os_stk%new(1, is_ptcl=.false.)
         call proj%os_stk%set(1, 'stk',     '/legacy/ptcl/raw.mrcs')
-        call proj%os_stk%set(1, 'stk_den', '/legacy/ptcl/den.mrcs')
         call proj%os_stk%set(1, 'boxfile', '/legacy/ptcl/ptcl.box')
         call proj%os_ptcl3D%new(1, is_ptcl=.true.)
         call proj%os_ptcl3D%set_stkind(1, 1)
@@ -290,7 +287,7 @@ contains
         call remap_project_paths(proj, string('/legacy/mic'), mic_root, nremapped, scope='mic')
         call assert_int(3, nremapped, 'scoped mic path count')
         call remap_project_paths(proj, string('/legacy/ptcl'), ptcl_root, nremapped, scope='ptcl')
-        call assert_int(3, nremapped, 'scoped particle path count')
+        call assert_int(2, nremapped, 'scoped particle path count')
         call remap_project_paths(proj, string('/legacy/cavg'), cavg_root, nremapped, scope='cavg')
         call assert_int(4, nremapped, 'scoped class-average path count')
         call remap_project_paths(proj, string('/legacy/vol'), vol_root, nremapped, scope='vol')
@@ -299,7 +296,6 @@ contains
         call assert_string_eq(intg_file%to_char(), proj%os_mic%get_str(1, 'intg'), 'scoped intg path')
         call assert_string_eq(mic_box_file%to_char(), proj%os_mic%get_str(1, 'boxfile'), 'scoped mic box path')
         call assert_string_eq(stk_file%to_char(), proj%os_stk%get_str(1, 'stk'), 'scoped raw stack path')
-        call assert_string_eq(stk_den_file%to_char(), proj%os_stk%get_str(1, 'stk_den'), 'scoped denoised stack path')
         call assert_string_eq(stk_box_file%to_char(), proj%os_stk%get_str(1, 'boxfile'), 'scoped stack box path')
         call assert_string_eq(cavg_file%to_char(), proj%os_out%get_str(1, 'stk'), 'scoped class-average path')
         call assert_string_eq(cavg_path%to_char(), proj%os_out%get_str(1, 'stkpath'), 'scoped class path')

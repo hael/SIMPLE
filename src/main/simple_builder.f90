@@ -23,7 +23,7 @@ type :: builder
     class(oris), pointer                :: spproj_field => null() !< pointer to field in spproj
     type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
-    type(euclid_sigma2)                 :: esig                   !< sigma2 noise variance for the selected particle source
+    type(euclid_sigma2)                 :: esig                   !< sigma2 noise variance
     type(polarft_calc)                  :: pftc                   !< object for polar Fourier transform calculations
     type(image)                         :: img                    !< individual image/projector objects
     type(image)                         :: img_crop               !< for cropped image

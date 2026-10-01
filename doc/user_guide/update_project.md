@@ -99,7 +99,7 @@ without a global pair.
 | Scope | Project segment and fields |
 | --- | --- |
 | Micrographs (`mic`) | `mic.movie`, `mic.intg`, `mic.boxfile` |
-| Particles (`ptcl`) | `stk.stk`, `stk.stk_den`, `stk.boxfile` |
+| Particles (`ptcl`) | `stk.stk`, `stk.boxfile` |
 | Class averages (`cavg`) | `out.stk`, `out.stkpath`, `out.frcs` for `frc2D`, `out.sigma2` |
 | Volumes (`vol`) | `out.vol`, `out.fsc`, `out.frcs` for `frc3D` |
 

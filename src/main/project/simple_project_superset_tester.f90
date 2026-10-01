@@ -20,7 +20,6 @@ contains
         write(*,'(A)') '**** running all project superset tests ****'
         call test_identity_accepts_superset()
         call test_identity_refusals()
-        call test_denoised_source_identity()
         call test_membership()
         call test_mask_and_restore()
     end subroutine run_all_project_superset_tests
@@ -101,7 +100,7 @@ contains
         type(project_superset) :: superset
         character(len=STDLEN)  :: msg
         integer :: status
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_true(status /= 0, what//' is refused')
         call assert_true(names_particle(msg, expected_first), what//': the refusal names the first offending particle')
         call assert_int(0, superset%get_nfrozen(), what//': a refused relation is left empty')
@@ -129,7 +128,7 @@ contains
         write(*,'(A)') 'test_identity_accepts_superset'
         call make_current(cur)
         call make_frozen(cur, frozen, 2)
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_int(0, status, 'a shorter frozen project on the shared indices is valid: '//trim(msg))
         call superset%kill
         call cur%kill
@@ -175,7 +174,7 @@ contains
         ! a CTF mismatch on a frozen particle; on a cohort row it does not matter
         cur = ref
         call cur%os_ptcl3D%set(15, 'dfx', 3.3)
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_int(0, status, 'a changed CTF of a cohort particle is accepted: '//trim(msg))
         call cur%os_ptcl3D%set(6, 'dfx', 3.3)
         call expect_refusal(cur, frozen, 'a changed CTF of a frozen particle', 6)
@@ -203,38 +202,6 @@ contains
         call ref%kill
     end subroutine test_identity_refusals
 
-    !> ptcl_src=den: the rows must name the same denoised source images as well
-    subroutine test_denoised_source_identity()
-        type(sp_project)       :: cur, frozen, ref
-        type(project_superset) :: superset
-        character(len=STDLEN)  :: msg
-        integer :: status, istk
-        write(*,'(A)') 'test_denoised_source_identity'
-        call make_current(ref)
-        do istk = 1, 2
-            call ref%os_stk%set(istk, 'stk_den', '/data/stacks/den_'//char(48+istk)//'.mrcs')
-        enddo
-        cur = ref
-        call make_frozen(ref, frozen, 2)
-        call superset%new(cur, frozen, 2, 'den', status, msg)
-        call assert_int(0, status, 'the same denoised sources are accepted: '//trim(msg))
-        call cur%os_stk%set(1, 'stk_den', '/data/stacks/other_den.mrcs')
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
-        call assert_int(0, status, 'a raw-source solution ignores the denoised sources: '//trim(msg))
-        call superset%new(cur, frozen, 2, 'den', status, msg)
-        call assert_true(status /= 0 .and. names_particle(msg, 1), &
-            &'a changed denoised source is refused, naming the first particle of its stack')
-        cur = ref
-        call cur%os_stk%delete_entry(2, 'stk_den')
-        call superset%new(cur, frozen, 2, 'den', status, msg)
-        call assert_true(status /= 0 .and. names_particle(msg, NPTCLS_FRZ + 1), &
-            &'a missing denoised source of the appended stack is refused')
-        call superset%kill
-        call cur%kill
-        call frozen%kill
-        call ref%kill
-    end subroutine test_denoised_source_identity
-
     subroutine test_membership()
         type(sp_project)       :: cur, frozen, work
         type(project_superset) :: superset
@@ -244,7 +211,7 @@ contains
         write(*,'(A)') 'test_membership'
         call make_current(cur)
         call make_frozen(cur, frozen, 2)
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_int(0, status, 'the membership of a valid pair is computed: '//trim(msg))
         ! rows 1-10 frozen; rows 11-12 were never updated and join rows 13-14
         ! (deselected in the frozen project) and 15-20 (appended)
@@ -269,28 +236,28 @@ contains
         ! an inactive current row belongs to neither set (one state: floor 5)
         call cur%os_ptcl2D%set_state(20, 0)
         call make_frozen(cur, frozen, 1)
-        call superset%new(cur, frozen, 1, 'raw', status, msg)
+        call superset%new(cur, frozen, 1, status, msg)
         call assert_int(0, status, 'a cohort of 9 is above the floor of one state: '//trim(msg))
         call assert_int(9, superset%get_ncohort(), 'an inactive current particle is not in the cohort')
         ! the per-state floor: 2 states need at least 10 cohort particles
         call make_frozen(cur, frozen, 2)
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_true(status /= 0, 'a cohort below 5 particles per inherited state is refused')
         call assert_int(0, superset%get_ncohort(), 'a refused relation is left empty')
-        call superset%new(cur, frozen, 1, 'raw', status, msg)
+        call superset%new(cur, frozen, 1, status, msg)
         call assert_true(status /= 0, 'a frozen state label above nstates is refused')
         ! an empty cohort
         do i = 11, NPTCLS
             call cur%os_ptcl2D%set_state(i, 0)
         enddo
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_true(status /= 0, 'an empty cohort is refused')
         ! an empty inherited state (every frozen particle in state 1 of 2)
         call make_current(cur)
         call make_frozen(cur, frozen, 1)
-        call superset%new(cur, frozen, 2, 'raw', status, msg)
+        call superset%new(cur, frozen, 2, status, msg)
         call assert_true(status /= 0, 'an empty inherited state is refused')
-        call superset%new(cur, frozen, 1, 'raw', status, msg)
+        call superset%new(cur, frozen, 1, status, msg)
         call assert_int(0, status, 'the same frozen project is valid for its own single state')
         call superset%kill
         call cur%kill
@@ -310,7 +277,7 @@ contains
         call make_current(cur)
         call cur%os_ptcl2D%set_state(20, 0)   ! a row the user deselected stays deselected
         call make_frozen(cur, frozen, 1)
-        call superset%new(cur, frozen, 1, 'raw', status, msg)
+        call superset%new(cur, frozen, 1, status, msg)
         call assert_int(0, status, 'the relation to mask is valid: '//trim(msg))
         work = cur
         call superset%mask(work)

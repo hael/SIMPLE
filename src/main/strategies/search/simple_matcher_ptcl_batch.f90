@@ -2,7 +2,7 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
+use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached
 use simple_pose_cont_refine3D_adapter, only: pose_cont_particle_workspace
 use simple_ptcl_cache,      only: ptcl_cache_in_use, ptcl_cache_read_batch
@@ -90,23 +90,10 @@ contains
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         type(pose_cont_particle_workspace), optional, intent(inout) :: pose_cont_particles
-        logical :: l_den_src
-        l_den_src     = params%l_ptcl_src_den
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        if( .not. l_den_src )then
-            call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
-        else
-            call discrete_read_imgbatch_source(params, build, 'den', &
-                nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
-        endif
+        call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
             tmp_imgs, tmp_imgs_pad, pose_cont_particles)
-        if( params%l_objfun_den )then
-            call discrete_read_imgbatch_source(params, build, 'den', &
-                nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
-            call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
-                tmp_imgs, tmp_imgs_pad)
-        endif
     end subroutine build_batch_particles3D
 
     !> Read one raw 3-D particle batch without constructing polar-Fourier data.
@@ -115,13 +102,7 @@ contains
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls_here
         integer,           intent(in)    :: pinds_here(nptcls_here)
-
-        if( params%l_ptcl_src_den )then
-            call discrete_read_imgbatch_source(params, build, 'den', nptcls_here, &
-                &pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
-        else
-            call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
-        endif
+        call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
     end subroutine build_batch_particles3D_cartesian
 
     subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, &
@@ -153,30 +134,6 @@ contains
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
         call build%pftc%memoize_ptcls
     end subroutine polarize_batch_particles3D
-
-    subroutine polarize_batch_particles3D_den( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls_here
-        integer,           intent(in)    :: pinds_here(nptcls_here)
-        class(image),      intent(inout) :: src_imgs(nptcls_here)
-        class(image),      intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        call tmp_imgs(1)%memoize_mask_coords
-        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
-        pdim_interp = build%pftc%get_pdim_interp()
-        call tmp_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            ithr  = omp_get_thread_num() + 1
-            iptcl = pinds_here(iptcl_batch)
-            call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
-            call build%pftc%polarize_ptcl_den_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
-        end do
-        !$omp end parallel do
-        call forget_ft_maps
-        call build%pftc%memoize_ptcls_den
-    end subroutine polarize_batch_particles3D_den
 
     !>  ptcl_imgs receives the raw full-size images, which only callers that restore
     !!  class averages from them need; omit it to skip both the buffer and the copy.

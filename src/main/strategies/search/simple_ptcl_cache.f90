@@ -340,13 +340,6 @@ contains
         call key_fp%kill
     end subroutine write_cache_key
 
-    !>  Entries derive from the raw stacks, so a denoised primary source (ptcl_src=den) is refused. Checked
-    !!  wherever cache state is decided, so a mis-plumbed worker command line cannot read wrong data.
-    logical function primary_src_is_den( params )
-        class(parameters), intent(in) :: params
-        primary_src_is_den = params%l_ptcl_src_den
-    end function primary_src_is_den
-
     !>  The stack fingerprint walks os_stk, so only particle oritypes are cacheable: cls3D "particles"
     !!  are class averages in os_out, where a replaced cavg stack would evade staleness detection.
     logical function oritype_cacheable( params )
@@ -362,7 +355,7 @@ contains
         class(builder),    intent(inout) :: build
         type(string) :: stkname
         if( .not. params%l_cache .or. params%box_crop >= params%box .or. &
-            &primary_src_is_den(params) .or. .not. oritype_cacheable(params) )then
+            &.not. oritype_cacheable(params) )then
             ptcl_cache_in_use = .false.
             return
         endif
@@ -385,7 +378,6 @@ contains
         type(string) :: stkname
         if( .not. params%l_cache ) return
         if( params%box_crop >= params%box )     return  ! nothing to cache, see ptcl_cache_ensure
-        if( primary_src_is_den(params) )        return  ! refused uniformly, see ptcl_cache_ensure
         if( .not. oritype_cacheable(params) )   return  ! refused uniformly, see ptcl_cache_ensure
         if( ptcl_cache_in_use(params, build) ) return
         stkname = cache_stkname(params)
@@ -478,12 +470,6 @@ contains
             write(logfhandle,'(A)') '>>> PARTICLE CACHE: box_crop == box, nothing to gain, running without cache'
             call disable_cache(params, cline)
             ! release any cache still owned from an earlier stage of a staged workflow
-            call ptcl_cache_cleanup
-            return
-        endif
-        if( primary_src_is_den(params) )then
-            write(logfhandle,'(A)') '>>> PARTICLE CACHE: denoised particle source in use, running without cache'
-            call disable_cache(params, cline)
             call ptcl_cache_cleanup
             return
         endif

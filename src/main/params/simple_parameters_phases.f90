@@ -1044,11 +1044,6 @@ contains
             self%nxpatch = 0
             self%nypatch = 0
         endif
-        select case(trim(self%ptcl_src))
-            case('raw','den')
-            case DEFAULT
-                THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
-        end select
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
             select case(trim(self%score_states))
                 case('yes','no')
@@ -1097,10 +1092,6 @@ contains
                     THROW_HARD('model_cavgs_rejection quality_context must be chunk, pool, or sieve')
             end select
         endif
-        self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
-        if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then
-            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
-        endif
         select case(trim(self%cache))
             case('yes','no')
             case DEFAULT
@@ -1113,23 +1104,6 @@ contains
                 THROW_HARD('Unsupported umap='//trim(self%umap)//'; expected yes|no')
         end select
         self%l_umap = trim(self%umap) == 'yes'
-        select case(trim(self%objfun_den))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported objfun_den='//trim(self%objfun_den)//'; expected yes|no')
-        end select
-        self%l_objfun_den = trim(self%objfun_den) == 'yes'
-        if( self%l_objfun_den )then
-            if( trim(self%objfun) /= 'euclid' )then
-                THROW_HARD('objfun_den=yes requires objfun=euclid')
-            endif
-            if( self%l_ptcl_src_den )then
-                THROW_HARD('objfun_den=yes requires ptcl_src=raw')
-            endif
-            if( self%objfun_den_w < 0. .or. self%objfun_den_w > 1. )then
-                THROW_HARD('objfun_den_w must be in [0,1]')
-            endif
-        endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')
             case DEFAULT

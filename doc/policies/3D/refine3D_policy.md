@@ -386,13 +386,11 @@ by construction; the continuous route is a strict refinement of it and cannot
 alter exploration dynamics on any sample. Objective type is a capability
 check and must never activate continuous-angle behavior by itself.
 
-Raw `objfun=euclid`, `objfun=cc`, and the `objfun_den=yes` hybrid provide the
-analytic joint `(sx,sy,rotind_frac)` gradient. The cc route minimizes `-cc`
-with a quotient-rule angular derivative and maps scores as the clamped
-correlation rather than `exp(-loss)`. The hybrid route minimizes the negative
-of the established weighted score: raw `exp(-loss)` plus clamped denoised
-correlation. Parameter validation does not couple `inpl_cont` to `objfun`,
-`objfun_den`, `ptcl_src`, `projrec`, or a specific program. Objective capability
+Raw `objfun=euclid` and `objfun=cc` provide the analytic joint
+`(sx,sy,rotind_frac)` gradient. The cc route minimizes `-cc` with a
+quotient-rule angular derivative and maps scores as the clamped correlation
+rather than `exp(-loss)`. Parameter validation does not couple `inpl_cont` to
+`objfun`, `projrec`, or a specific program. Objective capability
 is owned by the PFTC/search implementation. The opt-in is not restricted to `refine=shc`:
 deterministic, neighborhood, evaluation, and probabilistic matcher routes use
 the same policy wherever they commit a pose. A mode with no pose search,
@@ -491,8 +489,6 @@ the strategy dispatches `volassemble`.
   in the `<vol>_pcg_support.txt` sidecar so downstream consumers never mask
   again (2026-09-09)
 - calculates FSC curves and state resolutions on the halves as shipped
-- applies conical FSC curves for directional ML regularization when
-  `ml_reg=yes` and `conical_fsc=yes`; this is opt-in
 - calculates conical FSC and cFAR from copies of the shipped halves; with
   `envfsc=yes` the copies are additionally masked by the on-the-fly density
   envelope low-pass filtered at `envmsklp`, and the phase-randomized radial FSC
@@ -587,8 +583,8 @@ records only the refine3D-side integration contract:
   on the constrained pair without post-hoc masking or phase randomization,
   logged as `>>> FSC MODE`. Before either mask source exists, the base
   bootstraps on the sphere and its current pair supplies replay density.
-- **Current exclusions** (hard-errored, not approximated): `projrec=yes`,
-  `conical_fsc=yes`, and matrix-free workflow execution. Fractional/trailing
+- **Current exclusions** (hard-errored, not approximated): `projrec=yes` and
+  matrix-free workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.
 - New regularization is research, tracked in
   `doc/implementation_notes/pcg_priors_history.md`; it cannot be used to close

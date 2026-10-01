@@ -28,7 +28,6 @@ contains
         call cl%set('projfile',    'run.simple')
         call cl%set('oritype',     'ptcl3D')
         call cl%set('mskdiam',     180.)
-        call cl%set('ptcl_src',    'den')
         call cl%set('nthr',        8)
         call cl%set('nparts',      4)
         call cl%set('qsys_name',   'slurm')
@@ -63,15 +62,13 @@ contains
         call assert_int(1, cl%get_iarg('which_iter'), 'the iteration is at least 1, not the template''s')
         sval = cl%get_carg('oritype')
         call assert_string_eq('ptcl3D', sval, 'the particle segment of the template')
-        sval = cl%get_carg('ptcl_src')
-        call assert_string_eq('den', sval, 'the particle source of the template')
         sval = cl%get_carg('qsys_name')
         call assert_string_eq('slurm', sval, 'the queue of the template')
         call assert_real(180., cl%get_rarg('mskdiam'), 0., 'the mask of the template')
         call assert_int(8,    cl%get_iarg('nthr'),     'the threads of the template')
         call assert_int(4,    cl%get_iarg('nparts'),   'the partitions of the template')
         call assert_int(3600, cl%get_iarg('walltime'), 'the walltime of the template')
-        call assert_int(13,   cl%get_argcnt(),         'nothing else: six keys set, seven copied')
+        call assert_int(12,   cl%get_argcnt(),         'nothing else: six keys set, six copied')
         call assert_false(cl%defined('update_frac') .or. cl%defined('trail_rec') .or. cl%defined('trail_seed') &
             &.or. cl%defined('frozen_rec') .or. cl%defined('rec_backend') .or. cl%defined('vol1') &
             &.or. cl%defined('box_crop') .or. cl%defined('lp'), 'no sampling, trailing, frozen, backend or map key')
@@ -96,8 +93,6 @@ contains
         call assert_real(8.,   cl%get_rarg('lp'),       0., 'the scoring limit of the template')
         call assert_int(128,   cl%get_iarg('box_crop'),     'the crop of the template')
         call assert_real(180., cl%get_rarg('mskdiam'),  0., 'the mask of the template')
-        sval = cl%get_carg('ptcl_src')
-        call assert_string_eq('den', sval, 'the particle source of the template')
         call assert_false(cl%defined('update_frac') .or. cl%defined('trail_rec') .or. cl%defined('trail_seed') &
             &.or. cl%defined('frozen_rec'), 'no sampling, trailing or frozen key')
         call tmpl%kill

@@ -99,7 +99,7 @@ contains
         continuous_eligible = self%b_ptr%pftc%is_joint_grad_objfun() .and. trim(self%p_ptr%tseries) /= 'yes'
         if( trim(self%p_ptr%inpl_cont) == 'yes' .and. trim(self%p_ptr%tseries) /= 'yes' .and. &
             &(.not. continuous_eligible) )then
-            THROW_HARD('inpl_cont=yes requires a supported Euclidean, hybrid, or cc joint objective')
+            THROW_HARD('inpl_cont=yes requires a supported Euclidean or cc joint objective')
         endif
         self%continuous_active = continuous_eligible .and. self%p_ptr%l_doshift .and. &
             &trim(self%p_ptr%inpl_cont) == 'yes'

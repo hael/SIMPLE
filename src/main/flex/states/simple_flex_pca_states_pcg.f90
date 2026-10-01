@@ -10,8 +10,7 @@ use simple_parameters,        only: parameters
 use simple_image,             only: image
 use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE
 use simple_flex_pca_pcg,      only: flex_pcg_support_volume, flex_mskfile_set
-use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, &
-    &prep_rec_observation
+use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, prep_rec_observation
 use simple_math_ft,           only: resample_sigma2
 use simple_flex_pca_rounds,         only: flex_pca_rounds
 use simple_flex_pca_run_types,      only: flex_run_settings
@@ -326,11 +325,7 @@ contains
         do ibatch = 1, n, MAXIMGBATCHSZ
             batchlims = [ibatch, min(n, ibatch+MAXIMGBATCHSZ-1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            if( params%l_ptcl_src_den )then
-                call discrete_read_imgbatch_source(params, build, 'den', n, sel, batchlims, build%imgbatch(:batchsz))
-            else
-                call discrete_read_imgbatch(params, build, n, sel, batchlims)
-            endif
+            call discrete_read_imgbatch(params, build, n, sel, batchlims)
             do ii = 1, batchsz
                 ! the backend-neutral observation (normalize, crop, taper) of the rec3D PCG strategy
                 call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)

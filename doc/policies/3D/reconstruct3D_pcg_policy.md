@@ -42,8 +42,8 @@ association order and completeness check do not depend on particle balance.
 
 Box cropping is supported under the constant-field-of-view contract
 (`box*smpd == box_crop*smpd_crop`, enforced at entry). The shared-memory path
-deliberately rejects `projrec=yes`, fractional/trailing reconstruction, and
-`conical_fsc=yes` regularization; those cases must not silently fall back to
+deliberately rejects `projrec=yes` and fractional/trailing reconstruction;
+those cases must not silently fall back to
 gridding or matrix-free PCG. The distributed master integrates the
 fractional/trailing algebra — raw `(B,D)` chains blended under the population
 rule as `(u/f) current + (1-u)(N/M) previous`, where `M(s)` is the population
@@ -553,8 +553,7 @@ Not implemented, and hard-errored or absent rather than silently approximated:
 - no post-hoc masking of PCG maps; NU filtering is the assembly-owned
   competition shared with gridding and writes derived `_nu_filt` products
   without touching the primary maps;
-- no projection-direction compression, conical-FSC regularization, or
-  GPU/offload path;
+- no projection-direction compression or GPU/offload path;
 - no reuse of SPIDER BP-CG real-space code — the design is Fourier
   central-section and the architectures do not transfer. There is no licensing
   barrier: SIMPLE is GPL-3.0 and SPIDER GPL-2.0-or-later.
@@ -702,7 +701,7 @@ time, compute cost and memory:
   thread-seconds plus master thread-seconds.
 
 Baseline profile for the first quality/cost study: `automsk=no`, `envfsc=no`,
-`conical_fsc=no`, no `pcg_mskfile`; identical starting project, maps, seed,
+no `pcg_mskfile`; identical starting project, maps, seed,
 even/odd assignment, sampling and sigma state, stage schedule and resolution
 limits, `nparts`, threads, queue and hardware between the paired runs; each
 backend in its own clone of the starting project; `maxits_pcg`, `rtol` and the

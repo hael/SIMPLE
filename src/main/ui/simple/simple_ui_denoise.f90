@@ -8,8 +8,6 @@ type(ui_program), target :: icm2D
 type(ui_program), target :: icm3D
 type(ui_program), target :: ppca_denoise
 type(ui_program), target :: ppca_denoise_classes
-type(ui_program), target :: denoise_project
-type(ui_program), target :: map_params_from_den
 
 contains
 
@@ -19,8 +17,6 @@ contains
         call new_icm3D(prgtab)
         call new_ppca_denoise(prgtab)
         call new_ppca_denoise_classes(prgtab)
-        call new_denoise_project(prgtab)
-        call new_map_params_from_den(prgtab)
     end subroutine construct_denoise_programs
 
     subroutine new_icm2D( prgtab )
@@ -218,76 +214,5 @@ contains
         ! add to ui_hash
         call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab, UI_CATEGORY)
     end subroutine new_ppca_denoise_classes
-
-
-    subroutine new_denoise_project( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call denoise_project%new(&
-        &'denoise_project',&
-        &'Create paired raw and denoised particle representations',&
-        &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and denoised particle samples from diffusion maps',&
-        &'simple_exec',&
-        &.true., &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_FILT, 'neigs', 'num', &
-            'Number of eigencomponents (0 => auto scan; default 200)', &
-            'Number of eigencomponents used as the scan upper bound before ICM rank selection', &
-            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT), &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
-            'Diffusion graph neighbors (default 10; try 5-30)', &
-            'Local nearest neighbors used for diffusion-map graph construction', &
-            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT), &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_FILT, 'graph', 'multi', &
-            'Diffusion graph', 'Diffusion graph(euc|ori){euc}','', .false., 'euc', &
-        &choices=ui_choices([character(len=3) :: 'euc', 'ori']), &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
-            'Diffusion-map bandwidth mode', &
-            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}','', .false., 'median', &
-        &choices=ui_choices([character(len=8) :: 'median', 'ferguson']), &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_FILT, 'bandwidth_tune', 'num', &
-            'Ferguson bandwidth multiplier (default 1)', &
-            'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
-            'tune >= 0', .false., 1.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_FILT, 'dm_alpha', 'num', &
-            'Diffusion-map density normalization (default 0)', &
-            'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
-            '0 <= alpha <= 1', .false., 0.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_SRCH, nspace, required_override=.false., &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
-            'SO3 mixture subspace size', 'SO3 mixture subspace size', &
-            '# subspace directions', .false., 500.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
-            group="mask", visibility=UI_VIS_STANDARD)
-        call denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
-            group="compute", visibility=UI_VIS_STANDARD)
-        call denoise_project%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
-        call add_ui_program('denoise_project', denoise_project, prgtab, UI_CATEGORY)
-    end subroutine new_denoise_project
-
-    subroutine new_map_params_from_den( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call map_params_from_den%new(&
-        &'map_params_from_den',&
-        &'Map denoised-project assignments to raw particles',&
-        &'is a workflow for transferring assignments obtained on denoise_project transformed particles back to the raw project particle frame',&
-        &'simple_exec',&
-        &.true., &
-        &visibility=UI_VIS_ADVANCED)
-        call map_params_from_den%add_input(UI_FILE, projfile_raw, &
-        &visibility=UI_VIS_STANDARD)
-        call map_params_from_den%add_input(UI_FILE, projfile_den, &
-        &visibility=UI_VIS_STANDARD)
-        call map_params_from_den%add_input(UI_FILE, projfile, required_override=.false., &
-        &visibility=UI_VIS_ADVANCED)
-        call add_ui_program('map_params_from_den', map_params_from_den, prgtab, UI_CATEGORY)
-    end subroutine new_map_params_from_den
 
 end module simple_ui_denoise

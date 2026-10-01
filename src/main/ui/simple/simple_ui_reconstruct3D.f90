@@ -54,8 +54,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_SRCH, pgrp, &
         &visibility=UI_VIS_STANDARD)
-        call reconstruct3D%add_input(UI_SRCH, ptcl_src, &
-        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc, &
         &visibility=UI_VIS_ADVANCED)

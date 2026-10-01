@@ -24,7 +24,6 @@ type(ui_param) :: cn
 type(ui_param) :: cn_max
 type(ui_param) :: cn_min
 type(ui_param) :: combine_eo
-type(ui_param) :: conical_fsc
 type(ui_param) :: cs
 type(ui_param) :: ctf
 type(ui_param) :: ctf_yes
@@ -99,8 +98,6 @@ type(ui_param) :: nthr
 type(ui_param) :: numlen
 type(ui_param) :: nxpatch
 type(ui_param) :: nypatch
-type(ui_param) :: objfun_den
-type(ui_param) :: objfun_den_w
 type(ui_param) :: objfun
 type(ui_param) :: oritab
 type(ui_param) :: oritab2
@@ -127,9 +124,7 @@ type(ui_param) :: pick_roi
 type(ui_param) :: picker
 type(ui_param) :: pickrefs
 type(ui_param) :: projfile
-type(ui_param) :: projfile_den
 type(ui_param) :: projfile_merged
-type(ui_param) :: projfile_raw
 type(ui_param) :: projfile_ref
 type(ui_param) :: projfile_target
 type(ui_param) :: projname
@@ -143,7 +138,6 @@ type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
 type(ui_param) :: qsys_reservation
-type(ui_param) :: ptcl_src
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
@@ -164,12 +158,10 @@ type(ui_param) :: startit
 type(ui_param) :: startype
 type(ui_param) :: stepsz
 type(ui_param) :: stk
-type(ui_param) :: stk_den
 type(ui_param) :: stk_backgr
 type(ui_param) :: stk_traj
 type(ui_param) :: stk2
 type(ui_param) :: stktab
-type(ui_param) :: stktab_den
 type(ui_param) :: time_per_image
 type(ui_param) :: total_dose
 type(ui_param) :: trs
@@ -422,10 +414,6 @@ subroutine set_ui_params
                                    'Maximum number of iterations', &
                                    'Max # iterations', .false., 100.)
 
-    call ptcl_src%set_param(       'ptcl_src',        'multi',  'Particle source', &
-                                   'Particle source for matching and 3D reconstruction(raw|den){raw}','', .false., 'raw', &
-    &choices=ui_choices([character(len=3) :: 'raw', 'den']))
-
     call maxnchunks%set_param(     'maxnchunks',      'num',    'Number of subsets after which 2D analysis ends', &
                                    'After this number of subsets has been classified all processing will stop(0=no end){0}', &
                                    '{0}', .false., 0.0)
@@ -449,10 +437,6 @@ subroutine set_ui_params
     call mirr%set_param(           'mirr',            'multi',  'Perform mirroring', &
                                    'Whether to mirror and along which axis(no|x|y){no}','', .false., 'no', &
     &choices=ui_choices([character(len=2) :: 'no', 'x', 'y']))
-
-    call conical_fsc%set_param(    'conical_fsc',     'binary', 'Conical FSC regularization', &
-                                   'Use conical FSC curves when ML regularization is active(yes|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call ml_reg%set_param(         'ml_reg',          'binary', 'ML regularization', &
                                    'Regularization (ML-style) based on the signal power(yes|no){yes}','', .false., 'yes', &
@@ -570,14 +554,6 @@ subroutine set_ui_params
                                    'Objective function(euclid|cc|prob){euclid}','', .false., 'euclid', &
     &choices=ui_choices([character(len=6) :: 'euclid', 'cc', 'prob']))
 
-    call objfun_den%set_param(     'objfun_den',      'binary', 'Denoised objective', &
-                                   'Augment raw Euclidean objective with denoised-particle correlation(yes|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-
-    call objfun_den_w%set_param(   'objfun_den_w',    'num',    'Denoised objective weight', &
-                                   'Weight for denoised-particle correlation in hybrid objective(0-1){0.5}', &
-                                   '(0-1){0.5}', .false., 0.5)
-
     call oritab%set_param(         'oritab',          'file',   'Orientation and CTF parameter file', &
                                    'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', &
                                    '.simple|.txt parameter file', .false., 'oritab'//trim(METADATA_EXT))
@@ -681,14 +657,6 @@ subroutine set_ui_params
     call projfile%set_param(       'projfile',        'file',   'Project file', &
                                    'SIMPLE projectfile', &
                                    'e.g. myproject.simple', .true., '')
-
-    call projfile_raw%set_param(   'projfile_raw',    'file',   'Raw project file', &
-                                   'SIMPLE project input to denoise_project', &
-                                   'e.g. raw_project.simple', .true., '')
-
-    call projfile_den%set_param(   'projfile_den',    'file',   'Denoised child project file', &
-                                   'SIMPLE denoise_project child project containing assignments to map', &
-                                   'e.g. den_project.simple', .true., '')
 
     call projfile_target%set_param('projfile_target', 'file',   'Another project file', &
                                    'SIMPLE projectfile', &
@@ -828,10 +796,6 @@ subroutine set_ui_params
                                    'Particle image stack', &
                                    'xxx.mrc file with particles', .false., '')
 
-    call stk_den%set_param(        'stk_den',         'file',   'Denoised particle image stack', &
-                                   'Denoised particle stack paired with stk by particle order', &
-                                   'xxx.mrc file with denoised particles', .false., '')
-
 
     call stk_backgr%set_param(      'stk_backgr',      'file',   'background power spectra stack, eg NP_X_background_pspec.mrc', &
                                    'background power spectra stack', &
@@ -849,10 +813,6 @@ subroutine set_ui_params
     call stktab%set_param(         'stktab',          'file',   'List of per-micrograph particle stacks', &
                                    'List of per-micrograph particle stacks', &
                                    'stktab.txt file containing file names', .false., 'stktab.txt')
-
-    call stktab_den%set_param(     'stktab_den',      'file',   'List of denoised particle stacks', &
-                                   'List of denoised particle stacks paired with stktab entries', &
-                                   'stktab_den.txt file containing file names', .false., '')
 
     call time_per_image%set_param( 'time_per_image',  'num',    'Time per image', &
                                    'Estimated time per image in seconds for forecasting total execution time{100}', &

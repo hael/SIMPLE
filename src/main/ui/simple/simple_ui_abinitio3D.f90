@@ -105,17 +105,11 @@ contains
         call abinitio3D%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of particle assignments for ab-initio convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)
-        call abinitio3D%add_input(UI_SRCH, objfun_den, group="search", &
-        &visibility=UI_VIS_ADVANCED)
-        call abinitio3D%add_input(UI_SRCH, objfun_den_w, group="search", &
-        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
         &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
         &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        call abinitio3D%add_input(UI_SRCH, ptcl_src, group="search", &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call abinitio3D%add_input(UI_FILT, hp, group="filter", &
@@ -145,7 +139,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, envmsklp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -273,7 +266,6 @@ contains
         call abinitio3D_cavgs%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the final stage in Angstroms', .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D_cavgs%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         ! mask controls
         call abinitio3D_cavgs%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         ! computer controls

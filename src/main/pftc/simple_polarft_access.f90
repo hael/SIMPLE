@@ -19,16 +19,6 @@ contains
         is_euclid_objfun = self%p_ptr%cc_objfun == OBJFUN_EUCLID
     end function is_euclid_objfun
 
-    module pure logical function is_raw_euclid_objfun(self)
-        class(polarft_calc), intent(in) :: self
-        is_raw_euclid_objfun = self%is_euclid_objfun() .and. (.not. self%p_ptr%l_objfun_den)
-    end function is_raw_euclid_objfun
-
-    module pure logical function is_hybrid_objfun(self)
-        class(polarft_calc), intent(in) :: self
-        is_hybrid_objfun = self%is_euclid_objfun() .and. self%p_ptr%l_objfun_den
-    end function is_hybrid_objfun
-
     module pure logical function is_cc_objfun(self)
         use simple_type_defs, only: OBJFUN_CC
         class(polarft_calc), intent(in) :: self

@@ -349,6 +349,9 @@ mode has no `npreimages` control because basin selection is fixed.
 
 ### 3.3 Relationship to `objfun_den`
 
+> `objfun_den`, `stk_den` and `denoise_project` were removed on 2026-10-01;
+> this section is kept as design history.
+
 `objfun_den` already solves the scale/noise-normalization mismatch by using
 cross-correlation to a denoised representative. No normalization changes are
 needed here.

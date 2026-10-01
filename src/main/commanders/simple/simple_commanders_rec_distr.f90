@@ -368,8 +368,6 @@ contains
         end subroutine sum_pair_into_sum_rec
 
         subroutine restore_eos_and_write_fsc()
-            use simple_fsc, only: fsc_area_score_result
-            type(fsc_area_score_result)      :: cones_fsc
             type(halfmap_diagnostics_result) :: prev_diagnostics
             if( L_BENCH_GLOB ) t_restore_eos = tic()
             if( params%l_trail_rec .and. .not. l_trail_chain )then
@@ -380,20 +378,11 @@ contains
                 ! they satisfy the common evaluator's real-space contract
                 ! directly, with no representation adapter.
                 call read_previous_halfmaps()
-                if( params%conical_fsc == 'yes' )then
-                    call calc_gridding_pair_diagnostics(params, vol_prev_even, vol_prev_odd, &
-                        &state, prev_diagnostics, cones=cones_fsc)
-                    call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=prev_diagnostics%fsc, &
-                        &cfar_in=prev_diagnostics%cfar, cones_in=cones_fsc)
-                    call cones_fsc%kill
-                else
-                    call calc_gridding_pair_diagnostics(params, vol_prev_even, vol_prev_odd, &
-                        &state, prev_diagnostics)
-                    call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=prev_diagnostics%fsc, &
-                        &cfar_in=prev_diagnostics%cfar)
-                endif
+                call calc_gridding_pair_diagnostics(params, vol_prev_even, vol_prev_odd, &
+                    &state, prev_diagnostics)
+                call restore_gridding_pair(params, even_rec, odd_rec, state, &
+                    &eonames(1), eonames(2), pair_diagnostics, fsc_in=prev_diagnostics%fsc, &
+                    &cfar_in=prev_diagnostics%cfar)
                 call prev_diagnostics%kill
             else
                 ! With an accumulator chain the blended sums already contain the
@@ -686,18 +675,15 @@ contains
         !! base/replay mechanics but no composite lifetime, partial reduction, or
         !! trailing-chain policy.
         subroutine restore_gridding_pair( params, even_rec, odd_rec, state, fname_even, fname_odd, &
-            &diagnostics, fsc_in, cfar_in, cones_in )
-            use simple_fsc, only: fsc_area_score_result
-            class(parameters),                      intent(in)    :: params
-            class(reconstructor),                   intent(inout) :: even_rec, odd_rec
-            integer,                                intent(in)    :: state
-            class(string),                          intent(in)    :: fname_even, fname_odd
-            type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
-            real, optional,                         intent(in)    :: fsc_in(:)
-            real, optional,                         intent(in)    :: cfar_in
-            class(fsc_area_score_result), optional, intent(inout) :: cones_in
+            &diagnostics, fsc_in, cfar_in )
+            class(parameters),                intent(in)    :: params
+            class(reconstructor),             intent(inout) :: even_rec, odd_rec
+            integer,                          intent(in)    :: state
+            class(string),                    intent(in)    :: fname_even, fname_odd
+            type(halfmap_diagnostics_result), intent(out)   :: diagnostics
+            real, optional,                   intent(in)    :: fsc_in(:)
+            real, optional,                   intent(in)    :: cfar_in
             type(gridding_half_restore) :: even_restore, odd_restore
-            type(fsc_area_score_result) :: cones_fsc
             real,     allocatable :: res(:)
             real                  :: smpd, fny
             integer               :: box, filtsz
@@ -713,11 +699,6 @@ contains
                 allocate(diagnostics%fsc(filtsz), source=fsc_in)
                 diagnostics%cfar = cfar_in
                 l_have_fsc = .true.
-                if( params%l_ml_reg .and. (params%conical_fsc == 'yes') )then
-                    if( .not. present(cones_in) )then
-                        THROW_HARD('cones_in must be provided if conical regularization is enabled')
-                    endif
-                endif
             else
                 allocate(diagnostics%fsc(filtsz), source=0.)
                 l_have_fsc = .false.
@@ -737,28 +718,13 @@ contains
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
                 if( .not. l_have_fsc )then
                     call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
-                        &state, diagnostics, cones=cones_fsc)
+                        &state, diagnostics)
                 endif
                 call even_restore%final%kill
                 call odd_restore%final%kill
                 ! Regularization
-                if( l_have_fsc )then
-                    if( params%conical_fsc == 'yes' )then
-                        call even_rec%add_conical_invtausq2rho(cones_in)
-                        call odd_rec%add_conical_invtausq2rho(cones_in)
-                    else
-                        call even_rec%add_invtausq2rho(diagnostics%fsc)
-                        call odd_rec%add_invtausq2rho(diagnostics%fsc)
-                    endif
-                else
-                    if( params%conical_fsc == 'yes' )then
-                        call even_rec%add_conical_invtausq2rho(cones_fsc)
-                        call odd_rec%add_conical_invtausq2rho(cones_fsc)
-                    else
-                        call even_rec%add_invtausq2rho(diagnostics%fsc)
-                        call odd_rec%add_invtausq2rho(diagnostics%fsc)
-                    endif
-                endif
+                call even_rec%add_invtausq2rho(diagnostics%fsc)
+                call odd_rec%add_invtausq2rho(diagnostics%fsc)
                 ! regularized halves: density correction, deapodization, support, write
                 call even_restore%base%kill
                 call even_restore%prepare_final(even_rec)
@@ -790,7 +756,7 @@ contains
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
                 if( .not. l_have_fsc )then
                     call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
-                        &state, diagnostics, cones=cones_fsc)
+                        &state, diagnostics)
                 endif
                 call even_restore%final%kill
                 call odd_restore%final%kill
@@ -803,21 +769,18 @@ contains
             deallocate(res)
             call even_restore%kill
             call odd_restore%kill
-            call cones_fsc%kill
         end subroutine restore_gridding_pair
 
         !> Gridding adapter for the backend-neutral half-map evaluator: builds
         !! the merged average, selects lagged NU or density fallback in nu mode,
         !! and writes a newly generated density artifact when density is used.
         !! Any selected envelope is applied post hoc with phase randomization.
-        subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics, cones )
-            use simple_fsc,              only: fsc_area_score_result
+        subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics )
             use simple_vol_pproc_policy, only: state_mask_is_compatible
-            class(parameters),                      intent(in)    :: params
-            class(image),                           intent(in)    :: even, odd
-            integer,                                intent(in)    :: state
-            type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
-            class(fsc_area_score_result), optional, intent(inout) :: cones
+            class(parameters),                intent(in)    :: params
+            class(image),                     intent(in)    :: even, odd
+            integer,                          intent(in)    :: state
+            type(halfmap_diagnostics_result), intent(out)   :: diagnostics
             type(image)  :: average, envmask
             type(string) :: nu_envmask_file
             logical      :: mask_exists, mask_compatible
@@ -835,26 +798,26 @@ contains
                         call envmask%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                         call envmask%read(nu_envmask_file)
                         call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
-                            &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='nu')
+                            &envmask=envmask, support_kind='sphere', mask_kind='nu')
                     else
                         if( mask_exists ) write(logfhandle,'(A,I0,A)') '>>> FSC MASK: STATE ', state, &
                             &', lag-one NU mask is incompatible; using density fallback'
                         if( .not. mask_exists ) write(logfhandle,'(A,I0,A)') '>>> FSC MASK: STATE ', state, &
                             &', lag-one NU mask is unavailable; using density fallback'
                         call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
-                            &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='density')
+                            &envmask=envmask, support_kind='sphere', mask_kind='density')
                         call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
                     endif
                     call nu_envmask_file%kill
                 else
                     call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
-                        &envmask=envmask, cones=cones, support_kind='sphere', mask_kind='density')
+                        &envmask=envmask, support_kind='sphere', mask_kind='density')
                     call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
                 endif
                 call envmask%kill
             else
                 call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &
-                    &cones=cones, support_kind='sphere', mask_kind='none')
+                    &support_kind='sphere', mask_kind='none')
             endif
             call average%kill
         end subroutine calc_gridding_pair_diagnostics

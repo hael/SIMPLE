@@ -45,7 +45,6 @@ type :: parameters
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)          :: conical_fsc='no'     !< whether to perform conical FSC calculation when ML regularization is active(yes|no){no}
     character(len=3)          :: denoise='no'         !< whether to denoise images (yes|no){no}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
@@ -224,12 +223,10 @@ type :: parameters
     type(string)              :: prg                  !< SIMPLE program being executed
     type(string)              :: test                 !< SIMPLE TEST program being executed
     type(string)              :: projfile             !< SIMPLE *.simple project file
-    type(string)              :: projfile_den         !< denoise_project child SIMPLE project file with assignments
     type(string)              :: projfile_orig        !< original SIMPLE *.simple project file (unbootstrap source)
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
     type(string)              :: projfile_out         !< output SIMPLE project file for non-destructive updates
-    type(string)              :: projfile_raw         !< raw SIMPLE project used as input to denoise_project
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
     type(string)              :: projfile_frozen      !< abinitio3D_addon: the frozen solution's SIMPLE *.simple project file
@@ -247,12 +244,10 @@ type :: parameters
     type(string)              :: star_ptcl            !< STAR-formatted EM file (data.star)
     type(string)              :: starfile             !< STAR-formatted EM file (proj.star)
     type(string)              :: stk                  !< particle stack with all images(ptcls.ext)
-    type(string)              :: stk_den              !< denoised particle stack paired with stk
     type(string)              :: stk2                 !< 2nd stack(in selection map: selected(cavgs).ext)
     type(string)              :: stk3                 !< 3d stack (in selection map (cavgs)2selectfrom.ext)
     type(string)              :: stk_backgr           !< stack with image for background subtraction
     type(string)              :: stktab               !< list of per-micrograph stacks
-    type(string)              :: stktab_den           !< list of denoised per-micrograph stacks paired with stktab
     type(string)              :: subprojname          !< SIMPLE  subproject name
     type(string)              :: verbose_exit_fname   !< File name of indicator file when task completes(TASK_FINISHED)
     type(string)              :: vol
@@ -292,7 +287,6 @@ type :: parameters
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
-    character(len=4)          :: objfun_den='no'      !< augment raw Euclidean objective with denoised-particle correlation(yes|no){no}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement(yes|no){yes}
     character(len=3)          :: pose_cont='no'       !< transactional Cartesian five-parameter LM(yes|no){no}
@@ -317,7 +311,6 @@ type :: parameters
     character(len=STDLEN)     :: pose_policy='global' !< state-refinement pose policy(fixed|local|global){global}
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
-    character(len=STDLEN)     :: ptcl_src='raw' !< particle source for matching and 3D rec(raw|den){raw}
     character(len=STDLEN)     :: column_sampling='snr' !< flex_pca column selection(lowfreq|snr){snr}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
@@ -602,7 +595,6 @@ type :: parameters
     real    :: nu_msk_beta=1.0     !< nu_filt3D only: NU envelope boundary smoothness{1.0}
     real    :: nu_msk_dens=0.0     !< nu_filt3D only: weight of the local density term in the NU envelope{0.0}
     real    :: nu_msk_sig=3.0      !< NU evidence envelope mask threshold, in MADs above the solvent null{3.0}
-    real    :: objfun_den_w=0.3    !< denoised correlation weight in hybrid objective{0.3}
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
@@ -679,10 +671,8 @@ type :: parameters
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_regpass         = .true.
-    logical :: l_objfun_den      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
-    logical :: l_ptcl_src_den    = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_sticky_class_sampling = .false.
     logical :: l_trail_rec       = .false.

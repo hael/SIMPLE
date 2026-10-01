@@ -179,7 +179,6 @@ contains
                 ! resolution document next to rec_final_stateNN.mrc.
                 call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')
                 call child_cline%set('pgrp',    params%pgrp)
-                call child_cline%set('ptcl_src', params%ptcl_src)
                 call child_cline%set('envfsc',   params%envfsc)
                 call child_cline%set('envmsklp', params%envmsklp)
                 call child_cline%set('binwidth', params%binwidth)
@@ -187,7 +186,6 @@ contains
                 if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
-                if( final_stage_uses_ml_reg() ) call child_cline%set('conical_fsc', params%conical_fsc)
                 ! automsk is inherited on BOTH routes: the shipped PCG map is estimated on the same
                 ! density/NU support, with the same estimator-constrained FSC, as every refinement iteration.
                 if( cline_refine%defined('automsk') ) &

@@ -2346,8 +2346,7 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     use simple_image,              only: image
     use simple_reconstructor_pcg,  only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, PCG_LAMBDA
     use simple_rec3D_pcg_strategy, only: validate_pcg_common
-    use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch, &
-        &prep_rec_observation
+    use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
     use simple_sigma2_files,       only: load_sigma2_groups
     use simple_math_ft,            only: resample_sigma2
     type(parameters), intent(inout) :: params
@@ -2652,12 +2651,7 @@ contains
         do ibatch = 1, size(pinds), MAXIMGBATCHSZ
             batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
             batchsz = batchlims(2)-batchlims(1)+1
-            if( params%l_ptcl_src_den )then
-                call discrete_read_imgbatch_source(params, build, 'den', size(pinds), pinds, &
-                    &batchlims, build%imgbatch(:batchsz))
-            else
-                call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
-            endif
+            call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
             do ii = 1, batchsz
                 ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
                 call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
@@ -3488,7 +3482,6 @@ subroutine exec_generate_abinitio3D_addon_snapshots( self, cline )
         call generated%os_stk%set(ichunk, 'top',        chunk_last(ichunk))
         call generated%os_stk%set(ichunk, 'nptcls',     chunk_last(ichunk) - chunk_first(ichunk) + 1)
         call generated%os_stk%set(ichunk, 'nptcls_stk', chunk_last(ichunk) - chunk_first(ichunk) + 1)
-        if( generated%os_stk%isthere(ichunk, 'stk_den') ) call generated%os_stk%delete_entry(ichunk, 'stk_den')
         local_ind = 0
         do iptcl = chunk_first(ichunk), chunk_last(ichunk)
             local_ind = local_ind + 1

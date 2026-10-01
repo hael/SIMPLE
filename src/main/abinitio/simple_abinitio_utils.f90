@@ -312,12 +312,6 @@ contains
         if( cline_refine3D%defined('envmsklp') )then
             call child_cline%set('envmsklp', cline_refine3D%get_rarg('envmsklp'))
         endif
-        if( cline_refine3D%defined('conical_fsc') )then
-            call child_cline%set('conical_fsc', cline_refine3D%get_carg('conical_fsc'))
-        endif
-        if( cline_refine3D%defined('ptcl_src') )then
-            call child_cline%set('ptcl_src', cline_refine3D%get_carg('ptcl_src'))
-        endif
         if( cline_refine3D%defined('which_iter') )then
             call child_cline%set('which_iter', cline_refine3D%get_iarg('which_iter'))
         endif

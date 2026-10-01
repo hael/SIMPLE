@@ -59,7 +59,7 @@ real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-act
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
-    type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, conical_fsc, envfsc
+    type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, envfsc
     type(string) :: balance, partition, filt_mode, automsk, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
@@ -456,7 +456,6 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = 0.
                 cfg%ml_reg        = 'no'
-                cfg%conical_fsc   = 'no'
                 cfg%frac_best     = 1.0
                 cfg%overlap       = 0.99
                 cfg%fracsrch      = 99.
@@ -465,7 +464,6 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                cfg%conical_fsc   = params%conical_fsc
                 cfg%frac_best     = 1.0
                 if( trim(params%multivol_mode).eq.'independent' .and. istage >= stoch_stage )then
                     cfg%greedy_sampling = 'no'
@@ -484,7 +482,6 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                cfg%conical_fsc   = params%conical_fsc
                 if( trim(params%multivol_mode).eq.'independent' )then
                     cfg%frac_best       = 1.0
                     cfg%greedy_sampling = 'no'
@@ -526,11 +523,9 @@ contains
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_sticky_class_sampling
-        character(len=STDLEN) :: ptcl_src_eff
         real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
         l_full_update_stage = force_full_sampling_mode(params)
-        ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
         ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a coarser command-line lpstop stays a guard
@@ -618,14 +613,6 @@ contains
         call cline_refine3D%set('partition',              cfg%partition)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
-        call cline_refine3D%set('ptcl_src',               ptcl_src_eff)
-        if( trim(cfg%filt_mode%to_char()).eq.'none' ) then
-            call cline_refine3D%set('objfun_den',             params%objfun_den)
-            call cline_refine3D%set('objfun_den_w',           params%objfun_den_w)
-        else
-            call cline_refine3D%delete('objfun_den')
-            call cline_refine3D%delete('objfun_den_w')
-        endif
         call cline_refine3D%delete('lpstart')
         ! Non-NU stages: the printed stage limit is the highest resolution
         ! permitted. NU stages: no ceiling unless the user set lpstop.
@@ -655,7 +642,6 @@ contains
         call cline_refine3D%delete('minits')
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
-        call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)
         call cline_refine3D%set('overlap',                cfg%overlap)
@@ -757,11 +743,5 @@ contains
         endif
         call spproj%kill
     end function project_best_fsc05_resolution
-
-    character(len=STDLEN) function stage_ptcl_src( cfg, params ) result( ptcl_src )
-        type(refine3D_stage_cfg), intent(in) :: cfg
-        class(parameters),        intent(in) :: params
-        ptcl_src = trim(params%ptcl_src)
-    end function stage_ptcl_src
 
 end submodule simple_abinitio_controller

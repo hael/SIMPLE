@@ -299,12 +299,8 @@ subroutine new_export_relion( prgtab )
         call import_particles%add_input(UI_FILE, 'stktab', 'file', 'List of per-micrograph particle stacks',&
         &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '', &
         &visibility=UI_VIS_ADVANCED)
-        call import_particles%add_input(UI_FILE, stktab_den, &
-        &visibility=UI_VIS_ADVANCED)
         call import_particles%add_input(UI_IMG, 'stk', 'file', 'Stack of particles',&
         &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
-        call import_particles%add_input(UI_IMG, stk_den, &
         &visibility=UI_VIS_ADVANCED)
         call import_particles%add_input(UI_FILE, 'starfile', 'file', 'Particles Metadata starfile', 'Path to starfile containing particle metadata',&
         &'e.g. shiny.star', .false., '', group="data", visibility=UI_VIS_STANDARD)
@@ -715,10 +711,10 @@ subroutine new_export_relion( prgtab )
             'Override new_root for movie, integrated-micrograph, and box paths', &
             'e.g. /new/micrographs', .false., '', visibility=UI_VIS_ADVANCED)
         call update_project%add_input(UI_PARM, 'ptcl_old_root', 'string', 'Old particle root', &
-            'Override old_root for raw and denoised particle-stack paths', &
+            'Override old_root for particle-stack and box paths', &
             'e.g. /old/particles', .false., '', visibility=UI_VIS_ADVANCED)
         call update_project%add_input(UI_PARM, 'ptcl_new_root', 'dir', 'New particle root', &
-            'Override new_root for raw and denoised particle-stack paths', &
+            'Override new_root for particle-stack and box paths', &
             'e.g. /new/particles', .false., '', visibility=UI_VIS_ADVANCED)
         call update_project%add_input(UI_PARM, 'cavg_old_root', 'string', 'Old class-average root', &
             'Override old_root for class-average stack, FRC, and sigma paths', &

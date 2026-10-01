@@ -113,8 +113,6 @@ contains
         call cline_checkpoint%set('postprocess', 'no')
         call cline_checkpoint%delete('trail_rec')
         call cline_checkpoint%delete('refine')
-        call cline_checkpoint%delete('objfun_den')
-        call cline_checkpoint%delete('objfun_den_w')
         call cline_checkpoint%delete('sigma_est')
         call cline_checkpoint%delete('cc_emit_sigma')
         call cline_checkpoint%delete('ufrac_trec')

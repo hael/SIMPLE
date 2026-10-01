@@ -267,17 +267,11 @@ contains
             case('stk_backgr')
                 placeholder = 'e.g. background_pspec.mrcs'
                 return
-            case('stk_den')
-                placeholder = 'e.g. denoised.mrcs'
-                return
             case('stk_traj')
                 placeholder = 'e.g. trajectory.mrcs'
                 return
             case('stktab')
                 placeholder = 'e.g. stktab.txt'
-                return
-            case('stktab_den')
-                placeholder = 'e.g. stktab_den.txt'
                 return
             case('vol1')
                 placeholder = 'e.g. volume.mrc'

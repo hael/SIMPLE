@@ -23,7 +23,7 @@ pair overrides the global pair for that scope.
 ## Path ownership
 
 - Micrographs: `mic.movie`, `mic.intg`, and `mic.boxfile`.
-- Particles: `stk.stk`, `stk.stk_den`, and `stk.boxfile`.
+- Particles: `stk.stk` and `stk.boxfile`.
 - Class averages: `out.stk`, `out.stkpath`, `out.frcs` for `frc2D`, and
   `out.sigma2`.
 - Volumes: `out.vol`, `out.fsc`, and `out.frcs` for `frc3D`.

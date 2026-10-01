@@ -197,7 +197,6 @@ contains
         call pcg_frac_update%add_input(UI_SRCH, trs)
         call pcg_frac_update%add_input(UI_SRCH, pgrp)
         call pcg_frac_update%add_input(UI_SRCH, objfun)
-        call pcg_frac_update%add_input(UI_SRCH, ptcl_src)
         call pcg_frac_update%add_input(UI_FILT, ml_reg)
         call pcg_frac_update%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map', &
         &'Accepted for reconstruct3D command compatibility; no production maps are written by this test', &

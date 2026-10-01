@@ -1,7 +1,7 @@
 !@descr: unit tests for continuous in-plane registration on the polar Fourier transform (simple_polarft_calc, simple_pftc_shsrch_grad)
 ! A phantom volume (written to the run directory, removed at the end) projected through the strategy3D
 ! toolbox gives a reference at e3 = 0 and a particle rotated and shifted by a known amount. For the raw
-! Euclidean, cc and hybrid continuous-angle evaluators: identity with the discrete routes at integer
+! Euclidean and cc continuous-angle evaluators: identity with the discrete routes at integer
 ! angles, analytic vs central-difference gradients, non-negative losses under near-noiseless sigma2, the cc
 ! penalty, the joint seed selection, recovery of the known pose, and the strategy2D routes under inpl_cont.
 module simple_pftc_inplane_tester
@@ -48,7 +48,7 @@ real(dp),         parameter :: IDENTITY_ATOL  = 1.d-4
 real(dp),         parameter :: PROBE_SHIFTS(2,3) = reshape([0.d0,0.d0, 1.7d0,-2.3d0, -0.6d0,0.4d0], [2,3])
 real(dp),         parameter :: PROBE_ROTOFFS(4)  = [0.37d0, -1.42d0, 0.5d0, 1.93d0]
 
-integer, parameter :: OBJ_EUCLID = 1, OBJ_CC = 2, OBJ_HYBRID = 3
+integer, parameter :: OBJ_EUCLID = 1, OBJ_CC = 2
 
 ! the pftc keeps a reference to the sigma2 array it is given: module lifetime
 real(sp), allocatable, target :: sigma2_fixture(:,:)
@@ -61,7 +61,6 @@ contains
         call test_euclid_routes_and_recovery()
         call test_euclid_band_edges()
         call test_cc_evaluator()
-        call test_hybrid_evaluator()
         call test_strategy2D_route_flags()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
@@ -100,7 +99,6 @@ contains
         logical,                  intent(in)    :: hard_edge
         type(cmdline) :: cline
         type(ori)     :: o_ref, o_particle
-        complex(sp), allocatable :: den_pft(:,:)
         call cline%set('vol1',    PHANTOM_FILE)
         call cline%set('mskdiam', MSKDIAM)
         call cline%set('smpd',    SMPD)
@@ -116,10 +114,6 @@ contains
                 call cline%set('objfun', 'euclid')
             case(OBJ_CC)
                 call cline%set('objfun', 'cc')
-            case(OBJ_HYBRID)
-                call cline%set('objfun',       'euclid')
-                call cline%set('objfun_den',   'yes')
-                call cline%set('objfun_den_w', 0.37)
         end select
         call cline%check
         call b%init_params_and_build_strategy3D_tbox(cline, p)
@@ -150,16 +144,8 @@ contains
         ! the particle is rotated first, then shifted by the production phase: the
         ! recovered shift is expressed in the rotated frame, R(truth_angle) * shift
         if( sum(abs(shift)) > 0. ) call b%pftc%shift_ptcl(1, shift)
-        if( objfun == OBJ_HYBRID )then
-            ! the shifted raw particle doubles as the denoised fixture: isolates the
-            ! hybrid calculus while exercising its storage, memoisation and normalisation
-            den_pft = b%pftc%allocate_pft()
-            call b%pftc%get_ptcl_pft(1, den_pft(:,p%kfromto(1):p%kfromto(2)))
-            call b%pftc%set_ptcl_den_pft(1, den_pft)
-        endif
         call b%pftc%memoize_refs
         call b%pftc%memoize_ptcls
-        if( objfun == OBJ_HYBRID ) call b%pftc%memoize_ptcls_den
         if( allocated(sigma2_fixture) ) deallocate(sigma2_fixture)
         allocate(sigma2_fixture(p%kfromto(1):p%kfromto(2),1), source=1.0_sp)
         call b%pftc%assign_sigma2_noise(sigma2_fixture)
@@ -189,8 +175,6 @@ contains
                 call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift, rotind, f, grad)
             case(OBJ_CC)
                 call b%pftc%gen_corr_grad_at_angle(1, 1, shift, rotind, f, grad)
-            case(OBJ_HYBRID)
-                call b%pftc%gen_hybrid_grad_at_angle(1, 1, shift, rotind, f, grad)
             case default
                 f    = ieee_value(f, ieee_quiet_nan)
                 grad = f
@@ -500,32 +484,6 @@ contains
         call kill_fixture(b)
     end subroutine test_cc_evaluator
 
-    !> hybrid (euclid with denoised term): capability, grid identity, gradient
-    subroutine test_hybrid_evaluator()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad) :: joint_search
-        real(sp), allocatable :: scores(:)
-        real     :: joint_limits(3,2)
-        integer  :: nrots, igrid
-        write(*,'(A)') 'test_hybrid_evaluator'
-        call build_fixture(b, p, OBJ_HYBRID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
-        nrots = b%pftc%get_nrots()
-        allocate(scores(nrots))
-        call assert_true(b%pftc%is_hybrid_objfun(),     'objfun_den=yes is the hybrid objective')
-        call assert_true(b%pftc%is_joint_grad_objfun(), 'the hybrid objective advertises joint gradients')
-        call assert_false(b%pftc%is_raw_euclid_objfun(), 'the hybrid objective is not the raw Euclidean one')
-        joint_limits(1:2,1) = -p%trs; joint_limits(1:2,2) = p%trs
-        joint_limits(3,:)   = [1.-2., real(nrots)+2.]
-        call joint_search%new_joint(b, joint_limits, p%maxits_sh)
-        call joint_search%kill
-        call grid_identity(b, OBJ_HYBRID, nrots, 'hybrid')
-        call b%pftc%gen_objfun_vals(1, 1, [0._sp,0._sp], scores)
-        igrid = maxloc(scores, dim=1)
-        call gradient_probe_set(b, OBJ_HYBRID, igrid, 'hybrid')
-        call kill_fixture(b)
-    end subroutine test_hybrid_evaluator
-
     !> strategy2D_srch constructs the joint optimiser only under inpl_cont=yes and always
     !! keeps the legacy seed-search angle update (selection parity)
     subroutine test_strategy2D_route_flags()
@@ -544,7 +502,6 @@ contains
         spec%iptcl_batch = 1
         spec%iptcl_map   = 1
         p%l_prob_align_mode = .false.
-        p%l_objfun_den      = .false.
         p%inpl_cont         = 'no'
         call srch%new(p, spec, b)
         call assert_false(srch%uses_continuous_refinement(), 'inpl_cont=no: no continuous polish')

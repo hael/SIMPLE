@@ -86,12 +86,6 @@ contains
         &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, objfun_den, group="search", &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, objfun_den_w, group="search", &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, ptcl_src, group="search", &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
         &'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|pose_cont){shc}','',&
         &.false., 'shc', group="search", &
@@ -167,7 +161,6 @@ contains
         &'system P H P; experimental focused/support mode); spherical mskdiam support when absent', &
         &'e.g. focusmask.mrc', .false., '', group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, combine_eo, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
@@ -218,8 +211,6 @@ contains
         &before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &
         &choices=ui_choices([character(len=4) :: 'cc', 'none']), visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
-        call refine3D_auto%add_input(UI_SRCH, ptcl_src, group="search", &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'inpl_cont', 'binary', &

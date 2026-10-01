@@ -32,7 +32,6 @@ type :: pftc_shsrch_grad
     real(dp)                  :: joint_initial_cost = 0.d0 !< first optimizer evaluation for monotonic acceptance
     logical                   :: joint_initial_cost_valid = .false.
     logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
-    logical                   :: joint_hybrid = .false.  !< joint objective is negative hybrid score
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
@@ -120,10 +119,9 @@ contains
         call self%kill
         self%b_ptr => build
         if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
-            THROW_HARD('joint angle path requires a supported Euclidean, hybrid, or cc objective')
+            THROW_HARD('joint angle path requires a supported Euclidean or cc objective')
         endif
         self%joint_cc       = self%b_ptr%pftc%is_cc_objfun()
-        self%joint_hybrid   = self%b_ptr%pftc%is_hybrid_objfun()
         self%nrots          = self%b_ptr%pftc%get_nrots()
         self%maxits         = maxits
         self%opt_angle      = .false.
@@ -154,15 +152,12 @@ contains
     end subroutine set_limits
 
     ! Objective dispatch for the joint continuous route. Evaluators return a
-    ! quantity to minimize: raw Euclidean loss, -cc, or negative hybrid score.
+    ! quantity to minimize: raw Euclidean loss or -cc.
     subroutine joint_grad_at_angle( self, vec, cost, grad )
         class(pftc_shsrch_grad), intent(inout) :: self
         real(dp),                intent(in)    :: vec(3)
         real(dp),                intent(out)   :: cost, grad(3)
-        if( self%joint_hybrid )then
-            call self%b_ptr%pftc%gen_hybrid_grad_at_angle(self%reference, self%particle, &
-                &vec(1:2), vec(3), cost, grad)
-        else if( self%joint_cc )then
+        if( self%joint_cc )then
             call self%b_ptr%pftc%gen_corr_grad_at_angle(self%reference, self%particle, &
                 &vec(1:2), vec(3), cost, grad)
         else
@@ -172,14 +167,12 @@ contains
     end subroutine joint_grad_at_angle
 
     ! Map a joint cost to the legacy matcher score: exp(-loss) in [0,1] for
-    ! raw Euclidean, -cost clamped to [0,1] for hybrid, or -cost clamped to
-    ! [-1,1] for cc (benign series overshoot must not mint an invalid score).
+    ! raw Euclidean, or -cost clamped to [-1,1] for cc (benign series
+    ! overshoot must not mint an invalid score).
     real function joint_cost_to_score( self, cost )
         class(pftc_shsrch_grad), intent(in) :: self
         real(dp),                intent(in) :: cost
-        if( self%joint_hybrid )then
-            joint_cost_to_score = real(min(1.d0, max(0.d0, -cost)))
-        else if( self%joint_cc )then
+        if( self%joint_cc )then
             joint_cost_to_score = real(min(1.d0, max(-1.d0, -cost)))
         else
             joint_cost_to_score = real(exp(-max(0.d0, cost)))
@@ -413,7 +406,7 @@ contains
         if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
 
-    !> Polish the caller's pose over (sx,sy,rotind_frac) within +/-2 cells of irot_in (euclid, cc, hybrid);
+    !> Polish the caller's pose over (sx,sy,rotind_frac) within +/-2 cells of irot_in (euclid, cc);
     !! irot_in is authoritative, there is no all-angle rescan. An invalid or non-material solve returns the
     !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
@@ -441,7 +434,7 @@ contains
             THROW_HARD('joint minimization requested from a non-joint search object')
         endif
         if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
-            THROW_HARD('joint minimization requires a supported Euclidean, hybrid, or cc objective')
+            THROW_HARD('joint minimization requires a supported Euclidean or cc objective')
         endif
         if( irot_in < 1 .or. irot_in > self%nrots )then
             THROW_HARD('minimize_joint requires the selected in-plane cell as irot_in seed')
@@ -467,8 +460,8 @@ contains
             ! the incoming cell re-scored at xy_in, same mapping as the improved path
             seed_corr = joint_cost_to_score(self, initial_cost)
         endif
-        if( self%joint_cc .or. self%joint_hybrid )then
-            ! Correlation/hybrid costs can approach or cross zero, where a
+        if( self%joint_cc )then
+            ! Correlation costs can approach or cross zero, where a
             ! purely relative guard is toothless; floor the material scale at
             ! a 1% score change.
             improve_tol = max(64.d0 * epsilon(1.d0), &
@@ -490,12 +483,7 @@ contains
         valid_result = self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) .and. &
             &ieee_is_finite(final_cost) .and. valid_coordinates
         if( valid_result )then
-            if( self%joint_hybrid )then
-                ! Negative hybrid scores live in [-1,0]. Values outside that
-                ! interval indicate an invalid interpolated objective.
-                if( final_cost < -1.d0-JOINT_NEG_COST_TOL .or. &
-                    &final_cost > JOINT_NEG_COST_TOL ) valid_result = .false.
-            else if( self%joint_cc )then
+            if( self%joint_cc )then
                 ! a correlation materially beyond +/-1 is an unphysical
                 ! interpolation artifact; the pose found by descending into it
                 ! cannot be trusted
@@ -641,7 +629,6 @@ contains
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         self%joint_cc = .false.
-        self%joint_hybrid = .false.
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

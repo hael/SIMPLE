@@ -205,8 +205,6 @@ contains
         cline_boot = cline
         call cline_boot%set('prg', 'reconstruct3D')
         call cline_boot%delete('trail_rec')
-        call cline_boot%delete('objfun_den')
-        call cline_boot%delete('objfun_den_w')
         call cline_boot%delete('update_frac')
         call cline_boot%delete('endit')
         ! alignment-loop controls have no meaning for a reconstruction
@@ -1255,8 +1253,6 @@ contains
             call cline_rec3D%set('prg', 'reconstruct3D')
             call cline_rec3D%delete('trail_rec')
             call cline_rec3D%delete('refine')
-            call cline_rec3D%delete('objfun_den')
-            call cline_rec3D%delete('objfun_den_w')
             call cline_rec3D%delete('sigma_est')
             call cline_rec3D%delete('update_frac')
             call cline_rec3D%delete('ufrac_trec')
@@ -2197,8 +2193,6 @@ contains
             call cline_rec%delete('refine')
             call cline_rec%delete('update_frac')
             call cline_rec%delete('fillin')
-            call cline_rec%delete('objfun_den')
-            call cline_rec%delete('objfun_den_w')
             call cline_rec%delete('ufrac_trec')
             call cline_rec%delete('endit')
             call cline_rec%delete('vol_even')

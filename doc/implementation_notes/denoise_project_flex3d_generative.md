@@ -1,5 +1,10 @@
 # Flex-generated 3D particle representatives for `denoise_project`
 
+> **Retired (2026-10-01).** `denoise_project`, `map_params_from_den`, the
+> `stk_den` project field, `ptcl_src` and the `objfun_den`/`objfun_den_w`
+> hybrid objective were removed from the code base. This note is kept as a
+> design record only; nothing in it is implementable against current code.
+
 ## Status and intent
 
 This is a forward-looking implementation note. It does not describe behavior

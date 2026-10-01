@@ -178,8 +178,6 @@ contains
         call cline_assembly%set('which_iter', params%which_iter)
         call cline_assembly%set('nthr',       nthr)
         call cline_assembly%set('combine_eo', params%combine_eo)
-        call cline_assembly%delete('objfun_den')
-        call cline_assembly%delete('objfun_den_w')
         if( params%l_update_frac ) call cline_assembly%set('update_frac', params%update_frac)
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
@@ -1024,8 +1022,6 @@ contains
                     if( params%l_trail_rec .and. params%cc_objfun == OBJFUN_CC ) call cline_tmp%set('trail_seed', 'yes')
                 endif
                 call cline_tmp%delete('objfun')
-                call cline_tmp%delete('objfun_den')
-                call cline_tmp%delete('objfun_den_w')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc')
                 call xrec3D%execute( cline_tmp )

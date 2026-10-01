@@ -45,19 +45,17 @@ contains
     !! cohort, and a cohort that gives an inherited state fewer than
     !! MIN_COHORT_STATE_POP particles. A cohort below COHORT_WARN_FRAC of the
     !! frozen population is allowed (is_small_cohort, warned by the caller).
-    !! ptcl_src is the particle source the frozen solution was reconstructed
-    !! from. On refusal status /= 0 and the object is left empty.
-    subroutine new( self, cur, frozen, nstates, ptcl_src, status, msg )
+    !! On refusal status /= 0 and the object is left empty.
+    subroutine new( self, cur, frozen, nstates, status, msg )
         class(project_superset), intent(inout) :: self
         class(sp_project),       intent(inout) :: cur, frozen
         integer,                 intent(in)    :: nstates
-        character(len=*),        intent(in)    :: ptcl_src
         integer,                 intent(out)   :: status
         character(len=*),        intent(out)   :: msg
         logical, allocatable :: l_cohort(:)
         integer :: n, i, s, nper_state
         call self%kill
-        call validate_identity(cur, frozen, trim(ptcl_src) == 'den', status, msg)
+        call validate_identity(cur, frozen, status, msg)
         if( status /= 0 ) return
         status = 1
         n = cur%os_ptcl3D%get_noris()
@@ -221,12 +219,10 @@ contains
     !! rows both hold, and the superset relation: every frozen particle lies
     !! within the current project's rows, and appended rows (beyond the frozen
     !! project's last row) come from stacks the frozen project does not hold.
-    !! With l_den the denoised source image of every shared row must be the
-    !! same as well, and every appended row must have one. status /= 0 names
-    !! the defect and, for a row defect, the first offending particle index.
-    subroutine validate_identity( cur, frozen, l_den, status, msg )
+    !! status /= 0 names the defect and, for a row defect, the first offending
+    !! particle index.
+    subroutine validate_identity( cur, frozen, status, msg )
         class(sp_project), intent(inout) :: cur, frozen
-        logical,           intent(in)    :: l_den
         integer,           intent(out)   :: status
         character(len=*),  intent(out)   :: msg
         type(ctfparams) :: ctf_cur, ctf_frz
@@ -255,13 +251,6 @@ contains
                     call name_particle(i)
                     return
                 endif
-                if( l_den )then
-                    if( len(den_image_id(cur, i)) == 0 )then
-                        msg = 'the solution was reconstructed from denoised particles, and a stack has no stk_den'
-                        call name_particle(i)
-                        return
-                    endif
-                endif
                 cycle
             endif
             ! the same physical image in every segment of both projects
@@ -284,18 +273,6 @@ contains
                 msg = 'the frozen project ptcl2D and ptcl3D rows name different images'
                 call name_particle(i)
                 return
-            endif
-            if( l_den )then
-                if( len(den_image_id(cur, i)) == 0 .or. len(den_image_id(frozen, i)) == 0 )then
-                    msg = 'the solution was reconstructed from denoised particles, and a stack has no stk_den'
-                    call name_particle(i)
-                    return
-                endif
-                if( den_image_id(cur, i) /= den_image_id(frozen, i) )then
-                    msg = 'ptcl3D rows name different denoised source images'
-                    call name_particle(i)
-                    return
-                endif
             endif
             if( .not. is_frozen_row(frozen, i) ) cycle
             ! a frozen member must be active where the fresh-start selection is made
@@ -402,22 +379,6 @@ contains
             &'|'//trim(real2str(p%os_stk%get(stkind, 'smpd')))
         call stk%kill
     end function image_id
-
-    !> row i's denoised source image (ptcl3D): stk_den file and image index;
-    !! empty when its stack records no denoised source
-    function den_image_id( p, i ) result( id )
-        class(sp_project), intent(inout) :: p
-        integer,           intent(in)    :: i
-        character(len=:), allocatable :: id
-        type(string) :: stk
-        integer :: stkind, ind
-        call p%map_ptcl_ind2stk_ind('ptcl3D', i, stkind, ind)
-        id = ''
-        if( .not. p%os_stk%isthere(stkind, 'stk_den') ) return
-        stk = p%os_stk%get_str(stkind, 'stk_den')
-        if( stk%strlen_trim() > 0 ) id = trim(stk%to_char())//'|'//int2str(ind)
-        call stk%kill
-    end function den_image_id
 
     logical function same_ctf( a, b ) result( l_same )
         type(ctfparams), intent(in) :: a, b

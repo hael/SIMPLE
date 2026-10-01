@@ -1692,7 +1692,6 @@ contains
             logical, intent(in)    :: apply_changes
             integer, intent(inout) :: nfound, nbad
             call process_field(proj%os_stk, 'stk', 'stk', apply_changes, nfound, nbad)
-            call process_field(proj%os_stk, 'stk', 'stk_den', apply_changes, nfound, nbad)
             call process_field(proj%os_stk, 'stk', 'boxfile', apply_changes, nfound, nbad)
         end subroutine process_ptcl_fields
 

@@ -10,8 +10,8 @@ simple_exec prg=flex_pca ...        # projection-aware low-rank covariance (PCA)
 The `flex_analysis` diffusion-map pipeline that used to live here was removed;
 its embedding never produced usable states. The shared diffusion-map engines it
 used (`../pca/simple_diff_map_graphs.f90`, `../pca/simple_diff_map_denoise.f90`,
-`../pca/simple_diffusion_maps.f90`) remain, because `denoise_project`,
-`cls_split`, and other applications still depend on them.
+`../pca/simple_diffusion_maps.f90`) remain, because `cls_split` and other
+applications still depend on them.
 
 ## Layout
 

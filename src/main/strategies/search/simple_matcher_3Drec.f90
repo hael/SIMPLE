@@ -5,7 +5,7 @@ use simple_timer
 use simple_builder,         only: builder
 use simple_classaverager,  only: fourier_2d_accumulator
 use simple_cmdline,         only: cmdline
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, prep_rec_observation, killimgbatch
+use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch, prep_rec_observation, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
@@ -33,7 +33,6 @@ contains
         type(reconstructor) :: recvol
         integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
         integer :: batchlims(2), ibatch, batchsz, state, eo, group
-        logical :: l_den_src
         logical :: DEBUG = .false.
         integer(timer_int_kind) :: t, t0
         real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
@@ -50,7 +49,6 @@ contains
                 &params%smpd_crop, crop_imgs)
         endif
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        l_den_src = params%l_ptcl_src_den
         if( DEBUG ) t_init = toc(t)
         if( DEBUG ) then
             t_read = 0.d0
@@ -69,12 +67,7 @@ contains
                     batchlims = [ibatch, min(state_eo_offsets(group+1)-1, ibatch+MAXIMGBATCHSZ-1)]
                     batchsz   = batchlims(2) - batchlims(1) + 1
                     if( DEBUG ) t = tic()
-                    if( l_den_src )then
-                        call discrete_read_imgbatch_source(params, build, 'den', batchsz, &
-                            grouped_pinds(batchlims(1):batchlims(2)), [1,batchsz], build%imgbatch(:batchsz))
-                    else
-                        call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
-                    endif
+                    call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
                     if( DEBUG ) t_read = t_read + toc(t)
                     if( DEBUG ) t = tic()
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
@@ -127,7 +120,6 @@ contains
         type(ori) :: orientation
         integer, allocatable :: eopops(:), grouped_pinds(:), state_eo_offsets(:), proj2slice(:)
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, iproj, eo, state, nproj, group
-        logical :: l_den_src
         if( nptcls < 1 ) return
         if( params%nspace /= build%eulspace%get_noris() )then
             THROW_HARD('nspace/eulspace mismatch; calc_projdir3Drec')
@@ -147,7 +139,6 @@ contains
         endif
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         allocate(eopops(params%nspace), proj2slice(params%nspace), source=0)
-        l_den_src = params%l_ptcl_src_den
         do state = 1,params%nstates
             if( state_eo_offsets(2*state+1) <= state_eo_offsets(2*state-1) )then
                 call mark_empty_state(build, state)
@@ -179,12 +170,7 @@ contains
                 do ibatch = state_eo_offsets(group),state_eo_offsets(group+1)-1,MAXIMGBATCHSZ
                     batchlims = [ibatch, min(state_eo_offsets(group+1)-1,ibatch+MAXIMGBATCHSZ-1)]
                     batchsz   = batchlims(2) - batchlims(1) + 1
-                    if( l_den_src )then
-                        call discrete_read_imgbatch_source(params, build, 'den', batchsz, &
-                            &grouped_pinds(batchlims(1):batchlims(2)), [1,batchsz], build%imgbatch(:batchsz))
-                    else
-                        call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
-                    endif
+                    call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
                         &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), &
                         &crop_imgs=crop_imgs)

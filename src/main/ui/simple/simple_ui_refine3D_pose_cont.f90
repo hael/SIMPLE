@@ -76,7 +76,6 @@ contains
         &'before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &
         &choices=ui_choices([character(len=4) :: 'cc', 'none']), visibility=UI_VIS_ADVANCED)
         call refine3D_pose_cont%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
-        call refine3D_pose_cont%add_input(UI_SRCH, ptcl_src, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_pose_cont%add_input(UI_SRCH, sigma_est, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_pose_cont%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', &

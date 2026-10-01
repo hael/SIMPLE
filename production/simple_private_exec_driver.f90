@@ -214,7 +214,6 @@ contains
         type(commander_rank_cavgs)              :: xrank_cavgs
         type(commander_export_cavgs)            :: xexport_cavgs
         type(commander_cls_split)               :: xcls_split
-        type(commander_denoise_project)         :: xdenoise_project
         ! REFINE3D PROGRAMS
         type(commander_refine3D_distr_worker)   :: xrefine3D_worker
         type(commander_calc_pspec)              :: xcalc_pspec
@@ -310,8 +309,6 @@ contains
                 call xexport_cavgs%execute(cline)
             case( 'cls_split' )
                 call xcls_split%execute(cline)
-            case( 'denoise_project' )
-                call xdenoise_project%execute(cline)
             ! REFINE3D PROGRAMS
             case( 'refine3D' )
                 call xrefine3D_worker%execute(cline)

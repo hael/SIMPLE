@@ -3,7 +3,7 @@ module simple_reconstructor_openmpoffload
 use simple_core_module_api
 use simple_builder,          only: builder
 use simple_parameters,       only: parameters
-use simple_matcher_ptcl_io,  only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
+use simple_matcher_ptcl_io,  only: prepimgbatch, discrete_read_imgbatch
 use simple_matcher_3Drec,    only: calc_3Drec, prep_imgs4rec, init_rec, write_state_half_partial, &
     &set_state_vol_output, cleanup_rec_buffers
 use simple_reconstructor,    only: reconstructor
@@ -128,13 +128,11 @@ contains
         complex,    allocatable :: fplanes(:,:,:)
         real,       allocatable :: ctfsqplanes(:,:,:)
         logical,    allocatable :: even(:)
-        logical                 :: l_den_src
         integer(timer_int_kind) :: t, t_stage
         real(timer_int_kind)    :: dt_h2d, dt_launch, dt_wait
         integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
         integer :: ibatch, batchsz, sz, nbatch
         ! prep first batch
-        l_den_src = params%l_ptcl_src_den
         nbatch = ceiling(real(nptcls)/real(MAXIMGBATCHSZ))
         call prep_batch(1, batchsz, batchlims)
         if( DEBUG ) t = tic()
@@ -229,12 +227,7 @@ contains
                 sz      = lims(2) - lims(1) + 1
                 ! read images
                 if( DEBUG ) t_local = tic()
-                if( l_den_src )then
-                    call discrete_read_imgbatch_source(params, build, 'den', sz, pinds(lims(1):lims(2)), &
-                        [1,sz], build%imgbatch(:sz))
-                else
-                    call discrete_read_imgbatch(params, build, nptcls, pinds, lims)
-                endif
+                call discrete_read_imgbatch(params, build, nptcls, pinds, lims)
                 if( DEBUG ) t_read = t_read + toc(t_local)
                 ! preprocess images into padded objects
                 if( DEBUG ) t_local = tic()

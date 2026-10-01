@@ -69,7 +69,7 @@ contains
         integer,                    intent(in)    :: nstates
         character(len=*), optional, intent(in)    :: vol1  !< the starting-volume input (a path)
         type(cmdline) :: cl
-        call man%new(RUN_ID, 'abinitio3D', .true., spproj, 'raw')
+        call man%new(RUN_ID, 'abinitio3D', .true., spproj)
         call man%set_solution(nstates, 'c3', 128, 1.3, 180., 'independent', 6)
         call man%set_sampling(10000, 8000, 1., .true.)
         call man%set_stage_line(.false., 0., .true., 6.)
@@ -245,7 +245,6 @@ contains
                 &(a%l_autoscale .eqv. b%l_autoscale) .and. (a%l_lpset .eqv. b%l_lpset)
         enddo
         call assert_true(l_same_stages, 'every ladder field round trips exactly')
-        call assert_char('raw', trim(back%get_ptcl_src()), 'particle source round trip')
         call assert_true(file_contains(MAN_FNAME2, 'input vol1 /abs/refs/startvol_state01.mrc'), &
             &'a path-valued input round trips with its slashes')
         ! artifacts: the registered map, and the sigma2 state, whose path has blanks
@@ -322,6 +321,21 @@ contains
         call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
         call back%read(string(MAN_FNAME), status, msg)
         call assert_true(status /= 0 .and. index(msg, 'input key') > 0, 'an unknown input key is refused')
+        ! a manifest written before the denoised particle source was retired: its
+        ! input keys are ignored and never replayed, and a raw-source field reads
+        tampered(1:iend+3) = [lines(1:iend-2), [character(len=1024) :: 'ptcl_src raw', 'input objfun_den yes', &
+            &'input ptcl_src raw'], lines(iend-1:iend)]
+        call write_with_checksum(MAN_FNAME, tampered(1:iend+3))
+        call back%read(string(MAN_FNAME), status, msg)
+        call assert_int(0, status, 'a manifest with retired particle-source keys reads back: '//trim(msg))
+        call back%replay(cl)
+        call assert_false(cl%defined('ptcl_src') .or. cl%defined('objfun_den'), 'retired keys are not replayed')
+        call cl%kill
+        ! ... but a solution reconstructed from denoised particles is refused
+        tampered(1:iend+1) = [lines(1:iend-2), [character(len=1024) :: 'ptcl_src den'], lines(iend-1:iend)]
+        call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
+        call back%read(string(MAN_FNAME), status, msg)
+        call assert_true(status /= 0 .and. index(msg, 'denoised') > 0, 'a denoised-source solution is refused')
         ! records after the end marker
         tampered(1:n+1) = [lines(1:iend), [character(len=1024) :: 'nrows 12'], lines(iend+1:n)]
         call write_lines(MAN_FNAME, tampered(1:n+1))
@@ -381,7 +395,7 @@ contains
         call back%read_registered(spproj, string(PROJ_FNAME), status, msg)
         call assert_true(status /= 0 .and. index(msg, '/elsewhere/m.txt') > 0, 'an absolute registration is kept')
         ! the same file registered for another run
-        call other%new('another_run', 'abinitio3D', .true., spproj, 'raw')
+        call other%new('another_run', 'abinitio3D', .true., spproj)
         call other%register(spproj, MAN_FNAME)
         call back%read_registered(spproj, string(PROJ_FNAME), status, msg)
         call assert_true(status /= 0, 'a manifest of another registered run identifier is refused')
@@ -461,7 +475,6 @@ contains
         call assert_int(5,     cl%get_iarg('nstages'), 'the ladder ends at the base run''s last stage')
         call assert_int(10000, cl%get_iarg('nsample'), 'the effective nsample')
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
-        call assert_string_eq('raw', cl%get_carg('ptcl_src'), 'the particle source of the solution is replayed')
         call man%kill
         call spproj%kill
         call cl%kill
@@ -519,7 +532,7 @@ contains
             character(len=*), intent(in) :: program_name
             logical,          intent(in) :: l_eligible
             integer,          intent(in) :: nstates
-            call foreign%new(RUN_ID, program_name, l_eligible, spproj, 'raw')
+            call foreign%new(RUN_ID, program_name, l_eligible, spproj)
             call foreign%set_solution(nstates, 'c3', 128, 1.3, 180., 'independent', 6)
             call foreign%record_artifacts(spproj)
         end subroutine make_foreign

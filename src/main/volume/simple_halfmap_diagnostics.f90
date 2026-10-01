@@ -39,22 +39,20 @@ contains
     !! or NU envelope post hoc and phase-randomize; PCG never does either
     !! because its envelope belongs inside the estimator. Caller-owned inputs
     !! are never modified. Density mode returns the generated mask through the
-    !! optional envmask; NU mode requires the caller to supply envmask. The
-    !! optional cones result supports directional regularization.
-    subroutine evaluate_halfmap_pair( params, state, even, odd, average, diagnostics, backend, envmask, cones, &
+    !! optional envmask; NU mode requires the caller to supply envmask.
+    subroutine evaluate_halfmap_pair( params, state, even, odd, average, diagnostics, backend, envmask, &
         &l_pair_support_constrained, support_kind, mask_kind )
-        class(parameters),                      intent(in)    :: params
-        integer,                                intent(in)    :: state
-        class(image),                           intent(in)    :: even, odd, average
-        type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
-        character(len=*),                       intent(in)    :: backend
-        class(image),                 optional, intent(inout) :: envmask
-        class(fsc_area_score_result), optional, intent(inout) :: cones
-        logical,                      optional, intent(in)    :: l_pair_support_constrained
-        character(len=*),             optional, intent(in)    :: support_kind, mask_kind
+        class(parameters),                intent(in)    :: params
+        integer,                          intent(in)    :: state
+        class(image),                     intent(in)    :: even, odd, average
+        type(halfmap_diagnostics_result), intent(out)   :: diagnostics
+        character(len=*),                 intent(in)    :: backend
+        class(image),           optional, intent(inout) :: envmask
+        logical,                optional, intent(in)    :: l_pair_support_constrained
+        character(len=*),       optional, intent(in)    :: support_kind, mask_kind
         type(image)                 :: work_even, work_odd
         type(image_msk)             :: envmask_work
-        type(fsc_area_score_result) :: cones_local
+        type(fsc_area_score_result) :: cones
         real, allocatable :: fsc_t(:), fsc_n(:), res(:)
         integer :: nyq
         character(len=16) :: support_kind_here, mask_kind_here, posthoc_kind
@@ -110,18 +108,11 @@ contains
         endif
         ! calc_fsc_area_score converts the work maps to Fourier space in place,
         ! so the radial FSC below reads the same representation
-        if( present(cones) )then
-            call cones%new(work_even, CFAR_NDIRS, CFAR_CONE_HALF_ANGLE_DEG, CFAR_FSC_THRESHOLD, &
-                &CFAR_MIN_COUNT)
-            call cones%calc_fsc_area_score(work_even, work_odd, state=state)
-            diagnostics%cfar = cones%cfar
-        else
-            call cones_local%new(work_even, CFAR_NDIRS, CFAR_CONE_HALF_ANGLE_DEG, CFAR_FSC_THRESHOLD, &
-                &CFAR_MIN_COUNT)
-            call cones_local%calc_fsc_area_score(work_even, work_odd, state=state)
-            diagnostics%cfar = cones_local%cfar
-            call cones_local%kill
-        endif
+        call cones%new(work_even, CFAR_NDIRS, CFAR_CONE_HALF_ANGLE_DEG, CFAR_FSC_THRESHOLD, &
+            &CFAR_MIN_COUNT)
+        call cones%calc_fsc_area_score(work_even, work_odd, state=state)
+        diagnostics%cfar = cones%cfar
+        call cones%kill
         if( .not. l_phase_randomization ) call work_even%fsc(work_odd, diagnostics%fsc)
         res = get_resarr(params%box_crop, params%smpd_crop)
         call get_resolution(diagnostics%fsc, res, diagnostics%res_fsc05, diagnostics%res_fsc0143)

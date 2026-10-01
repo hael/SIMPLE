@@ -15,10 +15,10 @@ private
 #include "simple_local_flags.inc"
 
 !> what calc_pspec takes from the command line it is derived from: the
-!! particle segment and source, the mask, and the compute and queue settings;
+!! particle segment, the mask, and the compute and queue settings;
 !! the rest of the execution environment is the project's compenv
-character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(7) = [character(len=10) :: &
-    &'oritype', 'mskdiam', 'ptcl_src', 'nthr', 'nparts', 'qsys_name', 'walltime']
+character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(6) = [character(len=10) :: &
+    &'oritype', 'mskdiam', 'nthr', 'nparts', 'qsys_name', 'walltime']
 
 contains
 
@@ -126,8 +126,6 @@ contains
         call cline_sigma%delete('frozen_seed')
         call cline_sigma%delete('frozen_rec')
         call cline_sigma%delete('ufrac_trec')
-        call cline_sigma%delete('objfun_den')
-        call cline_sigma%delete('objfun_den_w')
         call cline_sigma%delete('sticky_class_sampling')
         call cline_sigma%delete('postprocess')
         call cline_sigma%delete('combine_eo')

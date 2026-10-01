@@ -86,7 +86,6 @@ contains
         call pickup_project_consensus_volume(cline)
         call derive_flex_pca_sampling(cline)
         call derive_flex_pca_band(cline)
-        if( .not.cline%defined('ptcl_src') )    call cline%set('ptcl_src','raw')
         if( .not.cline%defined('objfun') )      call cline%set('objfun','euclid')
         if( .not.cline%defined('outvol') )      call cline%set('outvol','flex_pca_state_001.mrc')
         call apply_flex_pca_pcg_defaults(cline)

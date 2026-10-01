@@ -262,7 +262,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', .false., 'yes', group='search', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
-        call refine3D_states%add_input(UI_SRCH, ptcl_src, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', &
         &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
@@ -318,7 +317,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', .false., 'yes', group='search', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
-        call classify3D_refs%add_input(UI_SRCH, ptcl_src, group='search', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) and map shifts back to particles(yes|no){no}', '', .false., 'no', group='search', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)

@@ -7,7 +7,7 @@ use simple_image,           only: image
 use simple_reconstructor,   only: reconstructor
 use simple_gridding,        only: prep3D_inv_kbenvelope4mul
 use simple_matcher_3Drec,   only: init_rec, prep_imgs4rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch
+use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
 use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_multi_scaled_batch
 use simple_flex_pca_rounds,         only: flex_pca_rounds
 use simple_flex_pca_run_types,      only: flex_run_settings
@@ -102,12 +102,7 @@ contains
             batchlims=[ibatch,min(size(self%pinds),ibatch+MAXIMGBATCHSZ-1)]
             batchsz=batchlims(2)-batchlims(1)+1
             t_sec = tic()
-            if( params%l_ptcl_src_den )then
-                call discrete_read_imgbatch_source(params,build,'den',batchsz, &
-                    &self%pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
-            else
-                call discrete_read_imgbatch(params,build,size(self%pinds),self%pinds,batchlims)
-            endif
+            call discrete_read_imgbatch(params,build,size(self%pinds),self%pinds,batchlims)
             sec_read = sec_read + toc(t_sec)
             t_sec = tic()
             call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &

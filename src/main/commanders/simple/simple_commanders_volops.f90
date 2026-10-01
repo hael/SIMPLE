@@ -499,7 +499,6 @@ contains
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
-        call cline%delete('ptcl_src')
         ! parse commad-line
         call params%new(cline)
         ! read project segment

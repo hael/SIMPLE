@@ -144,7 +144,7 @@ contains
         real,              intent(in) :: smpd_rec
         character(len=256) :: provenance
         provenance = 'flexpcg-v1|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
-            &'|ptcl_src='//trim(params%ptcl_src)//'|box='//trim(int2str(params%box))// &
+            &'|box='//trim(int2str(params%box))// &
             &'|smpd='//trim(real2str(params%smpd))//'|box_rec='//trim(int2str(box_rec))// &
             &'|smpd_rec='//trim(real2str(smpd_rec))//'|mskdiam='//trim(real2str(params%mskdiam))// &
             &'|ctf='//trim(params%ctf)

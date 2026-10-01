@@ -8,8 +8,7 @@ use simple_parameters,          only: parameters
 use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA, &
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
     &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
-use simple_matcher_ptcl_io,     only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, &
-    &killimgbatch, prep_rec_observation
+use simple_matcher_ptcl_io,     only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
 use simple_sigma2_files,        only: load_sigma2_groups
 use simple_math_ft,             only: resample_sigma2
 use simple_image,               only: image
@@ -344,12 +343,7 @@ contains
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                if( params%l_ptcl_src_den )then
-                    call discrete_read_imgbatch_source(params, build, 'den', size(pinds), pinds, &
-                        &batchlims, build%imgbatch(:batchsz))
-                else
-                    call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
-                endif
+                call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
                 do ii = 1, batchsz
                     ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
                     call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
@@ -1473,7 +1467,6 @@ contains
             &1.0e-5*real(params%box)*params%smpd )then
             THROW_HARD('PCG crop must preserve the native physical box extent')
         endif
-        if( trim(params%conical_fsc) == 'yes' ) THROW_HARD('PCG conical FSC integration is not implemented')
         if( params%msk <= 0.5 .or. params%msk_crop <= 0.5 ) THROW_HARD('rec_backend=pcg requires mskdiam')
         if( .not. ieee_is_finite(params%rtol) ) THROW_HARD('PCG rtol must be finite')
     end subroutine validate_pcg_common
@@ -1482,14 +1475,14 @@ contains
         type(parameters), intent(in) :: params
         character(len=256) :: provenance
         provenance = 'pcgraw-v2|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
-            &'|ptcl_src='//trim(params%ptcl_src)//'|iter='//trim(int2str(params%which_iter))// &
+            &'|iter='//trim(int2str(params%which_iter))// &
             &'|box='//trim(int2str(params%box))//'|smpd='//trim(real2str(params%smpd))// &
             &'|box_crop='//trim(int2str(params%box_crop))// &
             &'|smpd_crop='//trim(real2str(params%smpd_crop))// &
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_raw_provenance
 
-    !> Chain identity: native geometry, objective and particle source; neither
+    !> Chain identity: native geometry and objective; neither
     !! the iteration nor the crop, so the chain survives stage transitions.
     !! v3: the header particle count of each half is its represented population,
     !! the M(s) of the population rule; an older chain is discarded and re-seeded
@@ -1497,7 +1490,7 @@ contains
         type(parameters), intent(in) :: params
         character(len=256) :: provenance
         provenance = 'pcgtrail-v3|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
-            &'|ptcl_src='//trim(params%ptcl_src)//'|box='//trim(int2str(params%box))// &
+            &'|box='//trim(int2str(params%box))// &
             &'|smpd='//trim(real2str(params%smpd))// &
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_chain_provenance

@@ -442,8 +442,6 @@ contains
                 ! Distributed rec3D schedules workers from PRG, so do not inherit refine3D here.
                 call local_cline_rec%set('prg',   'reconstruct3D')
                 call local_cline_rec%set('mkdir', 'no') ! to avoid nested dirs
-                call local_cline_rec%delete('objfun_den')
-                call local_cline_rec%delete('objfun_den_w')
                 call local_cline_rec%set('objfun', 'cc')
                 call xrec3D%execute(local_cline_rec)
                 do s = 1,params%nstates
@@ -689,7 +687,7 @@ contains
             endif
         enddo
         ! one particle index space, the superset relation, the membership
-        call superset%new(spproj_cur, spproj_frz, man%get_nstates(), man%get_ptcl_src(), status, msg)
+        call superset%new(spproj_cur, spproj_frz, man%get_nstates(), status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
         write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> ABINITIO3D_ADDON FROZEN/COHORT/NEVER-UPDATED/STATES: ', &
             &superset%get_nfrozen(), '/', superset%get_ncohort(), '/', superset%get_nnever_updated(), '/', man%get_nstates()
@@ -884,7 +882,6 @@ contains
         call params%new(cline)
         call gui_comm%new(params)
         if( l_addon ) call addon_parse
-        write(logfhandle,'(A,A)') '>>> ABINITIO3D PARTICLE SOURCE: ', trim(params%ptcl_src)
         l_state_continue_mode = l_state_continue
         if( trim(params%multivol_mode).eq.'independent' )then
             if( .not. l_user_nstages ) write(logfhandle,'(A,I0)') &
@@ -1367,7 +1364,7 @@ contains
             integer :: status
             logical :: found
             call spproj_frz%read(params%projfile_frozen)
-            call superset%new(spproj, spproj_frz, man_addon%get_nstates(), man_addon%get_ptcl_src(), status, msg)
+            call superset%new(spproj, spproj_frz, man_addon%get_nstates(), status, msg)
             if( status /= 0 ) THROW_HARD(trim(msg))
             call man_addon%get_artifact('sigma2_state', 0, sigma_src, found)
             if( .not. found ) THROW_HARD('the frozen run recorded no committed residual sigma2 state')
@@ -1658,7 +1655,7 @@ contains
             character(len=STDLEN) :: msg
             integer :: i, status
             call spproj_man%read(params%projfile)
-            call man%new(run_id, program_name, l_eligible, spproj_man, trim(params%ptcl_src))
+            call man%new(run_id, program_name, l_eligible, spproj_man)
             call man%set_solution(nstates_glob, params%pgrp, params%box, params%smpd, params%mskdiam, &
                 &params%multivol_mode, split_stage)
             call man%set_sampling(params%nsample, nptcls_eff, update_frac, l_force_full_sampling)

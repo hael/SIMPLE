@@ -82,6 +82,13 @@ validates against the project that registered it:
 - the current project's native box and sampling equal the frozen solution's;
 - no stage box of the inherited ladder exceeds the native box.
 
+Manifests written before the denoised particle source and conical FSC
+regularization were retired carry a `ptcl_src` field and may record
+`ptcl_src`, `objfun_den`, `objfun_den_w` and `conical_fsc` inputs
+(`MANIFEST_RETIRED_KEYS`). The inputs are ignored and never replayed;
+a `ptcl_src` field other than `raw` is refused, because a solution
+reconstructed from denoised particles cannot be extended with raw ones.
+
 The frozen project is never written. The add-on works on a copy of it in the
 run directory (`frozen/`, with its sigma2 state), whose sigma2 file must stay
 byte-equal to the frozen run's through every frozen accumulation.
@@ -92,9 +99,7 @@ The two projects share one particle index space: row `i` names the same
 particle image in both wherever both hold a row `i`. They may differ in size.
 
 - Every row both projects hold must name, in `ptcl2D` and in `ptcl3D`, the
-  same stack file, image index, stack box and sampling (and the same denoised
-  source image when the frozen solution was reconstructed from
-  `ptcl_src=den`).
+  same stack file, image index, stack box and sampling.
 - Rows the current project appends past the frozen project's last row are
   cohort candidates. They must come from stacks the frozen project does not
   hold, so no image enters the union twice, and must name the same image in
