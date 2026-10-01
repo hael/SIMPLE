@@ -1093,8 +1093,7 @@ contains
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
         ! transaction-scoped names: candidate and ranges carry the generation
-        ! this update commits, so nothing left by another transaction can be
-        ! merged into it (2026-09-07)
+        ! this update commits, so nothing left by another transaction can be merged into it
         call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
@@ -1222,10 +1221,8 @@ contains
                 case('eval')
                     ! nothing
                 case DEFAULT
-                    ! one wall-clock line per iteration for the whole master-side
-                    ! reconstruction phase, the same for both backends and with
-                    ! the same thread budget (rec3D_master_nthr), so their costs
-                    ! can be compared from the log (2026-09-09)
+                    ! one wall-clock line per iteration for the master-side reconstruction phase, same
+                    ! thread budget (rec3D_master_nthr) for both backends, so their costs compare in the log
                     t_recphase = tic()
                     if( trim(params%rec_backend) == 'pcg' )then
                         call assemble_refine3D_pcg(cline, params, build)

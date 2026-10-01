@@ -1,39 +1,41 @@
 ---
 name: simple-main-nu-filt
-description: Use when working in SIMPLE's src/main/nu_filt subsystem, including simple_nu_filter, candidate-bank setup, mask-packed objective costs, ordered-label Potts smoothing, high-resolution shell extension, NU local-resolution output, and cleanup of module-level filter state.
+description: Use when working in SIMPLE's src/main/nu_filt subsystem, including simple_nu_filter, candidate-bank setup, mask-packed objective costs, ordered-label Potts smoothing, NU local-resolution output, and cleanup of module-level filter state.
 ---
 
 # SIMPLE `src/main/nu_filt`
 
 This folder owns the volume-domain nonuniform filtering algorithm. Workflow
-ownership still belongs to `volassemble`; this subsystem implements the filter
-state machine it calls.
+ownership still belongs to the callers: `simple_nu_state_filter` (gridding
+`volassemble` and the PCG master), `postprocess_nu`, `nu_filt3D` and flex_pca.
+This subsystem implements the filter state machine they call.
 
 ## Read First
 
 - `simple_nu_filter.f90`
 - `simple_nu_filter_bank.f90`
 - `simple_nu_filter_potts.f90`
-- `simple_nu_filter_extend.f90`
 - `simple_nu_filter_apply.f90`
 - `simple_nu_filter_stats.f90`
 - `simple_nu_filter_state.f90`
 - `simple_nu_filter_envmask.f90`
+- `simple_nu_filter_evidence.f90`
+- `simple_nu_filter_sharpen.f90`
 
 ## Core Lifecycle
 
 Normal callers follow:
 
 ```fortran
-call setup_nu_dmats(vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd)
+call setup_nu_dmats(vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, fsc_res=res0143)
 call optimize_nu_cutoff_finds()
-call extend_nu_filter_highres_shell_next(...)
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 call cleanup_nu_filter()
 ```
 
-The extension step is optional and controlled by workflow policy such as
-`nu_refine=yes`.
+The bank is the static ladder `lowpass_limits`. Given `fsc_res` it is cut at
+`fsc_res/NU_BANK_FSC_HEADROOM` (at least two rungs); without it (`nu_filt3D`,
+flex_pca) it is uncapped.
 
 ## Working Rules
 
@@ -44,16 +46,16 @@ The extension step is optional and controlled by workflow policy such as
   automasks or arbitrary logical envelopes.
 - Keep objective construction mask-packed; values outside the NU support mask
   must not influence smoothing or label selection.
-- Auxiliary even/odd pairs replace the finest retained bank member only when
-  their effective resolution is finer; they are not sidecar labels.
+- The auxiliary (ML-regularized) pair is appended as the last label, never in
+  a rung's place, and only when its Fourier index is at or beyond the finest
+  retained rung. It shares that rung's Potts coordinate and its filtered pair
+  is never cached. The last label is the finest bank member and the matching
+  low-pass handoff.
 - Ordered-label Potts smoothing is part of the current algorithm, not an optional
   user-facing mode.
-- High-resolution shell extension tests one frontier shell at a time, persists
-  accepted depth by state through `volassemble`, and should stop conservatively
-  when support is missing or acceptance is too weak.
-- NU-evidence envelope derivation must run before `nu_filter_vols`, which
-  releases unary storage. The current evidence baseline covers the static bank;
-  accepted `nu_refine` extension shells are not yet incorporated.
+- When the NU-evidence envelope arms the background clamp, derive it before
+  `optimize_nu_cutoff_finds`. Run `build_nu_evidence_state` before
+  `nu_filter_vols`, which releases the unary bank.
 - Keep the standalone `nu_filt3D` envelope interface to two shape controls:
   `nu_msk_sig` for evidence threshold and `amsklp` for physical evidence scale.
   Absolute evidence, zero density weighting, MRF beta 1, and the 0.1 component
@@ -70,7 +72,12 @@ The extension step is optional and controlled by workflow policy such as
 ## Mask Ownership
 
 - Spherical `mskdiam` support owns the NU objective domain.
-- Density-derived `automask3D_stateNN.mrc` remains independent and may be
-  consumed by `envfsc` or current `envref` behavior.
-- A future NU-evidence envelope must use its own artifact and must never feed
-  FSC correction or replace spherical NU support.
+- The density envelope (`automask3D_stateNN.mrc`) is independent of NU support.
+  It feeds `envfsc`, and under `automsk=yes` (or as the `automsk=nu` fallback)
+  it fixes the filter-field background and masks the `_nu_filt` references.
+- The NU-evidence envelope has its own artifact, `nu_envmask3D_stateNN.mrc`,
+  written by `write_nu_evidence_envmask` under active automasking. It is a
+  diagnostic under `automsk=yes`. Under `automsk=nu`, when valid, it is the
+  background and reference mask, and its lag-one artifact is the gridding
+  `envfsc` FSC mask (density fallback). It never replaces spherical NU support
+  and is never the PCG solve support.

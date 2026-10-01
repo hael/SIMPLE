@@ -25,8 +25,8 @@ contains
 
     !---------------- median ----------------
 
-    ! two arrays on which the selection routine's two-element final partition matters (they
-    ! gave 14.5 and 23 with the `ir-1` typo in selec, 2026-09-23); the true medians by sorting
+    ! two arrays on which the selection routine's two-element final partition matters (guards the
+    ! `ir-1` typo in selec); the true medians by sorting
     subroutine test_median()
         real, parameter :: EVEN(10) = [4., 15., 3., 36., 9., 19., 27., 10., 35., 8.]
         real, parameter :: ODD(11)  = [25., 23., 20., 28., 6., 4., 31., 13., 24., 35., 29.]

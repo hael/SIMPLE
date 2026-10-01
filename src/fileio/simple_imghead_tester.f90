@@ -1,10 +1,7 @@
 !@descr: unit tests for image file headers (simple_imghead): SPIDER header geometry, SPIDER and MRC header round trips, header probes
-! Replaces the in-module self-test test_imghead (one box of 120, dimensions only, a file left behind).
-! A SPIDER header is labrec records of lenbyt = 4*nx bytes, labrec = ceiling(1024/lenbyt), so
-! labbyt = labrec*lenbyt is at least 1024 bytes and the data start after it. getLabbyt returned
-! lenbyt (fixed 2026-09-25): headers were written short (nx words, so a box below 43 lost the pixel
-! size) and read short, and a box below 43 read past the 43 header fields (the first build of the
-! image tester stopped there, on a SPIDER volume of box 32).
+! A SPIDER header is labrec = ceiling(1024/lenbyt) records of lenbyt = 4*nx bytes, so
+! labbyt = labrec*lenbyt is at least 1024 bytes and the data start after it.
+! Guards getLabbyt returning lenbyt, which wrote and read short headers for small boxes.
 module simple_imghead_tester
 use simple_test_utils
 use simple_defs

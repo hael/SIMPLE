@@ -1,28 +1,8 @@
 !@descr: GUI metadata for the stream pool-2D stage — particle counts, mask geometry, initial reference selection, and user-input flag
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_pool2D
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields specific to the pool-2D
-!   stage of the cryo-EM streaming pipeline.  Tracks the number of particles
-!   imported and accepted, the rejection count, the initial reference
-!   selection array, and a flag indicating whether user input has been
-!   provided.  The Unix timestamp of the most recently imported particle
-!   batch is recorded and updated on each change.
-!
-! TYPES:
-!   gui_metadata_stream_pool2D — extends gui_metadata_base
-!     set()                      — assign particle counts, mask geometry, and stage field
-!     set_user_input()           — set the user-input flag independently
-!     set_initial_ref_selection() — append an index to the ref-selection array
-!     get()                      — retrieve particle counts, user-input flag,
-!                                  and last-import timestamp; returns l_assigned
-!     jsonise()                  — serialise all fields to a json_value tree
-!                                  (base override)
-!
-! DEPENDENCIES:
-!   unix, json_module, simple_string, simple_defs, simple_gui_metadata_base
-!==============================================================================
+! Filled by stream p06: all counts are passed in (rejected is not derived); mskdiam is in A and
+! mskscale is the box size in A. p06 sets user_input once the pool is past iteration 1.
+! set() stamps last_import_time (Unix time) when particles_imported changes.
+! initial_ref_selection (up to 1500 int16 indices) has no production writer.
 module simple_gui_metadata_stream_pool2D
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception
@@ -47,7 +27,7 @@ module simple_gui_metadata_stream_pool2D
     integer               :: iteration               = 0       ! current 2-D classification iteration
     integer               :: particles_imported      = 0       ! total particles received from upstream
     integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
-    integer               :: particles_rejected      = 0       ! particles_imported - particles_accepted
+    integer               :: particles_rejected      = 0       ! rejected pool particles (caller-supplied)
     integer               :: last_import_time        = 0       ! Unix timestamp of most recent import event
     integer               :: mskdiam                 = 0
     logical               :: user_input              = .false. ! .true. once the user has supplied input
@@ -63,8 +43,7 @@ module simple_gui_metadata_stream_pool2D
 
 contains
 
-  ! Assign particle counts and masking fields. Derives particles_rejected
-  ! automatically. Updates last_particles_imported only when the import
+  ! Assign particle counts and masking fields. Updates last_import_time only when the import
   ! count changes.
   subroutine set( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, mskdiam, mskscale, resolution )
     class(gui_metadata_stream_pool2D), intent(inout) :: self

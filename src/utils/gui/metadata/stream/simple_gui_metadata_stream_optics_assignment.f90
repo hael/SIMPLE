@@ -1,24 +1,6 @@
 !@descr: GUI metadata for the stream optics-assignment stage — micrograph and optics-group assignment counts
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_optics_assignment
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields specific to the optics-group
-!   assignment stage of the cryo-EM streaming pipeline.  Tracks the number
-!   of micrographs imported/assigned to optics groups, the number of distinct
-!   optics groups created, and the Unix timestamp of the most recently
-!   imported micrograph (supplied by the caller).
-!
-! TYPES:
-!   gui_metadata_stream_optics_assignment — extends gui_metadata_base
-!     set()     — assign all fields from caller-supplied values
-!     get()     — retrieve all fields; returns the l_assigned flag
-!     jsonise() — serialise all fields to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   json_kinds, json_module, simple_string, simple_defs, simple_error,
-!   simple_gui_metadata_base
-!==============================================================================
+! Filled by stream p02. set() stamps last_import_time (Unix time) whenever micrographs_imported
+! changes.
 module simple_gui_metadata_stream_optics_assignment
   use unix,                     only: c_long, c_time
   use json_kinds
@@ -40,7 +22,7 @@ module simple_gui_metadata_stream_optics_assignment
     integer               :: micrographs_imported     = 0  ! total micrographs received from import
     integer               :: micrographs_assigned     = 0  ! micrographs successfully placed in an optics group
     integer               :: optics_groups_assigned   = 0  ! number of distinct optics groups created
-    integer               :: last_import_time         = 0  ! Unix timestamp of most recent import (caller-supplied)
+    integer               :: last_import_time         = 0  ! Unix timestamp of most recent import (stamped by set)
   contains
     procedure :: set
     procedure :: get
@@ -49,7 +31,7 @@ module simple_gui_metadata_stream_optics_assignment
 
 contains
 
-  ! Assign all fields from caller-supplied values.
+  ! Assign the counts and stage; last_import_time is stamped when micrographs_imported changes.
   subroutine set( self, stage, micrographs_assigned, optics_groups_assigned, micrographs_imported )
     class(gui_metadata_stream_optics_assignment), intent(inout) :: self
     type(string),                                 intent(in)    :: stage

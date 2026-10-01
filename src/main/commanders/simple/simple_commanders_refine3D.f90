@@ -61,18 +61,8 @@ contains
         type(string)                :: init_vol
         type(string)                :: pose_init_refs(1), pose_init_checkpoint(1)
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
-        ! Registration pass (2026-09-16): one global refine=prob iteration of
-        ! ALL particles against the masked startup references, band-limited
-        ! at the FSC=regpass_fsc resolution of the startup pair, before the
-        ! neighbourhood iterations. Previous poses only make the startup
-        ! reference; the particles then see the solvent-mask constraint
-        ! under a global search rather than as a perturbation of the basins
-        ! the previous objective left them in (which prob_neigh cannot leave,
-        ! and which a full-band objective would not let them leave anyway --
-        ! aldolase run 16: 0.998 overlap in iteration 1, no motion after).
-        ! The band is set with lpstop, never lp: an explicit lp flips l_lpset,
-        ! which in every non-NU filt_mode matches both halves against the
-        ! merged reference and would silently break gold standard.
+        ! Registration pass: one refine=greedy iteration of all particles against the masked startup
+        ! references, banded via lpstop (never lp: l_lpset would break gold standard).
         integer, parameter :: REGPASS_NSPACE     = 5000
         integer, parameter :: MAIN_NSPACE        = 20000
         integer, parameter :: MAIN_NSPACE_SUB    = 500
@@ -81,11 +71,8 @@ contains
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_AUTO'
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
-        ! Minimum iteration count before the convergence test (overlap > 0.99)
-        ! may stop the run. Was 10; on PfCRT (2026-09-11) the forced ten
-        ! iterations degraded a converged map (cFAR 0.78 -> 0.62, FSC=0.5
-        ! 4.14 -> 4.31 A over iterations 1-10). Three is enough for the
-        ! startup bootstrap to be superseded; if it is converged, it is converged.
+        ! Minimum iterations before the convergence test (overlap > 0.99) may stop the run:
+        ! enough for the startup bootstrap to be superseded.
         integer, parameter :: MINITS_REFINE3D_AUTO = 3
         integer, parameter :: MAXITS_REFINE3D_AUTO_CAP = 50
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
@@ -208,29 +195,13 @@ contains
             call cline%delete('smpd_crop')
         endif
         if( l_ref_pose_init_requested ) call initialize_external_reference_poses
-        ! STARTUP BOOTSTRAP: reconstruct -> build masks -> re-reconstruct with
-        ! the masks and the NU prior, before any matching. Without it the
-        ! first iteration matches raw, spherically masked references while
-        ! every later iteration matches envelope-masked, NU-filtered ones --
-        ! the reference convention changes underneath an already converged
-        ! alignment, which is where refine3D_auto has been losing particles.
-        ! Sigmas come FIRST, from the particle power spectra, so the startup
-        ! reconstruction and every refinement iteration share one sigma
-        ! basis. The former half-map estimator left the startup regularized
-        ! against sigmas the refinement then discarded, and its heavy
-        ! rescaling conditioned the euclid system markedly worse (bgal: base
-        ! residual 0.23 vs 0.08).
-        ! refine3D validates and reuses this committed canonical state.
+        ! Startup: particle-power sigmas (the committed state refine3D reuses), then ONE regularized
+        ! reconstruct3D with the refinement's filtering, so iteration 1 sees the references iteration N will.
         cline_boot = cline
         call strip_refine3D_search_only_args(cline_boot)
         call cline_boot%set('prg', 'calc_pspec')
         call cline_boot%set('which_iter', 1)
         call xcalc_pspec%execute(cline_boot)
-        ! With the sigmas in hand the startup is a SINGLE regularized
-        ! reconstruction carrying the refinement's own filtering settings; it
-        ! leaves behind the automask, the NU evidence envelope, the _nu_filt
-        ! matching references and the matching-lp handoff that iteration 1
-        ! then consumes.
         cline_boot = cline
         call cline_boot%set('prg', 'reconstruct3D')
         call cline_boot%delete('trail_rec')
@@ -282,17 +253,9 @@ contains
 
     contains
 
-        !> One global registration iteration (refine=prob, REGPASS_NSPACE
-        !! directions, no subspace, every particle) at the FSC=regpass_fsc
-        !! resolution of the startup pair, imposed through lpstop so the
-        !! FSC-driven band and the independent even/odd references are kept.
-        !! Logs the fraction of particles whose projection direction moved by
-        !! more than the orientational basin width at that band
-        !! (delta = res_pass / (mskdiam/2)) and by more than twice it, and
-        !! whose shift moved by more than one pixel -- the number that says
-        !! whether re-basining happened at all. The main run then continues
-        !! from the pass output (poses in the project, reference on disk)
-        !! as iteration 2.
+        !> One global refine=greedy iteration (REGPASS_NSPACE directions, every particle) banded via lpstop
+        !! at the startup pair's FSC=regpass_fsc resolution; logs direction/shift reassignment fractions.
+        !! The main run continues from its output as iteration 2.
         subroutine run_registration_pass()
             type(sp_project)  :: pass_proj
             type(oris)        :: os_before, os_after
@@ -341,14 +304,8 @@ contains
             call pass_proj%read_segment(params%oritype, params%projfile)
             call os_before%copy(pass_proj%os_ptcl3D)
             call pass_proj%kill
-            ! the pass: one exhaustive iteration of every particle. greedy,
-            ! not prob (2026-09-17): prob SAMPLES the assignment from the
-            ! particle's probability table, so wherever the table is flat --
-            ! a membrane protein at any band the micelle dominates -- it
-            ! re-basins particles at random (PfCRT: 33% of directions at 8.9
-            ! A); greedy takes the argmax over every direction, and since the
-            ! incumbent's direction is among those evaluated a particle only
-            ! moves when a better pose exists under the current objective
+            ! greedy: the argmax over every direction, incumbent included, so a particle
+            ! moves only when a better pose exists under the current objective
             cline_pass = cline
             call cline_pass%set('prg',        'refine3D')
             call cline_pass%set('refine',     'greedy')
@@ -2079,20 +2036,9 @@ contains
         call build%kill_general_tbox
     end subroutine exec_refine3D_distr_worker
 
-    !> Complete sigma2 bootstrap and reconstruction for a project with 3D
-    !! orientations but no consumable sigma2 estimate (final reconstructions
-    !! at a new sampling, standalone reconstructions): particle power spectra
-    !! seed the canonical state, one euclid ML-regularized reconstruction gives
-    !! the bootstrap map, and one residual sigma2 pass (refine=sigma, no search)
-    !! against that map re-estimates every particle's sigma2 and commits the
-    !! next canonical generation. The shipped euclid ML reconstruction then
-    !! consumes those residual sigmas. On return the command line carries
-    !! vol1..N and which_iter+1; the iteration number labels the residual pass
-    !! and its ordinary iteration artifacts, not the canonical state. This is
-    !! also the standalone test entry point for the final-reconstruction stage
-    !! of abinitio3D and refine3D_auto, e.g.
-    !!   simple_exec prg=bootstrap_rec3D projfile=x.simple pgrp=c1 mskdiam=160
-    !!               nparts=10 nthr=8 rec_backend=pcg
+    !> Sigma2 bootstrap + reconstruction for 3D poses without a consumable sigma2 state (calc_final_rec at a new
+    !! sampling, or standalone): image-power seed, euclid ML gridding bootstrap map, one residual pass (refine=sigma)
+    !! committing the next generation, then the shipped euclid ML map. Returns vol1..N and which_iter+1 on cline.
     subroutine exec_bootstrap_rec3D( self, cline )
         use simple_commanders_rec,    only: commander_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
@@ -2122,25 +2068,14 @@ contains
         which_iter = max(1, params%which_iter)
         call cline%set('which_iter', which_iter)
         call cline%set('mkdir', 'no') ! child calls must not create nested run directories
-        ! 1. One sigma2 basis for every bootstrap (2026-09-06): the particle
-        ! power spectra, exactly what a fresh refinement seeds from, committed
-        ! to the registered canonical state; which_iter only numbers the
-        ! residual pass and its iteration files. The former half-map power
-        ! estimator sat on a different basis than the residual sigmas a
-        ! refinement then computes and conditioned the euclid system markedly
-        ! worse (bgal residual 0.23 vs 0.08, refine3D_auto startup record).
+        ! 1. One sigma2 basis for every bootstrap: the particle power spectra, what a fresh refinement
+        ! seeds from, committed to the canonical state; which_iter only numbers the residual pass.
         call prepare_pspec_cline(cline, params%projfile, which_iter, cline_pspec)
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
         call xcalc_pspec%execute(cline_pspec)
         call cline_pspec%kill
-        ! 2. Bootstrap map: a single euclid ML-regularized reconstruction on
-        ! the seed. It only serves as the reference the residual pass scores
-        ! against, so it is always a gridding assembly (one particle pass,
-        ! the regularized map and the unfiltered pair for a few seconds of
-        ! assembly) whatever backend the shipped map uses. It keeps the
-        ! caller's filt_mode/automsk: the residual sigmas depend on
-        ! the regularization of the reference, so it must be regularized
-        ! exactly as the refinement's matching references were (2026-09-07).
+        ! 2. Bootstrap map: one euclid ML-regularized gridding assembly on the seed, the residual pass's
+        ! reference; it keeps the caller's filt_mode/automsk, as residual sigmas depend on its regularization.
         cline_rec = cline
         call prepare_bootstrap_rec_cline(cline_rec, which_iter, l_final=.false.)
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: GRIDDING ML-REGULARIZED BOOTSTRAP MAP ON THE IMAGE-POWER SEED, SIGMA ITERATION ', &
@@ -2150,7 +2085,7 @@ contains
         ! 3. No refinement iteration follows, so the image-power seed is
         ! upgraded here: one residual sigma2 pass (refine=sigma: no search,
         ! no volume assembly, no orientation output) against the bootstrap
-        ! map at this sampling (simple_sigma2_bootstrap, 2026-09-06).
+        ! map at this sampling (simple_sigma2_bootstrap).
         allocate(seed_vols(params%nstates))
         do state = 1, params%nstates
             seed_vols(state) = refine3D_state_vol_fname(state)
@@ -2168,7 +2103,7 @@ contains
         ! residual sigmas, on the caller's backend. A PCG solve at the native
         ! box starts from nothing (no warm start exists at this sampling), so
         ! it gets the cold-solve iteration budget (at least
-        ! FINAL_PCG_MAXITS_FLOOR) whoever the caller is (2026-09-07).
+        ! FINAL_PCG_MAXITS_FLOOR) whoever the caller is.
         cline_rec = cline
         call prepare_bootstrap_rec_cline(cline_rec, which_iter + 1, l_final=.true.)
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D: EUCLID ML-REGULARIZED RECONSTRUCTION ON RESIDUAL SIGMAS, SIGMA ITERATION ', &
@@ -2188,17 +2123,9 @@ contains
 
     contains
 
-        !> euclid ML-regularized reconstruct3D on the sigma2 estimate of iter:
-        !! the bootstrap map (l_final=.false.) is a gridding assembly without
-        !! postprocessing that keeps the caller's filt_mode/automsk,
-        !! because the residual sigmas depend on the regularization of the
-        !! reference they are scored against; the shipped map (l_final=.true.)
-        !! keeps the caller's backend, postprocessing and automsk -- so on PCG
-        !! it is estimated on the same density-envelope support as every
-        !! refinement iteration, with the same reported FSC mode (2026-09-09)
-        !! -- is classical otherwise (no nonuniform filtering, which is a
-        !! matching-reference feature) and, on PCG, carries the cold-solve
-        !! iteration budget
+        !> euclid ML-regularized reconstruct3D on the sigma2 of iter. Bootstrap map (l_final=.false.): gridding,
+        !! no postprocess, caller's filt_mode/automsk. Shipped map: caller's backend, postprocess and automsk,
+        !! filt_mode=none unless automsk=nu; on PCG the cold-solve budget and the bootstrap map as lag-one vol.
         subroutine prepare_bootstrap_rec_cline( cline_rec, iter, l_final )
             class(cmdline), intent(inout) :: cline_rec
             integer,        intent(in)    :: iter
@@ -2248,15 +2175,8 @@ contains
             do istate = 1, params%nstates
                 call cline_rec%delete('vol'//int2str(istate))
             enddo
-            ! The shipped PCG map must be estimated on the density envelope
-            ! like every refinement iteration, and its REPORTED FSC must be
-            ! the estimator-constrained one. build_pcg_state_support derives
-            ! that envelope from vol<state>; with no reference the base pair
-            ! bootstraps on the sphere and the resolution doc reads "density
-            ! envelope applied post hoc ... phase-randomized correction", the
-            ! gridding wording (bgal, 2026-09-11). The bootstrap map of step 2
-            ! (same name, same sampling, automasked as the refinement was) is
-            ! the lag-one reference here.
+            ! Under automsk the shipped PCG map is estimated on the density envelope like every refinement iteration
+            ! (build_pcg_state_support derives it from vol<state>); the step-2 bootstrap map is that reference.
             if( l_final )then
                 if( cline_rec%defined('rec_backend') )then
                     if( cline_rec%get_carg('rec_backend') == 'pcg' )then

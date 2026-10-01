@@ -1,18 +1,4 @@
 !@descr: low-level POSIX socket helpers shared by the IPC TCP client and server (poll, accept, liveness)
-!==============================================================================
-! MODULE: simple_ipc_tcp_socket_helpers
-!
-! PURPOSE:
-!   Shared low-level socket helpers used by SIMPLE TCP client/server modules.
-!
-! PROVIDES:
-!   - c_pollfd           : bind(c) mirror of POSIX struct pollfd
-!   - POLLIN/OUT/ERR/HUP/NVAL : poll event constants
-!   - TCP_MAX_MSG        : shared wire-buffer size constant
-!   - fd_is_healthy      : non-blocking liveness check for a connected fd
-!   - poll_fds           : convenience wrapper around POSIX poll(2)
-!   - accept_connection  : thin c_accept wrapper
-!==============================================================================
 module simple_ipc_tcp_socket_helpers
   use iso_c_binding
   use unix,                   only: c_accept, c_null_ptr, c_socklen_t
@@ -101,17 +87,9 @@ module simple_ipc_tcp_socket_helpers
     fd_is_healthy = .true.
   end function fd_is_healthy
 
-  !> Poll an array of file descriptors for readability using POSIX poll(2).
-  !>
-  !> Sets events=POLLIN on the first \p n entries of \p fds, calls poll(),
-  !> and returns the count of ready descriptors in \p nready.  A negative
-  !> \p nready means poll() failed.  The caller inspects fds(i)%revents
-  !> to determine which fds are ready (e.g. iand(fds(i)%revents, POLLIN) /= 0).
-  !>
-  !> \param[inout] fds        array of c_pollfd; caller must set fds(i)%fd
-  !> \param[in]    n          number of active entries to poll (must be <= size(fds))
-  !> \param[in]    timeout_ms poll timeout in ms; -1 blocks indefinitely, 0 returns immediately
-  !> \param[out]   nready     number of fds with events set in revents, or < 0 on error
+  !> poll(2) fds(1:n) (caller sets %fd) for POLLIN; nready = number ready, < 0 on poll error or
+  !> n outside 0..size(fds). timeout_ms: -1 blocks, 0 returns at once. Callers then test
+  !> iand(fds(i)%revents, POLLIN).
   subroutine poll_fds( fds, n, timeout_ms, nready )
     type(c_pollfd), intent(inout) :: fds(:)
     integer,        intent(in)    :: n

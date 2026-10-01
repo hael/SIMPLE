@@ -1,15 +1,9 @@
 !@descr: library tests of independent half-set PCG reconstruction against gridding (simple_reconstructor_pcg)
-! Two disjoint half sets of a deterministic asymmetric phantom, observed through the
-! simulate_particles projection path with seeded white noise, are reconstructed with the
-! matrix-free PCG operator (fixed soft support) and with production gridding. Pinned:
-! ownership of the halves, the realised SNR and noise independence, solve determinism
-! across operator instances, the half-map FSC contract (bounded, low-frequency agreement,
-! decay towards Nyquist), strong noiseless recovery, and on the 48-view matrix the
-! lambda sweep bracketing a noisy-error optimum that beats the gridding control.
-! Nightly (lib_reconstruction): about a hundred PCG solves at box 24. Both solve tests are
-! well-determined (96 and 48 views per half): at 24 views the noiseless solve crept to 0.82 at
-! 40 iterations for lack of Fourier coverage, while 48 views recover 0.98 (2026-09-28), so the
-! noiseless bar is 0.97 and tests the solver, not the sampling.
+! Two disjoint half sets of a deterministic asymmetric phantom (simulate_particles path, seeded noise)
+! are reconstructed with matrix-free PCG (fixed soft support) and production gridding. Pinned: half
+! ownership, realised SNR and noise independence, solve determinism, the half-map FSC contract, strong
+! noiseless recovery, and (48 views) a lambda sweep bracketing a noisy-error optimum that beats gridding.
+! Both solve tests have enough views per half (96, 48) that the noiseless bar tests the solver, not the sampling.
 module simple_pcg_halfset_tester
 use simple_defs,              only: dp, OSMPL_PAD_FAC
 use simple_image,             only: image
@@ -50,7 +44,7 @@ integer, parameter :: N_LOW_SHELLS   = 3
 integer, parameter :: N_HIGH_SHELLS  = 3
 real(dp), parameter :: SNR_RELTOL         = 0.12_dp
 real(dp), parameter :: NOISE_CORR_TOL     = 0.08_dp
-real(dp), parameter :: CLEAN_CORR_MIN     = 0.97_dp ! 48 views: 0.984/0.987 at 40 iterations (2026-09-28)
+real(dp), parameter :: CLEAN_CORR_MIN     = 0.97_dp ! noiseless-recovery bar of both solve tests
 real(dp), parameter :: LOW_FSC_MIN        = 0.40_dp
 real(dp), parameter :: FSC_LOW_HIGH_GAP   = 0.10_dp
 real(dp), parameter :: FSC_BOUND_SLACK    = 1.e-5_dp
@@ -560,9 +554,7 @@ contains
         integer, parameter :: NHALF = 48
         integer, parameter :: TRAJ_ITS(6) = [1, 2, 4, 8, 16, 40]
         integer, parameter :: OPEN_ITS(3) = [4, 8, 40]
-        ! six values around the noisy raw-L2 optimum (lambda 10 on both halves, 2026-09-28: rel L2
-        ! 0.656/0.657, against 1.13/1.15 at 0.1 and 0.767/0.771 at 100), enough to bracket it; the
-        ! 13-value sweep from 1e-3 to 1e6 cost ~2000 of the suite's solver iterations
+        ! six values around the noisy raw-L2 optimum, enough to bracket it at a small solver cost
         integer, parameter :: NLAMBDA = 6
         real,    parameter :: LAMBDAS(NLAMBDA) = [0.1, 1., 3., 10., 30., 100.]
         type(oris) :: even_oris, odd_oris

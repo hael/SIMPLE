@@ -1,18 +1,6 @@
 !@descr: unit tests of the abinitio3D_addon superset relation (simple_project_superset)
-! A current project of 20 rows in two stacks and a frozen project of 14, its
-! first stack: the two differ in size and share the particle indices 1-14, as
-! a stream's pool that appended a set after the base run. Physical identity on
-! the shared indices, with its negative cases, each naming the first offending
-! particle: permuted rows, a changed stack source, appended rows from a stack
-! the frozen project holds, a ptcl2D/ptcl3D mismatch, a changed CTF parameter
-! or optics group, another stack sampling or box, a frozen member inactive in
-! the current project, a changed or missing denoised source (ptcl_src=den),
-! and a frozen particle missing from a current project that ends before it;
-! membership (frozen = state > 0 and updatecnt > 0, never-updated, deselected
-! and appended rows join the cohort) with the refusals of an empty cohort, a
-! cohort below the per-state floor, a state label above nstates and an empty
-! inherited state, and the per-state floor after labelling; masking of the
-! frozen rows and their restoration from the frozen project.
+! Current project 20 rows / 2 stacks, frozen project 14 rows (its first stack): identity refusals
+! naming the first offender, membership and floors, mask and restore.
 module simple_project_superset_tester
 use simple_defs,             only: STDLEN
 use simple_string_utils,     only: int2str

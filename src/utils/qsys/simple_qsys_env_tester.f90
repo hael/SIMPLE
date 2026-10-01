@@ -1,11 +1,8 @@
 !@descr: unit tests for the queue-system environment's installation-path policy and particle partitions (simple_qsys_env, simple_map_reduce, sp_project%update_compenv)
-! An installation path stored in a project by an older SIMPLE is runtime-local: update_compenv
-! drops it, and a distributed run takes the local SIMPLE_PATH (set by the CTest environment) for
-! its queue description and executable, never the project's (the policy of 9a87c12a8: executables
-! come from the environment), and derives the job time of an empty project (0-0:1:40). The project
-! file is written in the suite's directory and deleted.
-! Partitions given an active-particle mask stay contiguous and balance the active particles
-! (split_nobjs_active); the expected boundaries are worked out by hand in the comments.
+! A stored simple_path is runtime-local: update_compenv drops it, and a distributed run takes the
+! environment's SIMPLE_PATH (set by CTest) for its queue description and executable, never the
+! project's; an empty project gets the minimum job time. Partitions given an active-particle mask
+! stay contiguous and balance the active particles (split_nobjs_active).
 module simple_qsys_env_tester
 use simple_core_module_api
 use simple_cmdline,    only: cmdline

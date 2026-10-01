@@ -330,21 +330,9 @@ contains
         deallocate(grad)
     end subroutine automatic_thresh_sobel
 
-    ! Canny edge detection.
-    ! Performs canny edge detection on img_in and saves the result in img_out.
-    ! PARAMETERS:
-    !     -) 'thresh': optional.
-    !                 If present the algorithm performs canny
-    !                 with thresh as double threshold. If thresh
-    !                 isn't present, then the double threshold for
-    !                 is automatically selected.
-    ! Note: 'sigma'.
-    !        It is meaningful when the threshold has to be automatically
-    !        selected. It determines 'how much' has to be detected.
-    !        It could be changed by the user, but in this version of
-    !        the algorithm it is fixed to its default value (= 0.33)
-    !        as suggested in the source.
-    ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
+    ! Canny edge detection of img_in, into img_out if present, else in place. The double threshold is
+    ! thresh if present, else (1 -/+ sigma) * the median gradient with sigma = 0.33 (the zero-parameter
+    ! auto Canny cited below); lp is passed on only in that automatic case.
     subroutine canny( img_in, img_out, thresh, lp )
         class(image),           intent(inout) :: img_in
         class(image), optional, intent(inout) :: img_out

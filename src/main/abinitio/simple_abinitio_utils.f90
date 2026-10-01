@@ -758,7 +758,7 @@ contains
             ! The ini3D routes (cavg_ini, cavg_ini_ext) enter at a stage whose
             ! starting reconstruction is ML-regularized before any refine3D
             ! iteration has estimated particle sigmas. One rule for every such
-            ! start (2026-09-06): seed from particle power spectra at the
+            ! start: seed from particle power spectra at the
             ! consuming stage's start iteration and hand it over through the
             ! canonical state.
             ! The stage's first euclid iteration replaces the seed with

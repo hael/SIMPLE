@@ -695,24 +695,9 @@ contains
 
     end subroutine insert_plane_oversamp_opt
 
-    !>  RELION/reference-style density floor, applied BEFORE sampl_dens_correct.
-    !!
-    !!  sampl_dens_correct divides the Fourier numerator by rho with no floor and no Wiener
-    !!  term. RELION never does that: adjust_regularization_relion_style (backprojector.cpp,
-    !!  and the reference's relion_functions.adjust_regularization_relion_style) floors the filter
-    !!  at the spherically-averaged filter of its own shell divided by 1000, and applies that
-    !!  floor unconditionally -- even when the optional Wiener term 1/tau is absent.
-    !!
-    !!  For an ordinary reconstruction every particle contributes weight 1, rho is large and
-    !!  smooth, and the missing floor rarely bites. For KERNEL-WEIGHTED state maps the weights
-    !!  lie in [0,1] with most near zero, so rho is small and highly variable and the divide
-    !!  explodes wherever it approaches zero -- preferentially in low-occupancy regions, i.e.
-    !!  the solvent. Measured consequence before this floor existed: state maps carried
-    !!  solvent/molecule noise of 0.30 against the reference's 0.054, 70 % of the state-difference
-    !!  power sat in solvent, and the difference fragmented into ~200 disconnected specks
-    !!  instead of the single positive and single negative lobe a domain motion produces.
-    !!
-    !!  frac defaults to 1000 to match RELION exactly (floor = shell mean / 1000).
+    !>  Floor rho at its shell mean / frac (default 1000, RELION-style; clamped >= 1) before
+    !!  sampl_dens_correct, which divides unfloored. Needed for kernel-weighted (flex) state maps,
+    !!  whose rho is small and noisy in low-occupancy regions.
     subroutine floor_rho_shellwise( self, frac )
         class(reconstructor), intent(inout) :: self
         real, optional,       intent(in)    :: frac

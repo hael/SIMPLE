@@ -1,16 +1,6 @@
 !@descr: unit tests for IPC TCP client/helpers/server split modules
-!==============================================================================
-! MODULE: simple_ipc_tcp_socket_tester
-!
-! PURPOSE:
-!   Unit tests for the split IPC TCP modules:
-!     - simple_ipc_tcp_socket_helpers
-!     - simple_ipc_tcp_socket_server
-!     - simple_ipc_tcp_socket_client
-!
-! ENTRYPOINT:
-!   run_all_ipc_tcp_socket_tests
-!==============================================================================
+! Windows runs only the helper tests; __FreeBSD__ builds (the Mac build defines it) also skip the
+! listener-thread and client round-trip tests.
 module simple_ipc_tcp_socket_tester
   use iso_c_binding
   use unix, only: c_pthread_mutex_init, c_pthread_mutex_destroy, c_pthread_mutex_lock, c_pthread_mutex_unlock, &

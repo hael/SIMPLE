@@ -1,12 +1,8 @@
 !@descr: library test of Cartesian pose refinement on simulated 1JYX particles (simple_pose_cont_refine3D_adapter)
-! A long-running quality gate for the five-parameter LM: 1JYX from the embedded
-! coordinates at box 144, 5 000 reproducible projections with varying CTF and finite
-! noise, every starting pose perturbed by exactly 15 degrees and two pixels, no PFTC
-! search. Refines every particle through the adapter, reconstructs the truth, perturbed
-! and refined pose sets and scores them by FSC and truth-map correlation. Pinned: the
-! aggregate objective, rotation error and shift error fall, and the refined
-! reconstruction correlates better with the truth than the perturbed one. The
-! generated fixture files are removed before the test returns. Nightly (lib_cart_align3D).
+! Quality gate for the five-parameter LM: 5000 reproducible 1JYX projections at box 144 (varying CTF,
+! finite noise), every start pose off by 15 degrees and two pixels, refined through the adapter without
+! PFTC search. Pinned: the aggregate objective, rotation and shift errors fall, and the refined
+! reconstruction correlates better with the truth than the perturbed one. Nightly (lib_cart_align3D).
 module simple_pose_cont_1jyx_tester
 use ieee_arithmetic, only: ieee_is_finite
 !$  use omp_lib, only: omp_get_max_threads, omp_get_thread_num

@@ -95,9 +95,10 @@ Explicit `vol1` takes precedence. If `vol1` is absent, `refine3D_auto` may use
 the project `os_out` state-1 `vol` entry when the file exists and its native
 box and sampling match the current run.
 
-If no compatible starting volume is available, `refine3D_auto` runs a
-`reconstruct3D` startup pass and uses `vol_state01.mrc` as the initial
-reference.
+`refine3D_auto` always runs a `reconstruct3D` startup pass, after seeding
+sigmas from the particle power spectra (`calc_pspec`), and uses its
+`vol_state01.mrc` as the initial reference. A starting volume, when available,
+enters that pass only as its `vol1` (the lag-one reference).
 
 For an explicit external `vol1`, `ref_pose_init=cc` selects the shared
 external-reference transition. Before its fixed-reference CC pass, the service
@@ -109,16 +110,10 @@ Particles outside the capped cohort retain image-bootstrap records until they
 are updated by refinement. `ref_pose_init=none` trusts the supplied reference
 and does not invoke this wrapper-owned transition.
 
-When NU filtering is active and an existing initializer is used, the workflow
-requires a compatible same-stem raw native even/odd pair. It accepts
-`_unfil` half maps when present and otherwise uses the same-stem even/odd
-half maps. If the raw pair is missing or incompatible, the workflow falls back
-to startup reconstruction instead of trusting stale derived NU products.
-
-When the raw pair is compatible, `refine3D_auto` generates fresh same-stem
-`_nu_filt` bootstrap references before the first matcher pass, from the
-same static ladder as every later iteration (the auxiliary member
-requires `ml_reg=yes`).
+With NU filtering active, the startup pass generates fresh `_nu_filt`
+bootstrap references and the matching-lp handoff before the first matcher
+pass, from the same static ladder as every later iteration (the auxiliary
+member requires `ml_reg=yes`).
 
 Under `rec_backend=pcg` the startup reconstruction runs the same NU
 competition inside the PCG master and produces the same `_nu_filt` bootstrap
@@ -187,8 +182,8 @@ basin width (17% beyond twice it) away from a good abinitio3D
 registration, and the four-iteration budget recovered only to 4.31/6.61 A
 where the July run, which had no pass, reached 3.61/4.03 A from the same
 poses. At the working band the pass confirms a good registration and
-re-basins only the misregistered particles, at the cost of a `prob_tab`
-over 5000 directions at the full band (2-3x the coarse pass). `regpass_fsc`
+re-basins only the misregistered particles, at the cost of an exhaustive
+search over 5000 directions at the full band. `regpass_fsc`
 is the knob for testing other bands.
 
 The main run is base `refine3D` with:
@@ -201,7 +196,8 @@ The main run is base `refine3D` with:
 
 After refinement, it runs a final `reconstruct3D` pass from all particle
 images. Final reconstruction sets `postprocess=yes` and
-turns `filt_mode` back to `none` when the refinement used NU filtering.
+turns `filt_mode` back to `none` when the refinement used NU filtering
+(kept under `automsk=nu`, which is valid only in an NU mode).
 `automsk` is inherited (2026-09-09): on PCG the shipped map is estimated on
 the same density-envelope support as every refinement iteration, with the
 same implied `envfsc=yes` and the same reported `>>> FSC MODE`, rather than

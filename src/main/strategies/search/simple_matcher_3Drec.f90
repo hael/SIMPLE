@@ -428,17 +428,9 @@ contains
         endif
     end subroutine init_rec
 
-    !> Preprocess particle images for online volumetric 3d reconstruction.
-    !!
-    !!  With crop_imgs supplied, the treatment mirrors the 2D cropped class-average
-    !!  restoration in cavger_update_sums exactly: normalize at the native box,
-    !!  Fourier crop, then taper and gridding pad at box_crop without normalizing a
-    !!  second time (renorm=.false. against lmsk_crop), ft maps memoized on the
-    !!  cropped padded grid, shift converted to cropped pixels, and the CTF told the
-    !!  cropped pixel size. Both padded grids cover the same physical extent, so
-    !!  gen_fplane4rec produces the same physical frequencies either way; the sigma2
-    !!  range is capped at the crop Nyquist because gen_fplane4rec derives its
-    !!  sigma2 source range from the box it is handed.
+    !> Preprocess particle images for online 3D reconstruction. With crop_imgs, as the cropped 2D restoration
+    !! (cavger_update_sums): normalize at the native box, Fourier crop, taper and pad at box_crop without renorm,
+    !! shift and CTF in cropped pixels, and the sigma2 range capped at the crop Nyquist the cropped grid spans.
     subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, crop_imgs )
         use simple_image, only: image
         class(parameters), intent(in)    :: params

@@ -13,26 +13,13 @@ implicit none
 
 contains
 
-    !> Is the polar (shared-direction) former requested for the reduced solve?
+    !> Is the polar (shared-direction) E-step former requested? Always on.
     logical module function cov_polar_enabled()
         cov_polar_enabled = .true.
     end function cov_polar_enabled
 
-    !> Number of bank directions.
-    !!
-    !! MEASURED (IgG-RL 10k, box_crop 64, lp 15, d_tilde 64): the largest reduced eigenvalue is
-    !! 1194.2 / 1195.5 / 1196.2 / 1198.2 at ndir = 1000 / 2000 / 8000 / 32000 and 1198.3 with the
-    !! grid removed entirely (SIMPLE_COV_POLAR_EXACT=1), and ground-truth basis capture is 0.5828
-    !! at ndir=2000 against 0.5819 exact and 0.5848 Cartesian. A 6 degree direction grid is
-    !! indistinguishable from no discretisation at all here, because this stage never uses a
-    !! per-particle b on its own -- it accumulates Sbb and sum_i G_i (x) G_i over 10^4-10^5
-    !! particles, and the Gram is additionally a sum over ~10^3 plane samples, so direction error
-    !! enters suppressed by 1/sqrt(nsamp) rather than as a per-sample decorrelation.
-    !!
-    !! So the default targets AMORTISATION (~40 particles per direction) rather than resolution,
-    !! with a floor so small datasets still get a reasonable grid. Raise it with
-    !! SIMPLE_COV_POLAR_NDIR if a dataset ever shows direction sensitivity -- the bank is streamed
-    !! direction by direction, so ndir costs no memory, only bank-build time.
+    !> Bank directions: ~40 particles per direction, clamped to [1000,4000] and even (build_refspiral).
+    !! The bank holds all ndir directions, so memory scales with ndir.
     integer module function cov_polar_ndir( nptcls )
         integer, intent(in) :: nptcls
         integer :: v
@@ -139,19 +126,9 @@ contains
         deallocate(xw, xw1, xw2)
     end subroutine polar_sample_particle_packed
 
-    !> Banded mean projection for the polar E-step: reconstructor%project_fplane's numerics --
-    !! the SAME banded (h,k) sweep, apod_mat_3d interpolation weights (including their final
-    !! global renormalization), per-sample Friedel conjugation and transfer multiply -- with the
-    !! per-call full-plane work removed. project_fplane zero-fills the whole PADDED plane and
-    !! copies the reference ctfsq and transfer planes into the output on EVERY call; at the
-    !! native padded lattice that is several MB of memory traffic per particle, which measured
-    !! as ~80% of the polar E-step's project bucket, all spent on values the polar branch never
-    !! reads (only mean_fpl%cmplx_plane is consumed, by the residual subtraction). Here the
-    !! plane is zero-filled once at (re)allocation; every call rewrites exactly the in-band disc
-    !! samples, and out-of-disc positions stay zero -- the same invariant the Cartesian former's
-    !! ensure_latent_projection_plane relies on. The interpolated values are bit-identical to
-    !! project_fplane's (same expressions, same kbwin), so the residual planes the M-step
-    !! consumes are unchanged wherever the mean is nonzero and unchanged-because-zero elsewhere.
+    !> project_fplane(apply_ctf_amp=.true.) for the mean, cmplx_plane only, same interpolation; the plane
+    !! is zeroed only at (re)allocation and no ctfsq/transfer copies are made, so out-of-disc samples stay
+    !! zero only while the disc (frlims/nyq) is fixed. subtract_mean_banded sweeps the same disc.
     module subroutine project_fplane_mean_banded( rec, o, fpl_ref, fpl_out )
         type(reconstructor), intent(in)    :: rec
         class(ori),          intent(inout) :: o
@@ -226,15 +203,9 @@ contains
         end do
     end subroutine project_fplane_mean_banded
 
-    !> Exact Cartesian statistics of the low-k shells for the HYBRID polar E-step, added on top
-    !! of the ring statistics. Per lattice position the KB window geometry is computed once and
-    !! all ncomp+1 volumes are gathered through it (the Cartesian former's hoist); the data value,
-    !! CTF/whitening transfer and quadrature weight (1 per lattice point) are exactly the
-    !! Cartesian former's, so the shells this covers contribute to G/b/c/e_mm/myv precisely what
-    !! project_fplanes_mean_basis + cov_herm_inner would contribute for them -- including the DC
-    !! sample. This is what removes the ring quadrature's multiplicative posterior-variance bias:
-    !! after whitening the low-k shells still anchor the latent scale, and rings sample them
-    !! worst (few samples, steep integrand).
+    !> Exact Cartesian G/b/c/e_mm/myv increments over the hybrid E-step's low-k positions (hex,kex), equal
+    !! to what project_fplanes_mean_basis + cov_herm_inner add there, DC included; one KB window per position
+    !! serves all ncomp+1 volumes. Rings sample these few, steep shells worst and would bias the latent scale.
     module subroutine polar_hybrid_exact_accum( rec0, recs, ncomp, o, fpl, hex, kex, npos, &
             &Gd, bd, cd, e_mm, myv )
         type(reconstructor), intent(in)    :: rec0

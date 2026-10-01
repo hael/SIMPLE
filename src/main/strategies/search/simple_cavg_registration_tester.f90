@@ -1,12 +1,8 @@
 !@descr: unit tests for class-average registration on the polar Fourier transform (match_imgs, match_imgs2ref)
-! Moved out of simple_strategy2D_utils (its self-test test_cavg_registration, which the
-! cavg_registration test program ran) by the utils review (plan, section 9.7); the two matchers
-! are exported for it. Five copies of an asymmetric image of three Gaussians, rotated in 30 degree
-! steps, are registered all against all and against the first; then the copies are also shifted
-! by 0.25 (i-1) pixels in x and y and registered against the first, and the rotation and shift
-! found are compared with the ones applied. The sign convention of e3 is not pinned (the found
-! angle may be the applied one or its negative), and the shift is compared by length, which
-! does not depend on whether the rotation acts before or after the shift.
+! Five copies of an asymmetric three-Gaussian image, rotated in 30 degree steps, are registered all
+! against all; shifted also by 0.25 (i-1) px in x and y, against the first, where the found rotation
+! and shift are compared with the applied ones. The sign of e3 is not pinned, and the shift is compared
+! by length, which does not depend on whether the rotation acts before or after the shift.
 module simple_cavg_registration_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

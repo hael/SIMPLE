@@ -40,6 +40,8 @@ LINESLOOP:{
             last LINESLOOP;
         }
         if( $_ =~ /^\s+character/ or ($_ =~ /^\s+integer/ or ($_ =~ /^\s+real/ or ($_ =~ /^\s+logical/ or $_ =~ /^\s+type\(string\)/)))){
+            # strip the trailing comment first: commas in a !< descriptor would otherwise become arguments
+            $_ =~ s/!.*//;
             $_ =~ s/.+:://;
             my @splitted = split(",",$_);
             push(@vars,@splitted);

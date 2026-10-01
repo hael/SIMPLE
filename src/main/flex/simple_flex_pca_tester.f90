@@ -1,14 +1,7 @@
 !@descr: unit tests for the flex_pca latent model, state weights and deconvolution (simple_flex_pca_model, _weights, _util, _deconv)
-! The resume cache (bit-exact round trip of all seven payloads), the derived settings
-! (box_crop, min_neff and state count against the validated IgG and Ribosembly scales),
-! state placement with a population floor on two clusters plus outliers, kernel weights
-! at a bandwidth with bounded widening, covariance state weights on a bimodal embedding,
-! and latent deconvolution: noise-scale calibration, the held-out choice of K and
-! posterior means closer to the truth than the raw latents. Random draws come from a
-! fixed seed; the statistical checks have margins far outside their sampling noise.
-! The fast suite deconvolves 4000 particles at noise variance 0.5..5 per axis (the K
-! ladder stops at n/2000 = 2); the library suite repeats it on 20000 particles at the
-! realistic 2..20, where the ladder runs to K = 4 and must still stop at 2.
+! Resume cache round trip, derived settings, population-floor placement, kernel and state weights, and
+! latent deconvolution (noise scale, held-out K, posterior means). Fixed seeds. The fast suite
+! deconvolves 4000 particles; the library suite 20000 at realistic noise.
 module simple_flex_pca_tester
 use simple_core_module_api,  only: dp, DPI
 use simple_syslib,           only: del_file

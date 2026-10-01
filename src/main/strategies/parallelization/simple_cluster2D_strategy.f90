@@ -422,7 +422,7 @@ contains
         character(len=STDLEN) :: message
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        ! transaction-scoped names (see the refine3D strategy), 2026-09-07
+        ! transaction-scoped names (see the refine3D strategy)
         call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)

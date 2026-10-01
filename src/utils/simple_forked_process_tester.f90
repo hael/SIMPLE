@@ -1,28 +1,7 @@
 !@descr: unit tests for simple_forked_process (lifecycle, signals, restart, timestamps, I/O)
-!==============================================================================
-! MODULE: simple_forked_process_tester
-!
-! PURPOSE:
-!   Exercises the forked_process type across eight test cases:
-!     1. test_start              — fork, run to completion, verify STOPPED
-!     2. test_kill               — fork, SIGKILL, verify FAILED
-!     3. test_terminate          — fork, SIGTERM, verify STOPPED (graceful)
-!     4. test_restart            — fork with restart=.true., SIGKILL, verify
-!                                  RESTARTING then STOPPED; checks get_pid
-!                                  and get_nrestarts
-!     5. test_timestamps         — verify queuetime/starttime/stoptime are
-!                                  set and ordered after a clean run
-!     6. test_fail_timestamps    — verify failtime is set after a SIGKILL
-!     7. test_destroy            — smoke test: destroy() does not crash
-!     8. test_logfile_redirection— verify child output is written to logfile
-!                                  with correct FNV-1a hash
-!
-! ENTRY POINT:
-!   run_all_forked_process_tests
-!
-! DEPENDENCIES:
-!   unix, simple_forked_process, simple_string, simple_test_utils, simple_syslib
-!==============================================================================
+! Children run the default execute_test, which exits 0 on SIGTERM: terminate() must end in
+! STOPPED, kill() (SIGKILL) in FAILED. test_logfile_redirection hashes execute_test's sentinel
+! line. Skipped on Windows.
 module simple_forked_process_tester
   use unix,                  only: c_pid_t, c_usleep
   use simple_forked_process, only: forked_process,         &

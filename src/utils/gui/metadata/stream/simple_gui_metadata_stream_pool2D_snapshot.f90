@@ -1,23 +1,6 @@
 !@descr: GUI metadata for a pool-2D snapshot — id, filename, particle count, and timestamp
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_pool2D_snapshot
-!
-! PURPOSE:
-!   Extends gui_metadata_base with the fields the pool-2D process sends to
-!   the GUI after writing a classification snapshot.  Carries the snapshot
-!   id, project filename, the number of particles included, and a Unix timestamp
-!   recording when the snapshot was created.
-!
-! TYPES:
-!   gui_metadata_stream_pool2D_snapshot — extends gui_metadata_base
-!     set()     — assign id, filename and particle count; records snapshot_time
-!                 automatically
-!     get()     — retrieve all four fields; returns the l_assigned flag
-!     jsonise() — serialise all fields to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   unix, json_module, simple_defs, simple_gui_metadata_base
-!==============================================================================
+! Sent by stream p06 after it writes a snapshot project; set() stamps snapshot_time with the
+! current Unix time.
 module simple_gui_metadata_stream_pool2D_snapshot
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception

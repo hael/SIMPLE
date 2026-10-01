@@ -1,34 +1,7 @@
 !@descr: public parameters type and interfaces for parameter parsing and derivation phases
-! for dummies:
-! 1. To add a new command-line parameter, first declare it in type(parameters) below.
-!    Put it in the same type-ordered/alphabetical section as similar parameters and
-!    give it a declaration-time default when Fortran allows that.
-! 2. To make the parameter parseable from the command line, register it in
-!    src/main/params/simple_parameters_parse.f90 using the matching registry call:
-!    add_char for fixed-length character or type(string), add_int for integer,
-!    add_real for real, add_file for file arguments with format checks, and
-!    add_dir for directory arguments.
-! 3. If the parameter affects other parameters, derive those values in
-!    src/main/params/simple_parameters_phases.f90. Keep the logic in the phase
-!    that best matches the meaning of the parameter:
-!    setup_execution_context, resolve_parameter_sources, derive_sampling_settings,
-!    derive_parallel_settings, derive_image_settings, or
-!    validate_parameter_consistency.
-! 4. If the parameter needs sanity checks or mode restrictions, add them to
-!    validate_parameter_consistency in simple_parameters_phases.f90.
-! 5. If the parameter is a dynamic type(string) field that needs a non-empty or
-!    special runtime default, set that in init_dynamic_defaults in
-!    src/main/params/simple_parameters_core.f90.
-! 6. The new constructor flow is:
-!    reset defaults -> init_dynamic_defaults -> parse_inputs ->
-!    setup_execution_context -> resolve_parameter_sources ->
-!    derive_sampling_settings -> derive_parallel_settings ->
-!    derive_image_settings ->
-!    validate_parameter_consistency.
-! 7. Rule of thumb:
-!    declare in this file, parse in simple_parameters_parse.f90, derive or validate
-!    in simple_parameters_phases.f90, and only touch simple_parameters_core.f90 for
-!    dynamic-string defaults or shared utilities.
+! New parameter: declare here (scripts/simple_args_generator.pl derives the accepted-argument list from these
+! declarations), register in simple_parameters_parse.f90, derive/validate in simple_parameters_phases.f90
+! (phase order: new()), expose in src/main/ui. Dynamic type(string) defaults: init_dynamic_defaults (core).
 module simple_parameters
 use simple_core_module_api
 use simple_cmdline,    only: cmdline
@@ -219,7 +192,7 @@ type :: parameters
     type(string)              :: fname                !< file name
     type(string)              :: frcs                 !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     type(string)              :: fsc                  !< binary file with FSC info{fsc_state01.bin}
-    type(string)              :: pcg_mskfile          !< real-space [0,1] mask volume constraining the PCG solve (hard support projection P H P; experimental focused/support mode, pcg_priors_history.md dev item 5); requires rec_backend=pcg; spherical mskdiam support when absent
+    type(string)              :: pcg_mskfile          !< real-space [0,1] mask volume constraining the PCG solve (hard support projection P H P; experimental focused/support mode, pcg_priors_history.md dev item 5); accepted on both backends; spherical mskdiam support when absent
     type(string)              :: gainref              !< gain reference for movie alignment
     type(string)              :: import_dir           !< dir to import .star files from for import_starproject
     type(string)              :: infile               !< file with inputs(.txt)
@@ -300,7 +273,7 @@ type :: parameters
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|nu|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
-    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev); prev: abinitio2D seeded restart from the previous 2D clustering
+    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev){ptcl}; prev: abinitio2D seeded restart from the previous 2D clustering
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
@@ -353,7 +326,7 @@ type :: parameters
     ! class-average quality model preset(chunk100mics|sieve|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_snhc){shc}; also supports standalone pose_cont
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|shc_smpl|snhc_smpl|neigh|greedy|prob|prob_state|prob_neigh|pose_cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}

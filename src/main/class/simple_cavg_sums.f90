@@ -1,18 +1,7 @@
 !@descr: unregularized 2D class Fourier sums on disk: the partless carry-over set and per-worker contributions
-! One cavg_sums object holds, per class, the four unregularized accumulators of the 2D class
-! averages (even and odd numerators, even and odd CTF^2 sums) in the class averager's
-! Fourier layout, captured before any restoration step, together with the metadata of its kind:
-!   - STATE: the carried previous set of a run, written only by the assembly owner. It records
-!     M(c), the population the sums represent (population rule: population_blend_weights in
-!     simple_oris). It has no part number and does not depend on nparts, numlen or the
-!     execution mode.
-!   - CONTRIBUTION: one worker's current-iteration sums, accumulated from zero, with the
-!     class-centering offsets the worker applied to its references, its accumulated even/odd
-!     populations and whether the iteration blends carry-over.
-! A file is one scientific unit: header, per-class metadata, the four arrays and a closing
-! byte count, written to a temporary name and renamed into place, so a reader never observes
-! a half-written set. The carried sums are the state of a stochastic recurrence, an
-! approximation by construction: they are not an exact sum over current class memberships.
+! Per class: even/odd numerators and CTF^2 sums, captured before restoration. STATE: carried set, owner-written,
+! records M(c). CONTRIBUTION: one worker's from-zero sums + centering offsets, e/o pops, l_frac.
+! Written via temp name + rename, closed by a payload byte count. Ownership: doc/policies/2D/abinitio2D_policy.md
 module simple_cavg_sums
 use simple_core_module_api
 use simple_ftiter, only: ftiter

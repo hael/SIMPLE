@@ -71,8 +71,7 @@ contains
             &which covers a continuous reaction coordinate and branched compositional states with the &
             &same constants. A negative value places them along a density-spread path instead. &
             &A positive value places them along that single component, &
-            &which discards the other components and tends to concentrate the particles on one state. &
-            &SIMPLE_COV_KMEANS=1 recovers the former k-means placement', &
+            &which discards the other components and tends to concentrate the particles on one state', &
             'component index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, 'nkern', 'num', &
@@ -112,8 +111,8 @@ contains
             &even/odd agreement is kept per state. Costs 2*nbins extra reconstruction passes', &
             '# bins, 1=off', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        ! min_neff is not a flex_pca input: on the default path the GMM replaces the kernel weights and
-        ! bandwidth, so it cannot change the maps. Reachable as SIMPLE_COV_MIN_NEFF for the opt-out paths.
+        ! min_neff is not a flex_pca UI input; params%min_neff (default 2000) still sets the state-pruning
+        ! and GMM-island floors of run_flex_pca.
         call flex_pca%add_input(UI_FILT, 'column_separation', 'num', &
             'Minimum grid separation between columns (default 2)', &
             'Selected frequencies closer than this are suppressed; also decorrelates the column noise', &
@@ -123,8 +122,8 @@ contains
             'Probe subspace-iteration refinements (default 5)', &
             'EM / probe subspace iterations refining the column basis. Probe volumes aggregate the whole &
             &slice instead of one Fourier voxel, which is the main lever on per-particle latent quality. &
-            &An upper bound rather than a fixed count: the loop stops early once the mean principal-angle &
-            &cosine between successive bases reaches 0.97. Set 0 to disable', &
+            &An upper bound rather than a fixed count: a rank-1 fit stops early once its basis cosine to the &
+            &previous iteration reaches 0.999999; higher ranks run the full count. Set 0 to disable', &
             '# iterations', .false., 5.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, lp, required_override=.false., &
@@ -161,8 +160,8 @@ contains
         call flex_pca%add_input(UI_MASK, mskdiam, required_override=.false., &
             group="mask", visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
-        &'Backend of the state maps and of the coupled M-step basis solve; PCG solves the same weighted &
-        &least-squares problems with the support constraint inside the solve(gridding|pcg){gridding}', &
+        &'Backend of the coupled M-step basis solve (the state maps follow rec_states_backend); PCG solves the &
+        &same weighted least-squares problem with the support constraint inside the solve(gridding|pcg){gridding}', &
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_ADVANCED)

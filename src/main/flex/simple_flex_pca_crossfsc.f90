@@ -1,13 +1,7 @@
 !@descr: versioned cross-fit-FSC artifact (flex_pca_crossfsc.bin): writer, reader, SSNR conversion, series restart
-!! Spec: doc/for_developers/ideas/flex_pca_crossfsc_shrinkage_marching_spec.md (drop-in spec, 2026-08-31).
-!! The paired flex_pca engine's lasting output is the per-component, per-shell cross-fit FSC between
-!! two independent half-fits. It is persisted every iteration as a first-class versioned artifact.
-!! Of the spec's three consumers only (1) SSNR/tau^2 shrinkage (spec par.3-4) remains; frequency
-!! marching (par.5), the stopping series (par.6) and the single-fit SCAFFOLDING writer were removed
-!! 2026-09-07 (never adopted by a recipe). The record layout is unchanged: `paired`, `khi_shared`,
-!! `march_on` and `s_stop` stay as file-format fields (march_on is always 0 now), and
-!! crossfsc_assert_paired still THROWs when a paired=0 record from an old artifact is asked to drive
-!! rank selection.
+!! The paired flex_pca engine persists the per-component, per-shell cross-fit FSC between its two
+!! half-fits every iteration. Its only consumer is the SSNR/tau^2 ridge (crossfsc_to_invtau2);
+!! `paired`, `khi_shared`, `march_on` (always 0) and `s_stop` stay in the layout as file-format fields.
 module simple_flex_pca_crossfsc
 use simple_core_module_api
 use simple_flex_reconstructor_latent_ops, only: pair_index
@@ -17,7 +11,7 @@ private
 
 public :: crossfsc_record, crossfsc_file
 public :: crossfsc_load, crossfsc_write, crossfsc_append, crossfsc_latest_upto
-public :: crossfsc_assert_paired, crossfsc_kill, crossfsc_kill_record
+public :: crossfsc_kill, crossfsc_kill_record
 public :: crossfsc_to_invtau2, crossfsc_harvest_h, crossfsc_stop_stat
 public :: crossfsc_inband_mean, crossfsc_khi_deepest
 public :: COV_XFSC_FNAME
@@ -27,30 +21,29 @@ integer,          parameter :: COV_XFSC_VERSION = 1
 character(len=*), parameter :: COV_XFSC_FNAME        = 'flex_pca_crossfsc.bin'
 character(len=*), parameter :: COV_XFSC_SERIES_FNAME = 'flex_pca_crossfsc_series.txt'
 !> per-shell sampling below this is a dead shell, matching add_invtausq2rho's rsum floor
-!! (simple_reconstructor.f90:1128)
 real(dp),         parameter :: COV_XFSC_H_FLOOR = 1.0d-10
 
-!> One per-iteration record (spec par.2.4, version 1). Unmatched components appear in the per-fit
+!> One per-iteration record (layout COV_XFSC_VERSION). Unmatched components appear in the per-fit
 !! blocks (fsc_int/h/eigvals) but not in the matched blocks (match_*/fsc_cross).
 type crossfsc_record
     integer :: it_eff     = 0   !< global iteration stamp (never a worker-local counter)
     integer :: ncomp_a    = 0, ncomp_b = 0   !< per-fit delivered ranks
     integer :: kmatch     = 0   !< number of matched pairs
-    integer :: khi_a      = 0, khi_b = 0     !< each fit's internal-FSC band (par.5.2 criterion)
-    integer :: khi_shared = 0   !< the shared band in force (par.5)
-    integer :: reg_mode   = 0   !< the par.4 arm ACTIVE this iteration (0 when degraded)
-    integer :: march_on   = 0   !< 1 when the par.5 shared band was APPLIED this iteration
+    integer :: khi_a      = 0, khi_b = 0     !< each fit's internal-FSC band (deepest-crossing criterion)
+    integer :: khi_shared = 0   !< the shared band in force (written as khi_full)
+    integer :: reg_mode   = 0   !< the ridge arm ACTIVE this iteration (0 when degraded)
+    integer :: march_on   = 0   !< band-marching flag, written as 0
     integer,  allocatable :: match_a(:), match_b(:)  !< signed-permutation pairing (component indices)
     integer,  allocatable :: match_sign(:)           !< +1/-1
-    real,     allocatable :: match_cos(:)            !< masked matched cosine (par.5 criterion scalar)
+    real,     allocatable :: match_cos(:)            !< |cosine| of each matched pair
     real,     allocatable :: fsc_cross(:,:)          !< (filtsz,kmatch) cross-fit FSC curves
     real,     allocatable :: fsc_int_a(:,:)          !< (filtsz,ncomp_a) fit A internal e/o FSC
     real,     allocatable :: fsc_int_b(:,:)          !< (filtsz,ncomp_b)
-    real,     allocatable :: h_a(:,:)                !< (filtsz,ncomp_a) fit A sampling profiles (par.2.3)
+    real,     allocatable :: h_a(:,:)                !< (filtsz,ncomp_a) fit A sampling profiles
     real,     allocatable :: h_b(:,:)                !< (filtsz,ncomp_b)
     integer,  allocatable :: cnt(:)                  !< (filtsz) shared per-shell voxel counts
     real(dp), allocatable :: eigvals_a(:), eigvals_b(:)  !< latent variances (amplitude diagnostic)
-    real(dp) :: s_stop = 0.d0   !< stopping statistic S(t) at khi_cmp (par.6), precomputed
+    real(dp) :: s_stop = 0.d0   !< stopping statistic S(t) at khi_cmp, precomputed
 end type crossfsc_record
 
 !> The artifact: file header + all records so far. Full rewrite per iteration (status='replace',
@@ -63,7 +56,7 @@ type crossfsc_file
     integer :: filtsz     = 0   !< fdim(box_crop)-1
     real    :: smpd_crop  = 0.
     integer :: khi_full   = 0   !< full band cap (covariance_kfromto at the production lp)
-    integer :: khi_cmp    = 0   !< FIXED comparison band (par.6), frozen at first record
+    integer :: khi_cmp    = 0   !< FIXED comparison band, frozen at first record
     integer :: nrec       = 0
     type(crossfsc_record), allocatable :: recs(:)
 end type crossfsc_file
@@ -260,7 +253,7 @@ contains
         self%nrec = nkeep + 1
     end subroutine crossfsc_append
 
-    !> Index of the latest record with it_eff <= it (the par.4.2 timing rule: iteration t may
+    !> Index of the latest record with it_eff <= it (the timing rule: iteration t may
     !! consume only records stamped <= t-1, so callers pass it = t-1). 0 when none qualifies.
     integer function crossfsc_latest_upto( self, it ) result( irec )
         type(crossfsc_file), intent(in) :: self
@@ -271,20 +264,6 @@ contains
             if( self%recs(i)%it_eff <= it ) irec = i
         end do
     end function crossfsc_latest_upto
-
-    !> The scaffolding guard: a paired=0 record is not a cross-fit statistic. Rank selection and
-    !! stopping THROW here; the in-loop shrinkage arms and marching degrade silently instead
-    !! (their own call sites log the degradation).
-    subroutine crossfsc_assert_paired( self, purpose )
-        type(crossfsc_file), intent(in) :: self
-        character(len=*),    intent(in) :: purpose
-        if( self%paired /= 1 )then
-            write(logfhandle,'(A,A)') 'crossfsc consumer refused for purpose: ', trim(purpose)
-            THROW_HARD('flex_pca crossfsc artifact holds SCAFFOLDING (paired=0) records, which are &
-                &internal even/odd curves, not cross-fit statistics; refusing to use them for the &
-                &purpose named above')
-        endif
-    end subroutine crossfsc_assert_paired
 
     subroutine crossfsc_kill_record( rec )
         type(crossfsc_record), intent(inout) :: rec
@@ -316,7 +295,7 @@ contains
         self%smpd_crop = 0.; self%khi_full = 0; self%khi_cmp = 0; self%nrec = 0
     end subroutine crossfsc_kill
 
-    ! ============ the S.11/S.13 conversion (spec par.3.1) ============
+    ! ============ the S.11/S.13 conversion ============
 
     !> Convert one component's cross-fit FSC curve F plus that fit's own per-shell sampling
     !! profile H into the per-shell inverse prior variance invtau2, mirroring
@@ -335,26 +314,26 @@ contains
         n = min(size(fsc), min(size(h), size(invtau2)))
         invtau2 = 0.0
         do sh = 1, n
-            if( sh < k_lo ) cycle                          ! no addition below k_lo (:1137,:1144)
+            if( sh < k_lo ) cycle                          ! no addition below k_lo
             fc   = min(0.999, max(0.001, fsc(sh)))
-            ssnr = fc / (1.0 - fc)                         ! (:1108-1112)
-            if( real(h(sh),dp) > COV_XFSC_H_FLOOR )then    ! (:1128-1132)
+            ssnr = fc / (1.0 - fc)
+            if( real(h(sh),dp) > COV_XFSC_H_FLOOR )then
                 sig2 = 1.0 / h(sh)
             else
                 sig2 = 0.0                                 ! unpopulated shell
             endif
-            tau2 = ssnr * sig2                             ! (:1134)
+            tau2 = ssnr * sig2
             if( tau2 > TINY .and. fsc(sh) > 0.0 )then
-                invtau2(sh) = 1.0 / (max(fudge, TINY)*tau2)          ! (:1147)
+                invtau2(sh) = 1.0 / (max(fudge, TINY)*tau2)
             else
                 ! kill branch, per-shell here rather than per-voxel: the shell-mean H stands in
-                ! for the per-voxel rho of (:1149), within a factor wherever the shell is populated
+                ! for add_invtausq2rho's per-voxel rho, within a factor wherever the shell is populated
                 invtau2(sh) = min(1.0e3, 1.0e3 * h(sh))
             endif
         end do
     end subroutine crossfsc_to_invtau2
 
-    ! ============ the sampling profile H (spec par.2.3) ============
+    ! ============ the sampling profile H ============
 
     !> Per-component, per-shell mean of the DIAGONAL rows of one packed coupled density --
     !! the exact analog of the rsum/cnt pass in add_invtausq2rho, run over pair_index(q,q).
@@ -403,7 +382,7 @@ contains
         end do
     end subroutine crossfsc_harvest_h
 
-    ! ============ aggregations (spec par.5.2 / par.6.1) ============
+    ! ============ aggregations ============
 
     !> Mean FSC over shells 2..khi (the fmean_dg aggregation shape applied from shell 2,
     !! matching the stopping statistic's support).
@@ -415,7 +394,7 @@ contains
         fmean = sum(fsc(2:k_hi)) / real(k_hi - 1)
     end function crossfsc_inband_mean
 
-    !> The stopping statistic S(t) at the FIXED comparison band khi_cmp (spec par.6.1):
+    !> The stopping statistic S(t) at the FIXED comparison band khi_cmp:
     !! mean over matched pairs of the in-band mean cross-fit FSC. Computed over shells up to
     !! khi_cmp even while the working band is below it (those shells score ~0, honestly).
     real(dp) function crossfsc_stop_stat( rec, khi_cmp ) result( s )
@@ -430,9 +409,8 @@ contains
         s = s / real(rec%kmatch, dp)
     end function crossfsc_stop_stat
 
-    !> Criterion crossing of one FSC curve -- the get_find_at_crit analog
-    !! (simple_math_ft.f90:188-210): first shell h >= 3 with fsc(h) < crit returns h-1;
-    !! a curve that never crosses returns size-1.
+    !> Criterion crossing of one FSC curve -- the simple_math_ft::get_find_at_crit analog:
+    !! first shell h >= 3 with fsc(h) < crit returns h-1; a curve that never crosses returns size-1.
     integer function crossfsc_find_at_crit( fsc, crit ) result( find )
         real, intent(in) :: fsc(:)
         real, intent(in) :: crit
@@ -450,8 +428,8 @@ contains
         find = max(1, min(find, n - 1))
     end function crossfsc_find_at_crit
 
-    !> The band driver over a set of curves: the DEEPEST-crossing component (spec par.5.2 item 2,
-    !! the "best resolved state drives" analog). Not the mean: one honest component earning band
+    !> The band driver over a set of curves: the DEEPEST-crossing component (the "best resolved
+    !! state drives" analog). Not the mean: one honest component earning band
     !! is the point of marching.
     integer function crossfsc_khi_deepest( curves, ncurves, crit ) result( khi )
         real,    intent(in) :: curves(:,:)   !< (filtsz, ncurves)

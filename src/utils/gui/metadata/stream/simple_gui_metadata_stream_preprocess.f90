@@ -1,24 +1,6 @@
 !@descr: GUI metadata for the stream preprocessing stage — movie counts, CTF quality averages, and acceptance cutoffs
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_preprocess
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields specific to the movie-preprocessing
-!   stage of the cryo-EM streaming pipeline.  Tracks the number of movies
-!   imported, processed, and rejected; the processing rate; running averages
-!   of CTF resolution, ice score, and astigmatism; and the acceptance cutoffs
-!   for each quality metric.
-!
-! TYPES:
-!   gui_metadata_stream_preprocess — extends gui_metadata_base
-!     set()     — assign all fields from caller-supplied values
-!     get()     — retrieve all fields; returns the l_assigned flag
-!     jsonise() — serialise all fields to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   json_kinds, json_module, simple_string, simple_defs, simple_error,
-!   simple_gui_metadata_base
-!==============================================================================
+! Filled by stream p01: movies_rate is the movie watcher's detection rate (movies per hour) and
+! the cutoffs are the current ctfres/icefrac/astig thresholds.
 module simple_gui_metadata_stream_preprocess
   use json_kinds
   use json_module,              only: json_core, json_value
@@ -39,7 +21,7 @@ module simple_gui_metadata_stream_preprocess
     integer               :: movies_imported     = 0    ! total movies received from the file watcher
     integer               :: movies_processed    = 0    ! movies that completed motion-correction and CTF
     integer               :: movies_rejected     = 0    ! movies failing quality cutoffs
-    integer               :: movies_rate         = 0    ! processing rate (movies per unit time)
+    integer               :: movies_rate         = 0    ! movie detection rate (movies per hour)
     real                  :: average_ctf_res     = 0.0  ! mean CTF resolution estimate (Å)
     real                  :: average_ice_score   = 0.0  ! mean ice-contamination score
     real                  :: average_astigmatism = 0.0  ! mean astigmatism magnitude (Å)

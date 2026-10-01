@@ -647,9 +647,7 @@ contains
                 if(.not. sort_ascending)then
                     call reverse(indices)
                     ! the GUI reads indices_pre/indices_post as the records above/below the window as
-                    ! displayed (NICE panelmicrographs.js, selectBelow/selectAbove); in a descending
-                    ! view those are the ascending tail and head, listed in display order (they were
-                    ! swapped before 2026-09-25)
+                    ! displayed; in a descending view those are the ascending tail and head, in display order
                     call move_alloc(indices_pre,  tmp_inds)
                     call move_alloc(indices_post, indices_pre)
                     call move_alloc(tmp_inds,     indices_post)

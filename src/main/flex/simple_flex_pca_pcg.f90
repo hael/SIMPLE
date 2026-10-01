@@ -1,22 +1,8 @@
-!@descr: flex_pca coupled M-step on the PCG operator (rec_backend=pcg): pair-weighted Gram kernels and the
-!  right-hand sides on the 2x lattice, the per-voxel coupled solve kept as the (floored) block-Jacobi
-!  preconditioner, the support inside the solve, CG to a relative-residual tolerance
-!  (doc/implementation_notes/flex_pca_envelope_support.md, 3.4), mirroring reconstructor_pcg.
-!
-!  Conventions. The CG variable is the physical basis volume u on the native lattice. The right-hand side
-!  b = S^H y is the exact adjoint of nonuniform sampling: the pair-weighted plane samples deposited through
-!  the KB window at DOUBLED coordinates on the 2x lattice, inverse-transformed, cropped and divided by the
-!  2x deposition envelope (the 1x KB deposit of the gridding path carries the native gather envelope E and a
-!  10-20% interpolation error; the 2x deposit is exact to ~1%). The operator is the bare Toeplitz Gram
-!  T = S^H S of the same samples through the doubled-coordinate kernel (scale padf**3 relative to the
-!  gridding density under SIMPLE's forward-normalised FFT), band-limited to the Nyquist ball and bracketed by
-!  the hard support P. The preconditioner is the per-voxel coupled divide on the gridding density rho
-!  (the Fourier-diagonal Jacobi inverse of T), with a shell-relative floor so that it stays bounded on the
-!  unsampled voxels every real-space operation (the support) leaks into. Every solve with a positive budget
-!  starts from ZERO (the production reconstruct3D_pcg convention), so maxits_pcg buys the same number of
-!  corrections here as it does there; budget 0 is the explicit gridding mode and ships
-!  solve_coupled_basis_exp untouched. put_back writes E*u so the unchanged tail (inverse KB envelope,
-!  FSC-Wiener, band limit, soft mask) ships u.
+!@descr: flex_pca coupled M-step on the PCG operator (rec_backend=pcg), mirroring reconstructor_pcg
+!  Design: doc/implementation_notes/flex_pca_envelope_support.md, 3.4. CG on the native-lattice basis u:
+!  b = S^H y and T = S^H S from 2x-lattice KB deposits (scale OSMPL_PAD_FAC**3), Nyquist-ball band limit,
+!  hard support P, floored per-voxel coupled divide as preconditioner. maxits<=0 ships solve_coupled_basis_exp;
+!  otherwise CG warm-starts from the masked, LS-scaled gridding solution. put_back writes E*u.
 module simple_flex_pca_pcg
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 !$ use omp_lib, only: omp_get_thread_num, omp_get_max_threads, omp_in_parallel
@@ -120,12 +106,8 @@ type :: flex_pcg_t
     logical :: l_mask = .false., l_kernel = .false., l_ridge = .false., l_floor = .false.
     type(image) :: wimg                     !< persistent boxpd^3 work image (keeps its plans)
     type(image) :: nimg                     !< persistent box^3 work image (band limit, ridge, precond)
-    ! Per-thread transform pool. apply_operator's component transforms are INDEPENDENT, so they run
-    ! one-per-thread with SINGLE-THREADED FFTW plans -- the idiom image%construct_thread_safe_tmp_imgs
-    ! already uses (simple_image_core.f90:126, each pooled image built with wthreads=.false.).
-    ! Threading inside a transform instead was measured to be a net harm: every stack sample landed
-    ! in os_sem_down inside libfftw3f_threads. Width is min(nthr, ncomp) -- more threads than
-    ! components would idle.
+    ! Per-thread transform pool: independent transforms run one per thread on single-threaded FFTW plans
+    ! (the image%construct_thread_safe_tmp_imgs idiom); threaded plans stalled in os_sem_down. Width nthr.
     type(image), allocatable :: wpool(:)    !< per-thread boxpd^3 images
     type(image), allocatable :: npool(:)    !< per-thread box^3 images (band limit)
     real,    allocatable :: tp_work(:,:,:,:)!< (box,box,box,nthr_pool)
@@ -1072,7 +1054,7 @@ contains
     end subroutine fold_rhs_dense
 
     !> packed sums -> operator kernels: inverse transform on the 2x lattice, deposition envelope divided
-    !! out, forward transform, real part, scaled to the gridding density (kernel_scale)
+    !! out, forward transform, real part, scaled to the gridding density (FLEX_PCG_KSCALE)
     subroutine finalize( self, kpk )
         class(flex_pcg_t), intent(inout) :: self
         real,              intent(in)    :: kpk(:,:)
@@ -1085,28 +1067,14 @@ contains
         if( size(kpk,1) /= self%npairs ) THROW_HARD('packed kernel set has the wrong leading extent; finalize')
         if( size(kpk,2) /= self%npk ) THROW_HARD('packed kernel set is not on the band list; finalize')
         t_fold = tic()
-        ! khat is pair-leading for the solve's per-voxel k x k multiply. Written pair by pair from the
-        ! pair loop, every value landed in its own cache line shared between threads (a fold was memory
-        ! bound at ~85 s for 528 pairs on 48 threads). Each thread now writes its pairs as contiguous
-        ! slabs and one blocked transpose builds khat: same values, different store order.
+        ! One thread per pair writes a contiguous slab; a blocked transpose builds the pair-leading khat
+        ! (per-voxel k x k multiply in solve). Not counted in solve()'s seconds.
         if( allocated(self%khat) )then
             if( size(self%khat,1) /= self%npairs .or. size(self%khat,2) /= self%cdim(1) ) deallocate(self%khat)
         endif
         if( .not. allocated(self%khat) ) allocate(self%khat(self%npairs, self%cdim(1), self%cdim(2), self%cdim(3)))
         allocate(kt(self%cdim(1), self%cdim(2), self%cdim(3), self%npairs))
-        ! Scratch is allocated ONCE. The old loop did `tker = get_rmat()` and `ctmp = get_cmat()`
-        ! per pair, reallocating a full padded volume 2 x npairs times per M-step (npairs = 55 at
-        ! ncomp = 10, boxpd = 2*box_crop), which is what put ~26% of the master's CPU time in the
-        ! kernel. Everything else here is memory-bound rather than arithmetic: kpk and khat are
-        ! pair-LEADING -- contiguous for the solve's per-voxel k x k matrix, but strided by npairs
-        ! in this loop, so each element of the gather and the scatter is its own cache line. Both
-        ! are threaded now; the FFT plans are already threaded at this size.
         call self%ensure_pool()
-        ! Parallel OVER PAIRS. Each pair needs two transforms on the padded lattice and they are
-        ! independent, so with npairs = 55 at rank 10 this is 110 transforms per call and the call
-        ! happens once per half set -- comparable to the whole 8-iteration solve. It was a serial
-        ! loop with only the inner voxel passes threaded, which left the dominant term on one core.
-        ! NOTE: this cost is NOT inside solve()'s reported seconds; it is master-tail time.
         !$omp parallel do default(shared) private(ipair,i,j,k,t,tid,rp) schedule(static)
         do ipair = 1, self%npairs
             tid = 1
@@ -1159,8 +1127,6 @@ contains
         !$omp end parallel do
         deallocate(kt)
         self%l_kernel = .true.
-        ! This cost sits OUTSIDE solve()'s reported seconds, which is why the master tail looked
-        ! unaccounted for: 2*npairs padded transforms per call, once per half set.
         write(logfhandle,'(A,I0,A,I0,A,F8.1)') '>>> FLEX_PCA PCG KERNEL FOLD: npairs=', &
             &self%npairs, '  threads=', self%nthr_pool, '  seconds=', real(toc(t_fold))
         call flush(logfhandle)
@@ -1305,14 +1271,8 @@ contains
         complex :: acc
         integer :: q, r, i, j, k, sh, h, kk, m, phys(3), nsh, off, tid
         if( .not. self%l_kernel ) THROW_HARD('kernels are not finalized; apply_operator')
-        ! Scratch is persistent. This routine runs once per CG iteration and used to allocate and
-        ! free, per call, cq (ncomp x cdim complex = 681 MB at box_crop=128 / ncomp=10), acc, work,
-        ! a get_cmat result (134 MB) per component and a get_rmat + center_crop pair (75 MB) per
-        ! component: roughly 2.8 GB of mmap traffic per operator application. Measured on cnga1 at
-        ! box_crop=128 the solve ran at 1.05 of 16 cores with 31% of CPU time in the kernel, i.e.
-        ! it was bound by page faults, not arithmetic. center_embed/center_crop are inlined here
-        ! against a persistent buffer for the same reason; both use offset = (boxpd-box)/2 and zero
-        ! elsewhere, matching simple_cartesian_fourier exactly.
+        ! Persistent scratch: per-call allocation of these component-sized buffers left the solve page-fault bound.
+        ! center_embed/center_crop are inlined on it with simple_cartesian_fourier's offset (boxpd-box)/2 and zero fill.
         if( .not. allocated(self%op_cq) ) &
             &allocate(self%op_cq(self%cdim(1),self%cdim(2),self%cdim(3),self%ncomp))
         off = (self%boxpd - self%box)/2
@@ -1686,15 +1646,8 @@ contains
                 bh    = self%dot_all(b,hp)
                 outcome%start_corr  = real(bh / max(bnorm*hnorm, 1.0e-30_dp))
                 outcome%start_scale = real(bh / max(hnorm*hnorm, 1.0e-30_dp))
-                ! Apply that least-squares scale to the warm start. It is FREE: hp = B x0 is
-                ! already in hand from the operator application above, so rescaling x and hp and
-                ! recomputing the residual costs three vector passes and no transforms. Measured on
-                ! cnga1 at box_crop=128, warm-starting from the gridding solution: corr(b,Bx0)=0.77
-                ! but scale=0.52, i.e. the gridding iterate points the right way and is ~2x too
-                ! large. Unscaled it gives an initial relative residual of 0.959; at the optimal
-                ! scale that becomes sqrt(1-corr^2) = 0.634, which is where the COLD solve arrives
-                ! only after 8 iterations and ~520 s. Skipped when the scale is not a finite
-                ! positive number, and the attempt=1,2 cold restart below still guards curvature.
+                ! Least-squares rescale of the warm start (relative residual -> sqrt(1-corr^2)); hp = B x0 is in
+                ! hand, so it costs three vector passes. Only for a finite positive scale; the cold restart still guards.
                 if( l_warm .and. ieee_is_finite(real(outcome%start_scale,dp)) .and. &
                     &outcome%start_scale > 0.0 )then
                     x     = outcome%start_scale * x
@@ -1813,14 +1766,9 @@ contains
 
     end subroutine cg_core
 
-    !> the M-step solve on one half. Budget 0 is the explicit gridding mode: the solution of the 1x
-    !! numerators (solve_coupled_basis_exp, deapodized) is delivered untouched. Any positive budget runs
-    !! CG on the 2x right-hand sides FROM ZERO, the production reconstruct3D_pcg convention. The gridding
-    !! solution is still formed there, but only as the reference the diagnostic log compares against: it is
-    !! this operator's block-Jacobi preconditioner applied to the numerators, so a cold CG's own first
-    !! iterate already lands essentially on it, while starting there would make a budget of n mean
-    !! "gridding plus n" and would carry an unprojected object into a projected solve.
-    !! On return the reconstructors carry E*u on the expanded lattice for the unchanged tail.
+    !> M-step solve on one half. maxits<=0 ships the gridding solution (solve_coupled_basis_exp); otherwise
+    !! CG on the 2x right-hand sides starts from it, masked to the support (cg_core rescales it).
+    !! Returns E*u on the expanded lattice.
     subroutine solve( self, Y, rho, rpk, maxits, rtol, outcome, tag )
         class(flex_pcg_t),     intent(inout) :: self
         type(reconstructor),   intent(inout) :: Y(:)
@@ -1832,7 +1780,7 @@ contains
         character(len=*), optional, intent(in) :: tag
         real, allocatable :: b(:,:,:,:), x(:,:,:,:), xgrid(:,:,:,:)
         real, pointer     :: rp(:,:,:)
-        integer  :: q, rho_lb(3), verbose, iwarm
+        integer  :: q, rho_lb(3), verbose
         real(dp) :: gnorm, dnorm, gdot
         integer(timer_int_kind) :: t0
         character(len=:), allocatable :: ttag
@@ -1845,16 +1793,8 @@ contains
         verbose = 0
         call cov_env_int('SIMPLE_COV_PCG_VERBOSE', verbose)
         allocate(x(self%box,self%box,self%box,self%ncomp))
-        ! The Y reconstructors are built by init_basis_reconstructor through the 3-argument
-        ! image%new (simple_flex_pca_em_fit.f90:641), and image%new DEFAULTS wthreads to .true.
-        ! (simple_image_core.f90:38) with plan_nthreads = nthr_glob. At box_crop >= 100 that means
-        ! every Y(q) carries a 16-thread FFTW plan, and solve then runs 2*ncomp of those transforms
-        ! in SERIAL loops (the ifft below and put_back's fft). That is the semaphore-bound
-        ! configuration measured harmful on this path: with threaded plans driven one transform at a
-        ! time, the master sat in os_sem_down inside libfftw3f_threads. Turning it off here rather
-        ! than at the constructor confines the change to the PCG backend, leaving the gridding
-        ! path's bit-identical-eigenvalue policy gate untouched. set_wthreads early-returns when the
-        ! flag already matches, so only the first solve pays the plan rebuild.
+        ! Y(q) transforms run one at a time below (ifft, put_back's fft), so use unthreaded FFTW plans:
+        ! threaded plans driven serially stalled in os_sem_down. Set here to leave the gridding path alone.
         do q = 1, self%ncomp
             call Y(q)%set_wthreads(.false.)
         end do
@@ -1880,8 +1820,6 @@ contains
             return
         endif
         if( .not. self%l_kernel ) THROW_HARD('kernels are not finalized; solve')
-        ! cold start (production convention). The zero iterate is trivially on the support, so no masking
-        ! of the start is needed; the gridding solution is kept only when the diagnostic is asked for.
         gnorm = 0._dp
         if( verbose > 0 )then
             allocate(xgrid, source=x)
@@ -1895,24 +1833,11 @@ contains
             endif
             gnorm = sqrt(self%dot_all(xgrid,xgrid))
         endif
-        ! Start iterate. The cold start is the production convention, and the zero iterate is
-        ! trivially on the support while the gridding solution is a full-box object that has to be
-        ! masked onto it first. But that gridding (block-Jacobi) solution has already been computed
-        ! above and then discarded, cg_core already carries the warm-start machinery (start_corr,
-        ! start_scale and the attempt=1,2 cold restart on indefinite curvature), and every box-128
-        ! solve so far has stopped on maxits at a relative residual near 0.6 starting from 1.0. When
-        ! the solve is truncated that far from convergence the initial iterate IS the budget, so
-        ! this is the one lever that cuts the iteration COUNT instead of the cost per iteration.
-        ! Opt-in until measured: SIMPLE_COV_PCG_WARM=1 starts from the masked gridding solution.
-        iwarm = 1   ! the scaled warm start is the estimator of record (measured 2026-09-14/16); no switch
-        if( iwarm > 0 )then
-            if( self%l_mask )then
-                do q = 1, self%ncomp
-                    x(:,:,:,q) = x(:,:,:,q) * self%mask
-                end do
-            endif
-        else
-            x = 0.0
+        ! warm start: the full-box gridding solution masked onto the support
+        if( self%l_mask )then
+            do q = 1, self%ncomp
+                x(:,:,:,q) = x(:,:,:,q) * self%mask
+            end do
         endif
         allocate(b(self%box,self%box,self%box,self%ncomp))
         call self%finalize_rhs(rpk, b)
@@ -1921,7 +1846,7 @@ contains
             gdot  = self%dot_all(x,xgrid)
             xgrid = x - xgrid
             dnorm = sqrt(self%dot_all(xgrid,xgrid))
-            write(logfhandle,'(A,A,A,I0,A,ES10.3,A,F8.4)') '>>> ', ttag, ' cold solve vs the gridding &
+            write(logfhandle,'(A,A,A,I0,A,ES10.3,A,F8.4)') '>>> ', ttag, ' warm-started solve vs the gridding &
                 &reference: iters=', outcome%iteration_count, '  ||x-xg||/||xg||=', &
                 &real(dnorm / max(gnorm, 1.0e-30_dp)), '  corr(x,xg)=', &
                 &real(gdot / max(sqrt(self%dot_all(x,x))*gnorm, 1.0e-30_dp))
@@ -2201,14 +2126,9 @@ contains
 
     ! ---------------- self-test ----------------
 
-    !> Four checks on a random Gaussian test volume at the given box. (A) operator: E Pi T Pi E u through
-    !! the doubled-coordinate kernels against the exact nonuniform-DFT Gram (the KB-interpolation Gram is
-    !! itself 18-22% off and is not a reference); (B) right-hand side: the 2x deposit of exact samples
-    !! against the exact adjoint; (C) box <= 32 only: a full preconditioned CG solve of T u = S^H y from
-    !! central-slice samples of the volume, recovery of the volume on a spherical support: the clean,
-    !! generously supported baseline by default; with sweep=.true. twelve solves over support size, sample
-    !! noise and the Tikhonov term, every clean one held to the baseline criterion. (D) the band-list
-    !! kernels and right-hand side against the dense fold, bitwise.
+    !> Self-test on a random volume: (A) kernel operator vs the exact nonuniform-DFT Gram; (B) 2x rhs deposit vs the
+    !! exact adjoint; (C) box <= 32: CG recovery from central-slice samples on a sphere (sweep: twelve solves over
+    !! support, noise and Tikhonov term); (D) band-list kernels and rhs vs the dense fold, bitwise.
     subroutine test_flex_pcg_operator( box, nsamples, l_pass, passes, sweep )
         integer, intent(in)  :: box, nsamples
         logical, intent(out) :: l_pass

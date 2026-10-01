@@ -1,37 +1,7 @@
 !@descr: terminate message of the persistent-worker protocol: the server orders a worker to shut down
-!==============================================================================
-! MODULE: simple_persistent_worker_message_terminate
-!
-! PURPOSE:
-!   Provides the concrete terminate message type sent by the queue-system server
-!   to persistent-worker processes to command an orderly shutdown.
-!
-!   When the server is stopping it replies to worker heartbeats with a terminate
-!   message.  Upon receipt, the worker finishes its current tasks and exits.
-!   The terminate message carries:
-!     - terminate_time  — UNIX timestamp at the moment of transmission
-!     - reason          — human-readable terminate reason
-!
-! DESIGN CONTRACT:
-!   serialise_qsys_persistent_worker_message_terminate inlines the three-statement
-!   TRANSFER body (deallocate / allocate(sizeof(self)) / transfer) rather
-!   than delegating to the base serialise procedure.  This is mandatory:
-!   sizeof() is resolved against the declared type of the dummy argument, so
-!   calling the base procedure would allocate only sizeof(qsys_persistent_worker_message_base)
-!   bytes and silently truncate the terminate_time and reason fields from the buffer.
-!   See simple_persistent_worker_message_base for the full design contract.
-!
-! USAGE:
-!   type(qsys_persistent_worker_message_terminate) :: term
-!   call term%new()
-!   term%terminate_time = int(time())
-!   term%reason         = 'Server shutting down'
-!   call term%serialise(buffer)
-!
-! DEPENDENCIES:
-!   simple_persistent_worker_message_base  — base type and serialise contract
-!   simple_persistent_worker_message_types — WORKER_TERMINATE_MSG enumerator
-!==============================================================================
+! Sent in reply to a heartbeat on server shutdown, scale-down, or an out-of-range worker_id/UID clash.
+! The worker then cancels its running tasks and exits. The listener's own kill sentinel uses the same code.
+! serialise() override: see simple_persistent_worker_message_base.
 module simple_persistent_worker_message_terminate
     use simple_defs,                            only: STDLEN
     use simple_persistent_worker_message_base,  only: qsys_persistent_worker_message_base
@@ -43,7 +13,7 @@ module simple_persistent_worker_message_terminate
 
     !> Terminate wire message sent by the server to a persistent worker to command shutdown.
     !> Carries the shutdown timestamp and a human-readable reason; the worker
-    !> finishes in-flight tasks and exits upon receipt.
+    !> cancels in-flight tasks and exits upon receipt.
     type, extends(qsys_persistent_worker_message_base) :: qsys_persistent_worker_message_terminate
         integer               :: terminate_time = 0   !< UNIX timestamp at time of transmission
         character(len=STDLEN) :: reason         = ''  !< human-readable terminate reason

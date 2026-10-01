@@ -1,12 +1,9 @@
 !@descr: library tests of the in-process stream stages: optics assignment, picking references, pick and extract
-! Moved from Ruben's stream test commanders (assign_optics, gen_pickrefs, pick_extract; 2026-08)
-! by the stream review (plan, section 9.7): the checks are his, now assertions, so one failed
-! check no longer ends the suite. Each test builds its fixture in a fresh directory under the
-! suite's working directory, runs the production stage or commander with the arguments the
-! stream gives it, and removes the directory when every check passed (it is kept, and named in
-! the log, when one failed). The stream's preprocessing stage submits worker jobs and stays a
-! workflow entry (stream_preproc); doc/refactoring_notes/stream_area_tests_handover.md says what
-! these tests should pin beyond counts and files.
+! Each test builds its fixture in a fresh directory under the suite's working directory, runs the
+! production stage or commander with the arguments the stream gives it, and removes the directory
+! only if every check passed (otherwise it is kept and logged). The preprocessing stage submits
+! worker jobs, so it stays a workflow test (stream_preproc). What these tests should pin beyond
+! counts and files: doc/refactoring_notes/stream_area_tests_handover.md.
 module simple_stream_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

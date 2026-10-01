@@ -1,18 +1,6 @@
 !@descr: GUI metadata type for a labelled histogram.
-!==============================================================================
-! MODULE: simple_gui_metadata_histogram
-!
-! PURPOSE:
-!   Extends gui_metadata_base with histogram fields:
-!     name    — display name for the histogram
-!     labels  — bin boundary / centre values (real, up to 512 bins)
-!     data    — bin counts (integer, same length as labels)
-!   Provides set/get for all fields and a jsonise override that emits
-!   the name, labels array, and data array as a JSON object.
-!
-! DEPENDENCIES:
-!   json_module, simple_defs, simple_error, simple_string, simple_gui_metadata_base
-!==============================================================================
+! Up to 512 bins of real labels and integer counts; jsonise emits {labels:[...], data:[...]} as an
+! object named after the histogram (name is the key, not a field).
 module simple_gui_metadata_histogram
 use json_module,              only: json_core, json_value
 use simple_defs,              only: SHORTSTRLEN

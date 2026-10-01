@@ -256,18 +256,9 @@ contains
         call simple_touch(CALCPSPEC_FINISHED)
     end subroutine partitioned_cleanup
 
-    !>  Computes the bootstrap sigma2 spectra and Fourier-space sums for a set of
-    !!  partitions and writes the two artifacts per partition that
-    !!  calc_pspec_assemble consumes. part_ids supplies the file index of each
-    !!  partition, part_ranges its [fromp,top].
-    !!
-    !!  Particle images are read once, in batches spanning the whole selection,
-    !!  independently of where the partition boundaries fall. Accumulation is
-    !!  partition-local: a batch is split into the contiguous runs it shares with
-    !!  each partition (sel_pinds is sorted and the ranges are disjoint), and each
-    !!  run reduces into that partition's sum, so no two partitions ever contend.
-    !!  Particles outside the bootstrap sample keep a zero spectrum; the assemble
-    !!  step compensates via sig2_mul.
+    !>  Bootstrap sigma2 spectra (scaled by sig2_mul; unsampled particles stay zero) and Fourier sums of the partitions
+    !!  part_ids, ranges part_ranges, written per partition for calc_pspec_assemble. Images are read once in batches over
+    !!  the selection; each batch reduces per partition run (sel_pinds sorted, ranges disjoint), so partitions never contend.
     subroutine compute_pspec_partitions( params, build, part_ids, part_ranges, sel_pinds, sig2_mul )
         use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
         type(parameters), intent(in)    :: params

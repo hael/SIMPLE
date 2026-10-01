@@ -12,7 +12,7 @@ use simple_flex_pca_deconv,        only: calibrate_noise_scale, deconvolve_laten
 use simple_flex_pca_rounds,        only: flex_pca_rounds, flex_pca_rounds_shmem, flex_pca_half_of, &
     &PCA_STAGE_STATES, PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_POLISH, FLEX_FIT_ALL, FLEX_FIT_A, FLEX_FIT_B
 use simple_flex_pca_em,         only: cov_env_int_pub, compose_basis_from_runs, compose_cut_reembed, &
-    &build_covariance_eigenbasis, embed_latents_with_contrast, probe_worker_pass, embed_worker_pass, &
+    &embed_latents_with_contrast, probe_worker_pass, embed_worker_pass, &
     &estimate_covariance_mean, probe_subspace_iteration, align_basis_to_reference, &
     &save_probe_state, run_flex_pca_paired, &
     &init_basis_reconstructor
@@ -46,8 +46,8 @@ public :: auto_box_crop, auto_min_neff, auto_state_count
 public :: write_embedding_cache, read_embedding_cache, place_states_with_population_floor
 public :: FLEX_AUTO_K_START, FLEX_AUTO_K_MIN
 
-!> Over-provisioning level for npreimages=0. Bounded by cost, not accuracy: 24 and 32 converge to
-!! the same answer, while gate 2 compares K(K-1)/2 map pairs.
+!> Cap and floor of auto_state_count (tester only; preimage_auto's ceiling is AUTO_NSTATES). The cap
+!! is bounded by cost: gate 2 of the state merge compares K(K-1)/2 map pairs.
 integer, parameter :: FLEX_AUTO_K_START = 32
 integer, parameter :: FLEX_AUTO_K_MIN   = 8
 !> Nyquist margin for a derived box_crop; columns are selected inside that band.
@@ -73,8 +73,7 @@ integer,          parameter :: MIN_NSTATES       = 3
 ! npreimages is a PROVISION CEILING, not a target: state placement lays down that many kernels and
 ! the two-gate merge collapses the indistinct ones, so the recovered K is only ever <= it.
 ! preimage_auto=yes raises that ceiling to AUTO_NSTATES and turns the merge on, since over-provisioning
-! is the only regime in which the merge can recover K at all. Measured on Ribosembly: ceiling 32 with
-! the complete-linkage merge recovered 14 states at ARI 0.947 (14/16 GT states covered).
+! is the only regime in which the merge can recover K at all.
 integer,          parameter :: AUTO_NSTATES      = 32
 
 contains
@@ -135,11 +134,8 @@ contains
         endif
 
         neigs_req  = max(1, min(48, params%neigs))
-        ! No ceiling on the state count: over-provisioning is the only regime in which the merge recovers K.
-        ! npreimages=0 selects the automatic ceiling; anything else is taken as the requested ceiling.
-        ! npreimages is the ceiling; preimage_auto raises it and enables the collapse that makes a
-        ! ceiling meaningful. An explicit npreimages alongside preimage_auto=yes is honoured as the
-        ! ceiling -- auto then contributes only the merge.
+        ! npreimages = state ceiling (>= MIN_NSTATES); preimage_auto=yes raises it to AUTO_NSTATES unless
+        ! npreimages is given, and turns the merge on.
         nstates = max(MIN_NSTATES, params%npreimages)
         ! population floor (min_state_frac > 0): exactly npreimages hard-labelled states, each above
         ! the floor; it cannot be combined with the automatic ceiling or the two-gate merge
@@ -219,13 +215,8 @@ contains
         call get_environment_variable('SIMPLE_COV_COMPOSE', envc, envlen_c, envstat_c)
         l_compose = envstat_c == 0 .and. envlen_c > 0
 
-        ! ---- THE FIT: two disjoint mod-4-half fits, resident together and advanced by one shared
-        ! master loop, then the merge, then ONE all-N embedding against the merged basis (the
-        ! combine-then-polish convention: no restart, frozen rank and axes). Placed after
-        ! estimate_covariance_mean so the read-once env caches are set exactly as on the compose
-        ! path; the full-selection mean_rec built above is not consumed -- each fit owns a mean
-        ! scaled on its own half. A distributed WORKER never enters the driver: it falls through to
-        ! the worker control flow, routed by the probe-state file's paired dispatch stamp.
+        ! Paired fit (every non-compose run): two mod-4-half fits advanced together, merged, polished once,
+        ! embedded on all N.
         block
             real(dp), allocatable :: mergecos(:)
             if( .not. l_compose .and. .not. rounds%is_worker() )then
@@ -239,14 +230,7 @@ contains
                         &m_matchcos=mergecos, rounds=rounds)
                     if( .not. allocated(basis_recs) .or. ncomp < 1 ) &
                         &THROW_HARD('paired merge returned no merged basis')
-                    ! ---- FSC-DOCTRINE AXIS WEIGHTING: the per-axis cross-half match cosine is an FSC-per-component,
-                    ! and SIMPLE's house treatment of reproducibility is per-shell WEIGHTING,
-                    ! never hard truncation -- fsc2optlp doctrine, merged-estimate correction
-                    ! w = 2c/(1+c) (Rosenthal-Henderson). Axes below the 0.143 information
-                    ! floor are dropped (nothing is there); everything else is down-weighted
-                    ! through its prior variance, which handles a smooth no-cliff spectrum
-                    ! (measured on 10028) the way hard thresholds cannot. 0.5 remains the
-                    ! REPORTING bar for interpretable axes, logged per component below.
+                    ! Axis weight from cross-half match cosine c: prior variance x 2c/(1+c), ~0 below 0.143.
                     block
                         integer  :: qq
                         real(dp) :: cq, wq
@@ -275,48 +259,43 @@ contains
                             call flush(logfhandle)
                         endif
                     end block
-                    ! ---- FULL-SET POLISH: after the merge froze rank, axes and convergence on the
-                    ! half pair, ONE unmonitored full-selection EM iteration from the merged basis
-                    ! (the eo-combine-then-polish convention). Depth stays at 1: deeper polish has no
-                    ! held-out signal and was measured to erode the island (2026-09-01 harness).
-                    ! Writes under the polished namespace so the per-fit deliveries stay intact.
+                    ! Full-set polish: one unmonitored full-selection EM iteration from the merged basis, written
+                    ! under the polished namespace so the per-fit deliveries stay intact.
                     block
                         integer, parameter :: NPOLISH = 1
-                        if( .true. )then
-                            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MERGE POLISH: ', &
-                                &NPOLISH,' full-selection EM iteration(s) over ',nptcls, &
-                                &' particles from the merged basis'
-                            call flush(logfhandle)
-                            ! materialize the ENTRY basis under the polished namespace BEFORE the
-                            ! loop: a distributed round-1 worker loads the current basis from disk
-                            ! (the stamped prefix), and the merged basis lives only in memory here
-                            ! -- the merged eigenvolumes on disk carry the same content, so copy
-                            ! them into the polished names (they are overwritten every iteration
-                            ! by fit_iter_finish thereafter)
-                            block
-                                type(image)  :: vcp
-                                type(string) :: fsrc, fdst
-                                integer :: qcp
-                                call vcp%new([params%box_crop,params%box_crop,params%box_crop], &
-                                    &params%smpd_crop)
-                                do qcp = 1, ncomp
-                                    fsrc = 'flex_pca_merged_pc'//int2str_pad(qcp,3)//MRC_EXT
-                                    fdst = 'flex_pca_polished_pc'//int2str_pad(qcp,3)//MRC_EXT
-                                    if( file_exists(fsrc) )then
-                                        call vcp%read(fsrc)
-                                        call vcp%write(fdst, del_if_exists=.true.)
-                                    endif
-                                    call fsrc%kill; call fdst%kill
-                                end do
-                                call vcp%kill
-                            end block
-                            call probe_subspace_iteration(params, build, mean_rec, basis_recs, &
-                                &eigvals, sig2_eff, pinds, nptcls, ncomp, NPOLISH, &
-                                &fprefix='flex_pca_polished_pc', &
-                                &meta_fname='flex_pca_probe_polished.txt', rounds=rounds)
-                            call save_probe_state(ncomp, eigvals, sig2_eff, &
-                                &fname='flex_pca_probe_polished.txt')
-                        endif
+                        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MERGE POLISH: ', &
+                            &NPOLISH,' full-selection EM iteration(s) over ',nptcls, &
+                            &' particles from the merged basis'
+                        call flush(logfhandle)
+                        ! materialize the ENTRY basis under the polished namespace BEFORE the
+                        ! loop: a distributed round-1 worker loads the current basis from disk
+                        ! (the stamped prefix), and the merged basis lives only in memory here
+                        ! -- the merged eigenvolumes on disk carry the same content, so copy
+                        ! them into the polished names (they are overwritten every iteration
+                        ! by fit_iter_finish thereafter)
+                        block
+                            type(image)  :: vcp
+                            type(string) :: fsrc, fdst
+                            integer :: qcp
+                            call vcp%new([params%box_crop,params%box_crop,params%box_crop], &
+                                &params%smpd_crop)
+                            do qcp = 1, ncomp
+                                fsrc = 'flex_pca_merged_pc'//int2str_pad(qcp,3)//MRC_EXT
+                                fdst = 'flex_pca_polished_pc'//int2str_pad(qcp,3)//MRC_EXT
+                                if( file_exists(fsrc) )then
+                                    call vcp%read(fsrc)
+                                    call vcp%write(fdst, del_if_exists=.true.)
+                                endif
+                                call fsrc%kill; call fdst%kill
+                            end do
+                            call vcp%kill
+                        end block
+                        call probe_subspace_iteration(params, build, mean_rec, basis_recs, &
+                            &eigvals, sig2_eff, pinds, nptcls, ncomp, NPOLISH, &
+                            &fprefix='flex_pca_polished_pc', &
+                            &meta_fname='flex_pca_probe_polished.txt', rounds=rounds)
+                        call save_probe_state(ncomp, eigvals, sig2_eff, &
+                            &fname='flex_pca_probe_polished.txt')
                     end block
                     write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MERGED EMBED: all-N pass over ', &
                         &nptcls,' selected particles (both halves) against the ',ncomp, &
@@ -356,6 +335,7 @@ contains
             endif
         end block
 
+        ! reached by compose runs only: the paired block above delivers or aborts every other run
         if( .not. l_paired_states )then
         block_eigenbasis: block
 
@@ -367,21 +347,6 @@ contains
                 write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA composed basis: ',ncomp, &
                     &' components; no covariance moment, no EM (n_probe_iters ignored)'
                 call flush(logfhandle)
-            else
-            call build_covariance_eigenbasis(params, build, mean_rec, pinds, nptcls, &
-                &col_sep, neigs_req, basis_recs, eigvals, ncomp, sig2_eff, rounds=rounds)
-            if( state_axis > 0 ) state_axis = min(state_axis, min(ncomp, nkern))
-            write(logfhandle,'(A,I0)') '>>> FLEX_PCA retained covariance components=',ncomp
-            call flush(logfhandle)
-
-            ! Optional Wiener E-step / weighted-backprojection M-step, to clean the noisy column directions.
-            if( params%n_probe_iters > 0 )then
-                call probe_subspace_iteration(params, build, mean_rec, basis_recs, eigvals, sig2_eff, &
-                    &pinds, nptcls, ncomp, params%n_probe_iters, rounds=rounds)
-                if( state_axis > 0 ) state_axis = min(state_axis, min(ncomp, nkern))
-                write(logfhandle,'(A,I0)') '>>> FLEX_PCA probe-refined components=',ncomp
-                call flush(logfhandle)
-            endif
             endif   ! l_compose
             allocate(z(nptcls,ncomp), prior_precision(ncomp))
             allocate(latent_second(ncomp,ncomp,nptcls))
@@ -469,13 +434,7 @@ contains
                 &dist_out=kdist, bfloor_out=kfloor, comp_rho=comp_rho, macro_in=deconv_labels)
         endif
 
-        ! ---- OCCUPANCY FLOOR ----
-        ! min_neff is the minimum EFFECTIVE sample size of a state; until 2026-09-12 it only set the
-        ! kernel bandwidth, so a seat that ended up with a handful of particles was still reconstructed.
-        ! Measured on 10028: two of eight delivered states held 232 and 284 particles and their box-360
-        ! maps were reconstruction artifacts (directional striping, a uniform amplitude offset), while
-        ! every state above the floor was a clean map. A state below the floor carries no information
-        ! its macro-cluster does not already carry, so it is dropped before any map is reconstructed.
+        ! Drop states below min_neff before reconstruction (they gave artefact maps).
         call prune_underpopulated_states(nptcls, nstates, min_neff, state_weights, targets, &
             &bandwidths, neff, labels, kdist, kfloor)
 
@@ -746,8 +705,7 @@ contains
             &THROW_HARD('flex_pca requires populated even and odd halfsets')
     end subroutine validate_covariance_inputs
 
-    !> Cost of the requested state count in resident reconstructors. REPORT ONLY: a former hard 64 GB
-    !! refusal blocked runs that fit and missed ones that did not.
+    !> Cost of the requested state count in resident reconstructors. REPORT ONLY.
     subroutine report_state_memory( params, nstates )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nstates
@@ -767,11 +725,6 @@ contains
             &process x ',nproc,' processes = ',gb,' GB machine-wide'
         write(logfhandle,'(A)') '>>> FLEX_PCA the knobs that move it are npreimages (linear) and &
             &box_crop (cubic)'
-        ! the reconstructors rarely hurt: the reduced solve's accumulator is sized against COV_ATHR_BUDGET,
-        ! likewise per process, so a distributed run multiplies it by nproc. SIMPLE_COV_DTILDE moves it.
-        if( params%nparts > 1 ) write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the reduced-solve &
-            &accumulator is also per process; at nparts=',params%nparts,' it is paid that many times &
-            &over. Cap it with SIMPLE_COV_DTILDE if the machine is tight.'
         call flush(logfhandle)
     end subroutine report_state_memory
 
@@ -801,7 +754,7 @@ contains
             ! fromp/top to every particle so the table covers the whole project, restore after):
             ! esig%new also registers the table with the polar calculator; a bare allocate of the
             ! component inside a never-constructed object leaves the consumers with an
-            ! inconsistent object (gate crash in the mean-stage prep, 2026-09-08)
+            ! inconsistent object
             params%fromp = 1
             params%top   = noris
             call build%esig%new(params, build%pftc, string('flex_pca_unit_sigma2.dat'), params%box)
@@ -835,13 +788,13 @@ contains
 
     !> Calibrate the per-particle noise (from the even/odd half solutions when the run has them,
     !! else from the scale file the original run wrote) and replace z / precision by the posterior
-    !! means / precisions under the deconvolved mixture prior. applied=.false. when SIMPLE_COV_DECONV=0.
+    !! means / precisions under the deconvolved mixture prior.
     subroutine apply_latent_deconvolution( z, precision, eigvals, zhalf, pinds, nptcls, ncomp, applied, labels, &
         &contrast, resid_energy, resid_mean_energy, sig2_eff, resume, adopted, srcdir, srcfile )
         integer,  intent(in)    :: pinds(:), nptcls, ncomp
         integer, allocatable, optional, intent(inout) :: labels(:)   !< mixture component per particle
-        !> with these present the deconvolved coordinates are cached to flex_pca_embedding_deconv.bin
-        !! (same layout as the raw cache) so a resume adopts them instead of deconvolving again
+        !> not read: the deconvolved block is appended to flex_pca_embedding.bin (append_deconv_block);
+        !! flex_pca_embedding_deconv.bin is only read, as the cache of older runs
         real(dp), optional, intent(in)  :: contrast(:), resid_energy(:), resid_mean_energy(:), sig2_eff
         logical,  optional, intent(in)  :: resume
         logical,  optional, intent(out) :: adopted
@@ -1266,7 +1219,7 @@ contains
         integer :: q, u
         fn = 'flex_pca_eigenvalues.txt'
         if( present(fname) ) fn = trim(fname)
-        ! the eigenvolume MRCs are written by form_eigenbasis_from_reduced; only the table is written here
+        ! only the eigenvalue table is written here; the eigenvolume MRCs are not
         call del_file(fn)
         open(newunit=u,file=fn,status='replace',action='write')
         write(u,'(A)') '# component eigenvalue'
@@ -1522,10 +1475,8 @@ contains
         write(u,'(A,I0)') 'minimum_state_neff=',min_neff
         write(u,'(A)') 'half_maps=combined_even_odd'
         write(u,'(A)') 'validation=inspect_half_map_agreement_nuisance_correlations_and_heldout_residuals'
-        ! ---- cross-fit-FSC provenance (spec par.4.2): a run whose fits consumed the crossfsc
-        ! ridge is marked COUPLED, because the coupling deflates the cross-fit statistic's
-        ! independence the same bounded way gold-standard FSC regularization does. Lines appear
-        ! only when SIMPLE_COV_XFSC_REG is set, so the default manifest is unchanged.
+        ! cross-fit-FSC provenance, always written (the ridge is hard-wired on): COUPLED, because the ridge
+        ! deflates the cross-fit statistic's independence as gold-standard FSC regularization does
         write(u,'(A,I0)') 'crossfsc_reg_mode=',1
         write(u,'(A,L1)') 'crossfsc_coupled=',.true.
         close(u)
@@ -1561,7 +1512,7 @@ contains
         mn = max(20, min(nptcls, max(n_snr, n_occ)))
     end function auto_min_neff
 
-    !> Over-provisioned starting count for npreimages=0; see the call site for why 32 and not more.
+    !> Over-provisioned state count: FLEX_AUTO_K_START, capped by nptcls/(4*min_neff) and floored at FLEX_AUTO_K_MIN.
     pure integer function auto_state_count( nptcls, min_neff ) result( k )
         integer, intent(in) :: nptcls, min_neff
         k = FLEX_AUTO_K_START

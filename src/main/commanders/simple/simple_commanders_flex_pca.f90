@@ -7,27 +7,13 @@ implicit none
 
 ! 2*smpd_crop is the working Nyquist; the 1.25 safety factor keeps the covariance band clear of it
 real,    parameter :: COV_LP_OVER_NYQUIST   = 2.5
-!> default target sampling (flex_pca_envelope_support.md 2.2): working Nyquist 4.4 A, so helical pitch
-!! (5.4 A) and strand separation (4.8 A) sit inside the lattice; open question 6 of the note
-real,    parameter :: COV_LP_DEFAULT = 16.0   !< default variance resolution (A): box 64 on every project of the 2026-09 campaign; the helix regime (4.5 A) waits for the memory work
-!> smallest working box (the former fixed default)
+real,    parameter :: COV_LP_DEFAULT = 16.0   !< default lp (A); smpd_target = lp / COV_LP_OVER_NYQUIST
+!> smallest working box
 integer, parameter :: COV_MINBOX = 64
 
-!> rec_backend=pcg defaults: iteration cap and true relative-residual tolerance of the flex solves.
-!! These MATCH the flex_pca UI declaration, so a UI-driven launch and a command line without the keys
-!! run the same estimator (they did not before: the UI said 20/1e-3 while this said 2/0).
-!!
-!! Production's refine3D/abinitio3D budget of 2 does NOT transfer. Both flex solve kinds converge far
-!! more slowly than a single-volume refinement solve, measured on PfCRT (box 100 covariance, box 300
-!! states) with the cold start: the coupled M-step leaves a relative residual of 0.78 after 2
-!! iterations and 0.028 after 20, and the state solves leave 0.07-0.09 after 5 and 0.033-0.036 after
-!! 20. The FSC prior in the operator does not change that (0.81 vs 0.78 at 2 iterations). So the cap
-!! is 20 and the two stop rules do the work: rtol on the true residual and the FLEX_PCG_XTOL=1.5e-2
-!! diminishing-returns stop on dx/x, which is armed only when rtol > 0. On PfCRT neither fires before
-!! the cap (dx/x is still 3-4% at 20); on an easier problem they end the solve early.
-!! Cold state solves still take max(maxits_pcg, FINAL_PCG_MAXITS_FLOOR=5), which now only binds when
-!! maxits_pcg=0 is passed explicitly to select the gridding estimator for the basis.
-integer, parameter :: FLEX_PCG_MAXITS_DEFAULT = 4      ! 2026-09-16: warm-started; ladder {2,4,8} pending (plan section 6)
+!> rec_backend=pcg defaults: fixed 4-iteration budget of the warm-started basis M-step (rtol=0 disarms the rtol
+!! and FLEX_PCG_XTOL stops). NOTE: differs from the UI defaults (gridding, 20, 1e-3). State solves use FLEX_PCG_STATE_MAXITS.
+integer, parameter :: FLEX_PCG_MAXITS_DEFAULT = 4
 real,    parameter :: FLEX_PCG_RTOL_DEFAULT   = 0.0
 
 type, extends(commander_base) :: commander_flex_pca
@@ -50,8 +36,8 @@ contains
         call apply_flex_pca_defaults(cline)
         strategy = create_flex_pca_strategy(cline)
         call strategy%initialize(params, build, cline)
-        ! canonical sigma state (origin/master, 2026-09): validated or rebuilt from particle power
-        ! before any sigma read; the master process only, workers consume the state it wrote
+        ! canonical sigma state: validated or rebuilt from particle power before any sigma read;
+        ! the master process only, workers consume the state it wrote
         if( .not. cline%defined('part') )then
             call ensure_canonical_sigma_state(params, build, cline)
             ! the fallback's decision travels to the part scripts (job_descr was captured at initialize)
@@ -106,15 +92,13 @@ contains
         call apply_flex_pca_pcg_defaults(cline)
     end subroutine apply_flex_pca_defaults
 
-    !> rec_backend=pcg (doc/implementation_notes/flex_pca_envelope_support.md, step 1): the state maps
-    !! and the coupled M-step run on reconstructor_pcg, every positive budget from a ZERO start, capped
-    !! at maxits_pcg with rtol and the dx/x stop doing the work; maxits_pcg=0 is the budget-0 gate that
-    !! ships the gridding solution unchanged.
+    !> rec_backend=pcg defaults: the coupled M-step on the PCG operator, warm-started from the gridding solution
+    !! and capped at maxits_pcg; maxits_pcg=0 ships the gridding solution unchanged. The state maps follow
+    !! rec_states_backend (default gridding), not rec_backend.
     subroutine apply_flex_pca_pcg_defaults( cline )
         class(cmdline), intent(inout) :: cline
         type(string) :: backend
-        ! the masked PCG M-step is the default basis estimator (2026-09-16: 10 vs 3-5 reproducible
-        ! components on the 10180 selection, sharper leading modes on 10028); gridding stays an option
+        ! the masked PCG M-step is the default basis estimator; gridding stays an option
         if( .not.cline%defined('rec_backend') ) call cline%set('rec_backend', 'pcg')
         backend = cline%get_carg('rec_backend')
         if( trim(backend%to_char()) /= 'pcg' )then
@@ -274,13 +258,9 @@ contains
         call vol1%kill
     end subroutine pickup_project_consensus_volume
 
-    ! Resolve lp and box_rec from project geometry; neither overrides an explicit command-line value.
-    !> Step 0 of flex_pca_envelope_support.md: the working box follows a target sampling distance
-    !! (refine3D's autoscale on magic boxes, floor COV_MINBOX, never finer than the data) instead of a
-    !! fixed box_crop=64. Precedence: an explicit box_crop is an override (tests); else smpd_target;
-    !! else an explicit lp sets smpd_target = lp / COV_LP_OVER_NYQUIST so a requested band gets the
-    !! lattice that carries it; else COV_SMPD_TARGET_DEFAULT. Called on the master before params%new
-    !! so the workers inherit box_crop through the command line.
+    !> Working box from a target sampling distance (refine3D's autoscale on magic boxes, floor COV_MINBOX, never
+    !! finer than the data). Precedence: explicit box_crop, else lp / COV_LP_OVER_NYQUIST, else smpd_target, else
+    !! COV_LP_DEFAULT / COV_LP_OVER_NYQUIST (also sets lp). Master-only, before params%new; workers inherit box_crop.
     subroutine derive_flex_pca_sampling( cline )
         use simple_magic_boxes, only: autoscale
         class(cmdline), intent(inout) :: cline
@@ -302,7 +282,7 @@ contains
         call projfile%kill
         if( box < 1 .or. smpd <= 0. ) return
         ! lp is the one user-facing key (the resolution to which the variance is resolved); smpd_target
-        ! stays as an expert alias and box_crop as the override (2026-09-16)
+        ! is an expert alias and box_crop the override
         if( cline%defined('lp') )then
             smpd_target = cline%get_rarg('lp') / COV_LP_OVER_NYQUIST; src = 'lp / 2.5'
         else if( cline%defined('smpd_target') )then
@@ -330,6 +310,7 @@ contains
         call flush(logfhandle)
     end subroutine derive_flex_pca_sampling
 
+    ! Resolve lp and box_rec from project geometry; neither overrides an explicit command-line value.
     ! Called on the master before params%new so the workers inherit the resolved numbers.
     subroutine derive_flex_pca_band( cline )
         class(cmdline), intent(inout) :: cline

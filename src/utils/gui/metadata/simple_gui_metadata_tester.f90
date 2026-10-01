@@ -1,29 +1,6 @@
 !@descr: Unit tests for all gui_metadata types — lifecycle, serialisation, and JSON serialisation
-!==============================================================================
-! MODULE: simple_gui_metadata_tester
-!
-! PURPOSE:
-!   Exercises every public gui_metadata type through three test tiers:
-!     set/get   — verify that all fields round-trip correctly
-!     serialise — verify the binary transfer buffer is the expected size
-!     jsonise   — verify the JSON output via FNV-1a hash (for deterministic
-!                 types) or a non-empty length check (for types that embed
-!                 a live Unix timestamp)
-!   Types covered:
-!     gui_metadata_base, gui_metadata_micrograph, gui_metadata_histogram,
-!     gui_metadata_timeplot, gui_metadata_optics_group, gui_metadata_cavg2D,
-!     gui_metadata_vol3D, gui_metadata_ptcl, gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
-!     gui_metadata_stream_update, gui_metadata_stream_picking (initial and
-!     reference picking), gui_metadata_stream_opening2D,
-!     gui_metadata_stream_particle_sieving, gui_metadata_stream_pool2D,
-!     gui_metadata_stream_pool2D_snapshot
-!
-! ENTRY POINT:
-!   run_all_gui_metadata_tests() — run every test in this module
-!
-! DEPENDENCIES:
-!   simple_test_utils, simple_gui_metadata_api
-!==============================================================================
+! Per type: set/get round-trip, serialise (buffer length = sizeof) and jsonise. The JSON is pinned
+! by a fixed FNV-1a hash where the output is deterministic, otherwise by its length only.
 module simple_gui_metadata_tester
   use simple_test_utils,       only: assert_true, assert_int, assert_char
   use simple_gui_metadata_api

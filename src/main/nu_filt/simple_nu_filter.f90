@@ -1,29 +1,8 @@
 !@descr: volume-domain nonuniform filtering of even/odd volumes
-!
-! Static low-pass bank sequence:
-!    call setup_nu_dmats(vol_even, vol_odd, mskdiam, [real ::])
-!    call optimize_nu_cutoff_finds()
-!    call nu_filter_vols(vol_even_filt, vol_odd_filt)
-!    call cleanup_nu_filter()
-!
-! The static ladder plus the auxiliary (ML-regularized) pair is the only
-! mechanism (2026-09-18, the shell walk removed): the bank is the fixed
-! ladder lowpass_limits, capped at fsc/NU_BANK_FSC_HEADROOM of the base pair
-! when an FSC is supplied, and the auxiliary (ML-regularized) pair is one more
-! member of the bank beside the finest retained rung, competing with it voxel
-! by voxel at zero prior cost (2026-09-18). This is the machinery of commit
-! ed36eb4c's abinitio3D, with the auxiliary competing instead of replacing,
-! shared by refine3D_auto and postprocess_nu.
-!
-! One rule for every workflow (2026-09-19), with the base pair's FSC=0.143
-! resolution as the only input: the ladder is cut at fsc/NU_BANK_FSC_HEADROOM
-! (rungs at or coarser than the cut, never fewer than two); the ML-regularized
-! pair, carrying its FSC=0.143 resolution, joins the bank the moment that is
-! at or beyond the ladder's finest rung at the box, appended as the last
-! label at the finest rung's Potts coordinate; and the finest member of the
-! bank (the last label) is the matching low-pass handoff for the next
-! iteration. Which labels win voxels decides the filter, never the band.
-!
+! Sequence: setup_nu_dmats -> optimize_nu_cutoff_finds -> nu_filter_vols -> cleanup_nu_filter.
+! Bank: static ladder lowpass_limits, cut at fsc_res/NU_BANK_FSC_HEADROOM when given (>= 2 rungs);
+! an auxiliary (ML) pair at or beyond the finest retained rung is appended at that rung's Potts coordinate.
+! The last label is the finest member and the matching low-pass handoff.
 module simple_nu_filter
 use simple_core_module_api
 use simple_image, only: image
@@ -36,7 +15,6 @@ implicit none
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
           set_nu_solvent_envelope, clear_nu_solvent_envelope, &
           set_nu_evidence_null_shell, clear_nu_evidence_null_shell, &
-          retain_nu_filter_setup, nu_filter_setup_is_retained, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, analyze_filtmap_neighbor_continuity,&
@@ -46,10 +24,9 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
-          nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
-          print_nu_evidence_lowpass_histogram,&
+          NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
-          expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
+          assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
           NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC,&
           NU_EVIDENCE_MAX_NULL_FRAC, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
@@ -57,30 +34,12 @@ private
 #include "simple_local_flags.inc"
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
-! FSC-anchored candidate cap of the STATIC bank (2026-09-08; nu_refine=no
-! only since 2026-09-11). The competition prices a finer candidate by the
-! noise it admits from the other half, which holds for a gridding pair
-! (white noise to Nyquist) but not for a spectrally regularized pair
-! (truncated CG, P_tau), whose damped high-frequency modes make every finer
-! candidate nearly free wherever the halves share content -- on PfCRT the
-! finest bank label was populated at a 6 A FSC and the matching band was
-! pinned there (since addressed at the root by the like-for-like coarse-to-
-! fine selection, 2026-09-08). Given the pair's FSC=0.143 resolution, the
-! static bank keeps only candidates coarser than fsc/NU_BANK_FSC_HEADROOM
-! (1.5x finer than the FSC, about two ladder labels). Absent an FSC (the
-! standalone nu_filt3D program) the bank is uncapped. The shell walk that
-! used to extend the bank beyond the ladder (nu_refine=yes) was removed on
-! 2026-09-18; the static ladder plus the auxiliary pair is the only
-! mechanism, in every workflow. The finest retained rung is also the
-! matching band (2026-09-19): the cut bounds the lead of the band over the
-! FSC, 1.25-1.5x with this ladder (the uncapped July 2026 ladder led by up
-! to 2x and froze 2 of 10 PfCRT restarts; a band at the FSC itself starved
-! the alignment and converged 1 of 9).
+! Static-bank cap: with fsc_res, keep rungs at or coarser than fsc_res/NU_BANK_FSC_HEADROOM (>= 2);
+! without it (nu_filt3D, flex_pca) the bank is uncapped. Above the two-rung floor the cap bounds the
+! handoff's lead over the FSC; rationale in doc/policies/NU/nonuniform_filtering_policy.md sections 8, 12.
 real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
 ! Hard cap on mask-packed distance-matrix columns retained for NU optimization.
 integer,          parameter   :: NU_DMAT_CANDIDATE_CAP                = 24
-integer,          parameter   :: NU_HIGHRES_EXTENSION_RETAIN_STRIDE    = 2
-integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM            = 2
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
 ! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF
@@ -99,16 +58,8 @@ real,             parameter   :: NU_OBJECTIVE_UNARY_CAP           = 1. / epsilon
 ! one-step retained-bank transitions are tolerated, larger jumps are penalized.
 integer,          parameter   :: DISCONT_STEP_THRESH         = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 6
-! Adjacent retained-bank coordinate jumps are tolerated by the ordered-label
-! Potts prior; the quadratic hinge makes larger jumps increasingly expensive.
-! The coordinate is the discrete ladder position for the static labels and
-! the FINEST ladder position for every candidate finer than the ladder
-! (2026-09-13): the walked shells share the finest discrete member's
-! coordinate, so the hinge prices ladder jumps only and never a walk. Before,
-! each accepted shell was one more integer coordinate, so a voxel n shells
-! ahead of a neighbour parked on the finest static label paid (n-1)+(n-1)^2
-! for a filter that is nearly identical to its neighbour's, and the
-! post-extension cleanup pulled the walk's leading edge back label by label.
+! Adjacent ladder-coordinate jumps are tolerated by the ordered-label Potts prior; the linear-quadratic
+! hinge prices larger ones. The auxiliary label shares the finest rung's coordinate (setup_nu_candidate_coords).
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
@@ -146,66 +97,33 @@ real,             parameter   :: NU_ENVMASK_MIN_NULL_FRAC     = 0.02
 ! Columns are allocated with huge() and compaction can leave stale members behind,
 ! so evidence comparisons must ignore anything at that magnitude.
 real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
-! Four broad support bands are the compact interface between the full NU unary
-! bank and the future replay precision.  Confidence in successive entries means
-! reproducible detail is supported through 20, 12, 8, and 5 A respectively.
-! The sets are nested, so the packed confidences must be monotonically
-! non-increasing from coarse to fine.
+! Static nested support bands of the compact evidence state: entry b is the confidence that reproducible
+! detail is supported through 20, 12, 8, 5 A, so entries are non-increasing from coarse to fine.
 integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
 real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
-! Adaptive band granularity (pcg_priors_history.md Stage 6.6, final form): the band
-! ladder is derived from the ACTUAL candidate bank at evidence-build time --
-! the static four bands when the bank is the discrete ladder (abinitio3D's
-! mode), extended geometrically only over candidates the nu_refine shell walk
-! has ACCEPTED (refine3D_auto with nu_refine=yes, mirroring the gridding
-! path's proven challenger: strict unary win-fraction at the frontier, one
-! shell at a time). No band can exist without a challenger-validated probe.
-integer,          parameter   :: NU_EVIDENCE_MAX_NBANDS      = 8    !< band-count cap (cost: 2 padded FFT pairs per band per Q_NU application)
+! Evidence bands beyond the static four are appended at NU_EVIDENCE_BAND_RATIO steps while the finest
+! signal candidate reaches the next boundary, up to NU_EVIDENCE_MAX_NBANDS; the 4 A ladder floor lies
+! above the first one (3.2 A), so in practice the four static bands apply.
+integer,          parameter   :: NU_EVIDENCE_MAX_NBANDS      = 8    !< band-count cap
 real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric step, matching the 20->12->8->5 spacing
-!> Evidence-gated retention (belt-and-braces behind the challenger gate): an
-!! appended band is KEPT only if its mean support reaches this fraction;
-!! otherwise it is pruned finest-first so a zero-support subdivision
-!! self-neutralizes to the static ladder (measured over-suppression on 1WCM,
-!! pcg_priors_history.md S6.6 record).
+!> an appended band is kept only if its mean support reaches this fraction (pruned finest-first)
 real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
-!> Adaptive matching low-pass support gate. The promoted cutoff is the finest
-!! value for which this percentage of assigned non-null support selected that
-!! cutoff or a finer one. PCG combines it with explicit FSC shell headroom so
-!! sparse evidence cannot deadlock matching, while one extreme voxel cannot
-!! set the global bandwidth. The nu_refine=no PCG compatibility path retains
-!! its historical raw-finest handoff. Strength mirrors the shell walk's
-!! the retired shell walk's acceptance rule.
+!> Default gate of get_nu_filtmap_finest_selected_lp: the finest cutoff selected (it or finer) by at
+!! least this percentage of the assigned voxels. Diagnostic; the flex_pca nufilt report uses this default.
 real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
-! Matching-bandwidth handoff floor relative to the SIGNAL voxels of the NU
-! mask (mask minus the solvent/background clamp), 2026-09-13: the finest label
-! whose cumulative population (that label or finer) reaches this fraction of
-! the signal voxels sets the matching low-pass. The retired 5% gate above was
-! relative to the whole mask, of which the coarsest background clamp can be
-! 40% (aldolase: 157k of 412k), which is why it pinned PfCRT at 5-6 A. The raw
-! finest label (0%) let 54 voxels of 412k set the band at 3.37 A against a
-! 3.62 A map, and from iteration 2 on 4-36 seeded remnant voxels flipped it
-! between 3.52 and 3.57 A while cFAR decayed 0.70 -> 0.55. Since 2026-09-19
-! the handoff is the finest member of the bank and both population
-! statistics (this floor and the raw finest label) are diagnostics on the
-! handoff line only (the flex_pca report still quotes the floor).
+! Diagnostic only: finest label whose cumulative population reaches this % of the signal voxels
+! (mask minus the background clamp), quoted on the NU MATCHING LOW-PASS HANDOFF line.
+! The handoff itself is the finest bank member (get_nu_filter_bank_finest_lp).
 real,             parameter   :: NU_ALIGN_LP_MIN_SIGNAL_PCT   = 1.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 ! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,
 ! postprocess_nu commander): classical shrink-then-sharpen, localized by the
 ! evidence. One Guinier B-factor inside the evidenced local passband; no user
-! gain knob. The v1 band-gain constants (MAX_GAIN etc.) were removed with the
-! v1 design after the PfCRT over-sharpening record.
+! gain knob.
 real,             parameter   :: NU_SHARP_BFAC_FINEST_A = 5.0 !< Guinier sharpening only when the finest evidenced cutoff is finer (mirrors the standard postprocess lp<5A gate)
-! Replay-readiness contract, both directions. The generous spherical support
-! always contains substantial solvent AND substantial molecule, so a compact
-! state whose explicit null wins less than the floor (the zero-null failure
-! mode) or more than the ceiling (the saturated-null failure mode observed on
-! streptavidin when the offset was a median+3MAD detection threshold) marks a
-! failed null calibration, not a property of the specimen. The replay must
-! hard-error rather than attach an uncalibrated precision. Provisional (R9),
-! anchored to the simple_test_nu_envmask fixture (retired 2026-09-23) and the 2026-08-27
-! streptavidin run; recalibrate against real-data operating points before
-! relaxing.
+! Readiness bounds of the compact evidence state (assert_nu_evidence_replay_ready): the generous
+! sphere always holds solvent and molecule, so an explicit-null fraction outside [MIN, MAX] is a
+! failed null calibration. Provisional; recalibrate against real-data operating points before relaxing.
 real,             parameter   :: NU_EVIDENCE_MIN_NULL_FRAC = 0.01
 real,             parameter   :: NU_EVIDENCE_MAX_NULL_FRAC = 0.90
 character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
@@ -216,22 +134,16 @@ character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v1'
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
-! Raw (unsmoothed) mask-packed unaries of every candidate, kept for the
-! coarse-to-fine selection in optimize_nu_cutoff_finds (2026-09-08): a finer
-! candidate is compared with the incumbent at the finer candidate's own
-! smoothing scale, both smoothed alike, which the per-candidate radii of
-! dmats_mask cannot provide. Released with dmats_mask.
+! Raw (unsmoothed) mask-packed unaries of every candidate, for the like-for-like selection in
+! optimize_nu_cutoff_finds, which dmats_mask's per-candidate radii cannot give. Released with dmats_mask.
 real,             allocatable :: raw_dmats_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
-! Raw, unsmoothed unary costs kept for envelope masking. dmats_mask is smoothed at
-! candidate-dependent radii (30 A for the coarsest member, 6 A for the finest),
-! which is right for label selection but wrong for locating a boundary: it blurs
-! the coarse baseline five times harder than its competitors and erodes the
-! envelope inward on a 30 A scale. The envelope therefore gets its own evidence
-! from these, smoothed once, symmetrically, at a scale the caller chooses.
+! Raw coarsest-candidate (nu_ev_base) and best-candidate (nu_ev_best) unaries for envelope masking:
+! dmats_mask's per-candidate radii (30 A for the coarsest) would erode the boundary, so
+! calc_nu_evidence_margin smooths their difference once at the caller's scale.
 real,             allocatable :: nu_ev_base(:)
 real,             allocatable :: nu_ev_best(:)
 logical,          allocatable :: nu_lmask(:,:,:)
@@ -258,36 +170,14 @@ logical :: nu_l_solvent_clamp = .false.
 ! envelope (automsk=yes background policy, derived in the same evidence
 ! pass). Part of the frozen-evidence identity via the provenance string.
 character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
-! Null model of the NU evidence envelope (policy 2026-09-09), two regimes:
-! - SPHERICAL base pair (gridding, PCG bootstrap): the null is the robust
-!   median/MAD of the margin over the observed support, where solvent is
-!   the majority population by construction of the generous sphere. No
-!   shell is set; nu_calib_lmask and nu_null_lmask stay unallocated.
-! - ENVELOPE-CONSTRAINED base pair (PCG under automsk=yes): the estimator
-!   has removed the far solvent, so the margin there is an exact zero
-!   spike, not a noise sample, and the remaining support is not a
-!   solvent-majority mixture. The null is then designated by Euclidean
-!   geometry instead of estimated from a mixture: the dilation ring of the
-!   density envelope (dilated minus core, at full weight of the base
-!   support) is solvent by construction, and the median/MAD are taken
-!   there. Labels are free on the observed density envelope
-!   (nu_calib_lmask) and fixed solvent outside it, so the evidence
-!   envelope is nested inside the density envelope.
-! Packed on the setup support; set after setup_nu_dmats, cleared by
-! cleanup_nu_filter.
+! Evidence-envelope null. Spherical base pair: margin median/MAD over the observed support (no shell).
+! Envelope-constrained pair (set_nu_evidence_null_shell): null on the density envelope's dilation
+! ring at full base-support weight; labels free only on the observed density envelope.
 logical, allocatable :: nu_calib_lmask(:) !< labels free here; fixed solvent elsewhere
 logical, allocatable :: nu_null_lmask(:)  !< null statistics estimated here (the Euclidean shell)
 integer :: n_nu_calib = 0
 integer :: n_nu_null  = 0
-! Setup retention across two NU consumers of the same base pair (pcg_priors_history.md
-! dev item 4 dedup; historically the removed Q_NU evidence phase followed by
-! the matching-reference generation): both run on the same base pair with the same optimized, extended,
-! solvent-clamped setup when nu_refine=yes -- the evidence phase may retain
-! its setup for the matching pass instead of tearing it down, and the
-! matching pass consumes it and cleans up. State-indexed because the module
-! holds one setup; cleanup_nu_filter always clears the retention.
-integer :: nu_retained_setup_state = 0 !< 0 = nothing retained
-integer :: nu_bank_cap_find = 0 !< FSC-anchored static-bank cap in Fourier shells; 0 = uncapped (always with nu_refine=yes)
+integer :: nu_bank_cap_find = 0 !< FSC-anchored static-bank cap in Fourier shells; 0 = uncapped (no fsc_res)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
@@ -295,12 +185,10 @@ integer :: nu_smooth_norm_radius = -1
 real    :: smpd, nu_support_mskdiam = 0.
 logical :: nu_l_report = .true.
 ! Opt-in diagnostics for NU-filter development. Keep normal runs concise; this
-! flag restores the detailed candidate, shell-extension, and continuity logs.
+! flag restores the detailed candidate, smoothing, and continuity logs.
 logical :: NU_DEV_OUTPUT = .false.
-! Cache of the radial raw E/O noise profile that whitens the Huber unary
-! objective (see image::nu_objective_noise_profile). Computed once per
-! setup_nu_dmats and reused across all shell-extension challenges so the
-! per-shell median/MAD pass is not paid repeatedly.
+! Radial raw E/O noise profile that whitens the Huber unary (image::nu_objective_noise_profile),
+! computed once per setup_nu_dmats and reused by build_nu_evidence_state for its null candidate.
 real, allocatable :: nu_noise_profile_cached(:)
 real    :: nu_noise_rmax_cached = 0.
 integer :: nu_aux_replacement_label = 0
@@ -354,9 +242,8 @@ type :: nu_envmask_stats
     logical :: l_null_valid     = .true. !< the null is trusted: majority (mixture) or sufficient shell (Euclidean)
 end type nu_envmask_stats
 
-! Public scalar metadata for a frozen NU evidence state.  The large packed
-! arrays remain private in nu_evidence_state and can only be copied out through
-! unpack_nu_evidence_state, preventing accidental mutation between half replays.
+! Public scalar metadata for a frozen NU evidence state. The packed arrays stay private in
+! nu_evidence_state; unpack_nu_evidence_state copies them out, so consumers cannot mutate the state.
 type :: nu_evidence_summary
     logical :: valid = .false.
     integer :: ldim(3) = 0
@@ -374,8 +261,7 @@ type :: nu_evidence_summary
     real    :: null_bias_median = 0.
     real    :: null_bias_mad = 0.
     real    :: null_bias_threshold = 0.
-    ! band count is adaptive (Stage 6.6): NU_EVIDENCE_NBANDS static entries,
-    ! plus frontier-tracked extensions up to NU_EVIDENCE_MAX_NBANDS
+    ! NU_EVIDENCE_NBANDS static entries plus appended bands, up to NU_EVIDENCE_MAX_NBANDS
     real, allocatable :: supported_fraction(:)
     real, allocatable :: band_limits(:)
     character(len=32) :: source = ''
@@ -407,23 +293,14 @@ interface
         integer, intent(in) :: ilabel
     end function nu_label_is_aux_replacement
 
-    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, fsc_res )
+    module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
         class(image), intent(in) :: vol_even, vol_odd
-        integer, optional, intent(in) :: n_highres_steps
         real,    optional, intent(in) :: fsc_res
     end subroutine init_nu_filter
 
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report
     end subroutine set_nu_filter_report
-
-    module logical function keep_nu_highres_extension_step( istep, finest_step )
-        integer, intent(in) :: istep, finest_step
-    end function keep_nu_highres_extension_step
-
-    module integer function count_nu_highres_extension_retained_steps( nsteps )
-        integer, intent(in) :: nsteps
-    end function count_nu_highres_extension_retained_steps
 
     module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
         class(string), intent(in) :: cache_prefix
@@ -463,17 +340,9 @@ interface
     module subroutine clear_nu_evidence_null_shell
     end subroutine clear_nu_evidence_null_shell
 
-    module subroutine retain_nu_filter_setup( state )
-        integer, intent(in) :: state
-    end subroutine retain_nu_filter_setup
-
     module subroutine apply_nu_solvent_clamp( n_clamped )
         integer, optional, intent(out) :: n_clamped
     end subroutine apply_nu_solvent_clamp
-
-    module logical function nu_filter_setup_is_retained( state, box_expected )
-        integer, intent(in) :: state, box_expected
-    end function nu_filter_setup_is_retained
 
     module subroutine cleanup_aux_bank
     end subroutine cleanup_aux_bank
@@ -527,33 +396,17 @@ interface
         real, intent(inout) :: packed(:)
     end subroutine pack_nu_full_to_mask
 
-    module subroutine unpack_nu_dmat_candidate( icand, dmat_full )
-        integer, intent(in)  :: icand
-        real,    intent(out) :: dmat_full(:,:,:)
-    end subroutine unpack_nu_dmat_candidate
-
     module subroutine cache_filtered_vols( vol_even, vol_odd )
         class(image), intent(in) :: vol_even, vol_odd
     end subroutine cache_filtered_vols
 
-    module subroutine generate_single_filtered_pair( vol_even, vol_odd, cutoff_find, even_cache_fname, odd_cache_fname )
-        class(image),  intent(in) :: vol_even, vol_odd
-        integer,       intent(in) :: cutoff_find
-        class(string), intent(in) :: even_cache_fname, odd_cache_fname
-    end subroutine generate_single_filtered_pair
-
-    module subroutine delete_cached_filtered_pair( cutoff_find )
-        integer, intent(in) :: cutoff_find
-    end subroutine delete_cached_filtered_pair
-
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, evidence_source, fsc_res )
+            &evidence_source, fsc_res )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        integer,     optional, intent(in) :: n_highres_steps
         character(len=*), optional, intent(in) :: evidence_source
         real,        optional, intent(in) :: fsc_res !< pair FSC=0.143 resolution in A; caps the bank
     end subroutine setup_nu_dmats
@@ -570,16 +423,8 @@ interface
         integer, intent(in) :: ilabel, n_base
     end function nu_potts_coord_for_label
 
-    module integer function count_nu_walked_label_voxels( candmap, n_base )
-        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        integer, intent(in) :: n_base
-    end function count_nu_walked_label_voxels
-
     module real function get_nu_filter_bank_finest_lp()
     end function get_nu_filter_bank_finest_lp
-
-    module integer function get_nu_filtmap_highres_shell_depth()
-    end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
     end subroutine optimize_nu_cutoff_finds
@@ -600,10 +445,6 @@ interface
     module real function nu_candidate_coord_for_label( ilabel )
         integer, intent(in) :: ilabel
     end function nu_candidate_coord_for_label
-
-    module integer function nu_effective_base_label_for_candidate( icand, n_base )
-        integer, intent(in) :: icand, n_base
-    end function nu_effective_base_label_for_candidate
 
     ! In submodule: simple_nu_filter_evidence.f90
     module subroutine build_nu_evidence_state( vol_even, vol_odd, state )
@@ -631,23 +472,9 @@ interface
         real,    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
     end subroutine unpack_nu_evidence_state
 
-    module real function nu_evidence_finest_supported_lp( state, min_pct )
-        type(nu_evidence_state), intent(in) :: state
-        real,                    intent(in) :: min_pct
-    end function nu_evidence_finest_supported_lp
-
     module subroutine print_nu_evidence_summary( state )
         type(nu_evidence_state), intent(in) :: state
     end subroutine print_nu_evidence_summary
-
-    module subroutine print_nu_evidence_lowpass_histogram( state )
-        type(nu_evidence_state), intent(in) :: state
-    end subroutine print_nu_evidence_lowpass_histogram
-
-    module subroutine expand_nu_evidence_band_weights( state, band_w )
-        type(nu_evidence_state), intent(in)  :: state
-        real, allocatable,       intent(out) :: band_w(:,:,:,:)
-    end subroutine expand_nu_evidence_band_weights
 
     module subroutine assert_nu_evidence_replay_ready( state )
         type(nu_evidence_state), intent(in) :: state
@@ -700,12 +527,9 @@ interface
 
 
     ! In submodule: simple_nu_filter_apply.f90
-    !> The filtered even/odd references from the current label field. Without
-    !! an apply pair they are composed from the cached filtered candidates of
-    !! the pair the competition ran on; with vol_apply_even/odd (2026-09-21,
-    !! pcg_solvent=yes) the label field derived on that pair is applied to
-    !! the apply pair instead, per label, and the auxiliary label is filled
-    !! from the auxiliary pair as always.
+    !> Filtered even/odd references from the current label field: composed from the cached candidates of
+    !! the competition pair or, given vol_apply_even/odd (pcg_solvent=yes), from that pair filtered per label.
+    !! The auxiliary label is filled from the auxiliary pair in both cases.
     module subroutine nu_filter_vols( vol_even, vol_odd, vol_apply_even, vol_apply_odd )
         class(image),           intent(out) :: vol_even, vol_odd
         class(image), optional, intent(in)  :: vol_apply_even, vol_apply_odd

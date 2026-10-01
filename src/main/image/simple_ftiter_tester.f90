@@ -1,9 +1,7 @@
 !@descr: unit tests for the Fourier index iterator (simple_ftiter): loop limits, logical/physical addressing, resolution conversions
-! Replaces the in-module test_ftiter/test_addr (private access, a duplicated block, a stop at the first
-! failure). Loop limits and address maps for even, odd and non-square 2D and 3D boxes; the low-pass
-! limits, symmetric in the third dimension of a volume since 2026-09-25 (they ran from l = 0, so a
-! volume correlation or low-pass product saw half of the half-space); every dimension takes the
-! Fourier scale of the first, as the whole Fourier layer indexes isotropically.
+! Loop limits and address maps for even, odd and non-square 2D and 3D boxes. The 3D low-pass limits
+! are symmetric in l (guards a range starting at l = 0, which saw half of the half-space). Every
+! dimension takes the Fourier scale of the first, as the whole Fourier layer indexes isotropically.
 module simple_ftiter_tester
 use simple_test_utils
 use simple_defs

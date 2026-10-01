@@ -1,30 +1,8 @@
 !@descr: NU-evidence-driven envelope masking for volume-domain nonuniform filtering
-!
-! The NU unary is a cross-half prediction error. In solvent the two half maps are
-! uncorrelated at every bandwidth, so no candidate can beat the coarsest one and
-! the per-voxel improvement over that baseline concentrates near zero. Inside real
-! density the objective has a genuine minimum at the local SNR crossover, so the
-! improvement is positive and large. That improvement, not the selected label, is
-! the statistic this submodule segments on:
-!
-!     margin(v) = dmats_mask(v, coarsest) - min over candidates of dmats_mask(v, c)
-!
-! The optional scale-free form is baseline / best - 1, with a robust cost
-! floor. Unlike a fractional reduction, this ratio remains compatible with an
-! unbounded median-plus-MAD decision threshold.
-!
-! The selected label is a poor substitute: the coarsest bank member is a saturating
-! bin that absorbs both solvent and genuinely coarse density, and taking the argmin
-! discards the confidence.
-!
-! Segmentation is a binary MRF solved with the same parallel 8-color ICM schedule
-! the ordered-label Potts prior uses. beta regularizes boundary area only; it does
-! not enforce a connected result. Topology is applied by the connected component
-! and morphology tail in simple_image_msk: piecewise callers invoke it themselves
-! after nu_evidence_envelope, while write_nu_evidence_envmask runs the complete
-! evidence -> segmentation -> topology -> artifact chain as the one shared
-! producer for every workflow that regenerates the envelope from live evidence.
-!
+! Segments margin = max(0, raw C_coarsest - min_c raw C_c) (nu_ev_base/nu_ev_best), smoothed once at
+! lp_smooth; optional scale-free base/best - 1 with a robust floor. Binary MRF by 8-colour ICM (beta =
+! boundary area only); topology in simple_image_msk. write_nu_evidence_envmask is the workflow producer
+! (nu_filt3D runs the steps itself). Derivation: doc/algorithms/nu_evidence_envelope_mask.md.
 submodule (simple_nu_filter) simple_nu_filter_envmask
 implicit none
 #include "simple_local_flags.inc"

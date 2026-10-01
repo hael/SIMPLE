@@ -286,9 +286,9 @@ contains
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
 
-    !> pair_stem (optional): the project volume the _even_unfil/_odd_unfil
-    !! pair sits beside when fname_vol is a map derived from it (imgkind=unfil
-    !! or solvent), so the cutoff still comes from that pair.
+    !> Isotropic postprocess: cutoff = FSC=0.143 (FSC file, else the _unfil pair); Guinier B (lp < 5 A) from
+    !! the _unfil pair average, capped at the cutoff shell; sqrt(2FSC/(1+FSC)) unless provenance says ML-shrunk;
+    !! Butterworth at the cutoff; no mask if the support is already in the map. pair_stem: _unfil pair stem.
     subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state, pair_stem )
         use simple_butterworth, only: butterworth_filter
         use simple_vol_pproc_policy,    only: state_mask_is_compatible
@@ -320,16 +320,7 @@ contains
         ldim = [box,box,box]
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
-        ! Isotropic postprocess protocol (2026-09-21, the postprocess_nu v2
-        ! recipe with one cutoff; FSC weighting settled 2026-09-26): the
-        ! cutoff is the FSC=0.143 of the reconstruction's FSC file (the base
-        ! pair's curve, envfsc-corrected where that applies; with the solvent
-        ! prior it is the prior-free pair's), or, when no file is given, of
-        ! the unfiltered pair beside the map computed here; one Guinier
-        ! B-factor of the unfiltered pair average between HPLIM_GUINIER
-        ! (10 A, RELION's autob_lowres) and that cutoff; sharpen; the FSC
-        ! weighting exactly once; Butterworth low-pass at the cutoff, composed
-        ! like the NU filter's rungs. No density-windowed pair estimate.
+        ! protocol and its measurements: doc/policies/3D/refine3D_policy.md section 11
         has_fsc   = .false.
         do_envfsc = .false.
         res = vol_bfac%get_res()
@@ -389,13 +380,7 @@ contains
         else
             lplim = params%lp
         endif
-        ! B-factor: one Guinier slope inside the passband the low-pass below
-        ! will keep, estimated on the UNFILTERED pair average whenever it is
-        ! there. A regularized (Wiener/P_tau) map carries its prior's
-        ! amplitude suppression, which steepens the slope and drives the
-        ! estimate far too negative (2026-09-21: -150 on streptavidin from
-        ! the shipped closed-form map, against -77 to -83 from unregularized
-        ! maps); the map is only the fallback, with that caveat
+        ! B from the unfiltered pair: a regularized map's prior steepens the Guinier slope (map = fallback only)
         if( cline%defined('bfac') )then
             ! already in params%bfac
         else if( lplim < 5. )then
@@ -416,13 +401,7 @@ contains
             call vol_unfil%kill
             call vol_unfil_odd%kill
         endif
-        ! What kind of estimate the map is, from the support-provenance
-        ! sidecar beside it: an ML-regularized map (PCG solve_kind=regularized,
-        ! gridding with ml_reg) already carries the FSC weighting, since its
-        ! prior shrank every Fourier component by rho/(rho + <rho>/(tau*SSNR)),
-        ! ~FSC per shell (the half-map Wiener filter), voxelwise by sampling.
-        ! A pair average of imgkind=unfil|solvent, a base or mixed solve, an
-        ! unregularized gridding map and a foreign map carry none.
+        ! an ML-regularized map (provenance solve_kind) already carries ~FSC shrinkage per shell from its prior
         prov_solve_kind = ''
         call read_support_provenance(fname_vol, l_prov_constrained, l_prov_found, &
             &solve_kind=prov_solve_kind, l_kind_found=l_prov_kind)
@@ -431,41 +410,21 @@ contains
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
-        ! The sharpening stops at the cutoff shell: beyond it every shell
-        ! keeps the cutoff shell's gain exp(-B s_c^2/4) and the Butterworth
-        ! alone decides what is left. There is no signal beyond the cutoff to
-        ! restore, and at fine pixels exp(-B s^2/4) outgrows the order-8
-        ! Butterworth from ~1.5 x the cutoff on (2026-09-28, exp_gate at
-        ! 0.822 A/pixel, Nyquist shell: x45 at B -108, x3.4 at -80 uncapped).
+        ! sharpening held at the cutoff shell's gain beyond it: exp(-B s^2/4) would outgrow the Butterworth
         lp_find  = max(1, min(box/2, calc_fourier_index(lplim, box, smpd)))
         cap_gain = 1.
         if( params%bfac < 0. )then
             call vol_bfac%apply_filter(bfac_cap_filter(vol_bfac%get_filtsz(), box, smpd, params%bfac, lp_find))
             cap_gain = exp(-(params%bfac / 4.) * (real(lp_find) / (real(box) * smpd))**2)
         endif
-        ! Close the sharpening: the FSC weighting exactly once, then the
-        ! Butterworth at the FSC=0.143 cutoff (the same filter as the NU
-        ! filter's rungs). The weighting is RELION's (postprocessing.cpp
-        ! applyFscWeighting, Rosenthal & Henderson 2003), sqrt(2FSC/(1+FSC)),
-        ! applied only to a map that does not carry one: 2026-09-22 added the
-        ! Wiener 2FSC/(1+FSC) on top of the regularized map's own ~FSC
-        ! shrinkage, which left 0.036 of the amplitude at FSC=0.143 and
-        ! over-smoothed every map.
+        ! FSC weighting (RELION's sqrt(2FSC/(1+FSC))) exactly once: not on a map its prior already shrank
         if( has_fsc .and. .not. l_ml_shrunk )then
             optlp = fsc2cref(fsc)
             where( res < TINY ) optlp = 0.
             call vol_bfac%apply_filter(optlp)
             call vol_no_bfac%apply_filter(optlp)
         endif
-        ! The Butterworth covers the Fourier shells up to Nyquist and no
-        ! further: apply_filter zeroes every component beyond size(filter),
-        ! i.e. the corners of the Fourier cube out to sqrt(3) x Nyquist, where
-        ! apply_bfac's exp(-B s^2/4) is largest. A box-sized array reached
-        ! them with the Butterworth's k^-8 tail only (2026-09-27, exp_gate at
-        ! 0.822 A/pixel: corner gain ~1e5 at B -80 and ~1e8 at B -108, the
-        ! noise cloud outside the molecule on the classical path; the FSC
-        ! weighting, sized to the FSC, had been zeroing them, and the NU
-        ! sharpening's filters are Nyquist-sized).
+        ! Nyquist-sized: apply_filter zeroes shells beyond size(filter), the cube corners where the B gain peaks
         allocate(bwfilter(vol_bfac%get_filtsz()), source=0.)
         call butterworth_filter(lp_find, bwfilter)
         call vol_bfac%apply_filter(bwfilter)
@@ -486,15 +445,7 @@ contains
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)
-        ! Masking is a post-hoc operation and is disabled for every volume
-        ! that already carries its support from the reconstruction: the PCG
-        ! solve support, and since 2026-09-09 the gridding restoration, which
-        ! applies the same soft spherical support after deapodization and
-        ! records it in the support-provenance sidecar beside the volume. A
-        ! volume without that record (an imported map, a standalone
-        ! postprocess of foreign halves) gets the classical mask below. This
-        ! also keeps derived _pproc/_mirr maps from silently changing the
-        ! estimator after reconstruction.
+        ! no post-hoc mask when the support is already in the map (PCG, or a support-provenance record)
         l_support_at_source = trim(params%rec_backend) == 'pcg' .or. l_prov_found
         call vol_bfac%ifft()
         if( l_support_at_source )then
@@ -573,7 +524,7 @@ contains
         ! imgkind=unfil|solvent: postprocess the average of a half pair
         ! beside the project volume, written as <vol>_unfil.mrc or
         ! <vol>_solvent.mrc: the unfiltered (prior-free base) pair, or the
-        ! solvent-prior'd base pair of pcg_solvent=yes (2026-09-21), for
+        ! solvent-prior'd base pair of pcg_solvent=yes, for
         ! comparison with the shipped regularized map. The cutoff still comes
         ! from the _unfil pair beside the project volume (pair_stem).
         pair_stem = fname_vol

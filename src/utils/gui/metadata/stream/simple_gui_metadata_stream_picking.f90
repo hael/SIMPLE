@@ -1,24 +1,6 @@
-!@descr: GUI metadata for the stream initial-picking stage — micrograph counts, particle yield, and import timestamp
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_picking
-!
-! PURPOSE:
-!   Extends gui_metadata_base with counters specific to the initial particle-
-!   picking stage of the cryo-EM streaming pipeline.  Tracks the number of
-!   micrographs imported, accepted, and rejected; the number of extracted
-!   particles; the average yield per micrograph; and the Unix timestamp of
-!   the most recently imported micrograph.
-!
-! TYPES:
-!   gui_metadata_stream_picking — extends gui_metadata_base
-!     set()     — assign all fields from caller-supplied values
-!     get()     — retrieve all fields; returns the l_assigned flag
-!     jsonise() — serialise to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   unix, json_kinds, json_module, simple_string, simple_defs,
-!   simple_gui_metadata_base
-!==============================================================================
+!@descr: GUI metadata for the stream picking stages — micrograph counts, particle yield, and import timestamp
+! Serves both initial picking (p03) and reference picking (p04). set() derives micrographs_rejected
+! and particles_per_mic, and stamps last_micrograph_imported (Unix time) when the import count changes.
 module simple_gui_metadata_stream_picking
   use unix,                     only: c_long, c_time
   use json_kinds

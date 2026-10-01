@@ -1,21 +1,7 @@
 !@descr: flex per-state weight files: identity, science validation, transactions, delivery and loading
-!!
-!! Domain layer over simple_flex_weights_file (the bytes). Builder-free, like simple_sigma2_state:
-!! callers pass the project and the particle field explicitly. The particle-layout identity is the
-!! canonical sigma2 digest of the SAME project field (lineage + ordered stack reference and stack
-!! index per physical row, `state` excluded), so the weight files and a sigma2 store of one project
-!! agree on what "row i" means.
-!!
-!! One file per delivered state (`flex_weights_state_NNN.bin`), registered in the project's out
-!! segment as imgkind `flex_weights` with the state index, beside `vol_flex` state NNN, so the
-!! workflow's per-state selection and removal apply to the weights as they do to the maps.
-!!
-!! Producer path (flex_pca master, once per run): flex_weights_deliver scatters the run's
-!! selection-indexed weight table onto the full layout, writes one candidate per state, validates
-!! each file and the set, then publishes them. Consumer path: flex_weights_consumable +
-!! flex_weights_load_state (one state) or flex_weights_load_all (every registered state).
-!! The worker range protocol (write_local_range / merge_local_ranges) has no producer yet:
-!! flex_pca is master-computes, workers-read.
+!! Builder-free layer over simple_flex_weights_file; row identity = canonical sigma2 layout digest of the same field.
+!! Producer: flex_weights_deliver (validate the set, then publish). Consumers: flex_weights_consumable +
+!! flex_weights_load_state / flex_weights_load_all. The range merge has no producer yet.
 module simple_flex_weights_state
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, int64, real32, real64

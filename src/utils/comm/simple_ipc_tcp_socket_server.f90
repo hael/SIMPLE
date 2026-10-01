@@ -1,17 +1,7 @@
 !@descr: TCP listener that owns the server socket and a listener thread, with request/reply helpers for accepted connections
-!==============================================================================
-! MODULE: simple_ipc_tcp_socket_server
-!
-! PURPOSE:
-!   TCP listener wrapper used by SIMPLE components. It owns the server socket,
-!   starts a listener pthread, and provides thin request/reply helpers for
-!   accepted connections.
-!
-! DESIGN NOTES:
-!   - listener_args is passed by pointer to the listener pthread.
-!   - The mutex in listener_args is owned by the caller of this module.
-!   - kill() unblocks accept() using a localhost sentinel connection, then joins.
-!==============================================================================
+! Binds the first free port in TCP_PORT_MIN..TCP_PORT_MAX on INADDR_ANY and runs the caller's
+! listener function in a pthread with a listener_args pointer; the caller initialises and destroys
+! its mutex. kill() unblocks accept() with a localhost sentinel connection, then joins.
 module simple_ipc_tcp_socket_server
   use iso_c_binding
   use unix,          only: c_pthread_t, c_pthread_mutex_t,                    &

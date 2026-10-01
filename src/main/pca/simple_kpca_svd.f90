@@ -263,9 +263,8 @@ contains
                     iter              = 1
                     do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                         norm_prev(:,ithr) = norm_data(:,ithr)
-                        ! non-negative weights only (as the RBF rule clips the projected kernel column and the
-                        ! Nystroem cosine rule clips the cosines): with sign-mixed weights and an L1 denominator
-                        ! the iteration flipped direction and never converged (2026-09-23)
+                        ! non-negative weights only, as in the RBF branch: with sign-mixed weights and an
+                        ! L1 denominator the iteration flips direction and does not converge
                         proj_data(:,ithr) = max(0., ker_col(:,ithr)) * max(0., matmul(norm_pcavecs_t, norm_prev(:,ithr)))
                         denom = sum(real(proj_data(:,ithr),dp))
                         if( denom < DTINY ) exit
@@ -497,7 +496,7 @@ contains
         gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,1:q_used)
         call self%dense_mm(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used), alpha(:,1:q_used))
         ! the columns of alpha are sqrt(lambda_k) v_k, the kernel-PCA projections, stored as the features
-        ! exactly as the exact backend stores them (2026-09-23; they were the unit-norm v_k before)
+        ! exactly as the exact backend stores them
         self%eigvals = eig_q
         self%E_zn = 0.
         if( q_used > 0 ) self%E_zn(1:q_used,1:self%N) = transpose(alpha(:,1:q_used))

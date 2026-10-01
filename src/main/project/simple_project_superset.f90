@@ -1,26 +1,8 @@
 !@descr: abinitio3D_addon superset relation of a current and a frozen project: identity, frozen/cohort membership, masking and restoration
-! The two projects share one particle index space: row i names the same image
-! in both wherever both hold a row i. They may differ in size. The current
-! project may extend the frozen one by appended rows (a stream adding particle
-! sets after the base run), and the frozen project may run past the current
-! project's last row as long as no frozen particle lies there. Equal row counts
-! and stack tables would not prove that row i is the same image, so every
-! shared row is resolved through map_ptcl_ind2stk_ind in ptcl2D and ptcl3D and
-! must name the same stack file and physical image, with the same stack
-! geometry (and the same denoised source image when the solution was
-! reconstructed from ptcl_src=den), and the frozen rows the same CTF
-! parameters. Appended rows must come from stacks the frozen project does not
-! hold, so that no image enters the union twice.
-! Membership is defined once:
-!   frozen = frozen ptcl3D state > 0 .and. updatecnt > 0
-!   cohort = current ptcl2D state > 0 .and. .not. frozen (appended rows included)
-! The cohort is labelled into the inherited states by balanced labelling, so
-! the per-state floor holds exactly when every state receives at least
-! MIN_COHORT_STATE_POP of ncohort/nstates.
-! Masking sets state 0 in ptcl2D and ptcl3D of the working copy for the frozen
-! rows after saving the current ptcl2D states; restoration transfers the
-! frozen project's 3D records back (transfer_3Dparams plus the state) and
-! restores the saved ptcl2D states.
+! Current and frozen projects share row indices; shared rows must name the same image (and CTF/optics
+! for frozen rows), appended rows come from new stacks. frozen = frozen ptcl3D state>0 & updatecnt>0;
+! cohort = current ptcl2D state>0 & not frozen. mask zeroes frozen rows; restore brings them back.
+! Contract: doc/policies/3D/abinitio3D_addon_policy.md sec. 4.
 module simple_project_superset
 use simple_core_module_api
 use simple_sp_project, only: sp_project

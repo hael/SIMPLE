@@ -1,25 +1,7 @@
 !@descr: SIMPLE worker backend submission/environment manager module
-!==============================================================================
-! MODULE: simple_qsys_persistent_worker
-!
-! PURPOSE:
-!   Provides the qsys_base-derived submission type for the SIMPLE worker
-!   backend.  A qsys_persistent_worker object holds an environment key-value store
-!   that maps job-description keys to worker-script header directives, and
-!   writes those directives into per-job bash scripts.
-!
-!   The actual TCP server (task queues, heartbeat loop, listener pthread)
-!   lives in simple_persistent_worker_server.  The module-level pointer
-!   worker_server is the shared handle to that server; it is allocated and
-!   managed by simple_qsys_env.
-!
-! PUBLIC TYPES:
-!   qsys_persistent_worker   — submission/environment manager, extends qsys_base
-!
-! PUBLIC VARIABLES:
-!   worker_server — pointer to the shared persistent_worker_server instance;
-!                   allocated/managed by simple_qsys_env, not by this module
-!==============================================================================
+! Writes job-description keys as header directives into per-job scripts. The TCP server lives in
+! simple_persistent_worker_server; its shared handle persistent_worker%server is allocated by
+! simple_qsys_env and never touched here.
 module simple_qsys_persistent_worker
     use simple_core_module_api
     use simple_persistent_worker_server, only: persistent_worker_server
@@ -150,8 +132,7 @@ contains
     end subroutine write_worker_array_header
 
     !> Destructor: release the environment key-value store.
-    !> The shared worker_server is owned by simple_qsys_env; teardown
-    !> must be performed there, not here.
+    !> persistent_worker%server belongs to simple_qsys_env; do not tear it down here.
     subroutine kill_worker_env( self )
         class(qsys_persistent_worker), intent(inout) :: self
         call self%env%kill()

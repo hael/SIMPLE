@@ -75,24 +75,9 @@ contains
         end do
     end subroutine get_state_rec_pops
 
-    ! Population rule of the fractional blends. The stored sums of a group g (2D class,
-    ! 3D state) record M(g), the population they represent. With N(g) and n(g) from
-    ! get_group_update_counts, the owner blends
-    !   new = s * current + w * previous,   f = n/N,   u = f or an applied override,
-    !   s = u/f,   w = (1 - u) * N/M
-    ! so that the carried mass, s*n + w*M, equals the represented population N whatever
-    ! joined or left the group. The rule keeps the mass right, not the membership: old
-    ! contributions are removed in proportion, not particle by particle.
-    !> Population-rule weights of one group.
-    !!   nrep  N(g): active, updated rows of the group now
-    !!   nsmp  n(g): those sampled this round (in the current sums)
-    !!   mrep  M(g): population the stored sums represent (0 when there are none)
-    !!   ufrac optional applied map-update weight u in [0,1]; default u = f = n/N
-    !!   s     current scale, w previous weight
-    !!   mnew  population the blended sums represent, s*n + w*M: N whenever M > 0 or
-    !!         n = N, otherwise the mass actually stored (no previous mass to scale)
-    !! Special cases: N = 0 gives s = w = 0; n = 0 keeps the previous sums at mass N
-    !! (w = N/M); M = 0 gives w = 0. w exceeds 1 when rows return to the group.
+    !> Population-rule weights of one group: new = s*current + w*previous, f = n/N, u = ufrac (in [0,1]) or f,
+    !! s = u/f, w = (1-u)*N/M (0 if M = 0), mnew = s*n + w*M (= N when M > 0). n = 0 keeps the previous sums
+    !! (s = 0, w = N/M); N = 0 gives zeros. nrep = N active updated rows, nsmp = n sampled, mrep = M stored mass.
     elemental module subroutine population_blend_weights( nrep, nsmp, mrep, s, w, mnew, ufrac )
         integer,        intent(in)  :: nrep, nsmp
         real,           intent(in)  :: mrep

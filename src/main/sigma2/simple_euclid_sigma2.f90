@@ -18,7 +18,7 @@ public :: euclid_sigma2, sigma2_group_iter
 public :: write_groups_starfile, read_sigma2_groups_file
 
 integer, parameter :: LENSTR = 48
-! euclid scale diagnostics (doc/implementation_notes/drop_legacy_box_division.md, plan step 1):
+! euclid scale diagnostics (doc/implementation_notes/completed/drop_legacy_box_division.md, plan step 1):
 ! the search band is split into NDIAG_BANDS contiguous bands; per particle we keep the
 ! reference/particle amplitude ratio per band and the euclid objective value v at the
 ! assigned orientation, and report quantiles once per iteration
@@ -308,7 +308,7 @@ contains
         integer :: status
         character(len=STDLEN) :: message
         ! transaction-scoped names: the candidate and this range carry the
-        ! generation the master's update will commit (2026-09-07)
+        ! generation the master's update will commit
         call sigma2_state_next_generation(self%binfname%to_char(), next_gen, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         candidate_path = sigma2_state_candidate_path(self%binfname%to_char(), next_gen)

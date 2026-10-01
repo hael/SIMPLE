@@ -11,7 +11,7 @@ use simple_flex_reconstructor_latent_ops, only: prep_imgs4projected_model, solve
 use simple_flex_pca_crossfsc, only: crossfsc_file, crossfsc_record, crossfsc_load, crossfsc_write,&
     &crossfsc_append, crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2,&
     &crossfsc_harvest_h, crossfsc_stop_stat, crossfsc_inband_mean, crossfsc_khi_deepest,&
-    &crossfsc_assert_paired, COV_XFSC_FNAME
+    &COV_XFSC_FNAME
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_relative_inplane, polar_assign_directions, polar_sample_particle_fused
 implicit none
@@ -877,11 +877,10 @@ contains
         write(funit, iostat=io_stat) subhdr
         call fileiochk('write_probe_part_v5_fit; sub-header', io_stat)
         ! the coupled rho rows must live on the SAME lattice as the basis accumulators, otherwise
-        ! one band box cannot describe both and the boxed payload would be mis-scattered
+        ! one index list cannot describe both and the gathered payload would be mis-scattered
         if( size(rho_e,2) /= size(cmat_e,1) .or. size(rho_e,3) /= size(cmat_e,2) .or. &
             &size(rho_e,4) /= size(cmat_e,3) ) &
             &THROW_HARD('write_probe_part_v5_fit: rho_e lattice differs from the basis lattice')
-        ! one nonzero bounding box for the whole crop lattice (see "band boxing" above)
         ! index list of every populated lattice point, unioned over the six shipped arrays
         allocate(pm(size(cmat_e,1),size(cmat_e,2),size(cmat_e,3)), source=.false.)
         call pk_mask_c1(cmat_e, pm)
@@ -930,91 +929,10 @@ contains
         call write_probe_part_kernels(funit, kpk_e, kpk_o, rpk_e, rpk_o, 'write_probe_part_v5_fit')
     end subroutine write_probe_part_v5_fit
 
-    ! ---- band boxing -------------------------------------------------------------------------
-    ! Every probe-part payload is populated only inside the covariance band: the data planes are
-    ! capped at projected_model_kfromto before insertion, so the expanded lattices carry EXACT
-    ! zeros outside a small centred region (measured 6.5 % of the crop lattice and 6.9 % of the
-    ! doubled PCG lattice at box_crop=128 / lp=8, i.e. ~93 % of every part file was zeros).
-    ! We therefore ship only the NONZERO BOUNDING BOX of each lattice. The box is derived from the
-    ! data, never from an assumed band radius, so nothing nonzero can be dropped: outside the box
-    ! the part contributes exact zeros and the fold is bit-identical to shipping the full array.
-    ! A box that is merely a superset of the nonzero region is equally correct (it just ships more
-    ! zeros), which is why widening is always safe and narrowing never happens.
-    ! box = [i0,i1,j0,j1,k0,k1] over the three LATTICE dimensions. Two memory layouts occur:
-    !   layout 1: lattice is dims 1-3, slice index is dim 4  -- cmat_e/rho_ex(nx,ny,nz,ncomp)
-    !   layout 2: lattice is dims 2-4, slice index is dim 1  -- rho_e/kpk_e/rpk_e(nslice,nx,ny,nz)
-    ! The scan runs on the WRITE side, i.e. on the parallel part workers, never on the master, so
-    ! it is off the critical path that the reduce sits on.
-
-    subroutine box_reset( box )
-        integer, intent(out) :: box(6)
-        box = [huge(1), -huge(1), huge(1), -huge(1), huge(1), -huge(1)]
-    end subroutine box_reset
-
-    !> an empty box (nothing nonzero anywhere) collapses onto a single voxel: folding one zero
-    !! voxel is still bit-identical and it keeps every extent positive for the record I/O.
-    subroutine box_finalize( box, n1, n2, n3 )
-        integer, intent(inout) :: box(6)
-        integer, intent(in)    :: n1, n2, n3
-        if( box(1) > box(2) .or. box(3) > box(4) .or. box(5) > box(6) )then
-            box = [1,1,1,1,1,1]
-            return
-        endif
-        box(1) = max(1,box(1)); box(2) = min(n1,box(2))
-        box(3) = max(1,box(3)); box(4) = min(n2,box(4))
-        box(5) = max(1,box(5)); box(6) = min(n3,box(6))
-    end subroutine box_finalize
-
-    !> the box is derived from the union of exactly the arrays that get shipped, so "every nonzero
-    !! lies inside the box" holds by construction -- until someone adds a seventh array to the
-    !! writer and forgets the union. These verify that invariant directly on the shipped arrays and
-    !! are layout-, addressing- and wrap-agnostic. Write side only, so off the reduce's critical path.
-    subroutine box_verify_c1( a, box, who )
-        complex,          intent(in) :: a(:,:,:,:)
-        integer,          intent(in) :: box(6)
-        character(len=*), intent(in) :: who
-        if( count(a /= (0.,0.)) /= &
-            &count(a(box(1):box(2),box(3):box(4),box(5):box(6),:) /= (0.,0.)) ) &
-            &THROW_HARD(who//': nonzero content outside the band box (box/union out of sync)')
-    end subroutine box_verify_c1
-
-    subroutine box_verify_r1( a, box, who )
-        real,             intent(in) :: a(:,:,:,:)
-        integer,          intent(in) :: box(6)
-        character(len=*), intent(in) :: who
-        if( count(a /= 0.) /= &
-            &count(a(box(1):box(2),box(3):box(4),box(5):box(6),:) /= 0.) ) &
-            &THROW_HARD(who//': nonzero content outside the band box (box/union out of sync)')
-    end subroutine box_verify_r1
-
-    subroutine box_verify_r2( a, box, who )
-        real,             intent(in) :: a(:,:,:,:)
-        integer,          intent(in) :: box(6)
-        character(len=*), intent(in) :: who
-        if( count(a /= 0.) /= &
-            &count(a(:,box(1):box(2),box(3):box(4),box(5):box(6)) /= 0.) ) &
-            &THROW_HARD(who//': nonzero content outside the band box (box/union out of sync)')
-    end subroutine box_verify_r2
-
-    subroutine box_verify_c2( a, box, who )
-        complex,          intent(in) :: a(:,:,:,:)
-        integer,          intent(in) :: box(6)
-        character(len=*), intent(in) :: who
-        if( count(a /= (0.,0.)) /= &
-            &count(a(:,box(1):box(2),box(3):box(4),box(5):box(6)) /= (0.,0.)) ) &
-            &THROW_HARD(who//': nonzero content outside the band box (box/union out of sync)')
-    end subroutine box_verify_c2
-
     ! ---- index-list packing --------------------------------------------------------------------
-    ! The bounding box loses most of its value on the DOUBLED PCG lattice: that payload is in
-    ! physical FFT addressing, so real mass sits on opposite faces and an axis-aligned box covers
-    ! ~50 % of the lattice even though only ~6.9 % of voxels are nonzero. An explicit index list of
-    ! the populated lattice points is addressing-agnostic -- it does not care whether the support is
-    ! a centred ball, eight wrapped octants, or anything else -- and recovers the full ~15x.
-    ! The list is built from the UNION of the nonzeros of exactly the arrays being shipped, so
-    ! nothing nonzero is ever dropped and the fold stays bit-identical (the omitted voxels add 0.0).
-    ! One list per lattice per fit, shared by every slice, so its 4 bytes/voxel is amortised over
-    ! ncomp (or npairs) x 2 half-sets of payload.
+    ! Part payloads are nonzero only inside the covariance band, so only the populated lattice points
+    ! ship: one index list per fit from the union of the shipped arrays' nonzeros (omitted voxels are
+    ! exact zeros, so the fold is bit-identical). The PCG kernels and rhs ship packed on the band list.
 
     subroutine pk_mask_r2( a, m )
         real,    intent(in)    :: a(:,:,:,:)
@@ -1085,94 +1003,6 @@ contains
             end do
         end do
     end subroutine pk_mask_to_idx
-
-    subroutine box_union_c1( a, box )
-        complex, intent(in)    :: a(:,:,:,:)
-        integer, intent(inout) :: box(6)
-        integer :: i, j, k, i0, i1, j0, j1, k0, k1
-        i0 = box(1); i1 = box(2); j0 = box(3); j1 = box(4); k0 = box(5); k1 = box(6)
-        !$omp parallel do collapse(2) default(shared) private(i,j,k) schedule(static) &
-        !$omp reduction(min:i0,j0,k0) reduction(max:i1,j1,k1)
-        do k = 1, size(a,3)
-            do j = 1, size(a,2)
-                do i = 1, size(a,1)
-                    if( any(a(i,j,k,:) /= (0.,0.)) )then
-                        i0 = min(i0,i); i1 = max(i1,i)
-                        j0 = min(j0,j); j1 = max(j1,j)
-                        k0 = min(k0,k); k1 = max(k1,k)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        box = [i0,i1,j0,j1,k0,k1]
-    end subroutine box_union_c1
-
-    subroutine box_union_r1( a, box )
-        real,    intent(in)    :: a(:,:,:,:)
-        integer, intent(inout) :: box(6)
-        integer :: i, j, k, i0, i1, j0, j1, k0, k1
-        i0 = box(1); i1 = box(2); j0 = box(3); j1 = box(4); k0 = box(5); k1 = box(6)
-        !$omp parallel do collapse(2) default(shared) private(i,j,k) schedule(static) &
-        !$omp reduction(min:i0,j0,k0) reduction(max:i1,j1,k1)
-        do k = 1, size(a,3)
-            do j = 1, size(a,2)
-                do i = 1, size(a,1)
-                    if( any(a(i,j,k,:) /= 0.) )then
-                        i0 = min(i0,i); i1 = max(i1,i)
-                        j0 = min(j0,j); j1 = max(j1,j)
-                        k0 = min(k0,k); k1 = max(k1,k)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        box = [i0,i1,j0,j1,k0,k1]
-    end subroutine box_union_r1
-
-    subroutine box_union_r2( a, box )
-        real,    intent(in)    :: a(:,:,:,:)
-        integer, intent(inout) :: box(6)
-        integer :: i, j, k, i0, i1, j0, j1, k0, k1
-        i0 = box(1); i1 = box(2); j0 = box(3); j1 = box(4); k0 = box(5); k1 = box(6)
-        !$omp parallel do collapse(2) default(shared) private(i,j,k) schedule(static) &
-        !$omp reduction(min:i0,j0,k0) reduction(max:i1,j1,k1)
-        do k = 1, size(a,4)
-            do j = 1, size(a,3)
-                do i = 1, size(a,2)
-                    if( any(a(:,i,j,k) /= 0.) )then
-                        i0 = min(i0,i); i1 = max(i1,i)
-                        j0 = min(j0,j); j1 = max(j1,j)
-                        k0 = min(k0,k); k1 = max(k1,k)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        box = [i0,i1,j0,j1,k0,k1]
-    end subroutine box_union_r2
-
-    subroutine box_union_c2( a, box )
-        complex, intent(in)    :: a(:,:,:,:)
-        integer, intent(inout) :: box(6)
-        integer :: i, j, k, i0, i1, j0, j1, k0, k1
-        i0 = box(1); i1 = box(2); j0 = box(3); j1 = box(4); k0 = box(5); k1 = box(6)
-        !$omp parallel do collapse(2) default(shared) private(i,j,k) schedule(static) &
-        !$omp reduction(min:i0,j0,k0) reduction(max:i1,j1,k1)
-        do k = 1, size(a,4)
-            do j = 1, size(a,3)
-                do i = 1, size(a,2)
-                    if( any(a(:,i,j,k) /= (0.,0.)) )then
-                        i0 = min(i0,i); i1 = max(i1,i)
-                        j0 = min(j0,j); j1 = max(j1,j)
-                        k0 = min(k0,k); k1 = max(k1,k)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        box = [i0,i1,j0,j1,k0,k1]
-    end subroutine box_union_c2
 
     !> trailing PCG kernel block of one fit: the pair count (0 when the fit does not solve by PCG), then
     !! the packed even and odd kernel sums
@@ -1310,7 +1140,7 @@ contains
         if( subhdr(1) /= ncomp          ) THROW_HARD('v5 probe part per-fit ncomp mismatch')
         if( subhdr(5) /= size(rho_e,1)  ) THROW_HARD('v5 probe part per-fit npairs mismatch')
         ! the lattice dims MUST be validated, not just ncomp/npairs: a part written on a different
-        ! expanded lattice yields an in-range band box whose voxels land at the wrong addresses,
+        ! expanded lattice yields an in-range index list whose voxels land at the wrong addresses,
         ! i.e. silently misplaced mass instead of a loud failure
         if( subhdr(2) /= size(cmat_e,1) .or. subhdr(3) /= size(cmat_e,2) .or. &
             &subhdr(4) /= size(cmat_e,3) ) &

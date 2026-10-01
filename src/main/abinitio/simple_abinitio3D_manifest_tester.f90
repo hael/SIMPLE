@@ -1,19 +1,7 @@
 !@descr: unit tests of the abinitio3D run manifest (simple_abinitio3D_manifest)
-! Round trip of every record kind (the manifest read back is written again line
-! for line; a path-valued input keeps its '/'), the refusals of another schema
-! version, a truncated file, a missing or wrong checksum, an unknown field or
-! input key, records after the end marker or the checksum and an incomplete run
-! with a valid checksum; an input the format cannot hold leaves the manifest
-! unpublished instead of stopping the run; the registered manifest of a
-! project (a bare name resolves against the project file's own directory, an
-! absolute one is kept, the registered run identifier must match); paths longer
-! than 256 characters (an artifact under a deep directory, a path-valued input)
-! kept whole; the replay of the base run's settings onto a command line; and
-! the frozen-project validation (an eligible add-on output is a frozen input,
-! so add-ons chain) with its negative cases: an ineligible or foreign manifest, a
-! missing state map, a changed particle layout, stack table, optics/CTF
-! parameters or final map, and another particle count. In-memory projects, one
-! 8-pixel map and one small sigma2 stand-in file whose name has blanks.
+! Manifest round trip and refusals, registration, >256-char paths, replay onto a cmdline and
+! frozen-project validation (CTF change: dfx only); in-memory projects, one 8^3 map, a sigma2
+! stand-in with blanks in its name.
 module simple_abinitio3D_manifest_tester
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_defs,                only: STDLEN

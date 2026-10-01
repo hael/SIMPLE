@@ -188,20 +188,9 @@ contains
         b = 0.d0
     end subroutine spd_solve_dp
 
-    !>  Inverse of a symmetric positive-definite matrix by Cholesky, using the same diagonal rescaling
-    !!  and ridge-escalation policy as spd_solve_dp so a matrix that solves also inverts. A is DESTROYED.
-    !!  A rank-deficient input is rescued by the ridge exactly as in spd_solve_dp, so the result can be
-    !!  large; only a matrix that all three attempts fail on returns zeros. The embedding never hits that
-    !!  path: A = (a^2/sig2) G + diag(prior) with G PSD, so lambda_min(A) >= min(prior) and every
-    !!  [A^-1]_qq is bounded above by max(eigvals) -- a dead particle reproduces the prior, as it should.
-    !> One particle's MAP solve at fixed contrast, with optional ECM alternations of the
-    !! closed-form scale against the CURRENT basis:
-    !!     a <- (m'y + b'z) / (||m||^2 + 2 c'z + z'Gz + tr(G A^-1))
-    !! nml = 0 reproduces the historical fixed-a solve exactly, call order and all: the log det
-    !! comes off the pristine A, the inverse off a copy, the solve off A (the latter two rescale
-    !! their argument in place). The tr(G A^-1) term is the posterior variance of z and is
-    !! load-bearing -- dropping it uses E[z]E[z]' for E[zz'] and biases a high (measured in the
-    !! embedding-stage ECM). The bracket matches the projection fit's [0.1, 5].
+    !> One particle's MAP solve; nml>0 adds ECM contrast updates against the current basis,
+    !!   a <- (m'y + b'z) / (||m||^2 + 2c'z + z'Gz + tr(G A^-1)),  clamped to [0.1, 5].
+    !! tr(G A^-1) is the posterior variance; dropping it biases a high.
     module subroutine probe_solve_ecm( n, G, b, c, myv, e_mm, prior_, sig2, nml, a, z_, Ainv_, ldA, lok, quad )
         integer,  intent(in)    :: n, nml
         real(dp), intent(in)    :: G(n,n), b(n), c(n), myv, e_mm, prior_(n), sig2
@@ -476,6 +465,8 @@ contains
     end subroutine mcfa_mstep
 
 
+    !> SPD inverse by Cholesky, same rescaling and ridge escalation as spd_solve_dp; zeros if all
+    !! attempts fail. A is overwritten.
     module subroutine spd_inv_dp( A, Ainv, n )
         integer,  intent(in)    :: n
         real(dp), intent(inout) :: A(n,n)

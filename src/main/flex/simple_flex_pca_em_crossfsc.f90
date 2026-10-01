@@ -9,24 +9,22 @@ use simple_flex_reconstructor_latent_ops, only: prep_imgs4projected_model, solve
 use simple_flex_pca_crossfsc, only: crossfsc_file, crossfsc_record, crossfsc_load, crossfsc_write,&
     &crossfsc_append, crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2,&
     &crossfsc_harvest_h, crossfsc_stop_stat, crossfsc_inband_mean, crossfsc_khi_deepest,&
-    &crossfsc_assert_paired, COV_XFSC_FNAME
+    &COV_XFSC_FNAME
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_relative_inplane, polar_assign_directions, polar_sample_particle_fused
 implicit none
 #include "simple_local_flags.inc"
 
-!> par.5.2 deepest-crossing criterion for the per-fit internal-FSC bands recorded in the artifact
+!> FSC criterion of the deepest-crossing per-fit internal-FSC bands recorded in the artifact
 real, parameter :: XFSC_CRIT = 0.143
 
 contains
 
 
 
-    !> Read the SIMPLE_COV_XFSC_REG arm (default 0: internal e/o Wiener only), reload the
-    !! artifact when the ridge or the paired writer is live (restart-complete series -- the
-    !! load_probe_state idiom) and fail fast on the contract violations. Master-only state:
-    !! workers pass l_master=.false. and the whole subsystem stays inert on them (the ridge
-    !! and the writer are master M-step / master-loop operations).
+    !> Arm the cross-fit FSC ridge (arm 1, hard-wired; no switch selects another arm), reload the
+    !! artifact when the ridge or the paired writer is live, and fail fast on contract violations.
+    !! Master-only: workers pass l_master=.false. and stay inert.
     module subroutine xfsc_setup( ctx, params, kfr_ann, l_paired, l_master )
         type(xfsc_ctx_t),  intent(inout) :: ctx
         class(parameters), intent(in)    :: params
@@ -34,19 +32,18 @@ contains
         logical,           intent(in)    :: l_paired, l_master
         ctx%v_reg      = 1     ! the cross-fit FSC ridge (the internal e/o arm was the scaffolding)
         ctx%l_paired   = l_paired
-        ! the paired master writes honest paired=1 records EVERY iteration (spec par.2.2: the
-        ! artifact is the engine's lasting product); the single-fit engine writes none
+        ! the paired master writes honest paired=1 records EVERY iteration; the single-fit engine writes none
         ctx%l_writer   = l_paired .and. l_master
         ctx%pairing_id = 0
         if( l_paired )then
-            ! one-time env read (hazard 7: never mid-loop); the driver already validated 1|3
+            ! one-time env read (never mid-loop); the driver already validated 1|3
             ctx%pairing_id = 1
             call cov_env_int('SIMPLE_COV_MOD4_PAIRING', ctx%pairing_id)
         endif
         ctx%l_any      = ctx%l_writer .or. ctx%v_reg > 0
         ctx%l_loaded   = .false.
         ctx%filtsz     = max(1, fdim(params%box_crop) - 1)
-        ! crossfsc low-resolution exemption index: the reslim_ind analog (spec par.3.1 step 5)
+        ! crossfsc low-resolution exemption index: the reslim_ind analog
         ctx%klo        = max(6, kfr_ann(1))
         if( .not. l_master )then
             ctx%l_any    = .false.
@@ -104,8 +101,7 @@ contains
             ! which side of the record is THIS fit: the paired engine's fit%id names it
             l_fitb = fit%id == 2
             allocate(fit%xf_invtau2(fit%ncomp,ctx%filtsz), source=0.0)
-            call xfsc_build_invtau2(ctx, params, ctx%xf%recs(irec), ctx%v_reg, l_fitb, it_eff, &
-                &fit%xf_invtau2)
+            call xfsc_build_invtau2(ctx, params, ctx%xf%recs(irec), l_fitb, it_eff, fit%xf_invtau2)
             ctx%reg_active = ctx%v_reg
             ! fit-level invtau2, added once per halfset by fit_iter_finish (the gold-standard
             ! precedent adds the shared curve into both halves' rho every iteration)
@@ -115,25 +111,14 @@ contains
         call flush(logfhandle)
     end subroutine xfsc_prep_iter
 
-    !> Assemble the per-component, per-shell inverse prior variances for the crossfsc ridge
-    !! (spec par.4.1) from one PAIRED (paired=1) record, mapped into THIS fit's component
-    !! indices via the record's signed permutation. Arm 1: the matched cross-fit curve alone.
-    !! Arm 2: per shell min(internal, cross) -- the conservative blend; the internal curve
-    !! saturates high, so the blend defaults to the honest curve except where matching noise
-    !! makes the cross curve spuriously HIGH, which the internal curve then caps. Unmatched
-    !! components (spec par.4.4): arm 1 kills them (F=0 across the band -> kill-branch
-    !! invtau2, the intended suppression of an unreproducible direction); arm 2 falls back to
-    !! the internal curve alone, a finite weaker ridge that caps the damage of a matching
-    !! failure -- which is why arm 2 is the recommended first A/B. Components beyond the
-    !! record's per-fit rank (rank grew since t-1) get no ridge. Unmatched/unknown components
-    !! are logged loudly. Fit X's ridge always uses fit X's OWN H (invariant, spec par.2.3):
-    !! the record's per-fit H block for this fit, with the (shared) cross-fit F. The sign of
-    !! the match is irrelevant here (FSC of sign-matched volumes is stored sign-resolved).
-    subroutine xfsc_build_invtau2( ctx, params, rec, arm, l_fitb, it_eff, invtau2 )
+    !> Per-component, per-shell invtau2 from one paired record, in this fit's component indices:
+    !! the matched cross-fit FSC with this fit's own H. Unmatched components take the kill branch;
+    !! components beyond the record's rank get no ridge.
+    subroutine xfsc_build_invtau2( ctx, params, rec, l_fitb, it_eff, invtau2 )
         type(xfsc_ctx_t),      intent(in)  :: ctx
         class(parameters),     intent(in)  :: params
         type(crossfsc_record), intent(in)  :: rec
-        integer,               intent(in)  :: arm, it_eff
+        integer,               intent(in)  :: it_eff
         logical,               intent(in)  :: l_fitb
         real,                  intent(out) :: invtau2(:,:)   !< (ncomp, filtsz)
         real    :: fcur(ctx%filtsz), hcur(ctx%filtsz)
@@ -162,30 +147,12 @@ contains
             end do
             if( kmatch_q > 0 )then
                 fcur = rec%fsc_cross(:,kmatch_q)
-                if( arm == 2 )then
-                    if( l_fitb )then
-                        fcur = min(rec%fsc_int_b(:,qc), fcur)
-                    else
-                        fcur = min(rec%fsc_int_a(:,qc), fcur)
-                    endif
-                endif
             else
                 nun = nun + 1
-                if( arm == 2 )then
-                    ! internal curve alone: finite, weaker ridge
-                    if( l_fitb )then
-                        fcur = rec%fsc_int_b(:,qc)
-                    else
-                        fcur = rec%fsc_int_a(:,qc)
-                    endif
-                    write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA XFSC UNMATCHED component ',qc, &
-                        &': no partner cleared the match floor; arm-2 ridge from the internal curve alone'
-                else
-                    ! arm 1: F=0 across the band -> kill-branch invtau2 everywhere in band
-                    fcur = -1.0
-                    write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA XFSC UNMATCHED component ',qc, &
-                        &': no partner cleared the match floor; arm-1 ridge SUPPRESSES it (kill branch)'
-                endif
+                ! F<0 across the band -> kill-branch invtau2 everywhere in band
+                fcur = -1.0
+                write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA XFSC UNMATCHED component ',qc, &
+                    &': no partner cleared the match floor; arm-1 ridge SUPPRESSES it (kill branch)'
             endif
             call crossfsc_to_invtau2(fcur, hcur, params%tau, ctx%klo, invtau2(qc,:))
         end do
@@ -206,20 +173,9 @@ contains
         call crossfsc_kill(ctx%xf)
     end subroutine xfsc_teardown
 
-    !> CROSSFSC artifact writer, PAIRED mode (spec par.2.2): one honest paired=1 record per
-    !! iteration, appended after BOTH fits' master tails complete -- the impl-map step-3 hook in
-    !! the paired loop. Per-fit blocks come from each fit's own stashes (internal e/o FSC curves
-    !! + Gamma at the BAND/RANK site; H = the fit's own e+o harvest sum per spec par.2.3).
-    !!
-    !! MATCHED BLOCKS, v1-minimal (documented deviation from the full par.5 contract): the signed
-    !! pairing is GREEDY |cos| matching on the two fits' realized in-memory bases
-    !! (fit%prev_real -- the delivered orthonormal basis of this iteration, band-limited to the
-    !! working band and soft-masked identically in both fits, so the raw real-space cosine IS the
-    !! comparison-band masked cosine), rather than mask-mean-subtracted per-half varimax +
-    !! exhaustive/Hungarian matching. fsc_cross is then the honest cross-fit FSC between fit A's
-    !! component and sign * fit B's matched component (image%fsc, the em_iter Wiener-site call).
-    !! The offline instrument (~/ribo_local/rank_criterion.py) remains the reference for rank
-    !! decisions; upgrading the in-engine matching to matched varimax is step-3 follow-up work.
+    !> Append one paired=1 crossfsc record per iteration, after both fits' tails: per-fit internal
+    !! FSC, Gamma and own e+o H, plus greedy signed |cos| matching on the delivered bases (prev_real)
+    !! and each matched pair's cross-fit FSC. Greedy, not varimax+Hungarian.
     module subroutine xfsc_paired_record( ctx, params, fits, it_eff )
         type(xfsc_ctx_t),  intent(inout) :: ctx
         class(parameters), intent(in)    :: params
@@ -256,8 +212,8 @@ contains
         rec%ncomp_a    = nc_a
         rec%ncomp_b    = nc_b
         rec%kmatch     = km
-        ! per-fit internal-FSC bands by the par.5.2 criterion (deepest crossing + margin, clamped
-        ! to the full band), recorded for offline rank/band diagnostics
+        ! per-fit internal-FSC bands (deepest crossing + 2 shells, clamped to the full band),
+        ! recorded for offline rank/band diagnostics
         rec%khi_a      = min(fits(1)%khi_full, max(1, crossfsc_khi_deepest(fits(1)%xf_fscq, nc_a, XFSC_CRIT) + 2))
         rec%khi_b      = min(fits(2)%khi_full, max(1, crossfsc_khi_deepest(fits(2)%xf_fscq, nc_b, XFSC_CRIT) + 2))
         rec%khi_shared = fits(1)%khi_full
@@ -272,7 +228,7 @@ contains
         rec%fsc_int_b = fits(2)%xf_fscq(:,1:nc_b)
         rec%eigvals_a = fits(1)%xf_gam(1:nc_a)
         rec%eigvals_b = fits(2)%xf_gam(1:nc_b)
-        ! a paired-engine fit stores its OWN e+o sampling sum (spec par.2.3): H is the per-shell
+        ! a paired-engine fit stores its OWN e+o sampling sum: H is the per-shell
         ! mean of (rho_e + rho_o) diagonals = mean_e + mean_o (same voxel counts)
         rec%h_a = fits(1)%xf_h_e(:,1:nc_a) + fits(1)%xf_h_o(:,1:nc_a)
         rec%h_b = fits(2)%xf_h_e(:,1:nc_b) + fits(2)%xf_h_o(:,1:nc_b)

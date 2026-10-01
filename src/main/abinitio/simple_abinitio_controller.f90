@@ -533,48 +533,19 @@ contains
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
-        ! Ladder cap: the ladder's HARD fine bound LPSTOP_BOUNDS(1) (4.5 A),
-        ! not the class-FRC final limit lpfinal. lpfinal is the median
-        ! resolution of the three best class averages clamped to
-        ! LPSTOP_BOUNDS, i.e. 6.0 A for a specimen whose 2D classes stop at
-        ! 6 A although its 3D map reaches 4 A (PfCRT: the July reference run
-        ! matched the NU stages at 4.4/4.1/4.0 A; capping at lpfinal pinned
-        ! every 2026-09-07 run at 5.97 A and the maps plateaued at 6 A, record
-        ! in pcg_priors_history.md). Retain a coarser command-line lpstop as an
-        ! independent guard so a user ceiling cannot be lost when the stage
-        ! cline is rebuilt. The class-average route keeps its own final limit.
+        ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a coarser command-line lpstop stays a guard
+        ! (doc/policies/3D/abinitio3D_policy.md sec. 4).
         lp_cap = LPSTOP_BOUNDS(1)
         if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
         if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
-        ! Stage-boundary FSC=0.5 promotion (2026-09-06). abinitio3D runs
-        ! without gold-standard halves, so an FSC crossing is trustworthy only
-        ! where it lies beyond the band that produced the alignments; the
-        ! crossing measured at the end of the previous stage lies beyond that
-        ! stage's band and is therefore clean, whereas a per-iteration rule
-        ! would ratchet on noise fitted inside the newly opened band. Past
-        ! stage FSC05_PROMOTE_MIN_STAGE the planned stage limit is replaced
-        ! by the project's FSC=0.5 resolution of the best resolved populated
-        ! state when that is finer, never beyond the ladder cap. Streptavidin
-        ! log set: the plan sat at 8.6/7.6 A in stages 4/5 while the halves
-        ! agreed to 4.3 A at FSC=0.5. An add-on promotes by the same rule from
-        ! the union FSC measured in the add-on run; that FSC includes frozen
-        ! particles aligned up to the base run's final band, so it is clean only
-        ! for the cohort and reaches the base resolution within a stage or two
-        ! (abinitio3D_addon_policy.md, section 5).
+        ! Stage-boundary FSC=0.5 promotion past FSC05_PROMOTE_MIN_STAGE, never finer than lp_cap: once per
+        ! boundary, since without gold-standard halves only an FSC beyond the previous band is clean.
+        ! Add-on promotes from the union FSC (abinitio3D_policy.md sec. 4; abinitio3D_addon_policy.md sec. 5).
         l_fsc05_promoted = .false.
         if( .not. l_cavgs .and. .not. l_explicit_lp ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
-        ! Matching-band ceiling. Non-NU stages match at the (possibly
-        ! promoted) stage limit, so the ceiling equals it. NU stages match at
-        ! the NU handoff, the finest member of the FSC-cut candidate bank
-        ! (nonuniform_filtering_policy.md sections 8 and 12), with NO ceiling
-        ! (July 2026 policy restored 2026-09-08): the handoff is bounded by the
-        ! bank's fsc/1.5 cut, so a ceiling here only pins the map. PfCRT record 2026-09-08: with the ladder's 4.5 A
-        ! bound the handoff asked for 4.14 A (stage 7) and 3.98 A (stage 8),
-        ! matching was clamped to 4.5 A and the FSC sat at exactly 4.50 A for
-        ! 30 iterations; the July runs matched at 4.14/3.98 A and reached
-        ! 4.1-4.3 A with side chains. A command-line lpstop remains an explicit
-        ! user ceiling.
+        ! Matching-band ceiling: the (promoted) stage limit in non-NU stages, none in NU stages unless
+        ! lpstop is given (doc/policies/3D/abinitio3D_policy.md sec. 4).
         if( cfg%filt_mode .ne. 'none' )then
             lpstop_eff = 0.
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
@@ -680,15 +651,7 @@ contains
             call cline_refine3D%delete('nspace_sub')
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
-        ! Early stopping applies in every stage (minits=maxits for NU stages
-        ! retired 2026-09-08). The 2026-09-07 early stops that motivated it
-        ! happened under a matching-band ceiling: pinned at 5.97 A the sampler
-        ! converged on a coarse solution within a few iterations while the
-        ! FSC could still improve. Without the ceiling the overlap tracks the
-        ! map: PfCRT 2026-09-08 sat at 0.11-0.25 through stages 6-7 and only
-        ! passed 0.9 in stage 8 once the FSC had been flat at the band for
-        ! ten iterations, where the forced remainder of the budget changed
-        ! nothing; on streptavidin the forced budget cost 700 s of 2000 s.
+        ! Early stopping applies in every stage (doc/policies/3D/abinitio3D_policy.md sec. 4).
         call cline_refine3D%delete('minits')
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)

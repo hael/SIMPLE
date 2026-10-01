@@ -1,11 +1,7 @@
 !@descr: unit tests for simple_http_post against a loopback HTTP server (no network beyond localhost)
-! A listener thread of ipc_tcp_socket_server answers HTTP/1.1 on 127.0.0.1: a request with
-! a body is a POST and is echoed back with 201, a request without a body carries no body
-! (libcurl issues a GET when no POST fields are set) and gets a canned JSON document with
-! 200. Pinned: lifecycle, the body reaching the server verbatim, status code, content and
-! content type as delivered, reset of the response between requests, and a fast failure
-! with no listener. The request tests need the listener thread, which the ipc suites skip
-! on macOS/FreeBSD and Windows.
+! An ipc_tcp_socket_server listener thread on 127.0.0.1 echoes a POST body with 201; a body-less
+! request (libcurl then sends a GET) gets a canned JSON document with 200. The request tests need
+! that thread, so Windows and __FreeBSD__ builds (the Mac build defines it) skip them.
 module simple_http_post_tester
 use iso_c_binding
 use unix,                         only: c_pthread_mutex_init, c_pthread_mutex_destroy, c_pthread_mutex_lock, &
@@ -117,6 +113,7 @@ contains
             endif
             ! read until the header block is complete and Content-Length bytes of body are in
             ntot = nread
+            clen = 0
             do
                 hdr_end = index(req(1:ntot), CRLF//CRLF)
                 if( hdr_end > 0 )then

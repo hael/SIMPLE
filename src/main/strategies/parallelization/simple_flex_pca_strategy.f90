@@ -218,20 +218,8 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> DISTRIBUTED FLEX_PCA (MASTER), nparts=', &
             &self%rounds%nparts_run,' over project rows ',fromp_glob,'-',top_glob
         call flush(logfhandle)
-        ! ---- MASTER THREAD BOOST (profiled 2026-09-02: master-only phases own 81% of wall at
-        ! 1.5 busy threads while every worker core idles). Master and worker phases NEVER overlap
-        ! (one qsys round per iteration; the master blocks on part files), so the master uses
-        ! the workers' full thread budget for its own stages. Expressed the refine3D way: the
-        ! budget is a context component applied through omp_set_num_threads; job_descr and the
-        ! cline already carry the PER-WORKER nthr. The master's OWN params must agree with its
-        ! OpenMP budget because builder/matcher/reconstructor scratch is sized from params%nthr
-        ! (nthr_glob) -- the same contract refine3D keeps by handing nthr_master to every
-        ! sub-command line it runs in-process. SIMPLE_COV_MASTER_NTHR overrides.
-        ! Capped at the cores this master process actually owns: under a scheduler that is the
-        ! job's CPU allocation (SLURM_CPUS_PER_TASK), else the machine (omp_get_num_procs). Without
-        ! the cap, params%nthr became nparts*nthr and the part scripts the master generates inherited
-        ! it (--cpus-per-task=160 on a 96-core partition: unschedulable, five retries, master dead;
-        ! verification 2026-09-16). No environment override: the cap is the whole policy.
+        ! Master thread boost: master and worker phases never overlap, so master-only stages use nparts*nthr threads,
+        ! capped at owned cores (SLURM_CPUS_PER_TASK, else omp_get_num_procs); params%nthr follows (scratch is sized from it).
         self%rounds%nthr_worker = params%nthr
         self%rounds%nthr_master = max(params%nthr, self%rounds%nparts_run*params%nthr)
         ncpu_own = omp_get_num_procs()
@@ -290,8 +278,8 @@ contains
     end subroutine master_cleanup
 
     !> Partition the master's particle selection: one contiguous slice of pinds per part, written
-    !! to flex_pca_particles_part<NN>.txt and handed to that part as pindfile= through part_params
-    !! (the July flex_analysis prepare_particle_partitions). Called once, after validation.
+    !! to flex_pca_particles_part<NN>.txt and handed to that part as pindfile= through part_params.
+    !! Called once, after validation.
     subroutine master_plan_partitions( self, params, pinds )
         class(flex_pca_master_rounds), intent(inout) :: self
         type(parameters),              intent(inout) :: params
@@ -301,8 +289,8 @@ contains
         nsel = size(pinds)
         if( nsel < 1 ) THROW_HARD('flex_pca plan_partitions: empty particle selection')
         self%nparts_run = min(self%nparts_run, nsel)
-        ! qsys_nthr: the boosted params%nthr must NOT become the part scripts' --cpus-per-task
-        ! (2026-09-18: 48-CPU headers for 8-thread workers saturated the per-user QoS cap)
+        ! qsys_nthr: the part scripts request the worker thread count, never the boosted master params%nthr,
+        ! which would inflate every part's CPU request against the scheduler's per-user cap
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen, nptcls=nsel, qsys_nthr=self%nthr_worker)
         numlen = max(params%numlen, len(int2str(self%nparts_run)))
         if( allocated(self%part_params) ) deallocate(self%part_params)

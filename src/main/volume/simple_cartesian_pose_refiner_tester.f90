@@ -1,15 +1,9 @@
 !@descr: unit tests for the Cartesian five-parameter pose refiner (simple_cartesian_pose_refiner)
-! The numerics: prepared-particle validity and shell capping, an exact match giving a
-! zero objective and gradient without and with CTF (incl. phase flip) and shell
-! whitening, the inverse-envelope reference constructor, the Fourier shift phase sign
-! on the native pixel scale, the 1-NCC formula and its invariance to particle gain, the
-! five-parameter gradients of both objectives against central differences, the
-! Cartesian gather against the PFTC projector kernel at a matched boundary, and the
-! right rotation increment keeping orthogonality. The solvers: shift-only LM recovery
-! within its step bound, joint LM recovery of a known pose, exact poses retained,
-! active-parameter masks, cumulative and rejection guards, the accepted-relative-
-! reduction stop, the NCC solver on a gain-scaled particle, and invalid or
-! unobservable inputs leaving the pose untouched.
+! Numerics: particle preparation, sigma shells, the inverse-envelope reference, shift phase sign, the
+! 1-NCC formula, five-parameter gradients of both objectives against central differences, the gather
+! against the PFTC projector at a matched boundary, the right rotation increment. Solvers: shift-only
+! and joint LM recovery, the accepted-relative-reduction stop, the NCC solver on a gain-scaled
+! particle, and invalid or unobservable inputs leaving the pose untouched.
 module simple_cartesian_pose_refiner_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
 use simple_defs,                   only: dp, sp, DPI, KBALPHA, KBWINSZ, OSMPL_PAD_FAC

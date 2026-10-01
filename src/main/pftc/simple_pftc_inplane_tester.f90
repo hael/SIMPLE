@@ -1,13 +1,9 @@
 !@descr: unit tests for continuous in-plane registration on the polar Fourier transform (simple_polarft_calc, simple_pftc_shsrch_grad)
-! One synthetic phantom volume (written to the run directory for the suite, removed at
-! the end) projected through the strategy3D toolbox gives a reference at e3 = 0 and a
-! particle rotated and shifted by a known amount. Pinned, for the raw Euclidean, cc and
-! hybrid continuous-angle evaluators: identity with the discrete scoring routes at
-! integer angles, analytic against central-difference gradients in (sx, sy, theta),
-! the non-negative loss series under near-noiseless sigma2 (stale and re-memoised
-! square sums), the cc penalty for an undefined denominator, the joint route's seed
-! parity with the legacy callback, recovery of the known angle and shift by the joint
-! solve, and the strategy2D route construction under inpl_cont=no|yes.
+! A phantom volume (written to the run directory, removed at the end) projected through the strategy3D
+! toolbox gives a reference at e3 = 0 and a particle rotated and shifted by a known amount. For the raw
+! Euclidean, cc and hybrid continuous-angle evaluators: identity with the discrete routes at integer
+! angles, analytic vs central-difference gradients, non-negative losses under near-noiseless sigma2, the cc
+! penalty, the joint seed selection, recovery of the known pose, and the strategy2D routes under inpl_cont.
 module simple_pftc_inplane_tester
 use simple_pftc_srch_api
 use simple_string,                  only: string

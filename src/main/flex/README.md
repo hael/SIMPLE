@@ -16,8 +16,10 @@ used (`../pca/simple_diff_map_graphs.f90`, `../pca/simple_diff_map_denoise.f90`,
 ## Ownership
 
 The strategy owns roles, partitions and rounds; each producing module owns its
-part I/O; the commander owns the defaults. The execution contract is
-`doc/policies/flex_pca_policy.md`.
+part I/O; the commander owns the defaults. The preservation contract and the
+target ownership are in
+`doc/refactoring_notes/flex_pca_architecture_audit_and_refactoring_plan_2026_09_17.md`
+(sections 2 and 4).
 
 - `../strategies/parallelization/simple_flex_pca_strategy.f90`: shared-memory,
   distributed-master and worker strategies and the factory (`part=` is a
@@ -34,7 +36,7 @@ part I/O; the commander owns the defaults. The execution contract is
 1. `simple_flex_pca_model.f90` is the driver (`run_flex_pca`, shared by the
    shared-memory and master strategies): validation and particle selection,
    sigma, the mean, the fit (single or paired), embedding, latent
-   post-processing (ICA, UMAP readouts), the embedding cache and its resume
+   post-processing (UMAP readout), the embedding cache and its resume
    path, outputs. Its helpers are split by ownership: `simple_flex_pca_util`
    (environment switches, chi-squared median, unimodality),
    `simple_flex_pca_gmm` (the tied-covariance GMM and GMM AUTO weights),
@@ -61,8 +63,7 @@ part I/O; the commander owns the defaults. The execution contract is
    because kernel weights in `[0,1]` make `rho` small where occupancy is low);
    delivery is masked at `mskdiam` under the project-FSC low-pass.
 4. `simple_flex_pca_merge.f90` is the two-gate state merge;
-   `simple_flex_pca_ica.f90` the latent ICA rotation; `simple_umap.f90` (opt-in, `umap=yes`) the
-   UMAP readout.
+   `simple_umap.f90` (`umap=yes`, the default) the UMAP readout.
 5. Part-file protocols live next to their producers: probe parts in
    `em_estep`, embedding statistics in `em_embed`, the mean scale in
    `em_mean`, the sigma decision in `model`, state-weight rounds in `rec3D`;
@@ -81,7 +82,7 @@ part I/O; the commander owns the defaults. The execution contract is
    generation, digest and `nstates` across one delivery. Consumers go
    through `flex_weights_consumable` / `flex_weights_load_state` (one
    state) or `flex_weights_load_all` (the set, cross-checked).
-6. `simple_flex_pca_polar.f90` (the polar E-step bank) and
+7. `simple_flex_pca_polar.f90` (the polar E-step bank) and
    `simple_flex_reconstructor_latent_ops.f90` (the projection-aware latent
    model: Fourier projection/backprojection, particle prep, the coupled
    M-step solve).
@@ -94,10 +95,11 @@ never the project the user pointed at. Only `ptcl3D` is written, as refine3D doe
 for `nstates>1`. This lets the embedding and its state assignment be judged with a
 plain `simple_exec prg=reconstruct3D projfile=<projfile> nstates=<n>`.
 
-Self-contained tests live in `../../../production/tests/`
-(`simple_test_flex_pca.f90`) and require no data.
+Self-contained tests live in `simple_flex_pca_tester.f90` and
+`simple_flex_pcg_tester.f90` (suites registered in
+`../commanders/test/simple_commanders_test_class.f90`) and require no data.
 
 Other integration points: `../exec/simple_exec_denoise.f90`,
-`../apis/simple_private_exec_api.f90` and `../ui/simple/simple_ui_denoise.f90`
+`../apis/simple_private_exec_api.f90` and `../ui/simple/simple_ui_heterogeneity.f90`
 register the public and worker command; `../volume/simple_reconstructor.f90` is
 the shared reconstruction implementation.

@@ -1,13 +1,9 @@
 !@descr: the typed, versioned run manifest of abinitio3D: identity, solution, ladder, inputs and artifact digests of a completed run
-! Built by exec_abinitio3D at the end of every completed run (new, then the
-! solution, sampling, stage-line, ladder, input and artifact records), written
-! atomically, last and never fatally, and registered in projinfo by bare name.
-! It is the only route into abinitio3D_addon, which reads the manifest a frozen
-! project registers, validates it against that project and replays the base
-! run's settings from its input and ladder records. The file is plain
-! key-value text with a schema line, a completion status and an FNV-1a
-! checksum over every preceding line; readers refuse unknown fields, a missing
-! or wrong checksum, a truncated file and any other schema version.
+! Written last, atomically and never fatally by exec_abinitio3D (write_run_manifest),
+! then registered in projinfo by bare name. It is the only route into abinitio3D_addon:
+! read_registered, validate_frozen against the frozen project, then replay.
+! Plain key-value text with a schema line, a completion status and an FNV-1a checksum over
+! every preceding line; read refuses unknown fields, a bad checksum, truncation and other versions.
 module simple_abinitio3D_manifest
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api

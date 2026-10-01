@@ -1774,16 +1774,9 @@ contains
         deallocate(vals)
     end function nu_objective_noise_scale
 
-    !> Radially-resolved raw E/O noise scale: shell-wise Gaussian-scaled MAD of
-    !! the raw even-odd difference over real-space radius within the support.
-    !! This is the whitening profile for the NU Huber unary: reconstruction
-    !! noise is not spatially stationary (deapodization amplifies the
-    !! periphery; solve supports taper it), and a single global scale puts
-    !! peripheral residuals in the wrong Huber regime, which compresses their
-    !! cost-improvement margins and biases both the filter competition and the
-    !! evidence envelope toward the centre. Sparse or degenerate shells inherit
-    !! the nearest valid scale and the profile is smoothed once (1-2-1), so a
-    !! shell never whitens with a noisier estimate than its data supports.
+    !> Radial E/O noise profile: per-shell Gaussian-scaled MAD of even_raw - odd_raw over observed support voxels.
+    !! It whitens the NU Huber unary: noise is not stationary, so one global scale misplaces the periphery's regime.
+    !! Sparse or degenerate shells take the nearest valid scale, then one 1-2-1 pass; with no valid shell, the global one.
     module subroutine nu_objective_noise_profile( even_raw, odd_raw, l_mask, sigma_r, rmax )
         class(image),      intent(in)  :: even_raw, odd_raw
         logical,           intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
@@ -1916,36 +1909,16 @@ contains
         deallocate(vals, shell_of, off, fill)
     end subroutine nu_objective_noise_profile
 
+    ! Cross-half Huber unary, whitened by the radial E/O noise profile (interpolated between shell centres)
     module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask, noise_profile, profile_rmax )
         class(image),  intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
         real,          intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
         logical,       intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
         real,          intent(in)  :: noise_profile(:)
         real,          intent(in)  :: profile_rmax
-        ! The NU unary is a cross-half prediction error: raw even versus
-        ! filtered odd, plus filtered even versus raw odd. The residuals are
-        ! WHITENED by the radially-resolved raw E/O noise profile (see
-        ! nu_objective_noise_profile) before the robust loss: reconstruction
-        ! noise is not spatially stationary, and a single global scale puts
-        ! peripheral residuals in the wrong Huber regime. The per-voxel scale
-        ! is linearly interpolated between shell centres so the unary carries
-        ! no shell-boundary steps. A single-element profile is the global
-        ! normalization (profile_rmax then unused).
-        !
-        ! Huber keeps the desired L2 behavior for residuals at the expected
-        ! noise scale, matching the least-squares intuition of the original NU
-        ! formulation, but becomes L1-like for large residuals. That prevents
-        ! local outliers, imperfect masks, disorder, or interpolation/filter
-        ! artifacts from dominating the voxelwise filter choice and pushing the
-        ! selection toward overly conservative low-pass candidates.
+        ! L2 at noise scale, L1 for outliers
         real, parameter :: HUBER_DELTA  = 1.345
-        ! A zero-predictor residual can be many orders of magnitude larger
-        ! than an ordinary cross-half residual after PCG support projection.
-        ! Evaluate it in double precision and saturate before conversion to
-        ! the single-precision unary volume. Costs above 1/epsilon cannot carry
-        ! meaningful relative information in that volume; retaining a larger
-        ! dynamic range destabilizes the sliding-sum objective smoother when a
-        ! hard PCG support puts zero-cost and saturated regions side by side.
+        ! saturate in dp; keeps the smoother stable beside hard-support zeros
         real, parameter :: HUBER_LOSS_CAP = 1. / epsilon(1.)
         real :: sigma, cx, cy, cz, rr, xs, w
         integer :: nx, ny, nz, i, j, k, nsh, is

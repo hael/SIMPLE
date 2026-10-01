@@ -1,4 +1,4 @@
-!@descr: flex_pca EM: the M-step (coupled solve, FSC-Wiener merge, re-orthonormalisation, deflation, mixture update) per fit and iteration
+!@descr: flex_pca EM: the M-step tail (coupled solve, FSC-Wiener merge, deflation, re-orthonormalisation) per fit and iteration
 submodule (simple_flex_pca_em) simple_flex_pca_em_mstep
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_flex_pca_util, only: dilation_template
@@ -11,7 +11,7 @@ use simple_flex_reconstructor_latent_ops, only: prep_imgs4projected_model, solve
 use simple_flex_pca_crossfsc, only: crossfsc_file, crossfsc_record, crossfsc_load, crossfsc_write,&
     &crossfsc_append, crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2,&
     &crossfsc_harvest_h, crossfsc_stop_stat, crossfsc_inband_mean, crossfsc_khi_deepest,&
-    &crossfsc_assert_paired, COV_XFSC_FNAME
+    &COV_XFSC_FNAME
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_relative_inplane, polar_assign_directions, polar_sample_particle_fused
 implicit none
@@ -19,12 +19,9 @@ implicit none
 
 contains
 
-    !> The master-only tail of one EM iteration for one fit, in the single-fit order: Gamma
-    !! accumulate, likelihood log, coupled per-halfset M-step
-    !! solve + FSC-Wiener merge + band-limit + mask, BAND/RANK diagnostic (writes khi_fit),
-    !! even/odd update-agreement bookkeeping, mean-shaped deflation, re-orthonormalisation,
-    !! principal-angle convergence, basis swap + eigenvolume write, Gamma log, and the fit's
-    !! per-iteration frees.
+    !> Master tail of one EM iteration for one fit: Gamma and likelihood, cross-FSC ridge (when a record
+    !! exists), coupled per-half solve, FSC-Wiener merge, mean-shaped deflation, re-orthonormalisation and
+    !! basis swap. Frees per-iteration fields only; mix_* persist (see probe_fit_t).
     module subroutine fit_iter_finish( params, build, fit, it_eff, nthr )
         class(parameters),  intent(inout) :: params
         type(builder),      intent(inout) :: build
@@ -45,7 +42,6 @@ contains
         integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2)
         integer  :: khi_dg, nsig_dg, ntop_dg, sel_dg(4), tq_dg, bq_dg
         logical  :: l_dfl_bg, l_dfl_dil, l_z_local
-        logical  :: l_mstep_wiener
         integer  :: iblk_dfl, nblk_dfl, qlo_dfl, qhi_dfl
         type(flex_pcg_outcome_t) :: pcg_out
         do q = 1, fit%ncomp
@@ -88,10 +84,8 @@ contains
                     &xf_fsz, fit%xf_h_o, fit%xf_cnt)
             end block
         endif
-        ! Cross-FSC SSNR shrinkage ridge (SIMPLE_COV_XFSC_REG=1|2), the flex analog of
-        ! add_invtausq2rho: invtau2 from the previous iteration's record, built by the driver
-        ! (xfsc_prep_ridge), added to the diagonal rows of rho_e and rho_o after any distributed
-        ! reduction and immediately before the solves. One-shot: the driver rebuilds it each iteration.
+        ! Cross-FSC SSNR ridge (flex analog of add_invtausq2rho): invtau2 from record t-1, built by
+        ! xfsc_prep_iter, added to the rho_e/rho_o diagonals right before the solves; one-shot.
         if( allocated(fit%xf_invtau2) )then
             call add_invtausq2rho_coupled(fit%Yeven, fit%rho_e, fit%ncomp, fit%xf_invtau2)
             call add_invtausq2rho_coupled(fit%Yodd,  fit%rho_o, fit%ncomp, fit%xf_invtau2)
@@ -124,12 +118,6 @@ contains
         allocate(eimgs(fit%ncomp), oimgs(fit%ncomp))
         filtsz = max(1, fdim(params%box_crop) - 1)
         allocate(filt(filtsz), corrs(filtsz))
-        l_mstep_wiener = .true.   ! measured 2026-09-11: shipping the unshrunk basis adds noise, not resolution
-        if( .not. l_mstep_wiener .and. it_eff == 1 )then
-            write(logfhandle,'(A)') '>>> FLEX_PCA M-STEP: half-set FSC Wiener filter OFF (SIMPLE_COV_MSTEP_WIENER=0); &
-                &components band-limited and windowed only'
-            call flush(logfhandle)
-        endif
         ! native-lattice inverse KB envelope, applied to each half before FSC/merge/mask
         mstep_gridcorr = prep3D_inv_kbenvelope4mul([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         allocate(fscq_dg(filtsz, fit%ncomp), source=0.)
@@ -156,11 +144,7 @@ contains
             end do
             ! merged, FSC-Wiener + band-limit filtered, back to real, masked
             call realvols(q)%add(img_o); call realvols(q)%mul(0.5)
-            ! SIMPLE_COV_MSTEP_WIENER=0: ship the unshrunk merged basis (band limit and window only). The
-            ! half-set FSC Wiener pins each component at its own cross-half resolution (~20 A on 16.8k PfCRT
-            ! particles), below the scale of a helix displacement; without it the basis keeps every shell
-            ! to the band, noisier but not blurred, and the state reconstruction from all particles decides
-            if( l_mstep_wiener ) call realvols(q)%apply_filter(filt)
+            call realvols(q)%apply_filter(filt)
             if( fit%lp_it > 2.0*params%smpd_crop + TINY ) call realvols(q)%bp(0., fit%lp_it)
             call realvols(q)%ifft
             call flex_window_apply(realvols(q), params)
@@ -244,24 +228,13 @@ contains
             &'  update agreement (even|odd, prev basis deflated)=',eo_dim, &
             &'   n>=0.9: ',count(sv_eo >= 0.9d0),' of ',fit%ncomp
         call flush(logfhandle)
-        if( eo_dim < 0.d0 )then
-            continue                  ! nothing to judge yet
-        else if( eo_dim > fit%eo_best + COV_EO_TOL )then
-            fit%eo_best = eo_dim; fit%eo_stall = 0
-        else
-            fit%eo_stall = fit%eo_stall + 1
-        endif
         deallocate(sv_eo)
         do q = 1, fit%ncomp
             call eimgs(q)%kill; call oimgs(q)%kill
         end do
         deallocate(eimgs, oimgs)
-        ! Mean-shaped deflation (SIMPLE_COV_EM_DEFLATE=n): a_i is a scalar contrast fit, so any
-        ! frequency-dependent per-image scale (envelope/B-factor spread) lands in the residual as
-        ! a consensus-shaped term coherent across particles and would take a whole component.
-        ! n=1 removes the mean direction; n>1 removes n resolution shells of the consensus, which
-        ! covers any scale that varies smoothly with frequency. Soft masking breaks the Parseval
-        ! orthogonality of disjoint bands, so the shells are explicitly orthonormalised.
+        ! Mean-shaped deflation: the scalar contrast a_i leaves any frequency-dependent per-image scale in the
+        ! residual as a consensus-shaped term; vdfl resolution shells of the consensus (1 = the mean) remove it.
         if( fit%l_deflate_mean )then
             ndfl = max(1, fit%vdfl)
             ! the flat-in-mask background template is part of the deflation set by default (the
@@ -276,8 +249,7 @@ contains
             ! and defocus scatter); deflated by default, SIMPLE_COV_DEFLATE_DILATION=0 opts out
             l_dfl_dil = .not. cov_env_int_off('SIMPLE_COV_DEFLATE_DILATION')
             if( l_dfl_dil ) ndfl = ndfl + 1
-            ! complement block: each block deflates against templates carried on ITS window (a template
-            ! windowed by the other block's support is orthogonal to this block's vectors anyway)
+            ! a single block spanning every component (nblk_dfl = 1, qlo_dfl:qhi_dfl = 1:ncomp)
             nblk_dfl = 1
             do iblk_dfl = 1, nblk_dfl
             qlo_dfl = 1; qhi_dfl = fit%ncomp
@@ -389,8 +361,8 @@ contains
             write(logfhandle,'(A,I0,A,F9.6)') '>>> FLEX_PCA PROBE ITER ',it_eff, &
                 &'  mean principal-angle cosine vs previous basis=',cos_mean
             call flush(logfhandle)
-            ! reported only: the mean over all components is dominated by the non-reproducing
-            ! tail and fires early; it is the criterion only when the even/odd signal is unavailable
+            ! a stopping rule for a rank-1 fit only: over several components the non-reproducing tail
+            ! dominates the mean and it fires early
             if( fit%ncomp < 2 .and. cos_mean >= fit%conv_thresh ) fit%l_converged = .true.
             deallocate(Mconv, sconv)
             do q = 1, size(fit%prev_real)
@@ -421,12 +393,8 @@ contains
             fname = fit%fprefix//int2str_pad(q,3)//MRC_EXT
             call utilde_real(q)%write(fname, del_if_exists=.true.); call fname%kill
         end do
-        ! Gamma is the EM update and is always valid: it is reduced from the per-particle posterior
-        ! second moments, on either execution path. The point-estimate columns are NOT: the master of
-        ! a distributed round holds no z of its own (the workers do, and ship sufficient statistics),
-        ! so they are reported only when this process actually solved the particles.
-        ! z is zero-initialised at allocation and only ever written by a process that solved the
-        ! particles itself, so an all-zero z IS the distributed master's 'I do not hold it'
+        ! Gamma comes from reduced posterior moments on either path; the z moments only where z was solved.
+        ! z is zeroed at allocation and written only by a solving process: all-zero = distributed master.
         l_z_local = any(fit%z /= 0.d0)
         write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA PROBE EM Gamma update (n=',fit%nval,' valid particles):'
         do q = 1, min(fit%ncomp,10)
@@ -464,10 +432,6 @@ contains
         ! from one iteration's M-step to the next E-step, and are freed only by kill_probe_fit
         ! (the resize block at iteration start handles dimension changes).
         if( allocated(fit%gam_dbg) ) deallocate(fit%gam_dbg)
-        ! the update agreement is a diagnostic, not a stopping rule: it decays from the first
-        ! iteration while the basis keeps improving (non-reproducible update directions can
-        ! still carry a reproducible bias)
-        if( .false. .and. fit%eo_stall >= fit%eo_patience ) fit%l_converged = .true.
 
       contains
 

@@ -1,45 +1,6 @@
-!@descr: Assembles GUI metadata objects into a compact JSON document and sends it to the NICE frontend
-!==============================================================================
-! MODULE: simple_gui_assembler
-!
-! PURPOSE:
-!   Owns a single json-fortran document tree (json_root) that is populated
-!   incrementally by the stream pipeline.  Each assemble_* routine updates one
-!   named section of the tree; unchanged sections are suppressed via FNV-1a
-!   content hashing so only deltas are transmitted.  The assembled document is
-!   serialised to a string with to_string() for dispatch over IPC.
-!
-! TYPES:
-!   gui_assembler
-!     new()                          — initialise the JSON tree for a job
-!     kill()                         — destroy the JSON tree and reset state
-!     to_string()                    — serialise the current tree to a string
-!     set_stoptime()                 — record the job stop timestamp
-!     clear_hashes()                 — reset change-detection hashes
-!     is_associated()                — .true. if the JSON root is initialised
-!     assemble_stream_heartbeat()    — write process-status section
-!     assemble_batch_heartbeat()     — write single-job status section for batch (non-streaming) jobs
-!     assemble_batch_metadata()      — write project section for batch (non-streaming) jobs
-!     assemble_stream_preprocess()   — write preprocessing section
-!     assemble_stream_optics_assignment() — write optics-assignment section
-!     assemble_stream_initial_picking()    — write initial-picking section
-!     assemble_stream_reference_picking()  — write reference-picking section
-!     assemble_stream_opening2D()          — write 2D-classification section,
-!                                             including an optional single 'volume'
-!                                             object (gui_metadata_vol3D) for the
-!                                             abinitio3D_cavgs volume chosen for
-!                                             picking references
-!     assemble_stream_particle_sieving()   — write particle-sieving section
-!     assemble_stream_pool2D()             — write pool-2D section
-!     assemble_stream_abinitio3D_multistate() — write multistate abinitio3D section,
-!                                               including an optional per-state 'state_volumes'
-!                                               array of gui_metadata_vol3D entries, each with a
-!                                               nested 'reprojtiles' array of gui_metadata_cavg2D
-!                                               orthogonal reprojection tiles
-!
-! DEPENDENCIES:
-!   unix, simple_string, simple_forked_process, simple_gui_metadata_api
-!==============================================================================
+!@descr: builds the GUI JSON document (stream and batch) from gui_metadata objects
+! Each assemble_* replaces its section of json_root. Content sections are dropped when their FNV-1a
+! hash matches the last one sent (heartbeats always go). Call clear_hashes() after a failed send.
 module simple_gui_assembler
   use unix,                    only: c_time, c_long
   use simple_string,           only: string

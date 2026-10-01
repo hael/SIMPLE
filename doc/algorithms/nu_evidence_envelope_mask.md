@@ -116,7 +116,8 @@ would let a high-contrast core outvote weak but ordered density.
 
 ## Robust Evidence Score
 
-SIMPLE estimates the no-evidence population from all values inside the sphere:
+SIMPLE estimates the no-evidence population from the observed values inside
+the sphere (voxels where both half maps are exactly zero are excluded):
 
 \[
 \mu_0=\operatorname{median}(e), \qquad
@@ -136,6 +137,13 @@ This null estimate assumes solvent occupies most of the spherical support.
 Because `e` is a best-of-bank statistic, solvent values are not exactly zero:
 finite noise can make one candidate win by chance. The null therefore applies
 to the exact candidate bank and smoothing configuration being evaluated.
+
+An envelope-constrained base pair (a PCG solve on a density support) leaves
+the far solvent unobserved, so the remaining support is not solvent-dominated.
+`set_nu_evidence_null_shell` then designates the null geometrically: \(\mu_0\)
+and \(s_0\) are taken on the dilation ring of the density envelope (dilated
+minus core, where the base support has full weight), labels are free only on
+the observed density envelope, and voxels outside it are fixed solvent.
 
 ## Binary MRF Segmentation
 

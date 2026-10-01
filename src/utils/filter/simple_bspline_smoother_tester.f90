@@ -1,11 +1,8 @@
 !@descr: unit tests for the quadratic B-spline smoother (simple_bspline_smoother): closed-form transfer function in 2D and 3D
-! Replaces the in-module test_bspline_smoother and test_bspline_smoother_3d (linearity, reproducibility
-! and monotone smoothing only; two MRC files left behind). The smoother is a Tikhonov solve whose
-! transfer function is H = B**2 / (B**2 + lambda*R), with B the DFT of the sampled quadratic B-spline
-! (3/4 + cos(w)/4 per dimension) and R that of its gradient Gram kernel, a0 (11/20, 13/60, 1/120) in
-! one dimension times a2 (1, -1/3, -1/6) in another, summed over the dimensions. A cosine comes out
-! scaled by H at its frequency; a numpy emulation of the code agrees with the closed form to 2e-7,
-! for square and non-square (micrograph) boxes and volumes.
+! The smoother is a Tikhonov solve with transfer function H = B**2 / (B**2 + lambda*R): B is the DFT
+! of the sampled quadratic B-spline (3/4 + cos(w)/4 per dimension), R that of its gradient Gram kernel,
+! summed over the dimensions of a2 (taps 1, -1/3, -1/6) in that dimension times a0 (11/20, 13/60, 1/120)
+! in the others. A cosine comes out scaled by H at its frequency (square and non-square 2D boxes, a volume).
 module simple_bspline_smoother_tester
 use simple_test_utils
 use simple_defs

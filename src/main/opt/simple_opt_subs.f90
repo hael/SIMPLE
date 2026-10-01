@@ -1,6 +1,4 @@
 !@descr: the downhill simplex step (amoeba) behind the restarted simplex optimiser
-! The line searches, the hill-climbing selector and the limit corrector that lived here served the
-! BFGS and steepest-descent optimisers removed on 2026-09-23 (no production caller).
 module simple_opt_subs
 use simple_core_module_api
 use simple_opt_spec, only: costfun
@@ -14,18 +12,9 @@ logical :: warn=.false.
 
 contains
 
-    !> \brief multidimensional minimization of the function func(x) (x(1:ndim)
-    !>          is a vector in ndim dimensions) by the downhill simplex method
-    !>          of Nelder and Mead.
-    !!          The matrix p(1:ndim+1,1:ndim) is input/output. Its ndim+1 rows
-    !!          are ndim-dimensional vectors which are the vertices of the
-    !!          starting simplex. Input is also the vector y(1:ndim+1), whose
-    !!          components must be pre-initialized to the values of funk
-    !!          evaluated at the ndim+1 vertices (rows) of p. ftol is the
-    !!          fractional convergence tolerance to be achieved in the function
-    !!          value. On output, p and y will have been reset to ndim+1 new
-    !!          points all within ftol of a minimum function value, and iter
-    !!          gives the number of function evaluations taken.
+    !> \brief Nelder-Mead downhill simplex minimisation of func in ndim dimensions. p holds the ndim+1
+    !!          starting vertices (rows), y their pre-evaluated costs. On convergence (fractional range
+    !!          of y below ftol) the best vertex is swapped into slot 1; pb/yb take slot 1 if it beats yb.
     subroutine amoeba(p,y,pb,yb,ftol,func,fun_self,iter,itmax,nevals)
         real,     intent(inout) :: p(:,:)   !< the ndim+1 rows of p are ndim vec:s which are the vertices of the starting simplex
                                          !! the best point is put in slot 1 upon convergence

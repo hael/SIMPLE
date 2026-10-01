@@ -1,33 +1,7 @@
-!@descr: SIMPLE distributed worker process
-!==============================================================================
-! PROGRAM: simple_persistent_worker
-!
-! PURPOSE:
-!   Runs as a compute-node agent for the SIMPLE batch-processing system.
-!   Connects to a central server via TCP/IP, sends periodic heartbeat messages
-!   that report thread availability, and receives tasks in reply.  Each task
-!   is a path to a bash script that is executed in a dedicated pthread.
-!
-! COMMAND-LINE ARGUMENTS (all key=value):
-!   nthr=<N>        Number of parallel task slots (default: 1)
-!   port=<N>        TCP port of the central server
-!   server=<list>   Comma-separated list of server IP addresses
-!   worker_id=<N>   Unique integer ID assigned by the server (default: 0)
-!
-! EXECUTION FLOW:
-!   1. Parse arguments and allocate one thread slot per nthr.
-!   2. Connect to the server (init_client).
-!   3. Heartbeat loop: serialise + send heartbeat, decode reply.
-!        TERMINATE  -> join all threads and exit.
-!        TASK       -> validate script path; dispatch to a free thread slot.
-!        STATUS     -> informational, ignored.
-!   4. Deallocate, close log, print timing.
-!
-! INTERNAL ROUTINES:
-!   start_worker_thread  Find a free slot and spawn a pthread for the task.
-!   worker_task_thread   pthread body: execute the script, record exit code.
-!   get_nthr_used        Sum the nthr fields of all active slots (thread-safe).
-!==============================================================================
+!@descr: SIMPLE persistent worker: heartbeats a worker server and runs dispatched bash scripts in pthread slots
+! Args: server=<ips> port=<n> (required), worker_id=<slot from qsys_env>, nthr=<slots, default 1>.
+! TASK -> free slot runs `bash script`; STATUS ignored; TERMINATE or lost server -> cleanup,
+! which cancels the threads of unfinished scripts. Script-path validation is currently bypassed.
 program simple_persistent_worker
     use simple_core_module_api
     use unix,                  only: c_time,                                   &
@@ -61,9 +35,9 @@ program simple_persistent_worker
     ! ------------------------------------------------------------------
     ! Constants
     ! ------------------------------------------------------------------
-    integer, parameter :: HEARTBEAT_TIMEOUT_MS = 5000  !< send_recv_msg timeout (ms)
-    integer, parameter :: HEARTBEAT_MAX_RETRY  = 5     !< retries before giving up
-    integer, parameter :: POLL_TIME_US         = 200000  !< poll timeout for worker threads (us)
+    integer, parameter :: HEARTBEAT_TIMEOUT_MS = 5000  !< unused; send_recv_msg uses the client's TCP_TIMEOUT_MS
+    integer, parameter :: HEARTBEAT_MAX_RETRY  = 5     !< unused
+    integer, parameter :: POLL_TIME_US         = 200000  !< unused
     integer, parameter :: JOIN_TIMEOUT_MS      = 10000 !< max wait before abandoning blocking join
     integer, parameter :: JOIN_POLL_US         = 100000 !< polling interval while waiting for completion
 
@@ -196,7 +170,7 @@ program simple_persistent_worker
     ! ------------------------------------------------------------------
     do while (.not. l_terminate)
         ! Build and send heartbeat; block until reply or timeout
-        call heartbeat_msg%new() ! reset heartbeat_msg to default values (except worker_id)
+        call heartbeat_msg%new() ! resets every field, worker_id included; all are refilled below
         heartbeat_msg%worker_id      = worker_id
         heartbeat_msg%worker_uid     = trim(worker_uid)
         heartbeat_msg%heartbeat_time = int(c_time(0_c_long))
@@ -251,7 +225,7 @@ program simple_persistent_worker
 
         ! Brief pause before next heartbeat
         call sleep(1)
-       ! rc = c_usleep(POLL_TIME_US) ! sleep to avoid busy-polling if server is slow to reply or if we received a STATUS message
+        ! c_usleep is not called here, so rc keeps its zero from setup and this check never fires
         if( rc /= 0 ) then
             write(*,*) 'Worker: c_usleep failed in heartbeat loop, rc=', rc
         end if
@@ -320,7 +294,7 @@ contains
 
     !> Find the first idle thread slot, populate it with \p task, and
     !> spawn a new pthread.  If no slot is free the task is dropped and
-    !> a warning is printed (the server can re-queue on next heartbeat).
+    !> a warning is printed (the server has already removed it from its queue).
     subroutine start_worker_thread( task )
         type(qsys_persistent_worker_message_task), intent(in) :: task
         integer     :: slot_rc, create_rc, slot_i

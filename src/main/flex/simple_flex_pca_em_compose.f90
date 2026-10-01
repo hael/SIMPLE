@@ -1,23 +1,8 @@
 !@descr: flex_pca EM: multi-band basis composition from finished runs (SIMPLE_COV_COMPOSE)
-!!
-!! PCA at one band returns the leading eigenvectors of the covariance PROJECTED onto that band, and
-!! the eigenvectors of a projection are not the projection of the eigenvectors: a mode that ranks
-!! third at 30 A can fall below the rank cut at 16 A, and a mode that needs 20 A detail has no
-!! power at 30 A. Marching one basis through the bands (refit or extension) re-orders it at every
-!! stage and was measured to erode the coarse-band structure. Composition keeps every band's basis
-!! as delivered: the columns of each finished run are loaded on their own grid, Fourier-padded to
-!! the composing box (a coarse column stays exactly zero beyond
-!! its own band -- it is never noise-fitted in shells it never saw), orthonormalised coarse-first
-!! (a fine column keeps only what is new relative to the coarse subspace), and embedded ONCE with
-!! the union basis. The latent prior variance of each column follows its rescaling, so the
-!! embedding's MAP shrinkage is unchanged in the coarse directions.
-!!
-!! SIMPLE_COV_COMPOSE=<dir>[,<dir>...]: finished flex_pca run directories; any order (sorted by
-!! their crop box, coarse first). Per run the polished namespace is preferred, then merged, then
-!! the plain flex_pca_pc*.mrc, each with its own probe meta (rank, sig2, prior variances).
-!! Measured and rejected (2026-09-10): per-shell cross-half weighting of each column gutted the
-!! leading axes (two 50k-particle half fits disagree beyond 80 A); fine-first ordering was neutral;
-!! a per-component half-fit FSC >= 0.5 gate dropped union structure without buying any.
+!! SIMPLE_COV_COMPOSE=<dir>[,<dir>...]: finished runs; per run polished > merged > plain namespace.
+!! Columns are Fourier-padded to box_crop (zero beyond their band), Gram-Schmidt'ed coarse box first;
+!! residuals below COMPOSE_R2_FLOOR drop, prior variances follow the rescaling. compose_cut_reembed
+!! then cuts the union to its signal subspace (SIMPLE_COV_COMPOSE_CUT=0 skips it).
 submodule (simple_flex_pca_em) simple_flex_pca_em_compose
 use simple_imghead,         only: find_ldim_nptcls
 use simple_flex_pca_util,   only: cov_env_flag_on, cov_env_flag_off, cov_env_dp
@@ -285,9 +270,8 @@ contains
     !! population-variance criterion of the stage cut (SIMPLE_COV_CUT_SNR), then the basis is
     !! rotated onto the kept directions (U W+), re-orthonormalised and written back under the plain
     !! namespace so the run's embedding proper (and its distributed workers) see k columns. The
-    !! deconvolution's cost grows with the square of the latent dimension, so a 58-column union
-    !! without this step spends over an hour in the K ladder and its per-particle precision
-    !! matrices are mostly noise dimensions.
+    !! deconvolution's cost grows with the square of the latent dimension, and an uncut union's
+    !! per-particle precision matrices are mostly noise dimensions.
     module subroutine compose_cut_reembed( params, build, mean_rec, basis_recs, eigvals, ncomp, sig2_eff, &
         &pinds, nptcls, rounds )
         class(flex_pca_rounds), intent(inout) :: rounds

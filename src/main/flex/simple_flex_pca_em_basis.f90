@@ -1,4 +1,4 @@
-!@descr: flex_pca EM: eigenvolume realization, orthonormalization, alignment and bagging
+!@descr: flex_pca EM: eigenvolume realization, orthonormalization and alignment
 submodule (simple_flex_pca_em) simple_flex_pca_em_basis
 implicit none
 #include "simple_local_flags.inc"
@@ -133,11 +133,8 @@ contains
         do q = 1, nreal
             if( eval(q) > COV_EIG_REL_FLOOR*lam_max ) keep = keep + 1
         end do
-        ! Largest d the reduced solve's accumulator can afford: one shared d^2 x d^2 array -> 8*d^4 bytes,
-        ! against 8*[d(d+1)/2]^2 ~ 2*d^4 bytes for the packed CG path, which never forms the operator.
-        ! Size it against the model the solve will ACTUALLY use -- sizing d for the dense accumulator and
-        ! then solving packed spends a quarter of the budget and caps the column subspace 41 % below what
-        ! the data supports (at 8 GB: d 177 instead of 250).
+        ! memory cap from COV_ATHR_BUDGET under the packed 8*[d(d+1)/2]^2-byte model (cov_dim_budget); no
+        ! current solve forms that array, and with the shipped constants COV_DEFAULT_DTILDE binds first
         d_budget = cov_dim_budget()
         ! data-driven rank, REPORT ONLY: the energy floor and the memory budget never ask how many
         ! directions are real, so log what the data would support and let the discrepancy show
@@ -147,8 +144,8 @@ contains
         d_samples = 0
         if( nbasis > 0 ) d_samples = &
             &max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*real(nbasis,dp)/COV_SAMPLES_PER_PARAM))/2.d0))
-        ! memory budget is a GUARD, not the chooser. SIMPLE_COV_DTILDE replaces both, so a fixed-d A/B
-        ! is never silently clamped by the box's RAM.
+        ! memory budget is a GUARD, not the chooser: COV_DEFAULT_DTILDE sets the rank unless the energy
+        ! floor or the budget is lower.
         d_cap = min(d_budget, COV_DEFAULT_DTILDE)
         d_tilde  = max(1, min(keep, COV_MAX_DTILDE, d_cap))
         if( d_samples > 0 )then
@@ -162,16 +159,15 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA d_tilde=',d_tilde, &
             &'  (above energy floor=',keep,', memory cap=',d_budget,', rank cap=',COV_MAX_DTILDE, &
             &', default=',COV_DEFAULT_DTILDE,')'
-        write(logfhandle,'(A,A,A,F8.3,A,F6.3,A)') '>>> FLEX_PCA reduced-solve accumulator model: ', &
+        write(logfhandle,'(A,A,A,F8.3,A,F6.3,A)') '>>> FLEX_PCA d_tilde memory-cap model: ', &
             &trim(accum_model),', ',cov_accum_bytes(d_tilde)/1.d9, &
             &' GB at this d_tilde (budget ',COV_ATHR_BUDGET/1.d9,' GB)'
         if( d_tilde == d_budget .and. keep > d_budget )then
             write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the column subspace is limited by the &
-                &reduced-solve memory budget, not by the data; ',keep,' directions cleared the energy floor.'
+                &d_tilde memory budget, not by the data; ',keep,' directions cleared the energy floor.'
         else if( d_tilde == COV_DEFAULT_DTILDE .and. d_budget > COV_DEFAULT_DTILDE )then
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA NOTE: d_tilde is the measured default; the &
-                &memory budget would have allowed ',d_budget,'. Override with SIMPLE_COV_DTILDE=',d_budget, &
-                &' to restore the budget-chosen rank.'
+            write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: d_tilde is the measured default; the &
+                &memory budget would have allowed ',d_budget,'.'
         endif
         call flush(logfhandle)
         allocate(utilde(d_tilde), utilde_real(d_tilde))
@@ -186,7 +182,7 @@ contains
                 call utilde_real(q)%add(realvols(i), real(evec(i,q)/nrm))
             end do
             ! set_rmat(...,.false.) then fft then expand_exp -- NEVER add(), which leaves the reconstructor
-            ! flagged as Fourier and silently propagates an untransformed grid (see form_eigenbasis_from_reduced)
+            ! flagged as Fourier and silently propagates an untransformed grid
             call init_basis_reconstructor(params, build, utilde(q))
             call utilde(q)%set_rmat(utilde_real(q)%get_rmat(), .false.)
             call utilde(q)%fft
@@ -203,14 +199,9 @@ contains
 
 
 
-    !>  Cross-halfset basis alignment for the held-out embedding. Both eigenbases are
-    !!  first normalized to unit real-space norm, then M(i,j) = <U_ref_i, U_tgt_j>.
-    !!  A latent expressed in the TARGET basis is mapped into the REFERENCE frame by
-    !!  z_ref = M z_tgt (since x ~ U_tgt z_tgt and z_ref = U_ref^T x). The singular
-    !!  values of M are the cosines of the principal angles between the two subspaces,
-    !!  i.e. a gold-standard measure of how many latent dimensions actually reproduce
-    !!  across independent halves -- unlike per-component FSC, this cannot be fooled by
-    !!  a shared basis, because the two bases are estimated from disjoint particles.
+    !>  M(i,j) = <U_ref_i, U_tgt_j> over unit-normed volumes (per-vector only, so both sets should be
+    !!  orthonormal); z_ref = M z_tgt maps a target-basis latent into the reference frame. svals are
+    !!  the singular values of M, i.e. the principal-angle cosines between the two subspaces.
     module subroutine align_basis_to_reference( ref_imgs, nref_c, tgt_imgs, ntgt_c, M, svals )
         integer,     intent(in)    :: nref_c, ntgt_c
         type(image), intent(inout) :: ref_imgs(nref_c), tgt_imgs(ntgt_c)
@@ -246,80 +237,6 @@ contains
         end do
         deallocate(nrm_r, nrm_t, Mwork, V, ev)
     end subroutine align_basis_to_reference
-
-
-
-    !> Bagged basis: pool two independently fitted eigenbases, keep the top-k singular directions.
-    !!
-    !!  Nominally equivalent fits of the same data vary 5x in explanatory power, so the variance is
-    !!  in the fit, not the sample. Directions the two fits AGREE on add coherently in the pooled
-    !!  Gram and survive truncation; directions either invented on its own do not. Ceiling is the
-    !!  basis-error share of latent error, ~38 % -- the rest is per-particle estimation noise, which
-    !!  the deconvolution in simple_flex_pca_model::gmm_state_weights targets instead.
-    !!
-    !!  Inputs are compared and combined over the WHOLE rmat, matching align_basis_to_reference.
-    module subroutine bag_basis_pool( imgs_a, na_c, eig_a, imgs_b, nb_c, eig_b, ncomp_out, pooled, eig_pooled )
-        integer,     intent(in)    :: na_c, nb_c, ncomp_out
-        type(image), intent(inout) :: imgs_a(na_c), imgs_b(nb_c)
-        real(dp),    intent(in)    :: eig_a(na_c), eig_b(nb_c)
-        type(image), allocatable, intent(out) :: pooled(:)
-        real(dp),    allocatable, intent(out) :: eig_pooled(:)
-        real, pointer :: rmat_i(:,:,:), rmat_j(:,:,:), rmat_o(:,:,:)
-        real(dp), allocatable :: G(:,:), V(:,:), ev(:), nrm(:), eigin(:)
-        integer  :: m, k, i, j, q, nrot, ldim(3)
-        real(dp) :: onrm
-        real     :: smpd
-        m = na_c + nb_c
-        k = min(ncomp_out, m)
-        if( k < 1 ) THROW_HARD('flex_pca bagging asked for a rank below 1')
-        allocate(nrm(m), eigin(m), G(m,m), V(m,m), ev(m))
-        do j = 1, m
-            call pick(j, rmat_j)
-            nrm(j)   = sqrt(max(sum(real(rmat_j,dp)*real(rmat_j,dp)), DTINY))
-            eigin(j) = merge(eig_a(min(j,na_c)), eig_b(max(1,j-na_c)), j <= na_c)
-        end do
-        ! Gram of the unit-normalised union: equal weight per direction is what makes this a bag,
-        ! since eigenvalue weighting would reinstate a ranking measured not to track signal.
-        do i = 1, m
-            call pick(i, rmat_i)
-            do j = i, m
-                call pick(j, rmat_j)
-                G(i,j) = sum(real(rmat_i,dp)*real(rmat_j,dp)) / (nrm(i)*nrm(j))
-                G(j,i) = G(i,j)
-            end do
-        end do
-        call jacobi(G, m, m, ev, V, nrot)
-        call eigsrt(ev, V, m, m)
-        allocate(pooled(k), eig_pooled(k))
-        ldim = imgs_a(1)%get_ldim()
-        smpd = imgs_a(1)%get_smpd()
-        do q = 1, k
-            call pooled(q)%new(ldim, smpd)
-            call pooled(q)%get_rmat_ptr(rmat_o)
-            rmat_o = 0.
-            do j = 1, m
-                call pick(j, rmat_j)
-                rmat_o = rmat_o + real(V(j,q)/nrm(j)) * rmat_j
-            end do
-            onrm = sqrt(max(sum(real(rmat_o,dp)*real(rmat_o,dp)), DTINY))
-            rmat_o = rmat_o / real(onrm)
-            ! variance along the pooled direction, propagated from the input spectra: the MAP prior
-            ! needs the inputs' units, and the Gram eigenvalue is an overlap, not a variance.
-            eig_pooled(q) = sum(V(:,q)*V(:,q)*eigin(:))
-        end do
-        deallocate(nrm, eigin, G, V, ev)
-      contains
-        !> leading na_c indices address basis A, the remainder basis B
-        subroutine pick( idx, p )
-            integer,       intent(in)  :: idx
-            real, pointer, intent(out) :: p(:,:,:)
-            if( idx <= na_c )then
-                call imgs_a(idx)%get_rmat_ptr(p)
-            else
-                call imgs_b(idx-na_c)%get_rmat_ptr(p)
-            endif
-        end subroutine pick
-    end subroutine bag_basis_pool
 
     !> Turn a set of real-space basis volumes into embedding-ready column reconstructors.
     module subroutine basis_recs_from_images( params, build, imgs, ncomp, basis_recs )

@@ -1,30 +1,6 @@
 !@descr: libcurl-based HTTP POST client with response capture
-!==============================================================================
-! MODULE: simple_http_post
-!
-! PURPOSE:
-!   Provides a thin Fortran wrapper around libcurl for issuing HTTP POST
-!   requests and capturing the response body, HTTP status code, and
-!   content-type header.
-!
-! TYPES:
-!   http_response — holds the server's response: body, content-type, and
-!                   HTTP status code.
-!   http_post     — manages a persistent curl session for a fixed URL;
-!                   call new() once, request() as many times as needed,
-!                   then kill().
-!
-! USAGE:
-!   type(http_post)     :: poster
-!   type(http_response) :: resp
-!   logical             :: ok
-!   call poster%new(string('http://example.com/api'))
-!   ok = poster%request(resp, request_str=string('{"key":"val"}'))
-!   call poster%kill()
-!
-! DEPENDENCIES:
-!   iso_c_binding (intrinsic), curl
-!==============================================================================
+! http_post is bound to one URL: new() once, request() per POST, kill(). Each request() uses a fresh
+! easy handle (20 s timeout, SSL peer verification off) and returns .false. on any curl failure.
 module simple_http_post
   use, intrinsic :: iso_c_binding, only: c_ptr, c_loc, c_funloc, &
                                          c_associated, c_f_pointer, c_size_t
@@ -57,7 +33,7 @@ module simple_http_post
     integer      :: code          ! HTTP status code (e.g. 200, 404)
   end type http_response
 
-  ! Manages a reusable curl session bound to a single URL.
+  ! Bound to a single URL; no curl handle persists between requests.
   type :: http_post
     private
     type(string) :: url

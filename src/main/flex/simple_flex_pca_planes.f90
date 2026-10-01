@@ -1,20 +1,6 @@
 !@descr: flex_pca resident planes: prepped particle Fourier planes kept in memory across E-step passes
-!!
-!! Every E-step pass (mean, paired half-set iterations, joint fit, embedding) reads its particles
-!! from disk and runs the same prep (normalise, pad, FFT, CTF and whitening into an fplane_type).
-!! The prep depends only on the particle, its pose record, the sigma2 table and the run's band and
-!! mask, none of which change between passes of one flex_pca run. In a shared-memory run the
-!! process lives across all passes, so the planes can be prepared ONCE and served afterwards.
-!!
-!! The store is a plain array of fplane_type indexed by project row. A row is held when its
-!! cmplx_plane is allocated. planes_batch_load is the single entry point every pass uses: a batch
-!! whose rows are all held is served by copy (the E-step subtracts the mean projection in place,
-!! so the caller always works on its own copy); any other batch is read and prepped exactly as
-!! before and then stored, until the memory budget is reached. Distributed workers never enable
-!! the store (each round is a fresh process), so their path is the read+prep branch unchanged.
-!!
-!! Budget: a quarter of MemAvailable from /proc/meminfo at enable time, SIMPLE_COV_RESIDENT_GB overrides
-!! it, SIMPLE_COV_RESIDENT=0 disables the store (A/B switch only).
+!! Shared-memory runs with the plane cache in use only. planes_batch_load serves a fully held batch by copy
+!! (passes modify planes in place); otherwise it reads+preps and stores rows until 0.25*MemAvailable is used.
 module simple_flex_pca_planes
 use simple_core_module_api
 use simple_builder,                       only: builder
@@ -41,10 +27,8 @@ real(dp) :: gb_budget    = 0.d0
 
 contains
 
-    !> Turn the store on for a project of nrows particle rows (shared-memory runs only). Only the
-    !! cropped grid is worth holding: a plane prepared from the full-box particle lives on the
-    !! full padded lattice (5 MB at box 360) while the cache serves it on the box_crop lattice
-    !! (~40x smaller), so the store is tied to the particle cache being in use.
+    !> Turn the store on for a project of nrows particle rows (shared-memory runs only). Only planes on
+    !! the box_crop lattice are worth holding, so the store is tied to the plane cache being in use.
     subroutine planes_enable( nrows, cropped )
         integer, intent(in) :: nrows
         logical, intent(in) :: cropped
@@ -59,7 +43,7 @@ contains
         gb_budget = 0.25d0 * gb_avail
         if( gb_budget <= 0.d0 )then
             write(logfhandle,'(A)') '>>> FLEX_PCA RESIDENT PLANES OFF (no memory budget: MemAvailable &
-                &unreadable and SIMPLE_COV_RESIDENT_GB unset)'
+                &unreadable)'
             return
         endif
         allocate(held(nrows))

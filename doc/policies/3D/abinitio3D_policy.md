@@ -145,7 +145,8 @@ Its bootstrap map is a gridding assembly that carries the last stage's
 `filt_mode` and `automsk` (the residual sigmas depend on the
 regularization of the reference they are scored against, so that reference is
 regularized like the last stage's matching references); the shipped map is
-classical and runs on the workflow's backend with the PCG cold-solve budget
+classical (`filt_mode=none`, except that `automsk=nu` keeps the caller's NU
+`filt_mode`) and runs on the workflow's backend with the PCG cold-solve budget
 applied inside `bootstrap_rec3D` (2026-09-07).
 Whether the final reconstruction refreshes its sigmas at native sampling is
 decided by the registration-box rule: a registration box different from the

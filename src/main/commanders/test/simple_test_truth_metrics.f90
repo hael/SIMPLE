@@ -1,16 +1,9 @@
 !@descr: workflow-gate metrics against a simulation truth: maps docked in both hands, correlation, masked FSC and frame-free pose error
-! Ab initio maps have an arbitrary orientation and hand: dock_both_hands docks a
-! map and its x-mirror onto a reference and keeps the better; compare_to_truth
-! scores two maps in one frame (whole-volume Pearson correlation, or optionally
-! a common-mask/common-band correlation, plus the FSC of the soft-masked maps,
-! with resolutions no finer than Nyquist);
-! validate_reconstructed_volume is both, with the geometry checks and the floors
-! of a workflow gate. pair_pose_error scores poses against the simulation truth
-! without docking: the median over seeded particle pairs of the difference
-! between the estimated and the true relative rotation angle, invariant to a
-! global rotation or reflection of the reconstruction frame. add_gaussian_blob
-! breaks the symmetry of a model map so that c1 poses are unique. The masked FSC
-! is the production compare_volpair (simple_volpair_metrics).
+! Ab initio maps have an arbitrary orientation and hand, so a map is docked in both hands
+! (dock_both_hands) before compare_to_truth scores it: whole-volume or, with corr_lp, common-mask
+! correlation, plus masked FSC. pair_pose_error needs no docking: relative rotation angles over
+! particle pairs are invariant to a global rotation or reflection of the frame.
+! The masked FSC is the production compare_volpair (simple_volpair_metrics).
 module simple_test_truth_metrics
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

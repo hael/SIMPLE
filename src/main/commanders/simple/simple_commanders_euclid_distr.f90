@@ -137,7 +137,7 @@ contains
         call build%spproj%get_sigma2_state_path(state_path, state_path_found)
         if( .not. state_path_found )then
             ! execution-local state: registered by name, it lives next to
-            ! the project file that owns it (2026-09-07)
+            ! the project file that owns it
             call build%spproj%set_sigma2_state_path(string(SIGMA2_STATE_FNAME))
             call build%spproj%get_sigma2_state_path(state_path, state_path_found)
         endif

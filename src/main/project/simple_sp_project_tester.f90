@@ -457,7 +457,7 @@ contains
         call json%destroy(root)
         ! descending on dfx with a window: positions 2..5 of the descending order; indices_pre and
         ! indices_post are the records above and below the window as displayed, in display order
-        ! (the GUI's reading; they were the ascending head and tail, i.e. swapped, before 2026-09-25)
+        ! (the GUI's reading; guards against the swapped ascending head and tail)
         call dump_json(proj, 'mic', fromto=[2,5], sort_key='dfx', sort_asc='no', hist='no', plot_key='')
         call json%parse(file=JSON_FILE, p=root)
         call assert_false(json%failed(), 'the descending-window JSON parses')
@@ -496,7 +496,7 @@ contains
         call assert_int(NMICS - 4, n, 'the indices outside the window account for the other records')
         call json%destroy(root)
         ! histogram and plot asked for without a sort key: neither block, no dereference of the absent key
-        ! (calculate_histogram/calculate_plot read sort_key unguarded before 2026-09-23)
+        ! (guards calculate_histogram/calculate_plot against reading sort_key unguarded)
         call dump_json(proj, 'mic', hist='yes', plot_key='dfy')
         call json%parse(file=JSON_FILE, p=root)
         call assert_false(json%failed(), 'JSON without a sort key parses')

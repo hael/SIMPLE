@@ -1161,50 +1161,9 @@ subroutine exec_test_simulated_workflow( self, cline )
 
 end subroutine exec_test_simulated_workflow
 
-!>  \brief  Single gate for the PCG reconstruction operator and solver,
-!  see doc/policies/reconstruct3D_pcg_policy.md.
-!
-!  Replaces the former pcg_recon_ctf_free / _ctf_hetero / _kernel / _deapod
-!  tests. Those shared a phantom, an RNG seed and three near-identical stages;
-!  the CTF-free normal-operator and recovery stages were strict special cases
-!  (T_i = 1) of the heterogeneous ones and are not repeated here. The CTF-free
-!  ADJOINT check is kept, because it is the cheap isolation gate: if stage 2
-!  fails while stage 1 passes, the fault is in build_transfer rather than in
-!  the gather/scatter pair.
-!
-!  Stages run in increasing cost and fail fast, so the first failure is the
-!  most local one:
-!
-!    1. adjoint identity, T = 1              -- gather/scatter pair alone
-!    2. adjoint identity, T = C*S/sqrt(s2)   -- adds build_transfer
-!    3. normal operator: symmetry + PSD      -- the two properties CG requires,
-!                                               unmasked and masked (P H P)
-!    4. synthetic recovery                   -- end-to-end solve
-!    5. kernel vs matrix-free equivalence    -- the approximation's error budget
-!    6. kernel invariants + preconditioner   -- |T|^2 drops the shift, keeps CTF
-!    7. streaming vs monolithic accumulation -- begin_accum/accumulate_batch/
-!                                               end_accum/solve_accum must
-!                                               reproduce solve() exactly
-!    8. deapodization                        -- the only stage without an
-!                                               inverse crime (see below)
-!    9. symmetry by coordinate replication   -- in-operator point-group
-!                                               replication must equal a c1
-!                                               solve of the expanded set
-!   10. lambda/data-mass scaling              -- duplicating all weighted data
-!                                               must not change the solution
-!   11. crop invariants                       -- common-band raw B,D and the
-!                                               cropped kernel operator
-!   12. ML prior operator                     -- positive FSC/SSNR diagonal and
-!                                               kernel/matrix-free parity
-!
-!  INVERSE CRIME, deliberately. Stages 1-7 generate observations with
-!  forward_plane, so the operator's own KB envelope appears identically in the
-!  data and the model and cancels. That is what makes them clean gates on the
-!  operator ALGEBRA, and it is also why they cannot see an envelope bias: they
-!  scored 0.9998 correlation while the forward model was still wrong for real
-!  particles. Stage 8 is the honest one and exists for exactly that reason.
-!
-!  Does not touch reconstructor or volassemble.
+!>  \brief  Fail-fast gate of the PCG operator and solver: stages 1-14 plus 3b; stages after a failure are skipped.
+!  Stage table: doc/policies/3D/reconstruct3D_pcg_policy.md sec. 9. Operator data are forward_plane projections
+!  (inverse crime: algebra only); stage 8 projects phantom/env and is the only envelope check.
 subroutine exec_test_pcg_recon( self, cline )
     use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, &
         &PCG_OP_MATRIXFREE, PCG_OP_KERNEL, PCG_STOP_INDEFINITE
@@ -1220,19 +1179,13 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: MASS_LAMBDA_REL = 1.0e-3
     real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
     real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
-    ! kernel epsilon set from the single-precision roundoff the operator stages
-    ! measure (~1e-7 relative), loosened for the interior to allow for the
-    ! kernel's shift-invariance approximation. NOT tuned after inspecting a
-    ! reconstruction.
+    ! kernel interior tolerance: single-precision roundoff loosened for the kernel's
+    ! shift-invariance approximation, not tuned on a reconstruction
     real,             parameter :: EPS_INTERIOR = 5.0e-2
-    ! calibrate_kernel now applies the ANALYTIC factor padsc**2 instead of
-    ! fitting one. The fit is retained in measure_kernel_scale purely so this
-    ! test can assert the constant has not drifted: it returns 1.0 exactly when
-    ! the analytic value is right. Observed fits were within 0.5% of it.
+    ! measure_kernel_scale returns 1.0 when calibrate_kernel's analytic padsc**2 is right
     real,             parameter :: KSCALE_TOL = 2.0e-2
-    ! Fused and monolithic accumulation differ at single-precision roundoff
-    ! (~1e-7 observed for both B and Khat). Gate those statistics directly and
-    ! strictly. The preconditioner is a guarded reciprocal of D, and 20 Krylov
+    ! Fused and monolithic accumulation differ at single-precision roundoff;
+    ! gate B and Khat directly and strictly. The preconditioner is a guarded reciprocal of D, and 20 Krylov
     ! recurrences amplify that harmless perturbation; give the final volume a
     ! separate 5e-4 bound so solver conditioning cannot hide an accumulator
     ! defect or manufacture a false failure.
@@ -1249,12 +1202,8 @@ subroutine exec_test_pcg_recon( self, cline )
     ! stage 14: window band = mask3D_soft's soft ramp (values in
     ! [SUPPORT_BAND_LO,SUPPORT_BAND_HI]); repeated output-space warm starts
     ! must not apply the soft window more than once and shrink this band.
-    ! SUPPORT_ITS matches production usage (maxits_pcg default 2, never above
-    ! ~5): the old 40-iteration budget ran the tiny hard-masked operator far
-    ! past where production ever takes it, into a near-null mode of P(H+lambda I)P
-    ! (PCG_STOP_INDEFINITE at iteration 24, residual still 1.6e-2) that a
-    ! realistic iteration count never reaches. BOX was also bumped from 24 so
-    ! the masked operator's boundary-to-interior ratio is less extreme.
+    ! SUPPORT_ITS stays at a production-sized budget: much longer solves of the small hard-masked
+    ! operator reach a near-null mode of P(H+lambda I)P (PCG_STOP_INDEFINITE).
     real,             parameter :: SUPPORT_MSKRAD = real(BOX)/2.0 - 2.0
     integer,          parameter :: SUPPORT_ITS = 5, SUPPORT_NREP = 6
     real,             parameter :: SUPPORT_RTOL = 1.0e-4
@@ -1460,9 +1409,7 @@ subroutine exec_test_pcg_recon( self, cline )
         ! P H P with the support mask ACTIVE -- the operator production solves
         ! with (see set_mask: x = P u gives (P H P) u = P b). The soft edge
         ! makes P non-idempotent, so a one-sided or asymmetric mask application
-        ! breaks the dot-product identity where the unmasked check cannot see
-        ! it. Priors will attach inside this contract (pcg_priors_history.md S10
-        ! Stage 1.1), so it is asserted here before any of them exist.
+        ! breaks the dot-product identity where the unmasked check cannot see it.
         write(logfhandle,'(a)') '>>> STAGE 3b: masked-operator (P H P) symmetry and positive-definiteness'
         call pcgop%set_mask(real(BOX)/3.0)
         hp = pcgop%apply_normal(p_probe)
@@ -1570,8 +1517,7 @@ subroutine exec_test_pcg_recon( self, cline )
         energy_ratio = real(dp_hp_q / max(abs(dp_p_hq), epsilon(1.0_dp)))
         write(logfhandle,'(a,es14.6)') '    kernel/matrix-free probe energy ratio = ', energy_ratio
 
-        ! Establish the fixed-iteration reconstruction baseline without tuning
-        ! an acceptance threshold before current Linux/macOS CI evidence exists.
+        ! Fixed-iteration solve comparison: reported, not gated.
         ! Same RHS, initial state and iteration count prevent convergence-stop
         ! jitter from masquerading as an operator difference.
         allocate(recon_mf(BOX,BOX,BOX), recon_kernel(BOX,BOX,BOX), source=0.0)
@@ -1800,7 +1746,7 @@ subroutine exec_test_pcg_recon( self, cline )
     endif
 
     ! ============ STAGE 8: deapodization, the honest stage ============
-    ! Run last because it flips deapod state and rebuilds the selection.
+    ! It flips deapod state and rebuilds the selection.
     ! forward_plane(x/env) = FT[env . (x/env)] = FT[x], i.e. the true
     ! envelope-free central section -- no inverse crime.
     if( all_ok )then
@@ -1860,15 +1806,8 @@ subroutine exec_test_pcg_recon( self, cline )
     endif
 
     ! ============ STAGE 9: symmetry by coordinate replication ============
-    ! Coordinate replication over a point group must produce the SAME normal
-    ! system -- kernel Khat AND RHS b -- as reconstructing the symmetry-EXPANDED
-    ! particle set at c1: the M symmetry mates are one measurement written M
-    ! times (note section 2). Compared at the operator level, not through a
-    ! solve: the kernelized operator is only approximately SPD, so a
-    ! zero-tolerance solve driven to convergence loses positive-definiteness
-    ! (that approximation is stages 5-7's business, not this stage's). c2 is
-    ! lattice-exact, so the two builds agree to accumulator round-off plus the
-    ! euler round-trip used to compose the expanded orientation set.
+    ! Replication over c2 must build the same Khat and b as the c2-expanded particle set at c1 (policy
+    ! sec. 6). Compared at operator level, not through a solve: the kernelized operator is only nearly SPD.
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 9: symmetry replication == particle-set expansion (c2, kernel)'
         call c1sym%new('c1')
@@ -2144,7 +2083,7 @@ subroutine exec_test_pcg_recon( self, cline )
 
     ! ============ STAGE 12: FSC/SSNR ML prior operator ============
     ! Replay the cropped raw artifact so the prior is derived only after D is
-    ! available, exactly as the production two-map path will do after the base
+    ! available, as the production two-map path does after the base
     ! independent-half FSC has been measured.
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 12: FSC/SSNR ML prior positivity and operator parity'
@@ -2272,8 +2211,8 @@ subroutine exec_test_pcg_recon( self, cline )
     ! ============ STAGE 14: support semantics and warm-start band stability ============
     ! The shipped PCG map is window*u with u solved on the hard domain window > 0.
     ! Verify that the shipped map has no leakage outside that domain and that
-    ! repeated output-space warm starts do not shrink the soft window band, which
-    ! would reveal the former extra window multiplication on solver entry.
+    ! repeated output-space warm starts do not shrink the soft window band (an
+    ! extra window multiplication on solver entry would).
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 14: support semantics and warm-start band stability'
         call pcg_c%new(BOX, SMPD, LAMBDA)
@@ -2819,21 +2758,9 @@ contains
 end subroutine validate_rec3D_pcg_fractional_updates
 
 
-!> Same-inputs dual-backend reconstruction test (doc/implementation_notes/
-!> drop_legacy_box_division.md, plan step 2). Reconstructs ONE fixed set of
-!> particles/orientations/sigma2 with the gridding and the PCG backend through
-!> the production reconstruct3D commander, in the current directory (so the
-!> sigma2 group files of a refine3D run directory are found), and compares the
-!> two merged maps: per-shell amplitude ratio and FSC between backends, and the
-!> radial real-space profile ratio that exposes a deapodization mismatch.
-!> Expectation while the ÷box convention is mirrored by PCG (today): shell ratio
-!> ≈ 1 across the band and a radial ratio rising toward the box edge (gridding's
-!> under-deapodization, §2.1). After plan step 3: ≈ 1 across the band AND flat in
-!> radius. GATED: the summary properties are asserted (agreement-band width, median
-!> in-band amplitude ratio and FSC, radial-ratio range; in ground-truth mode also
-!> the gridding LS-profile flatness and the median truth FSC) and any violation is
-!> a hard failure. Thresholds derive from the validated neutral-phantom fixture and
-!> the streptavidin reference runs recorded in the plan document.
+!> Gridding vs PCG reconstruct3D on the same project/poses/sigma2 (numbered exec dir unless mkdir=no).
+!> Hard gates: agreement band, in-band amplitude ratio and FSC, radial-ratio range; with truth vol1
+!> also truth FSC (LS flatness only if ml_reg=no). Thresholds: doc/implementation_notes/completed/drop_legacy_box_division.md
 subroutine exec_test_rec3D_backends( self, cline )
     class(commander_test_rec3D_backends), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
@@ -3244,12 +3171,8 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     if( nrb_used >= 3 .and. (rmin < 0.5 .or. rmax > 2.0) ) &
         &call gate_fail('normalised radial ratio range ['//real2str_trim(rmin)//','//real2str_trim(rmax)//'] outside [0.5,2.0]')
     if( l_truth )then
-        ! gridding LS profile vs truth must be flat inside the mask: the legacy
-        ! deapodization fades to ~0.90 by r=24 px and must fail this gate.
-        ! With ml_reg=yes the shipped maps are ML-regularized, which moves this
-        ! profile legitimately (the gate is calibrated on unregularized maps),
-        ! so deviations are reported as diagnostics rather than gated -- the
-        ! prior/regularization harness runs measure, the base-map runs gate.
+        ! gridding LS profile vs truth must be flat inside the mask (a fading deapodization fails); ml_reg=yes
+        ! maps move it legitimately (the gate is calibrated on unregularized maps), so there it is only reported.
         l_gate_ls = .true.
         if( cline%defined('ml_reg') )then
             if( cline%get_carg('ml_reg') .eq. 'yes' ) l_gate_ls = .false.
@@ -3484,25 +3407,9 @@ subroutine exec_test_abinitio3D_addon( self, cline )
     endif
 end subroutine exec_test_abinitio3D_addon
 
-!> abinitio3D_addon on simulated particles, gated on the simulation truth.
-!  An off-axis Gaussian blob breaks the c3 symmetry of the embedded 6VXX map,
-!  so that c1 poses are unique; particles are simulated from that map (the
-!  truth) with CTF and noise and split into two stacks: the base set (the
-!  first NBASE) and a set appended after it, as a stream's pool grows. The
-!  frozen project holds the base set alone (NBASE rows), and abinitio3D solves
-!  a seeded selection of it (sampled so that trailing reconstruction is
-!  exercised); abinitio3D_addon then grows that solution on the current
-!  project, which holds both sets (NPTCLS rows, the frozen project's indices
-!  first) under the same project basename (the collision case): the cohort is
-!  the deselected base particles and the appended set. The gate checks the
-!  frozen inputs byte-unchanged, the frozen rows of the output identical to
-!  the frozen project, the add-on's own manifest, the union's sigma2 state
-!  registered at native sampling and the output valid as the frozen input of
-!  a next add-on, the coverage of the cohort, the cohort poses against the
-!  truth (frame- and hand-independent pair metric) and against the frozen
-!  poses, and the docked map correlation and masked FSC of the union map
-!  against the truth and against the base map. Every metric goes to
-!  metrics.tsv.
+!> abinitio3D_addon gate on symmetry-broken 6VXX particles: abinitio3D on a seeded selection of the
+!  first NBASE rows, then the add-on on all NPTCLS rows (same project basename). Gates frozen-input
+!  integrity, manifests, cohort coverage and poses, union map vs truth and base; metrics.tsv.
 subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     use simple_atoms,                   only: atoms
     use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
@@ -3544,18 +3451,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     real,    parameter :: DOCK_LP     = 20.
     ! blob: amplitude relative to the map maximum, width and position in A
     real,    parameter :: BLOB_AMP    = 1.5, BLOB_SIGMA = 11., BLOB_POS(3) = [45., 25., 30.]
-    ! Floors from five measured runs on the Dell (2026-09-26; the runs are
-    ! not bit-reproducible, OpenMP reductions, and the base run itself varies
-    ! with SIMPLE_SEED): two at 16 threads (SIMPLE_SEED 20260923) and three at
-    ! 8 threads, the CTest setting (SIMPLE_SEED 20260923, 20260927, 20260928).
-    ! Cohort-frozen pair median 8.5 / 11.0 and 5.2 / 4.5 / 11.5 deg
-    ! (frozen-frozen 7.1 / 8.4 and 4.4 / 3.5 / 9.4, excess at most 2.7),
-    ! coverage 1.00 throughout, union map correlation 0.974 / 0.949 and
-    ! 0.961 / 0.960 / 0.952 (never below the base map's by more than 0.001),
-    ! masked FSC=0.143 against the truth 4.83 to 5.03 A (base 5.13 to 5.48 A);
-    ! random poses give a pair median near 40 deg. Margins: about 30% on the
-    ! worst pose median, 5 deg on the excess, 0.05 on the union correlation,
-    ! 0.03 on the correlation loss, 1 A on the FSC
+    ! floors: worst observed run plus a margin (~30% pose median, 5 deg excess, 0.05/0.03 corr, 1 A FSC)
     real,    parameter :: MAX_COHORT_POSE_ERR  = 15.  !< cohort-frozen pair median; random poses give ~40
     real,    parameter :: MAX_POSE_ERR_EXCESS  = 5.   !< cohort-frozen above frozen-frozen
     real,    parameter :: MIN_COVERAGE        = 0.9   !< cohort particles with updatecnt > 0

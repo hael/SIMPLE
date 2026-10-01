@@ -1,20 +1,5 @@
 !@descr: GUI metadata type for an optics group and its beam-shift scatter plot.
-!==============================================================================
-! MODULE: simple_gui_metadata_optics_group
-!
-! PURPOSE:
-!   Extends gui_metadata_base with optics-group fields:
-!     i/i_max   — optics-group index within the current batch
-!     n_shifts  — number of populated beam-shift entries
-!     xshifts   — beam-shift x components (Angstroms, up to max_points)
-!     yshifts   — beam-shift y components (Angstroms, up to max_points)
-!   Provides set/get for all fields, scalar accessors for i, i_max, and
-!   max_points, and a jsonise override that emits a "coordinates" array of
-!   {x, y} shift objects.
-!
-! DEPENDENCIES:
-!   json_module, simple_core_module_api, simple_gui_metadata_base
-!==============================================================================
+! Holds up to max_points shifts; jsonise emits {id: i, coordinates: [{x, y}, ...]}.
 module simple_gui_metadata_optics_group
 use json_module,              only: json_core, json_value
 use simple_error,             only: simple_exception

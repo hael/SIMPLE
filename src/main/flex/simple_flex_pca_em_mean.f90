@@ -9,10 +9,6 @@ implicit none
 character(len=*), parameter :: MEAN_SCALE_FNAME = 'flex_pca_mean_scale.bin'
 #include "simple_local_flags.inc"
 
-! Runtime override of COV_UNIT_CONTRAST (SIMPLE_COV_CONTRAST=1): accumulate deviations against the
-! per-particle fitted scale instead of unit contrast. Set once before any parallel region.
-logical :: cov_fit_contrast_rt = .false.
-
 contains
 
     !> Single entry point for the covariance mean.
@@ -299,10 +295,6 @@ contains
         num%shconst = fpl%shconst
     end subroutine form_reconstruction_plane
 
-    !> Complex Hermitian-half plane inner product over the native k<=0 half (the planes are stored
-    !! half-plane, k in [kmin,0]). Properness is handled by the caller: reduced_covariance_solve
-    !! accumulates Re(b_q)Re(b_r), not |b|^2, and pairs it with the 0.5*sig2 noise scaling, since
-    !! E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G. The optional half selects a checkerboard sub-half.
     !> The (h,k) sample sequence cov_herm_inner visits, in exactly its order, for a plane pair that
     !! shares nyq and bounds with `ref` and is called without the `half` selector. Returns nsamp = -1
     !! if the sequence does not fit `slist`, in which case the caller must use cov_herm_inner directly.
@@ -338,17 +330,9 @@ contains
         end do
     end subroutine cov_herm_sample_list
 
-    !> Which of the two split halves a lattice point (ih,ik) of the unpadded plane belongs to.
-    !!
-    !! The former rule, parity of ih+ik (a checkerboard), is a half-box shift in disguise:
-    !! sum over parity 1 minus sum over parity 2 of conj(U)*y equals <U, y circularly shifted by
-    !! (N/2,N/2)>. That is nonzero whenever the object is wider than N/(2*sqrt(2)) -- always at
-    !! box_crop=64 with a 320 A mask, and the particle images are not masked at all -- and it is
-    !! pose-dependent, so it enters the two half-data solves with OPPOSITE signs. Measured on
-    !! 10028 (2026-09-06): every basis except a long single fit gave split-half correlations of
-    !! -0.13..-0.24, which the reliability prior turned into a 1000x over-shrinkage of the latents.
-    !! A deterministic integer hash assigns lattice points to halves with no spatial structure, so
-    !! half1 - half2 carries no coherent term and the correlation estimates signal/(signal+noise).
+    !> Split half (1 or 2) of lattice point (ih,ik) of the unpadded plane, by an integer hash with no
+    !! spatial structure, so half1 - half2 carries no coherent term. A structured split such as ih+ik
+    !! parity acts as a half-box shift of y, a pose-dependent term entering the halves with opposite signs.
     pure integer function cov_half_parity( ih, ik ) result( par )
         integer, intent(in) :: ih, ik
         integer(kind=8) :: key
@@ -361,6 +345,8 @@ contains
         par = int(iand(ishft(key, -9), 1_8)) + 1
     end function cov_half_parity
 
+    !> Complex inner product over the native k<=0 half-plane (stored half-plane, k in [kmin,0]) inside the
+    !! shared nyq disc; the optional half (1 or 2) restricts it to one cov_half_parity split half.
     module function cov_herm_inner( lhs, rhs, half ) result( val )
         type(fplane_type), intent(in) :: lhs, rhs
         integer, optional, intent(in) :: half
@@ -380,7 +366,7 @@ contains
         ! Integer form of the shell test below. For integer x >= 0 and integer n >= 0,
         ! nint(sqrt(x)) > n  <=>  sqrt(x) >= n+0.5  <=>  x >= n^2+n+0.25  <=>  x > n*(n+1),
         ! so the disc gate selects exactly the same samples without a square root and a round per
-        ! element. This routine is called d_tilde*(d_tilde+1)/2 times per particle in the reduced solve.
+        ! element. The embedding Gram alone calls this routine ncomp*(ncomp+1)/2 times per particle.
         nyq_disk = nyq_eff * (nyq_eff + 1)
         do k = kmin, kmax, pf
             ! the k=0 line is its own Friedel mate, so only h<=0 there, or it is counted twice
@@ -413,9 +399,8 @@ contains
         particle_contrast = real(max(0.1d0, min(5.0d0, emy / max(emm, DTINY))))
     end function particle_contrast
 
-    !> Whitened self-power of a plane in cov_herm_inner's index convention. The reduced-solve debias
-    !! assumes E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G with b and G from cov_herm_inner, so the sig2 fed to
-    !! it has to be the noise variance measured in THAT convention; this is what the log compares against.
+    !> Whitened self-power and sample count of a plane in cov_herm_inner's index convention;
+    !! em_calibrate_noise_prior uses the count to subtract the noise floor sig2*cnt.
     module subroutine cov_herm_selfpower( fpl, pw, cnt )
         type(fplane_type), intent(in)  :: fpl
         real(dp),          intent(out) :: pw, cnt

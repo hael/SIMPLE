@@ -1,42 +1,8 @@
-!@descr: TCP accept-loop server that hands tasks to persistent SIMPLE worker processes in reply to their heartbeats
-!==============================================================================
-! MODULE: simple_persistent_worker_server
-!
-! PURPOSE:
-!   Provides the TCP accept-loop server that coordinates SIMPLE worker
-!   processes.  Workers connect periodically with heartbeat messages;
-!   the server replies with a task to execute or a TERMINATE command.
-!
-!   The module exposes:
-!     - persistent_worker_server  — the server object (TCP socket + task queues)
-!     - TCP_BUFSZ                  — wire buffer size constant used by both sides
-!
-! DESIGN CONTRACT:
-!   1.  Mutex ownership: the mutex inside listener_args is owned by
-!       persistent_worker_server (init in new(), destroy in kill()), not by
-!       ipc_tcp_socket, which only borrows the pointer.
-!   2.  job_count and task%job_id assignment for WORKER_NEW_TASK_MSG happen
-!       in worker_listener_thread, where task queues are thread-local.
-!   3.  self%port is zeroed only after ipc_socket_server%kill() returns (i.e.
-!       after the listener thread has been joined), so is_running() stays
-!       true until shutdown is complete.
-!   4.  pack_task_queue() is called only when a task has actually been
-!       dispatched and shutdown is not in progress, to avoid unnecessary
-!       queue scans on idle heartbeats.
-!   5.  Network replies (repl_msg) are issued OUTSIDE the mutex to
-!       prevent blocking indefinitely while holding the lock.
-!   6.  Debug logging (heartbeat lines, per-task skip messages, idle
-!       replies) is controlled by the DEBUG compile-time constant.
-!       Set DEBUG=.true. in the parameter declaration to enable verbose output.
-!
-! DEPENDENCIES:
-!   simple_core_module_api          — logfhandle, int2str
-!   simple_string                   — string type
-!   simple_persistent_worker_message_* — all wire message types and type enumerator
-!   simple_ipc_tcp_socket_server     — ipc_tcp_socket_server, listener_args, repl_msg
-!   unix                            — pthreads, c_usleep, c_null_ptr
-!   iso_c_binding                   — C interop types and procedures
-!==============================================================================
+!@descr: TCP poll-loop server that hands tasks to persistent SIMPLE worker processes in reply to their heartbeats
+! Per heartbeat the listener replies with a task, STATUS idle, or TERMINATE (shutdown, bad id/UID, scale-down).
+! queue_task() submits WORKER_NEW_TASK_MSG over a self-connection; dispatched tasks keep that msg_type.
+! Invariants: server owns the mutex; queues/job_count are listener-local; no socket I/O under the
+! mutex; port is zeroed only after the join.
 module simple_persistent_worker_server
     use simple_core_module_api
     use simple_string,                              only: string
@@ -83,10 +49,10 @@ module simple_persistent_worker_server
 
     type(persistent_worker_runtime) :: persistent_worker
 
-    !> Shared state accessed by both the caller thread (via queue_task)
+    !> Shared state accessed by both the caller thread (new, kill, getters, setters)
     !> and the listener pthread — always under mutex protection.
     type persistent_worker_data
-        integer :: n_workers                        = 0       !< highest worker_id registered so far
+        integer :: n_workers                        = 0       !< number of worker slots (valid worker_id 1..n_workers)
         integer :: n_active_workers                 = 0       !< count of workers with a live identity; refreshed on every heartbeat
         integer :: nthr_per_worker                  = 1       !< configured thread capacity per worker process
         integer :: queue_pressure_workers_required  = 0       !< estimated workers needed for queued backlog + currently running tasks
@@ -107,7 +73,7 @@ module simple_persistent_worker_server
         integer                               :: port          = 0        !< TCP listen port; 0 when not running
         integer                               :: n_workers     = 0 
         integer                               :: nthr_workers  = 0        !< total worker thread slots to support
-        integer                               :: job_count     = 0        !< monotonic counter for unique job_id assignment
+        integer                               :: job_count     = 0        !< unused; job_ids come from the listener-local job_count
         type(string)                          :: host_ips                 !< comma-separated local IP addresses
         type(ipc_tcp_socket_server)           :: ipc_socket_server        !< underlying TCP socket and listener thread
         type(ipc_tcp_socket_client)           :: ipc_socket_client
@@ -129,9 +95,9 @@ module simple_persistent_worker_server
 
 contains
 
-    !> Initialise the server: allocate shared state, initialise the mutex,
-    !> bind a TCP socket, and spawn the listener pthread.  No-op if already running.
-    !> \param[in] nthr_workers  number of worker thread slots to support (must be > 0)
+    !> Initialise shared state and the mutex, then start the listener (bind + pthread), or with client_only
+    !> ("host:port") only connect to an existing server. n_workers = worker slots, nthr_workers = threads
+    !> per worker (both > 0). No-op if already running.
     subroutine new( self, n_workers, nthr_workers, client_only, enable_warmup_cooldown )
         class(persistent_worker_server), intent(inout) :: self
         integer,                            intent(in) :: n_workers
@@ -218,9 +184,8 @@ contains
         write(logfhandle,'(A)') '>>> PERSISTENT_WORKER: DISPATCH CLIENT CONNECTED'
     end subroutine new
 
-    !> Gracefully stop the server: signal workers with TERMINATE, wait
-    !> KILL_WAIT_TIME_US microseconds, join the listener thread, destroy
-    !> the mutex, and release all heap allocations.
+    !> Stop the server: set l_terminate, wait until every registered worker has been sent TERMINATE
+    !> (at most KILL_WAIT_TIME_US), join the listener thread, destroy the mutex, free the shared state.
     subroutine kill( self )
         class(persistent_worker_server), intent(inout) :: self
         integer(kind=c_int)                      :: rc
@@ -244,8 +209,7 @@ contains
         n_to_terminate                    = self%worker_data%n_active_workers
         rc = c_pthread_mutex_unlock(self%listener_args%mutex)
         if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER kill: mutex_unlock failed, rc=', rc
-        ! Wait until every registered worker has been told, at most KILL_WAIT_TIME_US; with no workers
-        ! there is nothing to wait for (a fixed two-second sleep here cost the unit tests 16 s, 2026-09-23).
+        ! With no registered workers there is nothing to wait for.
         waited_us = 0
         do while( n_to_terminate > 0 .and. waited_us < KILL_WAIT_TIME_US )
             rc = c_pthread_mutex_lock(self%listener_args%mutex)
@@ -257,7 +221,7 @@ contains
         end do
         call self%ipc_socket_server%kill()
         self%port = 0  ! zero only after listener thread has been joined
-        call self%ipc_socket_client%kill()  ! close the short-lived connection
+        call self%ipc_socket_client%kill()  ! close the dispatch client connection
         ! Destroy the mutex here — ipc_tcp_socket borrows the mutex by pointer;
         ! the owner (this type) must destroy it only after the listener thread has
         ! been joined (which ipc_socket_server%kill() guarantees above).
@@ -269,7 +233,7 @@ contains
         nullify(self%listener_args)
     end subroutine kill
 
-    !> Submit \p task to the listener thread over a short-lived TCP connection.
+    !> Submit \p task to the listener thread over the server's own client connection.
     !> Queue selection is encoded in task%priority (.true. => high-priority queue,
     !> .false. => normal-priority queue).
     !> Returns .false. if no valid status reply is received or if the listener
@@ -776,14 +740,9 @@ contains
             replied = .true.
         end subroutine handle_unknown_msg
 
-        !> Handle a WORKER_NEW_TASK_MSG sent by queue_task via a short-lived TCP client.
-        !> Deserialises the task from buf, assigns a job_id, and appends it to the
-        !> high-priority queue when new_task%priority=.true., otherwise normal-priority.
-        !> No mutex is needed: the task queues and job_count are
-        !> thread-local to worker_listener_thread and only ever accessed from here.
-        !> Replies with WORKER_STATUS_IDLE to acknowledge receipt; the actual dispatch
-        !> happens at the next worker heartbeat.
-        !> All variables accessed via host association from worker_listener_thread.
+        !> Enqueue a WORKER_NEW_TASK_MSG from queue_task: assign job_id and append to the high (priority)
+        !> or normal queue; queues and job_count are listener-local, so no mutex. Replies STATUS idle when
+        !> queued, error when the queue is full; dispatch happens on a later heartbeat.
         subroutine handle_new_task_msg()
             type(qsys_persistent_worker_message_task) :: new_task
             integer                                   :: slot, n_effective_workers, warmup_deficit
@@ -1022,8 +981,7 @@ contains
 
             send_terminate = status%l_terminate
 
-            ! Update worker registry (bounds-checked).
-            ! Log lines are deferred to outside the mutex (design contract point 5).
+            ! Update worker registry (bounds-checked); its WORKER CONNECTED log line is written under the mutex.
             call update_worker_registry()
             ! Refresh the externally-visible active worker count on every heartbeat,
             ! regardless of whether warmup/cooldown autoscaling is enabled.
@@ -1105,8 +1063,7 @@ contains
             rc = c_pthread_mutex_unlock(args%mutex)
             ! --- End of critical section ---
 
-            ! All log lines and network replies are outside the mutex
-            ! (design contract: never hold lock during blocking I/O or writes).
+            ! Network replies go out after the unlock: never hold the lock during blocking socket I/O.
             if( worker_id >= 1 .and. worker_id <= status%n_workers ) then
                 if( DEBUG ) &
                     write(logfhandle,'(A,A,A,A,A,A,A)') '>>> PERSISTENT_WORKER_SERVER heartbeat worker ', int2str(worker_id), &

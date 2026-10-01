@@ -145,20 +145,10 @@ contains
         deallocate(clspops)
     end subroutine remap_cls
 
-    !> Re-seed a K-class partition from a previous clustering, metadata only.
-    !! clsinds are the accepted parent classes. Each parent receives a number
-    !! of seed classes proportional to its active population (largest-remainder
-    !! allocation; at least one when ncls_target >= size(clsinds)), so every
-    !! seed class has ~nptcls/ncls_target particles (balanced) and the seed
-    !! set represents the previous view distribution (representative). A
-    !! parent with more than one seed class is split by rank interleaving on
-    !! corr (best-to-worst, dealt round-robin), so the children are equal in
-    !! size and in objective-value distribution. When ncls_target < size(clsinds)
-    !! the least populous parents receive no seed class. Every active particle
-    !! outside the seeded parents (dropped, rejected, or unlabelled) gets
-    !! class=0; e3/shift are left untouched. State=0 particles are ignored.
-    !! parent_of_seed(k) is the parent class of seed class k, seed_pops(k) its
-    !! population, ndropped the number of accepted parents left without a seed.
+    !> Re-seeds ncls_target balanced classes from the accepted parent classes clsinds (metadata only): seeds per
+    !! parent in proportion to its active population (largest remainder; at least one if ncls_target >= size(clsinds)),
+    !! a parent's particles dealt round-robin in corr rank. All other particles, state=0 included, get class=0; e3/shift
+    !! are untouched. parent_of_seed(k)/seed_pops(k): parent/population of seed k; ndropped: parents left without a seed.
     module subroutine reseed_classes( self, clsinds, ncls_target, parent_of_seed, seed_pops, ndropped )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: clsinds(:)

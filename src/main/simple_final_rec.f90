@@ -15,18 +15,9 @@ private
 
 contains
 
-    !> The one ending shared by abinitio3D, refine3D_auto, refine3D_states and
-    !! classify3D_refs: the final all-particle reconstruction at the native
-    !! particle sampling, driven by the refinement command line the map
-    !! continues from (filtering, automask, backend, crop and iteration
-    !! provenance). Valid committed canonical sigmas are reused; a missing,
-    !! stale, wrong-grid or crop-box-registered state is rebuilt by
-    !! bootstrap_rec3D (image-power seed, euclid ML bootstrap map, one residual
-    !! sigma pass, shipped euclid ML map). A refinement without ML
-    !! regularization ships a classical correlation map. State maps, FSCs and
-    !! envfsc masks are registered in the project; with l_postprocess the final
-    !! products (rec_final maps, low-pass snapshots, postprocessed and mirrored
-    !! maps, orthogonal reprojections) are written as well.
+    !> The final all-particle reconstruction at native sampling shared by abinitio3D, refine3D_auto,
+    !! refine3D_states and classify3D_refs, driven by the refinement command line it continues from. Sigmas
+    !! not consumable at the native box are rebuilt by bootstrap_rec3D; without ML regularization it ships a cc map.
     subroutine calc_final_rec( params, spproj, projfile, cline_refine, xrec3D, xbootstrap_rec3D, &
         &l_postprocess, lp_snapshot )
         class(parameters),     intent(in)    :: params
@@ -58,7 +49,7 @@ contains
             ! wrong-grid, wrong-layout or wrong-grouping state is rebuilt from
             ! particle power and residual-upgraded by bootstrap_rec3D.
             ! Sigmas estimated at a cropped registration box are refreshed at
-            ! native sampling before the shipped map (2026-09-07).
+            ! native sampling before the shipped map.
             l_bootstrap_sigmas = canonical_final_rec_needs_bootstrap()
             if( .not. l_bootstrap_sigmas ) l_bootstrap_sigmas = final_rec_box_changed()
             if( .not. l_bootstrap_sigmas ) write(logfhandle,'(A)') &
@@ -71,13 +62,8 @@ contains
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION BOOTSTRAP SIGMA ITERATION: ', bootstrap_sigma_iter
             if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
                 &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_final%get_iarg('maxits_pcg')
-            ! bootstrap_rec3D owns the complete sequence: image-power seed,
-            ! euclid ML bootstrap map, one residual sigma2 pass (refine=sigma)
-            ! against it at the final sampling, group consolidation as the
-            ! next iteration and the shipped euclid ML reconstruction on the
-            ! residual sigmas. The same program is the standalone test entry
-            ! point for this stage on any project with 3D orientations
-            ! (simple_exec prg=bootstrap_rec3D), 2026-09-07.
+            ! bootstrap_rec3D owns the whole sequence (image-power seed, euclid ML bootstrap map, one residual
+            ! sigma2 pass at the final sampling, shipped euclid ML map); prg=bootstrap_rec3D runs it standalone.
             call xbootstrap_rec3D%execute(cline_final)
         else
             if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
@@ -202,14 +188,8 @@ contains
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
                 if( final_stage_uses_ml_reg() ) call child_cline%set('conical_fsc', params%conical_fsc)
-                ! automsk is inherited on BOTH routes: the shipped PCG map is
-                ! estimated on the same selected density/NU support policy as
-                ! every refinement iteration, with the same
-                ! estimator-constrained FSC. Until 2026-09-16 only the
-                ! bootstrap_rec3D route forwarded it; the direct route (native
-                ! registration box, committed sigmas reused) shipped a
-                ! spherical-support solve with a post-hoc masked FSC (bgal
-                ! refine3D_auto record).
+                ! automsk is inherited on BOTH routes: the shipped PCG map is estimated on the same
+                ! density/NU support, with the same estimator-constrained FSC, as every refinement iteration.
                 if( cline_refine%defined('automsk') ) &
                     &call child_cline%set('automsk',   cline_refine%get_carg('automsk'))
                 if( trim(params%automsk) == 'nu' )then
@@ -226,7 +206,7 @@ contains
                     ! reference they are scored against: the bootstrap map is
                     ! regularized exactly as the refinement's matching
                     ! references were; the shipped map is made classical by
-                    ! bootstrap_rec3D itself (2026-09-07)
+                    ! bootstrap_rec3D itself
                     if( cline_refine%defined('filt_mode') ) &
                         &call child_cline%set('filt_mode', cline_refine%get_carg('filt_mode'))
                     if( trim(params%automsk) /= 'nu' .and. cline_refine%defined('nu_msk_sig') ) &

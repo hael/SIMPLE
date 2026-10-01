@@ -6,12 +6,11 @@ implicit none
 contains
 
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, evidence_source, fsc_res )
+            &evidence_source, fsc_res )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        integer,     optional, intent(in) :: n_highres_steps
         character(len=*), optional, intent(in) :: evidence_source
         real,        optional, intent(in) :: fsc_res
         type(image) :: vol_even_filt, vol_odd_filt, vol_support
@@ -23,7 +22,7 @@ contains
         real    :: x
         real,    allocatable :: bwfilters_tmp(:,:)
         integer, allocatable :: cutoff_finds_tmp(:)
-        call init_nu_filter(vol_even, vol_odd, n_highres_steps, fsc_res)
+        call init_nu_filter(vol_even, vol_odd, fsc_res)
         if( nu_l_report .and. nu_bank_cap_find > 0 )then
             write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') '>>> NU BANK CAP: FSC=0.143 ', fsc_res, &
                 &' A; candidates finer than ', calc_lowpass_lim(nu_bank_cap_find, box, smpd), &
@@ -62,24 +61,8 @@ contains
                 endif
             end do
             if( aux_replacement_idx > 0 )then
-                ! One rule for every workflow (2026-09-19, Hans): the
-                ! ML-regularized pair joins the bank the moment its FSC=0.143
-                ! resolution is at or beyond the ladder's finest rung at this
-                ! box, APPENDED as one more member beside that rung, never in
-                ! its place (2026-09-18): the two compete voxel by voxel under
-                ! the same unary, and the auxiliary shares the finest rung's
-                ! Potts coordinate (setup_nu_candidate_coords), so replacing a
-                ! finest-rung voxel by the regularized pair costs the prior
-                ! nothing -- the unary alone decides. Its slot has its own
-                ! Fourier index so the label reports its resolution; its
-                ! filtered pair is never cached (the unary uses the regularized
-                ! halves directly, apply/stats skip it). Within the ladder the
-                ! rungs compete alone: the finest retained rung is then finer
-                ! than the pair (the cap keeps a rung between fsc/1.5 and fsc),
-                ! and the pair would only hand the matching band back to the
-                ! FSC (PfCRT 2026-09-16/18, 0/4 and 1/9 restarts). Appended or
-                ! not, the last label is the finest member of the bank and is
-                ! the matching low-pass handoff.
+                ! ML pair appended as the last label only at or beyond the finest retained rung (in practice FSC <= 4 A);
+                ! it shares that rung's Potts coordinate, so the unary alone decides; its filtered pair is never cached.
                 aux_find = max(1, min(box/2, calc_fourier_index(aux_resolutions(aux_replacement_idx), box, smpd)))
                 if( aux_find >= cutoff_finds(size(cutoff_finds)) )then
                     call stash_aux_volumes(aux_even(aux_replacement_idx:aux_replacement_idx), &
@@ -125,9 +108,7 @@ contains
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
         call vol_even%nu_objective_noise_profile(vol_odd, nu_lmask, noise_profile, noise_rmax)
-        ! Cache for reuse during high-resolution shell extension; the raw
-        ! E/O noise profile is candidate-independent so it does not need to be
-        ! recomputed per shell challenge.
+        ! cached for build_nu_evidence_state's null candidate (the profile is candidate-independent)
         if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
         nu_noise_profile_cached = noise_profile
         nu_noise_rmax_cached    = noise_rmax
@@ -193,83 +174,32 @@ contains
             candidate_coords(i) = nu_potts_coord_for_label(i, n_base)
         end do
         ! the auxiliary member shares the finest rung's coordinate: a
-        ! boundary between the two is not a resolution discontinuity
-        ! (2026-09-18), see setup_nu_dmats
+        ! boundary between the two is not a resolution discontinuity,
+        ! see setup_nu_dmats
         if( nu_aux_replacement_label > 0 .and. n_base > 1 )then
             if( nu_aux_replacement_label == n_base ) &
                 &candidate_coords(n_base) = candidate_coords(n_base - 1)
         endif
     end subroutine setup_nu_candidate_coords
 
-    !> Number of bank labels that belong to the discrete static ladder. The
-    !! ladder always occupies labels 1..n (a capped static bank retains fewer
-    !! than size(lowpass_limits)); every label beyond it is a walked shell
-    !! (a retained step seeded by init_nu_filter or accepted by the shell walk)
+    !> min(n_base, size(lowpass_limits)): the bank labels that take their own ladder coordinate
     module integer function nu_static_ladder_count( n_base )
         integer, intent(in) :: n_base
         nu_static_ladder_count = max(1, min(size(lowpass_limits), n_base))
     end function nu_static_ladder_count
 
-    !> Ordered-label Potts coordinate of bank label ilabel in a bank of n_base
-    !! labels: the ladder position for a static label, the finest ladder
-    !! position for every walked shell (2026-09-13). The hinge therefore never
-    !! prices a transition among walked shells, or between a walked shell and
-    !! the finest static label; the walk is selected on unary evidence alone
-    !! (already AWF-smoothed) under the shell-walk acceptance gate
+    !> Ordered-label Potts coordinate of bank label ilabel: its index, capped at the ladder length.
+    !! setup_nu_candidate_coords then moves an appended auxiliary label onto the finest rung's coordinate.
     module real function nu_potts_coord_for_label( ilabel, n_base )
         integer, intent(in) :: ilabel, n_base
         nu_potts_coord_for_label = real(min(ilabel, nu_static_ladder_count(n_base)))
     end function nu_potts_coord_for_label
-
-    !> Mask voxels currently assigned to a walked (finer-than-ladder) label
-    module integer function count_nu_walked_label_voxels( candmap, n_base )
-        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        integer, intent(in) :: n_base
-        integer :: i, j, k, imask, icand, n_ladder, n
-        n = 0
-        if( .not.allocated(nu_mask_vox) ) then
-            count_nu_walked_label_voxels = 0
-            return
-        endif
-        n_ladder = nu_static_ladder_count(n_base)
-        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,icand) reduction(+:n) proc_bind(close)
-        do imask = 1, n_nu_mask
-            i = nu_mask_vox(1,imask)
-            j = nu_mask_vox(2,imask)
-            k = nu_mask_vox(3,imask)
-            icand = int(candmap(i,j,k))
-            if( icand > n_ladder .and. icand <= n_base ) n = n + 1
-        end do
-        !$omp end parallel do
-        count_nu_walked_label_voxels = n
-    end function count_nu_walked_label_voxels
 
     module real function get_nu_filter_bank_finest_lp()
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; get_nu_filter_bank_finest_lp')
         if( size(cutoff_finds) < 1 ) THROW_HARD('empty filter bank; get_nu_filter_bank_finest_lp')
         get_nu_filter_bank_finest_lp = nu_label_lowpass_limit(size(cutoff_finds))
     end function get_nu_filter_bank_finest_lp
-
-    module integer function get_nu_filtmap_highres_shell_depth()
-        integer :: base_n, finest_label, i, j, k, imask
-        get_nu_filtmap_highres_shell_depth = 0
-        if( .not.allocated(cutoff_finds) ) return
-        if( .not.allocated(filtmap)      ) return
-        if( .not.allocated(nu_lmask)     ) return
-        base_n = min(size(lowpass_limits), size(cutoff_finds))
-        if( base_n < 1 ) return
-        finest_label = 0
-        do imask = 1, n_nu_mask
-            i = nu_mask_vox(1,imask)
-            j = nu_mask_vox(2,imask)
-            k = nu_mask_vox(3,imask)
-            finest_label = max(finest_label, int(filtmap(i,j,k)))
-        end do
-        if( finest_label == 0 ) return
-        if( finest_label <= base_n ) return
-        finest_label = min(finest_label, size(cutoff_finds))
-        get_nu_filtmap_highres_shell_depth = max(0, cutoff_finds(finest_label) - cutoff_finds(base_n))
-    end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
         integer :: nx, ny, nz, i, j, k, icand, n_base, n_candidates, imask, n_clamped, ilevel
@@ -292,20 +222,8 @@ contains
         if( .not.allocated(raw_dmats_mask) ) THROW_HARD('raw_dmats_mask not allocated; run setup_nu_dmats before optimize_nu_cutoff_finds')
         if( allocated(filtmap) ) deallocate(filtmap)
         allocate(filtmap(nx,ny,nz), source=1_NU_LABEL_KIND)
-        ! Coarse-to-fine selection with like-for-like smoothing (2026-09-08).
-        ! dmats_mask holds each candidate smoothed at its own radius (1.5 x LP),
-        ! so an argmin over it compares differently smoothed fields: two
-        ! candidates with near-identical raw unaries do not tie, the smaller
-        ! radius wins at local minima of the unary field, the larger at maxima,
-        ! an intermediate one almost never. An honest gridding pair never
-        ! exposes this (adjacent fine candidates differ by the admitted noise
-        ! band); a regularized pair does, and the populated fine label then
-        ! follows the radius table (PfCRT 2026-09-07: box 140, radii 4/3/3 px
-        ! for 5.97/5.0/4.44 A, 7.2% at 5.0 and 0.08% at 4.44; box 150, 4/4/3,
-        ! 0.1% at 5.0 and 3% at 4.14). Here each finer candidate replaces the
-        ! incumbent only if it wins at ITS scale with both smoothed alike, so
-        ! identical unaries tie exactly and the coarser label keeps (strict <).
-        ! The cost is the smoothing passes: n(n+1)/2 - 1 instead of n.
+        ! Coarse-to-fine like-for-like selection: label l replaces the incumbent only if strictly cheaper, both
+        ! re-smoothed at l's radius from raw_dmats_mask (n(n+1)/2-1 extra passes); dmats_mask feeds the Potts prior.
         allocate(sel(n_nu_mask), source=1)
         allocate(lvl(n_nu_mask,n_candidates), source=0.)
         allocate(full(nx,ny,nz), source=0.)
@@ -353,9 +271,7 @@ contains
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
         call clamp_nu_filtmap_labels(n_base)
-        ! Keep the mask-packed unary bank. High-resolution extension appends
-        ! accepted challenger unaries and can then run a final ordered-label
-        ! cleanup over the expanded label field.
+        ! the unary bank stays allocated for build_nu_evidence_state; nu_filter_vols releases it
     end subroutine optimize_nu_cutoff_finds
 
     !> Enforce the solvent-constraint clamp on the module label field:
@@ -531,16 +447,5 @@ contains
         endif
         nu_candidate_coord_for_label = real(ilabel)
     end function nu_candidate_coord_for_label
-
-    !> Base label identity of a candidate: the label itself, clamped to the
-    !! bank. This used to round the Potts coordinate, which was an identity
-    !! map for the base bank; since the walked shells share the finest ladder
-    !! coordinate (2026-09-13) the coordinate is no longer a label and must
-    !! not be used as one (the shell-walk frontier is the finest BANK label)
-    module integer function nu_effective_base_label_for_candidate( icand, n_base )
-        integer, intent(in) :: icand, n_base
-        if( n_base < 1 ) THROW_HARD('empty base bank; nu_effective_base_label_for_candidate')
-        nu_effective_base_label_for_candidate = max(1, min(n_base, icand))
-    end function nu_effective_base_label_for_candidate
 
 end submodule simple_nu_filter_bank

@@ -1,26 +1,7 @@
-!@descr: GUI metadata for the stream particle-sieving stage — particle counts, masking parameters, and user-input flag
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_particle_sieving
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields specific to the particle-sieving
-!   stage of the cryo-EM streaming pipeline.  Tracks the number of particles
-!   imported and accepted, the rejection count, masking geometry, and a flag
-!   indicating whether user input has been provided.  The Unix timestamp of
-!   the most recently imported particle batch is recorded and updated on each
-!   change.
-!
-! TYPES:
-!   gui_metadata_stream_particle_sieving — extends gui_metadata_base
-!     set()            — assign particle counts and masking fields
-!     set_user_input() — set the user-input flag independently
-!     get()            — retrieve particle counts, user-input flag, and
-!                        last-import timestamp; returns the l_assigned flag
-!     jsonise()        — serialise all fields to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   unix, json_module, simple_string, simple_defs, simple_gui_metadata_base
-!==============================================================================
+!@descr: GUI metadata for the stream particle-sieving stage — particle counts, class selection, and user-input flag
+! Filled by stream p05 from ptcl_sieve: all three counts are passed in (rejected is not derived).
+! selection holds up to 1500 selected class indices of the latest product, as int16.
+! set() stamps last_import_time (Unix time) whenever particles_imported changes.
 module simple_gui_metadata_stream_particle_sieving
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception
@@ -44,7 +25,7 @@ module simple_gui_metadata_stream_particle_sieving
     integer               :: n_selection             = 0
     integer               :: particles_imported      = 0       ! total particles received from upstream
     integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
-    integer               :: particles_rejected      = 0       ! particles_imported - particles_accepted
+    integer               :: particles_rejected      = 0       ! particles rejected by the sieve (caller-supplied)
     integer               :: last_import_time        = 0       ! Unix timestamp of most recent import event
     logical               :: user_input              = .false. ! .true. once the user has supplied input
   contains
@@ -58,8 +39,7 @@ module simple_gui_metadata_stream_particle_sieving
 
 contains
 
-  ! Assign particle counts and masking fields. Derives particles_rejected
-  ! automatically. Updates last_particles_imported only when the import
+  ! Assign stage and particle counts. Updates last_import_time only when the import
   ! count changes.
   subroutine set( self, stage, particles_imported, particles_accepted, particles_rejected )
     class(gui_metadata_stream_particle_sieving), intent(inout) :: self

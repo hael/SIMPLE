@@ -1,13 +1,6 @@
-!@descr: unit test routines for the low-pass and cropping schedules (mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims), the FSC weightings (fsc2optlp, fsc2cref), the B-factor cap (bfac_cap_filter), the Butterworth kernel and apply_filter's Nyquist support
-! The clamps that turn a mask diameter into the 2D low-pass limits, the FRC-driven multi-stage schedule
-! of refinement (stages from the FRC crossings, the linear fallback when the FRC never crosses, the crop
-! box / sampling / shift-limit bookkeeping through the magic boxes), its two linear cousins, the
-! postprocess FSC weightings (the Wiener 2FSC/(1+FSC) and RELION's sqrt(2FSC/(1+FSC)) with its
-! truncation at the first FSC < 1e-4), the cap that holds a B-factor sharpening at the gain of the
-! cutoff shell, the order-8 Butterworth transfer function against its
-! closed form, and apply_filter zeroing every shell beyond its filter (the Fourier-cube corners a
-! Nyquist-sized filter removes). References: lpstages_ref.py (stats batch scratch), a
-! double-precision emulation of the same rules; the FSC weightings are closed forms.
+!@descr: unit tests for the low-pass/crop stage schedules, FSC weightings, B-factor cap, Butterworth filter and apply_filter Nyquist support
+! Expected stage values come from an out-of-tree double-precision emulation (lpstages_ref.py, not in the repo);
+! FSC weightings and the Butterworth kernel are closed forms.
 module simple_lpstages_tester
 use simple_test_utils        ! assertions etc.
 use simple_defs              ! sp
@@ -345,7 +338,7 @@ contains
     ! that radius (its value after filtering is the mean weight over the full cube): all of them for a
     ! box-sized filter (the corners reach nint(sqrt(3) N/2) = 28 < 32), 18706/32768 for a filter over the
     ! Fourier shells (filtsz = 16; numpy count over [-16,15]^3). postprocess relies on this to keep
-    ! exp(-B s^2/4) out of the cube corners (2026-09-27, exp_gate).
+    ! exp(-B s^2/4) out of the cube corners.
     subroutine test_filter_nyquist_support()
         integer, parameter :: N = 32
         real,    parameter :: KEPT_FRAC_NYQ = 18706. / 32768.

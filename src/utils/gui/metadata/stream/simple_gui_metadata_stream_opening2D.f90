@@ -1,27 +1,7 @@
 !@descr: GUI metadata for the stream opening-2D stage — particle counts, masking parameters, and user-input flag
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_opening2D
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields specific to the opening 2-D
-!   classification stage of the cryo-EM streaming pipeline.  Tracks the
-!   number of particles imported and accepted, the rejection count, masking
-!   geometry, and a flag indicating whether user input has been provided.
-!   The Unix timestamp of the most recently imported particle batch is also
-!   recorded and updated on each change.
-!
-! TYPES:
-!   gui_metadata_stream_opening2D — extends gui_metadata_base
-!     set()           — assign particle counts and masking fields
-!     set_user_input() — set the user-input flag independently
-!     get()           — retrieve particle counts and last-import timestamp;
-!                       returns the l_assigned flag
-!     jsonise()       — serialise all fields to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   unix, json_kinds, json_module, simple_string, simple_defs,
-!   simple_gui_metadata_base
-!==============================================================================
+! Filled by stream p03 (send_meta2D). particles_rejected = imported - accepted;
+! last_particles_imported is a Unix timestamp, stamped when particles_imported changes.
+! mask_diam is in A; mask_scale (JSON mskscale) is the box size in A, for overlay scaling.
 module simple_gui_metadata_stream_opening2D
   use unix,                     only: c_long, c_time
   use json_kinds
@@ -43,11 +23,11 @@ module simple_gui_metadata_stream_opening2D
     integer               :: particles_imported           = 0       ! total particles received from upstream
     integer               :: particles_accepted           = 0       ! particles passing 2-D selection criteria
     integer               :: particles_rejected           = 0       ! particles_imported - particles_accepted
-    integer               :: mask_diam                    = 0       ! circular mask diameter (pixels)
+    integer               :: mask_diam                    = 0       ! mask diameter (A)
     integer               :: box_size                     = 0       ! particle box size (pixels)
     integer               :: cycle                        = 0       ! opening-2D plan cycle index
     integer               :: last_particles_imported      = 0       ! Unix timestamp of most recent import event
-    real                  :: mask_scale                   = 0.0     ! fractional mask scale factor
+    real                  :: mask_scale                   = 0.0     ! box size in A (box_size * smpd)
     logical               :: user_input                   = .false. ! .true. once the user has supplied input
   contains
     procedure :: set

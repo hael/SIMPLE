@@ -1,6 +1,6 @@
 !@descr: CTF/sigma-weighted Fourier-projection operator and preconditioned
 !  conjugate-gradient volume solver of the reconstruct3D PCG backend, see
-!  doc/policies/reconstruct3D_pcg_policy.md. Per-particle data is cached once
+!  doc/policies/3D/reconstruct3D_pcg_policy.md. Per-particle data is cached once
 !  (prep_particles), the particle loops are OpenMP-parallel, and the optional
 !  kernelized (Toeplitz) normal operator makes the per-iteration cost independent
 !  of the particle count; the matrix-free operator is the exact reference.
@@ -57,7 +57,7 @@ type :: pcg_solver_outcome
     real              :: rejected_start_initial = 0.0       !< initial relative residual of the discarded start
     logical           :: converged            = .false.
     ! the regularized solve starts from the closed-form Wiener shrink of the
-    ! base solution (2026-09-16); its residuals against the coupled system and
+    ! base solution; its residuals against the coupled system and
     ! the agreement of the solved map with it are kept for the sidecar
     real              :: closed_form_rel_residual   = -1.0 !< L2 relative residual of the closed-form start (-1: no closed form)
     real              :: closed_form_rel_residual_m = -1.0 !< preconditioned relative residual of the closed-form start
@@ -560,18 +560,9 @@ contains
         call self%fold_solvent_ridge_into_precond
     end subroutine set_solvent_prior
 
-    !> Jacobi term of the solvent ridge in the preconditioner. The real-space
-    !! ridge lambda_s (1-w(r)) has no Fourier-diagonal representation, but its
-    !! mean over the solve domain is a constant, and a real-space constant is
-    !! the same constant as a Fourier diagonal in the operator's units (the
-    !! image FFT pair round-trips), so it enters the preconditioner as
-    !! c/padsc^2, exactly like the ML prior. Without it CG runs on the ridge
-    !! system with a preconditioner built for the prior-free operator and is
-    !! left far from solved at the production budget (bgal 2026-09-22: RESID
-    !! 0.2-0.3 at lambda_rel 1.2 against 0.04-0.06 prior-free, above 1 for
-    !! lambda_rel >= 10). Idempotent under strength changes: the constant
-    !! folded last time is removed before the new one is added. Called from
-    !! set_solvent_prior and again when the preconditioner is (re)built
+    !> Jacobi term of the solvent ridge lambda_s (1-w(r)): not Fourier-diagonal, but its mean over the solve domain
+    !! is a constant, entered as c/padsc^2 like the ML prior; without it CG stays far from solved at the production
+    !! budget. Idempotent: the last folded constant is replaced. Called on set_solvent_prior and precond (re)build.
     subroutine fold_solvent_ridge_into_precond( self )
         class(reconstructor_pcg), intent(inout) :: self
         real(dp) :: psum
@@ -1927,7 +1918,7 @@ contains
         endif
         ! the real-space diagonal of the circulant data operator is one number,
         ! the mean of D over ALL native shells (the solvent prior's closed-form
-        ! strength estimate compares its real-space ridge with it, 2026-09-22)
+        ! strength estimate compares its real-space ridge with it)
         if( sum(shell_count) > 0 )then
             self%realspace_diag = real(sum(shell_sum) / real(sum(shell_count),dp)) * self%padsc**2
         else
@@ -2216,11 +2207,9 @@ contains
         self%t_fin_kernel = pcg_toc(tp)
     end subroutine finalize_khat
 
-    !> analytic scale of Khat relative to the matrix-free operator: padsc**2. A
-    !! least-squares fit measured 64.3 (synthetic) and 63.98 (real data), i.e. this
-    !! constant; the trailing path derives Khat from a stored accumulator with no
-    !! particles resident, so only an analytic factor survives (policy section 5).
-    !! measure_kernel_scale still fits it for the tests
+    !> analytic scale of Khat relative to the matrix-free operator: padsc**2. The trailing path
+    !! builds Khat from a stored accumulator with no particles resident, so only an analytic factor
+    !! works (policy section 5); measure_kernel_scale fits it for the tests
     subroutine calibrate_kernel( self )
         class(reconstructor_pcg), intent(inout) :: self
         self%Khat = self%Khat * self%padsc**2
@@ -2917,19 +2906,9 @@ contains
         self%l_profile = .false.
     end subroutine solve_core
 
-    !> The regularized map in closed form (2026-09-14), in place of the
-    !! P_tau replay solve: the base solution's Fourier coefficients on the
-    !! padded lattice scaled voxelwise by
-    !!     (rho + floor) / (rho + floor + P_tau) = 1 - P_tau * precond,
-    !! the replay's own preconditioner and prior. This is the optimum of the
-    !! diagonal model the preconditioner encodes -- the map a first CG step
-    !! from zero targets -- voxelwise, so unlike the retired shell-isotropic
-    !! FSC shrinkage it shrinks undersampled voxels by their own rho. What it
-    !! leaves out is the coupling the support crop introduces, which the
-    !! replay solve was iterating on; the returned relative residuals of the
-    !! result against the replay system (L2 and preconditioned norms, one
-    !! operator application) measure exactly that and are diagnostics only.
-    !! x arrives and leaves as a shipped map (window*u).
+    !> Closed-form regularized map: the base solution's padded Fourier coefficients scaled voxelwise by
+    !! (rho+floor)/(rho+floor+P_tau) = 1 - P_tau*precond, the diagonal model's optimum. The residuals against the
+    !! P_tau (replay) system measure the support-crop coupling this omits (diagnostics only). x is window*u in and out.
     subroutine shrink_by_ml_prior( self, x, rel_resid_l2, rel_resid_m )
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(inout) :: x(self%box,self%box,self%box)

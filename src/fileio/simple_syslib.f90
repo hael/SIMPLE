@@ -419,17 +419,8 @@ contains
     end function fs_avail_bytes
 
     !> \brief How many files to read from concurrently, given nreq are available.
-    !!
-    !!  The right queue depth is a property of the storage, not of the CPU, so nthr_glob
-    !!  is never the answer: on a spinning disk many concurrent readers turn per-file
-    !!  sequential runs into head thrashing, while on flash a handful of streams already
-    !!  saturates the device.
-    !!
-    !!  The verdict is memoized per device rather than per process, because a run can
-    !!  legitimately span devices -- particle stacks on a slow disk and a particle cache
-    !!  on a fast one is exactly the case cache_dir exists to serve. Caching one global
-    !!  answer would apply whichever device happened to be touched first to both.
-    !!  SIMPLE_IO_NSTREAMS overrides every device.
+    !!  A property of the storage, not the CPU, so never nthr_glob: concurrent readers thrash a
+    !!  spinning disk. The cap is memoized per device; SIMPLE_IO_NSTREAMS overrides every device.
     function io_read_nstreams( fname, nreq, report ) result( nstreams )
         class(*), intent(in) :: fname
         integer,  intent(in) :: nreq

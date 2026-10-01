@@ -1,17 +1,7 @@
 !@descr: TCP client that sends a request and reads the reply from the first reachable server of a list
-!==============================================================================
-! MODULE: simple_ipc_tcp_socket_client
-!
-! PURPOSE:
-!   Lightweight TCP client used by SIMPLE components to send a request buffer
-!   and read a reply from any reachable server IP in a comma-separated list.
-!
-! DESIGN NOTES:
-!   - Reuses an existing healthy socket when possible.
-!   - Applies SO_KEEPALIVE and send/receive timeouts on new sockets.
-!   - Handles partial sends by looping until the full payload is written.
-!   - Handles fragmented replies by accumulating reads into rcv_buffer.
-!==============================================================================
+! connect() reuses a healthy socket, else tries each comma-separated IP with SO_KEEPALIVE and
+! TCP_TIMEOUT_MS send/receive timeouts. send_recv_msg does a single send and a single read (no
+! partial-send or fragment reassembly) and reconnects up to TCP_MAX_RETRIES times on failure.
 module simple_ipc_tcp_socket_client
   use iso_c_binding
   use unix,          only: c_socket, c_connect, c_send, c_setsockopt, c_close, c_read, &

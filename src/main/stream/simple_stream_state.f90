@@ -1,20 +1,7 @@
 !@descr: global stream master pipe descriptors for IPC
-!==============================================================================
-! MODULE: simple_stream_state
-!
-! PURPOSE:
-!   Declares the shared pipe descriptor arrays used for inter-process
-!   communication between the stream master and worker processes.
-!   Centralizing them here avoids circular USE dependencies and ensures
-!   both sides of each channel reference the same descriptors.
-!
-! VARIABLES:
-!   ipc_pipe_*_in  — stage input pipes: commands sent FROM master TO stage
-!   ipc_pipe_*_out — stage output pipes: metadata sent FROM stage TO master
-!
-! DEPENDENCIES:
-!   none
-!==============================================================================
+! Kept here so the master and the forked stages share the same descriptors without circular USE.
+! Names are from the master's side: ipc_pipe_*_in carries stage->master metadata,
+! ipc_pipe_*_out carries master->stage updates.
 module simple_stream_state
 
   implicit none

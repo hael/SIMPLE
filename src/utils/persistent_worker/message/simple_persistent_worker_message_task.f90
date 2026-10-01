@@ -1,53 +1,8 @@
 !@descr: task message of the persistent-worker protocol: a queued job request and the job dispatched to a worker
-!==============================================================================
-! MODULE: simple_persistent_worker_message_task
-!
-! PURPOSE:
-!   Defines the task wire message exchanged between the persistent-worker
-!   server and workers.  The same payload is used for:
-!     - queued task requests (master -> listener)
-!     - dispatched tasks     (listener -> worker)
-!
-!   When a persistent worker sends a heartbeat and the server has a queued job that fits
-!   the worker's available thread capacity, the server replies with a task
-!   message.  The task message carries:
-!     - job_id       — unique job counter (>0 when active)
-!     - queue_time   — UNIX time of enqueue
-!     - start_time   — UNIX time worker started execution
-!     - end_time     — UNIX time of completion (0 = pending)
-!     - exit_code    — script exit status after completion
-!     - nthr         — thread slots required
-!     - submitted    — .true. once dispatched to a persistent worker
-!     - priority     — .true. when caller requests priority handling
-!     - script_path  — absolute path to the bash script
-!
-! DESIGN CONTRACT:
-!   serialise_qsys_persistent_worker_message_task inlines the three-statement
-!   TRANSFER body (deallocate / allocate(sizeof(self)) / transfer) rather
-!   than delegating to the base serialise procedure.  This is mandatory:
-!   sizeof() is resolved against the declared type of the dummy argument, so
-!   calling the base procedure would allocate only sizeof(qsys_persistent_worker_message_base)
-!   bytes and silently truncate the task-specific fields from the buffer.
-!   See simple_persistent_worker_message_base for the full design contract.
-!
-! USAGE:
-!   type(qsys_persistent_worker_message_task) :: task
-!   call task%new()
-!   task%job_id       = my_job_id
-!   task%queue_time   = int(time())
-!   task%start_time   = 0
-!   task%end_time     = 0
-!   task%exit_code    = 0
-!   task%nthr         = required_threads
-!   task%submitted    = .false.
-!   task%priority     = .false.
-!   task%script_path  = script_path
-!   call task%serialise(buffer)
-!
-! DEPENDENCIES:
-!   simple_persistent_worker_message_base  — base type and serialise contract
-!   simple_persistent_worker_message_types — WORKER_TASK_MSG enumerator
-!==============================================================================
+! queue_task() sends it to the listener as WORKER_NEW_TASK_MSG; the listener assigns job_id and later
+! dispatches the same record, msg_type unchanged, on a heartbeat with enough free threads.
+! queue_time, start_time, end_time and exit_code are never set.
+! serialise() override: see simple_persistent_worker_message_base.
 module simple_persistent_worker_message_task
     use simple_defs,                            only: STDLEN
     use simple_persistent_worker_message_base,  only: qsys_persistent_worker_message_base

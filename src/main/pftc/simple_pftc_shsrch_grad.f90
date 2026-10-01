@@ -413,27 +413,9 @@ contains
         if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
 
-    !> Classical Euclidean joint refinement over (sx,sy,rotind_frac).
-    !! The selected reference/class is fixed. Without irot_in, a discrete
-    !! all-angle scan chooses the best grid cell at xy_in. With irot_in, the
-    !! caller's selected grid cell is authoritative and no scan is performed.
-    !! The continuous solve starts from the selected cell with bounds of plus
-    !! or minus two rotation indices. The PFTC objective is periodic, so those
-    !! bounds may safely straddle the first or last grid index.
-    !!
-    !! A non-improving or numerically invalid solve returns its selected seed
-    !! cell and score. evaluation_valid=.false. is a diagnostic signal only;
-    !! irot is never 0 and callers always receive a committable discrete pose.
-    !!
-    !! irot_in is the ONLY route into the joint optimizer: the caller's
-    !! selected assignment (the product of legacy selection everywhere,
-    !! polish-only principle) is authoritative, so no global all-angle
-    !! reselection is ever performed -- under exactly degenerate in-plane
-    !! branches (e.g. dihedral C2 about the symmetry axis) a second global
-    !! selection at a slightly different shift hops branches on
-    !! floating-point noise. The solve refines within +/-2 cells of irot_in;
-    !! a non-improving solve returns the incoming cell re-scored at xy_in,
-    !! so committing it retains the incoming pose.
+    !> Polish the caller's pose over (sx,sy,rotind_frac) within +/-2 cells of irot_in (euclid, cc, hybrid);
+    !! irot_in is authoritative, there is no all-angle rescan. An invalid or non-material solve returns the
+    !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
             &evaluation_valid, improved, initial_cost_out, irot_in ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
@@ -444,22 +426,11 @@ contains
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
         integer,                 intent(in)    :: irot_in
-        ! The raw Euclidean loss is nonnegative by construction; the truncated
-        ! coefficient series can undershoot slightly at fractional angles, but
-        ! a final cost below this tolerance is an unphysical evaluator
-        ! artifact and the pose found by descending into it cannot be trusted
+        ! a final cost this far outside its physical range is a series artifact: invalid solve
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
-        ! An improvement must be material to displace the exhaustive discrete
-        ! floor: the roundoff-scale guard alone lets any solver twitch count as
-        ! "improved" (L-BFGS-B's own convergence tolerance is orders looser),
-        ! which commits fractional poses on noise and, under symmetric point
-        ! groups with near-degenerate in-plane branches, flips assignments en
-        ! masse between iterations
+        ! a gain must be material, not solver noise
         real(dp), parameter :: JOINT_IMPROVE_REL_TOL = 1.d-4
-        ! A solution pinned to a search bound is an uncontrolled excursion --
-        ! for the rotation window it contradicts the exhaustive seed scan, and
-        ! for shifts it is the corner-landing signature of a descent into
-        ! series artifacts -- so it never displaces the floor either
+        ! bound-pinned solutions never displace the seed
         real(dp), parameter :: JOINT_BOUND_TOL = 1.d-3
         real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(3,2)
         real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3), brange
@@ -552,8 +523,7 @@ contains
             end do
         endif
         if( .not. valid_result )then
-            ! Return the selected seed cell and its score; irot still holds the
-            ! global scan result or the caller's authoritative local seed.
+            ! return the incoming seed cell (irot = irot_in) and its score
             if( present(evaluation_valid) ) evaluation_valid = .false.
             if( present(improved) ) improved = .false.
             rotind_frac = real(irot,dp)

@@ -1,17 +1,7 @@
 !@descr: abinitio3D_addon validation against the base solution per state: FSC verdict, map correlation at base resolution, cohort cross-check and stage limits
-! For every state the union FSC is set against the base run's: the FSC=0.5 and
-! FSC=0.143 resolutions, the move of the FSC=0.143 Fourier shell and a verdict
-! (IMPROVED or REGRESSED when it moved by more than SHELL_TOL shells, else
-! UNCHANGED), and the mean FSC gain over the shells up to the base run's
-! FSC=0.143 shell. The union map is correlated with the base map inside the base
-! mask, up to the base run's FSC=0.143 resolution. The add-on keeps the base
-! frame, so the maps are compared as they are; below DOCK_CORR_FLOOR the union
-! map is also docked onto the base map, which tells a moved frame (rotation,
-! shift, docked correlation) from a changed structure. With addon_diag the
-! cohort-only map, built from particles the base run never saw, is compared with
-! the base map: their FSC cross-validates the cohort's alignment. Both runs'
-! stage limits are listed. The report is logged and written as SIMPLE text
-! records (kind=stage|state|cohort), one per line, which read restores.
+! Per state: union vs base FSC (verdict on the FSC=0.143 shell move beyond SHELL_TOL), correlation in
+! the mskdiam soft sphere up to the base resolution, docking below DOCK_CORR_FLOOR, optional cohort-only
+! check (addon_diag), stage limits; kind=stage|state|cohort text records that read restores.
 module simple_abinitio3D_addon_report
 use simple_core_module_api
 use simple_volpair_metrics, only: compare_volpair

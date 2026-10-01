@@ -60,8 +60,8 @@ E[z_i]     = A_i^{-1} (a_i / sigma2) b_i,
 E[z_i z_i'] = E[z_i] E[z_i]' + A_i^{-1}.
 ```
 
-The contrast `a_i` is fitted inside a bracket `[0.2, 3]`, in closed form or
-by a grid.
+The contrast `a_i` is fitted in closed form against the projected mean,
+`a_i = <T mu, y_i> / <T mu, T mu>`, clamped to `[0.1, 5]`.
 
 **M-step.** The basis volumes are updated by weighted backprojection of
 the residuals, coupled per Fourier voxel through the posterior second
@@ -75,11 +75,12 @@ then re-orthonormalized into the next basis, and `Gamma` is set from the
 posterior second moment. Even and odd particle halves maintain separate
 half-bases so that agreement between them can be measured.
 
-**Convergence.** The iteration stops when the principal angles between
-successive subspaces exceed a cosine of 0.97, or when the number of
-reproducible dimensions between the even and odd half-bases has plateaued
-(tolerance 0.02 for three iterations). The reproducible dimension count, not
-the requested rank, is what the downstream steps trust.
+**Convergence.** `n_probe_iters` bounds the iteration count. The only early
+stop applies to a rank-1 fit: it ends once the mean principal-angle cosine
+between successive bases reaches 0.999999. With two or more components the
+non-reproducing tail dominates that mean, so the fit runs to the bound.
+Downstream steps trust each component's reproducibility (its match cosine
+between two independent half-fits), not the requested rank.
 
 **Embedding.** With the converged basis, each particle's latent coordinate is
 the MAP solution of the same E-step,
@@ -161,6 +162,5 @@ combined with the merge or with external targets.
   `src/main/flex/simple_flex_pca_merge.f90`.
 - Weighted reconstruction: `src/main/flex/simple_flex_pca_rec3D.f90`.
 - Projection and backprojection operators:
-  `src/main/flex/simple_flex_projected_latent_model.f90`,
   `src/main/flex/simple_flex_reconstructor_latent_ops.f90`.
 - Subsystem overview: `src/main/flex/README.md`.

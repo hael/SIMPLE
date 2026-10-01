@@ -796,24 +796,9 @@ contains
         ipair = (r * (r - 1)) / 2 + q
     end function pair_index
 
-    !> The flex analog of simple_reconstructor::add_invtausq2rho (the ml_reg SSNR ridge), for the
-    !! packed coupled normal matrix: adds the per-component, per-shell inverse prior variance
-    !! invtau2(q,sh) -- from simple_flex_pca_crossfsc::crossfsc_to_invtau2 -- to the DIAGONAL rows
-    !! pair_index(q,q) of rho_cross_exp, the exact analog of `self%rho(phys) = self%rho(phys) +
-    !! invtau2` (simple_reconstructor.f90:1151). Because rho stays per-voxel and invtau2 is
-    !! per-shell, solve_coupled_basis_exp then sees H_q(v) + invtau2_q(sh) in the denominator: the
-    !! sampling-aware Gilles-Singer S.11 shrinkage H/(H+R), inherited for free. Off-diagonal rows
-    !! are untouched -- the prior imposed is independent per component per shell (a diagonal tau^2
-    !! prior), the only form a per-component cross-fit FSC curve can inform.
-    !! Deliberately a mutate-rho routine rather than an optional argument threaded into
-    !! solve_coupled_basis_exp: it matches the precedent's semantics, keeps the solve signature
-    !! stable, and lets the dead-voxel floor (COUPLED_DENSITY_FLOOR) and
-    !! the Cholesky-failure fallback see the regularized diagonal. The tiny relative ridge
-    !! (COUPLED_MSTEP_RIDGE_REL) stays: it is a conditioning floor with a different job, invisible
-    !! at 1e-8 next to any real invtau2.
-    !! Call it AFTER any distributed reduction (part files on disk are never mutated) and BEFORE
-    !! the solve. Shells below the conversion's k_lo carry invtau2 = 0, so "no addition at very low
-    !! resolution" holds by construction; shells above nyq / the invtau2 band are skipped.
+    !> Flex analog of reconstructor::add_invtausq2rho: adds the per-component, per-shell invtau2(q,sh)
+    !! (crossfsc_to_invtau2) to the diagonal rows pair_index(q,q) of the packed coupled density.
+    !! Call after any distributed reduction and before solve_coupled_basis_exp.
     subroutine add_invtausq2rho_coupled( basis_recs, rho_cross_exp, ncomp, invtau2 )
         integer,             intent(in)    :: ncomp
         type(reconstructor), intent(in)    :: basis_recs(ncomp)  !< lattice geometry reference only

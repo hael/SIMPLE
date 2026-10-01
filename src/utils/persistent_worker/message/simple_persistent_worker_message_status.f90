@@ -1,38 +1,7 @@
-!@descr: status message of the persistent-worker protocol: the server reply to a heartbeat when no task is available or an error occurred
-!==============================================================================
-! MODULE: simple_persistent_worker_message_status
-!
-! PURPOSE:
-!   Provides the concrete status message type sent by the queue-system server
-!   to persistent-worker processes as a reply when no task is available or an
-!   error occurs.
-!
-!   The server sends a status message in response to a heartbeat when
-!   there are no tasks to dispatch.  The worker consumes the status and continues
-!   its heartbeat loop.  The status message carries:
-!     - status  — status code at the moment of transmission
-!     - message — human-readable status message
-!
-! DESIGN CONTRACT:
-!   serialise_qsys_persistent_worker_message_status inlines the three-statement
-!   TRANSFER body (deallocate / allocate(sizeof(self)) / transfer) rather
-!   than delegating to the base serialise procedure.  This is mandatory:
-!   sizeof() is resolved against the declared type of the dummy argument, so
-!   calling the base procedure would allocate only sizeof(qsys_persistent_worker_message_base)
-!   bytes and silently truncate the status and message fields from the buffer.
-!   See simple_persistent_worker_message_base for the full design contract.
-!
-! USAGE:
-!   type(qsys_persistent_worker_message_status) :: status
-!   call status%new()
-!   status%status   = WORKER_STATUS_IDLE
-!   status%message  = 'No tasks available'
-!   call status%serialise(buffer)
-!
-! DEPENDENCIES:
-!   simple_persistent_worker_message_base  — base type and serialise contract
-!   simple_persistent_worker_message_types — WORKER_STATUS_MSG enumerator
-!==============================================================================
+!@descr: status message of the persistent-worker protocol: the listener's idle or error reply
+! Answers a heartbeat with no task (the worker ignores it), acknowledges queue_task (idle = queued,
+! error = queue full) and answers unknown message types (error). Codes live in the server module.
+! serialise() override: see simple_persistent_worker_message_base.
 module simple_persistent_worker_message_status
     use simple_defs,                            only: STDLEN
     use simple_persistent_worker_message_base,  only: qsys_persistent_worker_message_base

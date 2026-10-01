@@ -10,9 +10,10 @@ Nonuniform filtering is a volume-domain regularization feature. On both
 reconstruction backends it selects a local low-pass limit inside spherical
 `mskdiam` support and writes NU-filtered derived references
 (`simple_nu_state_filter`, shared by the gridding volassemble and the PCG
-master since 2026-09-06). Its candidate bank is not truncated by the FSC. The
-finest selected label separately governs the matching bandwidth handed to
-later iterations.
+master since 2026-09-06). Given the base pair's FSC=0.143 resolution its
+candidate bank is cut at `fsc/1.5` (section 8). The finest member of the bank,
+not the finest selected label, is the matching bandwidth handed to later
+iterations (section 12).
 
 It is not a separate final-map postprocessing workflow. `postprocess` and the
 automatic `reconstruct3D` postprocess step use the ordinary global
@@ -32,7 +33,7 @@ Supported values:
 - `nonuniform_lpset`
 
 `filt_mode=nonuniform` enables NU-filtered volume products. After the first
-iteration, the finest cutoff selected by the NU filter supplies the matching
+iteration, the finest member of the NU bank supplies the matching
 bandwidth while the matcher retains independent half-map topology.
 
 `filt_mode=nonuniform_lpset` enables the same NU filter and promotes the
@@ -61,8 +62,8 @@ pinned at 8.4-9.1 A).
 
 There is one NU competition (2026-09-16): the former `nu_refine` control
 and the high-resolution shell walk it enabled are retired (section 10). The
-bank is the coarse ladder plus fine rungs generated from the box (section
-8), the same in every workflow and in `postprocess_nu`.
+bank is the static ladder plus the optional auxiliary pair (section 8), the
+same in every workflow and in `postprocess_nu`.
 
 `mskdiam` controls the spherical NU support mask. `automsk` separately controls
 NU-evidence envelope generation, but is valid only while NU filtering is active.
@@ -87,8 +88,9 @@ phase-randomized solvent correction with the selected density or NU mask; PCG
 never phase-randomizes. `envmsklp` defaults to 20 A through
 `ENVMSKLP_DEFAULT`; it is separate from `amsklp`, which continues to set the NU
 evidence smoothing scale. FSC
-correction changes reported resolution metadata; it does not truncate the NU
-filter bank or directly set the NU matching bandwidth. `envfsc` is independent
+correction changes the reported resolution and, through the state's FSC=0.143
+resolution, the NU bank cap, the auxiliary member's admission, and hence the
+matching handoff (sections 8, 12). `envfsc` is independent
 of `automsk` and can operate without NU filtering.
 
 With `automsk=yes` the conservative density envelope is the
@@ -114,7 +116,7 @@ bandwidth metadata.
 
 `simple_nu_filter` owns the filter algorithm and its module-level working
 state: candidate-bank setup, objective generation, ordered-label smoothing,
-optional high-resolution extension, output synthesis, diagnostics, and cleanup.
+output synthesis, diagnostics, and cleanup.
 
 `simple_matcher_refvol_utils.f90` owns matcher reference loading. It decides
 whether to use NU-filtered even/odd references, a merged NU reference, or a
@@ -147,7 +149,7 @@ For each state, `volassemble` then:
 8. with active automasking, multiplies the NU-filtered even and odd references
    by the selected envelope, then writes NU-filtered even, odd, merged, and
    local-resolution products
-9. records the finest locally selected NU low-pass limit for later handoff
+9. records the finest NU bank member as the matching low-pass handoff
 
 Low-resolution even/odd insertion is a registration-reference preparation
 trick. It must not feed `volassemble` FSC calculation, automasking, NU
@@ -167,8 +169,8 @@ The NU filter consumes:
 - optionally, an auxiliary even/odd pair (the regularized pair), the finest
   member of the bank
 - optionally, the auxiliary pair's effective resolution in Angstrom
-- optionally, the base pair's FSC=0.143 resolution, which bounds the hard
-  rungs when no auxiliary pair is supplied
+- optionally, the base pair's FSC=0.143 resolution, which caps the ladder
+  rungs (section 8)
 
 When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base NU
 input and passes the ML-regularized even/odd pair as the auxiliary member.
@@ -280,7 +282,7 @@ NU-filtered products are derived references and diagnostics.
 The current filter performs these steps:
 
 1. build a retained low-pass bank from the base even/odd pair
-2. optionally replace the finest discrete bank member with an auxiliary pair
+2. optionally append an auxiliary pair as the last (finest) bank member
 3. cache low-pass-filtered bank volumes as local scratch files
 4. compute mask-packed unary objective costs for retained candidates
 5. smooth each candidate objective over a mask-normalized local support
@@ -304,7 +306,7 @@ pair; the references do, in every voxel. Log: `>>> NU REFERENCES: STATE n,
 LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR`.
 
 The bank is the static ladder `[20, 15, 12, 10, 8, 6, 5, 4]` A (the
-machinery of commit ed36eb4c's abinitio3D, the only NU mechanism since
+NU machinery of the ed36eb4c build used by abinitio3D, the only NU mechanism since
 2026-09-18; the generated dense ladder of 2026-09-16 and the shell walk of
 section 10 are both gone). Given the pair's FSC=0.143 resolution the bank
 is capped (2026-09-08): only candidates coarser than `fsc/1.5`
@@ -333,15 +335,16 @@ logs one `>>> NU BANK CAP:` line and one `>>> NU AUXILIARY MEMBER:` line
 per state (admitted, or "within the ladder ... the rungs compete alone").
 Absent an FSC (the standalone `nu_filt3D` program) the bank is uncapped.
 
-An opt-in replay-evidence API can compact this full unary bank before it is
+An opt-in evidence API can compact this full unary bank before it is
 released. Callers must tag the setup source as `base_unfil`; the API fingerprints
 and rechecks the exact half pair and rejects the ML auxiliary-replacement path.
 It adds a zero cross-half-prediction null to a separate ordered-label model.
 Because raw zero prediction has a systematic Huber-loss offset relative to a
 smoothed predictor even for independent noise, and selecting the best of several
 signal candidates adds a multiple-comparison advantage, the null score
-subtracts the robust median-plus-three-MAD offset of
-`C_zero-min(C_signal bank)` over the generous spherical support. This calibrates
+subtracts the lower quartile of `C_zero-min(C_signal bank)` over the observed
+part of the generous spherical support: the centre of the null component,
+not a detection threshold (median and MAD are recorded as diagnostics). This calibrates
 the actual competing bank while retaining sensitivity to genuinely coarse
 shared signal whenever its candidate wins, rather than treating the 20-A label
 as solvent. The API then freezes selected
@@ -349,30 +352,27 @@ cutoff, normalized label entropy, and nested support confidence through
 20/12/8/5 A plus the spherical-support geometry in
 `nu_evidence_state`. This evidence analysis
 does not alter the NU filtering label map or outputs.
-`expand_nu_evidence_band_weights` expands the frozen state into per-band
-lack-of-evidence weight fields (`1 - a_b` inside the spherical evidence
-support, 1 outside it), recreating the packed lexicographic order from the
-frozen geometry alone so it works after `cleanup_nu_filter`. Before any
-replay use, `assert_nu_evidence_replay_ready` enforces the readiness
+Before the state is used, `assert_nu_evidence_replay_ready` enforces the readiness
 contract: a state whose explicit null wins less than
 `NU_EVIDENCE_MIN_NULL_FRAC` or more than `NU_EVIDENCE_MAX_NULL_FRAC` of the
 OBSERVED part of the generous spherical support marks a failed null
 calibration (starved and saturated null respectively) and hard-errors --
-validity alone does not qualify evidence to parameterize a precision. The
+validity alone does not qualify the evidence. The
 observed part excludes exact zero/zero voxels that a density-constrained PCG
 solve leaves inside the sphere (`nu_observed_mask`, set by `setup_nu_dmats`
 with the same test as the whitening profile); every calibration statistic
 (null-bias center, spatial beta, temperature, null/uncertain/band-support
 fractions) is confined to it, unobserved voxels are frozen at the explicit
 null with zero band support, and the summary reports `observed_fraction`.
-The spherical NU support itself is unchanged. The compact evidence state is a
-diagnostic and envelope input only; the in-solve `Q_NU` consumer was removed
-on 2026-09-06 (`doc/implementation_notes/pcg_priors_history.md`).
+The spherical NU support itself is unchanged. The compact evidence state's
+only consumer is `postprocess_nu` (local sharpening); the NU-evidence envelope
+is derived from the raw unaries, not from it. The in-solve `Q_NU` consumer was
+removed on 2026-09-06 (`doc/implementation_notes/pcg_priors_history.md`).
 With `automsk` enabled the NU-evidence envelope is regenerated from the static
 candidate bank while the raw per-voxel evidence margins are live. It remains a
 diagnostic under `automsk=yes`; under `automsk=nu` it is the current
 coarsest-bank boundary and reference envelope when valid, with density
-fallback. Accepted adaptive candidates do not redefine it in the same pass.
+fallback.
 `write_nu_evidence_envmask` remains the single producer, called from the
 shared `simple_nu_state_filter` on both backends. The full post-hoc NU
 filtering path described in this document is production behavior on both
@@ -448,7 +448,7 @@ generated dense ladder that replaced it was withdrawn on 2026-09-18 after
 the PfCRT regressions (`latest3`/`latest4`: abinitio3D climb stalls,
 refine3D_auto 4.03/4.50 A against 3.93/4.14 A on 2026-09-11 from the same
 particles). The static ladder plus the auxiliary pair of section 8 -- the
-machinery of commit ed36eb4c's abinitio3D, which produced the best PfCRT
+abinitio3D NU machinery of the ed36eb4c build, which produced the best PfCRT
 maps -- is the only NU mechanism, in abinitio3D, refine3D_auto and
 postprocess_nu alike. Records: `doc/implementation_notes/pcg_decision_log.md`
 (2026-09-16 to 2026-09-18).
@@ -528,11 +528,13 @@ evidence-limited NU reference protect against the latter). With the
 regularized pair placed at `fsc/1.5` (2026-09-16, `Sep16_10of10`) the band
 was never pinned, the FSC gained +0.47 A per stage-6 iteration against
 +0.19 A, and 10/10 restarts converged; the uncapped July 2026 ladder led by
-1.55x (median, up to 1.9x) and froze 2 of 10. The finest retained rung of
-the ladder cut at `fsc/1.5` leads by 1.25-1.5x, always, with no constant
-floor: the 4.5 A floor of the 2026-09-16 fix held stages 7-8 below their
+1.55x (median, up to 1.9x) and froze 2 of 10. The cut at `fsc/1.5` bounds
+the lead of the finest retained rung at 1.5x from above (apart from the
+two-rung floor); below that the lead depends on where the FSC falls between
+rungs and shrinks toward 1x at the 4 A end of the ladder. There is no
+constant floor: the 4.5 A floor of the 2026-09-16 fix held stages 7-8 below their
 crop Nyquist (4.14/3.88 A) and band-limited the finals at 4.44-4.50 A.
-Independent halves (`nonuniform`) use the same rule; the ed36eb4c
+Independent halves (`nonuniform`) use the same rule; the
 refine3D_auto of 2026-09-11, whose regularized pair was ignored within the
 ladder and whose rungs handed off up to the cap, produced the reference
 PfCRT map.

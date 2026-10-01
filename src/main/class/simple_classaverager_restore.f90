@@ -533,13 +533,9 @@ contains
         call cur%kill
     end subroutine cavger_commit_carryover
 
-    ! The owner blend of Section 4.1 of the class-average state note. cur holds the current
-    ! sums of the whole sample (all parts summed). With l_frac the previous set is read,
-    ! shifted once by the class-centering offsets, and blended with the population rule:
-    ! new = s*current + w*shift(previous), M <- s*n + w*M, with N(c) and n(c) counted on the
-    ! merged project. Without l_frac, or when no usable previous set exists, the current sums
-    ! are the new set and M is the accumulated population. The new set is published, copied
-    ! back into cavgs, and eo_pops is set to the population the restored sums represent.
+    ! Owner blend (doc/refactoring_notes/completed/class_average_and_reconstruct3d_partials_refactoring.md 4.1):
+    ! with l_frac and a usable previous set, cur <- s*cur + w*shift(prev), M <- s*n + w*M (N, n on the merged
+    ! project); else cur is the new set with M = acc_pops. Publishes it, copies it into cavgs, sets eo_pops to match.
     subroutine commit_carryover( cur, l_frac, acc_pops )
         type(cavg_sums), intent(inout) :: cur
         logical,         intent(in)    :: l_frac

@@ -28,8 +28,7 @@ contains
 
     !> \brief logical mask over the resolution shells of get_resarr(box, smpd): .false. at the three
     !! shells nearest each band (a resolution in Angstrom, e.g. the graphene bands) and .true.
-    !! elsewhere. A band finer than Nyquist (2*smpd) is not in the spectrum and masks nothing; it
-    !! used to mask the three highest shells instead (masks review, 2026-09-22; fixed 2026-09-25)
+    !! elsewhere. A band finer than Nyquist (2*smpd) is not in the spectrum and masks nothing.
     function calc_graphene_mask( box, smpd, bands ) result( mask )
         integer, intent(in)  :: box
         real,    intent(in)  :: smpd, bands(:)

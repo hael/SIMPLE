@@ -1,13 +1,8 @@
 !@descr: unit and library tests of the flex_pca PCG M-step operator (simple_flex_pca_pcg)
-! Drives the module's white-box self-test test_flex_pcg_operator (it needs the private
-! components of flex_pcg_t and the private scatter/fold kernels, so it stays in the
-! module) and asserts its four checks by name: (A) the operator through the doubled-
-! coordinate kernels against the exact nonuniform-DFT Gram, (B) the right-hand-side
-! deposit against the exact adjoint, (C) at box <= 32 a preconditioned CG solve that
-! recovers the volume, (D) the band-list kernels against the dense fold. The fast gate
-! runs box 32 with 200 samples and the clean baseline solve; nightly runs box 64 with
-! 400 samples (no solve) and the twelve-setting solve sweep at box 32, where every clean
-! solve is held to the baseline criterion.
+! Asserts by name the four checks (A-D) of test_flex_pcg_operator, a white-box self-test that stays
+! in simple_flex_pca_pcg because it needs flex_pcg_t's private components and kernels. The fast gate
+! runs box 32, 200 samples and the clean baseline solve; nightly runs box 64, 400 samples (no solve)
+! and the twelve-setting solve sweep at box 32.
 module simple_flex_pcg_tester
 use simple_flex_pca_pcg, only: test_flex_pcg_operator
 use simple_test_utils

@@ -365,8 +365,7 @@ contains
         ! set_bp_range3D before the search (an explicit lp, or the previous
         ! handoff). The project 'lp'/'lp_est' fields are rewritten by assembly
         ! AFTER the search with the NU handoff for the NEXT iteration, so they
-        ! must not be reported as the matching band (2026-09-14: an explicit
-        ! lp=3.6 run reported 4.026 here while matching at 3.6).
+        ! must not be reported as the matching band.
         write(logfhandle,601) '>>> MATCHING  LOW-PASS LIMIT (THIS ITERATION) ', params%lp
         if( params%l_nonuniform )then
         write(logfhandle,604) '>>> NU HANDOFF LP (NEXT)     AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv

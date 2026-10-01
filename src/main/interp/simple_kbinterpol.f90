@@ -1,19 +1,7 @@
 !@descr: Kaiser-Bessel interpolation kernel
-!
-! meaning of α: the oversampling factor
-! | α  | Padding | Meaning                                       |
-! | -- | ------- | --------------------------------------------- |
-! | 1  | none    | KB tries to suppress aliasing it cannot avoid |
-! | 2  | 2×      | KB is tuned for a wide guard band             |
-! | >2 | heavy   | diminishing returns                           |
-!
-! meaning of β: controls how aggressively the KB kernel suppresses high-frequency content in its Fourier transform
-! | Parameter | Controls               | What breaks if wrong     |
-! | --------- | ---------------------- | ------------------------ |
-! | α         | Guard band size        | Unavoidable aliasing     |
-! | W         | Cost vs smoothness     | Runtime / memory         |
-! | β         | Spectral concentration | Leakage *or* instability |
-!
+! alpha is the oversampling (padding) factor and sets the guard band: 1 leaves aliasing KB cannot avoid,
+! 2 gives a wide guard band, more has diminishing returns. W = 2*Whalf trades cost for smoothness.
+! beta sets the spectral concentration of the kernel (wrong: leakage or instability); new derives it from W, alpha.
 module simple_kbinterpol
 use simple_defs
 use iso_c_binding

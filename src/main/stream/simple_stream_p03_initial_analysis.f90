@@ -1,38 +1,8 @@
-!@descr: task 3 in the stream pipeline: the first 2D analysis from segmentation picked particles used for initial screening and generation of picking references
-!==============================================================================
-! MODULE: simple_stream_p03_initial_analysis
-!
-! PURPOSE:
-!   Stream pipeline stage 3 — opening 2D / generate picking references.
-!   Imports micrographs from the upstream pipeline until a quality threshold
-!   is reached, runs segmentation-based picking and particle extraction,
-!   performs ab-initio 2D classification and shape ranking, then waits for
-!   the user to select references via the GUI before handing off to the
-!   reference-based picking stage.
-!
-! FLOW:
-!   1. Accumulate micrographs (micimporter) until params%nmics accepted mics.
-!   2. Segmentation-based picking  →  particle extraction.
-!   3. Ab-initio 2D classification (abinitio2D)  →  shape ranking.
-!   4. Send sprite-sheet of ranked classes to GUI; wait for user selection.
-!   5a. User requests more micrographs → increment nmics, restart from step 1.
-!   5b. User confirms reference selection → process_selected_refs, continue.
-!
-! RESTARTABILITY:
-!   The outer `do` loop (lines 1–5 above) acts as a GOTO-free restart block.
-!   `restart_requested = .true.` with `cycle` repeats from step 1;
-!   `exit` after user confirmation proceeds to optics assignment and write-out.
-!
-! GUI MESSAGING:
-!   Progress and image metadata are broadcast to the GUI via the
-!   ipc_pipe_initial_analysis_in pipe using the gui_metadata_* types.
-!   User updates (threshold changes, reference selections) arrive on
-!   ipc_pipe_initial_analysis_out.
-!
-! DEPENDENCIES:
-!   simple_stream_api, simple_gui_metadata_api, simple_mini_stream_utils,
-!   commander_extract, commander_abinitio2D, commander_shape_rank_cavgs
-!==============================================================================
+!@descr: stream stage 3: two-cycle opening analysis that generates picking references
+! Cycle 1 (NMICS_PLAN(1) mics): segdiam pick -> extract -> abinitio2D -> cavg quality selection.
+! Cycle 2: pick all mics with cycle-1 bins -> ptcl_sieve -> abinitio2D -> quality -> balance_classes
+!          -> abinitio3D_cavgs -> reproject. Exits when done or on a GUI pickrefs selection.
+! GUI: progress on ipc_pipe_initial_analysis_in, selections on ipc_pipe_initial_analysis_out.
 module simple_stream_p03_initial_analysis
 use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
@@ -96,7 +66,7 @@ contains
         integer,                   allocatable     :: cycle_plan_status(:)          ! tracks the status of each step of the opening2D plan
         logical,                   allocatable     :: accepted_bins(:)
         type(string),              allocatable     :: projects(:)                   ! batch of new project paths from the watcher
-        type(string),              allocatable     :: imgfiles(:)                   ! cache of cavgs stack paths for each cluster, for use in process_selected_refs
+        type(string),              allocatable     :: imgfiles(:)                   ! cavgs stack path set by run_cavg_quality_selection_2
         type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_projfile, boxfile
         type(string)                               :: proj_local                    ! local (bare filename) copy of a watched project, for per-project pick+extract
         type(string)                               :: cur_projname                  ! projname of the project_list record currently being picked+extracted
@@ -425,7 +395,7 @@ contains
                 end if
 
             else if( n_cycles > 1 ) then
-                ! cycle 1 stage 0: import micrographs until params%nmics is reached
+                ! cycle 2 stage 1: combine the sieved chunks once the sieve has finished
                 call simple_getcwd(cwd_cycle)
                 cycle_projfile = cwd_cycle//'/'//string(DIR_STREAM)//'all/all'//METADATA_EXT
                 if( cycle_plan(n_cycles) == 1 ) then
@@ -871,9 +841,8 @@ contains
                 call spproj_inout%read(cluster_projfile)
             end subroutine finish_abinitio3D
 
-            ! Block until at least nmics micrographs pass quality thresholds
-            ! (ctfres, icefrac, astig).  Polls project_buff for new partial
-            ! projects and applies rejection after each batch.
+            ! Not called. Polls project_buff until nmics_target micrographs pass the
+            ! ctfres/icefrac/astig thresholds.
             subroutine micimporter( nmics_target )
                 integer, intent(in) :: nmics_target
                 integer :: n_imported, n_new_oris, n_oris, iproj, iori_loc, imic

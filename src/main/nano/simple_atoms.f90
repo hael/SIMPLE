@@ -9,31 +9,8 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
-!        COLUMNS  DATA TYPE     FIELD        DEFINITION
-!  =============  ============  ===========  =============================================
-!  a6     1 -  6  Record name   "ATOM  "                       
-!  i5     7 - 11  Integer       serial       Atom serial number.             | i7  5 - 11 support for >99999 atoms, extended PDB format
-!  1x
-!  a4    13 - 16  Atom          name         Atom name (13-14 Chemical symbol - right justified 15 Remoteness indicator (alphabetic) 16 Branch designator (numeric))
-!  a1    17       Character     altLoc       Alternate location indicator.
-!  a3    18 - 20  Residue name  resName      Residue name.
-!  1x
-!  i1    22       Character     chainID      Chain identifier.
-!  i4    23 - 26  Integer       resSeq       Residue sequence number.        | i5 23 - 27 Integer resSeq support for >9999 residues, extended PDB format
-!  a1    27       AChar         iCode        Code for insertion of residues. |
-!  3x
-!  f8.3  31 - 38  Real(8.3)     x            Orthogonal coordinates for X, Angstroms.
-!  f8.3  39 - 46  Real(8.3)     y            Orthogonal coordinates for Y, Angstroms.
-!  f8.3  47 - 54  Real(8.3)     z            Orthogonal coordinates for Z, Angstroms.
-!  f6.2  55 - 60  Real(6.2)     occupancy    Occupancy.  
-!  f6.2  61 - 66  Real(6.2)     tempFactor   Temperature factor.
-!  6x
-!  A4    73 - 76  LString(4)    segID        Segment identifier, left-justified.
-!  A2    77 - 78  LString(2)    element      Element symbol, right-justified.
-!  A2    79 - 80  LString(2)    charge       Charge on the atom.
-!  =============  ============  ===========  =============================================
-!character(len=80), parameter :: pdbfmt         = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
-!character(len=80), parameter :: xpdbfmt        = "(A4,I7,1X,A4,A1,A3,1X,A1,I5,3X,3F8.3,2F6.2,6X,A4,2A2)"
+! PDB ATOM/HETATM fixed columns per the wwPDB v3.3 coordinate section; segID (73-76) is skipped.
+! Extended (>99999 atoms / >9999 residues): 'ATOM'/'HETA' + I7 serial (5-11), I5 resSeq (23-27), no iCode.
 character(len=80), parameter :: pdbfmt          = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,A2,A2)"
 character(len=80), parameter :: xpdbfmt         = "(A11,1X,A4,A1,A3,1X,A1,I5,3X,3F8.3,2F6.2,10X,A2,A2)"
 character(len=80), parameter :: pdbfmt_write    = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,A2,A2)"
@@ -1440,8 +1417,7 @@ contains
             call vol_at1%new([atom_box, atom_box, atom_box], smpd)
             call vol_at2%new([atom_box, atom_box, atom_box], smpd)
             ! 0-based corner (window_slim adds 1) of the box whose voxel atom_box/2+1 holds the atom,
-            ! where center_inbox puts the simulated atom; ang2vox is 1-based, so the corner was one
-            ! voxel too far and the window off by one voxel from the simulation (fixed 2026-09-25)
+            ! where center_inbox puts the simulated atom; ang2vox is 1-based, hence the -1
             center(:) = ang2vox(atom_coord(:), smpd) - 1 - atom_box/2
             call vol1%window_slim(center, atom_box, vol_at1, outside)
             call vol_at1%mask3D_soft(real(atom_box)/2.)
@@ -1575,8 +1551,7 @@ contains
             ! extract the atom volume from the molecule volume
             call vol_at%new([atom_box, atom_box, atom_box], smpd)
             ! 0-based corner (window_slim adds 1) of the box whose voxel atom_box/2+1 holds the atom,
-            ! where center_inbox puts the simulated atom; ang2vox is 1-based, so the corner was one
-            ! voxel too far and the window off by one voxel from the simulation (fixed 2026-09-25)
+            ! where center_inbox puts the simulated atom; ang2vox is 1-based, hence the -1
             center(:) = ang2vox(atom_coord(:), smpd) - 1 - atom_box/2
             call vol%window_slim(center, atom_box, vol_at, outside)
             call vol_at%mask3D_soft(real(atom_box)/2.)

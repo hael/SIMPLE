@@ -788,7 +788,7 @@ contains
             case DEFAULT
                 THROW_HARD('rec_states must be yes or no')
         end select
-        ! automsk=yes implies envfsc=yes on both backends (policy 2026-09-09).
+        ! automsk=yes|nu implies envfsc=yes on both backends.
         ! On PCG the density envelope is the solve support of BOTH the base
         ! and the ML-regularized solve, so the FSC pair is envelope-constrained
         ! in the estimator; on gridding the same envelope (automask3D at
@@ -807,9 +807,8 @@ contains
         ! null shell) is dilated by at least ENVMSKWIDTH_A_MIN, converted to
         ! layers at the sampling the envelope is built at (smpd_crop) and
         ! rounded UP so the minimum is a lower bound, so the same physical
-        ! envelope comes out at every crop level and in every program (policy
-        ! 2026-09-09: the former abinitio3D-only default of 7 layers, made
-        ! physical and shared). The minimum replaces the DEFAULT only: an
+        ! envelope comes out at every crop level and in every program.
+        ! The minimum replaces the DEFAULT only: an
         ! explicit binwidth on the command line wins in either direction, so
         ! a tighter envelope can be tested without touching the constant.
         if( self%l_envfsc .and. self%smpd_crop > TINY .and. .not. cline%defined('binwidth') )then

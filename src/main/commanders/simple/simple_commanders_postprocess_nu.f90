@@ -1,24 +1,8 @@
 !@descr: NU-evidence nonuniform postprocessing (isolated from the standard postprocess path)
-!
-! postprocess_nu is the commander for the NU-evidence local sharpening
-! experiment (nu_evidence_local_sharpening.md): model-free LocScale-style
-! local amplitude restoration in which both the confidence field and the
-! target spectrum derive from the frozen cross-half NU evidence state (the
-! compact state the NU competition also uses for its envelope). It is deliberately
-! isolated from the standard postprocess commander (global B-factor + FSC
-! filter), which remains untouched: a single isotropic B-factor does not
-! serve most specimens, and this path is the recorded alternative.
-!
-! Operates on the project like postprocess (2026-09-18): the state's volume
-! from the out segment, its UNREGULARIZED even/odd pair (_even_unfil/_odd_unfil;
-! evidence authority is the base pair, regularized maps flatten the evidence
-! margin) as the evidence input, and its regularized pair (_even/_odd) as the
-! auxiliary member of the refinement's filter competition. Outputs follow
-! standard postprocess with _nu in the suffix (2026-09-21): the sharpened map
-! <vol>_pproc_nu, its mirror <vol>_pproc_nu_mirr (same mirr rule), and the
-! competition's local-resolution map <vol>_locres_nu. They are
-! display/interpretation maps -- never an input to FSC correction or
-! resolution claims.
+! Evidence pair: the state's _even_unfil/_odd_unfil. With _even/_odd present the refinement's competition
+! is rerun for <vol>_locres_nu. nu_evidence_sharpen_vol then sharpens the _solvent pair if present, else
+! the unfil pair, to <vol>_pproc_nu (+_mirr). Display maps only, never FSC/resolution inputs.
+! Design: doc/implementation_notes/nu_evidence_local_sharpening.md.
 module simple_commanders_postprocess_nu
 use simple_commanders_api
 use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
@@ -112,13 +96,8 @@ contains
         if( fsc0143 <= TINY .or. fsc0143 <= 2.*smpd + TINY ) &
             &THROW_HARD('the half-map FSC never falls below 0.143: are the _even_unfil/_odd_unfil halves independent? postprocess_nu')
         if( l_aux )then
-            ! the refinement's filter competition, the one rule of every
-            ! workflow: static ladder cut at fsc/1.5, the regularized pair
-            ! beside the finest rung once its FSC=0.143 is at or beyond it,
-            ! the finest bank member as the matching handoff; the products
-            ! (_nu_filt references, _nu_locres), the assignment table and the
-            ! handoff are exactly what a refinement iteration would use
-            ! (2026-09-18/19)
+            ! the refinement's filter competition (ladder cut at fsc/1.5, regularized pair as auxiliary member):
+            ! assignment table, handoff line and local-resolution map as a refinement iteration would give
             write(logfhandle,'(A)') '>>> POSTPROCESS_NU: FILTER COMPETITION WITH THE ML-REGULARIZED PAIR'
             call setup_nu_dmats(even, odd, params%mskdiam, [fsc0143], aux_even, aux_odd, fsc_res=fsc0143)
             call optimize_nu_cutoff_finds()
@@ -130,8 +109,7 @@ contains
             write(logfhandle,'(A,F6.2,A,F6.2,A,F6.2,A)') '>>> NU MATCHING LOW-PASS HANDOFF: ', handoff_lp, &
                 &' A (finest bank member; finest label with 1% of signal voxels ', populated_lp, &
                 &' A, raw finest label ', raw_lp, ' A)'
-            ! the competition's local-resolution map, named like the
-            ! refinement's _nu_locres product of this volume
+            ! the competition's local-resolution map, <vol>_locres_nu
             fname = basename(add2fbody(fname_vol, params%ext, '_locres_nu'))
             call write_nu_local_resolution_map(fname)
             write(logfhandle,'(A)') '>>> POSTPROCESS_NU: WROTE THE LOCAL-RESOLUTION MAP '//fname%to_char()
@@ -152,12 +130,8 @@ contains
         call cleanup_nu_filter()
         call assert_nu_evidence_replay_ready(evstate)
         call print_nu_evidence_summary(evstate)
-        ! classical shrink-then-sharpen localized by the evidence; the shipped
-        ! product is the single sharpened merged volume. Estimate on the base
-        ! pair, apply to the prior'd pair (2026-09-21): with a solvent-prior
-        ! pair beside the volume (pcg_solvent=yes, _even_solvent/_odd_solvent)
-        ! the evidence of the unregularized pair sharpens that pair's merged
-        ! map; otherwise the unregularized pair's own
+        ! estimate on the unregularized pair, sharpen the solvent-prior pair (_even_solvent/_odd_solvent,
+        ! pcg_solvent=yes) when present, else the unregularized pair; one merged product
         fname_even_solvent = add2fbody(fname_vol, params%ext, '_even_solvent')
         fname_odd_solvent  = add2fbody(fname_vol, params%ext, '_odd_solvent')
         l_solvent = file_exists(fname_even_solvent) .and. file_exists(fname_odd_solvent)
@@ -165,10 +139,8 @@ contains
             call find_ldim_nptcls(fname_even_solvent, ldim, nptcls)
             l_solvent = ldim(1) == box
         endif
-        ! the unregularized pair's FSC weights every local passband
-        ! (2FSC/(1+FSC) stretched to the local cutoff) and its average sets
-        ! the B-factor; the sharpened pair is the solvent-prior'd one when
-        ! present, else the unregularized pair itself
+        ! the unregularized pair's FSC weights every local passband (sqrt(2FSC/(1+FSC)) stretched to the
+        ! local cutoff) and its average sets the B-factor
         if( l_solvent )then
             write(logfhandle,'(A)') '>>> POSTPROCESS_NU: SHARPENING THE SOLVENT-PRIOR PAIR '//&
                 &fname_odd_solvent%to_char()//' '//fname_even_solvent%to_char()//' WITH THE EVIDENCE OF THE UNREGULARIZED PAIR'

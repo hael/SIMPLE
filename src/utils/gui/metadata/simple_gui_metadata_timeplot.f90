@@ -1,19 +1,6 @@
 !@descr: GUI metadata type for a time-series plot with one or two data traces.
-!==============================================================================
-! MODULE: simple_gui_metadata_timeplot
-!
-! PURPOSE:
-!   Extends gui_metadata_base with time-plot fields:
-!     name    — display name for the plot
-!     labels  — x-axis values (real, up to 512 points)
-!     data    — primary y-axis trace (real, same length as labels)
-!     data2   — optional secondary y-axis trace (real, same length as labels)
-!   Provides set/get for all fields and a jsonise override that emits the
-!   name, labels, data, and data2 arrays as a JSON object.
-!
-! DEPENDENCIES:
-!   json_module, simple_core_module_api, simple_gui_metadata_base
-!==============================================================================
+! Up to 512 points; jsonise emits {labels, data, data2} as an object named after the plot, with
+! data2 all zeros when set() got no second trace.
 module simple_gui_metadata_timeplot
 use json_module,              only: json_core, json_value
 use simple_defs,              only: SHORTSTRLEN

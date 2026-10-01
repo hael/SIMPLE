@@ -1,10 +1,7 @@
 !@descr: unit tests for the image class and the Fourier projector (simple_image, simple_projector)
-! Replaces the self-test test_image that lived in simple_image (THROW_HARD checks, print-only
-! filter, mask, rotation and binarisation parts, six image files left behind) and takes over the
-! image basics that only the deleted ptcl_center test touched: get_nyq, masscen, shift2Dserial,
-! roavg, power_spectrum and fproject (plan, section 9.7, the open items, 2026-09-25). Expected values
-! are closed forms or exact array operations written here; the image files are removed at the end.
-! The padding tests pin the contract of doc/refactoring_notes/planned/image_rmat_padding_encapsulation.md
+! Expected values are closed forms or exact array operations written here; the image files are
+! removed at the end.
+! The padding tests pin the contract of doc/refactoring_notes/completed/image_rmat_padding_encapsulation.md
 ! (section 2): in real space the padding of the in-place FFT buffer holds zeros.
 module simple_image_tester
 use, intrinsic :: ieee_exceptions, only: ieee_get_flag, ieee_set_flag, ieee_divide_by_zero
@@ -159,7 +156,7 @@ contains
 
     ! a flat spectrum (every component 1) through bp: the low-pass zeroes every component beyond
     ! its shell and keeps every one below the cosine edge, the high-pass the reverse; a limit of 0
-    ! switches its side off without the division by zero that get_find(0.) was (fixed 2026-09-25)
+    ! switches its side off without a division by zero in get_find(0.)
     subroutine test_bandpass()
         real,    parameter :: LP = 4., HP = 8., WIDTH = 10.
         type(image) :: img
@@ -284,7 +281,6 @@ contains
         rc = c%get_rmat()
         call assert_true(maxval(abs(rc - ra)) < 1.e-4 * amax, 'shift2Dserial (out of place) agrees with shift')
         ! integer shift: shift(s) gives out(x) = in(x + s), circularly, i.e. the content moves by -s
-        ! (the opposite sign misses by 0.5 of the maximum; first run, 2026-09-25)
         call a%copy(orig)
         call a%shift([3., -5., 0.])
         ra = a%get_rmat()
@@ -452,11 +448,9 @@ contains
 
     !---------------- correlation ----------------
 
-    ! two centred Gaussians of widths in the ratio 10:13 correlate at 2*10*13/(10**2+13**2) = 0.9665
-    ! (continuous closed form). corr leaves out the lowest Fourier indices (|h|**2 < 2), which weigh
-    ! more in a small box: a numpy emulation of it gives 0.9672 in the box of 100 of the original
-    ! test_image and 0.9592 in a box of 64 (first run, 2026-09-25); low-passed at 20 A the value
-    ! depends on where loop_lims starts h (0.9636-0.9672), so that one keeps the old range
+    ! two centred Gaussians of widths 10 and 13 correlate at 2*10*13/(10**2+13**2) = 0.9665 (continuous
+    ! closed form); corr leaves out |h|**2 < 2, so a numpy emulation of it gives 0.9672 in a box of 100.
+    ! Low-passed at 20 A the value depends on where loop_lims starts h, hence the wider bound
     subroutine test_corr()
         integer, parameter :: BOXC = 100
         type(image) :: g1, g2, g3
@@ -558,8 +552,7 @@ contains
 
     ! round trips at the sizes where a file layout changes (policy, section 4.5): a SPIDER header is
     ! labrec records of 4*nx bytes and at least 1024 bytes, so boxes below 13 and below 43 and boxes
-    ! above 256 lay it out differently (it was wrong for every box below 43 until 2026-09-25, while
-    ! the tests used 64); odd and non-square images and volumes, stacks of three, in both formats.
+    ! above 256 lay it out differently; odd and non-square images and volumes, stacks of three, in both formats.
     ! The pixel values are integers below 2**24, exact in single precision and distinct per pixel
     ! and per image, so a transposition or a swapped image shows
     subroutine test_file_roundtrip_sizes()
@@ -689,17 +682,10 @@ contains
 
     !---------------- the padding of the real-space array ----------------
 
-    ! The real array of an image is the in-place FFTW buffer: 2*(n1/2+1) rows in the first
-    ! dimension, two more than the box for an even n1 and one more for an odd n1. In real space
-    ! that padding holds zeros, and max_abs_padding, the largest magnitude in it, returns zero.
-    ! Zero is exact, so every tolerance below is 0. fft and ifft shift the phase origin and accept
-    ! even boxes only (shift_phorig), so the tests that only need an image in Fourier space get
-    ! there with fft_noshift, which takes any box.
+    ! rmat's first dim is the in-place FFTW buffer (n1+2 even / n1+1 odd); in real space the extra rows must be
+    ! exactly zero, so every tolerance is 0. fft/ifft need even boxes; fft_noshift takes any.
 
-    ! the query itself: zero for a new image, the magnitude of a value planted in the last padding
-    ! row (set_rmat_at does not bound its indices by the box), NaN for a NaN there, and, as the
-    ! control that the rows are looked at, nonzero in Fourier space, where they hold the last
-    ! Fourier column of a noise image
+    ! max_abs_padding on a planted value (set_rmat_at is not box-bounded) and, as a control, in Fourier space
     subroutine test_padding_query()
         real, parameter :: PLANTED = -3.
         type(image) :: img

@@ -222,9 +222,7 @@ contains
 
     !> collect_and_reject on one completed coarse chunk, single pass, without the learned model:
     !! a class average with a strong centred component passes the hard gates, a blank one is
-    !! rejected, and the selection reaches the particles, the sentinels, the exported project,
-    !! the previews and the latest-product metadata (Ruben's stream test sieve_cavgs, moved here
-    !! by the stream review, plan section 9.7)
+    !! rejected, and the selection reaches particles, sentinels, export, previews and latest product
     subroutine test_collect_and_reject_hard_gates()
         character(len=*), parameter :: CHUNK_STEM = 'chunk_coarse_1'
         character(len=*), parameter :: CAVG_STACK = 'cavgs_iter001'//MRC_EXT

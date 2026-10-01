@@ -1,39 +1,7 @@
 !@descr: GUI metadata for a stream quality update — thresholds and user selections broadcast from the GUI
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_update
-!
-! PURPOSE:
-!   Extends gui_metadata_base with the fields the GUI broadcasts to running
-!   stream processes when the user adjusts settings mid-session.  Each field
-!   may be set independently; only fields that changed need to be sent.
-!
-! FIELDS:
-!   pickrefs_selection        — per-class selection array (1 = selected, 0 = not)
-!   pickrefs_selection_length — number of valid entries in pickrefs_selection
-!   sieverefs_selection        — per-class selection for sieve refchunk (1 = selected, 0 = not)
-!   sieverefs_selection_length — number of valid entries in sieverefs_selection
-!   increase_nmics            — additional micrographs to use before re-picking (0 = none)
-!   ctfresupdate              — CTF resolution threshold (A); 0 = unset
-!   astigmatismupdate         — astigmatism threshold (A);   0 = unset
-!   icescoreupdate            — ice-contamination score;      0 = unset
-!   mskdiam2D                    — mask diameter for 2D classification (pixels); 0 = unset
-!   snapshot2D_id                — snapshot set ID; 0 = unset
-!   snapshot2D_iteration         — 2D classification iteration to snapshot; 0 = unset
-!   snapshot2D_selection         — class indices included in the snapshot
-!   snapshot2D_selection_length  — number of valid entries in snapshot2D_selection
-!   snapshot2D_filename          — project file name for the snapshot
-!
-! PROCEDURES:
-!   set/get_ctfres_update, set/get_astigmatism_update, set/get_icescore_update
-!   set/get_increase_nmics
-!   set/get_pickrefs_selection, set/get_pickrefs_selection_length
-!   set/get_sieverefs_selection, set/get_sieverefs_selection_length
-!   set/get_mskdiam2D_update
-!   set/get_snapshot2D_update, has_snapshot2D_update
-!
-! DEPENDENCIES:
-!   json_kinds, json_module, simple_gui_metadata_base
-!==============================================================================
+! The master copies GUI response fields here and sends the whole object to the running p01, p03 and p06.
+! Unset values are 0; receivers ignore 0 and unchanged values. Readers: p01 thresholds,
+! p03 pickrefs_selection+cycle, p06 mskdiam2D/sieverefs/snapshot2D. increase_nmics has no reader.
 module simple_gui_metadata_stream_update
 use json_kinds
 use json_module,              only: json_core, json_value
@@ -50,10 +18,10 @@ private
 
 type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
-  integer(kind=2)       :: pickrefs_selection(500)      = 0    ! per-class selection; 1 = selected, 0 = not selected
+  integer(kind=2)       :: pickrefs_selection(500)      = 0    ! selected class indices
   integer               :: pickrefs_cycle               = 0    ! current pickrefs cycle
   integer               :: pickrefs_selection_length    = 0    ! number of classes in the selection
-  integer(kind=2)       :: sieverefs_selection(1000)    = 0    ! per-class selection for sieve refchunk; 1 = selected, 0 = not selected
+  integer(kind=2)       :: sieverefs_selection(1000)    = 0    ! selected match-class indices (read by pool2D)
   integer               :: sieverefs_selection_length   = 0    ! number of sieve-ref classes in the selection
   integer               :: increase_nmics               = 0    ! additional micrographs requested before re-picking; 0 = no request
   real                  :: ctfresupdate                 = 0.0  ! CTF resolution threshold (A); 0 = unset
@@ -182,7 +150,7 @@ contains
     selection = self%pickrefs_selection(1:n)
   end function get_pickrefs_selection
 
-  ! Store the pickref cluster membership as an integer array
+  ! Set the p03 cycle whose class averages pickrefs_selection indexes.
   subroutine set_pickrefs_cycle( self, ncycle )
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: ncycle
@@ -191,7 +159,7 @@ contains
     self%pickrefs_cycle   = ncycle
   end subroutine set_pickrefs_cycle
 
-  ! Retrieve the pickref cluster membership as an integer array
+  ! Retrieve the p03 cycle whose class averages pickrefs_selection indexes.
   function get_pickrefs_cycle( self ) result( ncycle )
     class(gui_metadata_stream_update), intent(in)  :: self
     integer                                        :: ncycle
@@ -216,8 +184,7 @@ contains
     n = self%pickrefs_selection_length
   end function get_pickrefs_selection_length
 
-  ! Store the user's sieve-reference class selection as an integer array
-  ! Called when the GUI returns a refs_selection array from the particle-sieving stage.
+  ! Store the GUI's ref_selection (match-class indices); read by pool2D (p06), not by sieving.
   subroutine set_sieverefs_selection( self, selection )
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: selection(:)

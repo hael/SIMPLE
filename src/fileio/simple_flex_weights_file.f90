@@ -1,19 +1,6 @@
 !@descr: versioned binary persistence and transaction primitives for the flex per-state weight files
-!!
-!! One committed `flex_weights_state_NNN.bin` per delivered flex_pca state, each holding that
-!! state's per-particle weight over the FULL physical particle layout of the project (rows outside
-!! the run's selection are zero) and a flag marking the particles hard-labelled to it, so a
-!! workflow that selects one state has everything about it in one file. The files of one delivery
-!! share generation, layout digest and `nstates`; column s of a run, label value s and `vol_flex`
-!! state s in the same project's out segment describe the same state.
-!!
-!! The format follows the canonical sigma2 store (simple_sigma2_state_file): 16-byte magic + 32
-!! int64 header words with a header checksum, fixed section offsets, an immutable committed file,
-!! a candidate that is validated and atomically published, and worker range files for a future
-!! distributed writer. As in the sigma2 store since 2026-09-21 there are no per-row checksums:
-!! the particle sections are written contiguously; only the small per-state scalar section
-!! carries a checksum.
-!!
+!! One committed flex_weights_state_NNN.bin per state: its weight over the full particle layout (0 outside the
+!! selection) and a hard-label flag. Format/transactions follow simple_sigma2_state_file; header and scalars carry checksums.
 !! Layout: header(512) | scalars(real64, NFIELDS+ncomp) | weights(real32, nptcls) | flags(int32, nptcls)
 module simple_flex_weights_file
 use, intrinsic :: iso_fortran_env, only: int8, int32, int64, real32, real64

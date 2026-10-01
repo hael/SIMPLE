@@ -37,14 +37,9 @@ contains
 
     ! CONSTRUCTOR
 
-    !>  \brief  is a constructor of the expanded Fourier matrix
-    !> Expands the Fourier volume into the cyclic halo needed by the KB gather.
-    !! The expanded coefficients are the volume's own (1/N)-convention Fourier
-    !! coefficients, unscaled: reconstructed maps are stored at the particle
-    !! coefficient scale (the data quotient), so a gathered central slice IS a
-    !! reprojection. (Until 2026-08 this multiplied by the original box size and
-    !! the reconstructors divided by it -- a matched pair retired together; see
-    !! doc/implementation_notes/drop_legacy_box_division.md S0/S5.3a.)
+    !>  \brief  expands the Fourier volume into the cyclic halo needed by the KB gather. The coefficients
+    !! are the volume's own, unscaled: maps are stored at the particle coefficient scale, so a gathered
+    !! central slice is a reprojection (doc/implementation_notes/completed/drop_legacy_box_division.md S0).
     subroutine expand_cmat( self )
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)

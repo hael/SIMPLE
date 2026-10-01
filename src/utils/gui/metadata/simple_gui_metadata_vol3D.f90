@@ -1,41 +1,8 @@
 !@descr: GUI metadata type for a single 3D volume entry (product paths + stats).
-!==============================================================================
-! MODULE: simple_gui_metadata_vol3D
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields that describe one reconstructed
-!   3D volume for GUI display:
-!     reprojpath    — absolute path to the reprojections image
-!     volpath       — absolute path to the raw reconstructed volume
-!     pprocpath     — absolute path to the postprocessed volume (_pproc)
-!     lppath        — absolute path to the low-pass filtered volume (_lp)
-!     pprocmirrpath — absolute path to the mirrored postprocessed volume (_pproc_mirr)
-!     state         — state index (multistate reconstructions)
-!     box           — volume box size in pixels
-!     smpd          — pixel size (Angstroms)
-!     res0143       — FSC=0.143 resolution estimate (Angstroms, optional)
-!     res05         — FSC=0.5 resolution estimate (Angstroms, optional)
-!     pop           — particle population count contributing to this volume (optional)
-!     fsc_invres    — FSC curve x-axis, 1/resolution (up to 1000 points, optional)
-!     fsc_corr      — FSC curve correlation values, same length as fsc_invres (optional)
-!     oridist       — orientation distribution 2D histogram, azimuth (-180..180) x
-!                     elevation (-90..90), 5 degree bins (72 x 36 bins, optional)
-!     oridistpath   — absolute path to the orientation-distribution histogram image (optional)
-!     reprojtiles   — orthogonal reprojection sprite-sheet tiles (gui_metadata_cavg2D,
-!                     optional), nested as a 'reprojtiles' JSON array when set
-!     <kind>_min/<kind>_max — MRC header-recorded minimum/maximum density values
-!                     (dmin/dmax) for each of volpath/pprocpath/lppath/pprocmirrpath,
-!                     read once at generation time via set_minmax so GUI consumers
-!                     don't need to reopen each volume file per request (optional,
-!                     emitted only for kinds that were recorded)
-!   Provides set/get for all fields and a jsonise override that emits all
-!   mandatory fields plus the optional res0143, res05, pop, fsc curve,
-!   oridist histogram, oridistpath, reprojtiles and per-kind min/max when set.
-!
-! DEPENDENCIES:
-!   json_module, simple_defs, simple_string, simple_error,
-!   simple_gui_metadata_base, simple_gui_metadata_types, simple_gui_metadata_cavg2D
-!==============================================================================
+! Optional fields (res0143/res05/pop, cfar when > 0, FSC, 72x36 oridist, oridistpath, per-kind MRC
+! min/max, reprojtiles) are emitted only when set; i/i_max route IPC batches.
+! reprojtiles is allocatable: never set it on objects sent via raw serialise().
+! See doc/refactoring_notes/stream_area_review_2026-09-30.md, item A6.
 module simple_gui_metadata_vol3D
 use json_module,               only: json_core, json_value
 use simple_defs,               only: LONGSTRLEN
@@ -112,8 +79,8 @@ contains
   !---------------- setters ----------------
 
   ! Set all volume fields and mark the object as assigned.
-  ! res0143, res05, pop and oridistpath are optional; omitting them clears the
-  ! corresponding value/flag.
+  ! res0143, res05, cfar and pop are optional; omitting one clears its flag.
+  ! An omitted oridistpath keeps its previous value.
   ! i and i_max are required IPC routing fields (batch index / batch size).
   subroutine set( self, reprojpath, volpath, pprocpath, lppath, pprocmirrpath, state, box, smpd, i, i_max, res0143, res05, cfar, pop, oridistpath )
     class(gui_metadata_vol3D), intent(inout) :: self
@@ -283,7 +250,7 @@ contains
 
   !---------------- serialisation ----------------
 
-  ! Emit all mandatory fields plus optional res0143/res05/pop/fsc curve/oridist as a JSON object.
+  ! Emit the mandatory fields plus every optional field that is set (cfar when > 0) as a JSON object.
   ! Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
     class(gui_metadata_vol3D), intent(inout) :: self

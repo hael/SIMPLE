@@ -1,21 +1,7 @@
 !@descr: splits a project into stack-bound, particle-balanced subsets and runs independent abinitio2D jobs
-!
-! This module implements a bounded manual-selection workflow:
-!
-! (1) The input project is split into NCHUNKS stack-bound subsets, balanced by
-!     active particle count as closely as stack boundaries allow. If NCHUNKS is
-!     not provided, it is selected to target about 100 classes per chunk.
-! (2) Each subset is written as a temporary project and submitted as an
-!     independent abinitio2D job.
-! (3) No automatic class-average selection, matching, merging, or global
-!     reclustering is performed.
-! (4) The final artifacts are the solved chunk projects:
-!         chunk_1/chunk.simple, chunk_2/chunk.simple, ...
-!
-! In short:
-!
-! Split project -> run independent abinitio2D jobs -> leave solved chunk projects.
-!
+! Subsets are balanced by active particle count as closely as stack boundaries allow; nchunks=0
+! (the default) targets about TARGET_NCLS_PER_CHUNK classes per chunk. No class selection, matching,
+! merging or global reclustering follows: the outputs are the solved chunk_<N>/chunk.simple projects.
 module simple_stream_abinitio2D_chunks
 use simple_stream_api
 implicit none

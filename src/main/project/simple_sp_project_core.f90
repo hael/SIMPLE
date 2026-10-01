@@ -150,8 +150,7 @@ contains
     !> Register the canonical sigma2 state. A state in the project's own
     !! directory is stored by name only and resolved against that directory
     !! on lookup, so a project copied into another execution directory never
-    !! points back into the originating run (execution-local state,
-    !! 2026-09-07). A state elsewhere keeps its absolute path: an explicit
+    !! points back into the originating run. A state elsewhere keeps its absolute path: an explicit
     !! cross-directory registration (streaming pool, project merges).
     module subroutine set_sigma2_state_path( self, state_path )
         class(sp_project), intent(inout) :: self

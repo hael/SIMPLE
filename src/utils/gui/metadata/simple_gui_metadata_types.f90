@@ -1,19 +1,7 @@
 !@descr: Integer type-tag constants for all GUI metadata kinds.
-!==============================================================================
-! MODULE: simple_gui_metadata_types
-!
-! PURPOSE:
-!   Defines the integer parameters used as meta_type tags in gui_metadata_base.
-!   Tags are assigned via enum, bind(c) so values are contiguous and
-!   self-maintaining — inserting a new tag only renumbers later entries.
-!   Each concrete gui_metadata subtype has exactly one tag.  Sub-message types
-!   (e.g. per-micrograph rows or per-histogram variants within a stage) are
-!   assigned sequential values immediately after their parent stage tag.
-!
-! USAGE:
-!   Pass a tag to gui_metadata_base%new() to identify the subtype at runtime.
-!   Tags are also used by IPC consumers to dispatch incoming buffers.
-!==============================================================================
+! A tag names a message role, not a Fortran type (gui_metadata_micrograph alone serves several);
+! the stream master's pipe listener dispatches on it. Values are enum-assigned and never
+! persisted, so inserting a tag may renumber the later ones.
 module simple_gui_metadata_types
 
 implicit none

@@ -1,37 +1,8 @@
-!@descr: flex_pca paired engine FINAL STAGE -- "merge, don't refit" (proposal 1 par.7)
-!!
-!! The paired fits ARE the production fit; the final stage is a delivery replay, never a fresh
-!! EM. Under SIMPLE_COV_PAIRED_MERGE=1 the paired driver stashes each fit's LAST-iteration raw
-!! M-step sufficient statistics (numerators Y + packed coupled per-voxel densities rho, pre-ridge
-!! pre-solve) plus the entry-frame basis those statistics are expressed in; this submodule then
-!!   1. frame-aligns fit B into fit A: R = the orthogonal polar factor of the entry-frame
-!!      cross-Gram M_BA(p,q) = <uB_p, uA_q> (align_basis_to_reference + the
-!!      Procrustes precedent). polar(M) IS the signed permutation from matching composed with
-!!      the in-span rotation: for any signed permutation P, P * polar(P^T M) = polar(M).
-!!   2. rotates fit B's statistics into A's frame -- numerators linearly (Y' = Y.R over the
-!!      cmat_exp grids), packed densities quadratically (rho' = R^T rho R in pair-index space;
-!!      zB = M_BA zA, so E[zA zA'] = R^T E[zB zB'] R) -- sums the four quarter-sets (A-even,
-!!      A-odd, B'-even, B'-odd) into a merged even/odd pair, harvests the per-shell sampling H
-!!      from each half's pair diagonals and adds the ridge from the honest cross-fit FSC in the
-!!      sampling-aware Gilles-Singer S.11 form with the SUMMED H (crossfsc_to_invtau2 +
-!!      add_invtausq2rho_coupled -- the refine3D ml_reg add_invtausq2rho precedent: per-half
-!!      invtau2 added to each half equals summed-H invtau2 added once to the sum), then runs ONE
-!!      joint per-voxel coupled solve on the summed statistics and realizes the merged basis
-!!      through the existing tail (gridcorr, band-limit at the inherited band, mask,
-!!      orthonormalize). Merged eigenvolumes: flex_pca_merged_pc*.mrc; meta:
-!!      flex_pca_probe_merged.txt. The S.13 fixed-point iteration of the conversion is NOT run
-!!      (single-shot S.11).
-!!   3. SIMPLE_COV_PAIRED_MERGE=2 is the volume-level pooled-Gram fallback (bag_basis_pool on
-!!      the delivered bases) -- cruder (merges restored volumes, not statistics), kept as the
-!!      floor the IgG bagging evidence backs.
-!! The all-N embedding against the merged basis is the CALLER's stage (run_flex_pca diverts the
-!! probe-only early-return to it); this submodule only delivers the merged model handles.
-!! The merged realization applies the SAME mean-shaped/background deflation the per-fit tail
-!! applies to every delivered basis (the joint solve's raw output re-enters the contrast/
-!! background component exactly as the per-fit solves do -- measured 19-42% of basis energy;
-!! skipping it read as a spurious span disagreement). Recorded deviation: no internal-FSC
-!! Wiener post-filter exists here -- the cross-fit ridge IS the regularizer, exactly as in
-!! refine3D's final ml_reg maps.
+!@descr: flex_pca paired engine final stage: merge the two fits' statistics, don't refit
+!! Each fit stashes its last-iteration raw M-step statistics and entry-frame basis. B is rotated into
+!! A's frame (R = polar factor of the entry cross-Gram; Y.R, R^T rho R), the four quarter-sets are
+!! summed, the cross-fit-FSC ridge is added with the summed H, and one joint coupled solve runs;
+!! deflation, orthonormalisation and a gauge fix to A's frame follow.
 submodule (simple_flex_pca_em) simple_flex_pca_em_pairmerge
 use simple_flex_pca_util, only: dilation_template
 use simple_flex_reconstructor_latent_ops, only: solve_coupled_basis_exp, add_invtausq2rho_coupled, &
@@ -50,8 +21,8 @@ contains
     !> Snapshot one fit's LAST-iteration raw M-step sufficient statistics + entry frame.
     !! Called by the paired driver after the batch loop and reductions, BEFORE fit_iter_finish
     !! (which ridges rho, mutates the numerators in the coupled solve, and frees everything).
-    !! Overwrites every iteration: convergence and the crossfsc stop are evaluated after the
-    !! tails, so any iteration can turn out to be the last. prev_real at this point holds the
+    !! Overwrites every iteration: convergence is evaluated after the tails, so any iteration can
+    !! turn out to be the last. prev_real at this point holds the
     !! PREVIOUS iteration's delivered basis == the frame the statistics' latents live in.
     module subroutine probe_fit_merge_stash( fit )
         type(probe_fit_t), intent(inout) :: fit
@@ -105,22 +76,9 @@ contains
         fit%l_mg_stash = .true.
     end subroutine probe_fit_merge_stash
 
-    !> THE MERGE (par.7 final-stage steps 1-2). Consumes the two fits' stashes and delivered
-    !! state, delivers the merged model handles + the merged eigenvolumes/meta/manifest lines.
-    !> Init-deflated matched cosines: project the SHARED deterministic init (the it000 stamps
-    !! fit A wrote at initialisation) out of both entry-frame bases before measuring the match.
-    !! Raw cross-half agreement at short budgets partly measures init memory -- both fits start
-    !! IDENTICALLY -- which inflates every match above any prune threshold (measured: the rank
-    !! cut is inert at n_probe_iters <= 3 while cutting 20->13 at 6). The deflated cosine is the
-    !! honest reproducibility signal at ANY budget. ok=.false. when no stamps are on disk.
-    !!
-    !! With thr/sub_cos/pa_cos present it ALSO measures the reproducible SUBSPACE: the deflated
-    !! bases are orthonormalised, the principal-angle cosines of their spans are pa_cos (sorted),
-    !! the reproducible dimension is the count of pa_cos >= thr, and sub_cos(q) is the cosine of
-    !! fit A's deflated component q with that subspace. The per-component matched cosine is
-    !! rotation-sensitive (a near-flat spectrum lets components rotate between halves: measured
-    !! 0.72 vs 0.48 for the same data under two summation orders while the principal angles agreed
-    !! to 3 decimals), the subspace cosine is not, so the rank gate consumes sub_cos.
+    !> Cross-half match after projecting the shared it000 init out of both bases (fits start identical).
+    !! Optionally pa_cos (principal cosines of the deflated spans) and sub_cos (each A component's
+    !! cosine with the span where pa_cos >= thr), which sets the axis weights. ok=.false. without stamps.
     subroutine init_deflated_matchcos( imgsA, ncA, imgsB, ncB, pstar, defl_cos, ok, thr, sub_cos, pa_cos )
         use simple_linalg, only: jacobi, eigsrt
         type(image), intent(in)  :: imgsA(:), imgsB(:)
@@ -244,24 +202,25 @@ contains
         ok = .true.
     end subroutine init_deflated_matchcos
 
-    module subroutine probe_paired_merge( params, build, fits, merge_mode, m_basis_recs, &
+    !> The merge: consumes the two fits' stashes and delivered state; returns the merged model
+    !! handles and writes the merged eigenvolumes, meta and manifest lines.
+    module subroutine probe_paired_merge( params, build, fits, m_basis_recs, &
         &m_eigvals, m_ncomp, m_sig2, m_matchcos )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(probe_fit_t),   intent(inout) :: fits(2)
-        integer,             intent(in)    :: merge_mode
         type(reconstructor), allocatable, intent(out) :: m_basis_recs(:)
         real(dp),            allocatable, intent(out) :: m_eigvals(:)
         integer,             intent(out)              :: m_ncomp
         real(dp),            intent(out)              :: m_sig2
-        !> per merged component: |cos| of the A<-B match (the reproducibility signal the rank
-        !! gate consumes; 1.0 padding when the mode-2 pooled path skips matching)
+        !> per merged component: the init-deflated subspace cosine (raw A<-B match |cos| when no
+        !! it000 stamps exist); the caller turns it into axis weights
         real(dp), allocatable, optional, intent(out)  :: m_matchcos(:)
         type(reconstructor), allocatable :: Ymrg(:), utilde(:)
-        type(image),         allocatable :: realvols(:), utilde_real(:), pooled(:)
+        type(image),         allocatable :: realvols(:), utilde_real(:)
         type(image)  :: mstep_gridcorr, imga, imgb
         type(string) :: fname
-        real(dp), allocatable :: Mba(:,:), Rm(:,:), sv_ab(:), eigvals_m(:), eig_pooled(:)
+        real(dp), allocatable :: Mba(:,:), Rm(:,:), sv_ab(:), eigvals_m(:)
         real,     allocatable :: rho_me(:,:,:,:), rho_mo(:,:,:,:), kpk_m(:,:)
         complex,  allocatable :: rpk_m(:,:)
         type(flex_pcg_outcome_t) :: pcg_out
@@ -282,33 +241,6 @@ contains
         ncA_del = fits(1)%ncomp
         ncB_del = fits(2)%ncomp
         filtsz  = max(1, fdim(params%box_crop) - 1)
-        if( merge_mode >= 2 )then
-            ! ---- pooled-Gram fallback (bag_basis_pool on the DELIVERED bases) ----
-            write(logfhandle,'(A)') '>>> FLEX_PCA MERGE mode=2: volume-level pooled-Gram fallback &
-                &(bag_basis_pool over both delivered bases; statistics not merged)'
-            call flush(logfhandle)
-            call bag_basis_pool(fits(1)%prev_real, ncA_del, fits(1)%eigvals, &
-                &fits(2)%prev_real, ncB_del, fits(2)%eigvals, ncA_del, pooled, eig_pooled)
-            d_new = size(pooled)
-            ! same gauge as mode 1: the pooled-Gram eigenvectors rotate freely in a
-            ! near-degenerate span; fix the frame to fit A's delivered components
-            if( d_new == ncA_del ) call gauge_fix_to_frame(fits(1)%prev_real, ncA_del, pooled, d_new)
-            do q = 1, d_new
-                fname = MERGED_PC_FBODY//int2str_pad(q,3)//MRC_EXT
-                call pooled(q)%write(fname, del_if_exists=.true.); call fname%kill
-            end do
-            call basis_recs_from_images(params, build, pooled, d_new, m_basis_recs)
-            allocate(eigvals_m(d_new), source=eig_pooled(1:d_new))
-            call merged_delivery(params, fits, 2, pooled, d_new, eigvals_m, m_sig2)
-            call move_alloc(eigvals_m, m_eigvals)
-            m_ncomp = d_new
-            do q = 1, d_new
-                call pooled(q)%kill
-            end do
-            deallocate(pooled, eig_pooled)
-            return
-        endif
-        ! ================= mode 1: accumulator-level merge =================
         if( .not. (fits(1)%l_mg_stash .and. fits(2)%l_mg_stash) ) &
             &THROW_HARD('paired merge: no stashed M-step statistics (driver gate error)')
         if( .not. (allocated(fits(1)%mg_prev) .and. allocated(fits(2)%mg_prev)) ) &
@@ -354,11 +286,11 @@ contains
                 &' <- B', pstar(q), '  sign=', psign(q), '  |cos|=', abs(real(paircos)), &
                 &'  |R|=', real(abs(Rm(pstar(q),q)))
             if( abs(paircos) < 0.5d0 ) write(logfhandle,'(A,I0,A)') &
-                &'>>> FLEX_PCA MERGE WARNING: component ',q,' matched below |cos|=0.5; the rank &
-                &gate should have retired this axis before the merge'
+                &'>>> FLEX_PCA MERGE WARNING: component ',q,' matched below |cos|=0.5 &
+                &(weakly reproducible axis)'
         end do
         call flush(logfhandle)
-        ! ---- init-deflated match (rank-gate signal at ANY budget) ----
+        ! ---- init-deflated match (the axis-weight signal at any budget) ----
         if( present(m_matchcos) )then
             block
                 real(dp), allocatable :: dcos(:), scos(:), pcos(:)
@@ -387,12 +319,12 @@ contains
                     end do
                     write(logfhandle,*)
                     call flush(logfhandle)
-                    ! the rank gate and the axis weights consume the SUBSPACE cosine
+                    ! the axis weights use the SUBSPACE cosine (rotation-insensitive, unlike the matched one)
                     m_matchcos(1:ncm) = scos(1:ncm)
                     deallocate(dcos, scos, pcos)
                 else
                     write(logfhandle,'(A)') '>>> FLEX_PCA MERGE init-deflated match unavailable &
-                        &(no it000 stamps); rank gate falls back to the RAW match -- inflated at &
+                        &(no it000 stamps); axis weights fall back to the RAW match -- inflated at &
                         &short budgets'
                     call flush(logfhandle)
                 endif
@@ -466,7 +398,7 @@ contains
         end do
         ! ---- step 2d: sum the merged halves and run ONE joint per-voxel coupled solve on the
         ! total statistics (numerators already hold e+o; densities summed here). The ridge is
-        ! added ONCE with the summed H == per-half ridge added to each half (see header). ----
+        ! added ONCE with the summed H == per-half ridge added to each half. ----
         rho_me = rho_me + rho_mo
         deallocate(rho_mo)
         call add_invtausq2rho_coupled(Ymrg, rho_me, ncm, invtau2)
@@ -566,9 +498,8 @@ contains
         deallocate(h_e, h_o, h_sum, cnt, fscq, invtau2, corrs)
     end subroutine probe_paired_merge
 
-    !> Shared delivery for both merge modes: merged probe meta + eigenvalue table, the
-    !! merged-vs-fitA / merged-vs-fitB matched |cos| tables (log + manifest), and the merge
-    !! provenance appended to the paired manifest.
+    !> Merged delivery: merged probe meta + eigenvalue table, the merged-vs-fitA / merged-vs-fitB
+    !! matched |cos| tables (log + manifest), and the merge provenance appended to the paired manifest.
     subroutine merged_delivery( params, fits, mode, mimgs, nm, eigvals_m, sig2_m, &
         &Rm, Mba, sv_ab, pstar, psign, fscq, khi_m )
         class(parameters), intent(in)    :: params
@@ -628,8 +559,6 @@ contains
                     &psign(q), abs(real(Mba(pstar(q),q))), &
                     &crossfsc_inband_mean(fscq(:,q), khi_m)
             end do
-        else
-            write(u,'(A)') '# merge mode=2: pooled-Gram fallback (bag_basis_pool over the delivered bases)'
         endif
         write(u,'(A)') '# merge matched: comp  fitA_comp  |cos|A  fitB_comp  |cos|B'
         do q = 1, nm
@@ -799,8 +728,6 @@ contains
         end do
     end subroutine rotate_pair_voxel
 
-    !> Rotate fit B's packed coupled density into fit A's frame and add it to the merged density:
-    !! rho_acc += pack(R^T unpack(rho_b) R), per voxel.
     !> packed right-hand sides of fit B rotated into the merged frame and added: acc(q') += sum_p R(p,q') b(p)
     subroutine rotate_rhs_packed_add( Rm, ncb, ncm, rpk_b, rpk_acc )
         real(dp), intent(in)    :: Rm(:,:)
@@ -931,14 +858,9 @@ contains
         call flush(logfhandle)
     end subroutine merge_pair_algebra_selfcheck
 
-    !> Mean-shaped (contrast) + background (+ optional pose-derivative) deflation of the merged
-    !! solve output, mirroring the per-fit tail's per-iteration deflation statement for
-    !! statement (simple_flex_pca_em_iter::fit_iter_finish, SIMPLE_COV_EM_DEFLATE block):
-    !! consensus shells split in resolution, optional flat-in-mask background template
-    !! (SIMPLE_COV_DEFLATE_BG), modified Gram-Schmidt with the relative-norm floor, then
-    !! projection out of every merged component. Config comes from the same sources the tail
-    !! uses: fit%l_deflate_mean / fit%vdfl / fit%dstep_ann (per-fit stage config; identical
-    !! across fits) and the two env gates.
+    !> Mean-shaped deflation of the merged solve output, as fit_iter_finish applies it per fit: vdfl
+    !! consensus shells plus the background and dilation templates (always on here: SIMPLE_COV_DEFLATE_BG
+    !! and _DILATION are not read), modified Gram-Schmidt, then projection out of every merged component.
     subroutine merge_deflate_mean_shaped( params, fit, realvols, nvols )
         class(parameters), intent(inout) :: params
         type(probe_fit_t), intent(in)    :: fit
@@ -959,7 +881,6 @@ contains
         if( l_dfl_bg )   ndfl_sh = ndfl_sh - 1
         ! the DILATION of the consensus, (x-c).grad rho, is the breathing mode (magnification and
         ! defocus scatter): reproducible, peripheral, and the first axis a focused basis takes
-        ! (10028 continuum, 2026-09-09). Deflated by default; SIMPLE_COV_DEFLATE_DILATION=0 opts out.
         l_dfl_dil = .true.
         if( l_dfl_dil ) ndfl = ndfl + 1
         allocate(dfl_basis(ndfl))
@@ -1034,7 +955,5 @@ contains
         deallocate(dfl_basis)
         call mvol_dfl%kill
     end subroutine merge_deflate_mean_shaped
-
-    !> Soft inner exclusion (focused heterogeneity), matching the per-fit tail's annulus.
 
 end submodule simple_flex_pca_em_pairmerge

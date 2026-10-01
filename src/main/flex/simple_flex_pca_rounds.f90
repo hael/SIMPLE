@@ -1,12 +1,8 @@
 !@descr: flex_pca distribution contract: the role/round object handed down by the strategy
-!!
-!! Domain modules (model, em, rec3D) receive a `flex_pca_rounds` and ask it only what a
-!! distributable phase needs to know: whether this process is the distributed master or a
-!! worker, how many parts a round spans, and how to run one qsys round. The strategies in
-!! strategies/parallelization extend this type; the master implements the rounds on top of its
-!! qsys context, shared memory and workers refuse them. This leaf module also holds the stage
-!! and fit identifiers that travel to workers through job_descr, and the ONE mod-4 half rule
-!! the paired engine and the two-job half harness share, so both partition identically.
+!! Domain modules (model, em, rec3D) ask a flex_pca_rounds only for the master/worker role, the part
+!! count and how to run one qsys round. The strategies extend it: the master implements rounds on its
+!! qsys context, shared memory and workers refuse them. Also holds the stage and fit identifiers sent
+!! through job_descr and the ONE mod-4 half rule of the paired engine.
 module simple_flex_pca_rounds
 use simple_core_module_api
 use simple_parameters, only: parameters
@@ -91,7 +87,7 @@ end interface
 ! to a .tmp and renamed, so a master that finds the final name is guaranteed a complete file ----
 integer, parameter :: EMBED_STATS_VERSION = 1
 integer, parameter :: PROBE_PART_VERSION  = 12  ! rho rows are always the full packed triangle; trailing PCG kernel + rhs blocks on the shared band list (slot for slot, no per-part index list)
-integer, parameter :: PROBE_PART_VERSION5 = 10  ! v5 layout, payloads band-boxed (nonzero bounding box per lattice) + trailing PCG kernel + rhs blocks per fit
+integer, parameter :: PROBE_PART_VERSION5 = 10  ! *_v5_* multi-fit layout: per-fit populated-point index list, payload, PCG blocks
 integer, parameter :: FLEX_PCA_PART_MAGIC = 1180053590
 
 contains
@@ -144,9 +140,8 @@ contains
         THROW_HARD('flex_pca round requested outside the distributed master: '//trim(label))
     end subroutine shmem_run_stage
 
-    !> The ONE mod-4 split rule, shared by the two-job pcafit harness (validate_covariance_inputs)
-    !! and the paired engine's driver -- so the two instruments partition the selection identically
-    !! by construction. Pairing 1 (default) puts row residues {0,1} in half A; pairing 3 puts
+    !> The ONE mod-4 split rule, shared by the paired engine's master driver and its workers so both
+    !! partition the selection identically. Pairing 1 (default) puts row residues {0,1} in half A; pairing 3 puts
     !! {0,3}. Both pair one even-row residue with one odd-row residue, so each half keeps both
     !! internal e/o classes under the row-alternating project eo split. Pairing 2 ({0,2}|{1,3})
     !! is eo-degenerate by construction and is REFUSED where SIMPLE_COV_MOD4_PAIRING is read --
@@ -193,9 +188,8 @@ contains
         endif
     end subroutine flex_pca_set_part_dir
 
-    !> Node-local part directory for the local queue system: parts are written and reduced once
-    !! per round (5-54 s per iteration and ~90 s in the states stage over the network on
-    !! 2026-09-08), so they go to the disk the user already declared local through cache_dir.
+    !> Node-local part directory for the local queue system: parts are written and reduced every
+    !! round, so they go to the disk the user already declared local through cache_dir.
     !! Master and workers derive the SAME name from the run directory (no new key travels), which
     !! is safe because local workers run on the master's node in the master's directory. Empty
     !! (= run directory) for any other queue system, when cache_dir is not given, or in shared

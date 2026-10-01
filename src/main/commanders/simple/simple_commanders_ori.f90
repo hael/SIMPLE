@@ -621,14 +621,9 @@ contains
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
 
-    !> the angular resolution of the projection directions the 3D searches use: nspace directions
-    !! built as the builder builds its search space (sym%build_refspiral for pgrp); for every
-    !! direction, the angle to its third-nearest neighbour among the other directions and all
-    !! their symmetry copies, so that neighbours across the border of the asymmetric unit count
-    !! (a direction's own symmetry copies are the same view and do not); the resolution is the
-    !! largest of these angles, the definition of oris%find_angres, which it equals in C1. With
-    !! moldiam, also the spatial resolution this angular step supports at the particle's rim
-    !! (resang). The cost is nspace**2 * nsym dot products (OpenMP).
+    !> Angular resolution of the nspace search directions (built as the builder does, build_refspiral): the
+    !! largest angle from a direction to its third-nearest among all symmetry copies of the other directions,
+    !! i.e. oris%find_angres across the asymmetric-unit border. With moldiam, also resang at the particle rim.
     subroutine exec_measure_projspace_angres( self, cline )
         class(commander_measure_projspace_angres), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline

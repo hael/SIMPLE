@@ -1,19 +1,6 @@
 !@descr: unit tests for simple_persistent_worker_server
-!==============================================================================
-! MODULE: simple_persistent_worker_server_tester
-!
-! PURPOSE:
-!   Validates the public contract of simple_persistent_worker_server:
-!     - module-level defaults and constants
-!     - server lifecycle (new/kill/is_running/get_port/get_host_ips)
-!     - invalid-input handling in new()
-!     - idempotent new() behavior while already running
-!     - queue_task() request/response semantics for priorities
-!     - queue saturation behavior (eventual rejection)
-!
-! ENTRY POINT:
-!   run_all_persistent_worker_server_tests
-!==============================================================================
+! The whole suite needs the listener thread, so Windows and __FreeBSD__ builds (the Mac build
+! defines it) skip it.
 module simple_persistent_worker_server_tester
   use simple_persistent_worker_server,       only: persistent_worker, persistent_worker_server, TCP_BUFSZ
   use simple_test_utils,                     only: assert_true, assert_false, assert_int, assert_string_eq

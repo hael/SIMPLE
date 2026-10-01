@@ -117,18 +117,9 @@ contains
         end do
     end subroutine calc_filtmap_lowpass_histogram
 
-    !> Finest selected low-pass of the retained filter bank. With
-    !! min_assigned_pct absent the NU_ALIGN_LP_MIN_ASSIGNED_PCT support gate
-    !! applies; the gridding volassemble handoff passes 0 (raw finest selected
-    !! label, the pre-2026-08-30 behaviour): on PfCRT the 5% gate capped the
-    !! matching band at 5-6 A against a 4.1 A map (refine3D_auto gridding,
-    !! 2026-09-02) and the refinement degraded. Labels are ranked by their
-    !! low-pass limits, not indices, so an FSC-derived auxiliary replacement
-    !! orders correctly among the bank members.
-    !! min_signal_pct (2026-09-13): additional floor relative to the SIGNAL
-    !! voxels, i.e. the assigned voxels not under the solvent/background clamp
-    !! (nu_solvent_lmask): the finest label whose cumulative population reaches
-    !! that fraction of the signal voxels. n_signal returns the signal count.
+    !> Finest label (ranked by low-pass limit, so the auxiliary orders correctly) whose cumulative population
+    !! reaches min_assigned_pct (default NU_ALIGN_LP_MIN_ASSIGNED_PCT) of the assigned voxels and, if given,
+    !! min_signal_pct of the signal voxels (assigned minus the background clamp, returned in n_signal).
     module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct, min_signal_pct, n_signal )
         logical, optional, intent(in)  :: mask(:,:,:)
         real,    optional, intent(in)  :: min_assigned_pct

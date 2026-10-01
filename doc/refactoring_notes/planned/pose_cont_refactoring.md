@@ -203,6 +203,12 @@ Facts verified in the source that the contract relies on:
 | O7 | How `refine3D_auto` is switched to continuous-only refinement (C11). Today `refine3D_auto` hard-sets `refine=prob_neigh` and exposes no `refine`; no automated 3D workflow exposes `refine`. `refine3D_states` is the precedent: it exposes a workflow-level `pose_policy`, derives `multivol_mode` and `prob_neigh_mode` from it, and rejects those keys on its command line. Options: (a) expose `refine=prob_neigh\|cont`, as Phase 8 now says; (b) one workflow-level key for all continuous pose refinement, `pose_cont=no\|yes\|only`, where `yes` is the polish of C19 and `only` the continuation mode of C11. | (b). One key answers "how much continuous refinement", `yes` means the same in `refine3D` and `refine3D_auto`, `refine` stays internal, and `only` reads as what it is: no discrete search at all. `refine3D_auto` derives `refine` from `pose_cont`, rejects `refine` on its command line as `refine3D_states` rejects `multivol_mode`, and rejects `pose_cont=only` with `ref_pose_init=cc` or `regpass=yes` given explicitly. `refine3D` keeps `refine=cont` and `pose_cont=yes\|no`. The existing `continue` key (resume a previous run) is not reused. | Phase 8 |
 | O8 | Record layout for `corr_cart` and the improved flag (C15). The record is 52 reals today (slot 51 attempted, 52 improved); slot 42 is unused but holds old `cc_nonpeak` values in pre-2024 projects. | Keep the width at 52. Slot 51 becomes `corr_cart` (`I_CORR_CART`, flag `corr_cart`); slot 52 stays the improved flag with its meaning; slot 42 stays unused. No reader change is needed: 52-real projects read as they are and narrower records still read with both fields zero. The one artefact: a particle that ran the experimental `pose_cont` between 2026-09-21 and the cut-over shows `corr_cart` = 1 until its first Cartesian pass, which only a report could see, since reports read the particles the pass sampled. The alternatives each need a reader special case or reuse slot 42. | Phase 7 |
 
+Delegation, 2026-09-30: the maintainer delegated the run and reviews the
+result at the end (section 14.1). The run adopts the recommendations of O4,
+O5 (option a), O6, O7 (option b) and O8, and the layout of section 6.6, and
+records each adoption in section 15 in the phase that implements it. Each
+remains open to reversal at the final review. O2 keeps its interim rule.
+
 O3 (ranking of stored scores of mixed origin) was withdrawn on 2026-09-30:
 the one ranking of stored `ptcl3D` scores is never read under the sampling
 defaults `refine3D_states` fixes, and C14 now keeps the Cartesian score out
@@ -526,21 +532,21 @@ Paths are under `src/main/` unless they start with `src/` or `doc/`.
 | `doc/policies/3D/refine3D_auto_policy.md` | Drop the paragraph and link that point to the deleted policy (lines 16-18) (1); continuous-pose section (10) | 1, 10 |
 | `ui/simple_ui_visibility_tester.f90` | Retire E26 (1); add N21 (8) | 1, 8 |
 | `commanders/simple/simple_commanders_refine3D.f90` | Remove the four hooks (1); the continuous-only switch of O7 in `exec_refine3D_auto` (8) | 1, 8 |
-| `volume/simple_cartesian_pose_refiner.f90` and tester | Split into the two `cftc` classes; delete after parity | 2, 7 |
-| new `cftc/simple_cartft_calc.f90`, `cftc/simple_cartft_pose_opt.f90`, testers, `cftc.inf` | Create | 2 |
+| `volume/simple_cartesian_pose_refiner.f90` and tester | Split into the two `cftc` classes, kept as forwarders (2); old copies of the rewritten tests follow the new definitions (3); inverse-envelope constructor (4); delete after parity (7) | 2, 3, 4, 7 |
+| new `cftc/simple_cartft_calc.f90`, `cftc/simple_cartft_pose_opt.f90`, testers, `cftc.inf` | Create (2); objectives, preparation and bounds (3); reference read and write (4); batch preparation and residual (6); strategy use (7) | 2, 3, 4, 6, 7 |
 | `simple_builder.f90` | Add `cftc` (4); the toolbox allocates only what the active representation needs (6) | 4, 6 |
 | `strategies/search/simple_matcher_refvol_utils.f90` | Write, read and remove the prepared Cartesian reference volumes beside the polar model; drop adapter import and `cartesian_only` | 4 |
 | `src/defs/simple_refine3D_fnames.f90` | `refine3D_cart_refvols_fname(half)` replaces `refine3D_pose_cont_ref_fname` (section 6.6) | 4 |
 | `strategies/search/simple_strategy3D.f90` | Representation-neutral | 5 |
 | new `strategies/search/simple_strategy3D_pftc.f90` | Owns `s` | 5 |
-| nine polar strategy files | `extends(strategy3D_pftc)` | 5 |
+| the nine polar strategy files: `strategies/search/simple_strategy3D_greedy.f90`, `strategies/search/simple_strategy3D_greedy_inpl.f90`, `strategies/search/simple_strategy3D_greedy_smpl.f90`, `strategies/search/simple_strategy3D_greedy_sub.f90`, `strategies/search/simple_strategy3D_shc.f90`, `strategies/search/simple_strategy3D_shc_smpl.f90`, `strategies/search/simple_strategy3D_snhc_smpl.f90`, `strategies/search/simple_strategy3D_eval.f90`, `strategies/search/probabilistic/simple_strategy3D_prob.f90` | `extends(strategy3D_pftc)` | 5 |
 | `strategies/search/simple_strategy3D_srch.f90` | Writes the `cont_inpl_*` fields it produces | 5 |
 | `strategies/search/simple_matcher_ptcl_batch.f90`, `simple_matcher_2Dprep.f90` | Cartesian preparation sibling; drop adapter import and `optional` flags | 6 |
 | `sigma2/simple_euclid_sigma2.f90` | Cartesian `calc_sigma2`; remove the setter | 6 |
 | `strategies/search/simple_strategy3D_alloc.f90` | Skip PFTC allocations when `l_cart_refine` | 6 |
-| `strategies/search/simple_strategy3D_pose_cont.f90` and tester | Replace with `simple_strategy3D_cont.f90` and tester | 7 |
-| `strategies/search/simple_strategy3D_matcher.f90` | Remove every entry of section 8.1 | 5, 7 |
-| `strategies/search/simple_pose_cont_refine3D_adapter.f90` and tester | Delete | 7 |
+| `strategies/search/simple_strategy3D_pose_cont.f90` and tester | Calls into the forwarders (2); the sigma predicate and E20 go with the objective change (3); replace with `simple_strategy3D_cont.f90` and tester (7) | 2, 3, 7 |
+| `strategies/search/simple_strategy3D_matcher.f90` | Reference read through the calculator (4); `ptr%s` dereferences (5); batch preparation and sigma calls (6); remove every entry of section 8.1 (7) | 4, 5, 6, 7 |
+| `strategies/search/simple_pose_cont_refine3D_adapter.f90` and tester | Forwarders (2); observation preparation under O4 and O5 until it moves (3); observation part moves out (6); delete (7) | 2, 3, 6, 7 |
 | `strategies/search/simple_pose_cont_run_stats.f90` and tester | Delete | 7 |
 | `strategies/parallelization/simple_refine3D_strategy.f90` | Remove stats aggregation (7); bypass `prob_align` and the polar model for `refine=cont` (8); schedule the polish (9) | 7, 8, 9 |
 | `src/defs/simple_defs_ori.f90`, `src/fileio/simple_binoris.f90` | Record layout of O8 (recommended: width 52, slot 51 `corr_cart`, slot 52 the improved flag; no reader change) | 7 |
@@ -1030,6 +1036,41 @@ Code run. The rules below add to sections 9-11 and relax none of them.
 | 9 | Attended | - | The scientific gate of the polish (checkpoint 7) |
 | 10 | Unattended | End of phase | Phases 1-9 accepted |
 
+### 14.1 Delegated run (2026-09-30)
+
+The maintainer delegated the whole refactoring to one unattended run on the
+Dell (Oracle Linux) and reviews the complete raw diff when it is done. For
+that run the following replaces the per-phase review gates above; everything
+else in sections 9-11 and the stop conditions of this section stand.
+
+- One driver runs phases 0 to 10 in order, one Claude Code session per
+  phase, in its own copy of the repository (`~/pose_cont_autorun/repo`).
+  Other checkouts on the machine are read, never written.
+- Nothing is committed, staged, stashed, branched or tagged (maintainer,
+  2026-09-30): the change lives in the working tree against the HEAD the
+  copy started from, and git is read-only for the run. Where this plan
+  speaks of commits (section 1: ownership moves and numerical changes in
+  separate commits; the rest of section 14), the phase boundary takes their
+  place: after every phase the driver writes that phase's diff
+  (`review/phase_N.diff`) and the complete raw diff against HEAD so far
+  (`review/full_after_N.diff`), and at the end `review/full.diff`.
+- A phase starts only when the previous one has met its exit criteria and
+  written its row of section 15. A phase that cannot meet them stops the run
+  with a report; it does not hand on a partial result.
+- Review checkpoints (section 13) are recorded, not waited for: at each one
+  the run writes into section 15 what would have been reviewed and the
+  evidence, so the final review can take the checkpoints in order.
+- Phases marked "Attended" in the table above run unattended. The open
+  decisions are taken as section 4 records under "Delegation".
+- After every phase the driver checks that the files the phase changed are
+  the ones section 8.3 assigns to it; a mismatch stops the run.
+- Phase 0 runs on the Dell: the test entries, each high-level entry two or
+  three times so later phases compare against a spread, and the beta-gal
+  runs on the bgal single-state set already on the machine. The run finds
+  that set read-only; if it is absent, Phase 0 records the gap and the
+  beta-gal comparisons of later phases fall back to the simulated gates.
+- Out of scope, as before: renaming the shared `simple_cartesian_fourier`.
+
 ## 15. Progress
 
 | Date | Phase | Commit | Evidence | Status |
@@ -1042,3 +1083,5 @@ Code run. The rules below add to sections 9-11 and relax none of them.
 | 2026-09-30 | Methodology review | - | Section 5 checked against `refine3D refine=neigh` (`strategy3D_greedy_sub`, the `refine3D_nano` mode). Matches: `euclid` measure, `cc` weighting of the continuous polar stages, reference and gather, even/odd, band limit, sigma2 definition, shift-first staging. Open: particle preparation order (O4), particle-side interpolation (O5), search bounds (O6). Corrected: the `cc` row (two polar weightings), the CTF equivalence claim, shell membership. Added: N28, N29, the high-resolution E25 case | O4-O6 awaiting ruling |
 | 2026-09-30 | Naming | - | Short form `cart` for new identifiers (C17): `cartft_calc`, `cartft_pose_opt`, `simple_cartft_calc`, `simple_cartft_pose_opt` and their testers, `l_cart_refine`, `cart_refvols_{even,odd}.bin`, `cart_refvols_header_compatible`, selector `cart_calculator`. Names of current code that the refactoring deletes are unchanged in the inventory | O4-O6 awaiting ruling |
 | 2026-09-30 | Rulings | - | C5: sigma2 never enters a correlation; a Cartesian `cc` pass reads, requires and writes none. C14: `corr` (polar) and `corr_cart` (Cartesian) are separate stored objective values; nobody recalculates a stored score. C15 superseded by O8 (record layout; recommended width 52 with slot 51 `corr_cart`). O7 opened: the `refine3D_auto` continuous-only switch (recommended `pose_cont=no\|yes\|only`). The Phase 7 comment at the `refine3D_states` sort is dropped | O4-O8 awaiting ruling |
+| 2026-09-30 | Delegation | - | The maintainer delegated the whole run to the Dell and reviews at the end (section 14.1). Recommendations of O4, O5 (a), O6, O7 (b), O8 and the 6.6 layout adopted for the run; checkpoints recorded rather than waited for. The nine polar strategy files listed by name in section 8.3 | Ready for Phase 0 |
+| 2026-09-30 | Delegation | - | No commits (maintainer): the run never commits, stages or stashes; it delivers the complete raw diff and one diff per phase (section 14.1) | Ready for Phase 0 |

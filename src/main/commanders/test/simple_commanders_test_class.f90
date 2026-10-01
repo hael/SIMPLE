@@ -105,29 +105,12 @@ use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! The fast gate is thirteen area suites, each one CTest entry under the label
-! `fast` (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md,
-! section 5.1). Every sub-suite in them makes assertions through
-! simple_test_utils, needs no network beyond localhost, no download and no
-! user-supplied data, and runs on one OpenMP thread.
-!
-!   test=unit_<area>                 one area suite in one process
-!   test=unit_<area> suite=<name>    one sub-suite of it (name as in test=list,
-!                                    lowercase, spaces as underscores)
-!   test=units                       every area suite in sequence: a developer
-!                                    convenience, not the gate CTest runs
-!   test=forked_process              real child processes, clock polling (forked
-!                                    process, stream heartbeat): excluded from
-!                                    the build, label `platform`
-!   test=openmp_offload              OpenMP target offload, cuFFT, cuBLAS on a device
-!                                    (nthr= device=): label `platform`, registered
-!                                    with USE_OPENMP_OFFLOAD
-!   test=lib_<area>                  a library suite of the nightly extensive
-!                                    tier (section 5.2.1): same shape, no
-!                                    30 s budget; lib_reconstruction is the first
-!
-! SIMPLE_UNIT_ORDER=reverse runs a suite's table backwards; a result that
-! differs from the forward run is a state leak between sub-suites.
+! Fast gate: the thirteen test=unit_<area> suites, one CTest entry each, label `fast`
+! (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, section 5.1): assertions
+! through simple_test_utils, localhost only, no downloads or user data, one OpenMP thread.
+! suite=<name> runs one sub-suite (suite=list names them); test=units runs every area (not the gate);
+! lib_<area> are nightly library suites (section 5.2.1); forked_process and openmp_offload are label
+! `platform`. SIMPLE_UNIT_ORDER=reverse runs a table backwards: a differing result is a state leak.
 
 
 type, extends(commander_base) :: commander_test_units
@@ -246,13 +229,13 @@ type :: unit_suite
     procedure(no_arg_test), pointer, nopass :: run => null()
 end type unit_suite
 
-integer, parameter :: MAX_SUITES = 128   ! `units` registers 66 sub-suites (2026-09-25)
+integer, parameter :: MAX_SUITES = 128   ! must hold every sub-suite of `units`; add_suite stops on overflow
 
 contains
 
     ! ---- area tables ---------------------------------------------------------
     ! One function per area returns its sub-suites in table order. The umbrella
-    ! (test=units) is the concatenation of all seven.
+    ! (test=units) is the concatenation of all thirteen.
 
     subroutine suites_core( s, n )
         type(unit_suite), intent(inout) :: s(:)
@@ -764,7 +747,7 @@ contains
     !> command-line spelling of a sub-suite name: lowercase, blanks and hyphens as underscores,
     !! commas and slashes dropped ('search, sort, locate' -> search_sort_locate, 'stack I/O' ->
     !! stack_io). Only the name up to its last non-blank counts: the stored names are character(32),
-    !! and converting their padding to underscores made suite= match nothing (fixed 2026-09-25);
+    !! and their padding must not become underscores, or suite= matches nothing;
     !! scripts/check_test_registry.py applies the same rule to the lists in the test UI
     function suite_id( name ) result( id )
         character(len=*), intent(in) :: name

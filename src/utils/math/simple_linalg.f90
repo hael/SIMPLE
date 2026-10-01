@@ -439,9 +439,7 @@ end subroutine matinv_dp
 
 ! Not snrm2: Apple's Accelerate BLAS returns single-precision function results
 ! (snrm2, sdot, sasum) in the f2c/g77 convention, as a double, so a gfortran
-! caller expecting a float reads 0. The double-precision accumulation below is
-! portable and at least as accurate. (Found by the linear algebra unit tests,
-! 2026-09-23; norm_2 had returned 0 on macOS since the BLAS switch of 2026-06-10.)
+! caller expecting a float reads 0. Double-precision accumulation is portable.
 function norm_2_sp(v) result(r)
     real(kind=4), intent(in) :: v(:)
     real(kind=4) :: r

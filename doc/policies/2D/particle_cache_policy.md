@@ -12,8 +12,9 @@ and was removed from those paths.
 
 The samplers draw a fresh ~nsample subset of the particles every iteration and
 each selected particle is read at full box and Fourier-cropped to `box_crop`.
-In probabilistic mode the same particle is read up to three times per
-iteration: probabilistic scoring, search, and reconstruction. The cache writes
+In probabilistic mode the same particle is read twice per iteration:
+probabilistic scoring (`prob_tab2D`) and search, whose batch also feeds
+class-average restoration. The cache writes
 the iteration-independent prefix of that preprocessing to disk once and serves
 all subsequent reads from it, trading disk space at `cache_dir` for a roughly
 `(box/box_crop)^2` reduction in read volume.
@@ -74,22 +75,17 @@ the geometry line and inherit the verdict.
 The process that builds — or adopts a valid leftover, e.g. after a killed
 predecessor in the same execution directory — owns the cache files and
 removes them on normal exit and on hard exception, via the
-`cache_cleanup_glob` hook in `simple_defs` (called from `simple_exception`
+`cache_cleanup_glob` hook in `simple_defs` (called from `simple_error`
 and the tails of `simple_exec`/`single_exec`). Workers never take ownership,
 so a dying worker cannot delete the cache under the other ranks or a
 resubmitted part. Deletion is key-file-first, so a partially completed
 cleanup can never leave a cache that still validates.
 
-Cache-enabled `abinitio3D` uses the final active downscaling-ladder
-`box_crop` for every refine3D stage. The stable key lets the owner fast path
-reuse one cache throughout all eligible stages. Stage low-pass limits still
-follow the ladder, while `cache=no` retains the stage-specific crop schedule.
-The user's `cache=yes` request is re-stamped onto every stage command line, so
-a stage-local fallback does not permanently disable later stages. A stage that
-declines the cache releases its files; a later eligible stage may rebuild the
-same final-crop cache.
+`abinitio2D` holds `box_crop` fixed across its stages, so the stable key lets
+the owner fast path reuse one cache for every stage; there is no per-stage
+invalidation.
 
-Per-iteration `prob_align` calls hit an ownership fast path in
+Per-iteration `prob_align2D` calls hit an ownership fast path in
 `ptcl_cache_ensure` (same owned key name, key file exists) and skip the full
 revalidation.
 
@@ -103,9 +99,9 @@ run falls back to uncached execution *uniformly*: `disable_cache` flips
 `cache=no` on both params and the command line before any worker command
 line is generated.
 
-Uniformity is mandatory, not best-effort: restoring class averages or
-reconstructing from cropped particles is deliberately not the same
-preprocessing as from full-size ones, so ranks must never mix modes.
+Uniformity is mandatory, not best-effort: restoring class averages from
+cropped particles is deliberately not the same preprocessing as from
+full-size ones, so ranks must never mix modes.
 `ptcl_cache_assert_ready` hard-stops a worker that expected a cache and
 cannot find one (the classic case: node-local `cache_dir` not visible to
 every rank).
@@ -117,9 +113,7 @@ The cache is refused, uniformly and at every decision level (`in_use`,
 
 - `box_crop >= box` (nothing to gain);
 - the primary particle source is the denoised stack (`ptcl_src=den`) — the
-  entries derive from the raw stacks and would be the wrong pixels. A
-  denoised *objective* (`objfun_den=yes`) is eligible: those images are read
-  separately into a matcher-lifetime full-size workspace;
+  entries derive from the raw stacks and would be the wrong pixels;
 - `oritype` is not `ptcl2D`/`ptcl3D` — cls3D "particles" are class averages
   in `os_out`, which the stack fingerprint cannot see.
 
@@ -130,10 +124,6 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   Correctness is preserved (a rerun validates or rebuilds), and a rerun in
   the same execution directory reclaims the orphan, but a run in a fresh
   directory strands the old files in `cache_dir` until manually removed.
-- **Fixed-crop cost in cache-enabled `abinitio3D`.** Early stages use the
-  final ladder crop instead of their smaller stage-local crops. This increases
-  early-stage cache size and matching work, but avoids a sequential full-size
-  cache rewrite at every crop transition. Uncached runs keep stage-local crops.
 - **Node-local `cache_dir` on multi-node jobs.** The master builds on its own
   node; workers on other nodes then hard-stop with the uniformity error.
   Intentional, but there is no replicate-to-node-local mechanism.
@@ -141,9 +131,9 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   ownership fast path has skipped revalidation) fails loudly at read time
   rather than being served silently; this does not occur in the current
   workflows.
-- The cached reconstruction and restoration paths are accepted on
-  statistical parity (FSC trajectory, final maps) with uncached execution,
-  not bit equality; the alignment paths are bit-exact.
+- The cached class-average restoration path is accepted on statistical
+  parity with uncached execution, not bit equality; the alignment paths are
+  bit-exact.
 
 ## 9. Future Extensions
 
@@ -151,14 +141,10 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   at `ptcl_cache_ensure` time (age- or dead-key-based) to reclaim
   signal-killed leftovers automatically.
 - **Benefit predicate**: `ensure` knows `nsel`; with the planned iterations,
-  sampling schedule, and fixed crop ratio it can compute predicted bytes saved
-  versus the one-time build and larger early-stage matching cost, then decline
-  uneconomical caching through the existing uniform fallback.
-- **Stage-local reads from the final-crop cache**: Fourier cropping is nested
-  (normalization precedes any crop), so readers could truncate final-crop
-  records to each stage's planned crop. This would preserve one cache build
-  while recovering the smaller early-stage matching grids.
+  sampling schedule, and crop ratio it can compute predicted bytes saved
+  versus the one-time build, then decline uneconomical caching through the
+  existing uniform fallback.
 - **UI promotion**: `cache`/`cache_dir` are `UI_VIS_DEVELOPER`; promote after
-  validation, and consider defaulting `cache=yes` for `abinitio3D`.
+  validation, and consider defaulting `cache=yes` for `abinitio2D`.
 - **Denoised-source entries**: per-source cache entries would lift the
   `ptcl_src=den` exclusion if that path becomes I/O-bound in practice.

@@ -1,28 +1,8 @@
-!@descr: GUI metadata for the top-level SIMPLE project — populated from a project file
-!==============================================================================
-! MODULE: simple_gui_metadata_project
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields identifying the SIMPLE project a
-!   GUI session is attached to.  set() populates the project name, project
-!   file path, and micrograph/stack/particle counts from an in-memory
-!   sp_project.  The Unix timestamp at which the metadata was first assigned
-!   is also recorded.
-!
-! TYPES:
-!   gui_metadata_project — extends gui_metadata_base
-!     set()     — populate project name and record counts from an in-memory sp_project
-!     get()     — retrieve project name, project file path, record counts,
-!                 and created timestamp; returns the l_assigned flag
-!     jsonise() — serialise all fields to a json_value tree (base override)
-!
-! DEPENDENCIES:
-!   unix, json_kinds, json_module, simple_defs, simple_defs_fname, simple_fileio,
-!   simple_string, simple_error, simple_string_utils, simple_sp_project, simple_gui_metadata_base,
-!   simple_gui_metadata_types, simple_gui_metadata_micrograph, simple_gui_metadata_cavg2D,
-!   simple_image, simple_math, simple_eer_factory, simple_motion_gain_helpers,
-!   simple_procimgstk, simple_gui_utils, simple_syslib
-!==============================================================================
+!@descr: GUI metadata for the top-level SIMPLE project — populated from an in-memory sp_project
+! set() fills the sections chosen by oritype (mov, mic, ptcl, cls2D, cls3D; default all) and writes
+! preview files as it goes (movie thumbnail, particle montage JPEGs, per-stage copies of the 3D
+! reprojection/heatmap JPEGs). stage2D selects the 2D/3D stage slot, 0 the final one.
+! Holds allocatable components, so it is jsonised in-process and never serialised over IPC.
 module simple_gui_metadata_project
   use unix,                           only: c_long, c_time
   use json_kinds
@@ -109,8 +89,8 @@ module simple_gui_metadata_project
 
 contains
 
-  ! Populate the project name and segment record counts from an already
-  ! in-memory project, without touching disk.
+  ! Populate the oritype-selected sections from an in-memory project (the project file is not
+  ! read); preview JPEGs are written as a side effect.
   subroutine set( self, spproj, oritype, stage2D, selection )
     class(gui_metadata_project),     intent(inout) :: self
     type(sp_project),                intent(inout) :: spproj

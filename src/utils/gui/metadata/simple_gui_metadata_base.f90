@@ -1,22 +1,7 @@
-!@descr: Abstract base type for GUI metadata objects.
-!==============================================================================
-! MODULE: simple_gui_metadata_base
-!
-! PURPOSE:
-!   Defines gui_metadata_base, the common root for all GUI metadata types.
-!   Provides:
-!     new/kill    — lifecycle management with an integer subtype tag
-!     type        — return the subtype tag set at construction
-!     initialized — query initialisation state (safe on uninitialised objects)
-!     assigned    — query whether derived-type data has been populated
-!     serialise   — binary transfer of base-type fields into a character buffer
-!     jsonise     — polymorphic JSON hook; emits {} when assigned, else null
-!   Derived types extend gui_metadata_base and override jsonise() to emit
-!   their own fields.  Subtype tags are defined in simple_gui_metadata_types.
-!
-! DEPENDENCIES:
-!   json_module, simple_error
-!==============================================================================
+!@descr: Base type for GUI metadata objects.
+! Derived types override jsonise() and inherit serialise(), a raw transfer() of the whole object
+! that receivers undo with transfer(buffer, obj): in an object sent over IPC, allocatable or
+! pointer components must stay unset. Subtype tags live in simple_gui_metadata_types.
 module simple_gui_metadata_base
 use json_module,         only: json_core, json_value
 use simple_error,        only: simple_exception

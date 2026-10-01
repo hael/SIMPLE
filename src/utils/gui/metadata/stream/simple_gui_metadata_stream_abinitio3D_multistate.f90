@@ -1,30 +1,8 @@
 !@descr: GUI metadata for the stream multistate abinitio3D stage — pipeline stage, particle/state counts, per-state resolution, and user-input flag
-!==============================================================================
-! MODULE: simple_gui_metadata_stream_abinitio3D_multistate
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields specific to the multistate
-!   abinitio3D stage of the cryo-EM streaming pipeline. Tracks the current
-!   pipeline stage text, the internal abinitio3D/refine progress counters,
-!   the number of pooled particles, per-state populations and resolution
-!   estimates, and a flag indicating whether user input has been provided.
-!   The Unix timestamp of the most recently imported particle batch is
-!   recorded and updated on each change.
-!
-! TYPES:
-!   gui_metadata_stream_abinitio3D_multistate — extends gui_metadata_base
-!     set()            — assign pipeline stage, progress counters, particle
-!                        counts, and overall resolution
-!     set_user_input() — set the user-input flag independently
-!     set_state_stats() — assign per-state population and resolution
-!     get()            — retrieve scalar fields and the last-import
-!                        timestamp; returns l_assigned
-!     jsonise()        — serialise all fields to a json_value tree
-!                        (base override)
-!
-! DEPENDENCIES:
-!   unix, json_module, simple_string, simple_defs, simple_gui_metadata_base
-!==============================================================================
+! Filled by stream p07: refine_iteration and particles_at_last_refine count abinitio3D_addon
+! passes and the pool size at the last one. last_import_time is stamped when particles_imported
+! changes. p07 always sends resolution=0 and never sets user_input; per-state stats follow once
+! abinitio3D is done.
 module simple_gui_metadata_stream_abinitio3D_multistate
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception
@@ -46,10 +24,10 @@ module simple_gui_metadata_stream_abinitio3D_multistate
 
     character(len=STDLEN)  :: stage                     = 'unknown'
     integer                :: abinitio3D_stage          = 0       ! internal abinitio3D progress: 0=not started, 1=running, 2=complete
-    integer                :: refine_iteration          = 0       ! current refine3D iteration count
+    integer                :: refine_iteration          = 0       ! abinitio3D_addon passes started
     integer                :: nstates                   = 0       ! number of states being resolved
     integer                :: particles_imported        = 0       ! total particles pooled from upstream
-    integer                :: particles_at_last_refine  = 0       ! pool size at the last refine3D entry
+    integer                :: particles_at_last_refine  = 0       ! pool size when abinitio3D or the last addon pass began
     integer                :: last_import_time          = 0       ! Unix timestamp of most recent import event
     logical                :: user_input                = .false. ! .true. once the user has supplied input
     real                   :: resolution                = 0.0     ! overall current low-pass/resolution estimate

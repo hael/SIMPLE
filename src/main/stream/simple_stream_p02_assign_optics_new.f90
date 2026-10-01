@@ -1,19 +1,7 @@
 !@descr: task 2 in the stream pipeline: assign optics groups to streamed micrographs
-!==============================================================================
-! MODULE: simple_stream_p02_assign_optics_new
-!
-! PURPOSE:
-!   Watches for completed preprocessing projects, imports micrograph metadata,
-!   updates optics-group assignments/maps, exports STAR products, and streams
-!   optics-assignment metadata to the GUI.
-!
-! ENTRY POINT:
-!   stream_p02_assign_optics%execute(cline)
-!
-! NOTES:
-!   - Runs continuously until TERM_STREAM or SIGTERM.
-!   - Maintains rolling optics maps and removes stale map files.
-!==============================================================================
+! Imports micrographs from completed preprocessing projects, exports optics/micrograph STAR files,
+! writes optics_map_<N> files (keeping the last five) and sends per-group shiftx/shifty points to
+! the GUI. Runs until TERM_STREAM or SIGTERM.
 module simple_stream_p02_assign_optics_new
 use unix,                        only: c_time, SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc

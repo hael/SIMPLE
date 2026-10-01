@@ -8,7 +8,7 @@ use simple_flex_reconstructor_latent_ops, only: solve_coupled_basis_exp, add_inv
 use simple_flex_pca_crossfsc, only: crossfsc_file, crossfsc_record, crossfsc_load, crossfsc_write,&
     &crossfsc_append, crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2,&
     &crossfsc_harvest_h, crossfsc_stop_stat, crossfsc_inband_mean, crossfsc_khi_deepest,&
-    &crossfsc_assert_paired, COV_XFSC_FNAME
+    &COV_XFSC_FNAME
 use simple_flex_pca_util,   only: cov_env_flag_on, cov_env_flag_off
 use simple_flex_pca_polar,  only: polar_grid_build, polar_grid_kill, polar_project_recs,&
     &polar_sample_particle_fused
@@ -40,58 +40,12 @@ contains
         character(len=*), optional, intent(in) :: fprefix, meta_fname
         type(fplane_type), allocatable :: fpls(:)
         type(ori),           allocatable :: orientations(:)
-        !> marginal-likelihood scratch: h_i before the solve, and the per-thread accumulator of
-        !! log det A_i - h_i' A_i^-1 h_i. The remaining terms of -2 log p(y_i) are the per-particle
-        !! data energy (fixed across iterations, since a_i and mu are) and N*log det Gamma, added at
-        !! the reduction. See spd_logdet_dp for why resid_energy could never serve this purpose.
-        real(dp) :: ldA
-        !> principal-angle convergence threshold. Overridable because the default 0.97 was tuned for a
-        !! probe that STARTED from the covariance eigenbasis and only had to clean it: from a data-free
-        !! start the subspace stops rotating several iterations before Gamma stops moving (measured on
-        !! 10076: cos crosses 0.97 at iteration 5 while max var is still falling ~20 % per iteration),
-        !! so a pure-EM fit needs a tighter bar. SIMPLE_COV_PROBE_CONV is in PER MILLE (995 = 0.995).
-        !> even/odd half-basis agreement: the dataset-agnostic convergence signal
         integer, parameter :: MIX_ZSUB_MAX = 2000   ! per-part latent subsample shipped for mcfa_init
-        !> POLAR SHARED-DIRECTION E-STEP, SIMPLE_COV_POLAR_ESTEP=1 (stage 1).
-        !! IN the batch loop: once per
-        !! EM iteration the mean + ncomp basis volumes are projected onto the polar rings of a
-        !! shared direction table (the bank); per particle, the bank rings at (direction, psi)
-        !! replace the ncomp+1 per-particle Cartesian projections in forming G/b/c/e_mm/myv, and
-        !! everything downstream -- the ECM/MCFA solve, mixture accumulators,
-        !! e/o halfsets, the Cartesian M-step insertion -- is untouched. CTF amplitude, shift
-        !! phase and per-shell whitening ride in exactly as in the Cartesian former, because the
-        !! SAME prepped cmplx/transfer planes are polar-sampled (the validated embed formulation).
-        !! The mean-shaped deflation needs no special handling here: dfl_basis deflates the
-        !! refined basis VOLUMES at the end of each M-step, and the bank is rebuilt from those
-        !! same basis_recs at the next iteration, so the deflation enters the bank exactly as it
-        !! enters the per-particle Cartesian projections.
-        integer  :: idp_es, ir
-        !> HYBRID exact/ring quadrature (accuracy): the shells 0..rhyb_es are accumulated as
-        !! EXACT Cartesian lattice statistics per particle (data, CTF and model read exactly as
-        !! the Cartesian former reads them -- including the DC sample the rings never had) and
-        !! the shared-direction rings cover only the annulus above. Measured on the calibrated
-        !! synthetic dissector: the pure ring quadrature carries a MULTIPLICATIVE low bias of
-        !! the posterior latents (z-variance ratio ~0.85 vs Cartesian, the eigen-spectrum
-        !! collapse mechanism of the first science A/B), which angular/radial oversampling and
-        !! the DC sample alone do NOT fix; the hybrid at rhyb ~ 0.55*band restores ratio ~1.00
-        !! with G err 0.4% and b err ~3%. SIMPLE_COV_POLAR_RHYB overrides (0=off: pure rings,
-        !! tonight's baseline); SIMPLE_COV_POLAR_OSAMP multiplies ring angular sampling.
-        real(dp) :: pw_es, cnt_es
-        real     :: taz_es
         integer(timer_int_kind) :: t_bank
-        !> exact-direction polar arm of the check: the SAME quadrature at the particle's own
-        !! direction (no snap), which attributes any disagreement between direction quantization
-        !! (banked vs exact) and the polar formulation itself (exact vs Cartesian). tazim -- the
-        !! mean within-ring relative spread of |T|^2 -- bounds the radial-factorisation error in G.
-        !> DC-less Cartesian arm of the check: cov_herm_inner includes the (0,0) sample, the polar
-        !! quadrature starts at ring 1 and has none. If the exact-direction polar arm agrees with
-        !! THIS reference, the polar/Cartesian gap is the DC term, not the ring quadrature.
         logical  :: l_probe_distr_pre
-        !> mean-shaped (contrast) deflation of the refined basis, SIMPLE_COV_EM_DEFLATE
-        logical  :: lok
         integer,             allocatable :: eo(:)
         real(dp) :: a, aa, e_mm, myv
-        integer  :: it, q, r, i, ithr, nthr, batchlims(2), batchsz, ibatch, row
+        integer  :: it, q, i, ithr, nthr, batchlims(2), batchsz, ibatch, row
         !> effective (global) iteration numbering -- the ONLY counters iteration-keyed schedules
         !! and iteration logs may use; equal to it/niters except on a distributed probe worker
         integer  :: it_eff, niters_eff
@@ -99,20 +53,14 @@ contains
         logical  :: l_probe_distr
         complex,             allocatable :: cme(:,:,:,:), cmo(:,:,:,:)
         real,                allocatable :: rhe(:,:,:,:), rhoo(:,:,:,:)
-        real(dp) :: qml
-        ! ---- MCFA state: tied-covariance mixture prior over the latents ----
-        integer  :: kk2
-        real(dp) :: lwm, wsm
-        ! unified-mixture state: frame rotation (Gap B), full-N running average of the
-        ! reduced mixture statistics (Gap A), starved-component reseeding, final full pass
         integer(timer_int_kind) :: t_it, t_sec
         real(timer_int_kind) :: sec_read, sec_prep, sec_estep, sec_ins
-        real(dp) :: twp0, twp1, twp2
+        real(dp) :: twp0
         logical  :: l_pcache
         !> the hoisted per-fit state (M2): every cross-iteration and per-iteration-per-fit
         !! variable of this routine now lives in one probe_fit_t owned by the driver
         type(probe_fit_t) :: fit
-        !> cross-fit-FSC driver context (inert unless a SIMPLE_COV_XFSC_* gate is set)
+        !> cross-fit-FSC driver context (ridge only: the single-fit engine writes no records)
         type(xfsc_ctx_t)  :: xfctx
         nthr = omp_get_max_threads()
         ! ---- M2 state hoist: populate the fit object from the arguments ----
@@ -129,37 +77,17 @@ contains
         fit%ncomp    = ncomp
         fit%sig2_eff = sig2_eff
         fit%sig2     = max(sig2_eff, DTINY)
-        ! ---- optional STRIDE subsample, for the basis refinement only ----
-        ! The probe refines ncomp band-limited, FSC-regularised volumes, and every iteration costs a
-        ! full pass over the data -- far more particles than that many parameters need. A stride keeps
-        ! both halfsets and every state proportionally represented; fromp/top would NOT, because
-        ! particles are commonly ordered by state (on Ribosembly a contiguous window selects whole
-        ! states). The embedding stage that follows still uses every particle: only the basis
-        ! refinement is subsampled.
-        ! The stride MUST be applied within each halfset, not across the particle list. `eo` alternates
-        ! strictly by particle index (0,1,0,1,...), so a plain stride of 2 selects one halfset entirely
-        ! and leaves the other empty -- and every probe M-step is regularised by an even/odd FSC, which
-        ! is then computed against nothing. Measured: the Wiener filter kills the basis and the run dies
-        ! at the "embedding collapsed" guard. Striding per halfset keeps both populated at any stride.
-        ! ---- absolute cap, not a fixed ratio ----
-        ! The probe refines ncomp band-limited, FSC-regularised volumes, and that parameter count
-        ! does not grow with the dataset, so the particles needed to determine it do not either. A
-        ! constant stride would leave the probe scaling linearly and dominating the run; capping the
-        ! count makes it O(1) in dataset size.
-        !
-        ! COV_PROBE_MAX_PTCLS is the total across all processes, so each takes its share -- a worker
-        ! sees only its own partition and would otherwise take the whole budget nparts times over.
-        ! Only a WORKER divides the total by nparts: it holds one fromp/top partition. The master
-        ! holds every particle, so passing nparts there divides twice and inflates the stride by
-        ! exactly nparts. See cov_stage_subsample, which the initialiser shares.
+        ! Optional probe-stage cap (SIMPLE_COV_PROBE_MAX, default off), applied per halfset; embedding
+        ! still uses every particle. The cap is a cross-process total: only a worker divides it by nparts.
         nparts_sub = 1
         if( rounds%is_worker() ) nparts_sub = params%nparts
         call cov_stage_subsample(build, fit%pinds, fit%nptcls, nparts_sub, COV_PROBE_MAX_PTCLS, &
             &'SIMPLE_COV_PROBE_MAX', 'PROBE', fit%ppinds, fit%npp)
         allocate(fit%z(fit%npp,fit%ncomp))
-        ! per-fit stage configuration: every SIMPLE_COV_* selector that becomes fit state
+        fit%z = 0.d0
+        ! per-fit stage configuration (hard-wired defaults)
         call fit_stage_config(params, fit, nthr)
-        ! ---- CROSS-FIT-FSC setup: the ridge defaults OFF; the single-fit engine writes no records ----
+        ! ---- CROSS-FIT-FSC setup: the single-fit engine writes no records; its ridge reads any paired artifact ----
         call xfsc_setup(xfctx, params, fit%kfr_ann, .false., .not. rounds%is_worker())
         l_probe_distr_pre = rounds%distributed()
         ! ---- DOWNSCALED-PARTICLE CACHE ----
@@ -277,8 +205,7 @@ contains
                 fit%dens(:,:,:batchsz) = 0.d0
                 t_sec = tic()
                 !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
-                !$omp& private(i,ithr,q,r,a,aa,e_mm,myv,row,twp0,twp1,twp2,ldA,lok,qml,kk2,lwm,wsm) &
-                !$omp& private(idp_es,pw_es,cnt_es,taz_es,ir)
+                !$omp& private(i,ithr,q,a,aa,e_mm,myv,row,twp0)
                 do i = 1, batchsz
                     if( orientations(i)%isstatezero() ) cycle
                     ithr = omp_get_thread_num() + 1
@@ -314,10 +241,6 @@ contains
                     &'  bank build seconds=',fit%sec_bank,'  estep seconds=',sec_estep
                 call flush(logfhandle)
             endif
-            ! ---- POLAR CHECK SUMMARY (iteration 1): three formers ran on the first N particles:
-            ! Cartesian (reference), polar at the bank direction (the production stage-1 path) and
-            ! polar at the exact direction. banked-vs-exact isolates the direction quantization;
-            ! exact-vs-Cartesian isolates the polar formulation (quadrature + radial |T|^2). ----
             call fit_iter_reduce(fit, it_eff, nthr, rounds=rounds)
             if( rounds%is_worker() )then
                 allocate(cme(fit%es(1),fit%es(2),fit%es(3),fit%ncomp), cmo(fit%es(1),fit%es(2),fit%es(3),fit%ncomp))
@@ -399,9 +322,8 @@ contains
             call cleanup_rec_buffers(build, fpls)
             deallocate(orientations, eo)
             if( fit%l_converged )then
-                write(logfhandle,'(A,I0,A,F8.3,A,I0,A)') '>>> FLEX_PCA PROBE converged after ',it_eff, &
-                    &' iterations: reproducible dim (even|odd) peaked at ',fit%eo_best, &
-                    &' and did not improve for ',fit%eo_patience,' iterations'
+                write(logfhandle,'(A,I0,A,F9.6)') '>>> FLEX_PCA PROBE converged after ',it_eff, &
+                    &' iterations: rank-1 basis cosine vs previous >= ',fit%conv_thresh
                 call flush(logfhandle)
                 exit
             endif
@@ -427,11 +349,8 @@ contains
         ncomp = fit%ncomp
     end subroutine probe_subspace_iteration
 
-    !> Per-fit stage configuration: every SIMPLE_COV_* selector that becomes fit state, read in
-    !! the single-fit entry order. Driver-only selectors (parity check, particle
-    !! cache) stay with the callers. Under the paired driver this runs once per fit; the env
-    !! values are process-wide constants, so the two reads agree by construction (hazard note:
-    !! the moment any of these becomes per-fit, hoist the read to the driver and stamp copies).
+    !> Per-fit stage defaults, all hard-wired: polar E-step, MCFA prior (K=COV_EM_MIX), mean-shaped
+    !! deflation, fixed per-particle contrast (no ECM, no a-scaled M-step), band and convergence settings.
     subroutine fit_stage_config( params, fit, nthr )
         class(parameters),  intent(inout) :: params
         type(probe_fit_t),  intent(inout) :: fit
@@ -453,20 +372,10 @@ contains
                 &supplies G/b/c; data-plane prep and M-step insertion stay Cartesian'
             call flush(logfhandle)
         endif
-        ! ---- MCFA (SIMPLE_COV_EM_MIX=K): tied-covariance K-component mixture latent prior ----
-        ! Mixtures of common factor analysers (Baek, McLachlan & Flack, IEEE TPAMI 32:1298,
-        ! 2010): ONE shared basis, K Gaussian components in the latent space, fitted in the same
-        ! EM as the basis itself. The structural point: a direction earns rank in U only if it
-        ! improves the fit under a MULTI-MODAL prior, so purely continuous nuisance variation --
-        ! fit equally well by any single component -- gains nothing. This is the one thing a
-        ! moment estimator cannot reproduce, because responsibilities are posterior objects.
-        ! K=1 pins the component at the origin with a diagonal covariance, which reduces EXACTLY
-        ! to the plain PPCA EM -- that is the mandated regression test, not a feature.
+        ! MCFA: one basis, K latent Gaussians (Baek et al., IEEE TPAMI 2010); K=1 is plain PPCA EM.
         fit%kmix   = COV_EM_MIX
         fit%l_mix_req = fit%kmix >= 1
-        ! v2 (2026-08-21): the four MCFA accumulators are additive sufficient statistics and now
-        ! ride in the probe part files (PROBE_PART_VERSION 3), together with a bounded latent
-        ! subsample so the master can seed mcfa_init. nparts>1 is therefore supported.
+        ! the MCFA accumulators and a bounded latent subsample (mcfa_init's seed) ride in the probe part files
         fit%n_mix_warm = 1
         fit%l_mix_active = .false.
         fit%l_mix_used   = .false.
@@ -478,32 +387,12 @@ contains
             allocate(fit%sec_proj_thr(nthr), fit%sec_gram_thr(nthr), source=0.d0)
         endif
         fit%nll_prev    = 0.d0
-        fit%eo_best     = -1.d0
-        fit%eo_stall    = 0
-        fit%eo_patience = COV_EO_PATIENCE
-        ! ON by default. The consensus-shaped term is one the model provably cannot represent:
-        ! the contrast coefficient is pinned at 1, so a particle of true amplitude a_i leaves
-        ! (a_i - 1) * T_i P(R_i) mu behind, rank one along the consensus and identical in every
-        ! particle. Deflating it costs a projection per basis volume per iteration and was
-        ! positive in all four cells measured at K=20 on EMPIAR-10076 -- moment 0.1756 -> 0.1906,
-        ! EM 0.1193 -> 0.1764, and positive again with latent whitening layered on both arms.
-        ! It removes 34.6% of the basis energy on the first EM iteration and 16.2% at convergence.
-        ! Validated on 10076 only so far; SIMPLE_COV_EM_DEFLATE=0 restores the old behaviour.
+        ! mean-shaped deflation: the per-particle scalar contrast cannot absorb a frequency-dependent
+        ! scale, which would otherwise take a whole consensus-shaped component
         fit%vdfl           = COV_EM_DEFLATE
         fit%l_deflate_mean = .true.
-        ! ---- per-particle contrast INSIDE the EM (a_i in the basis loop) ----
-        ! The probe has always fit a scale a_i = <m,y>/||m||^2 per particle per iteration and
-        ! subtracted a_i*(T mu) from the residual -- the claim that the EM path has no scale
-        ! parameter was about a different routine. What the historical path does NOT do:
-        !   1. refine a_i against the basis: the projection fit ignores B z, which biases a_i
-        !      wherever the basis is not orthogonal to the consensus (deflation removes most of
-        !      that, which is one reason the two compose), and
-        !   2. carry a_i into the M-step: the residual y - a m ~ a B z + n is inserted with
-        !      weight z and density E[zz'], where the ML weighting is a z and a^2 E[zz'].
-        ! 3DVA fits its alpha_i jointly in the M-step, which is both of these at once.
-        ! SIMPLE_COV_PROBE_CONTRAST=n enables n ECM alternations per particle (fixes 1);
-        ! SIMPLE_COV_PROBE_MLSCALE=1 enables the consistent M-step weighting (fixes 2).
-        ! Both off by default; the polar statistics path keeps the fixed polar-fit contrast.
+        ! per-particle contrast a_i = <m,y>/||m||^2 (clamped to [0.1,5]) is held fixed: no ECM
+        ! refinement against the basis, no a-scaled M-step insertion
         fit%n_probe_cm  = 0
         fit%nml_plain   = 0
         fit%l_probe_mls = .false.
@@ -627,14 +516,9 @@ contains
             end do
     end subroutine fit_iter_begin
 
-    !> PAIRED-ENGINE ENTRY (SIMPLE_COV_PAIRED=1; plan step 1-2, shared-memory probe-only v1):
-    !! two resident probe fits over the mod-4 disjoint halves of the master's selection,
-    !! advanced by ONE shared master loop. Per-fit initialisation mirrors the single-fit order:
-    !! mean copy + mean scale on the fit's own half, deterministic data-free basis (identical
-    !! geometry both fits) with per-fit noise/prior calibration, probe-stage subsample.
-    !! Delivery is probe-only: fit A keeps the legacy namespaces (flex_pca_pc*/flex_pca_probe.txt)
-    !! so every downstream consumer keeps working; fit B writes flex_pca_fitB_pc* +
-    !! flex_pca_probe_fitB.txt (naming precedent: the bagA/bagB pools).
+    !> Paired engine: two resident probe fits over the mod-4 halves of the selection, advanced by one
+    !! shared loop from identical data-free bases, then merged by probe_paired_merge. Fit A writes
+    !! flex_pca_pc*/flex_pca_probe.txt, fit B flex_pca_fitB_pc*/flex_pca_probe_fitB.txt.
     module subroutine run_flex_pca_paired( params, build, pinds, nptcls, col_sep, neigs_req, &
         &m_basis_recs, m_eigvals, m_ncomp, m_sig2, m_matchcos , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
@@ -648,17 +532,13 @@ contains
         real(dp), allocatable, optional,  intent(out)           :: m_matchcos(:)
         type(probe_fit_t) :: fits(2)
         integer, allocatable :: half_pinds(:)
-        integer :: vpair, f, i, cnt, nhalf(2), u, vmerge
-        ! ---- FINAL STAGE (par.7 "merge, don't refit"): the accumulator-level merge is the delivery.
-        ! vmerge is kept as the mode selector consumed by the stash hook and the merge itself
-        ! (1 = accumulators, 2 = the pooled-Gram fallback taken when the frame map degenerates).
-        vmerge = 1
+        integer :: vpair, f, i, cnt, nhalf(2), u
         if( .not. (present(m_basis_recs) .and. present(m_eigvals) .and. present(m_ncomp) &
             &.and. present(m_sig2)) ) THROW_HARD('the paired merge requires the merged-product arguments')
         if( params%n_probe_iters < 2 ) THROW_HARD('the paired merge needs n_probe_iters >= 2: the final iteration''s statistics are expressed in the previous iteration''s delivered frame')
         if( present(m_ncomp) ) m_ncomp = 0
         if( present(m_sig2)  ) m_sig2  = 0.d0
-        ! ---- the split: the ONE rule, shared with the two-job pcafit harness ----
+        ! ---- the split: the ONE rule (flex_pca_half_of), shared with the paired workers ----
         vpair = 1
         call cov_env_int_pub('SIMPLE_COV_MOD4_PAIRING', vpair)
         if( vpair == 2 ) THROW_HARD('SIMPLE_COV_MOD4_PAIRING=2 groups same-parity rows: both &
@@ -719,7 +599,7 @@ contains
                 &fits(f)%ppinds, fits(f)%npp)
             allocate(fits(f)%z(fits(f)%npp, fits(f)%ncomp))
         end do
-        call probe_subspace_paired(params, build, fits, params%n_probe_iters, vmerge == 1, vpair, rounds=rounds)
+        call probe_subspace_paired(params, build, fits, params%n_probe_iters, vpair, rounds=rounds)
         ! ---- delivery (v1, probe-only): both fits' probe metas + eigenvalue tables; the
         ! eigenvolumes are already on disk from the last iteration under each fit's prefix ----
         do f = 1, 2
@@ -741,10 +621,9 @@ contains
             &ncomp A=',fits(1)%ncomp,' B=',fits(2)%ncomp,'  sig2 A=',fits(1)%sig2_eff, &
             &' B=',fits(2)%sig2_eff
         call flush(logfhandle)
-        ! ---- FINAL STAGE (par.7): frame-align + accumulator merge + ONE joint solve (mode 1)
-        ! or the pooled-Gram fallback (mode 2); merged eigenvolumes/meta/manifest written inside.
-        ! The fits' own delivery above is untouched -- the merge is an ADDITIONAL product.
-        if( vmerge > 0 ) call probe_paired_merge(params, build, fits, vmerge, m_basis_recs, &
+        ! ---- final stage: frame-align, accumulator merge and one joint solve; the merged eigenvolumes,
+        ! meta and manifest lines are an additional product next to the fits' own delivery ----
+        call probe_paired_merge(params, build, fits, m_basis_recs, &
             &m_eigvals, m_ncomp, m_sig2, m_matchcos=m_matchcos)
         do f = 1, 2
             call kill_probe_fit(fits(f))
@@ -779,21 +658,18 @@ contains
     !! the per-fit CPU inserts, reductions and master tails. Supported E-step bodies are the CPU
     !! polar former and the plain Cartesian former (plan §3.5); the merged read list assumes
     !! ascending ppinds order (hazard 1).
-    subroutine probe_subspace_paired( params, build, fits, niters, l_merge_stash, vpair , rounds)
+    subroutine probe_subspace_paired( params, build, fits, niters, vpair , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
         class(parameters), intent(inout) :: params
         type(builder),     intent(inout) :: build
         type(probe_fit_t), intent(inout) :: fits(2)
         integer,           intent(in)    :: niters
-        !> par.7 final stage (SIMPLE_COV_PAIRED_MERGE=1): snapshot each fit's raw M-step
-        !! sufficient statistics + entry frame every iteration, pre-ridge pre-solve
-        logical,           intent(in)    :: l_merge_stash
         !> the mod-4 pairing, stamped into both probe-state files for distributed dispatch
         integer,           intent(in)    :: vpair
         integer  :: it_eff, niters_eff, f, nthr
         integer(timer_int_kind) :: t_it
-        !> cross-fit-FSC driver context: the paired master writes honest paired=1 records every
-        !! iteration; the ridge/marching/stopping consumers act per their own gates
+        !> cross-fit-FSC driver context: the paired master writes paired=1 records every
+        !! iteration; the ridge is their only consumer
         type(xfsc_ctx_t) :: xfctx
         !> phase-2 distributed dispatch: the E-step fans out over parts, one qsys round per
         !! iteration, one v5 part per worker carrying BOTH fits' blocks
@@ -805,7 +681,7 @@ contains
                 &rounds%nparts(), ' parts, one v5 part per worker, per-fit reduce'
             call flush(logfhandle)
         endif
-        ! ---- per-fit stage config: process-wide env values, read once per fit ----
+        ! ---- per-fit stage config (hard-wired defaults) ----
         do f = 1, 2
             call fit_stage_config(params, fits(f), nthr)
         end do
@@ -855,7 +731,7 @@ contains
                 ! par.7 merge stash: raw last-iteration statistics, BEFORE fit_iter_finish
                 ! ridges rho / solves the numerators in place / frees the accumulators. Every
                 ! iteration overwrites -- any iteration can turn out to be the last.
-                if( l_merge_stash ) call probe_fit_merge_stash(fits(f))
+                call probe_fit_merge_stash(fits(f))
                 call fit_iter_finish(params, build, fits(f), it_eff, nthr)
                 write(logfhandle,'(A,A,A,I0,A,I0,A,ES12.4)') '>>> FLEX_PCA PAIRED FIT ', &
                     &merge('A','B',f==1), ' it=', it_eff, '  refined dim=', fits(f)%ncomp, &

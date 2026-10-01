@@ -38,7 +38,7 @@ contains
         real(dp), optional,    intent(in) :: targets_in(ncomp,nstates)
         ! optional LOT pullback metric on the leading nk latent components; absent = identity
         real(dp), optional,    intent(in) :: zmetric(:,:)
-        ! per-component reliability; enables the default reliability-ordered equal-occupancy placement
+        ! per-component reliability; enables the default diffusion k-center placement (reliability-path fallback)
         real(dp), optional,    intent(in) :: comp_rho(ncomp)
         ! macro-cluster label per particle from the latent deconvolution's mixture; replaces GMM AUTO's discovery fit
         integer,  optional,    intent(in) :: macro_in(:)
@@ -93,8 +93,8 @@ contains
             write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA state stage restricted to the leading ',nk, &
                 &' of ',ncomp,' latent components (marginalised precision)'
         endif
-        ! Reliability-ordered path is the default when a reliability vector arrived; SIMPLE_COV_KMEANS=1
-        ! recovers k-means. Set inside the placing branch, as it also selects the along-path weighting.
+        ! Set inside the placing branch: along-path targets (external curve, reliability path) also select
+        ! the along-path weighting.
         l_relpath = .false.
         allocate(weights(nptcls,nstates), targets(ncomp,nstates), bandwidths(nstates), neff(nstates), labels(nptcls))
         if( present(dist_out)   ) allocate(dist_out(nptcls,nstates))
@@ -141,15 +141,6 @@ contains
                     &proj_out=ppath, tproj_out=tpath)
                 l_relpath = .true.
             endif
-        else if( axis == 0 .and. present(comp_rho) )then
-            ! 1-D equal-occupancy path. Correct on a genuine reaction coordinate, but it
-            ! MERGES states on a branched manifold -- kept for 1-D data and as the diffusion fallback.
-            allocate(ppath(nptcls), tpath(nstates))
-            call reliability_path_targets(z(:,1:nk), nptcls, nk, nstates, wcomp, comp_rho(1:nk), tcen, &
-                &proj_out=ppath, tproj_out=tpath)
-            l_relpath = .true.
-            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA state targets: reliability-ordered &
-                &equal-occupancy path over ',nk,' components, points=',nstates
         else if( axis == 0 )then
             call kmeans_latent_targets(z(:,1:nk), nptcls, nk, nstates, wcomp, tcen)
             write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA state targets: k-means over ',nk, &
@@ -298,23 +289,19 @@ contains
             bandwidths(state) = real(h)
             neff(state)       = real(sumw*sumw/max(sumw2,DTINY))
         end do
-        ! Tied-covariance mixture by default; SIMPLE_COV_GMM=0 recovers the kernel. The kernel loop above
+        ! Tied-covariance mixture unless the targets are equal-mass (below). The kernel loop above
         ! still runs: dist_out feeds cv_select_bandwidths and its quantiles diagnose the chi2 scale.
         l_gmm = .true.
-        ! EQUAL-MASS PLACEMENT IS NOT A GMM INITIALISATION. The tied-covariance mixture is a
-        ! discrete-state model: it re-fits the means, and on a continuum with one dense mode every
-        ! component slides into that mode -- which silently UNDOES the equal-occupancy placement that
-        ! was just constructed (measured on the RNA data: sextiles in, one state holding 88% of the
-        ! particles out). Where the targets carry equal mass by construction, keep them and let the
-        ! along-path kernel deliver the frames. SIMPLE_COV_GMM=1 forces the refit back on for A/B.
+        ! EQUAL-MASS PLACEMENT IS NOT A GMM INITIALISATION: the mixture re-fits the means, and on a
+        ! continuum with one dense mode every component slides into it. Equal-mass targets keep the kernel.
         if( l_relpath )then
             write(logfhandle,'(A)') '>>> FLEX_PCA equal-mass targets: GMM refit SKIPPED &
                 &(it would re-fit the means onto the dominant mode); along-path kernel weights kept'
             l_gmm = .false.
         endif
         if( l_gmm )then
-            ! Hierarchical placement (default ON, SIMPLE_COV_GMM_AUTO=0 opts out): detect discrete
-            ! islands vs continuum in the mixture itself and give each its own share of the budget.
+            ! Hierarchical placement (hard-wired on, nstates >= 3): detect discrete islands vs
+            ! continuum in the mixture itself and give each its own share of the budget.
             l_gmm_auto = .true.
             if( l_gmm_auto .and. nstates >= 3 )then
                 call gmm_auto_state_weights(z, nptcls, ncomp, nk, nstates, tcen, wcomp, min_neff, weights, &

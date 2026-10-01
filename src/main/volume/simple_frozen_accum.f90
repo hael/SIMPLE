@@ -1,28 +1,9 @@
 !@descr: frozen accumulator store of one abinitio3D_addon run: run context, per-box sets, writers and validated adds into a reduction
-! A frozen contribution is the raw accumulator of the frozen particles (gridding
-! even/odd Fourier sums and sampling densities, or the PCG raw B/D pair of one
-! half) at one consuming box. It is produced once per distinct box by a
-! reconstruct3D on the frozen project and summed, with coefficient one, into
-! every add-on reconstruction at that box before any restoration or prior:
-! S = S(cohort) + S(frozen), rho = rho(cohort) + rho(frozen), B = B(c) + B(f),
-! D = D(c) + D(f). Nothing here scales, decays or restores; trailing, FSC and
-! regularization stay with the callers.
-!
-! A frozen_accum object is one add-on run's store. Its identity, the run
-! context (one text file per add-on run), carries the run identifier, the
-! backend, the state layout and the particle counts, with the row counts of
-! both projects: the producers (reconstruct3D on the frozen project) are
-! validated against the frozen project's rows, the consumers (the add-on's
-! reconstructions) against the working project's. The two share their particle
-! index space on the rows both hold, and either may be the longer (appended
-! rows of the working project are cohort rows). Every set records the
-! context's identity and is validated against it and against the consumer's
-! grid before a single payload byte is read; a set is never padded or clipped.
-! Consumers load the store only through the frozen_rec handshake, which names
-! the context file, so a stale frozen_* file in a directory activates nothing.
-! A loaded store also carries its run's objective-function weighting (euclid
-! or cc): every set records the weighting it was accumulated with, and a
-! consumer refuses a set of another weighting rather than mix the two.
+! Raw frozen-particle accumulators (gridding even/odd S/rho, PCG B/D per half), one set per state
+! and box, added with coefficient one before any restoration or prior; nothing here scales or restores.
+! Sets are bound to the run context (run id, backend, states, row counts, weighting) and
+! validated against it and the consumer grid before any payload is read; defects are fatal.
+! Contract: doc/policies/3D/abinitio3D_addon_policy.md sec. 5 and 7.
 module simple_frozen_accum
 use simple_core_module_api
 use simple_reconstructor,     only: reconstructor

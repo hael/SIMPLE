@@ -182,14 +182,10 @@ contains
         deallocate(wt_w, mloc, minvloc, z)
     end subroutine reconstruct_external_ppca
 
-    ! BIC of the fitted model from the PPCA marginal likelihood (Tipping & Bishop 1999):
-    ! -2 ln L + p ln N with ln L = -(N/2) [D ln 2pi + ln|C| + tr(C^-1 S)], C = W W^T + sigma^2 I and S the
-    ! sample covariance, evaluated at the fitted W and sigma^2 (so an unconverged fit scores no better
-    ! than its optimum): ln|C| = sum_k ln lambda_k + (D-Q) ln sigma^2 with lambda_k the retained
-    ! eigenvalues, tr(C^-1 S) = [tr S - (1/N) sum_n t_n^T M^-1 t_n] / sigma^2 with t_n = W^T x_n and
-    ! M = W^T W + sigma^2 I; p = D Q - Q(Q-1)/2 + 1 free parameters (W up to a rotation, sigma^2). The
-    ! residual-sum-of-squares form used until 2026-09-23 kept rewarding components, so the rank scan was
-    ! decided by the iteration cap; this one stops where the spectrum flattens
+    ! BIC = -2 ln L + p ln N, with the PPCA marginal likelihood (Tipping & Bishop 1999) at the fitted W and sigma^2
+    ! (so an unconverged fit scores no better than its optimum): ln L = -(N/2) [D ln 2pi + ln|C| + tr(C^-1 S)],
+    ! C = W W^T + sigma^2 I, S the sample covariance, ln|C| = sum_k ln lambda_k + (D-Q) ln sigma^2, M = W^T W + sigma^2 I,
+    ! tr(C^-1 S) = [tr S - (1/N) sum_n t_n^T M^-1 t_n] / sigma^2, t_n = W^T x_n; p = D Q - Q(Q-1)/2 + 1 parameters
     real(dp) function calc_bic_ppca( self, pcavecs ) result(bic)
         class(ppca), intent(inout) :: self
         real,        intent(in)    :: pcavecs(self%D,self%N)
@@ -243,8 +239,7 @@ contains
         dloc = size(pcavecs,1)
         nloc = size(pcavecs,2)
         ! the likelihood comparison needs each candidate fit near its optimum: EM stops on its own
-        ! tolerances, the caller's cap is honoured as given (the former hard cap of ten iterations left
-        ! the lower rank as under-fitted as the higher one and the margins within BIC_TOL, 2026-09-23)
+        ! tolerances, the caller's cap is honoured as given
         if( present(maxpcaits) )then
             maxits = max(maxpcaits, 1)
         else

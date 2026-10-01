@@ -1,22 +1,8 @@
 !@descr: flex_pca plane cache: the full-box prep's padded transform, restricted to the box_crop grid, kept on disk per particle
-!!
-!! The full-box prep of a particle (noise-normalise, taper, gridding-pad to boxpd, FFT scaled by
-!! 1/boxpd^2) is followed by gen_fplane4rec, which only ever reads the padded transform at the
-!! frequencies of the box_crop grid. Both padded grids (boxpd and box_croppd) span the same
-!! physical field of view, so the Fourier index h means the same spatial frequency on either and
-!! the 1/n^2 scaling makes the coefficients identical. The cache therefore stores, per particle,
-!! the complex block of the boxpd transform at |h| <= box_croppd/2 -- exactly the cmat a
-!! box_croppd image would carry -- and a cached run injects that block into the padded heap image
-!! and continues through gen_fplane4rec unchanged. No second normalisation, taper or crop happens
-!! on the cached path, so its planes equal the full-box planes to floating-point rounding.
-!! (The shared particle cache stores a real-space Fourier-cropped image instead; re-tapering and
-!! padding that 64-pixel image is a different prep: rank cut 7 -> 13-15 on the 20k harness.)
-!!
-!! Layout: one direct-access unformatted file under cache_dir (or SIMPLE_PTCL_CACHE_DIR, else the
-!! run directory), record 1 = header key, record p+1 = the block of project row p. Only the rows
-!! of the run's selection are written; a header mismatch (rows, box, box_crop, smpd, selection
-!! hash) rebuilds. Built once by the process that owns the run (shared memory or the distributed
-!! master) before any pass; workers open it read-only.
+!! cache=yes and box_crop<box only. Per selected project row, the |h|<=box_croppd/2 block of the full-box padded
+!! transform (== a box_croppd cmat; self-checked on particle 1), injected by plane_cache_fill ahead of gen_fplane4rec.
+!! Direct access under cache_dir (else SIMPLE_PTCL_CACHE_DIR, else .): record 1 header, record p+1 row p. Built by
+!! the non-worker process; adopted on matching magic/version/rows/box/box_crop/smpd/size (the selection is not checked).
 module simple_flex_pca_plane_cache
 use simple_core_module_api
 use simple_builder,         only: builder

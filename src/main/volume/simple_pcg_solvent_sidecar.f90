@@ -1,47 +1,8 @@
 !@descr: opt-in soft solvent prior of the PCG base solve (pcg_solvent=yes)
-!
-!  What it does. Neither the spherical support nor the density envelope (drawn
-!  at envmsklp, 20 A) sees solvent finer than the scale it was drawn at: the
-!  dilation ring and skirt, and every cavity, channel and gap below ~20 A.
-!  With pcg_solvent=yes the base system gains a real-space, position-dependent
-!  ridge, (H + lambda I + Lambda_s) x = b with Lambda_s = lambda_s (1 - w(r)):
-!  a Gaussian prior with position-dependent variance, the real-space twin of
-!  the replay's P_tau. Each half is first solved prior-free; that pair's
-!  FSC=0.143 sets the smoothing scale and each half's own prior-free map
-!  yields its protein weight w(r) in [0,1] (this module): a Wang-type solvent
-!  statistic (smoothed absolute density), an Otsu threshold inside the
-!  production support, and a logistic of the statistic around that threshold
-!  whose width is the spread of the statistic in the solvent class. Both
-!  halves are then solved again, cold, with the same budget, ridge installed.
-!  The prior is half-independent, so the pair stays gold standard; the FSC is
-!  solvent-flattened and reported as such. Nothing is zeroed and nothing is
-!  masked: where the data term is strong the prior is irrelevant, where it is
-!  weak solvent is pulled toward zero; a misassigned voxel is over-regularized,
-!  not deleted, and the partition is redrawn from prior-free maps every
-!  iteration. The prior-free pair stays the base pair (FSC, NU competition
-!  and calibration, evidence, _unfil); the prior'd pair is the base of the
-!  closed-form replay and the pair the NU label field is applied to
-!  (2026-09-21). The solve support is untouched.
-!
-!  Reporting. One PCG SOLVENT PRIOR line per half per reconstruction (the
-!  smoothing scale, the Otsu threshold and the logistic width, the fraction of
-!  the production support with w < 1/2, the mean weight, the relative ridge
-!  coefficient), the prior-free pair's FSC, the even/odd weight agreement, and
-!  the weight volumes pcg_solvent_weight_stateNN_even|odd.mrc (overwritten
-!  each iteration). Provenance: solvent_prior=soft per_half base_pair lambda_rel=<x> auto|set.
-!
-!  Strength (2026-09-22). pcg_solvent_lambda not given = estimated per state
-!  and iteration by cross-validation with the NU objective over the production
-!  support, in closed form on the prior-free pair (estimate_solvent_prior_lambda):
-!  x(lambda) ~ h/(h + lambda data_scale (1-w)) x_pre with h the real-space
-!  diagonal of the data operator; J(lambda) = whitened Huber cross-half
-!  prediction error of the shrunk halves against the prior-free other halves;
-!  grid, argmin, one parabolic step in log lambda. Table and verdict in the
-!  log (PCG SOLVENT PRIOR LAMBDA), edge and flat curves flagged. The real
-!  re-solve then runs once at the chosen strength. pcg_solvent_check=yes
-!  (shared-memory and distributed paths) prints the same grid by real
-!  re-solves, with their residuals, beside it, to validate the closed form
-!  on a data set.
+!  Per half: w(r) in [0,1] from its own prior-free map (Otsu + logistic on |x| smoothed at ~2x FSC=0.143),
+!  then a cold re-solve with ridge lambda_s(1-w). Prior-free pair = base pair (FSC, NU, evidence, _unfil);
+!  prior'd pair = replay base and NU apply target. lambda_rel: closed-form cross-half CV unless given.
+!  Rationale: doc/implementation_notes/pcg_decision_log.md (solvent-prior entries).
 module simple_pcg_solvent_sidecar
 use simple_core_module_api
 use simple_parameters,        only: parameters
@@ -65,15 +26,7 @@ real,    parameter :: PCG_SOLVENT_LP_MIN_A  = 8.0
 !> voxels of the production support (window >= this) that take part in the
 !! Otsu partition; the weight is still evaluated everywhere
 real,    parameter :: PCG_SOLVENT_SUPPORT_MIN = 0.5
-!> strength estimate (2026-09-22): the ridge coefficient is chosen by
-!! cross-validation with the NU objective over the production support, in
-!! closed form on the prior-free pair: x(lambda) ~ s(r) x_pre with
-!! s = h / (h + lambda_rel data_scale (1-w(r))), h the real-space diagonal of
-!! the data operator; J(lambda) = the whitened Huber cross-half prediction
-!! error of s x_even against y_odd and s x_odd against y_even (image%nu_objective,
-!! profile from the prior-free pair). Grid, argmin, one parabolic step in
-!! log lambda between the neighbours. An edge argmin and a flat curve are
-!! flagged: flat means the weight map, not the strength, is the limit.
+!> relative ridge coefficients scanned by estimate_solvent_prior_lambda
 real,    parameter :: PCG_SOLVENT_LAMBDA_GRID(8) = [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0]
 real,    parameter :: PCG_SOLVENT_LAMBDA_FLAT_TOL = 1.e-3 !< relative J range below which the curve is flat
 type :: pcg_solvent_lambda_stats
@@ -197,12 +150,9 @@ contains
         endif
     end subroutine build_solvent_prior_weight
 
-    !> Relative ridge coefficient by cross-validation, closed form on the
-    !! prior-free pair (see the type comment above). x_even/odd: prior-free
-    !! base halves (real space); weight_even/odd: their protein weights;
-    !! support: the production support of the solve (window >= 1/2 takes part);
-    !! h: real-space diagonal of the data operator; data_scale: the reference
-    !! the relative coefficient multiplies. No operator, no solve.
+    !> Relative ridge coefficient by closed-form cross-validation on the prior-free pair, no solve:
+    !! s = h/(h + lambda data_scale (1-w)) shrinks each half; J = whitened Huber cross-half error over
+    !! the support (window >= 1/2); grid argmin, one parabolic step in log lambda, edge/flat flagged.
     subroutine estimate_solvent_prior_lambda( state, x_even, x_odd, weight_even, weight_odd, support, &
             &h_even, h_odd, data_scale_even, data_scale_odd, lambda_opt, stats )
         integer,                       intent(in)    :: state
@@ -480,7 +430,6 @@ contains
             return
         endif
         ! the strength: the command-line value, or the cross-validated estimate
-        ! (simple_pcg_solvent_sidecar)
         if( params%l_pcg_solvent_lambda_auto )then
             call estimate_solvent_prior_lambda(state_here, prov_even, prov_odd, weight(1), weight(2), base_support, &
                 &pcgop_even%get_realspace_diagonal(), pcgop_odd%get_realspace_diagonal(), &

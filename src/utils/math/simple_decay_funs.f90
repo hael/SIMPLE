@@ -11,8 +11,7 @@ private
 contains
 
     ! the maximum sample size, scaled by the number of states and capped at the particle count, as a
-    ! fraction of the particles (the former half-the-particles and minimum clamps could not change the
-    ! result, review of 2026-09-23)
+    ! fraction of the particles
     function calc_update_frac( nptcls, nstates, nsample_minmax ) result( update_frac )
         integer, intent(in) :: nptcls, nstates, nsample_minmax(2)
         real    :: update_frac

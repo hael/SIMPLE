@@ -36,11 +36,9 @@ integer, parameter :: TC_NSEED = 4  ! rows a full reconstruction contains (sampl
 
 contains
 
-    !> Reduce one state's Cartesian partial reconstructions and restore dense
-    !> even, odd, and merged volumes. On return build%vol/build%vol2 contain the
-    !> restored half-volumes needed by automask, while vol_nu_base_even/odd and
-    !> optional vol_nu_aux_even/odd contain the static-bank nonuniform-filter
-    !> auxiliary inputs before even/odd low-resolution insertion.
+    !> Reduce one state's Cartesian partial reconstructions and restore dense even, odd and merged
+    !> volumes. On return build%vol/vol2 hold the restored halves (for automask); under NU, vol_nu_base_*
+    !> and (ml_reg + static aux) vol_nu_aux_* hold the NU inputs before even/odd low-resolution insertion.
     subroutine restore_state_from_parts( params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
         &sum_rec, state, numlen_part, &
         &update_frac_trail_rec, realized_update_frac, trail_counts, &
@@ -76,38 +74,24 @@ contains
         integer(timer_int_kind) :: t_trail_blend
         call reduce_partials()
         call set_state_filenames()
-        ! Trailing happens in the accumulator domain: the persistent chain of
-        ! e/o Fourier sums + sampling densities is decayed by (1 - update
-        ! fraction) and the current partial sums are added, so every Fourier
-        ! component is weighted by its accumulated sampling density. All
-        ! downstream restoration (FSC, halfmaps, merged volume, nonuniform
-        ! filter inputs) then consumes the blended statistics. Only when the
-        ! chain does not exist yet (bootstrap) do we fall back to the legacy
-        ! previous-halfmap volume blend below, while seeding the chain.
+        ! Trailing blends the e/o accumulators (sums + densities) before any restoration; with no chain
+        ! yet (bootstrap) the legacy previous-halfmap volume blend runs while the chain is seeded.
         call blend_trailing_accumulators()
-        ! abinitio3D_addon: the frozen accumulators join as a second, constant
-        ! set of partials after the cohort chain is written and before any
-        ! restoration or prior, so FSC, regularization and NU inputs describe
-        ! the union while the chain carries the cohort's mass only
+        ! abinitio3D_addon: frozen accumulators join after the cohort chain is written and before any
+        ! restoration or prior, so FSC, regularization and NU describe the union, the chain the cohort
         call add_frozen_accumulators()
         call sum_eos_before_density_correction_if_needed()
         call restore_eos_and_write_fsc()
         call sum_eos_after_density_correction_if_needed()
         call capture_nonuniform_source_halves()
         call restore_merged_volume()
-        ! Keep restored half-volumes current in build%vol/build%vol2 for
-        ! automasking and optional trailing. Low-resolution even/odd blending is
-        ! a registration-reference trick and is applied only during
-        ! reprojection-model preparation, never to these on-disk halfmaps.
+        ! build%vol/vol2 hold the restored halves for automasking and trailing; low-resolution e/o
+        ! blending belongs to reprojection-model preparation, never to these on-disk halfmaps.
         call build%vol%read(eonames(1))
         call build%vol2%read(eonames(2))
         call trail_restored_halves_if_needed()
-        ! The shipped halves and merged volume carry the soft spherical support
-        ! at msk_crop (restore_gridding_pair, restore_merged_volume; the legacy
-        ! trailing blend mixes two such volumes). Record it beside the volume
-        ! so postprocess does not mask again, and whether the ML prior shrank
-        ! it (ml_reg: invtau2 in both halves before the merged sum) so
-        ! postprocess does not FSC-weight it a second time.
+        ! Record the shipped soft-sphere support (msk_crop) and whether the ML prior shrank the map,
+        ! so postprocess neither masks nor FSC-weights it again.
         if( params%l_ml_reg )then
             call write_support_provenance(volname, .false., 'gridding_regularized')
         else
@@ -191,15 +175,8 @@ contains
             endif
             if( l_trail_chain .and. 1.0 - update_frac_trail_rec > 0.01 )then
                 if( L_BENCH_GLOB ) t_trail_blend = tic()
-                ! Population rule (class-average and reconstruct3D partials note,
-                ! Section 4.1): the chain records M, the population it represents;
-                ! with N active updated rows now and n of them in the current
-                ! partials, current *= s = u/f and chain *= w = (1-u)*N/M, so the
-                ! blended mass is s*n + w*M = u*N + (1-u)*N = N whatever joined or
-                ! left the state, and the restored current-map coefficient is
-                ! exactly u (ufrac_trec contract). With N = M this is the former
-                ! recurrence, chain weight 1 - u. The rule keeps the mass right, not
-                ! the membership: old contributions are removed in proportion.
+                ! Population rule (population_blend_weights; importance_sampling_fractional_update_policy.md
+                ! sec. 7): current *= u/f, chain *= (1-u)N/M, so the blended mass is N and the current-map coefficient u.
                 call population_blend_weights(trail_counts(TC_NREP), trail_counts(TC_NSMP), trail_chain_mrep, &
                     &cur_scale, weight_prev, mnew, ufrac=update_frac_trail_rec)
                 if( abs(cur_scale - 1.0) > 0.001 )then
@@ -222,15 +199,8 @@ contains
                 if( L_BENCH_GLOB ) timings%trail_blend_accums = &
                     timings%trail_blend_accums + toc(t_trail_blend)
             else
-                ! No blend this iteration: either the chain does not exist yet
-                ! (bootstrap; the legacy previous-halfmap volume blend produces
-                ! this iteration's outputs) or the applied fraction is ~1 (full
-                ! replacement of the model). Either way the persisted chain must
-                ! represent full-dataset sampling mass: fractional partials are
-                ! scaled by 1/f for the write and restored afterwards, and the
-                ! chain records M = N. Without this, a chain seeded at fractional
-                ! mass f makes the next iteration's effective update weight
-                ! f/(f + (1-f)*f), far above the requested fraction.
+                ! No blend (no chain yet, or u ~ 1): persist the chain at full mass (partials x 1/f, M = N);
+                ! a fractional-mass seed would over-weight the next update.
                 call even_rec%apply_weight_sums(1.0 / realized_update_frac)
                 call odd_rec%apply_weight_sums(1.0 / realized_update_frac)
                 trail_mrep_new = real(trail_counts(TC_NREP))
@@ -754,12 +724,8 @@ contains
             endif
             call even_restore%new(even_rec)
             call odd_restore%new(odd_rec)
-            ! Every gridding product is deapodized and then given the soft
-            ! spherical support the PCG solve installs (mask3D_soft at
-            ! msk_crop), so the two backends' halves are equivalent and the FSC
-            ! is computed on the halves as shipped, with no mask of its own
-            ! (2026-09-09). The inverse envelope's rim gain, which the legacy
-            ! undeapodized FSC avoided, is zeroed by the support.
+            ! Every gridding product is deapodized, then given the PCG solve's soft sphere (msk_crop), so both
+            ! backends ship equivalent halves, the FSC takes them as shipped, and the sphere zeroes deapodization's rim gain.
             if( params%l_ml_reg )then
                 call even_rec%restore_base(even_restore%base, preserve_numerator=.true.)
                 call even_restore%finalize_from_base(even_rec)
@@ -864,10 +830,8 @@ contains
                     call state_mask_is_compatible(nu_envmask_file, params%box_crop, params%smpd_crop, &
                         &mask_exists, mask_compatible)
                     if( mask_compatible )then
-                        ! the image must be constructed before it can be read
-                        ! (the bootstrap has no lag-one mask, so this branch
-                        ! first runs at iteration 1: refine3D_auto crash
-                        ! 2026-09-18)
+                        ! the image must be constructed before it can be read (the bootstrap
+                        ! has no lag-one mask, so this branch first runs at iteration 1)
                         call envmask%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                         call envmask%read(nu_envmask_file)
                         call evaluate_halfmap_pair(params, state, even, odd, average, diagnostics, 'gridding', &

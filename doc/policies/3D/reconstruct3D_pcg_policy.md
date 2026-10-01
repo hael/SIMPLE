@@ -505,8 +505,8 @@ orientations explicitly.
 
 ## 9. Tests
 
-`test=pcg_recon` in `simple_commanders_test_highlevel.f90` — one gate, nine
-fail-fast stages, in memory with no project I/O. Each stage gates the ones after
+`test=pcg_recon` in `simple_commanders_test_highlevel.f90` — one gate, 14
+fail-fast stages (plus stage 3b), in memory with no project I/O. Each stage gates the ones after
 it; a visually plausible map is not evidence that the CTF/sigma adjoint is
 correct.
 
@@ -514,16 +514,21 @@ correct.
 | --- | --- |
 | 1 | adjoint dot-product identity, `T_i = 1` |
 | 2 | same with nonzero shift, astigmatic CTF and sigma2 — isolates `build_transfer` |
-| 3 | normal-operator symmetry and positive-definiteness |
+| 3 | normal-operator symmetry and positive-definiteness; 3b: the same for the masked operator `P H P` |
 | 4 | heterogeneous phantom recovery |
 | 5 | kernelized-vs-matrix-free operator, scale/energy, and fixed-iteration solution baseline |
 | 6 | kernel shift-invariance, CTF-dependence, and the preconditioner |
 | 7 | streaming batches and serialized fixed-order raw reduction reproduce monolithic accumulation |
 | 8 | deapodization against envelope-free data — the one stage without an inverse crime |
 | 9 | symmetry replication equals a c1 build of the symmetry-expanded particle set |
+| 10 | relative lambda: duplicated data (two raw artifacts, fixed-order reduction) doubles data scale and lambda and leaves a fixed-iteration solve unchanged |
+| 11 | full vs cropped raw B/D agree in the common band; cropped kernel vs matrix-free |
+| 12 | FSC/SSNR ML prior: nonzero positive-semidefinite diagonal, consistent summary, kernel/matrix-free parity, positive energy |
+| 13 | gridding and PCG prepare the same cropped observation (`box_crop < box`) |
+| 14 | support semantics: masked output zero outside the support; repeated warm starts keep the soft window band |
 
-Stages 1-7 generate observations with `forward_plane`, so the gather envelope
-cancels; they gate operator *algebra* only. Envelope correctness for real
+Outside stages 8 and 13, observations are generated with `forward_plane`, so the gather envelope
+cancels; those stages gate operator *algebra* only. Envelope correctness for real
 particles is gated solely by stage 8.
 
 Matrix-free is the oracle for kernel development. Any change to kernel

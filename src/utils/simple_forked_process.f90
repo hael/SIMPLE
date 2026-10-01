@@ -1,33 +1,8 @@
 !@descr: POSIX fork-based child-process manager with timestamps, auto-restart, and status polling
-!==============================================================================
-! MODULE: simple_forked_process
-!
-! PURPOSE:
-!   Provides the forked_process type, which wraps a POSIX fork()/waitpid()
-!   lifecycle. The parent retains a handle to the child, can poll its status,
-!   send signals, and optionally restart it on failure up to FORK_MAX_RESTARTS
-!   times. Unix timestamps are recorded at queue, start, stop, and fail events.
-!
-! TYPES:
-!   forked_process — owns a single child PID; bind a commander-style execute()
-!                    procedure via type extension or direct override before
-!                    calling start().
-!
-! STATUS CODES (public parameters):
-!   FORK_STATUS_FAILED     (-1) — child exited non-zero; restart exhausted
-!                                  or disabled
-!   FORK_STATUS_RUNNING    ( 0) — child is still running
-!   FORK_STATUS_STOPPED    ( 1) — child exited cleanly (exit code 0)
-!   FORK_STATUS_RESTARTING ( 2) — child failed and is being restarted
-!   FORK_STATUS_SKIPPED    ( 3) — process was skipped (never started)
-!
-! PARAMETERS (hard-coded):
-!   FORK_POLL_TIME    — usleep interval for status polling (µs)    (100 000)
-!   FORK_MAX_RESTARTS — maximum automatic restarts before giving up     (10)
-!
-! DEPENDENCIES:
-!   unix, simple_string, simple_syslib, simple_string_utils, simple_cmdline
-!==============================================================================
+! Extend and override execute(cline); start() forks and runs it in the child (exit 0).
+! status() polls waitpid(WNOHANG) and, if restart=.true., re-forks a failed child (side effect),
+! up to FORK_MAX_RESTARTS+1 times. A non-zero wait status (including signals) is FAILED.
+! terminate() sends SIGTERM, kill() SIGKILL.
 module simple_forked_process
   use unix,                  only: c_pid_t, c_int, c_long, c_null_char, &
                                   c_fork, c_kill, c_exit, c_time,     &
@@ -224,7 +199,7 @@ contains
 
   ! Non-blocking status poll. Uses waitpid(WNOHANG) to check whether the
   ! child has exited. Records stop/fail timestamps. On failure, auto-restarts
-  ! the child up to FORK_MAX_RESTARTS times if self%restart is set.
+  ! the child up to FORK_MAX_RESTARTS+1 times if self%restart is set.
   function status( self ) result( status_code )
     class(forked_process), intent(inout) :: self
     integer(kind=c_int)                  :: options, stat_loc, rc

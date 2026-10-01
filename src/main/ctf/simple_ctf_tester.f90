@@ -23,7 +23,7 @@ real,    parameter :: TOL = 2.e-6   ! Fortran-vs-Fortran comparisons
 ! 3.0 rad ~ 172 deg exercises the near-pi regime typical of a laser phase plate,
 ! where an erroneous fold at pi would flip the sign of the transfer function
 real,    parameter :: PHASES(4) = [0., PI/4., PIO2, 3.0]
-! closed-form references (double precision, ctf_ref.py of the stats batch, 2026-09-23)
+! closed-form references, computed in double precision
 real,    parameter :: WL_300KV    = 0.0196808236   ! Angstrom, 12.26/sqrt(V + 0.9784 V^2/1e6)
 real,    parameter :: WL_200KV    = 0.0250707883
 real,    parameter :: AC_CONST    = 0.1001674212   ! atan(0.1/sqrt(1-0.01))

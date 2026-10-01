@@ -1,44 +1,8 @@
 !@descr: polar-Fourier shared-direction basis bank for flex_pca
-!
-! WHY THIS EXISTS
-! ---------------
-! Every per-particle stage of flex_pca (reduced solve, embedding, probe E-step) extracts
-! `d+1` Cartesian central sections at the particle's own continuous orientation and then forms
-! `G_qr = <B_q,B_r>` and `b_q = <B_q,y>` over that plane. Because every particle sits at its own
-! orientation, nothing is shared: the projection cost is `N * (d+1) * plane_samples * kb_taps`
-! and the Gram cost is `N * d^2 * plane_samples`. Measured on Ribosembly (335k particles,
-! d_tilde=177) those two terms are 3786 and 3763 thread-seconds against 87 s for everything else
-! in the solve -- 98.9 % of the stage.
-!
-! Both terms collapse if the model is evaluated on a DISCRETE grid of projection DIRECTIONS
-! instead of per particle:
-!
-!   1. the `d+1` sections at one direction serve every particle assigned to it, so the projection
-!      cost becomes `nspace * (d+1) * ...` and stops scaling with N;
-!   2. the noise/CTF weight `w_i` is RADIAL, so the theta-sum in `G` factorises:
-!         G_qr(i) = sum_k w_i(k) C_qr(k),   C_qr(k) = sum_{theta in ring k} U_q conj(U_r)
-!      and `C` is shared by every particle at that direction. The per-particle Gram drops from
-!      `d^2 * nsamp` to `d^2 * nk` -- a factor of ~40 at box_crop 64.
-!
-! The in-plane angle stays CONTINUOUS: the bank is built at `e3 = 0` and the particle is polar-
-! sampled at the relative in-plane angle recovered from the two rotation matrices, so no in-plane
-! discretisation is introduced. The ONLY approximation is snapping the out-of-plane direction to
-! the grid, and `nspace` is a free knob that controls it (the bank is streamed direction by
-! direction, so nspace costs almost nothing in memory).
-!
-! CONVENTIONS -- these must match simple_flex_pca_em exactly or the two paths are not
-! comparable:
-!   * the Cartesian inner product `cov_herm_inner` sums over the HALF-plane k<=0 of the UNPADDED
-!     lattice (the plane is stored on a stride-OSMPL_PAD_FAC grid) with unit weight per lattice
-!     point. The polar grid therefore carries a quadrature weight `wq` normalised so that
-!     `sum(wq)` equals the number of Cartesian lattice points in the same disc.
-!   * the basis is interpolated out of `cmat_exp` with `latent_projection_weights` /
-!     `weighted_expanded_cmat`, i.e. the SAME normalised KB kernel `project_fplanes_mean_basis`
-!     uses -- NOT `interp_cmat_exp`, whose weights are unnormalised.
-!   * the CTF is NOT baked into the bank (it cannot be, the bank is shared). The Cartesian path
-!     computes `G = <T U_q, T U_r>` and `b = <T U_q, y>`; here the same numbers come from
-!     `|T|^2` folded into the radial weight and `conj(T) y` folded into the particle.
-!
+! Mean + basis sections are projected once per shared direction (cov_polar_ndir) on polar rings; particles are
+! sampled at their continuous relative in-plane angle and ring-mean |T|^2 factorises G_qr = sum_k w_i(k) C_qr(k).
+! Approximations: direction snap and radial |T|^2 (tazim). Quadrature measure, KB weights and CTF adjoint must
+! match the Cartesian cov_herm_inner path.
 module simple_flex_pca_polar
 use simple_core_module_api
 use simple_reconstructor, only: reconstructor
@@ -74,8 +38,7 @@ type :: polar_grid_t
     integer :: ph0 = 0, pk0 = 0                           !< padded array lower bounds of cmplx_plane
     integer,  allocatable :: rbeg(:), rend(:)             !< (nk) sample range of each ring
     !> First sample of the SECOND half within each ring. Angles are stored even-indices-first, so
-    !! [rbeg,rmid-1] and [rmid,rend] are two interleaved half-sets of the ring -- the polar analogue
-    !! of the Cartesian checkerboard split cov_herm_inner takes with `half`. Both are contiguous, so
+    !! [rbeg,rmid-1] and [rmid,rend] are two interleaved half-sets of the ring. Both are contiguous, so
     !! the half-set Grams and b-vectors are still one BLAS call each, and the ring block as a whole
     !! stays contiguous so nothing in the solve changes shape.
     integer,  allocatable :: rmid(:)                      !< (nk)
@@ -91,14 +54,9 @@ end type polar_grid_t
 
 contains
 
-    !> Build the ring-wise polar grid. `kto` is the band edge (the shell beyond which every model
-    !! plane is identically zero) and [knfrom,knto] are the pure-noise rings used for sig2.
-    !! `ang_osamp` multiplies the per-ring angular sample count (accuracy knob; default 1 is the
-    !! historical grid). `gate_lo` replaces the inner measure gate: when present, the Cartesian
-    !! point count the quadrature is normalized to excludes h^2+k^2 <= gate_lo instead of
-    !! h^2+k^2 < kfrom^2 -- the SHELL-complement convention the hybrid exact/ring split needs
-    !! (shells are nint(sqrt())-assigned, so the annulus above shell r starts at r*(r+1)+1, not
-    !! at (r+1)^2; using the default gate there would double-count the boundary points' measure).
+    !> Ring-wise polar grid: band rings kfrom..kto (model planes vanish beyond kto) and pure-noise rings
+    !! [knfrom,knto] for sig2; ang_osamp multiplies the angles per ring. gate_lo makes the measure exclude
+    !! h^2+k^2 <= gate_lo (nint shells: above shell r starts at r*(r+1)+1) instead of h^2+k^2 < kfrom^2.
     subroutine polar_grid_build( g, kfrom, kto, knfrom, knto, hlo, hhi, klo, ph0, pk0, &
             &ang_osamp, gate_lo )
         type(polar_grid_t), intent(inout) :: g
@@ -311,18 +269,9 @@ contains
         endif
     end subroutine polar_relative_inplane
 
-    !> Polar-sample one particle plane at the in-plane angle (ca,sa) relative to its bank direction.
-    !!
-    !! Returns, on the BAND rings,
-    !!    xw(j) = conj(T_i(j)) * y_i(j)      (the whitened, CTF-adjoint observation)
-    !!    wr(r) = ring mean of |T_i|^2       (the radial weight the Gram factorisation needs)
-    !! and on the NOISE rings the weighted power of the observation, which above the band equals the
-    !! residual because every model plane is zero there. sig2 measured this way is in the SAME
-    !! representation as G and b -- including whatever variance the polar resampling removes -- so
-    !! the debias identity E[Re(b_q)Re(b_r)] = 0.5*sig2*G stays self-consistent.
-    !!
-    !! `tazim` reports the mean relative azimuthal spread of |T|^2 within a ring. It is 0 for a
-    !! non-astigmatic CTF and is the quantity that invalidates the radial factorisation if it is not.
+    !> Polar-sample one particle plane at in-plane angle (ca,sa) from its bank direction: band rings give
+    !! xw = conj(T)*y and wr = ring mean |T|^2; noise rings give the weighted residual power (hfpw/hfcnt) for
+    !! sig2. tazim, the mean relative azimuthal spread of |T|^2 per ring, is 0 without astigmatism.
     subroutine polar_sample_particle( cplane, tplane, g, ca, sa, xw, wr, hfpw, hfcnt, tazim, xw1, xw2 )
         complex,            intent(in)  :: cplane(:,:)
         complex,            intent(in)  :: tplane(:,:)
@@ -350,13 +299,8 @@ contains
                 yv   = polar_interp_plane(cplane, g, kbwin, hu, ku)
                 tv_c = polar_interp_plane(tplane, g, kbwin, hu, ku)
                 xw(j) = conjg(tv_c) * yv
-                ! THE HALF-SPLIT. Alternating polar SAMPLES does not give independent halves:
-                ! consecutive samples on a ring are ~1 lattice unit apart by construction, while the
-                ! 3-tap KB kernel spans +-1, so neighbours interpolate from almost the same Cartesian
-                ! points and their noise is shared. Measured on EMPIAR-10076, that drove every
-                ! split-half rho to 0.95-1.00 and flattened the reliability prior to nothing.
-                ! Splitting the underlying LATTICE by parity -- the same convention cov_herm_inner
-                ! uses -- gives halves that are functions of disjoint samples.
+                ! half-split by LATTICE (hx+ky) parity, not by alternating ring samples: neighbours ~1 unit
+                ! apart share 3-tap KB taps and hence noise, while the parity halves use disjoint samples
                 if( present(xw1) ) xw1(j) = conjg(tv_c) * polar_interp_plane(cplane, g, kbwin, hu, ku, 1)
                 if( present(xw2) ) xw2(j) = conjg(tv_c) * polar_interp_plane(cplane, g, kbwin, hu, ku, 2)
                 t2    = real(tv_c*conjg(tv_c))
@@ -382,17 +326,9 @@ contains
         end do
     end subroutine polar_sample_particle
 
-    !> Zero-allocation fused variant of polar_sample_particle for the shared-direction E-step:
-    !! the KB window geometry of each ring sample is computed ONCE and shared by the data-plane
-    !! and transfer-plane gathers (the general sampler interpolates each plane separately, which
-    !! recomputes the identical geometry twice per sample), the unused z-axis weights are never
-    !! evaluated (polar_interp_plane computes them and drops them), and the sqrt(wq)-packed real
-    !! representation is written directly so no complex temporary -- and no per-call allocation --
-    !! exists at all. Numerics: each accumulator (yv, tv_c, tm, tv, tazim) sees exactly the taps,
-    !! weights and operation order of the original path, so xws/wr/tazim are bit-identical to
-    !! polar_sample_particle_packed without halves. No noise rings (the E-step grid has none) and
-    !! no parity half-fields (its callers never request them) -- the general sampler stays the
-    !! entry point for the embed path, which needs both.
+    !> Allocation-free polar_sample_particle for the shared-direction E-step: one KB window per ring sample
+    !! serves the data and transfer gathers, xws is written sqrt(wq)-packed, and xws/wr/tazim match
+    !! polar_sample_particle_packed without halves bit for bit. No noise rings, no parity half-fields.
     subroutine polar_sample_particle_fused( cplane, tplane, g, ca, sa, xws, wr, tazim )
         complex,            intent(in)  :: cplane(:,:)
         complex,            intent(in)  :: tplane(:,:)

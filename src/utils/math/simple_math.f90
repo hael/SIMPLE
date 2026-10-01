@@ -826,7 +826,7 @@ contains
         enddo
         sigma  = HUGE(sigma) ! initialisation, to get into the loop
         thresh = real(MIN_VAL) ! a two-valued input is already optimally split at the first bin,
-                               ! so the loop below never assigns thresh (segmentation tester, 2026-09-22)
+                               ! so the loop below never assigns thresh
         do T = MIN_VAL, MAX_VAL - 1
           q1   = q1 + p(T)
           q2   = q2 - p(T)
@@ -861,9 +861,7 @@ contains
           endif
         enddo
         ! T is the last bin of the lower class; bin T holds the values that round to T,
-        ! i.e. [T-0.5, T+0.5), so the class boundary in value space is T+0.5. Returning
-        ! T itself put the upper half of that bin into the foreground (found by the
-        ! segmentation tester, 2026-09-22).
+        ! i.e. [T-0.5, T+0.5), so the class boundary in value space is T+0.5
         thresh = (thresh + 0.5) / sc + old_range(1)
     end subroutine otsu_1
 
@@ -1194,16 +1192,9 @@ contains
 
     ! Savitzky-Golay filter
 
-    ! From numerical recipes ch14.8
-    ! y: input vector (size n) is returned filtered.
-    ! "To summarize: Within limits, Savitzky-Golay filtering does manage to provide smoothing
-    ! without loss of resolution. It does this by assuming that relatively distant data points have
-    ! some significant redundancy that can be used to reduce the level of noise. The specific nature
-    ! of the assumed redundancy is that the underlying function should be locally well-fitted by a
-    ! polynomial. When this is true, as it is for smooth line profiles not too much narrower than
-    ! the filter width, then the performance of Savitzky-Golay filters can be spectacular. When it
-    ! is not true, then these filters have no compelling advantage over other classes of smoothing
-    ! filter coefficients."
+    ! Numerical Recipes ch14.8: smoothing by a local degree-m least-squares polynomial over nl+nr+1 points,
+    ! which keeps features not much narrower than the window. y (size n) is filtered in place; the last
+    ! nr points are left as they are and the window is truncated at the left edge.
     subroutine SavitzkyGolay_filter( n, y )
         integer, intent(in)    :: n
         real,    intent(inout) :: y(n)

@@ -1,22 +1,6 @@
 !@descr: unit tests for persistent-worker wire message modules
-!==============================================================================
-! MODULE: simple_persistent_worker_message_tester
-!
-! PURPOSE:
-!   Exercises all persistent-worker wire message modules:
-!     1. simple_persistent_worker_message_types
-!     2. simple_persistent_worker_message_base
-!     3. simple_persistent_worker_message_heartbeat
-!     4. simple_persistent_worker_message_task
-!     5. simple_persistent_worker_message_status
-!     6. simple_persistent_worker_message_terminate
-!
-! ENTRY POINT:
-!   run_all_persistent_worker_message_tests
-!
-! DEPENDENCIES:
-!   simple_test_utils and all simple_persistent_worker_message_* modules
-!==============================================================================
+! Pins the message-type enum values and, per message type, new/kill and the raw serialise/transfer
+! round trip (buffer length = sizeof).
 module simple_persistent_worker_message_tester
   use simple_test_utils, only: assert_true, assert_int
   use simple_persistent_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_HEARTBEAT_MSG, WORKER_TASK_MSG, WORKER_STATUS_MSG, WORKER_NEW_TASK_MSG

@@ -1,39 +1,7 @@
-!@descr: stream pipeline stage 7 — multistate 3D reconstruction/refinement of pooled particles
-!==============================================================================
-! MODULE: simple_stream_p07_abinitio3D_multistate
-!
-! PURPOSE:
-!   Drives the continuous multistate 3D reconstruction/refinement loop for the
-!   streaming pipeline. Watches for completed 3D-export sets (written by
-!   stream_p06_pool2D) and imports them into a growing pool project.
-!
-!   Broadcasts stage/progress metadata and per-state gui_metadata_vol3D
-!   (volume paths, population, FSC-derived resolution/curve, orientation
-!   distribution histogram) to the GUI via ipc_pipe_abinitio3D_multstate_in.
-!   refine3D is not yet wired in — only the abinitio3D stage currently
-!   produces per-state volumes/FSCs.
-!
-! ENTRY POINT:
-!   stream_p07_abinitio3D_multistate%execute(cline) — called by the stream master
-!
-! INTERNAL SUBROUTINES:
-!   import_sets_into_pool          — read new exported sets into the pool
-!   send_meta_abinitio3D_multistate — broadcast stage/progress metadata to the GUI
-!   build_and_send_vol3D_states     — build/send per-state gui_metadata_vol3D once
-!                                      abinitio3D volumes/FSCs are available
-!   compute_oridist_for_state       — bin one state's particle orientations into
-!                                      the 72x36 azimuth/elevation histogram
-!   locate_state_jpeg               — locate a per-state output jpeg (reprojections
-!                                      or orientation-distribution heatmap) alongside its volume
-!   send_state_reprojtiles           — send one gui_metadata_cavg2D entry per
-!                                      orthogonal reprojection tile in a state's sprite sheet
-!   send_to_abinitio3D_multstate_in_pipe — frame and write a metadata buffer
-!   sigterm_handler       — SIGTERM handler: sets l_terminate for graceful exit
-!
-! DEPENDENCIES:
-!   simple_stream_api, simple_stream_state, simple_gui_metadata_api,
-!   simple_refine3D_fnames, unix
-!==============================================================================
+!@descr: stream stage 7: multistate 3D from pool2D exports (abinitio3D, then abinitio3D_addon)
+! Imports stage-6 exports (each filtered by model_cavgs_rejection), runs one NSTATES3D abinitio3D,
+! then an abinitio3D_addon pass whenever the pool has grown. Ingestion pauses while a job runs.
+! After abinitio3D, sends per-state gui_metadata_vol3D and reprojection tiles to the GUI.
 module simple_stream_p07_abinitio3D_multistate
 use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
@@ -143,7 +111,7 @@ contains
                     call setslist%push2chunk_list(projects(i), setslist%size() + 1, .true.)
                 enddo
             endif
-            ! Import new particles, paused while abinitio3D or refine3D is running
+            ! Import new particles, paused while abinitio3D or abinitio3D_addon is running
             if( .not. l_pause_ingestion ) call import_sets_into_pool( nimported )
             ! abinitio stage
             if( abinitio_stage < 2 .and. spproj_glob%os_ptcl2D%get_noris() /= 0 ) then
@@ -355,7 +323,7 @@ contains
                 else if( abinitio_stage == 1 ) then
                     my_stage = string('running abinitio3D')
                 else if( addon_stage == 1 ) then
-                    my_stage = string('running refine3D')
+                    my_stage = string('running abinitio3D_addon')
                 else
                     my_stage = string('idle')
                 endif
@@ -391,10 +359,9 @@ contains
                 endif
             end subroutine send_meta_abinitio3D_multistate
 
-            ! Build (once volumes/FSCs are available) and send one gui_metadata_vol3D
-            ! entry per state: paths, population, FSC-derived resolution/curve, and
-            ! the orientation-distribution histogram. Called once abinitio3D completes;
-            ! refine3D is not yet wired in, so this reflects the abinitio3D output only.
+            ! Send one gui_metadata_vol3D per state (paths, population, FSC resolution/curve,
+            ! orientation histogram). Called only when abinitio3D completes; abinitio3D_addon
+            ! results are not sent.
             subroutine build_and_send_vol3D_states
                 integer                      :: istate, my_pop, my_box, n_fsc_pts, k, fsc_box
                 real                         :: my_smpd, res0143, res05
@@ -700,7 +667,7 @@ contains
                 call simple_chdir(cwd)
             end subroutine finish_abinitio3D_addon
 
-            ! Called asynchronously on SIGTERM. Exits immediately after logging.
+            ! Called asynchronously on SIGTERM. Only sets l_terminate; the main loop exits on its next pass.
             subroutine sigterm_handler()
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
                 l_terminate = .true.

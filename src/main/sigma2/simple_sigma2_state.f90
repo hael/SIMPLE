@@ -101,7 +101,7 @@ contains
     !! generation: <committed stem>.g<generation>.next. Candidate and range
     !! names carry the generation they belong to, so a file left by another
     !! transaction (a crashed run, a second run in the same directory) can
-    !! never be mistaken for this one (2026-09-07).
+    !! never be mistaken for this one.
     function sigma2_state_candidate_path(committed_path, generation) result(candidate_path)
         character(len=*), intent(in) :: committed_path
         integer(int64),   intent(in) :: generation
@@ -152,9 +152,8 @@ contains
     end function transaction_stem
 
     !> An active particle record enters the grouped model only when every
-    !! shell is finite and positive. Invalid records are skipped with a
-    !! warning instead of aborting the run (2026-09-07); the legacy store
-    !! averages whatever its part files hold.
+    !! shell is finite and positive. Invalid records are skipped and counted
+    !! in one warning.
     pure logical function record_is_valid(spectrum)
         real(real32), intent(in) :: spectrum(:)
         record_is_valid = all(ieee_is_finite(spectrum)) .and. all(spectrum > 0.0_real32)

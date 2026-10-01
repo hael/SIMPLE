@@ -1,21 +1,8 @@
 !@descr: task 00 in the stream pipeline: master controller used when running from GUI
-!==============================================================================
-! MODULE: simple_stream_p00_master
-!
-! PURPOSE:
-!   Orchestrates the full stream pipeline from the GUI side. The master process
-!   launches stage workers, aggregates metadata from stage->master pipes,
-!   assembles heartbeat/progress payloads for NICE, and routes GUI updates back
-!   to workers via master->stage pipes.
-!
-! RESPONSIBILITIES:
-!   - Initialise stream stage command lines and metadata containers.
-!   - Create and manage IPC pipes for all stages.
-!   - Spawn/terminate/restart forked stage processes.
-!   - Run a metadata listener thread and merge framed pipe messages.
-!   - Poll NICE for control updates and broadcast framed update messages.
-!   - Perform orderly shutdown (thread join, pipe close, mutex cleanup).
-!==============================================================================
+! Forks the stage workers; a listener thread merges length-framed stage->master pipe messages into
+! the GUI metadata. Every 5 s the main loop posts the assembled JSON to NICE, applies its
+! terminate/restart requests, and forwards threshold/selection updates to the running p01, p03, p06.
+! Shutdown stops assign_optics first (waits up to 60 s), then the other stages, then the listener.
 module simple_stream_p00_master
 use unix
 use simple_syslib,                         only: symlink
@@ -299,7 +286,7 @@ contains
         if( c_pthread_mutex_init(terminate_mutex, c_null_ptr) /= 0 ) THROW_HARD('failed to initialise terminate mutex')
         ! start persistent worker server if requested by params
         params%qsys_name = '' ! force qsys_env to read from env vars so we can control with params
-        params%ncunits   = 16  ! set to 8 for now to ensure enough threads for stream processes; can be overridden by env var or compenv
+        params%ncunits   = 16  ! enough threads for the stream processes; env var or compenv can override
         call qsys%new(params, 1, qsys_nthr=16, stream=.true.)
         ! init update metadata
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)

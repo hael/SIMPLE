@@ -1,4 +1,4 @@
-!@descr: flex_pca EM: basis-fit driver, noise-prior calibration, probe-state I/O and band selection
+!@descr: flex_pca EM: worker stage bodies, data-free basis init, noise-prior calibration, probe-state I/O and band selection
 submodule (simple_flex_pca_em) simple_flex_pca_em_fit
 use simple_matcher_3Drec,   only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
@@ -8,53 +8,6 @@ implicit none
 #include "simple_local_flags.inc"
 
 contains
-
-    !> Full column-covariance eigenbasis pipeline.
-    module subroutine build_covariance_eigenbasis( params, build, mean_rec, pinds, nptcls, &
-        &col_sep, neigs_req, basis_recs, eigvals, ncomp_out, sig2_out, fprefix, rounds)
-        class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        type(reconstructor), intent(inout) :: mean_rec
-        integer,             intent(in)    :: pinds(:), nptcls, col_sep, neigs_req
-        type(reconstructor), allocatable, intent(out) :: basis_recs(:)
-        real(dp),            allocatable, intent(out) :: eigvals(:)
-        integer,             intent(out)   :: ncomp_out
-        real(dp),            intent(out)   :: sig2_out
-        !> optional clean real-space eigenvolumes + output-name prefix, used by the
-        !! held-out (cross-halfset) embedding to align two independently fitted bases
-        character(len=*),        optional, intent(in)  :: fprefix
-        type(reconstructor) :: work
-        integer :: lb(3), ub(3), nyq_rec
-        ! one work reconstructor defines the expanded lattice / Nyquist / grid correction
-        call init_basis_reconstructor(params, build, work)
-        lb      = lbound(work%cmat_exp)
-        ub      = ubound(work%cmat_exp)
-        nyq_rec = work%get_lfny(1)
-        ! NOTE: do not restrict the column sample sweep to the lp band. Everything above the lp shell is
-        ! hard-zeroed by realize_hermitian_volume, yet it still moves the eigenvalues by up to 1.2e-4
-        ! relative for only ~1.09x -- some path out of band escapes that argument. Find it first.
-        ! column selection. A WORKER in the COLS round must not re-run the SNR-greedy selection: its
-        ! own estimate_snr_volume call only produced this part's contribution, so the selection would
-        ! see a fraction of the variance. It reads the master's choice instead. A worker in the SNR
-        ! round runs the selection path only to reach estimate_snr_volume, and exits below.
-        ! PROBE WORKER. Like the SOLVE worker, nothing upstream is needed: the master refreshed
-        ! flex_pca_pc*.mrc and flex_pca_probe.txt before scheduling this round, so the worker rebuilds
-        ! the current basis from disk and contributes one EM half-pass over its own particle range.
-        ! niters=1 -- the iteration loop lives on the master, one qsys round per iteration, because
-        ! the basis the E-step projects against changes every iteration.
-        ! Workers never enter this routine: their stage bodies are probe_worker_pass and
-        ! embed_worker_pass, dispatched by the worker strategy.
-        ! ---- EM PATH (the only estimator) ----
-        ! Hand probe_subspace_iteration a data-free basis. The moment/covariance estimator that used
-        ! to live here -- SNR volume, column selection and accumulation, reduced solve -- has been
-        ! removed; probe_subspace_iteration is itself a PPCA EM and supersedes it. Only reachable on
-        ! the master: a worker in a PROBE or EMBED round has already returned above with the basis it
-        ! read off disk, so nothing here runs twice.
-        call init_basis_datafree(params, build, mean_rec, pinds, nptcls, col_sep, neigs_req, &
-            &basis_recs, eigvals, ncomp_out, sig2_out, rounds=rounds)
-        call work%dealloc_rho; call work%kill
-    end subroutine build_covariance_eigenbasis
 
     module subroutine probe_worker_pass( params, build, mean_rec, pinds, nptcls , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
@@ -123,21 +76,9 @@ contains
         if( allocated(eig_probe) ) deallocate(eig_probe)
     end subroutine embed_worker_pass
 
-    !> DATA-FREE EM INITIALISER (SIMPLE_COV_EM=1).
-    !!
-    !! Replaces the whole moment estimator -- SNR volume, column selection, column accumulation,
-    !! merge, reduced solve -- as the thing that hands probe_subspace_iteration its starting basis.
-    !! probe_subspace_iteration is ALREADY a PPCA EM (posterior precision A = (a^2/sig2)G + Gamma^-1,
-    !! E[zz'] = zz' + A^-1, coupled per-voxel M-step, Gamma from the posterior second moment). What it
-    !! has never been given is a start that is not the covariance eigenbasis, which is why running it
-    !! today is evidence for neither the EM formulation nor against it: if the columns are noise, the
-    !! probe starts inside a noise subspace and its Gamma^(0) are noise variances.
-    !!
-    !! The subspace here is the lowest-frequency Fourier modes the band admits, realised as cos/sin
-    !! Friedel pairs through exactly the same band-limit + mask + deapodisation the column path uses,
-    !! then orthonormalised. NO data moment is formed anywhere: select_frequencies_lowfreq is
-    !! pure geometry (greedy smallest-|xi|, col_sep-separated) and the "columns" fed to it are unit
-    !! impulses, not estimates. Deterministic, so two arms are comparable run to run.
+    !> Data-free EM start: lowest-|k| band lattice points (col_sep apart) realised as masked cos/sin
+    !! pairs and orthonormalised; deterministic. One capped data pass calibrates sig2 and Gamma^0;
+    !! the master also writes the initial eigenvolumes and the it000 copies the paired merge deflates against.
     module subroutine init_basis_datafree( params, build, mean_rec, pinds, nptcls, col_sep, neigs_req, &
         &basis_recs, eigvals, ncomp_out, sig2_out, fprefix , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
@@ -186,9 +127,8 @@ contains
         deallocate(realvols)
         ncomp_out = max(1, min(neigs_req, d_tilde))
         call basis_recs_from_images(params, build, utilde_real(1:ncomp_out), ncomp_out, basis_recs)
-        ! The eigenvolume MRCs are the master->worker handoff for every distributed probe round; on
-        ! the moment path form_eigenbasis_from_reduced writes them, and nothing else does, so the EM
-        ! path has to write its own initial basis or the first PROBE round finds no flex_pca_pc001.mrc.
+        ! The eigenvolume MRCs are the master->worker handoff for every distributed probe round, so the
+        ! initial basis is written here or the first PROBE round finds no flex_pca_pc001.mrc.
         pfx = 'flex_pca_pc'
         if( present(fprefix) ) pfx = trim(fprefix)
         if( .not. rounds%is_worker() )then
@@ -205,12 +145,8 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA EM INIT (data-free): impulses=',ncol, &
             &'  representatives=',nreal,'  rank=',ncomp_out
         call flush(logfhandle)
-        ! the ONLY data pass: the noise convention constant and the initial prior variance.
-        ! Two scalars do not need a million particles, and at box_crop=96 on the full dataset an
-        ! uncapped pass costs more than several EM iterations, so it shares the initialiser's
-        ! budget SIMPLE_COV_CALIB_MAX (default COV_CALIB_MAX_PTCLS; SIMPLE_COV_BASIS_MAX used to
-        ! be shared here but its default of 0 left this pass uncapped). Always master here -- a worker returned
-        ! long before this point -- so nparts is 1 and the budget is not divided twice.
+        ! the only data pass (sig2 and Gamma^0), capped at COV_CALIB_MAX_PTCLS (SIMPLE_COV_CALIB_MAX);
+        ! master only, so nparts=1 and the budget is not divided
         call cov_stage_subsample(build, pinds, nptcls, 1, COV_CALIB_MAX_PTCLS, &
             &'SIMPLE_COV_CALIB_MAX', 'EM CALIBRATION', cpinds, ncal)
         call em_calibrate_noise_prior(params, build, mean_rec, basis_recs, ncomp_out, cpinds, ncal, &
@@ -226,16 +162,9 @@ contains
         call work%dealloc_rho; call work%kill
     end subroutine init_basis_datafree
 
-    !> One pass over the particles to fix the two scalars the EM cannot invent: the whitened-noise
-    !! convention constant sig2 (measured on the high-frequency shells, where conformational signal is
-    !! negligible) and the initial prior variance Gamma^(0).
-    !!
-    !! Gamma^(0) is deliberately set from the mean-deflated residual with only the noise floor removed,
-    !! i.e. an OVER-estimate of the conformational signal, which makes the iteration-1 prior WEAK. The
-    !! asymmetry is on purpose: a prior that starts too tight shrinks z, which shrinks the Gamma update,
-    !! which tightens the prior -- the self-reinforcing collapse that is the single most plausible cause
-    !! of the previous EM's failure. Starting loose is corrected by the very first Gamma M-step; starting
-    !! tight is not corrected by anything.
+    !> One data pass for the two scalars the EM cannot invent: sig2 from the shells above 0.7*Nyquist and
+    !! Gamma^(0) from the mean-deflated residual minus that noise floor. Gamma^(0) over-estimates on purpose:
+    !! a loose prior is corrected by the first M-step, a tight one shrinks z and so tightens itself.
     module subroutine em_calibrate_noise_prior( params, build, mean_rec, basis_recs, ncomp, pinds, nptcls, &
         &sig2_out, gam0 )
         class(parameters),   intent(inout) :: params
@@ -333,12 +262,7 @@ contains
 
 
 
-    !>  Master -> probe-worker handoff: basis dimension, prior variances, whitened-noise level,
-    !!  and the global-iteration stamp (current/total probe iterations). The stamp is what lets a
-    !!  relaunched worker key iteration schedules (mixture warm-up gates) off
-    !!  the master's true iteration rather than its own loop counter, which is pinned at 1 --
-    !!  one qsys round per iteration. Trailing line; 0 0 when the caller has no iteration context.
-    !> The probe-state file carries MODEL state only (dimension, noise level, prior variances).
+    !> Master -> probe-worker handoff of MODEL state only (dimension, noise level, prior variances).
     !! Round control (iteration, budget, fits, stage) travels in job_descr under registered keys.
     module subroutine save_probe_state( ncomp, eigvals, sig2_eff, fname )
         integer,  intent(in) :: ncomp
@@ -383,10 +307,9 @@ contains
         call fn%kill
     end subroutine load_probe_state
 
-    !>  Rebuild the projection-ready basis a probe worker needs from the master's flex_pca_pc*.mrc.
-    !!  Same idiom as load_utilde_stack and probe_external_basis: set_rmat then fft then expand_exp,
-    !!  never add(), which would leave the reconstructor flagged Fourier and propagate an
-    !!  untransformed grid.
+    !>  Rebuild the projection-ready basis a probe worker needs from the master's flex_pca_pc*.mrc:
+    !!  set_rmat then fft then expand_exp, never add(), which would leave the reconstructor flagged
+    !!  Fourier and propagate an untransformed grid.
     module subroutine load_probe_basis( params, build, ncomp, basis_recs, fprefix )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build

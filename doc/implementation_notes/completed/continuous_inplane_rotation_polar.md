@@ -393,7 +393,7 @@ Do `OBJFUN_EUCLID` first and completely.
   memoized `FT(CTF²)·FT(REF²)` products without an extra FFT and recomputed
   per evaluation; hoisting it across L-BFGS-B iterations remains available
   if profiling justifies the added state. Validated by
-  `simple_test_continuous_inplane_cc_grad` (on-grid identity vs `gen_corrs`
+  `simple_pftc_inplane_tester` (`test_cc_evaluator`; on-grid identity vs `gen_corrs`
   at 2.3e-7, three-variable FD gradient checks at 1.1e-4). Wired into the
   joint continuous route: `new_joint`/`minimize_joint` dispatch on the
   objective (`is_joint_grad_objfun`), with cc-aware score mapping

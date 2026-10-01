@@ -1,12 +1,9 @@
 !@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc) on generated images, through the production polarisation path
-! Moved from the gencorrs_fft test program by the review of the remaining tests (plan, section 9.7):
-! three smooth zero-mean random images are polarised into a polarft_calc as references and, in
-! rotated or unrelated form, as particles; gen_objfun_vals (objfun=cc) must then peak at rotation 1
-! with correlation ~1 for an image against itself, at the applied rotation (a sixth of a turn) for
-! a rotated copy, and stay low for an unrelated image. The noise is zero-mean so that the shared
-! mask envelope carries no correlation. calc_frc rotates the reference with rotate_ref_8, not the
-! FFT path of gen_objfun_vals, so its shell correlations must peak at the same rotation; the probe
-! rotations (+60, -60 and 180 degrees) put the peaks in each branch of rotate_ref_8.
+! Three smooth zero-mean images (so the shared mask envelope carries no correlation) are references
+! and, rotated or unrelated, particles. gen_objfun_vals (objfun=cc) must peak at rotation 1 with cc ~1
+! for an image against itself, at the applied sixth of a turn for a rotated copy, and stay low for an
+! unrelated image. calc_frc (rotate_ref_8, not the FFT path) must peak at the same rotations; the probes
+! (+60, -60 and 180 degrees) cover each branch of rotate_ref_8.
 module simple_polarft_corr_tester
 use simple_core_module_api
 use simple_cmdline,      only: cmdline

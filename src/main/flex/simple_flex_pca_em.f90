@@ -24,84 +24,50 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: build_covariance_eigenbasis, embed_latents_with_contrast, estimate_covariance_mean
+public :: embed_latents_with_contrast, estimate_covariance_mean
 public :: probe_subspace_iteration, align_basis_to_reference
 public :: init_basis_reconstructor
-public :: bag_basis_pool, basis_recs_from_images
+public :: basis_recs_from_images
 public :: cov_env_int_pub, save_probe_state
 public :: compose_basis_from_runs, compose_cut_reembed
 public :: probe_worker_pass, embed_worker_pass
 public :: probe_fit_t, new_probe_fit, kill_probe_fit, xfsc_ctx_t
 public :: run_flex_pca_paired, run_flex_pca_paired_worker
 
-! Density observability floor, matching simple_image_arith::div_cmat_at_1 and the projected-latent coupled
-! solve.
-real(dp), parameter :: COV_DENSITY_FLOOR = 1.0d-6
-! Relative ridge used ONLY for the covariance diagonal in the S.B SNR proxy, which runs before the S.C
-! weights exist (Algorithm 1 precedes Algorithm 2).
-real,     parameter :: COV_RIDGE_REL     = 5.0e-2
 ! Relative eigenvalue floor for retaining direct-column PCA components.
 real(dp), parameter :: COV_EIG_REL_FLOOR = 1.0d-6
-! Cap on the column-subspace dimension. The accumulation is a batched dsyrk on the Van Loan-Pitsianis
-! rearrangement (see unrearrange_kron_selfsum), which needs ONE shared d^4 array regardless of thread count.
+! Rank cap on the orthonormalised representative subspace (orthonormalize_representatives).
 integer,  parameter :: COV_MAX_DTILDE    = 320
 ! Default column-subspace dimension, applied as a min against the memory budget so the rank follows
-! the data rather than free RAM. Override with SIMPLE_COV_DTILDE.
+! the data rather than free RAM.
 integer,  parameter :: COV_DEFAULT_DTILDE = 128
-! Total particles the probe / SNR / column-accumulation initialiser fit on, summed across processes.
-! 0 = OFF: capping traded a recovered conformation for speed, which is not a trade worth taking.
-! See doc/policies/flex_pca_policy.md. Enable per-run with SIMPLE_COV_PROBE_MAX / SIMPLE_COV_BASIS_MAX.
+! Probe-stage particle cap, a total across processes; 0 = off (SIMPLE_COV_PROBE_MAX overrides).
 integer,  parameter :: COV_PROBE_MAX_PTCLS = 0
-integer,  parameter :: COV_BASIS_MAX_PTCLS = 0
-! Particle budget for em_calibrate_noise_prior. That pass estimates exactly TWO global
-! scalars (the whitened-noise constant sig2 and the initial prior variance Gamma^0), whose
-! precision improves only as 1/sqrt(N) -- 20k particles already give ~0.7% on sig2, far
-! tighter than the EM needs. It previously shared SIMPLE_COV_BASIS_MAX, whose default of 0
-! means UNCAPPED, so on a full dataset it read every particle on the MASTER ALONE (workers
-! idle, no stage guard covers it): measured ~5 min of 1/10-capacity time at 105k/box64
-! before the first distributed round. Capping removes the work rather than parallelising it.
+! Particle cap for em_calibrate_noise_prior (SIMPLE_COV_CALIB_MAX overrides): it estimates only two
+! global scalars (sig2, Gamma^0), whose precision improves as 1/sqrt(N), and runs on the master alone.
 integer,  parameter :: COV_CALIB_MAX_PTCLS = 20000
 ! How far above the spectrum's noise bulk a direction must stand to count as signal. Loose by design:
 ! keeping a noise direction costs one rank, dropping a real one costs a conformation.
 real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
 ! Samples per free parameter for the rank bound d ~ sqrt(2N/R). REPORT ONLY.
 real(dp), parameter :: COV_SAMPLES_PER_PARAM = 10.0d0
-!> probe stops when successive bases agree to this mean principal-angle cosine: tight enough that the
-!! remaining rotation cannot move a state target, and it fires at the measured knee rather than
-!! running the tuned count out.
-!> The fit runs its full n_probe_iters budget: an in-loop convergence stop was measured to fire on
-!> semi-convergence, and the paired merge needs the last two iterations' frames. Kept as a ceiling
-!> that a rank-1 fit can still trip (a lone component that stops moving has nothing left to learn).
+!> Mean principal-angle cosine vs the previous basis at which a rank-1 fit stops early. Higher ranks
+!! run the full n_probe_iters budget (the paired merge needs the last two iterations' frames).
 real(dp), parameter :: COV_PROBE_CONV    = 0.999999d0
 !> mixture width of the MCFA E-step: the deconvolution picks the macro-clusters downstream, so this
-!> is only the E-step's flexibility budget (measured stable 8-32 on 10028/10076)
+!> is only the E-step's flexibility budget
 integer,  parameter :: COV_EM_MIX        = 16
-!> nuisance shells deflated out of every basis volume each M-step (envelope + background + the
-!> consensus dilation): without it ~86% of the 10028 basis was solvent and envelope
+!> consensus resolution shells deflated out of every basis volume each M-step (the background and
+!> dilation templates are added on top)
 integer,  parameter :: COV_EM_DEFLATE    = 4
-!> Convergence is declared when the REPRODUCIBLE dimension -- the sum of principal-angle cosines
-!! between the even and odd half-bases, which the M-step already produces every iteration -- has
-!! not improved by more than COV_EO_TOL for COV_EO_PATIENCE consecutive iterations. This is the
-!! only criterion here with no dataset-specific constant in it: it asks the data how much of the
-!! basis survives a change of particles, and stops when that stops growing.
-real(dp), parameter :: COV_EO_TOL        = 0.02d0
-integer,  parameter :: COV_EO_PATIENCE   = 3
-! Memory budget for the shared A accumulator, in bytes.
+! Byte budget behind the d_tilde memory cap (cov_dim_budget); no current solve allocates the modelled array.
 real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
 ! Accumulate the columns against the unscaled mean (a==1) rather than the per-particle ML contrast a_i.
 ! Subtracting a_i*T*mu also deletes the component of the conformational signal parallel to T*mu.
 logical,  parameter :: COV_UNIT_CONTRAST  = .true.
 ! Grid-search the per-particle contrast in the embedding instead of using the closed-form estimate.
 logical,  parameter :: COV_EMBED_CONTRAST_GRID = .false.
-integer,  parameter :: COV_CG_MAXIT = 2000     ! CG iteration cap; convergence is reported, not assumed
-real(dp), parameter :: COV_CG_TOL   = 1.d-10   ! relative residual target
 integer,  parameter :: GRAM_DIAG_STRIDE = 200   ! subsample for the projected-Gram spectrum
-integer,  parameter :: NCONTRAST_GRID = 50
-real(dp), parameter :: A_GRID_HI = 2.0d0
-! bracket for the fitted per-particle contrast; wide enough not to bind on real amplitude spread,
-! tight enough that a particle the mask or the band has emptied cannot drag its latent to infinity
-real(dp), parameter :: A_CONTRAST_LO = 0.2d0
-real(dp), parameter :: A_CONTRAST_HI = 3.0d0
 real(dp), parameter :: COV_PINV_RCOND = 1.0d-6
 
 ! Source of the covariance mean mu.
@@ -114,34 +80,13 @@ logical, parameter :: COV_MASK_IMAGES = .false.
 ! lambda*defocus/d, which reaches ~70 A at 5.5 um defocus and 15 A resolution.
 real, parameter :: COV_MASK_MARGIN = 1.4
 
-! Subtract the analytic per-sample noise bias K_R(.,q_s)|T|^2 from the column numerator. Without it the
-! bias survives into the half-set column FSC and the Wiener shrinkage deletes the low-frequency band.
-logical, parameter :: COV_COLUMN_NOISE_DEBIAS = .true.
-
-character(len=*), parameter :: COV_UTILDE_FBODY = 'flex_pca_utilde'
-character(len=*), parameter :: COV_UTILDE_META  = 'flex_pca_utilde.txt'
 !> master -> probe-worker handoff: the basis dimension, its prior variances and the whitened-noise
 !! level. The basis volumes themselves are already on disk as flex_pca_pc*.mrc.
 character(len=*), parameter :: COV_PROBE_META   = 'flex_pca_probe.txt'
-! Half-width of the KB backprojection stencil in grid units, as cov_kb_weights derives it.
-integer, parameter :: COV_KB_IWINSZ = ceiling(KBWINSZ - 0.5)
 
-!> Per-fit state of one probe EM fit (the paired-engine state hoist, proposal §4 step 0/1).
-!!
-!! probe_subspace_iteration used to keep everything that survives from EM iteration N to N+1 as
-!! subroutine-local variables of the one long call -- which is exactly why a distributed probe
-!! worker (relaunched with niters=1 every round) destroys its MCFA state, prev_real
-!! and polar caches each round, and why two alternating single-fit calls could never
-!! implement the paired engine. This type is that state, hoisted, so one master-loop iteration
-!! can advance two resident fits.
-!!
-!! LIFECYCLE CONTRACT (the MCFA free-on-iteration crash, em_iter teardown note, verbatim
-!! archetype): the mixture state (mix_*) and its work arrays (rhs0th etc) must survive from one
-!! iteration's M-step to the next iteration's E-step. They are freed ONLY by kill_probe_fit or
-!! by the basis-rank-change resize at iteration start -- never by per-iteration cleanup. The
-!! historical bug: iteration 3 initialised the mixture, per-iteration cleanup freed it,
-!! l_mix_active stayed true, and iteration 4's E-step walked into an unallocated mix_Ominv (a
-!! null descriptor, invisible to -fcheck=bounds, every thread segfaulting on the same line).
+!> Per-fit EM state, owned by the driver so one loop can advance two resident fits.
+!! Lifecycle: mix_* and their work arrays (rhs0th, mkth, lwth, rkth, mxa_*) live across
+!! iterations; only kill_probe_fit or the rank-change resize in fit_iter_begin may free them.
 type :: probe_fit_t
     ! ---- identity, selection, files ----
     integer      :: id = 0                  !< 1 = fit A, 2 = fit B, 0 = single-fit (legacy)
@@ -165,8 +110,6 @@ type :: probe_fit_t
                                             !! mid-stage even when ncomp shrinks (rank never grows)
     ! ---- convergence state (cross-iteration) ----
     real(dp)     :: nll_prev = 0.d0
-    real(dp)     :: eo_best  = -1.d0
-    integer      :: eo_stall = 0, eo_patience = 0
     logical      :: l_converged = .false.
     type(image), allocatable :: prev_real(:)   !< previous iteration's orthonormal basis
     real(dp)     :: conv_thresh = 0.d0
@@ -227,32 +170,20 @@ type :: probe_fit_t
     logical      :: l_probe_mls = .false.
     logical      :: l_deflate_mean = .false.
     integer      :: vdfl = 0
-    ! ---- cross-fit-FSC (crossfsc) per-fit hooks ----
-    ! The driver owns the artifact and all consumer decisions (see xfsc_ctx_t in em_iter);
-    ! fit_iter_finish only (a) harvests the writer payloads below when l_xf_harvest is set --
-    ! the H profiles from the rho_e/rho_o pair diagonals BEFORE any invtau2 mutates them and
-    ! before their deallocation, the internal e/o FSC curves and Gamma at the BAND/RANK site --
-    ! and (b) applies xf_invtau2 (built by the driver from the previous iteration's record) to
-    ! the diagonal rows of this fit's rho_e AND rho_o immediately before the two coupled solves,
-    ! deallocating it after (one-shot per iteration). With no XFSC gate live, l_xf_harvest stays
-    ! false and xf_invtau2 unallocated: both hooks are inert.
+    ! ---- cross-fit-FSC (crossfsc) per-fit hooks; the driver (xfsc_ctx_t) owns every decision ----
+    ! fit_iter_finish harvests the writer payloads when l_xf_harvest is set (H before any ridge touches rho)
+    ! and applies xf_invtau2 (record t-1, xfsc_prep_iter) to the rho_e/rho_o diagonals before the solves, once.
     logical  :: l_xf_harvest = .false.
     real,     allocatable :: xf_h_e(:,:), xf_h_o(:,:)  !< (filtsz,ncomp) per-shell H, pre-ridge
     integer,  allocatable :: xf_cnt(:)                 !< (filtsz) shared per-shell voxel counts
     real,     allocatable :: xf_fscq(:,:)              !< (filtsz,ncomp) internal e/o FSC curves
     real(dp), allocatable :: xf_gam(:)                 !< (ncomp) Gamma at the writer site
     real,     allocatable :: xf_invtau2(:,:)           !< (ncomp,filtsz) ridge from record t-1
-    ! ---- paired-merge stash (SIMPLE_COV_PAIRED_MERGE=1; proposal par.7 step 2) ----
-    ! The final stage merges the two fits' LAST-iteration M-step sufficient statistics; those
-    ! live only inside one iteration (fit_iter_finish mutates the numerators in the coupled
-    ! solve and frees everything), so under the merge gate the paired driver snapshots them
-    ! RAW -- after the batch loop + reductions, before fit_iter_finish (pre-ridge, pre-solve)
-    ! -- every iteration, overwriting: any iteration can turn out to be the last (convergence
-    ! or the crossfsc stop are evaluated after the tails). mg_prev is the fit's ENTRY-frame
-    ! orthonormal basis (prev_real at stash time = the previous iteration's delivered basis),
-    ! which is the latent frame the stashed statistics are expressed in -- the frame map R is
-    ! computed between the two fits' mg_prev sets, NOT between the post-solve delivered bases.
-    logical  :: l_mg_stash = .false.               !< stash present (driver-gated)
+    ! ---- paired-merge stash ----
+    ! probe_fit_merge_stash snapshots the raw M-step statistics (pre-ridge, pre-solve) every iteration,
+    ! since any iteration can be the last. mg_prev is the entry-frame basis those statistics are
+    ! expressed in; the merge's frame map R is computed between the two fits' mg_prev sets.
+    logical  :: l_mg_stash = .false.               !< stash present
     integer  :: mg_ncomp = 0, mg_npairs = 0        !< entry rank of the stashed iteration
     complex,  allocatable :: mg_ye(:,:,:,:), mg_yo(:,:,:,:)   !< (es) x ncomp numerators
     real,     allocatable :: mg_rhe(:,:,:,:), mg_rho(:,:,:,:) !< (npairs, es) packed densities
@@ -269,22 +200,15 @@ type :: probe_fit_t
 end type probe_fit_t
 
 
-!> ---- CROSS-FIT-FSC driver context (artifact writer + SSNR ridge) ----
-!! Spec: doc/for_developers/ideas/flex_pca_crossfsc_shrinkage_marching_spec.md (the marching and
-!! stopping consumers of that spec were removed 2026-09-07; only the artifact and the ridge remain).
-!! The ridge defaults OFF (SIMPLE_COV_XFSC_REG=0). One context is owned by each driver loop
-!! (single-fit probe_subspace_iteration, paired probe_subspace_paired); the per-fit payloads the
-!! writer needs (H profiles harvested from the rho pair diagonals, internal FSC curves, Gamma) are
-!! stashed in probe_fit_t by fit_iter_finish, so the phase procedure stays ignorant of the artifact
-!! and the driver owns every consumer decision. Only the paired engine writes records (paired=1,
-!! one per iteration: the artifact is its lasting product); the single-fit engine can consume a
-!! paired artifact left in the directory (pcafit names its side).
+!> Cross-fit-FSC driver context, one per driver loop: the paired master's per-iteration record
+!! writer and the SSNR ridge (arm 1, hard-wired in xfsc_setup) built from record t-1. fit_iter_finish
+!! stashes the writer payloads in probe_fit_t; the driver owns every consumer decision.
 type :: xfsc_ctx_t
     logical  :: l_writer   = .false.   !< this driver writes records (paired master)
     logical  :: l_any      = .false.   !< ridge or writer live -> artifact state resident
     logical  :: l_loaded   = .false.   !< artifact reloaded from disk (restart-complete series)
     logical  :: l_paired   = .false.   !< this driver is the paired engine
-    integer  :: v_reg      = 0         !< par.4 arms: 0 internal / 1 cross / 2 blend
+    integer  :: v_reg      = 0         !< ridge arm: 0 none, 1 cross-fit FSC (xfsc_setup sets 1)
     integer  :: reg_active = 0         !< arm ACTIVE this iteration (0 when degraded)
     integer  :: klo        = 6         !< low-resolution exemption index (reslim_ind analog)
     integer  :: filtsz     = 0
@@ -580,12 +504,11 @@ interface
         type(probe_fit_t), intent(inout) :: fit
     end subroutine probe_fit_merge_stash
 
-    module subroutine probe_paired_merge( params, build, fits, merge_mode, m_basis_recs, &
+    module subroutine probe_paired_merge( params, build, fits, m_basis_recs, &
         &m_eigvals, m_ncomp, m_sig2, m_matchcos )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(probe_fit_t),   intent(inout) :: fits(2)
-        integer,             intent(in)    :: merge_mode
         type(reconstructor), allocatable, intent(out) :: m_basis_recs(:)
         real(dp),            allocatable, intent(out) :: m_eigvals(:)
         integer,             intent(out)              :: m_ncomp
@@ -602,20 +525,6 @@ interface
     end subroutine run_flex_pca_paired_worker
 
     ! ===== implemented in simple_flex_pca_em_fit =====
-
-    module subroutine build_covariance_eigenbasis( params, build, mean_rec, pinds, nptcls, &
-        &col_sep, neigs_req, basis_recs, eigvals, ncomp_out, sig2_out, fprefix, rounds)
-        class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        type(reconstructor), intent(inout) :: mean_rec
-        integer,             intent(in)    :: pinds(:), nptcls, col_sep, neigs_req
-        type(reconstructor), allocatable, intent(out) :: basis_recs(:)
-        real(dp),            allocatable, intent(out) :: eigvals(:)
-        integer,             intent(out)   :: ncomp_out
-        real(dp),            intent(out)   :: sig2_out
-        character(len=*),        optional, intent(in)  :: fprefix
-    end subroutine build_covariance_eigenbasis
 
     module subroutine init_basis_datafree( params, build, mean_rec, pinds, nptcls, col_sep, neigs_req, &
         &basis_recs, eigvals, ncomp_out, sig2_out, fprefix , rounds)
@@ -844,14 +753,6 @@ interface
         real(dp), allocatable, intent(out) :: M(:,:), svals(:)
     end subroutine align_basis_to_reference
 
-    module subroutine bag_basis_pool( imgs_a, na_c, eig_a, imgs_b, nb_c, eig_b, ncomp_out, pooled, eig_pooled )
-        integer,     intent(in)    :: na_c, nb_c, ncomp_out
-        type(image), intent(inout) :: imgs_a(na_c), imgs_b(nb_c)
-        real(dp),    intent(in)    :: eig_a(na_c), eig_b(nb_c)
-        type(image), allocatable, intent(out) :: pooled(:)
-        real(dp),    allocatable, intent(out) :: eig_pooled(:)
-    end subroutine bag_basis_pool
-
     module subroutine basis_recs_from_images( params, build, imgs, ncomp, basis_recs )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
@@ -968,8 +869,7 @@ interface
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         integer,             intent(in)    :: pinds(:), nptcls, col_sep, neigs_req
-        !> merged final-stage product (SIMPLE_COV_PAIRED_MERGE>=1 only; stay unallocated/0
-        !! otherwise) -- the caller embeds ALL particles against this basis
+        !> merged final-stage product (required); the caller embeds ALL particles against this basis
         type(reconstructor), allocatable, optional, intent(out) :: m_basis_recs(:)
         real(dp),            allocatable, optional, intent(out) :: m_eigvals(:)
         integer,             optional,    intent(out)           :: m_ncomp

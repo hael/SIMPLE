@@ -1,24 +1,8 @@
 !@descr: task 1 in the stream pipeline: pre-processing (movie registration, CTF estimation, segmentation-based picking)
-!==============================================================================
-! MODULE: simple_stream_p01_preprocess_new
-!
-! PURPOSE:
-!   Implements stream pipeline stage 1 preprocessing. The stage watches for
-!   incoming movie sets, runs motion correction and CTF estimation, performs
-!   segmentation-based picking, and emits preprocessing metadata for GUI
-!   dashboards (micrographs, histograms, and timeplots).
-!
-! ENTRY POINT:
-!   stream_p01_preprocess%execute(cline)
-!
-! GUI MESSAGING:
-!   - Sends stage metadata to master via ipc_pipe_preprocess_in.
-!   - Receives user updates from master via ipc_pipe_preprocess_out.
-!
-! DEPENDENCIES:
-!   simple_stream_api, simple_stream_state, simple_gui_metadata_api,
-!   simple_motion_correct_utils, simple_histogram
-!==============================================================================
+! Watches dir_movies, resolves the gain reference (flipgain, including auto-detect and generate) and
+! runs prg=preprocess on new movies; segmentation picking preprocessing covers the first ninipick.
+! Sends micrograph/histogram/timeplot GUI metadata on ipc_pipe_preprocess_in and applies the
+! ctfres/astig/icefrac thresholds received on ipc_pipe_preprocess_out.
 module simple_stream_p01_preprocess_new
 use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc

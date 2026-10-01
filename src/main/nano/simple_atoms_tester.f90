@@ -1,10 +1,6 @@
 !@descr: unit tests for atomic models (simple_atoms): access, geometry, PDB I/O, density simulation and per-atom validation
-! Replaces the in-module self-test test_atoms of simple_atoms (its private assertions stopped at the
-! first failure, the I/O and density parts only ran, and three PDB files were left behind); the
-! routines only that self-test called were removed (plan, section 9.7, the open items, 2026-09-25).
 ! atom_validate is pinned against a map simulated from the model itself: every atom must correlate
-! with its own simulated density (0.99 in a numpy emulation of convolve and the window mask), which
-! the one-voxel offset of its window (fixed 2026-09-25) broke (0.35-0.44 in the same emulation).
+! with its own simulated density. Guards a one-voxel offset of the atom_validate window.
 module simple_atoms_tester
 use simple_test_utils
 use simple_defs

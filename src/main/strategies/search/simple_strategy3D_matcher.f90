@@ -543,7 +543,7 @@ contains
                     ! direction is the closest one to its stored orientation.
                     ! A contained procedure reaches the HOST's orientation, not
                     ! the caller's OpenMP-private copy, so a procedure-local
-                    ! ori is mandatory here (shared-ori double free, 2026-09-07)
+                    ! ori is mandatory here (a shared ori is double-freed)
                     call b_ptr%spproj_field%get_ori(iptcl, o_sigma)
                     call b_ptr%spproj_field%set(iptcl, 'proj', b_ptr%eulspace%find_closest_proj(o_sigma))
                     call o_sigma%kill

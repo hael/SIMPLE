@@ -58,8 +58,8 @@ low-pass (as in 2D) rather than by an FSC filter.
 **Sampling grid.** Each stage crops to `smpd_target = max(2, lp/3)` at the
 ends and interpolates the box in between, always preserving
 `box * smpd = box_crop * smpd_crop`; the shift bound is `min(8, max(2, 12 A /
-smpd_crop))` pixels. When a single downscaled particle cache is used, every
-eligible stage adopts the final crop while the low-pass still marches.
+smpd_crop))` pixels. The downscaled particle cache is 2D-only; `abinitio3D`
+rejects `cache` and `cache_dir`.
 
 **Search stochasticity.** Stages 1 and 2 use the stochastic direct
 neighborhood (first-improvement over a random subset of directions);

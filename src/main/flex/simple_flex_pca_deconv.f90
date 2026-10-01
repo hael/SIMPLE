@@ -1,20 +1,8 @@
 !@descr: flex_pca latent deconvolution: calibrated per-particle noise + an empirical-Bayes mixture prior fitted through it
-!!
-!! The delivered latent z_i is a MAP solve: z_i = A_i^-1 (D_i x_i + e_i) with D_i the data precision
-!! (the whitened projected Gram over sig2), A_i = D_i + P the posterior precision (P = diag prior),
-!! and e_i whitened image noise of covariance D_i. So E[z_i|x_i] = R_i x_i with R_i = A_i^-1 D_i and
-!! Cov[z_i|x_i] = A_i^-1 D_i A_i^-1 =: N_i. The stored precision A_i understates the real noise
-!! (basis error, model misfit), so N_i is scaled by ONE factor a, calibrated from the even/odd
-!! Fourier-half solutions of every particle: d_i = z_i^even - z_i^odd has predicted covariance
-!! A_h^-1 D_i A_h^-1 with A_h = P + D_i/2, and a = sum|d_i|^2 / sum tr(predicted). No likelihood
-!! chooses a.
-!!
-!! The population prior G is a K-component Gaussian mixture fitted by extreme deconvolution
-!! (Bovy, Hogg & Roweis 2011): z_i ~ sum_k pi_k N(R_i mu_k, R_i Sigma_k R_i^T + a N_i). K is chosen
-!! by particle-half cross-validation (fit on one half of the particles, score the held-out
-!! log-likelihood of the other, both ways). The delivered coordinates become the posterior means
-!! E[x_i|z_i] under G, with their posterior covariances, so every downstream consumer (UMAP, state
-!! placement, kernels) works on the population instead of the noise ellipsoid.
+!! MAP latents z_i = A_i^-1(D_i x_i + e_i), D_i = A_i - P: E[z|x] = R_i x, R_i = A_i^-1 D_i, noise a*A_i^-1 D_i A_i^-1,
+!! with the scalar a calibrated from even/odd half solutions. The prior is a K-Gaussian mixture fitted by extreme
+!! deconvolution (Bovy, Hogg & Roweis 2011). K is chosen by particle-half held-out log-likelihood on a strided
+!! subsample of ~XD_CV_MAX particles; the final fit uses all. z/precision become posterior means/precisions.
 module simple_flex_pca_deconv
 use simple_core_module_api
 use simple_srch_sort_loc, only: hpsort
@@ -122,8 +110,8 @@ contains
         end do
         ! ---- K by particle-half cross-validation ----
         kmax = max(1, min(kmax_in, XD_KMAX, nptcls/2000))
-        ! K is a coarse choice: select it on a strided subsample (measured 1178 s for the ladder on
-        ! 105k particles in 17 dimensions; the final fit below still sees every particle)
+        ! K is a coarse choice: select it on a strided subsample of ~XD_CV_MAX particles; the final
+        ! fit below still sees every particle
         allocate(inA(nptcls), inB(nptcls), score(kmax))
         stride = max(1, nint(real(nptcls,dp)/XD_CV_MAX))
         do i = 1, nptcls
@@ -284,9 +272,7 @@ contains
         !$omp end parallel do
     end subroutine noise_and_projection
 
-    !> fit nk components from the equal-mass quantile init (seeding new components on the
-    !! worst-explained particles was tried on 2026-09-08 and catches noise outliers, not compact
-    !! minority populations: five of eight components tiny and 20x wider than the body)
+    !> fit nk components from the equal-mass quantile init (xd_init)
     subroutine xd_ladder( z, R, Nz, n, d, nk, cobs, zmean, mu, Sig, pik, ll )
         integer,  intent(in)  :: n, d, nk
         real(dp), intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), cobs(d,d), zmean(d)

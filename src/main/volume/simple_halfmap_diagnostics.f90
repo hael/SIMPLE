@@ -159,18 +159,9 @@ contains
 
     ! DIAGNOSTIC LIFECYCLE
 
-    !> Support-provenance sidecar of a shipped state volume
-    !! (<vol>_pcg_support.txt, the historical name kept for compatibility).
-    !! Records the shipped half pair's support kind (sphere, density, NU,
-    !! explicit, or mixed) and what kind of estimate the primary pair is: a
-    !! PCG base, regularized or bootstrap-mixed solve, or a gridding
-    !! restoration without (gridding) or with (gridding_regularized) the
-    !! FSC-derived ML prior in its denominator.
-    !! Consumers: the PCG trailing bootstrap reads the support field for its
-    !! lag-one FSC pair; postprocess skips its post-hoc mask for any volume
-    !! carrying the sidecar, and skips its FSC weighting for the ML-regularized
-    !! kinds (regularized, gridding_regularized), whose prior already shrank
-    !! every shell by its FSC (2026-09-26).
+    !> Support-provenance sidecar of a shipped state volume (<vol>_pcg_support.txt, also for gridding):
+    !! the pair's support and solve kind. The PCG trailing bootstrap reads the support; postprocess skips its
+    !! mask for any sidecar and its FSC weighting for the ML-regularized kinds, whose prior already did it.
     function support_provenance_fname( volname ) result( fname )
         type(string), intent(in) :: volname
         type(string) :: fname
@@ -246,7 +237,7 @@ contains
     !> The volume and its sidecar are one artifact: every copy, rename or
     !! fresh write of a state volume goes through these so no valid map loses
     !! its provenance and no stale sidecar survives beside a map that has none
-    !! (stage snapshots, final copies, start volumes; review 2026-09-09 P1)
+    !! (stage snapshots, final copies, start volumes)
     subroutine copy_support_provenance( src_vol, dest_vol )
         type(string), intent(in) :: src_vol, dest_vol
         type(string) :: src, dest

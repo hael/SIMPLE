@@ -79,6 +79,23 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
   `rg -n "THROW_(HARD|WARN)\\(.*//&" src` and inspect newly added macro lines
   with `git diff -U0 -- '*.f90' | rg '^\\+.*THROW_(HARD|WARN)\\(.*&[[:space:]]*$'`.
 
+## Comments
+
+Comments are short, snappy and accurate; long ones have been found to rot.
+See `doc/refactoring_notes/comment_novel_inventory_2026-09-30.md`.
+
+- File header: one `!@descr:` line first (`scripts/check_descr.py`), then at
+  most 5 lines.
+- Procedure header: at most 3 lines. In-body comments: 1-2 lines that say why
+  or state a non-obvious invariant, not what the next line does.
+- No dates, names, commit hashes, run measurements, "used to" narration,
+  rejected alternatives, `file.f90:NNN` references or out-of-tree paths in
+  code. Git history keeps them; decision logs live in `doc/`.
+- Do not restate a policy note or list what the compiler knows (dependencies,
+  routine lists, field lists); point to the doc instead.
+- When code changes, fix or delete the comments it falsifies. A comment that
+  names a switch or path must name one that exists.
+
 ## Debugging And Build Notes
 
 - Debug build: `cmake .. -DCMAKE_BUILD_TYPE=Debug`

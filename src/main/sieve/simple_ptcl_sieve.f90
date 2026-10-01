@@ -1,40 +1,8 @@
 !@descr: multi-tier particle sieve with coarse/fine 2D chunking and rejection
-!==============================================================================
-! MODULE: simple_ptcl_sieve
-!
-! PURPOSE:
-!   Manages chunked ab initio 2D processing across two tiers:
-!   coarse chunks (pass 1) and fine chunks (pass 2), including queue
-!   submission, completion polling, rejection, compatibility filtering,
-!   and final project combination.
-!
-! TYPES:
-!   chunk2D_state - Per-chunk state container (identity, particle counts,
-!                   paths, command line, and lifecycle flags).
-!   ptcl_sieve    - Orchestrator owning coarse/fine chunk arrays, queue
-!                   environment, defaults, compatibility models, and counters.
-!
-! WORKFLOW:
-!   1. new()                     - initialize object state, output dirs,
-!                                  queue environment, and optional
-!                                  compatibility pretraining.
-!   2. cycle()                   - collect completions and reject,
-!                                  generate coarse/fine chunks, submit work.
-!   3. generate_chunks_coarse()  - build coarse chunks from project list.
-!   4. generate_chunks_fine()    - merge eligible coarse chunks into fine chunks.
-!   5. submit()                  - submit pending chunks (fine prioritized).
-!   6. collect_and_reject()      - detect finished jobs and apply rejection.
-!   7. combine_completed_chunks()- combine eligible completed outputs.
-!
-! SENTINEL FILES (per chunk directory):
-!   ABINITIO2D_FINISHED - queue job completion marker.
-!   REJECTION_FINISHED  - rejection stage completion marker.
-!   COMPLETE            - chunk consumed/finalized marker.
-!   REJECTION_FAILED    - rejection failure marker.
-!
-! ENVIRONMENT:
-!   SIMPLE_CHUNK_PARTITION - optional queue partition override.
-!==============================================================================
+! cycle() = collect_and_reject -> generate_chunks_coarse -> generate_chunks_fine (unless single_pass)
+! -> submit (fine first). Restart state comes from per-chunk sentinels
+! (ABINITIO2D_FINISHED, REJECTION_FINISHED, COMPLETE).
+! Contract: doc/policies/sieving_and_rejection/ptcl_sieve_policy.md
 module simple_ptcl_sieve
   use unix,                               only: c_time, c_long
   use simple_defs,                        only: logfhandle, STDLEN, CWD_GLOB, JPEG_DIM, COSMSKHALFWIDTH
@@ -215,11 +183,9 @@ contains
   ! LIFECYCLE
   ! --------------------------------------------------------------------------
 
-  ! Initializes a ptcl_sieve object from a parameters object: derives output
-  ! directories from the current working directory, stores the concurrency
-  ! limit, mask diameter, and thread count; imports any existing chunks from a
-  ! previous run; creates all four output directories; allocates empty chunk
-  ! arrays; and initialises the queue environment.
+  ! Initializes from params (concurrency, mask, threads, per-tier defaults); re-imports chunks
+  ! from a previous run, then creates the two chunk directories under the CWD; starts the queue
+  ! environment and pretrains the compatibility models when params%refs exists.
   subroutine new( self, params, completedir, pre_chunked )
     class(ptcl_sieve), intent(inout) :: self
     type(parameters),           intent(in)    :: params
@@ -310,14 +276,14 @@ contains
     call timer_stop(t0, string('kill'))
   end subroutine kill
 
-  ! Sets the module-level final-ingestion flag. Once enabled, fine-tier final
+  ! Sets the object's final-ingestion flag. Once enabled, fine-tier final
   ! flushing logic is allowed to run without waiting on timeout.
   subroutine set_final_ingestion(self)
     class(ptcl_sieve), intent(inout) :: self
     self%final_ingestion = .true.
   end subroutine set_final_ingestion
 
-  ! Clears the module-level final-ingestion flag.
+  ! Clears the object's final-ingestion flag.
   subroutine unset_final_ingestion(self)
     class(ptcl_sieve), intent(inout) :: self
     self%final_ingestion = .false.

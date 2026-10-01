@@ -1,7 +1,6 @@
 !@descr: flex_pca state placement: tied-covariance GMM and the hierarchical GMM AUTO weights
 module simple_flex_pca_gmm
 use simple_core_module_api
-use simple_flex_pca_em, only: cov_env_int_pub
 use simple_reconstructor, only: reconstructor
 use simple_srch_sort_loc, only: hpsort
 use simple_linalg, only: jacobi, eigsrt, matinv
@@ -16,11 +15,9 @@ public :: gmm_state_weights, gmm_auto_state_weights
 
 contains
 
-    !>  Tied-covariance Gaussian-mixture responsibilities over the placed state targets. Replaces the
-    !!  Epanechnikov kernel, whose compact support left many particles in no map at all; softmax over the
-    !!  bandwidth is no substitute, it blurs every state back toward consensus. Tied covariance because
-    !!  within-state spread is shared measurement error.
-    !!  Measurements: doc/implementation_notes/flex_pca_state_placement_measurements.md
+    !>  Tied-covariance Gaussian-mixture responsibilities over the placed state targets; unlike the compact
+    !!  Epanechnikov kernel they leave no particle outside every map. Tied covariance because within-state
+    !!  spread is shared measurement error.
     subroutine gmm_state_weights( z, nptcls, ncomp, nk, nstates, tcen, wcomp, weights, neff, &
         &bandwidths, labels, pairsep, piout, maxit, respawn, pimin )
         integer,  intent(in)    :: nptcls, ncomp, nk, nstates
@@ -325,7 +322,7 @@ contains
         integer,  intent(inout) :: labels(nptcls)
         integer,  parameter   :: KFIT_MAX = 24
         !> minimum deliverable state occupancy: below this a map is noise, so no macro-cluster
-        !! or seat allocation may create one. SIMPLE_COV_MIN_STATE overrides.
+        !! or seat allocation may create one
         integer,  parameter   :: GMM_MIN_OCC = 5000
         real(dp), allocatable :: tcen_d(:,:), sep(:,:), pifit(:), mass(:)
         real(dp), allocatable :: zsub(:,:), tcen_m(:,:), ysub(:,:), C(:,:), ev(:), evec(:,:)
@@ -660,11 +657,8 @@ contains
                     &lab_m, maxit=300, respawn=.false., &
                     &pimin=min(real(minocc,dp)/real(nm,dp), 0.5d0/real(bm,dp)))
             else
-                ! A macro-cluster with several seats is a continuum (the deconvolution found it to be
-                ! one Gaussian: a likelihood fit inside it has no modes to find and collapses, measured
-                ! twice on 2026-09-08). Its sections are GEOMETRIC: k-means regions in the full
-                ! standardised latent, so a high-variance nuisance axis (breathing) does not dictate
-                ! the cut the way slices along the dominant axis did (v11: sections 2-4 identical maps).
+                ! A multi-seat macro-cluster is a continuum (one deconvolution Gaussian) where a likelihood fit
+                ! collapses; its sections are k-means regions in the full standardised latent, so no axis dictates the cut.
                 call continuum_region_weights(zsub(:,1:nk), nm, nk, bm, tcen_m, wcomp, min_neff, &
                     &w_m, neff_m, bw_m, lab_m)
             endif

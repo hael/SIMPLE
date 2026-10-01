@@ -1,43 +1,7 @@
-!@descr: stream task 5: continuous particle-sieving with staged chunk generation and class-average rejection
-!@header: Watches completed stream projects, imports new particles, and drives
-!         the ptcl_sieve cycle (collect/reject, coarse, optional fine,
-!         submit) until termination.
-!==============================================================================
-! MODULE: simple_stream_p05_sieve_cavgs_new
-!
-! PURPOSE:
-!   Implements stream pipeline task 5: continuously ingests incoming project
-!   files and drives a staged ptcl_sieve classification pipeline that
-!   produces progressively refined class averages, automatically rejecting
-!   low-quality averages after each stage (sieving).
-!
-! TYPES:
-!   stream_p05_sieve_cavgs - commander_base extension; entry point for the
-!                            sieve-cavgs stream task.
-!
-! WORKFLOW:
-!   1. Initialise parameters, queue environment, and ptcl_sieve object.
-!   2. Restore previously imported project history (if present).
-!   3. Enter main loop (runs until termination signal):
-!      a. Watch dir_target for newly completed project files.
-!      b. Import new projects into the rec_list.
-!      c. Call sieve%cycle(), which performs per-cycle:
-!           i.   collect_and_reject   — harvest completed chunks and sieve cavgs
-!           ii.  generate_chunks_coarse — seed coarse chunks from new records
-!           iii. generate_chunks_fine   — promote coarse outputs to fine chunks
-!                                         (skipped when coarse_only is enabled)
-!           iv.  submit                 — dispatch pending chunks to queue
-!      d. Sleep for WAITTIME before the next cycle.
-!
-! PARAMETERS (hard-coded):
-!   MAX_MOVIE_IMPORT    — maximum movies imported per loop cycle   (20)
-!
-! ENVIRONMENT:
-!   SIMPLE_STREAM_CHUNK_PARTITION — queue partition for chunk jobs
-!
-! DEPENDENCIES:
-!   simple_stream_api, simple_ptcl_sieve, simple_stream_pool2D_utils
-!==============================================================================
+!@descr: stream stage 5: continuous particle sieving via ptcl_sieve (coarse, optional fine, cavg rejection)
+! Imports completed refpick projects (<=MAX_MOVIE_IMPORT per loop) and calls sieve%cycle each loop.
+! The sieve is created on first import (mskdiam from pickrefs). Final ingestion is set after
+! FINAL_INGESTION_IDLE_TIME without imports and cleared on the next import.
 module simple_stream_p05_sieve_cavgs_new
 use simple_stream_api
 use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
@@ -370,7 +334,7 @@ contains
             if( allocated(cbuf) ) deallocate(cbuf)
         end subroutine send_to_sieve_cavgs_in_pipe
         
-        ! Called asynchronously on SIGTERM. Exits immediately after logging.
+        ! Called asynchronously on SIGTERM. Only sets l_terminate; the main loop exits on its next pass.
         subroutine sigterm_handler()
             write(logfhandle, '(A)') 'SIGTERM RECEIVED'
             l_terminate = .true.

@@ -61,16 +61,9 @@ contains
     end function prep2D_inv_instrfun4mul
 
     !=============================================================
-    ! 3D gridding deapodization
-    !
-    ! The 3D reconstructor inserts on the NATIVE lattice (period box_crop)
-    ! with the discrete, per-axis normalized KB stencil (half-width KBWINSZ
-    ! native voxels). The real-space envelope multiplying the reconstructed
-    ! map is therefore the inverse transform of that normalized stencil with
-    ! period box_crop — not the continuous instrument function, and not a
-    ! padded-lattice period (doc/implementation_notes/drop_legacy_box_division.md
-    ! S2.1). The routines below are shared with the PCG backend, which uses
-    ! the same stencil on its padded lattice (period box_croppd).
+    ! 3D gridding deapodization: the envelope is the inverse transform of the per-axis normalized
+    ! KB stencil at the insertion lattice period (box_crop native; box_croppd for PCG), not the
+    ! continuous instrument function (doc/implementation_notes/completed/drop_legacy_box_division.md S2.1)
     !=============================================================
 
     !> 1-D real-space envelope of the discrete, per-axis normalized KB stencil

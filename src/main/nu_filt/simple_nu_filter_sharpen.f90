@@ -1,42 +1,9 @@
 !@descr: NU-evidence nonuniform postprocessing, v2 (classical pipeline, local)
-!
-! v2 of the postprocess_nu gain stack (nu_evidence_local_sharpening.md S3b/S3c).
-! v1 (confidence-as-Wiener band gains + amplitude-ratio restoration) measurably
-! over-sharpened the high-resolution core on PfCRT: band support confidence is
-! a calibrated SUPPORT PROBABILITY, not an SSNR -- it saturates to 1 wherever
-! evidence exists, so the finest bands of a raw unfiltered input passed at full
-! noise power and the ratio restoration then boosted local dips toward a
-! noise-level target. v2 follows the classical postprocess recipe instead --
-! shrinkage and sharpening coupled, in that order -- localized by the evidence:
-!
-!   1. sharpen: one classical Guinier B-factor, estimated from the merged map
-!      between HPLIM_GUINIER and the finest evidenced local cutoff (only when
-!      that cutoff is finer than NU_SHARP_BFAC_FINEST_A, exactly like the
-!      standard postprocess gate);
-!   2. filter (the local Wiener surrogate): per-voxel Butterworth low-pass at
-!      the frozen state's evidenced local cutoff (selected_cutoff, from the
-!      Potts-smoothed label optimization), composed exactly like the
-!      production NU filter -- so sharpening never extends beyond the local
-!      passband, which is the classical lesson v1 skipped; and the evidence
-!      pair's FSC weighting inside each local passband, stretched so that
-!      its FSC=0.143 crossing sits at the voxel's cutoff (2026-09-22; the
-!      weighting is RELION's sqrt(2FSC/(1+FSC)) since 2026-09-26, it was the
-!      Wiener 2FSC/(1+FSC)). Applied once: the sharpened pair (_unfil or
-!      _solvent) carries no ML shrinkage of its own;
-!   3. solvent: voxels the calibrated null claims (cutoff 0) and voxels
-!      outside the spherical evidence support flatten to the half-map mean --
-!      the evidence-derived envelope behavior validated in the v1 run.
-!
-! The global FSC-derived optlp is NOT applied as such: the global FSC
-! averages over the map and would erase the evidenced local extension in the
-! core. It is applied stretched to each local cutoff instead, so the core
-! keeps its extension with the global SNR falloff's shape and the poorly
-! resolved regions get it compressed.
-!
-! Discipline unchanged from v1: one frozen evidence identity; the shipped
-! product is the single sharpened MERGED volume (classical-postprocess style)
-! and is display/interpretation only -- the unregularized base half pair
-! keeps sole resolution authority.
+! One Guinier B from the evidence-pair average (HPLIM_GUINIER to the finest evidenced cutoff, only if
+! finer than NU_SHARP_BFAC_FINEST_A); per voxel sqrt(2FSC/(1+FSC)) stretched so FSC=0.143 sits at its
+! evidenced cutoff, then Butterworth there; null/outside-support voxels take the map mean.
+! One merged display map, never an FSC input. Design and v1 record:
+! doc/implementation_notes/nu_evidence_local_sharpening.md sections 3b-3c.
 submodule (simple_nu_filter) simple_nu_filter_sharpen
 implicit none
 #include "simple_local_flags.inc"
@@ -85,9 +52,8 @@ contains
         res = get_resarr(ldim(1), summ%smpd)
         call get_resolution(fsc(1:nyq), res, fsc05, fsc0143)
         k0143 = max(1, min(nyq, calc_fourier_index(fsc0143, ldim(1), summ%smpd)))
-        ! expand the mask-packed evidenced local cutoffs to the grid (same
-        ! spherical-support recreation and packing order as
-        ! expand_nu_evidence_band_weights); 0 = null verdict or outside support
+        ! expand the mask-packed evidenced local cutoffs to the grid (spherical support recreated
+        ! in setup_nu_mask_voxels packing order); 0 = null verdict or outside support
         call unpack_nu_evidence_state(state, selected_cutoff=cutoffs)
         call vol_supp%disc(ldim, summ%smpd, 0.5 * summ%mskdiam / summ%smpd, supp_lmask)
         call vol_supp%kill
@@ -197,7 +163,7 @@ contains
         deallocate(rout)
         call vol_merged%kill
         write(logfhandle,'(A)') '>>> NU EVIDENCE SHARPENING: display/interpretation product; the unregularized'
-        write(logfhandle,'(A)') '>>> half pair keeps sole resolution authority (never feed _nu_sharp maps to FSC)'
+        write(logfhandle,'(A)') '>>> half pair keeps sole resolution authority (never feed _pproc_nu maps to FSC)'
         ! destruct
         call vol_work%kill
         call vol_filt%kill

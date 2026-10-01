@@ -926,7 +926,7 @@ contains
         call spproj%read(params%projfile)
         ! A fresh abinitio3D never continues another run's sigma2 estimate: a
         ! canonical registration inherited with the project is dropped so the
-        ! first euclid stage seeds in this run's own directory (2026-09-07)
+        ! first euclid stage seeds in this run's own directory
         if( spproj%projinfo%get_noris() == 1 )then
             if( spproj%projinfo%isthere(1, 'sigma2_state') )then
                 call spproj%projinfo%delete_entry('sigma2_state')
@@ -1358,16 +1358,9 @@ contains
             call mpath%kill
         end subroutine addon_parse
 
-        !> The frozen project is copied, never written: the copy is its own
-        !! project file under the frozen project's name in a directory of its
-        !! own (reading a project resets projname, the sigma2 layout lineage, to
-        !! the file name, and projinfo projfile, the target of every segment write
-        !! without a file name, to the file itself, so nothing can reach the
-        !! working copy or the frozen run), and it owns a copy of the frozen run's
-        !! committed residual sigma2 state, registered by absolute path so that
-        !! no working-directory convention enters its resolution. Then the
-        !! identity of the run-directory copies is re-validated and the frozen
-        !! rows of the working copy are masked.
+        !> Copy the frozen project, never writing the original: a read resets projfile, the default
+        !! segment-write target, to the copy itself, and the copy registers its own copy of the committed
+        !! sigma2 state by absolute path. Then verify that state and mask the working project's frozen rows.
         subroutine addon_prologue
             character(len=STDLEN) :: msg
             type(string) :: sigma_src

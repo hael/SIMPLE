@@ -274,13 +274,9 @@ contains
         call assert_real(1.23333, intercept, 1.e-4, 'fit_straight_line: intercept of the perturbed line (12 - slope * 5.5)')
     end subroutine test_fit_straight_line
 
-    !> 35 exact lines on 100 points of x in [-1, 1) (single precision, as a caller hands them in),
-    !! slopes from -5 to 5 through near-flat and flat, intercepts from -10 to 10: slope and intercept
-    !! come back within 1e-5 (a float32 emulation of the fit gives 6e-8 at worst). r squared is not
-    !! asserted: for a near-flat line it is 0/0 in single precision (below 0.9999 for |slope| under
-    !! about 5e-6 |intercept|), and the one production caller (guinier_bfac) uses only the slope.
-    !! Replaces the unit_numerics sub-suite `straight-line fit`, which drew 10 000 random lines and
-    !! required r squared >= 0.9999, so it failed for about one seed in twenty.
+    !> 35 exact lines on 100 points of x in [-1, 1) (single precision, as a caller hands them in):
+    !! slopes -5 to 5 through near-flat and flat, intercepts -10 to 10; slope and intercept within 1e-5.
+    !! r squared is not asserted: ill-conditioned for (near-)flat lines, and guinier_bfac uses only the slope.
     subroutine test_fit_straight_line_recovery()
         integer, parameter :: NPTS = 100
         real,    parameter :: SLOPES(7)     = [-5., -0.5, -1.e-5, 0., 1.e-5, 0.5, 5.]

@@ -1,4 +1,4 @@
-!@descr: flex_pca state maps on the reconstruct3D PCG backend (rec_backend=pcg): the kernel weight of a
+!@descr: flex_pca state maps on the reconstruct3D PCG backend (rec_states_backend=pcg): the kernel weight of a
 !  particle enters through its noise model as sigma2/w, so the right-hand side and the density carry it
 !  identically and the preconditioner, Gram kernel, ridge scale and raw artifacts follow without change
 !  (doc/implementation_notes/flex_pca_envelope_support.md, section 3.3)

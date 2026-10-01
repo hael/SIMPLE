@@ -49,7 +49,7 @@ public :: SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
 
 real,    parameter :: LOG_EPS                   = 1.0e-12
 ! Low-pass scales used by the foreground and signal metrics documented in
-! doc/microchunk_and_rejection/model_cavgs_rejection.md.
+! doc/policies/sieving_and_rejection/model_cavgs_rejection.md.
 real,    parameter :: FOREGROUND_SEG_LP         = 30.0
 real,    parameter :: SIGNAL_METRIC_LP          = 10.0
 real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0

@@ -1,4 +1,4 @@
-!@descr: compact immutable evidence state for the direct NU-conditioned PCG replay
+!@descr: compact immutable NU evidence state, consumed by postprocess_nu local sharpening
 submodule (simple_nu_filter) simple_nu_filter_evidence
 implicit none
 #include "simple_local_flags.inc"
@@ -50,13 +50,8 @@ contains
         if( .not.allocated(nu_noise_profile_cached) ) &
             &THROW_HARD('NU whitening profile is unavailable for evidence compaction')
         if( n_nu_mask < 1 ) THROW_HARD('NU evidence support is empty')
-        ! Observation domain (2026-09-02 correction): a density-constrained
-        ! PCG solve leaves exact zero/zero voxels inside the broader spherical
-        ! evidence support. They are boundary conditions, not measurements.
-        ! Every calibration statistic below (null-bias center, spatial beta,
-        ! confidence temperature, readiness null fraction, band support
-        ! fractions) is evaluated over OBSERVED voxels only; unobserved
-        ! voxels are frozen at the explicit null with zero band support.
+        ! Calibration statistics use observed voxels only: exact zero/zero voxels left by a density-constrained
+        ! PCG solve are boundary conditions, frozen at the explicit null with zero band support.
         if( .not.allocated(nu_observed_mask) ) &
             &THROW_HARD('NU observation mask was not set up before evidence compaction')
         if( size(nu_observed_mask) /= n_nu_mask ) THROW_HARD('NU observation mask size mismatch')
@@ -77,9 +72,7 @@ contains
             &THROW_HARD('invalid NU evidence signal-candidate count')
         if( size(dmats_mask,1) /= n_nu_mask .or. size(dmats_mask,2) < n_signal ) &
             &THROW_HARD('NU unary bank shape is incompatible with evidence compaction')
-        ! coarse-to-fine ordering is a property of the bank cutoffs; the Potts
-        ! coordinates are not strictly increasing since the walked shells share
-        ! the finest ladder coordinate (2026-09-13)
+        ! coarse-to-fine ordering is checked on the bank cutoffs, not on the Potts coordinates
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; build_nu_evidence_state')
         if( size(cutoff_finds) < n_signal ) THROW_HARD('NU evidence cutoff geometry is incomplete')
         do icand = 2, n_signal
@@ -101,24 +94,8 @@ contains
             endif
         enddo
 
-        ! Candidate zero: no reproducible signal.  Smooth it at the same scale
-        ! as the adjacent 20-A label so the null/coarsest comparison is not
-        ! manufactured by unequal spatial averaging.  The raw zero predictor
-        ! has an objective offset relative to smoothed predictors even for
-        ! independent noise, and choosing the best of several signal candidates
-        ! adds a multiple-comparison advantage.  Calibrate both effects from the
-        ! distribution of C_zero-min(C_signal) over the deliberately generous
-        ! support.  The subtracted offset is the NULL COMPONENT'S CENTER ONLY,
-        ! estimated by the lower quartile of the gap distribution: the gaps are
-        ! a solvent/signal mixture in which signal voxels sit strictly higher,
-        ! so the lower quartile tracks the null component even on a
-        ! majority-molecule support where the median is contaminated.  A
-        ! center-plus-3MAD offset is a DETECTION threshold, not a likelihood
-        ! offset -- on streptavidin (2026-08-27) it made the null unbeatable
-        ! everywhere (null_fraction=1.0, global over-smoothing).  With the
-        ! center-only offset the softmax stays a graded competition and the
-        ! ordered-label spatial model does the consolidation; median and MAD
-        ! are retained as recorded diagnostics.
+        ! Null candidate: zero cross-half prediction, smoothed at label 1's scale. Offset = lower quartile of
+        ! C_zero - min(C_signal) over observed voxels (the null component's centre, not a detection threshold).
         allocate(null_full(ldim(1),ldim(2),ldim(3)), source=0.)
         allocate(smooth_tmp(ldim(1),ldim(2),ldim(3)), source=0.)
         allocate(null_cost(n_nu_mask), source=0.)
@@ -175,10 +152,8 @@ contains
 
         beta = estimate_evidence_beta(null_cost, dmats_mask(:,:n_signal))
         call regularize_evidence_labels(null_cost, dmats_mask(:,:n_signal), coords, beta, evidence_map)
-        ! Readiness diagnoses the calibrated evidence model on the complete
-        ! spherical support.  It must not be changed by the downstream
-        ! envelope constraint, which deliberately reassigns solvent voxels to
-        ! the coarsest signal label for the replay precision.
+        ! The readiness null fraction is taken over the observed support before the envelope
+        ! constraint below reassigns solvent voxels to the coarsest signal label.
         n_null_observed = 0
         !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) &
         !$omp reduction(+:n_null_observed) proc_bind(close)
@@ -239,14 +214,8 @@ contains
                 &l_constrain_background=.true.)
         endif
 
-        ! Stage 6.6 band ladder from the ACTUAL bank: the static four bands,
-        ! extended geometrically only while an accepted candidate is at least
-        ! as fine as the next boundary. With the static bank (abinitio3D's
-        ! discrete-ladder mode, nu_refine=no) this is exactly the pre-6.6
-        ! four-band behavior; when the nu_refine shell walk has extended the
-        ! bank (refine3D_auto, mirroring the gridding path), the ladder grows
-        ! over the ACCEPTED candidates only, so no band can exist without a
-        ! covering, challenger-validated probe.
+        ! band ladder: the static four, extended at NU_EVIDENCE_BAND_RATIO while the finest signal
+        ! candidate reaches the next boundary (see NU_EVIDENCE_MAX_NBANDS)
         allocate(band_limits_active(NU_EVIDENCE_NBANDS), source=NU_EVIDENCE_BAND_LIMITS)
         do
             nb_active = size(band_limits_active)
@@ -284,8 +253,7 @@ contains
             endif
             if( .not.nu_observed_mask(imask) )then
                 ! no measurement at this voxel: explicit null, maximal
-                ! uncertainty, no band support (fully suppressed in the
-                ! replay; the solve support zeroes it anyway)
+                ! uncertainty, no band support (postprocess_nu flattens it to the map mean)
                 state%selected_label(imask)  = 0_NU_LABEL_KIND
                 state%selected_cutoff(imask) = 0.
                 state%uncertainty(imask)     = 1.
@@ -302,12 +270,8 @@ contains
                 if( e >= 80. )then
                     probs(icand) = 0.
                 else
-                    ! Adaptive candidates are samples of a continuous
-                    ! resolution coordinate. Integrate their posterior with
-                    ! the represented frequency-cell measure so adding or
-                    ! thinning shell probes cannot manufacture support merely
-                    ! by changing the number of labels. The static bank uses
-                    ! unit measure exactly, preserving nu_refine=no bitwise.
+                    ! weighted by the candidate's frequency-cell measure (unit within the static
+                    ! ladder) so the label count cannot manufacture support
                     probs(icand) = candidate_measure(icand) * exp(-e)
                 endif
             enddo
@@ -342,13 +306,8 @@ contains
         state%summary%mskdiam = nu_support_mskdiam
         state%summary%n_support = n_nu_mask
         state%summary%n_candidates = n_candidates
-        ! Stage 6.6 evidence-gated retention: an appended (frontier-tracked)
-        ! band is KEPT only if it actually earns support; otherwise the
-        ! subdivision would replace the fine tail's partially evidenced
-        ! weight with the full penalty and over-suppress genuine signal
-        ! (measured on 1WCM, pcg_priors_history.md S6.6 run record). Pruning
-        ! truncates finest-first; the static bands are never pruned, so
-        ! pre-6.6 behavior is the guaranteed floor.
+        ! an appended band is kept only if it earns NU_EVIDENCE_MIN_BAND_SUPPORT; pruned finest-first,
+        ! the static bands never
         do while( nb_active > NU_EVIDENCE_NBANDS )
             if( sum(state%band_support(:,nb_active)) / real(n_observed) >= NU_EVIDENCE_MIN_BAND_SUPPORT ) exit
             nb_active = nb_active - 1
@@ -450,16 +409,9 @@ contains
         deallocate(null_cost, coords, signal_lps, candidate_measure)
     end subroutine build_nu_evidence_state
 
-    !> Geometry and integration measure for the evidence candidate posterior.
-    !! The eight-member static bank deliberately retains its historical
-    !! integer coordinates and unit masses so the heavily used
-    !! nu_refine=no PCG route is numerically unchanged. Once accepted shell
-    !! candidates are present, their coordinates follow Fourier-shell distance
-    !! normalized by the finest static interval while the original coordinates
-    !! remain exactly 1:n_static. Each signal hypothesis receives its Voronoi
-    !! cell width, normalized to the static bank's total signal mass. This
-    !! removes adaptive label-count bias without discontinuously changing the
-    !! established static Potts geometry.
+    !> Evidence candidate coordinates (null 0, signal i at i) and unit integration masses. Only a bank longer
+    !! than the static ladder takes the branch past the early return (Fourier-shell coordinates, Voronoi-width
+    !! masses); init_nu_filter builds none, and the evidence path rejects the auxiliary label.
     subroutine setup_evidence_candidate_geometry( signal_lps, coords, measure )
         real, intent(in) :: signal_lps(:)
         real, allocatable, intent(out) :: coords(:), measure(:)
@@ -535,8 +487,7 @@ contains
         if( any(state%summary%ldim < 1) .or. state%summary%smpd <= TINY ) return
         if( state%summary%n_support < 1 ) return
         if( state%summary%mskdiam <= TINY ) return
-        ! band count is adaptive (Stage 6.6): the static ladder is the floor,
-        ! frontier-tracked extensions are bounded by the declared cap
+        ! the static bands are the floor; appended bands are bounded by NU_EVIDENCE_MAX_NBANDS
         if( state%summary%n_candidates < 2 ) return
         if( state%summary%n_bands < NU_EVIDENCE_NBANDS .or. &
             &state%summary%n_bands > NU_EVIDENCE_MAX_NBANDS ) return
@@ -613,99 +564,22 @@ contains
         endif
     end subroutine unpack_nu_evidence_state
 
-    !> Matching low-pass handoff with assignment support: the finest selected
-    !! cutoff such that at least min_pct percent of the assigned (non-null)
-    !! support voxels selected that cutoff or a finer one — the fine-end
-    !! percentile of the assigned cutoffs. Robust against a single-voxel
-    !! selection pinning the matching bandwidth, and against crop-Nyquist
-    !! candidate aliasing, because duplicate finds pool naturally in the
-    !! cumulative tail. min_pct=0 reproduces the raw finest-selected value.
-    module real function nu_evidence_finest_supported_lp( state, min_pct )
-        type(nu_evidence_state), intent(in) :: state
-        real,                    intent(in) :: min_pct
-        real, allocatable :: vals(:)
-        integer :: n_assigned, imask, cnt, k
-        nu_evidence_finest_supported_lp = 0.
-        if( .not.nu_evidence_state_is_valid(state) ) return
-        n_assigned = count(state%selected_label > 0_NU_LABEL_KIND)
-        if( n_assigned == 0 ) return
-        allocate(vals(n_assigned))
-        cnt = 0
-        do imask = 1, size(state%selected_label)
-            if( state%selected_label(imask) > 0_NU_LABEL_KIND )then
-                cnt = cnt + 1
-                vals(cnt) = state%selected_cutoff(imask)
-            endif
-        enddo
-        k = min(n_assigned, max(1, ceiling(real(n_assigned) * max(0., min_pct) / 100.)))
-        nu_evidence_finest_supported_lp = selec(k, n_assigned, vals)
-        deallocate(vals)
-    end function nu_evidence_finest_supported_lp
-
-    !> Replay-readiness contract (pcg_priors_history.md S6.2): a valid compact state
-    !! is necessary but not sufficient to parameterize the replay precision.
-    !! The spherical evidence support is deliberately generous and always
-    !! contains BOTH substantial solvent and substantial molecule, so the null
-    !! fraction is gated from both sides: below NU_EVIDENCE_MIN_NULL_FRAC is
-    !! the zero-null failure mode (nothing reads as solvent, Q_NU regularizes
-    !! nothing it should); above NU_EVIDENCE_MAX_NULL_FRAC is the
-    !! saturated-null failure mode observed on streptavidin (everything reads
-    !! as solvent, Q_NU degenerates into a global detail penalty). Hard error,
-    !! no fallback: fallback policy is a workflow decision, never an inferred
-    !! substitute prior.
+    !> Readiness of a valid compact state: the explicit-null fraction must lie in
+    !! [NU_EVIDENCE_MIN_NULL_FRAC, NU_EVIDENCE_MAX_NULL_FRAC] (starved or saturated null otherwise).
+    !! Hard error, no fallback: fallback policy is a workflow decision.
     module subroutine assert_nu_evidence_replay_ready( state )
         type(nu_evidence_state), intent(in) :: state
         if( .not.nu_evidence_state_is_valid(state) ) &
-            &THROW_HARD('NU evidence state is invalid; cannot parameterize the replay precision')
+            &THROW_HARD('NU evidence state is invalid; cannot check its readiness')
         if( state%summary%null_fraction < NU_EVIDENCE_MIN_NULL_FRAC .or. &
             &state%summary%null_fraction > NU_EVIDENCE_MAX_NULL_FRAC )then
             call print_nu_evidence_summary(state)
-            write(logfhandle,'(A,F10.6,A,F10.6,A,F10.6,A)') '>>> NU REPLAY EVIDENCE REJECTED: null_fraction=', &
+            write(logfhandle,'(A,F10.6,A,F10.6,A,F10.6,A)') '>>> NU EVIDENCE REJECTED: null_fraction=', &
                 &state%summary%null_fraction, ' outside [', NU_EVIDENCE_MIN_NULL_FRAC, ',', &
                 &NU_EVIDENCE_MAX_NULL_FRAC, ']'
             THROW_HARD('NU evidence null population outside its readiness bounds (failed null calibration?)')
         endif
     end subroutine assert_nu_evidence_replay_ready
-
-    !> Expand the frozen compact state into the per-band lack-of-evidence
-    !! weight fields the PCG replay precision consumes: w_b = 1 - a_b inside
-    !! the spherical evidence support, 1 outside it (no evidence there; the
-    !! solver's own support grading confines the effect to the soft rim).
-    !! The packed order is recreated from the frozen geometry alone -- the
-    !! lexicographic traversal of the spherical support disc, exactly
-    !! setup_nu_mask_voxels -- so this works after mutable NU state is
-    !! released and never touches module-level filter state.
-    module subroutine expand_nu_evidence_band_weights( state, band_w )
-        type(nu_evidence_state), intent(in)  :: state
-        real, allocatable,       intent(out) :: band_w(:,:,:,:)
-        type(image) :: vol_supp
-        logical, allocatable :: supp_lmask(:,:,:)
-        integer :: i, j, k, iband, imask
-        if( .not.nu_evidence_state_is_valid(state) ) &
-            &THROW_HARD('cannot expand invalid NU evidence state')
-        call vol_supp%disc(state%summary%ldim, state%summary%smpd, &
-            &0.5 * state%summary%mskdiam / state%summary%smpd, supp_lmask)
-        call vol_supp%kill
-        if( count(supp_lmask) /= state%summary%n_support ) &
-            &THROW_HARD('NU evidence support geometry cannot be recreated from the frozen state')
-        allocate(band_w(state%summary%ldim(1),state%summary%ldim(2),state%summary%ldim(3),&
-            &state%summary%n_bands), source=1.0)
-        imask = 0
-        do k = 1, state%summary%ldim(3)
-            do j = 1, state%summary%ldim(2)
-                do i = 1, state%summary%ldim(1)
-                    if( .not.supp_lmask(i,j,k) ) cycle
-                    imask = imask + 1
-                    do iband = 1, state%summary%n_bands
-                        band_w(i,j,k,iband) = min(1., max(0., 1. - state%band_support(imask,iband)))
-                    enddo
-                enddo
-            enddo
-        enddo
-        if( imask /= state%summary%n_support ) &
-            &THROW_HARD('NU evidence packed order mismatch during band-weight expansion')
-        deallocate(supp_lmask)
-    end subroutine expand_nu_evidence_band_weights
 
     module subroutine print_nu_evidence_summary( state )
         type(nu_evidence_state), intent(in) :: state
@@ -726,48 +600,6 @@ contains
         write(logfhandle,'(A,ES14.6)') '    pcg_nu_null_bias_threshold=', state%summary%null_bias_threshold
         write(logfhandle,'(A,A)') '    pcg_nu_evidence_provenance=', trim(state%summary%provenance)
     end subroutine print_nu_evidence_summary
-
-    !> Per-candidate local low-pass assignment table of a compact evidence
-    !! state -- the Q_NU-path counterpart of the retained-filter-bank
-    !! histogram (print_filtmap_lowpass_histogram). The merged-reference
-    !! (nonuniform_lpset) topology skips post-hoc NU filtering entirely, so
-    !! there is no filter bank to tabulate there; the evidence carries the
-    !! same per-voxel resolution assignment and is tabulated here instead.
-    module subroutine print_nu_evidence_lowpass_histogram( state )
-        type(nu_evidence_state), intent(in) :: state
-        integer, allocatable :: counts(:)
-        real,    allocatable :: lps(:)
-        integer :: imask, lab, n_signal, icand, n_supp
-        real    :: pct
-        if( .not.nu_evidence_state_is_valid(state) ) return
-        n_signal = state%summary%n_candidates - 1
-        n_supp   = state%summary%n_support
-        if( n_signal < 1 .or. n_supp < 1 ) return
-        allocate(counts(0:n_signal), source=0)
-        allocate(lps(n_signal),      source=0.)
-        do imask = 1, n_supp
-            lab = int(state%selected_label(imask))
-            if( lab < 0 .or. lab > n_signal ) cycle
-            counts(lab) = counts(lab) + 1
-            if( lab > 0 ) lps(lab) = state%selected_cutoff(imask)
-        enddo
-        write(logfhandle,'(A)')     '>>> NU EVIDENCE LOW-PASS ASSIGNMENTS'
-        write(logfhandle,'(A,I12)') '    Support voxels: ', n_supp
-        write(logfhandle,'(A)')     '    Bank  LP limit (A)        Voxels    Pct support'
-        pct = 100. * real(counts(0)) / real(n_supp)
-        write(logfhandle,'(4X,A6,2X,A12,2X,I12,2X,F8.2,A)') '  null', '          --', counts(0), pct, '%'
-        do icand = 1, n_signal
-            pct = 100. * real(counts(icand)) / real(n_supp)
-            if( lps(icand) > TINY )then
-                write(logfhandle,'(4X,I6,2X,F12.3,2X,I12,2X,F8.2,A)') icand, lps(icand), counts(icand), pct, '%'
-            else
-                ! no voxel selected this candidate, so its cutoff was never
-                ! observed here; report the count without a fabricated limit
-                write(logfhandle,'(4X,I6,2X,A12,2X,I12,2X,F8.2,A)') icand, '          --', counts(icand), pct, '%'
-            endif
-        enddo
-        deallocate(counts, lps)
-    end subroutine print_nu_evidence_lowpass_histogram
 
     subroutine validate_compact_evidence_state( state )
         type(nu_evidence_state), intent(in) :: state

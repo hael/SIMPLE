@@ -1,17 +1,6 @@
 !@descr: unit tests of the abinitio3D_addon frozen accumulator sets (simple_frozen_accum)
-! Fixed-grid numerics on both backends: the raw statistics of a frozen set F
-! written by the production writer and added by the production consumer to a
-! separately accumulated cohort C equal a direct accumulation of F u C (gridding
-! Fourier sums and densities, PCG raw B and D), and so do the restored gridding
-! halves and the fixed-iteration PCG solutions; a zero cohort gives F exactly.
-! Provenance: the run context round trip (every record, re-written line for
-! line; the working project three rows longer than the frozen project, a
-! producer accepted with the frozen project's row count and a consumer with
-! the working project's), and the refusals of a wrong schema, a truncated or
-! inconsistent context, another run, another grid, another reconstruction
-! weighting, another frozen count, a missing or size-mismatched component and
-! a wrong half.
-! Box 16, a few tens of planes of seeded white noise: well under a second.
+! Frozen set F + cohort equals the direct union (gridding sums/rho, PCG B/D, restored and solved
+! maps); a zero cohort gives F exactly. Plus context round trip and refusals. Box 16, seeded noise.
 module simple_frozen_accum_tester
 use simple_defs,              only: OSMPL_PAD_FAC, STDLEN
 use simple_string,            only: string

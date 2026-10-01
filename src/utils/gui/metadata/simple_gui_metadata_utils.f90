@@ -1,15 +1,6 @@
 !@descr: Utility functions for GUI metadata types.
-!==============================================================================
-! MODULE: simple_gui_metadata_utils
-!
-! PURPOSE:
-!   Provides helpers that operate across all gui_metadata types.
-!     max_metadata_size — return sizeof() the largest concrete metadata type,
-!                         used to size fixed receive buffers for IPC transfer.
-!
-! DEPENDENCIES:
-!   simple_gui_metadata_api
-!==============================================================================
+! max_metadata_size sizes the stream IPC receive buffers: a metadata type newly sent over the
+! pipes must be added to its list.
 module simple_gui_metadata_utils
 use simple_gui_metadata_api
 

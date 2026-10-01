@@ -246,7 +246,7 @@ contains
         logical :: l_nu_refs_missing
         l_nonuniform_mode    = params%l_nonuniform
         l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset
-        ! both backends assemble the same _nu_filt products (policy 2026-09-06)
+        ! both backends assemble the same _nu_filt products (doc/policies/NU/nonuniform_filtering_policy.md)
         vol_avg = params%vols(s)
         ! READ: try nonuniform refs first if requested, then regular refs, then average
         if( l_nonuniform_mode )then
@@ -420,18 +420,8 @@ contains
             call fname_envmsk%kill
         end subroutine apply_automatic_envelope_to_refs
 
-        !> Matching references first take the spherical soft mask here. The
-        !! selected automatic envelope is applied after filtering: assembly
-        !! applies it to NU products, while the helper above handles the
-        !! matcher-owned fallback path. automsk=yes applies the conservative
-        !! density envelope, which retains every density present at envmsklp.
-        !! automsk=nu (opt-in) applies the NU-evidence envelope when available:
-        !! it cuts out density that is not reproducible between halves at the
-        !! evidence candidates -- a detergent micelle -- which the particle
-        !! images still contain, so the reference can no longer explain them
-        !! and under the euclid objective pose discrimination collapses (PfCRT,
-        !! pcg_priors_history.md 2026-09-02). Never a default; never a PCG
-        !! solve support (automasking_policy.md).
+        !> Matching references take the spherical soft mask here; the automatic envelope follows after filtering
+        !! (assembly for NU products, apply_automatic_envelope_to_refs otherwise; doc/policies/3D/automasking_policy.md).
         subroutine mask_matching_reference( refvol )
             class(image), intent(inout) :: refvol
             call refvol%mask3D_soft(params%msk_crop, backgr=0.0)

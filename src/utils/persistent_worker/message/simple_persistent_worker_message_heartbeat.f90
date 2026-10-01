@@ -1,43 +1,7 @@
 !@descr: heartbeat message of the persistent-worker protocol: a worker reports liveness and thread load
-!==============================================================================
-! MODULE: simple_persistent_worker_message_heartbeat
-!
-! PURPOSE:
-!   Provides the concrete heartbeat message type used by SIMPLE persistent-worker
-!   processes to signal liveness and thread-capacity information to the
-!   persistent-worker server.
-!
-!   Persistent workers send a heartbeat message at regular intervals (HEARTBEAT_TIMEOUT_MS).
-!   The server replies with either a task message or a TERMINATE message.
-!   The heartbeat carries:
-!     - worker_id       — 1-based slot index on the server side
-!     - heartbeat_time  — UNIX timestamp at the moment of transmission
-!     - nthr_used       — threads currently executing tasks
-!     - nthr_total      — total thread capacity advertised by this worker
-!     - worker_uid      — unique worker identifier: <hostname>_<PID>
-!
-! DESIGN CONTRACT:
-!   serialise_qsys_persistent_worker_message_heartbeat inlines the three-statement
-!   TRANSFER body (deallocate / allocate(sizeof(self)) / transfer) rather
-!   than delegating to the base serialise procedure.  This is mandatory:
-!   sizeof() is resolved against the declared type of the dummy argument, so
-!   calling the base procedure would allocate only sizeof(qsys_persistent_worker_message_base)
-!   bytes and silently truncate the four heartbeat fields from the buffer.
-!   See simple_persistent_worker_message_base for the full design contract.
-!
-! USAGE:
-!   type(qsys_persistent_worker_message_heartbeat) :: hb
-!   call hb%new()
-!   hb%worker_id      = my_id
-!   hb%heartbeat_time = int(time())
-!   hb%nthr_used      = get_nthr_used()
-!   hb%nthr_total     = nthr
-!   call hb%serialise(buffer)
-!
-! DEPENDENCIES:
-!   simple_persistent_worker_message_base  — base type and serialise contract
-!   simple_persistent_worker_message_types — WORKER_HEARTBEAT_MSG enumerator
-!==============================================================================
+! Worker -> server each loop: worker_id, worker_uid, heartbeat_time, nthr_used/total (fd set server-side).
+! Reply: task, STATUS idle, or TERMINATE.
+! serialise() override: see simple_persistent_worker_message_base.
 module simple_persistent_worker_message_heartbeat
     use simple_persistent_worker_message_base,  only: qsys_persistent_worker_message_base
     use simple_persistent_worker_message_types, only: WORKER_HEARTBEAT_MSG
@@ -54,7 +18,7 @@ module simple_persistent_worker_message_heartbeat
         integer :: heartbeat_time = 0  !< UNIX timestamp at time of transmission
         integer :: nthr_used      = 0  !< threads currently executing tasks
         integer :: nthr_total     = 0  !< total thread capacity of this worker
-        integer :: fd             = 0  !< file descriptor of the worker's connected socket, used by the server to identify the sender and route replies
+        integer :: fd             = 0  !< server-side connection fd, overwritten on receipt; used to clear the registry entry on disconnect
         character(len=256) :: worker_uid = ''  !< unique worker identifier: <hostname>_<PID>
     contains
         procedure :: new       => new_qsys_persistent_worker_message_heartbeat       !< constructor

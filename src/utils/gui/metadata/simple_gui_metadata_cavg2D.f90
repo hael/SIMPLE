@@ -1,24 +1,6 @@
 !@descr: GUI metadata type for a single 2D class average entry (sprite-sheet position + stats).
-!==============================================================================
-! MODULE: simple_gui_metadata_cavg2D
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields that describe one class-average entry
-!   in a sprite-sheet JPEG, matching the JSON produced by add_cls2D_accepted_to_json
-!   in simple_stream_p05_sieve_cavgs:
-!     path            — absolute path to the selection JPEG
-!     idx             — class index within the JPEG map
-!     spritex/spritey — position of this tile within the sheet (percentage, 0–100)
-!     spriteh/spritew — total sprite-sheet height/width (pixels)
-!     res             — resolution estimate (Angstroms, optional)
-!     pop             — particle population count (optional)
-!   Provides set/get for all fields and a jsonise override that emits all
-!   mandatory fields plus the optional res and pop when they have been set.
-!
-! DEPENDENCIES:
-!   json_module, simple_defs, simple_string, simple_error,
-!   simple_gui_metadata_base, simple_gui_metadata_types
-!==============================================================================
+! JSON keys: path, mrcpath, spritex/spritey (tile origin, % of the sheet), spriteh/spritew (sheet
+! size, pixels) and idx, plus res/pop only when passed to set(). i/i_max route IPC batches.
 module simple_gui_metadata_cavg2D
 use json_module,               only: json_core, json_value
 use simple_defs,               only: LONGSTRLEN

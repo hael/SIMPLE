@@ -115,20 +115,26 @@ Otherwise the code throws rather than silently reusing the wrong pool.
 
 ## 5. Worker Server
 
-`persistent_worker_server%new(nthr_workers)` allocates listener state, allocates
-shared worker data, initialises the listener mutex, propagates the debug flag,
-starts the TCP listener, and records the bound port and host IP list.
+`persistent_worker_server%new(n_workers, nthr_workers)` allocates listener
+state, allocates shared worker data, initialises the listener mutex, starts the
+TCP listener (skipped with `client_only`), records the bound port and host IP
+list, and connects the dispatch client used by `queue_task`. `n_workers` is the
+number of worker slots; `nthr_workers` is the thread capacity per worker.
+Verbose logging is the compile-time `DEBUG` parameter; nothing propagates it.
 
-`persistent_worker_data` is the only server-side data written by the listener
-pthread. It holds:
+`persistent_worker_data` is the state shared between the caller thread and the
+listener pthread. It holds:
 
-- worker heartbeat registry
-- high, normal, and low priority task queues
-- termination and debug flags
+- the worker-slot count, active-worker count, and per-worker thread capacity
+- queue-pressure and warm-up/scale-down state
+- the termination flag and the count of TERMINATE replies sent since it was set
 
 All mutable `persistent_worker_data` fields are protected by the listener
-mutex. `queue_task` also increments `job_count` and assigns `task%job_id` inside
-that mutex.
+mutex. The worker heartbeat registry, the high, normal, and low priority task
+queues, and `job_count` are local to the listener thread and need no mutex.
+`queue_task` only sends the task to the listener over the dispatch client
+connection; the listener increments its local `job_count` and assigns
+`task%job_id` when it enqueues the task.
 
 The listener thread must not perform blocking network replies while holding the
 mutex. It copies the selected task to local storage, releases the mutex, and
@@ -137,25 +143,31 @@ then sends exactly one reply.
 Task selection order is high, normal, low. A task is dispatchable only when the
 worker heartbeat reports enough free thread capacity for `task%nthr`.
 
-Production qsys submissions currently use normal priority. The high and low
-queues are implemented and tested through the server API, but they are not used
-by `qsys_ctrl`.
+`qsys_ctrl` sets `task%priority` from `worker_priority` (`high` selects the
+high queue, anything else the normal queue); several stream stages and their
+jobs set `worker_priority=high`.
+Nothing can enqueue into the low queue: the task message carries only a logical
+priority flag.
 
 ## 6. Message Protocol
 
-The wire protocol has four fixed message types:
+The wire protocol enumerates five fixed message types:
 
 | Message | Value | Direction | Purpose |
 | --- | --- | --- | --- |
-| `WORKER_TERMINATE_MSG` | 1 | server to worker | orderly shutdown |
+| `WORKER_TERMINATE_MSG` | 1 | server to worker | shut down; the worker cancels running tasks. The same value is the kill sentinel `ipc_tcp_socket_server%kill` sends to the listener |
 | `WORKER_HEARTBEAT_MSG` | 2 | worker to server | liveness and thread-load report |
-| `WORKER_TASK_MSG` | 3 | server to worker | script dispatch |
-| `WORKER_STATUS_MSG` | 4 | server to worker | idle or error reply |
+| `WORKER_TASK_MSG` | 3 | none | set by `task%new()` only; never sent on the wire |
+| `WORKER_NEW_TASK_MSG` | 4 | `queue_task` to listener, listener to worker | task submission, and the dispatched task (same record, type unchanged) |
+| `WORKER_STATUS_MSG` | 5 | listener to worker or `queue_task` | idle reply to a heartbeat with no task; `queue_task` acknowledgement (idle = queued, error = queue full); error reply to unknown types |
 
-Every concrete message type must override `serialise` and allocate the buffer
-with `sizeof(self)` where `self` is declared as the concrete type. Calling the
-base `serialise` for derived messages truncates the payload to the base-message
-layout.
+The listener sends TERMINATE in reply to a heartbeat during server shutdown,
+on cooldown scale-down, and when the `worker_id` is out of range or its UID
+does not match the registered one.
+
+Messages travel as their raw memory image. Every concrete message type
+overrides `serialise` with its own copy of the transfer body; do not send an
+extended type through the base `serialise`.
 
 `TCP_BUFSZ = 1460` is the shared socket buffer size and must be large enough for
 every message type.
@@ -166,8 +178,8 @@ Generated SIMPLE bash scripts remain the unit of distributed work.
 
 When the active qsys object is `qsys_persistent_worker`,
 `qsys_ctrl` calls `dispatch_task_to_persistent_worker`, creates a
-`qsys_persistent_worker_message_task`, fills `nthr` and `script_path`, and
-queues the task as normal priority.
+`qsys_persistent_worker_message_task`, fills `nthr` and `script_path`, sets
+`priority` from `worker_priority`, and queues the task.
 
 If the worker server is missing or the queue is full, the current dispatch path
 logs the failure. It does not currently propagate enqueue failure back to the
@@ -181,12 +193,10 @@ The existing scheduler remains the source of truth for completion:
 The worker server is a dispatch transport. It is not currently a completion
 authority.
 
-For the normal-priority production path, the listener marks a dispatched normal
-task inactive immediately before queue compaction. This is the current
-ownership-transfer model: after dispatch, filesystem completion files decide
-whether the job finished. High and low priority queue entries do not currently
-use that same immediate-removal path and should be reviewed before production
-use.
+In every priority queue, the listener marks a dispatched task inactive
+(`job_id = 0`) immediately, and queue compaction then removes it. This is the
+current ownership-transfer model: after dispatch, filesystem completion files
+decide whether the job finished.
 
 ## 8. Worker Process
 
@@ -226,6 +236,11 @@ bash <script_path>
 ```
 
 The script does not need executable permissions because `bash` is explicit.
+
+On `WORKER_TERMINATE_MSG`, or when the server cannot be reached, the worker
+leaves the heartbeat loop and its cleanup cancels the pthreads of tasks that are
+still running; it does not wait for them to finish. `WORKER_STATUS_MSG`
+replies are ignored.
 
 ## 9. Thread Slots
 
@@ -284,10 +299,11 @@ removed.
 - The listener mutex is initialised by `persistent_worker_server%new` and
   destroyed by `persistent_worker_server%kill` after the listener thread has
   been joined.
-- `job_count` increment and task `job_id` assignment stay inside the server
-  mutex.
+- `job_count` increment and task `job_id` assignment stay in the listener
+  thread, which owns the task queues; they need no mutex.
 - Blocking network replies stay outside the server mutex.
-- Concrete wire messages override `serialise` with concrete `sizeof(self)`.
+- Concrete wire messages override `serialise` with their own copy of the
+  transfer body; extended types are never sent through the base `serialise`.
 - Worker slots use `nthr == 0` as the idle signal.
 - Worker task execution remains explicit `bash <script_path>`.
 - Production use must not claim script-path validation is active while

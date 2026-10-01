@@ -449,16 +449,9 @@ contains
         end function read_sorted_stack_runs
     end subroutine discrete_read_imgbatch
 
-    !> One reconstruction-observation contract for both backends (2026-09-09).
-    !! A cropped particle is noise-normalized at the native box against lmsk,
-    !! Fourier-cropped to the box of obs and returned to real space; the edge
-    !! taper (taper_edges_particle, the treatment norm_noise_taper_edge_pad_fft
-    !! fuses for the gridding pad) follows at the CROPPED box when l_taper is
-    !! set. Without a crop the observation is tapered first and normalized
-    !! second, as in the fused gridding routine. Gridding (prep_imgs4rec) calls
-    !! this for the crop step and tapers/pads/transforms in its fused routine;
-    !! PCG takes the tapered observation and its native Fourier plane. Cropping
-    !! and tapering do not commute, so every backend prepares through here.
+    !> The reconstruction observation of both backends. Cropped: noise-normalized at the native box against lmsk,
+    !! Fourier-cropped to obs, back in real space, then tapered at the cropped box if l_taper; uncropped: tapered,
+    !! then normalized, as in the fused gridding routine. Cropping and tapering do not commute, so all backends use it.
     subroutine prep_rec_observation( ptcl_img, lmsk, obs, l_taper )
         class(image), intent(inout) :: ptcl_img
         logical,      intent(in)    :: lmsk(:,:,:)

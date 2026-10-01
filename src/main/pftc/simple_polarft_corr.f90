@@ -1414,17 +1414,9 @@ contains
         grad = 2.d0 * grad / denom
     end subroutine gen_raw_euclid_grad_for_rot_8
 
-    ! Candidate Phase 3 API: evaluate the normalized raw Euclidean residual and
-    ! its gradient at a continuous angular grid coordinate.  Shift
-    ! differentiation must happen in the angular sample domain, so per
-    ! evaluation the polar-sample series S*REF, argtransf_x*S*REF and
-    ! argtransf_y*S*REF are formed as three column sections of one buffer and
-    ! transformed in a single batched angular FFT execution; the resulting
-    ! coefficient series of the objective and both shift derivatives then
-    ! evaluate at the fractional rotation index in O(pftsz).  The shift-phase
-    ! arguments flip sign across the Friedel mate, so the derivative sections
-    ! carry the anti-Friedel extension -conjg on the second half-circle.  No
-    ! inverse FFTs and no temporary allocations.
+    ! Normalized raw Euclidean residual and gradient at a continuous rotation index: S*REF and its x/y shift
+    ! derivatives (anti-Friedel -conjg extension, as the shift phase flips sign) share one batched angular FFT,
+    ! and the coefficient series evaluate at rotind_frac in O(pftsz), with no inverse FFT or temporary allocation.
     module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -1545,25 +1537,8 @@ contains
         endif
     end subroutine eval_joint_coeffs_at_rotind
 
-    ! CC counterpart of gen_raw_euclid_grad_at_angle: evaluate the normalized
-    ! cross-correlation and its gradient at a continuous angular grid
-    ! coordinate, in loss orientation (f = -cc, grad = -dcc), so the joint
-    ! minimizer applies unchanged.  The correlation matched here is the
-    ! selection score of gen_corrs (unweighted shells; NOT the k-weighted
-    ! variant of gen_corr_cc_grad_for_rot_8), so on integer grid indices -f
-    ! reproduces gen_corrs, Nyquist bin included -- both series below therefore
-    ! accumulate p = 1:pftsz+1, unlike the Euclidean evaluator which zeroes
-    ! Nyquist.  The numerator N(theta) and its two shift-derivative series
-    ! reuse the batched three-section angular FFT of the Euclidean evaluator;
-    ! the denominator series D(theta) = sum_k FT(CTF2)*FT(REF2) is assembled
-    ! from memoized transforms (no extra FFT) and is shift-independent
-    ! (|shift phase| = 1), so the quotient rule only enters the theta
-    ! component:
-    !     cc         = N / sqrt(D*C),          C = sqsums_ptcls * 2*nrots
-    !     dcc/dshift = N_shift / sqrt(D*C)
-    !     dcc/dtheta = (N' - N*D'/(2*D)) / sqrt(D*C)
-    ! Dispatched from the joint continuous route (pftc_shsrch_grad) when the
-    ! objective is cc; validated by simple_test_continuous_inplane_cc_grad.
+    ! cc counterpart of gen_raw_euclid_grad_at_angle in loss orientation (f=-cc, grad=-dcc); on integer
+    ! grid indices it reproduces gen_corrs (unweighted shells, Nyquist included).
     module subroutine gen_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -1620,6 +1595,7 @@ contains
         grad = wraw * raw_grad + wden * den_grad
     end subroutine gen_hybrid_grad_at_angle
 
+    ! cc = N/sqrt(D*C); D is shift-independent, so the quotient rule enters only d/dtheta
     subroutine gen_normalized_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, denoised, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -1897,7 +1873,7 @@ contains
 
     !> Evaluation of sigma2 noise particle contribution
     !> Optional scale diagnostics at the SAME orientation (see
-    !> doc/implementation_notes/drop_legacy_box_division.md, plan step 1):
+    !> doc/implementation_notes/completed/drop_legacy_box_division.md, plan step 1):
     !>   ref_pow(k)  mean |CTF*ref|^2 per polar component in shell k
     !>   ptcl_pow(k) mean |ptcl|^2    per polar component in shell k
     !>   v           the euclid objective value at this orientation,

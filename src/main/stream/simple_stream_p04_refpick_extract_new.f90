@@ -1,30 +1,8 @@
-!@descr: task 4 in the stream pipeline: reference-based picking and extraction
-!
-! MODULE: simple_stream_p04_refpick_extract_new
-!
-! PURPOSE:
-!   Implements stream pipeline stage 4: reference-based particle picking and
-!   extraction.  The module watches an upstream completed-project directory for
-!   micrograph batches produced by stage 3 (CTF estimation), applies quality
-!   thresholds (CTF resolution, ice fraction, astigmatism), dispatches
-!   pick_extract jobs to the queueing system, and aggregates results into the
-!   master project file.  Progress and micrograph thumbnails are broadcast to
-!   the GUI via ipc_pipe_refpick_in.
-!
-! WORKFLOW:
-!   1. Wait for picking references (pickrefs) to appear on disk.
-!   2. On the first incoming micrograph batch, call make_pickrefs to build
-!      low-pass filtered templates at the correct pixel size.
-!   3. For each subsequent batch: select micrographs that pass QC thresholds,
-!      write a per-batch sub-project, and submit it to pick_extract.
-!   4. Collect completed jobs, merge micrograph/particle metadata into the
-!      master project, and export STAR files for downstream use.
-!   5. Terminate cleanly on SIGTERM or when a termination sentinel file appears.
-!
-! PUBLIC TYPE:
-!   stream_p04_refpick_extract — commander_base extension; entry point is
-!                                exec_stream_pick_extract.
-!
+!@descr: stream stage 4: reference-based picking and extraction
+! Waits (<=24 h) for pickrefs, builds templates with make_pickrefs on the first preprocessed
+! project (smpd known only then), then queues one pick_extract job per new project and merges
+! results into the stage project. ctfres/icefrac/astig thresholds apply to new projects only if
+! reject_mics=yes; a restart re-imports completed projects with the thresholds always applied.
 module simple_stream_p04_refpick_extract_new
 use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
 use, intrinsic :: iso_c_binding,  only: c_char, c_size_t, c_int, c_loc
@@ -778,7 +756,7 @@ contains
                 write(logfhandle,'(A,I6,A)')'>>> IMPORTED ',nsel_mics,' PREVIOUSLY PROCESSED MICROGRAPHS'
             end subroutine import_previous_mics
 
-            ! Broadcast initial-picking progress to the GUI.
+            ! Broadcast reference-picking progress to the GUI.
             subroutine send_meta( my_stage )
                 type(string), intent(in) :: my_stage
                 call meta_reference_picking%set(            &
@@ -941,7 +919,7 @@ contains
                 if( allocated(cbuf) ) deallocate(cbuf)
             end subroutine send_to_refpick_in_pipe
 
-            ! Called asynchronously on SIGTERM. Exits immediately after logging.
+            ! Called asynchronously on SIGTERM. Only sets l_terminate; the main loop exits on its next pass.
             subroutine sigterm_handler()
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
                 l_terminate = .true.

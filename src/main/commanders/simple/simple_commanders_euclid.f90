@@ -80,7 +80,7 @@ contains
             call build%spproj%get_sigma2_state_path(state_path, found)
             if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
             ! the transaction prepared before the workers ran: candidate and
-            ! ranges of the generation this consolidation commits (2026-09-07)
+            ! ranges of the generation this consolidation commits
             call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)

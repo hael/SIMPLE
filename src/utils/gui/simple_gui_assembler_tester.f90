@@ -1,27 +1,7 @@
 !@descr: Unit tests for gui_assembler — lifecycle, hash suppression, and all assemble_stream_* procedures
-!==============================================================================
-! MODULE: simple_gui_assembler_tester
-!
-! PURPOSE:
-!   Exercises gui_assembler through a set of unit tests covering object
-!   lifecycle (new/kill/reuse/set_stoptime), hash-based change suppression
-!   (clear_hashes), and JSON assembly for the batch-heartbeat, stream-preprocess,
-!   optics-assignment, initial-picking, reference-picking, opening-2D,
-!   particle-sieving, pool-2D, and project stages.
-!   Where the assembled JSON is fully deterministic (no live timestamps) the
-!   test verifies an FNV-1a hash of the serialised output; otherwise it checks
-!   only that the output is non-empty.
-!   assemble_stream_heartbeat needs live forked child processes, so its test
-!   has its own entry point and runs in the forked_process platform entry.
-!
-! ENTRY POINTS:
-!   run_all_gui_assembler_tests() — the unit_ui tests
-!   run_stream_heartbeat_tests()  — the stream heartbeat over seven live children
-!
-! DEPENDENCIES:
-!   simple_gui_metadata_api, simple_gui_assembler, simple_test_utils,
-!   simple_string, simple_sp_project, simple_syslib, simple_forked_process, unix
-!==============================================================================
+! JSON is pinned by an FNV-1a hash where it is deterministic (no live timestamps), otherwise only
+! checked for being non-empty. run_stream_heartbeat_tests forks seven live children, so it runs in
+! the forked_process test entry, not with run_all_gui_assembler_tests in unit_ui.
 module simple_gui_assembler_tester
   use simple_gui_metadata_api, only: gui_metadata_stream_preprocess,                      &
                                      gui_metadata_micrograph,                             &
@@ -561,12 +541,9 @@ contains
     call test_stream_heartbeat_lifecycle()
   end subroutine run_stream_heartbeat_tests
 
-  ! The stream master's heartbeat section over seven live children running the
-  ! finite default fork worker (initial_picking and opening2D share one process,
-  ! as in the master): while they run, every stage and the master report
-  ! 'running' with a pid and a start time and no stop time; after SIGTERM, all
-  ! report 'finished' with a stop time. Ruben's stream test `master`, moved here
-  ! by the stream review (plan, section 9.7); it never started the master itself.
+  ! Stream heartbeat over seven live default fork workers (initial_picking and opening2D share one,
+  ! as in the master, which is not started): while running, every stage and the master report
+  ! 'running' with pid and start time but no stop time; after SIGTERM, 'finished' with a stop time.
   subroutine test_stream_heartbeat_lifecycle()
     type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
     type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate

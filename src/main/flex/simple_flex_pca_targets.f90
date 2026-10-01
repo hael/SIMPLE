@@ -17,11 +17,9 @@ public :: diffusion_kcenter_targets, kmeans_latent_targets, path_latent_targets,
 
 contains
 
-    !> Manifold-covering state targets by diffusion-map k-center. k-means allocates by DENSITY and misses
-    !! sparse states; a 1-D path merges states on a BRANCHED manifold. A diffusion embedding makes geodesic
-    !! structure Euclidean, so greedy farthest-point covers any shape. Reliability weighting is essential:
-    !! the largest-eigenvalue component is typically the worst measured.
-    !! Measurements: doc/implementation_notes/flex_pca_state_placement_measurements.md
+    !> Manifold-covering state targets by diffusion-map k-center: k-means misses sparse states and a 1-D path
+    !! merges branches, while greedy farthest-point on the diffusion embedding covers any shape. Reliability
+    !! weighting is essential: the largest-eigenvalue component is typically the worst measured.
     subroutine diffusion_kcenter_targets( z, nptcls, ncomp, nstates, wcomp, rho, centroids, ok )
         integer,  intent(in)  :: nptcls, ncomp, nstates
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp), rho(ncomp)

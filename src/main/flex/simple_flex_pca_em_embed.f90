@@ -45,7 +45,6 @@ contains
         real(dp), allocatable :: zhalf(:,:,:), Ghf(:,:,:,:), bhf(:,:,:), chf(:,:,:)
         real(dp), allocatable :: myhf(:,:), emmhf(:,:)   ! per-half <Tmu,y>, <Tmu,Tmu> for the half-solve contrast
         real(dp) :: ah, aah
-        logical  :: l_halfcontrast
         real(dp), allocatable :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
         integer,  allocatable :: prows(:)
         integer :: ipart, pn_part
@@ -76,28 +75,10 @@ contains
         l_from_parts = .false.
         if( present(stats_only) ) l_stats_only = stats_only
         if( present(from_parts) ) l_from_parts = from_parts
-        ! RELPRIOR=0 no longer forces the stage in-process. The distributed flow ships G/b/c
-        ! and the split-half solves so the master can re-solve under the reliability-scaled
-        ! prior; with the prior PLAIN the same re-solve applies 1/Gamma_q instead, so the
-        ! caches are kept and only the rho computation is skipped. Measured motivation: two
-        ! nparts=1-matched pairs read +0.037/+0.024 and +0.025/+0.022 (ARI/AMI) for the plain
-        ! prior on the EM arm -- the rho^2 rescaling over-shrinks the reproducible directions
-        ! 5-8 whose rho sits at 0.46-0.55.
+        ! the caches flow whenever stats do; under the plain prior the re-solve applies 1/Gamma_q, no rho
         l_cache_stats = l_relprior .or. l_stats_only .or. l_from_parts .or. present(zhalf_out)
-        ! Per-half fitted contrast in the split-half solves (SIMPLE_COV_HALF_CONTRAST=0 opts out).
-        ! The delivered z keeps a=1. WHY: the basis is deflated against the mean, so the FULL-plane
-        ! <TU,Tmu> nearly cancels while its two half-plane parts do not (they are +-D_i, pose
-        ! dependent, and Tmu dwarfs TUz). With a fixed a=1 the residual carries (a_i-1)*Tmu, which
-        ! therefore enters the two half solves with OPPOSITE signs and drives the split-half
-        ! correlation negative (measured -0.13..-0.24 on 10028, 2026-09-07). Fitting a per half
-        ! removes that term from the reliability estimate without touching the delivered latents.
-        l_halfcontrast = .true.
         if( l_relprior )then
-            if( l_halfcontrast )then
-                write(logfhandle,'(A)') '>>> FLEX_PCA split-half solves: per-half fitted contrast'
-            else
-                write(logfhandle,'(A)') '>>> FLEX_PCA split-half solves: contrast fixed to the full-plane value'
-            endif
+            write(logfhandle,'(A)') '>>> FLEX_PCA split-half solves: per-half fitted contrast'
             call flush(logfhandle)
         endif
         allocate(prior(ncomp))
@@ -254,14 +235,11 @@ contains
                     Gcache(:,:,row) = Gth(:,:,ithr)
                     bcache(:,row)   = bth(:,ithr)
                     ccache(:,row)   = cth(:,ithr)
-                    ! and the two half-data solves, each at its OWN fitted contrast (see l_halfcontrast)
+                    ! and the two half-data solves, each at its OWN fitted contrast (the delivered z keeps a=1):
+                    ! at a=1 the residual (a_i-1)*Tmu enters the halves with opposite signs (basis deflated vs the mean)
                     do ihf = 1, 2
-                        if( l_halfcontrast )then
-                            ah = myhf(ihf,ithr) / max(emmhf(ihf,ithr), DTINY)
-                            ah = max(0.1d0, min(5.d0, ah))
-                        else
-                            ah = contrast(row)
-                        endif
+                        ah = myhf(ihf,ithr) / max(emmhf(ihf,ithr), DTINY)
+                        ah = max(0.1d0, min(5.d0, ah))
                         aah = ah*ah
                         Ath(:,:,ithr) = (aah/sig2)*Ghf(:,:,ihf,ithr)
                         do q = 1, ncomp
@@ -433,17 +411,9 @@ contains
         if( allocated(gwork)  ) deallocate(gwork, gvec, gev, gspec_thr, gcnt_thr)
     end subroutine embed_latents_with_contrast
 
-    !> One part's embedding sufficient statistics.
-    !!
-    !! The embedding is not a clean partition, so a part cannot ship finished latents.
-    !! The reliability prior comes from
-    !! rho(q) = corr(zhalf(:,q,1), zhalf(:,q,2)) over every particle, and each particle's final z is
-    !! re-solved against it; per-part rho would solve the parts against different priors.
-    !!
-    !! So a part ships what it can compute independently -- the per-particle sufficient statistics
-    !! from the image pass plus its own rows of the split-half latents -- and the master does the
-    !! coupled arithmetic: reduce zhalf, form rho and the prior once, then re-solve. The re-solve
-    !! touches no images, so the stage that actually costs is the part that distributes.
+    !> One part's embedding sufficient statistics (per-particle scalars, split-half latents, G/b/c
+    !! blocks). The master reduces zhalf over every particle, forms the prior once, then re-solves
+    !! each part's rows from these blocks without touching an image.
     subroutine write_embed_stats_part( fname, pinds, contrast, resid_energy, resid_mean_energy, &
         &Gcache, bcache, ccache, zhalf, nptcls, ncomp )
         class(string), intent(in) :: fname

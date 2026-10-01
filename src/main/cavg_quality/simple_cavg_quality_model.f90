@@ -73,7 +73,7 @@ real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
 ! Default chunk class-average quality model, promoted from the pairwise
 ! logistic artifact learned from
-! /Users/elmlundho/model_cavgs_rejection/chunk_training5.
+! an out-of-tree chunk training set.
 character(len=*), parameter :: CHUNK100MICS_FEATURE_POLICY = 'microchunk_plus_score_signal'
 real, parameter :: CAVG_QUALITY_LOGISTIC_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     7.142857E-02, 7.142857E-02, 7.142857E-02, 7.142857E-02, &

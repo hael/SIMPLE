@@ -502,23 +502,8 @@ contains
             neigs = min(max(neigs, 1), max(params%nptcls-1, 1))
         endif
         if( l_hybrid_resid )then
-            ! Residual hybrid denoiser:
-            ! 1. Fit PPCA to the centered particle stack and reconstruct the linear denoised estimate.
-            ! 2. Form a residual stack r = x - x_ppca that contains what the linear model did not explain.
-            ! 3. Run kPCA only on that residual stack, not on the full images.
-            ! 4. Write x_hybrid = avg + x_ppca + alpha * r_kpca.
-            !
-            ! Why this exists as a separate mode:
-            ! - A direct PPCA -> kPCA image-domain cascade tended to make images blurrier.
-            ! - The intent here is different: PPCA handles the global linear denoising,
-            !   while kPCA is restricted to modeling structured nonlinear leftovers.
-            ! - Keeping this in its own pca_mode keeps the existing ppca and kpca
-            !   behavior untouched and makes the hybrid easy to benchmark independently.
-            !
-            ! Current scope:
-            ! - Implemented only for transp_pca=no in the image-denoise commander.
-            ! - Uses the existing PPCA and kPCA solvers as black-box stages.
-            ! - alpha controls how strongly the residual kPCA correction is blended back.
+            ! pca_mode=ppca_kpca_resid: PPCA gives x_ppca, kPCA models only r = x - x_ppca; output is
+            ! avg + x_ppca + alpha*r_kpca (alpha = ppca_kpca_resid_alpha). transp_pca=no only.
             if( l_transp_pca ) THROW_HARD('ppca_kpca_resid currently supports transp_pca=no only')
             allocate(ppca_ptr_typed, kpca_ptr)
             call ppca_ptr_typed%new(params%nptcls, npix, neigs)
@@ -539,21 +524,8 @@ contains
             if( l_profile_pca ) write(logfhandle,'(A,F8.3,A)') 'PPCA+kPCA residual denoise master: ', real(t1-t0)/real(trate), ' s'
             call system_clock(t0)
             block
-                ! Hybrid residual diagnostics:
-                ! - residual RMS stats: size of the residual left after PPCA alone.
-                ! - correction RMS stats: size of the damped kPCA correction being added back.
-                ! - remaining residual RMS stats: size of (residual - alpha * correction).
-                !   If this drops meaningfully, the residual kPCA stage is explaining structure
-                !   that PPCA did not capture.
-                ! - residual/correction cosine stats: directional alignment between the PPCA
-                !   residual and the kPCA correction. High positive values mean the correction
-                !   is targeting the residual rather than acting like an unrelated smoother.
-                !
-                ! Practical interpretation:
-                ! - correction RMS << residual RMS  => hybrid is barely changing the PPCA result
-                ! - remaining residual RMS much lower than residual RMS => hybrid is active/useful
-                ! - cosine near 1 => correction tracks the residual well
-                ! - cosine near 0 or negative => correction is weakly aligned or potentially harmful
+                ! profile diagnostics: RMS of the PPCA residual, the alpha-scaled kPCA correction and what
+                ! remains, plus residual/correction cosine (near 1: the correction tracks the residual)
                 real(dp) :: resid_rms, corr_rms, remain_rms, align_cos
                 real(dp) :: resid_norm2, corr_norm2, dot_rc
                 real(dp) :: resid_sum, resid_sumsq, resid_max

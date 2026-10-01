@@ -1,44 +1,7 @@
-!@descr: stream pipeline stage 6 — global 2D classification of pooled particles from sieving
-!==============================================================================
-! MODULE: simple_stream_p06_pool2D_new
-!
-! PURPOSE:
-!   Drives the continuous global 2D classification loop for the streaming
-!   pipeline.  Watches for completed particle-sieve sets, imports them into
-!   a growing pool, runs iterative 2D clustering, and broadcasts progress
-!   and class-average metadata to the GUI via ipc_pipe_pool2D_in.
-!   Also responds to live GUI updates: mask-diameter changes and snapshot-2D
-!   write requests received on ipc_pipe_pool2D_out.
-!
-!   stepwise=yes (cline flag, default no): instead of importing every
-!   available sieved set in one go, import_sets_into_pool caps each batch to
-!   just enough sets to reach nptcls_threshold and defers the rest; the
-!   deferred sets are imported in a later batch once the pool is free again.
-!
-! ENTRY POINT:
-!   stream_p06_pool2D%execute(cline) — called by the stream master
-!
-! INTERNAL SUBROUTINES:
-!   unpause_pool          — clear the pause flag and log resumption
-!   import_sets_into_pool — read new sieve sets into the pool; initialise
-!                           clustering parameters on first import; when
-!                           stepwise=yes, caps the batch to nptcls_threshold
-!                           and defers remaining sets to a later call
-!   cleanup4restart       — remove stale files when restarting an existing job
-!   send_meta             — broadcast pool-2D progress metadata to the GUI
-!   send_meta_snapshot2D  — broadcast snapshot metadata to the GUI
-!   send_cavg2D_meta      — serialise and send one class-average sprite tile
-!   send_cavgs2D          — iterate all current class averages and send each
-!   send_snapshot_cavg2D_meta — serialise and send one snapshot-selected class-average
-!                               sprite tile, using the jpeg/sprite locations written
-!                               by write_project_stream2D
-!   send_snapshot_cavgs2D — iterate snapshot-selected class averages and send each
-!   sigterm_handler       — SIGTERM handler: sets l_terminate for graceful exit
-!
-! DEPENDENCIES:
-!   simple_stream_api, simple_stream2D_state, simple_stream_pool2D_utils,
-!   simple_stream_state, simple_gui_metadata_api, unix
-!==============================================================================
+!@descr: stream stage 6: global 2D classification of the sieved-particle pool
+! Imports sieved sets when the pool is idle (stepwise=yes: stop once the pool reaches nptcls_threshold),
+! iterates with an adaptive pause policy, and after EXPORT_3D_START_ITERATION exports new particles
+! to DIR_STREAM_COMPLETED for stage 7. GUI in: mskdiam2D, sieverefs, snapshot2D.
 module simple_stream_p06_pool2D_new
 use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
@@ -232,7 +195,7 @@ contains
             endif
             l_imported            = setslist%get_included_flags()
             ! Adaptive pause policy:
-            ! - iterations 11..20: pause only if no imports for >1 iterations
+            ! - iterations 2..20: pause only if no imports for >1 iterations
             ! - iterations 21+:    pause after 1 iteration without imports
             ! When the final sieve set has been imported, run uninterrupted to
             ! iteration 25 (no pausing).
@@ -831,7 +794,7 @@ contains
                 receive_from_pool2D_out_pipe = .true.
             end function receive_from_pool2D_out_pipe
 
-            ! Called asynchronously on SIGTERM. Exits immediately after logging.
+            ! Called asynchronously on SIGTERM. Only sets l_terminate; the main loop exits on its next pass.
             subroutine sigterm_handler()
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
                 l_terminate = .true.

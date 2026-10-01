@@ -1,22 +1,6 @@
 !@descr: GUI metadata type for a single micrograph and its particle coordinates.
-!==============================================================================
-! MODULE: simple_gui_metadata_micrograph
-!
-! PURPOSE:
-!   Extends gui_metadata_base with micrograph-specific fields:
-!     path        — absolute path to the micrograph file
-!     dfx/dfy     — defocus values (Angstroms)
-!     ctfres      — CTF resolution estimate (Angstroms)
-!     i/i_max     — micrograph index within the current batch
-!     xdim/ydim   — micrograph dimensions in pixels
-!     coordinates — up to 5000 particle box centres (int16 x/y pairs)
-!   Provides set/get for scalar fields, set_coordinate/clear_coordinates for
-!   the coordinate array, and a jsonise override that emits all fields plus
-!   an optional "boxes" array when coordinates are present.
-!
-! DEPENDENCIES:
-!   json_module, simple_defs, simple_string, simple_error, simple_gui_metadata_base
-!==============================================================================
+! Up to 5000 box centres stored as int16 to keep the raw IPC transfer small; xdim/ydim and the
+! "boxes" array are emitted only when coordinates are set, ctfimg only when non-empty.
 module simple_gui_metadata_micrograph
 use json_module,              only: json_core, json_value
 use simple_defs,              only: LONGSTRLEN

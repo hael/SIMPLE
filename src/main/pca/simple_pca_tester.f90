@@ -17,7 +17,7 @@ implicit none
 private
 public :: run_all_pca_tests
 
-!---------------- SVD PCA fixtures (references: pca_svd_ref.py, stats batch 2026-09-23) ----------------
+!---------------- SVD PCA fixtures (double-precision references, computed out of tree) ----------------
 
 ! A: D = 5 >= N = 4 (master_ori); singular values of the centred data 10.71309, 5.69645, 2.45564, 0
 real, parameter :: PCA_A(5,4) = reshape([ 1., 3., -1., 2., 0.,   2., 1., 0., -2., 5., &
@@ -435,8 +435,8 @@ contains
 
     ! exact backend, cosine kernel: the centred cosine-similarity kernel's leading eigenpairs, the
     ! features sqrt(lambda_k) v_k(i), and the converged pre-images of the fixed-point rule with
-    ! non-negative weights (max(0, projected column) x max(0, cosine); with the sign-mixed weights and
-    ! the L1 denominator of before 2026-09-23 one cluster never converged and landed in the other)
+    ! non-negative weights (max(0, projected column) x max(0, cosine); guards sign-mixed weights, under
+    ! which one cluster never converged and landed in the other)
     subroutine test_kpca_exact_cosine()
         type(kpca_svd) :: kpca
         real, allocatable :: eigvals(:)

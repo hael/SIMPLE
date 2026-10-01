@@ -1,25 +1,8 @@
 !@descr: Two-gate agglomerative merge of over-provisioned flex_pca states.
-!
-!        Latent criteria (BIC, ICL) score the mixture in the space it was fitted in, so components
-!        that partition particles but reconstruct to the same density still score as distinct. The
-!        question here -- how many distinguishable maps the data support -- is therefore asked of
-!        the orientations and of the maps instead.
-!
-!        Gate 1, orientation (cheap): the latent comes from 2D projections, so viewing direction is
-!        its largest confound and a component whose viewing-axis distribution departs from the
-!        global one is a view cluster rather than a state. Gate 1 fires on failure of a null, not on
-!        improvement -- pooling always improves view coverage, so an improvement rule would run to
-!        K=1.
-!
-!        Gate 2, volume (expensive, pairs surviving gate 1): catches several components landing on
-!        one true state with full view coverage each, which gate 1 cannot see. Tested against each
-!        state's own half-map reproducibility.
-!
-!        Single pass: the pairwise relation is computed once on the delivered maps and closed under
-!        COMPLETE linkage; the caller re-reconstructs once at the converged count.
-!
-!        Off by default; SIMPLE_COV_MERGE=1 enables, and npreimages=0 (auto state ceiling) enables it
-!        implicitly. SIMPLE_COV_MERGE=0 always wins.
+!        Gate 1 (orientation): a state whose viewing-axis distribution stands out from its peers is a view
+!        cluster, folded into a sufficiently similar map. Gate 2 (volume): pairs whose deviation maps agree within
+!        their own half-map reproducibility fuse under complete linkage. Latent distance never merges.
+!        On when SIMPLE_COV_MERGE is non-zero or preimage_auto=yes; SIMPLE_COV_MERGE=0 always wins.
 module simple_flex_pca_merge
 use simple_core_module_api
 use simple_image,          only: image
@@ -32,7 +15,7 @@ private
 
 public :: flex_pca_merge_enabled, flex_pca_merge_force_on, two_gate_state_merge
 
-!> Set by the npreimages=0 auto-ceiling path; consulted only when SIMPLE_COV_MERGE is unset.
+!> Set by the preimage_auto=yes path; consulted only when SIMPLE_COV_MERGE is unset.
 logical :: l_merge_forced = .false.
 
 !> Viewing-axis second moments are symmetric 3x3 with unit trace (v is a unit vector), leaving
@@ -57,13 +40,8 @@ real(dp), parameter :: MAD2SIGMA = 1.4826d0
 real(dp), parameter :: VIEW_FOLD_MIN_R = 0.8d0
 !> Shells where both states reproduce below this are noise in both and carry no evidence either way.
 real(dp), parameter :: FSC_SIGNAL_FLOOR = 0.143d0
-!> Default on the disattenuated ratio; 1 means the two maps agree as well as each agrees with
-!! itself, i.e. indistinguishable given the noise. SIMPLE_COV_MERGE_R overrides.
-!> Gate on the DEVIATION-from-ensemble-mean disattenuated ratio (see pair_map_ratio). 0.98 is the
-!! measured value that fuses only true duplicates on both benchmarks at once: Ribosembly
-!! same-GT pairs bottom out at 0.983 while different-GT pairs top out at 0.970, and EMPIAR-10076
-!! cross-family pairs top out at 0.878. It was 0.95 when the ratio was computed on RAW maps,
-!! where the shared consensus density made every pair score high and no gate transferred.
+!> Default gate on the DEVIATION-from-ensemble-mean disattenuated ratio (see pair_map_ratio); 1 means
+!! the two maps agree as well as each agrees with itself. SIMPLE_COV_MERGE_R pins it (no adaptive cut).
 real(dp), parameter :: MERGE_R_DEFAULT = 0.98d0
 !> Absolute SANITY bound for the adaptive gate -- not a duplicate threshold. Two states whose
 !! deviations correlate below this are never duplicates whatever the gap structure says. It must
@@ -292,7 +270,7 @@ contains
             label_out(s) = s
         end do
         if( nstates < 2 ) return
-        ! zero-mass states (e.g. pruned by AUTO-K upstream) have EMPTY maps on disk; every gate
+        ! zero-mass states have EMPTY maps on disk; every gate
         ! statistic on them is noise, so they stand aside as singletons and keep their slots
         allocate(mass(nstates), l_live(nstates))
         do s = 1, nstates
@@ -322,12 +300,12 @@ contains
             call get_environment_variable('SIMPLE_COV_MERGE_R', gv, gl, gs)
             l_fixed_gate = (gs == 0 .and. gl > 0)
         end block
-        ! Decision-robustness levers, both default OFF (= previous behaviour exactly).
+        ! Decision-robustness levers, both default OFF.
         ! MARGIN: merge only when the ratio clears the gate by this much. EO: merge only when BOTH
         ! half-independent cross estimates clear the gate on their own -- a pair the halfsets
         ! disagree about is genuinely ambiguous, and requiring their agreement makes the delivered
         ! K stable under epsilon-level perturbation (thread count, GPU atomic order), which a bare
-        ! threshold on their mean is not (measured: one borderline pair flipped 14->13).
+        ! threshold on their mean is not.
         rmargin = 0.d0
         call merge_env_dp('SIMPLE_COV_MERGE_MARGIN', rmargin)
         l_eo = merge_env_is('SIMPLE_COV_MERGE_EO', '1')
@@ -425,15 +403,8 @@ contains
         end do
         !$omp end parallel do
         ! ---- DEVIATION FROM THE ENSEMBLE MEAN ----
-        ! Every state map is dominated by the density all states SHARE, so an FSC between raw state
-        ! maps measures the consensus, not the difference: it drives every pair to the top of the
-        ! scale and leaves correct fusions (0.9983-0.9995) crowded against harmful ones
-        ! (0.9848-0.9928), which is why no fixed gate transferred between datasets. Subtracting the
-        ! ensemble mean first makes the ratio measure what actually distinguishes the states.
-        ! Measured 2026-08-16 on deviations: Ribosembly same-GT pairs 0.983-0.999 vs different-GT
-        ! 0.413-0.970, and EMPIAR-10076 within-family 0.69-1.03 vs cross-family <=0.878 -- so a
-        ! single gate at 0.98 fuses only true duplicates on BOTH, with zero false fusions.
-        ! The per-state reliability below is computed from the same deviations, as it must be.
+        ! Raw state maps are dominated by the shared density, so their FSC measures the consensus; the ratio
+        ! and the per-state reliability are both computed on deviations from the live-state mean.
         block
             type(image) :: mean_e, mean_o
             real(dp)    :: wgt
@@ -607,13 +578,8 @@ contains
                     &' + ',kmin_b,'  weakest cross ratio=',rbest,' -> indistinguishable within their own noise'
             end do
         endif
-        ! Under AUTO-K the merge serves as a MAP-SPACE DUPLICATE FUSE only: gate 2 decides, gate 1
-        ! reports but never folds. Measured 2026-08-16 on Ribosembly: gate 1 folded 3 genuine
-        ! compositional states (map ratios 0.86-0.92, well below the duplicate gate) because its
-        ! premise -- conformation independent of viewing direction -- fails for a compositional
-        ! mixture, and the >1/3 stand-down did not trip at 4 of 16 flagged. AUTO-K's own
-        ! reproducibility gate already handles unstable states.
-        ! any non-zero value, matching how the model module gates AUTO-K (cov_env_int_pub > 0)
+        ! SIMPLE_COV_AUTO_K > 0 makes the merge a map-space duplicate fuse only: gate 2 decides, gate 1 reports
+        ! but never folds, since its view-independence premise fails for a compositional mixture
         akv = 0.d0
         call merge_env_dp('SIMPLE_COV_AUTO_K', akv)
         if( akv > 0.d0 )then

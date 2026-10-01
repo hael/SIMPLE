@@ -1,25 +1,7 @@
 !@descr: GUI metadata type for a single particle entry (sprite-sheet position + stats).
-!==============================================================================
-! MODULE: simple_gui_metadata_ptcl
-!
-! PURPOSE:
-!   Extends gui_metadata_base with fields that describe one particle entry
-!   in a sprite-sheet JPEG, matching the per-tile layout used for the
-!   randomly-sampled particle montage produced by gui_metadata_project%set:
-!     path            — absolute path to the particle-sample JPEG
-!     pathlp          — absolute path to the source particle stack MRC
-!     idx             — particle index within the ptcl2D segment
-!     spritex/spritey — position of this tile within the sheet (percentage, 0–100)
-!     spriteh/spritew — total sprite-sheet height/width (pixels)
-!     df              — defocus estimate (microns, optional)
-!     box             — particle box size in pixels (optional)
-!   Provides set/get for all fields and a jsonise override that emits all
-!   mandatory fields plus the optional df and box when they have been set.
-!
-! DEPENDENCIES:
-!   json_module, simple_defs, simple_string, simple_error,
-!   simple_gui_metadata_base, simple_gui_metadata_types, simple_gui_metadata_cavg2D
-!==============================================================================
+! One tile of the random particle montage written by gui_metadata_project%set: path is the montage
+! JPEG, pathlp its low-pass twin, idx the ptcl2D index. df (microns) and box are emitted only when
+! passed to set().
 module simple_gui_metadata_ptcl
 use json_module,                only: json_core, json_value
 use simple_defs,                only: LONGSTRLEN
@@ -38,7 +20,7 @@ private
 type, extends( gui_metadata_base ) :: gui_metadata_ptcl
   private
   character(len=LONGSTRLEN) :: path       = ''                  ! absolute path to the particle-sample JPEG
-  character(len=LONGSTRLEN) :: pathlp     = ''                  ! absolute path to the source particle stack MRC
+  character(len=LONGSTRLEN) :: pathlp     = ''                  ! absolute path to the low-pass particle-sample JPEG
   integer                   :: idx        = 0                   ! particle index within the ptcl2D segment
   type(sprite_sheet_pos)    :: sprite     = sprite_sheet_pos()  ! tile position and sheet dimensions
   real                      :: df         = 0.0   ! defocus estimate (microns); valid only when l_df

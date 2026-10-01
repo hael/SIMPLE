@@ -60,7 +60,7 @@ contains
         call assert_real(thresh, thresh2, 1.0e-6,                    'otsu: the binarising overload reports the same threshold')
         call assert_true(all((x_out > 0.5) .eqv. mask),               'otsu: the binarising overload agrees with the mask overload')
         ! a constant sample is one class: the threshold is the value and nothing is foreground
-        ! (the range scaling divided by zero and returned NaN before 2026-09-25)
+        ! (guards a division by zero in the range scaling, which returned NaN)
         x = 3.5
         call otsu(N, x, thresh)
         call assert_real(3.5, thresh, 0.,                                 'otsu: a constant sample thresholds at its value')

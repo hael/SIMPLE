@@ -1,56 +1,8 @@
-!@descr: downscaled particle cache shared by the 2D and 3D matcher workflows
-!
-! Every iteration the samplers draw a fresh ~nsample subset of the particles and
-! each selected particle is read at full box and Fourier-cropped to box_crop in
-! prepimg4align. Nothing is reused: sample4update_cnt exhausts the lowest
-! updatecnt tier first, so consecutive iterations draw near-disjoint subsets and
-! sweep the whole dataset before revisiting anything. A partial cache would
-! therefore never hit; only a cache covering all particles is worth anything.
-!
-! What is cacheable is the iteration-independent prefix of prepimg4align: noise
-! normalization against the full-box lmsk, forward FFT, and the clip to box_crop.
-! The shift is not cacheable (it is re-read from the project every iteration) and
-! neither is anything after it, since the mask must follow the shift. The CTF
-! phase flip is iteration-independent and commutes with the shift, but is left
-! out so the cache does not depend on CTF parameters.
-!
-! An entry is thus the noise-normalized, Fourier-cropped particle, stored as a
-! real-space box_crop image: Fourier crop -> inverse FFT -> forward FFT is an
-! exact round trip, so reading an entry back reproduces the same coefficients
-! prepimg4align would have computed. At box_crop=88 that is ~30 KB against
-! ~379 KB at box=308.
-!
-! abinitio2D holds box_crop fixed across all its stages, so one cache serves a
-! whole 2D run and there is nothing to invalidate between stages. Cache-enabled
-! abinitio3D likewise uses the final (largest) crop in its downscaling ladder for
-! every stage, avoiding a cache rewrite at each stage boundary. The cache lives
-! exactly as long as the run that owns it: the
-! process that builds (or adopts) it removes the files on normal exit and on
-! hard exception, via the cache_cleanup_glob hook in simple_defs. Only
-! SIGKILL-class deaths can leave files behind, and a rerun in the same execution
-! directory finds and reclaims those (see cache_run_token).
-!
-! 2D consumers: prob_tab2D, which needs only the alignment product, and
-! cluster2D_exec, which additionally restores class averages from the raw
-! images. The latter is not a pure I/O substitution -- the edge taper and the
-! gridding source grid then live at box_crop rather than at box -- and it requires
-! cavger_init_online(cropped_ptcls=.true.), which switches the class-averager work
-! images to ldim_croppd, the mask to lmsk_crop, and scales the shift and the CTF
-! pixel size to the cropped grid. Note in particular that a cached particle is
-! already noise-normalized, so restoration must not normalize it a second time:
-! cropping discards most of the noise power, and re-normalizing would rescale the
-! particle by the crop factor while leaving ctfsq_plane and sigma2 untouched.
-!
-! 3D consumers: refine3D search, prob_tab, and prob_tab_neigh take alignment
-! reads -- the cached entry is exactly the iteration-independent prefix of their
-! prepimg4align as well -- and the matcher reconstruction phase (calc_3Drec /
-! calc_projdir3Drec) reads the cache too, with the same deliberate numerics
-! change as the 2D restoration: taper and gridding pad at box_crop, no second
-! noise normalization, shift and CTF pixel size scaled to the cropped grid (see
-! prep_imgs4rec). The one-off starting-volume reconstruct3D keeps reading the
-! originals. A denoised primary source (ptcl_src=den) disqualifies the cache
-! outright; a denoised objective (objfun_den=yes) does not, since those images
-! are read separately.
+!@descr: on-disk cache of noise-normalized, Fourier-cropped particles for the 2D matcher workflows
+! An entry is the iteration-independent prefix of prepimg4align (noise norm vs lmsk, FFT, clip to box_crop),
+! stored in real space (exact round trip). Covers every active particle. Read by prob_tab2D and cluster2D_exec;
+! restoration then runs at box_crop with no second normalization (cavger_init_online(cropped_ptcls=.true.)).
+! refine3D and abinitio3D reject cache=yes. Contract: doc/policies/2D/particle_cache_policy.md
 module simple_ptcl_cache
 use simple_pftc_srch_api
 use simple_builder,           only: builder
@@ -79,30 +31,19 @@ integer(kind=8),  parameter :: HASH_M2 = 2147483629_8, HASH_A2 = 48271_8  ! larg
 ! resolved once per process by ptcl_cache_in_use
 logical :: l_probed    = .false.
 logical :: l_available = .false.
-! Exit-time cleanup: the process that builds -- or adopts, see ptcl_cache_ensure --
-! the cache owns its files and removes them on normal exit or hard exception, via
-! the cache_cleanup_glob hook that simple_exception and the exec programs call.
-! Workers never take ownership, so a dying worker cannot delete the cache out from
-! under the other ranks or a resubmitted part. Paths are resolved at ownership
-! time so that cleanup does not depend on params still being alive.
+! Owner = the process that built or adopted the cache; workers never own. Paths are resolved at
+! ownership time so exit cleanup (cache_cleanup_glob) does not depend on params.
 logical      :: l_owner = .false.
 type(string) :: owned_files(5)
-! cache record index per global particle index, 0 for particles that were not cached.
-! Deselected particles are never sampled, so caching them would waste both a full-size
-! read at build time and box_crop^2*4 bytes on disk; the map buys that back while
-! keeping lookups O(1). It is monotone over cached particles, so a sorted batch of
-! pinds still maps to a forward scan of the file. cache_nrecs is the number of
-! records (= maxval(cache_ind)), memoized at index load so the per-batch reads --
-! of which reconstruction adds many across state/eo groups -- need not rescan it.
+! cache record per global particle index (0 = not cached: only active particles are); monotone, so
+! sorted pinds read the file forward. cache_nrecs = maxval(cache_ind), memoized at index load.
 integer, allocatable :: cache_ind(:)
 integer              :: cache_nrecs = 0
 
 contains
 
-    !>  Where the cache lives. It is large (nsel * box_crop^2 * 4 bytes), so when the
-    !!  project sits on a slow disk it usually wants to be somewhere faster: cache_dir
-    !!  on the command line, else the SIMPLE_PTCL_CACHE_DIR environment variable, else
-    !!  the execution directory. An empty result means the execution directory.
+    !>  Where the cache lives: cache_dir, else $SIMPLE_PTCL_CACHE_DIR, else the execution directory (empty result).
+    !!  It is large (nsel * box_crop^2 * 4 bytes), so a project on a slow disk wants it somewhere faster.
     function cache_dir( params ) result( dirname )
         class(parameters), intent(in) :: params
         type(string)          :: dirname
@@ -120,15 +61,9 @@ contains
         endif
     end function cache_dir
 
-    !>  Per-run discriminator folded into the cache basename: a hash of the absolute
-    !!  execution directory. cache_dir is explicitly meant to be shared, so several
-    !!  concurrent runs pointing at the same fast disk must not delete or overwrite
-    !!  each other, and projname alone cannot guarantee that. The execution directory
-    !!  can: no two live runs share one, every rank can recompute it locally (the
-    !!  distributed workers cd into the master's directory before they start, see
-    !!  simple_qsys_ctrl), and unlike a PID it survives a restart, so a rerun in the
-    !!  same directory finds -- and can adopt or rebuild -- what a killed predecessor
-    !!  left behind instead of orphaning it.
+    !>  Per-run token in the cache basename: a hash of the execution directory, so concurrent runs sharing cache_dir
+    !!  stay apart. Every rank recomputes it (workers cd into the master's directory, simple_qsys_ctrl), and unlike a
+    !!  PID it survives a restart: a rerun in the same directory adopts or rebuilds what a killed run left.
     function cache_run_token( ) result( tok )
         type(string) :: tok
         integer(kind=8) :: h1, h2
@@ -138,19 +73,9 @@ contains
         tok = string(int2str(int(h1))//'-'//int2str(int(h2)))
     end function cache_run_token
 
-    !>  Cache files for this run. The run token keeps concurrent runs writing to a
-    !!  shared cache_dir apart; the project name is kept in the basename for the
-    !!  human reading a directory listing, and box_crop so a run with a different
-    !!  crop cannot pick up a stale cache. A leftover with the same name -- same
-    !!  directory recreated after deletion, or a killed run -- is not an error:
-    !!  ptcl_cache_ensure validates it against the key (which records the execution
-    !!  directory verbatim, so even a token collision cannot validate) and either
-    !!  adopts or rebuilds in place.
-    !!
-    !!  tmp=.true. returns the name used while the cache is being written. The tag goes
-    !!  before the extension, never after: image format is inferred from the extension
-    !!  (fname2format), so a name ending in the tag would be rejected as an unsupported
-    !!  format the moment anything tried to read its header.
+    !>  Cache file name from projname (for listings), box_crop (no stale crop) and the run token; a same-name leftover
+    !!  is validated against the key by ptcl_cache_ensure, then adopted or rebuilt. tmp=.true. gives the name used while
+    !!  writing, tagged before the extension because fname2format infers the image format from the extension.
     function cache_fname( params, ext, tmp ) result( fname )
         class(parameters), intent(in) :: params
         character(len=*),  intent(in) :: ext
@@ -259,10 +184,8 @@ contains
         read_cache_index = .true.
     end function read_cache_index
 
-    !>  Number of records in the cache, which is the global particle count: entries are
-    !!  indexed by global iptcl so that a distributed worker holding only [fromp,top]
-    !!  addresses the same file as the master that wrote it. params%nptcls is not used
-    !!  here because it is not guaranteed to carry the same meaning in both roles.
+    !>  Global particle count, the length of the particle -> record map: global iptcl indexing lets a worker holding
+    !!  [fromp,top] address the master's file. params%nptcls is not guaranteed to mean the same in both roles.
     integer function cache_nptcls( build )
         class(builder), intent(inout) :: build
         cache_nptcls = build%spproj_field%get_noris()
@@ -293,11 +216,9 @@ contains
         h2 = mod(h2 * HASH_A2 + int(val, 8), HASH_M2)
     end subroutine fold_int
 
-    !>  Geometry the cached pixels depend on, all of it already in memory. Cheap enough
-    !!  for every rank to recompute on every probe. The execution directory is recorded
-    !!  verbatim so that a cache left by a different run whose directory happens to hash
-    !!  to the same token can never validate; all ranks share the directory (workers cd
-    !!  into it), so the line compares equal within a run.
+    !>  Geometry line of the key, from memory, cheap for every rank on every probe. The execution directory is
+    !!  recorded verbatim, so a run whose directory hashes to the same token never validates; all ranks run in
+    !!  that directory, so the line compares equal within a run.
     function cache_key_geom( params, build ) result( key )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -319,24 +240,9 @@ contains
             &' nstks='//int2str(build%spproj%os_stk%get_noris()))
     end function cache_key_geom
 
-    !>  Fingerprint of the particle sources themselves.
-    !!
-    !!  Every stack is folded in project order together with its particle range and its
-    !!  physical size and modification time: a name-only or endpoints-only key would miss
-    !!  a stack replaced in place or a changed stack in the middle, either of which would
-    !!  serve stale pixels. Size and mtime make the check conservative -- a touched file
-    !!  forces a rebuild -- which is the right way to be wrong.
-    !!
-    !!  The particle -> image mapping is folded as well: the image a particle reads is
-    !!  determined by its stkind and its explicit indstk when present (see
-    !!  map_ptcl_ind2stk_ind), with the range-derived fallback covered by the per-stack
-    !!  fromp/top already in the hash. Without this, a project reordered or remapped
-    !!  over unchanged stacks -- e.g. adopting a SIGKILL orphan after such an edit --
-    !!  would silently associate particles with the wrong images.
-    !!
-    !!  This costs one stat per stack plus O(nptcls) integer folds, so only the rank
-    !!  that decides whether to rebuild pays it, once per build decision. See
-    !!  cache_key_matches and the ownership fast path in ptcl_cache_ensure.
+    !>  Source fingerprint: each stack (name, range, nptcls_stk, size, mtime) plus every particle's stkind/indstk,
+    !!  so a stack replaced in place or a remapped project cannot validate a stale cache. One stat per
+    !!  stack + O(nptcls) folds; only the rank that decides whether to rebuild computes it.
     function cache_key_stkfp( build ) result( key )
         class(builder), intent(inout) :: build
         type(string) :: key, stkname
@@ -376,15 +282,9 @@ contains
         key = string('stkfp='//int2str(int(h1))//'-'//int2str(int(h2)))
     end function cache_key_stkfp
 
-    !>  Compare the key file against this run. The key has two lines: geometry, then the
-    !!  source fingerprint.
-    !!
-    !!  full=.true. recomputes both and is used only by ptcl_cache_ensure, which is the
-    !!  rank that decides whether to rebuild. Consumers pass full=.false. and take the
-    !!  fingerprint line on trust, because recomputing it would mean every worker
-    !!  process stat-ing every stack -- a metadata burst on a parallel filesystem, and
-    !!  redundant besides, since the builder validated the same sources moments earlier
-    !!  and rewrites the key whenever they change.
+    !>  Compares the key file (geometry line, then source fingerprint) with this run. full=.true. (ptcl_cache_ensure,
+    !!  the deciding rank) recomputes both; consumers trust the fingerprint, since recomputing it has every worker stat
+    !!  every stack, and ptcl_cache_ensure validated the sources moments earlier and rebuilds when they change.
     logical function cache_key_matches( params, build, full )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -440,22 +340,15 @@ contains
         call key_fp%kill
     end subroutine write_cache_key
 
-    !>  Entries are derived from the raw particle stacks, so a workflow whose primary
-    !!  particle source is the denoised stack (ptcl_src=den) must not be served from
-    !!  the cache: the pixels would simply be the wrong ones. A denoised *objective*
-    !!  (objfun_den=yes) is different: its images are read separately after the raw
-    !!  primary batch (see build_batch_particles3D), so the raw alignment read may
-    !!  still come from the cache. Checked wherever cache state is decided, so even
-    !!  a mis-plumbed worker command line cannot read wrong data.
+    !>  Entries derive from the raw stacks, so a denoised primary source (ptcl_src=den) is refused. Checked
+    !!  wherever cache state is decided, so a mis-plumbed worker command line cannot read wrong data.
     logical function primary_src_is_den( params )
         class(parameters), intent(in) :: params
         primary_src_is_den = params%l_ptcl_src_den
     end function primary_src_is_den
 
-    !>  The stack fingerprint walks os_stk, so only workflows whose images come from
-    !!  the imported particle stacks can be cached. cls3D "particles" are class
-    !!  averages living in os_out; a replaced cavg stack would evade staleness
-    !!  detection, so those workflows are refused rather than served wrong pixels.
+    !>  The stack fingerprint walks os_stk, so only particle oritypes are cacheable: cls3D "particles"
+    !!  are class averages in os_out, where a replaced cavg stack would evade staleness detection.
     logical function oritype_cacheable( params )
         class(parameters), intent(in) :: params
         oritype_cacheable = trim(params%oritype) == 'ptcl2D' .or. trim(params%oritype) == 'ptcl3D'
@@ -483,14 +376,9 @@ contains
         ptcl_cache_in_use = l_available
     end function ptcl_cache_in_use
 
-    !>  Refuse to run uncached when the user asked for the cache.
-    !!
-    !!  Restoring class averages from cropped particles is deliberately not the same
-    !!  preprocessing as restoring from full-size ones -- the edge taper and the gridding
-    !!  source grid live at box_crop. If some ranks found the cache and others silently
-    !!  fell back, their partial sums would be assembled into the same class averages
-    !!  from two different preprocessing paths. That is very easy to hit with a
-    !!  node-local cache_dir, so availability is mandatory and uniform, not best-effort.
+    !>  Refuses to run uncached when cache=yes. Cropped restoration preprocesses differently (taper and gridding grid
+    !!  at box_crop), so ranks mixing cache and fallback would sum two paths into one class average; a node-local
+    !!  cache_dir makes that easy, so availability is mandatory and uniform.
     subroutine ptcl_cache_assert_ready( params, build )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -516,14 +404,9 @@ contains
         if( allocated(cache_ind) ) deallocate(cache_ind)
     end subroutine ptcl_cache_reset
 
-    !>  Take ownership of the on-disk cache files: resolve their names now and arm the
-    !!  exit-time cleanup hook. Called by ptcl_cache_ensure only, i.e. by the process
-    !!  that builds or adopts the cache, before the first byte is written, so that an
-    !!  exception mid-build also sweeps the temporaries.
-    !!
-    !!  If a staged workflow changes box_crop, the names change under one process.
-    !!  The previous stage's cache is dead weight the moment a new one is owned, so
-    !!  it is deleted at the handoff rather than left to accumulate until exit.
+    !>  Takes ownership of the cache files (ptcl_cache_ensure only, before the first byte is written): resolves their
+    !!  names and arms the exit cleanup hook, so an exception mid-build sweeps the temporaries too. When a staged
+    !!  workflow changes box_crop, the previous stage's owned files are deleted at the handoff.
     subroutine ptcl_cache_own( params )
         class(parameters), intent(in) :: params
         type(string) :: newkey
@@ -556,26 +439,17 @@ contains
         end do
     end subroutine delete_owned_files
 
-    !>  Delete the owned cache files; a no-op in every process that never took
-    !!  ownership. Runs on normal exit (called from the exec programs) and on hard
-    !!  exception (via cache_cleanup_glob in simple_exception). The hook is disarmed
-    !!  first so a throw during deletion cannot re-enter, and the key file goes first
-    !!  so a partially-completed cleanup can never leave a cache that still validates.
-    !!
-    !!  The memoized probe/index state goes with the files: in a staged in-memory run
-    !!  the same process consumes the next stage's cache, and a stale l_available or
-    !!  cache_ind from this one would have it read a deleted file.
+    !>  Deletes the owned files (none unless owner) and resets the probe/index state, which the next stage of a staged
+    !!  run would otherwise read stale. Runs via cache_cleanup_glob on exit (simple_exec, single_exec) and on hard
+    !!  exceptions (simple_error); the hook is disarmed first so a throw during deletion cannot re-enter.
     subroutine ptcl_cache_cleanup
         nullify(cache_cleanup_glob)
         call ptcl_cache_reset
         call delete_owned_files
     end subroutine ptcl_cache_cleanup
 
-    !>  Uniform fallback to uncached execution, decided master-side before any worker
-    !!  is scheduled. Flipping cache=no on the command line matters as much as on
-    !!  params: worker command lines are generated from the cline, and cache
-    !!  availability must be uniform across ranks -- ptcl_cache_assert_ready explains
-    !!  why mixed modes are forbidden.
+    !>  Uniform fallback to uncached execution, decided master-side before workers are scheduled. cache=no goes on the
+    !!  cline too, as worker command lines are generated from it (ptcl_cache_assert_ready: why modes must not mix).
     subroutine disable_cache( params, cline )
         class(parameters), intent(inout) :: params
         class(cmdline),    intent(inout) :: cline
@@ -584,16 +458,8 @@ contains
         call cline%set('cache', 'no')
     end subroutine disable_cache
 
-    !>  Build the cache if it is missing or stale. Single sequential pass over the
-    !!  particles in index order, which is also the only wholly sequential read of
-    !!  the originals the pipeline ever performs. Master-side, call before workers;
-    !!  cline is the command line the worker jobs will be generated from, so that a
-    !!  fallback decision here reaches every rank.
-    !!
-    !!  This is also where cache ownership is taken: whichever process builds the
-    !!  cache -- or adopts a valid one left in place, e.g. by a killed predecessor in
-    !!  the same execution directory -- arms the exit-time cleanup that removes the
-    !!  files on normal termination or hard exception.
+    !>  Master-side, before workers: build if missing/stale or adopt a valid leftover (the builder/adopter
+    !!  owns the files); any fallback sets cache=no on cline so all ranks agree.
     subroutine ptcl_cache_ensure( params, build, cline )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
@@ -611,14 +477,11 @@ contains
         if( params%box_crop >= params%box )then
             write(logfhandle,'(A)') '>>> PARTICLE CACHE: box_crop == box, nothing to gain, running without cache'
             call disable_cache(params, cline)
-            ! in a staged workflow a previous stage's cache may still be owned; it is
-            ! unusable from here on (crops only grow), so release it now
+            ! release any cache still owned from an earlier stage of a staged workflow
             call ptcl_cache_cleanup
             return
         endif
         if( primary_src_is_den(params) )then
-            ! ptcl_src is staged, so a denoised stage may follow a cached one;
-            ! release the previous stage's cache -- crops only grow, it is dead
             write(logfhandle,'(A)') '>>> PARTICLE CACHE: denoised particle source in use, running without cache'
             call disable_cache(params, cline)
             call ptcl_cache_cleanup
@@ -631,13 +494,8 @@ contains
             call ptcl_cache_cleanup
             return
         endif
-        ! Fast path for the per-iteration prob_align calls: this process already owns
-        ! exactly this cache -- it built or adopted it earlier in the run, and per-run
-        ! naming means no other process may touch it -- so the full revalidation
-        ! (source stat sweep, index reload, active-particle scan) is skipped and the
-        ! memoized probe state stays valid. A particle activated mid-run past this
-        ! point fails loudly at read time (ptcl_cache_read_batch) rather than being
-        ! served wrong data; one stat guards against out-of-band file deletion.
+        ! Fast path for per-iteration prob_align2D calls: this process already owns this exact cache, so skip
+        ! full revalidation (late activations fail in ptcl_cache_read_batch); the key stat catches deletion.
         if( l_owner )then
             keyfile = cache_keyname(params)
             if( (owned_files(1) .eq. keyfile) .and. file_exists(keyfile) )then
@@ -647,10 +505,7 @@ contains
             call keyfile%kill
         endif
         call ptcl_cache_reset
-        ! This is the rank that decides whether to rebuild, so it is the one that pays
-        ! for the full source fingerprint. Consumers check only the geometry line and
-        ! inherit this verdict, which keeps the per-stack stat sweep to once per
-        ! cluster2D invocation instead of once per worker process per iteration.
+        ! the deciding rank pays for the full source fingerprint; consumers check only the geometry line
         stkname = cache_stkname(params)
         if( file_exists(stkname) )then
             if( cache_key_matches(params, build, full=.true.) )then
@@ -676,21 +531,15 @@ contains
         idxname = cache_idxname(params)
         tmpstk  = cache_fname(params, STK_EXT,          tmp=.true.)
         tmpidx  = cache_fname(params, '_idx'//BIN_EXT,  tmp=.true.)
-        ! Invalidate first: the key is the commit record, so from here until it is
-        ! rewritten no reader can accept whatever state the cache files are in. A
-        ! stale stack and index go now rather than being overwritten by the publish
-        ! renames: without the key they are unreachable anyway, and freeing them
-        ! first lets the free-space budget below measure what the rebuild can
-        ! actually use.
+        ! Invalidate first: the key is the commit record. Freeing the stale stack/index now also lets the
+        ! free-space budget below measure what the rebuild can use.
         call del_file(keyfile)
         call del_file(idxname)
         call del_file(stkname)
         call del_file(tmpstk)
         call del_file(tmpidx)
         nptcls = cache_nptcls(build)
-        ! Only active particles are cached: a deselected one is never sampled, so
-        ! caching it would cost a full-size read now and box_crop^2*4 bytes forever.
-        ! cache_ind carries the resulting particle -> record mapping.
+        ! only active particles are cached (a deselected one is never sampled)
         if( allocated(cache_ind) ) deallocate(cache_ind)
         allocate(cache_ind(nptcls), source=0)
         nsel = 0
@@ -712,13 +561,8 @@ contains
             call tmpidx%kill
             return
         endif
-        ! The cache may claim at most a quarter of the free space at its destination,
-        ! so a large dataset cannot starve whatever else lives there. The predicted
-        ! size is exact: nsel records of box_crop^2 reals, the stack header, and the
-        ! index file. Over budget, the whole run falls back to uncached execution --
-        ! uniformly, via disable_cache, before any worker command line is generated.
-        ! An unknown free space (fs_avail_bytes < 0, unsupported filesystem) is
-        ! treated as no verdict rather than as zero.
+        ! At most 1/FREE_SPACE_DENOM of the destination's free space; over budget the whole run falls back
+        ! uniformly. An unknown free space (fs_avail_bytes < 0) is no verdict, not zero.
         want_bytes = int(nsel,8) * int(params%box_crop,8)**2 * 4_8 &
             &+ 1024_8 + 4_8 * int(nptcls + 1, 8)
         dirname = cache_dir(params)
@@ -751,10 +595,8 @@ contains
             if( cache_ind(iptcl) > 0 ) pinds(cache_ind(iptcl)) = iptcl
         end do
         nbatches = ceiling(real(nsel) / real(batchsz))
-        ! The full-box noise-normalization mask. The refine3D distributed master
-        ! builds only the project, not the general toolbox, so build%lmsk need not
-        ! exist in the process that builds the cache; construct the identical disc
-        ! mask locally in that case (same recipe as build_general_tbox).
+        ! Full-box noise mask. Every current caller builds the general toolbox (build%lmsk); the
+        ! disc fallback (same recipe as build_general_tbox) is defensive only.
         if( allocated(build%lmsk) )then
             lmsk = build%lmsk
         else
@@ -837,17 +679,8 @@ contains
             endif
         end do
         stkname = cache_stkname(params)
-        ! One handle, read serially.
-        !
-        ! The whole cache is a single file, and Fortran allows a file to be connected to
-        ! at most one unit at a time, so the several-readers-over-one-file arrangement
-        ! used for particle stacks is not available here -- a second open of the same
-        ! path fails. Nor would it buy anything: libgfortran serializes access per unit,
-        ! so threads sharing one connection queue up regardless.
-        !
-        ! This is much less costly than it sounds. Records are box_crop-sized and pinds
-        ! arrive sorted, so this is a forward scan over a file an order of magnitude
-        ! smaller than the originals it replaces.
+        ! One handle, read serially: Fortran connects a file to at most one unit, and with small records
+        ! and sorted pinds this is a forward scan of a file far smaller than the originals.
         call dstkio%new(params%smpd_crop, params%box_crop)
         call dstkio%cache_stack_info(stkname, &
             &[params%box_crop, params%box_crop, 1], cache_nrecs)
