@@ -212,7 +212,7 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         &.true.,&
         &visibility=UI_VIS_STANDARD, display_name='Conformational State Refinement')
         call refine3D_states%add_input(UI_SRCH, maxits, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
-        call refine3D_states%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_states%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_STANDARD)
         call refine3D_states%add_input(UI_SRCH, 'flex', 'binary', 'Initialize states with flex PCA', &
         &'Run flex_pca to derive the initial particle states and state volumes; the default for state=0/1 input, &
         &skipped automatically when the project already carries multi-state labels; flex=no selects stochastic &

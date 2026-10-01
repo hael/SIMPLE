@@ -941,7 +941,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('action="/viewbatch/7"', class_average_rendered)
         self.assertNotIn("class_selector", class_average_rendered)
 
-    def test_active_abinitio3d_batch_card_opens_volume_output(self):
+    def test_active_3d_batch_cards_open_volume_output(self):
         job = {
             "id": 7,
             "disp": 9,
@@ -961,6 +961,16 @@ class TemplateIntegrationTests(SimpleTestCase):
 
         self.assertIn('action="/viewbatch/7"', rendered)
         self.assertIn('name="volume_viewer" value="1"', rendered)
+
+        job["prog"] = "refine3D_states"
+        job["status"] = "running"
+        states_rendered = render_to_string(
+            "nice_batch/includes/_batch_card.html",
+            {"job": job},
+        )
+        self.assertIn('name="volume_viewer" value="1"', states_rendered)
+        states_table = render_to_string("jobs_table.html", {"jobs": [job]})
+        self.assertIn('/viewbatch/7?volume_viewer=1', states_table)
 
         job["prog"] = "abinitio2D"
         other_output = render_to_string(

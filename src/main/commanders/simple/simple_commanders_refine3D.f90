@@ -6,7 +6,7 @@ use simple_refine3D_fnames,                        only: refine3D_state_vol_fnam
 use simple_refine3D_stage_plan,                    only: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 use simple_gui_communicator,                       only: gui_communicator
-use simple_abinitio_utils,                         only: gen_ortho_reprojs4viz
+use simple_abinitio_utils,                         only: gen_ortho_reprojs4viz, write_abinitio_lowpass_snapshot
 implicit none
 #include "simple_local_flags.inc"
 
@@ -245,7 +245,6 @@ contains
         call spproj%read_segment('cls3D',  params%projfile)
         call spproj%read_segment('ptcl3D', params%projfile)
         call spproj%read_segment('out',    params%projfile)
-        call gen_ortho_reprojs4viz(params, spproj)
         call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true.)
         call spproj%kill
         call init_vol%kill
@@ -617,6 +616,7 @@ contains
         type(cmdline)             :: cline_rec3D
         type(parameters)          :: params
         type(sp_project)          :: spproj
+        type(gui_communicator)    :: gui_comm
         type(lp_crop_inf)         :: lpinfo_multi(2)
         type(string), allocatable :: init_vols(:)
         type(string)              :: multivol_mode, flex_arg, pose_policy_arg
@@ -638,11 +638,11 @@ contains
         real,    parameter :: MIN_STATE_FRAC_FLEX     = 0.1
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_STATES'
         integer :: nstates_project, nptcls_eff, nsample_target, nptcls_per_iter, local_nspace_sub
-        integer :: maxits_user, stage_cap, init_niters, stage2_niters, total_iter
+        integer :: maxits_user, stage_cap, init_niters, stage2_niters, total_iter, gui_stage
         integer :: maxits_glob_multi, init_stage_cap, init_stage_minits, init_sweep_iters, min_maxits_required
         real    :: update_frac_auto, state_overlap, local_ang_bound, local_inpl_bound, local_shift_bound
         logical :: l_maxits_defined, l_init_state_assignment, l_nstates_on_cline, l_flex_requested, l_nsample_auto
-        logical :: l_has_project_multistates, l_run_init_stage, l_run_prob_neigh_stage
+        logical :: l_has_project_multistates, l_run_init_stage, l_run_prob_neigh_stage, l_gui_comm_active
         ! commanders
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
@@ -653,6 +653,7 @@ contains
         init_stage_cap    = INIT_MAXITS_REFINE3D_STATES
         init_stage_minits = 1
         init_sweep_iters  = 1
+        gui_stage         = 0
         l_init_state_assignment   = .false.
         l_has_project_multistates = .false.
         l_run_init_stage          = .false.
@@ -777,6 +778,8 @@ contains
             endif
         endif
         call params%new(cline)
+        l_gui_comm_active = params%niceserver .ne. "" .and. params%niceprocid > 0
+        if( l_gui_comm_active ) call gui_comm%new(params)
         write(logfhandle,'(A,A)') '>>> '//WORKFLOW_LABEL//' POSE_POLICY: ', trim(params%pose_policy)
         call validate_refine3D_states_mode()
         call validate_refine3D_states_combine_eo()
@@ -827,10 +830,12 @@ contains
         ! project registration, final products and reprojections
         call calc_final_rec(params, spproj, params%projfile, cline, xrec3D, xbootstrap_rec3D, &
             &l_postprocess=.true., lp_snapshot=params%lpstop)
+        call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true.)
         call spproj%kill
         call cleanup_init_vols()
         call pose_policy_arg%kill
         call multivol_mode%kill
+        call gui_comm%kill()
         call simple_end('**** SIMPLE_REFINE3D_STATES NORMAL STOP ****')
 
     contains
@@ -1354,7 +1359,10 @@ contains
             integer,          intent(out) :: niters
             integer,          intent(in)  :: max_stage_iters
             real,             intent(in)  :: stage_overlap_target
-            integer :: stage_start, stage_limit
+            type(sp_project) :: gui_proj
+            type(string)     :: gui_stage_suffix, gui_vol, gui_stage_vol, gui_stage_lp
+            integer :: stage_start, stage_limit, gui_box, state
+            real    :: gui_smpd, gui_lp
             niters        = 0
             state_overlap = 0.
             stage_limit   = max_stage_iters
@@ -1389,6 +1397,32 @@ contains
             if( niters >= stage_limit .and. state_overlap < stage_overlap_target )then
                 write(logfhandle,'(A,I0,A,F7.4)') '>>> '//WORKFLOW_LABEL//' STAGE ', stage, &
                     &' REACHED STAGE CAP BEFORE STATE_OVERLAP TARGET: ', state_overlap
+            endif
+            if( l_gui_comm_active )then
+                ! Freeze the current stage map before the next block overwrites
+                ! recvol_stateNN.mrc, then publish matching project metadata.
+                gui_stage = gui_stage + 1
+                gui_box   = params%box
+                gui_smpd  = params%smpd
+                gui_lp    = cline%get_rarg('lp')
+                if( cline%defined('box_crop')  ) gui_box  = cline%get_iarg('box_crop')
+                if( cline%defined('smpd_crop') ) gui_smpd = cline%get_rarg('smpd_crop')
+                gui_stage_suffix = '_stage'//int2str_pad(gui_stage,2)
+                do state = 1,params%nstates
+                    gui_vol       = refine3D_state_vol_fname(state)
+                    if( .not. file_exists(gui_vol) ) cycle
+                    gui_stage_vol = add2fbody(gui_vol, string(MRC_EXT), gui_stage_suffix)
+                    gui_stage_lp  = add2fbody(gui_stage_vol, MRC_EXT, LP_SUFFIX)
+                    call write_abinitio_lowpass_snapshot(gui_vol, gui_lp, gui_stage_lp, gui_smpd, box=gui_box)
+                enddo
+                call gui_proj%read(params%projfile)
+                call gen_ortho_reprojs4viz(params, gui_proj)
+                call gui_comm%add_metadata(gui_proj, oritype='cls3D', stage=gui_stage)
+                call gui_proj%kill
+                call gui_stage_suffix%kill
+                call gui_vol%kill
+                call gui_stage_vol%kill
+                call gui_stage_lp%kill
             endif
         end subroutine run_refine3D_states_stage
 

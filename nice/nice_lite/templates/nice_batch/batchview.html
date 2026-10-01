@@ -12,7 +12,8 @@
     - 2D classes panel (only when "cls2D" is in jobstats) is a selectable
       tile grid of class averages, shared with the stream classification2D
       views.
-    - 3D volume panel is an opt-in Mol* viewer for finished abinitio3D jobs.
+    - 3D volume panel is an opt-in Mol* viewer for supported 3D workflows,
+      including immutable stage snapshots published by running jobs.
     - Job details footer.
 
   Context variables:
@@ -28,7 +29,7 @@
     error   — optional error text for the logs panel (stderr.log tail)
     arguments — list of {key, label, value, origin, submitted} for the arguments panel
     submitted_argument_count — count of user-submitted arguments
-    volume_outputs — browser-safe metadata for owned abinitio3D result volumes
+    volume_outputs — browser-safe metadata for owned 3D result volumes
 {% endcomment %}
 {% load static %}
 <!DOCTYPE html>

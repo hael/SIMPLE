@@ -543,7 +543,7 @@ def view_batch_manual_picker(request, jobid):
 @require_GET
 @cache_control(private=True, max_age=300, no_transform=True)
 def view_batch_volume_data(request, jobid, volume_name):
-    """Stream one owned ab initio 3D MRC output for Mol*."""
+    """Stream one declared, owned 3D MRC output for Mol*."""
     batch_job, jobmodel = _get_accessible_batch_job(
         request,
         "view_batch_volume_data",
@@ -551,7 +551,7 @@ def view_batch_volume_data(request, jobid, volume_name):
     )
     if (
         batch_job is None
-        or jobmodel.status != "finished"
+        or jobmodel.status == "queued"
         or jobmodel.prog not in BatchJob.VOLUME_VIEWER_PROGRAMS
     ):
         return HttpResponse(status=404)

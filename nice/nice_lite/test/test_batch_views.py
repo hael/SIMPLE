@@ -290,7 +290,7 @@ class BatchViewTests(SimpleTestCase):
                 with patch.object(batch_views, "SIMPLEBatch", return_value=launcher):
                     self.assertEqual(batch_views._argument_rows(jobmodel), [])
 
-    def test_active_batch_volume_viewer_is_explicit_and_abinitio3d_only(self):
+    def test_active_batch_volume_viewer_is_explicit_and_program_gated(self):
         jobmodel = SimpleNamespace(
             id=7,
             disp=9,
@@ -334,6 +334,13 @@ class BatchViewTests(SimpleTestCase):
                 jobmodel,
                 volume_viewer_requested=True,
             )
+            jobmodel.prog = "refine3D_states"
+            jobmodel.status = "running"
+            running_states_context = batch_views._batch_overview_context(
+                batch_job,
+                jobmodel,
+                volume_viewer_requested=True,
+            )
             jobmodel.prog = "abinitio2D"
             wrong_program_context = batch_views._batch_overview_context(
                 batch_job,
@@ -349,6 +356,11 @@ class BatchViewTests(SimpleTestCase):
             "recvol_state01.mrc",
         )
         self.assertNotIn("path", open_context["volume_outputs"][0])
+        self.assertTrue(running_states_context["volume_viewer_requested"])
+        self.assertEqual(
+            running_states_context["volume_outputs"][0]["name"],
+            "recvol_state01.mrc",
+        )
         self.assertFalse(wrong_program_context["volume_viewer_requested"])
         self.assertEqual(wrong_program_context["volume_outputs"], [])
 
@@ -396,6 +408,52 @@ class BatchViewTests(SimpleTestCase):
         )
         self.assertEqual(b"".join(response.streaming_content), volume_bytes)
         response.close()
+
+    def test_batch_volume_data_streams_running_refine3d_states_stage(self):
+        temporary_job_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_job_dir.cleanup)
+        volume_path = os.path.join(
+            temporary_job_dir.name,
+            "recvol_state01_stage01_lp.mrc",
+        )
+        volume_bytes = b"running stage MRC volume bytes"
+        with open(volume_path, "wb") as volume_file:
+            volume_file.write(volume_bytes)
+
+        jobmodel = SimpleNamespace(
+            status="running",
+            prog="refine3D_states",
+            master_stats={"project_metadata": {"cls3D": {"stage1": []}}},
+        )
+        batch_job = Mock()
+        batch_job.get_volume_outputs.return_value = []
+        batch_job.get_stage_volume_outputs.return_value = [{
+            "name": "recvol_state01_stage01_lp.mrc",
+            "path": volume_path,
+        }]
+
+        with patch.object(
+            batch_views,
+            "_get_accessible_batch_job",
+            return_value=(batch_job, jobmodel),
+        ):
+            response = batch_views.view_batch_volume_data(
+                self._get_request("/batchvolume/7/recvol_state01_stage01_lp.mrc"),
+                7,
+                "recvol_state01_stage01_lp.mrc",
+            )
+            jobmodel.status = "queued"
+            queued_response = batch_views.view_batch_volume_data(
+                self._get_request("/batchvolume/7/recvol_state01_stage01_lp.mrc"),
+                7,
+                "recvol_state01_stage01_lp.mrc",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), volume_bytes)
+        response.close()
+
+        self.assertEqual(queued_response.status_code, 404)
 
     def test_batch_volume_data_rejects_an_undeclared_filename(self):
         jobmodel = SimpleNamespace(

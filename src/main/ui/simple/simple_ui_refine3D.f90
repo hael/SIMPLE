@@ -26,7 +26,7 @@ contains
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &visibility=UI_VIS_STANDARD, display_name='Refine 3D Structure')
+        &visibility=UI_VIS_ADVANCED, display_name='Refine 3D Structure')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%add_input(UI_IMG, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
