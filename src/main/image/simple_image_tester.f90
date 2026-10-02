@@ -43,6 +43,7 @@ contains
         call test_apply_filter()
         call test_power_spectrum()
         call test_shifts()
+        call test_flip()
         call test_acf()
         call test_rotations_and_roavg()
         call test_masscen()
@@ -317,6 +318,46 @@ contains
         call a%kill
         call b%kill
     end subroutine test_acf
+
+    ! Exact array sections are the oracle; copying integer-valued pixels needs no tolerance.
+    subroutine test_flip()
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+        integer, parameter :: NDIMS = 5
+        integer, parameter :: DIMS(3,NDIMS) = reshape([6,4,1, 4,6,1, 2,2,1, 2,6,1, 6,2,1], [3,NDIMS])
+        character(len=2), parameter :: MODES(8) = ['X ', 'Y ', 'XY', 'YX', 'x ', 'y ', 'xy', 'yx']
+        type(image) :: img
+        real, allocatable :: original(:,:,:), expected(:,:,:)
+        character(len=:), allocatable :: tag
+        integer :: id, imode, i, nx, ny
+        !$ integer :: nthr_saved
+        write(*,'(A)') 'test_flip'
+        !$ nthr_saved = omp_get_max_threads()
+        !$ call omp_set_num_threads(1)
+        do id = 1,NDIMS
+            nx = DIMS(1,id)
+            ny = DIMS(2,id)
+            original = reshape([(real(i), i=1,nx*ny)], [nx,ny,1])
+            call img%new(DIMS(:,id), SMPD, wthreads=.false.)
+            do imode = 1,size(MODES)
+                tag = int2str(nx)//'x'//int2str(ny)//' flip '//trim(MODES(imode))
+                select case(MODES(imode))
+                case('X','x')
+                    expected = original(nx:1:-1,:,:)
+                case('Y','y')
+                    expected = original(:,ny:1:-1,:)
+                case('XY','YX','xy','yx')
+                    expected = original(nx:1:-1,ny:1:-1,:)
+                end select
+                call img%set_rmat(original, .false.)
+                call img%flip(MODES(imode))
+                call assert_true(all(img%get_rmat() == expected), tag//': every pixel matches exact reversal')
+                call img%flip(MODES(imode))
+                call assert_true(all(img%get_rmat() == original), tag//': two flips restore every pixel')
+            end do
+            call img%kill()
+        end do
+        !$ call omp_set_num_threads(nthr_saved)
+    end subroutine test_flip
 
     !---------------- rotations, rotational average ----------------
 
