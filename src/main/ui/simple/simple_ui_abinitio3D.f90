@@ -180,7 +180,12 @@ contains
         &.true., visibility=UI_VIS_ADVANCED, display_name='Extend Initial 3D Model')           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call abinitio3D_addon%add_input(UI_IMG, 'projfile_frozen', 'file', 'Frozen solution project', &
+        call abinitio3D_addon%add_input(UI_FILE, projfile, &
+        &label_override       = 'Superset project', &
+        &help_override        = 'SIMPLE project file whose particles are a superset of the frozen set in projfile_frozen; '//&
+        &'the particles it adds are searched and, when the run completes, it is replaced by the run''s project', &
+        &required_override    = .true., visibility=UI_VIS_STANDARD)
+        call abinitio3D_addon%add_input(UI_FILE, 'projfile_frozen', 'file', 'Frozen solution project', &
         &'Project of a completed abinitio3D run (its run directory copy) whose particles are frozen', &
         &'e.g. 1_abinitio3D/myproject.simple', .true., '')
         ! parameter input/output
