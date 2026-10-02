@@ -1,10 +1,11 @@
-!@descr: unit tests for the random draws of simple_rnd (shuffle, partial_shuffle, multinomal)
+!@descr: unit tests for simple_rnd integer draws, shuffles and multinomial sampling
 ! Full and partial Fisher-Yates shuffles keep every value and give a duplicate-free
 ! prefix; the multinomial draw reproduces its probabilities within four binomial
 ! standard deviations (1000 draws: 0.013 at p = 0.8, 0.009 at p = 0.1) and never draws
 ! an entry of probability zero. Every test starts from a fixed seed.
 module simple_rnd_tester
-use simple_rnd,        only: shuffle, partial_shuffle, multinomal
+use simple_defs,       only: dp
+use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal
 use simple_math,       only: hpsort
 use simple_test_utils
 implicit none
@@ -17,10 +18,55 @@ contains
 
     subroutine run_all_rnd_tests()
         write(*,'(A)') '**** running all random draw tests ****'
+        call test_irnd_uni()
         call test_shuffle()
         call test_partial_shuffle()
         call test_multinomal()
     end subroutine run_all_rnd_tests
+
+    !> Guard against single-precision rounding that makes valid indices unreachable for large NP.
+    !! Check bounds around 2**23 and 2**24, and huge(0), by comparing each sampled index with
+    !! the probability interval containing the same underlying double-precision random draw.
+    subroutine test_irnd_uni()
+        integer, parameter :: BOUNDS(7) = [2**23-1, 2**23, 2**23+1, 2**24-1, 2**24, 2**24+1, huge(0)]
+        integer, parameter :: NBOUND_DRAWS = 256
+        integer, allocatable :: seed(:)
+        integer :: nseed, ibound, idraw, np, which
+        real(dp) :: harvest, lower, upper
+        logical :: in_range, correct_bins
+        character(len=128) :: msg
+        write(*,'(A)') 'test_irnd_uni'
+        call set_fixed_seed(20261002)
+        call assert_int(1, irnd_uni(1), 'a singleton integer range returns one')
+        call random_seed(size=nseed)
+        allocate(seed(nseed))
+        do ibound = 1,size(BOUNDS)
+            np = BOUNDS(ibound)
+            in_range = .true.
+            correct_bins = .true.
+            do idraw = 1,NBOUND_DRAWS
+                call random_seed(get=seed)
+                which = irnd_uni(np)
+                ! Replay the same draw: index k must correspond to a value in [(k-1)/NP, k/NP).
+                ! This detects rounding errors without waiting to randomly hit a rare endpoint.
+                call random_seed(put=seed)
+                call random_number(harvest)
+                if( which < 1 .or. which > np )then
+                    in_range = .false.
+                    correct_bins = .false.
+                    cycle
+                endif
+                lower = real(which-1,dp) / real(np,dp)
+                upper = real(which,dp)   / real(np,dp)
+                if( harvest < lower .or. harvest >= upper ) correct_bins = .false.
+            enddo
+            write(msg,'(A,I0)') 'integer draws stay within [1, NP] for NP=', np
+            call assert_true(in_range, trim(msg))
+            write(msg,'(A,I0)') 'integer draws match equal-width probability bins for NP=', np
+            call assert_true(correct_bins, trim(msg))
+        enddo
+        deallocate(seed)
+    end subroutine test_irnd_uni
 
     !> a full shuffle is a permutation of its input, and it does permute
     subroutine test_shuffle()

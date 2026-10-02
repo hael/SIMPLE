@@ -372,17 +372,18 @@ contains
     function irnd_uni( NP ) result( irnd )
         integer, intent(in) :: NP
         integer             :: irnd
+        real(dp)            :: harvest
         irnd = 1
-        if( NP == 0 )then
-            write(logfhandle,*) 'Uniform random integer must be generated from a non-empty set!'
+        if( NP <= 0 )then
+            write(logfhandle,*) 'Uniform random integer requires a positive upper bound!'
             write(logfhandle,*) 'In: irnd_uni, module: simple_rnd'
             stop
         else if( NP == 1 )then
             irnd = 1
         else
-            irnd = ceiling(ran3()*real(NP))
-            irnd = max(1,irnd)
-            irnd = min(NP,irnd)
+            ! Draw and scale in double precision to retain coverage of large integer ranges.
+            call random_number(harvest)
+            irnd = min(NP, 1 + int(harvest * real(NP, dp)))
         endif
     end function irnd_uni
 
