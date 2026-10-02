@@ -669,6 +669,8 @@ def view_stream(request, jobid):
         "folder": streamjob.get_absdir(),
     }
     response = render(request, template, context)
+    response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
+    response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
     # Reset panel checksums when entering a stream shell so each iframe refreshes once.
     for cookie in request.COOKIES:
         if "checksum" in cookie:
