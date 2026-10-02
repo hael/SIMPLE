@@ -35,11 +35,27 @@ type(test_failure),      allocatable :: failures(:)
 
 contains
 
-    !> seed the intrinsic generator with a fixed state, seed(i) = base_seed + 104729 (i-1) wrapped into
-    !! [1, huge-1], so every run draws the same numbers (seed_rnd reads /dev/urandom unless SIMPLE_SEED
-    !! is set); simple_rnd%seed_rnd_fixed holds the formula and restarts the SIMPLE_SEED count
-    subroutine set_fixed_seed( base_seed )
-        integer, intent(in) :: base_seed
+    subroutine set_fixed_seed( base_seed, propagate )
+        use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
+        integer, intent(in)           :: base_seed
+        logical, intent(in), optional :: propagate
+        character(len=32)             :: seed_string
+        integer(c_int)                :: status
+        interface
+            function c_setenv( name, value, overwrite ) bind(C, name='setenv') result(ierr)
+                import :: c_char, c_int
+                character(kind=c_char), intent(in) :: name(*), value(*)
+                integer(c_int), intent(in), value   :: overwrite
+                integer(c_int)                      :: ierr
+            end function c_setenv
+        end interface
+        if( present(propagate) )then
+            if( propagate )then
+                write(seed_string,'(i0)') base_seed
+                status = c_setenv('SIMPLE_SEED'//c_null_char, trim(seed_string)//c_null_char, 1_c_int)
+                if( status /= 0_c_int ) error stop 'Could not set SIMPLE_SEED for the test process'
+            endif
+        endif
         call seed_rnd_fixed(base_seed)
     end subroutine set_fixed_seed
 

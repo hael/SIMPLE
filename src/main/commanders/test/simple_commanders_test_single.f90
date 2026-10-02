@@ -381,6 +381,7 @@ subroutine exec_test_single_workflow( self, cline )
     use simple_commanders_project_core, only: commander_new_project
     use single_commanders_nano3D,       only: commander_autorefine3D_nano, commander_refine3D_nano
     use simple_test_truth_metrics,      only: pair_pose_error
+    use simple_test_utils,              only: set_fixed_seed
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
     type(cmdline)                         :: cline_sim, cline_reproject, cline_trajectory, cline_denoise
@@ -428,7 +429,8 @@ subroutine exec_test_single_workflow( self, cline )
     ! 0.5 deg (declared before the first run)
     integer,          parameter           :: NCONT_ITERS = 2, NPAIRS = 20000, PAIR_SEED = 20261001
     real,             parameter           :: MAX_PAIR_LOSS = 0.5
-    integer,          parameter           :: NREPROJS = 1000, MASKDIAM = 40, NREFINE_ITERS = 5
+    integer,          parameter           :: NREPROJS = 1000, MASKDIAM = 40, NREFINE_ITERS = 5, NTHR = 8
+    integer,          parameter           :: TEST_SEED = 20260923
     integer,          parameter           :: NFRAMES_PER_GROUP = 10
     integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
@@ -457,7 +459,10 @@ subroutine exec_test_single_workflow( self, cline )
         case default
             THROW_HARD('no sub-suite '//suite_name%to_char()//' in single_workflow; use suite=list')
     end select
+    call set_fixed_seed(TEST_SEED, propagate=.true.)
+    write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', TEST_SEED
     if( .not. cline%defined('smpd') ) call cline%set('smpd', 0.358)
+    call cline%set('nthr', NTHR)
     projname = 'test_single_workflow_'//suite_name%to_char()
     call params%new(cline)
     projfile = projname%to_char()//'.simple'

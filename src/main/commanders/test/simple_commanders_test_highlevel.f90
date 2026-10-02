@@ -837,6 +837,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: NMOVIES        = 10
     integer,          parameter :: EXTRACT_BOX    = 192
     integer,          parameter :: NTHR           = 4
+    integer,          parameter :: TEST_SEED      = 20260923
     real,             parameter :: MIN_VOL_CORR   = 0.80
     real,             parameter :: MAX_FSC0143    = 40.0
     real,             parameter :: DOCK_HP        = 100.0
@@ -904,6 +905,8 @@ subroutine exec_test_simulated_workflow( self, cline )
         case default
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
+    call set_fixed_seed(TEST_SEED, propagate=.true.)
+    write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', TEST_SEED
     test_workdir = 'test_simulated_workflow_'//system_name%to_char()
     call simple_getcwd(cwd_root)
     if( file_exists(test_workdir%to_char()) )then
