@@ -295,6 +295,13 @@ if(BUILD_TESTS)
   # independent workflow, not an extension of simulate_particles.
   simple_add_test(abinitio3D_addon highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=abinitio3D_addon nthr=8)
+  # continuous Cartesian pose refinement end to end (refine3D refine=cont under both
+  # objectives and distributed, refine3D_auto pose_cont=only from perturbed poses and as the
+  # continuation of a polar refine3D_auto) on simulated 1JYX particles, gated on the simulation
+  # truth. Its own entry by owner decision (contract C18 of the pose_cont refactoring,
+  # 2026-09-30): a refinement mode independent of the polar workflows the other entries run.
+  simple_add_test(cont_refine3D_1jxy highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=cont_refine3D_1jxy nthr=8)
   simple_add_test(single_atoms_stats highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
   # stream preprocessing: five simulated movies through the stream's
@@ -334,7 +341,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 30)   # 13 fast + 1 platform + 11 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 31)   # 13 fast + 1 platform + 12 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

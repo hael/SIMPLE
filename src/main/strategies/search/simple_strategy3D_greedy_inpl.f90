@@ -5,7 +5,7 @@ use simple_strategy3D_alloc, only: s3D
 use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
-use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_pftc,   only: strategy3D_pftc
 use simple_strategy3D_srch,  only: strategy3D_spec
 implicit none
 
@@ -13,7 +13,7 @@ public :: strategy3D_greedy_inpl
 private
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_greedy_inpl
+type, extends(strategy3D_pftc) :: strategy3D_greedy_inpl
 contains
     procedure :: new         => new_greedy_inpl
     procedure :: srch        => srch_greedy_inpl

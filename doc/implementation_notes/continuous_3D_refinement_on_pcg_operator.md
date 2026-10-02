@@ -542,7 +542,7 @@ accumulator-domain trailing chains of
 the realized fraction `f` and the applied weight `u` (`ufrac_trec`) already
 distinct and the chains persisted for `rec_backend=pcg` too. The volume block
 is the PCG solve of this note, from a cold base since the 2026-09-10 warm-start
-retirement. The pose block is `simple_cartesian_pose_refiner` (the stage-1 to
+retirement. The pose block is `simple_cartesian_pose_refiner` (since the pose_cont refactoring, 2026-10-01: `cartft_calc` and `cartft_pose_opt` in `src/main/cftc`) (the stage-1 to
 stage-3 numerics, validated, no caller), whose objective is the same whitened
 residual as section 3.1 -- so the joint objective in `(V, poses)` of section
 3.1 is the one all three blocks minimize. Stage 5 is therefore not "add SGD"

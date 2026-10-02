@@ -13,10 +13,6 @@ conservative defaults, prepares a starting reference when needed, runs base
 It is not a separate matcher implementation. Once startup material is ready,
 the refinement iterations are delegated to `commander_refine3D`.
 
-The related `refine3D_pose_cont` program reuses this lifecycle while making
-Cartesian pose refinement mandatory; its mode and lifecycle contract are in
-[refine3D_pose_cont_policy.md](refine3D_pose_cont_policy.md).
-
 ## 2. Defaults
 
 `refine3D_auto` sets hard workflow defaults:
@@ -24,7 +20,8 @@ Cartesian pose refinement mandatory; its mode and lifecycle contract are in
 - `balance=no`
 - `greedy_sampling=no`
 - `trail_rec=yes`
-- `refine=prob_neigh`
+- `refine=prob_neigh` (derived from `pose_cont`, section 7; `refine` itself is
+  rejected on the command line)
 - `ml_reg=yes`
 - `overlap=0.99`
 - `nstates=1`
@@ -223,3 +220,35 @@ resolution target.
 to [refine3D_states_policy.md](refine3D_states_policy.md), the in-development
 [classify3D_refs_policy.md](classify3D_refs_policy.md), base `refine3D`, or the ab
 initio workflows.
+
+## 7. Continuous Pose Refinement
+
+`pose_cont=no|yes|only` is the workflow's one switch for continuous Cartesian
+pose refinement (contract of the pose_cont refactoring,
+`doc/refactoring_notes/completed/pose_cont_refactoring.md`; the base mode is
+described in [refine3D_policy.md](refine3D_policy.md), "Continuous Cartesian
+pose policy"). `refine` is derived from it and rejected on the command line,
+as `refine3D_states` derives `multivol_mode` from `pose_policy`.
+
+- `no` (default): the discrete workflow above.
+- `yes`: every main-loop iteration is followed by a continuous pass over the
+  same particle sample (the polish); the registration pass, the pose
+  initialization and the bootstraps run without it. One reconstruction per
+  iteration, from the polished poses; convergence keeps measuring the
+  discrete search.
+- `only`: a continuation mode that runs no discrete search. The project must
+  hold 3D poses from a discrete workflow (`abinitio3D`, or a polar
+  `refine3D_auto` or `refine3D` run); the workflow checks every active
+  particle at entry, before the sampling and the sigma bootstrap, and stops
+  with a message otherwise. `ref_pose_init=cc` and `regpass=yes` are rejected
+  with it, the registration pass is skipped, and the main loop runs
+  `refine=cont` with no projection grid, probability table or polar
+  reprojection model. Sampling (`nsample`), the sigma bootstrap, the startup
+  reconstruction, NU low-pass seeding and the final reconstruction are
+  unchanged; when the final reconstruction must rebuild sigma2 at native
+  sampling, its `bootstrap_rec3D` residual pass still runs through the polar
+  matcher. No convergence is declared in a continuous pass, so the run goes
+  to `maxits`.
+
+`objfun` stays `euclid`; `objfun=cc` with `refine=cont` is available through
+`refine3D`.

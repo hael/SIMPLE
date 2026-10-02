@@ -37,6 +37,8 @@ type convergence
     procedure :: print_iteration
     procedure :: append_stats
     procedure :: plot_projdirs
+    procedure :: calc_pass_scores
+    procedure :: calc_polish_stats
     procedure :: get
 end type convergence
 
@@ -311,7 +313,18 @@ contains
             trail_rec_ufrac = real(count(sampled > sampled_lb .and. updatecnts > 0.5 .and. states > 0.5)) / &
                 &real(count(updatecnts > 0.5 .and. states > 0.5))
         endif
-        call os%stats('corr',       self%score,      mask=mask)
+        ! the score of the pass's representation (C14): corr_cart over the particles a Cartesian
+        ! pass sampled, corr otherwise
+        if( params%l_cart_refine )then
+            call self%calc_pass_scores(os, sampled > sampled_lb .and. states > 0.5, .true., pose_stats_available)
+        else
+            call self%calc_pass_scores(os, mask, .false., pose_stats_available)
+            ! with the polish (pose_cont=yes) a Cartesian pass followed the discrete one over the
+            ! same sample: its attempts and improved fraction are reported beside the discrete
+            ! statistics, which stay those of the search (C8, C19)
+            if( trim(params%pose_cont) == 'yes' ) &
+                &call self%calc_polish_stats(os, sampled > sampled_lb .and. states > 0.5, pose_stats_available)
+        endif
         call os%stats('dist',       self%dist,       mask=mask)
         call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call os%stats('frac',       self%frac_srch,  mask=mask)
@@ -334,8 +347,15 @@ contains
         self%mi_proj     = os%get_avg('mi_proj',     mask=mask)
         self%mi_state    = os%get_avg('mi_state',    mask=mask)
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
-        call calc_continuous_inplane_stats(self, os, mask, cont_stats_available)
-        call calc_continuous_pose_stats(self, os, mask, pose_stats_available)
+        ! a Cartesian pass runs no polar in-plane search: fields left by an earlier polar pass
+        ! are not this pass's statistics
+        if( params%l_cart_refine )then
+            self%cont_inpl_improved_pct = 0.
+            self%cont_inpl_attempts     = 0
+            cont_stats_available        = .false.
+        else
+            call calc_continuous_inplane_stats(self, os, mask, cont_stats_available)
+        endif
         ! overlaps and particle updates
         s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
@@ -515,6 +535,14 @@ contains
             endif
             deallocate( state_mi_joint, statepops )
         endif
+        ! O2 interim rule (section 7.2 of the pose_cont refactoring plan): a Cartesian pass
+        ! reports frac = 100 and its overlap only measures motion below angthres_mi_proj, which
+        ! a pass that removes grid error meets at once, so no convergence is declared under
+        ! refine=cont; the run goes to maxits and the motion statistics above are logged
+        if( params%l_cart_refine )then
+            if( converged ) write(logfhandle,'(A)') '>>> CONVERGED: not declared under refine=cont (runs to maxits)'
+            converged = .false.
+        endif
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &
@@ -616,29 +644,45 @@ contains
         deallocate(attempted, improved)
     end subroutine calc_continuous_inplane_stats
 
-    subroutine calc_continuous_pose_stats(self, os, mask, available)
+    !> The score statistics of a pass over mask and, for a Cartesian pass (l_cart), its pose
+    !! statistics: the score is corr_cart for a Cartesian pass and corr for a polar one (C14);
+    !! a Cartesian pass attempts every particle it samples, so the attempts are the particles of
+    !! mask (the sampled ones) and the improved percentage counts the improved flag among them
+    !! (C15, O8). cart_stats tells whether pose statistics were computed.
+    subroutine calc_pass_scores( self, os, mask, l_cart, cart_stats )
         class(convergence), intent(inout) :: self
-        class(oris), intent(inout) :: os
-        logical, intent(in) :: mask(:)
-        logical, intent(out) :: available
-        real, allocatable :: attempted(:), improved(:)
-        integer :: nimproved
-
+        class(oris),        intent(inout) :: os
+        logical,            intent(in)    :: mask(:)
+        logical,            intent(in)    :: l_cart
+        logical,            intent(out)   :: cart_stats
         self%pose_cont_improved_pct = 0.
-        self%pose_cont_attempts = 0
-        ! A zero-valued improved field is a valid result, but particle fields
-        ! encode zero as absent. Attempts therefore own report availability;
-        ! get_all returns zero for every non-improved particle.
-        available = os%isthere('pose_cont_attempted')
-        if( .not. available ) return
-        attempted = os%get_all('pose_cont_attempted')
+        self%pose_cont_attempts     = 0
+        cart_stats = l_cart
+        if( .not. l_cart )then
+            call os%stats('corr', self%score, mask=mask)
+            return
+        endif
+        call os%stats('corr_cart', self%score, mask=mask)
+        call self%calc_polish_stats(os, mask, cart_stats)
+    end subroutine calc_pass_scores
+
+    !> The attempts (the particles of mask, the pass's sample) and improved percentage (the
+    !! improved flag among them) of the polish pass that followed a discrete pass; the score
+    !! stays the discrete pass's. polish_stats tells that they were computed.
+    subroutine calc_polish_stats( self, os, mask, polish_stats )
+        class(convergence), intent(inout) :: self
+        class(oris),        intent(inout) :: os
+        logical,            intent(in)    :: mask(:)
+        logical,            intent(out)   :: polish_stats
+        real, allocatable :: improved(:)
+        self%pose_cont_improved_pct = 0.
+        self%pose_cont_attempts     = count(mask)
+        polish_stats                = .true.
+        if( self%pose_cont_attempts < 1 ) return
         improved = os%get_all('pose_cont_improved')
-        self%pose_cont_attempts = count(mask .and. attempted > 0.5)
-        nimproved = count(mask .and. attempted > 0.5 .and. improved > 0.5)
-        if( self%pose_cont_attempts > 0 ) &
-            &self%pose_cont_improved_pct = 100.*real(nimproved)/real(self%pose_cont_attempts)
-        deallocate(attempted,improved)
-    end subroutine calc_continuous_pose_stats
+        self%pose_cont_improved_pct = 100.*real(count(mask .and. improved > 0.5))/real(self%pose_cont_attempts)
+        deallocate(improved)
+    end subroutine calc_polish_stats
 
     subroutine append_stats( self, params, ostats )
         use CPlot2D_wrapper_module, only: plot2D

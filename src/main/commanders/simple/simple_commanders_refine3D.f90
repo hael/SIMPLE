@@ -12,11 +12,7 @@ implicit none
 
 type, extends(commander_base) :: commander_refine3D_auto
   contains
-    procedure :: execute                      => exec_refine3D_auto
-    procedure :: configure_workflow_defaults  => configure_refine3D_auto_defaults
-    procedure :: configure_registration_stage => configure_refine3D_auto_registration_stage
-    procedure :: execute_main_stage           => execute_refine3D_auto_main_stage
-    procedure :: before_final_reconstruction  => before_refine3D_auto_final_reconstruction
+    procedure :: execute      => exec_refine3D_auto
 end type commander_refine3D_auto
 
 type, extends(commander_base) :: commander_refine3D_states
@@ -52,6 +48,7 @@ contains
         use simple_estimate_ssnr,     only: lpstages_setlims
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_refine3D_strategy, only: strip_refine3D_search_only_args
+        use simple_strategy3D_cont,   only: check_cont_seeds
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_boot, cline_pass
@@ -76,24 +73,61 @@ contains
         integer, parameter :: MINITS_REFINE3D_AUTO = 3
         integer, parameter :: MAXITS_REFINE3D_AUTO_CAP = 50
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
-        integer :: box_crop, init_box, nptcls_eff, nsample_target
+        integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
-        logical :: l_external_input, l_ref_pose_init_requested
+        logical :: l_external_input, l_ref_pose_init_requested, l_cont_only, l_polish
+        type(string) :: pose_cont_arg
         ! commanders
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         type(commander_calc_pspec)      :: xcalc_pspec
         type(commander_refine3D)        :: xrefine3D
+        maxits_user      = 0
         l_external_input = cline%defined('vol1')
-        l_maxits_defined = cline%defined('maxits')
+        ! continuous pose refinement (O7 of the pose_cont refactoring): pose_cont=no|yes|only is the
+        ! workflow switch and refine is derived from it, as refine3D_states derives multivol_mode
+        if( cline%defined('refine') ) THROW_HARD(WORKFLOW_LABEL//' derives refine from pose_cont; use pose_cont=no|yes|only')
+        if( .not. cline%defined('pose_cont') ) call cline%set('pose_cont', 'no')
+        pose_cont_arg = cline%get_carg('pose_cont')
+        select case(trim(pose_cont_arg%to_char()))
+            case('no')
+                l_cont_only = .false.
+                l_polish    = .false.
+            case('yes')
+                ! a continuous pass after every main-loop iteration (C19); the registration pass,
+                ! the pose initialization and the bootstraps run without it
+                l_cont_only = .false.
+                l_polish    = .true.
+            case('only')
+                ! a continuation mode (C11): no discrete search, so no pose initialization and no
+                ! registration pass; the Cartesian pass keeps objfun=euclid (C20)
+                l_cont_only = .true.
+                l_polish    = .false.
+                if( cline%defined('ref_pose_init') )then
+                    if( cline%get_carg('ref_pose_init') == 'cc' ) &
+                        &THROW_HARD(WORKFLOW_LABEL//' pose_cont=only continues from existing poses; ref_pose_init=cc is a discrete pose initialization')
+                endif
+                if( cline%defined('regpass') )then
+                    if( cline%get_carg('regpass') == 'yes' ) &
+                        &THROW_HARD(WORKFLOW_LABEL//' pose_cont=only runs no discrete registration pass; regpass=yes is not available with it')
+                endif
+                call cline%set('regpass', 'no')
+            case DEFAULT
+                THROW_HARD(WORKFLOW_LABEL//' supports pose_cont=no|yes|only')
+        end select
         ! hard defaults
         call cline%set('balance',         'no') ! no balancing based on 2D clustering
         call cline%set('greedy_sampling', 'no') ! only active when balance is 'yes'`
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        call cline%set('refine',  'prob_neigh') ! probabilistic neighborhood 3D refinement
+        if( l_cont_only )then
+            call cline%set('refine',      'cont') ! continuous Cartesian refinement of the stored poses
+        else
+            call cline%set('refine',  'prob_neigh') ! probabilistic neighborhood 3D refinement
+        endif
         call cline%set('ml_reg',         'yes') ! ML regularization is on
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
+        call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
@@ -113,17 +147,32 @@ contains
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! evidence-constrained background filtering
-        call self%configure_workflow_defaults(cline, MINITS_REFINE3D_AUTO)
+        l_maxits_defined = cline%defined('maxits')
+        if( l_maxits_defined )then
+            maxits_user = cline%get_iarg('maxits')
+            if( maxits_user < 1 ) THROW_HARD('maxits must be >= 1 for '//WORKFLOW_LABEL)
+            call cline%set('minits', maxits_user)
+        else if( cline%defined('minits') )then
+            call cline%set('minits', max(MINITS_REFINE3D_AUTO, cline%get_iarg('minits')))
+        else
+            call cline%set('minits', MINITS_REFINE3D_AUTO)
+        endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
-        ! Workflow-only parent arguments must not leak into nested SIMPLE programs.
-        call cline%delete('pose_cont_mode')
         call gui_comm%new(params)
         l_ref_pose_init_requested = trim(params%ref_pose_init).eq.'cc'
         if( l_ref_pose_init_requested .and. .not. l_external_input )then
             THROW_HARD(WORKFLOW_LABEL//' ref_pose_init=cc requires an external vol1 input')
         endif
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
+        ! pose_cont is this workflow's switch: its children see the derived refine only
+        call cline%delete('pose_cont')
+        if( l_cont_only )then
+            ! the entry check of the continuation mode, before any bootstrap work (section 7.1)
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call check_cont_seeds(spproj%os_ptcl3D)
+            call spproj%kill
+        endif
         call set_refine3D_auto_sampling()
         l_have_init_vol = .false.
         init_box        = 0
@@ -228,13 +277,19 @@ contains
         call seed_refine3D_auto_nonuniform_lpset()
         ! global registration pass against the masked startup references
         call run_registration_pass()
-        ! 3D refinement iterations: neighbourhood search, main direction set
         call cline%set('prg',                   'refine3D')
-        call cline%set('refine',              'prob_neigh')
-        if( .not. cline%defined('nspace')     ) call cline%set('nspace',     MAIN_NSPACE)
-        if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', MAIN_NSPACE_SUB)
-        call self%execute_main_stage(params, cline, xrefine3D)
-        call self%before_final_reconstruction(cline, xrefine3D)
+        if( l_cont_only )then
+            ! 3D refinement iterations: continuous Cartesian refinement, no projection grid
+            call cline%set('refine',            'cont')
+        else
+            ! 3D refinement iterations: neighbourhood search, main direction set
+            call cline%set('refine',              'prob_neigh')
+            if( .not. cline%defined('nspace')     ) call cline%set('nspace',     MAIN_NSPACE)
+            if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', MAIN_NSPACE_SUB)
+            if( l_polish ) call cline%set('pose_cont', 'yes')
+        endif
+        call cline%set('maxits',             params%maxits)
+        call xrefine3D%execute(cline)
         ! the shared ending (simple_final_rec): final all-particle
         ! reconstruction at original sampling with sigmas bootstrapped for the
         ! native box, project registration, final products and reprojections
@@ -306,7 +361,6 @@ contains
             cline_pass = cline
             call cline_pass%set('prg',        'refine3D')
             call cline_pass%set('refine',     'greedy')
-            call self%configure_registration_stage(cline_pass)
             call cline_pass%set('nspace',     REGPASS_NSPACE)
             call cline_pass%delete('nspace_sub')
             call cline_pass%delete('prob_athres')
@@ -561,49 +615,6 @@ contains
         end subroutine initialize_external_reference_poses
 
     end subroutine exec_refine3D_auto
-
-    !> Variant hook for defaults that must be fixed before parameters are parsed.
-    subroutine configure_refine3D_auto_defaults(self, cline, minits_default)
-        class(commander_refine3D_auto), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-        integer, intent(in) :: minits_default
-        integer :: maxits_user
-
-        call cline%set('objfun', 'euclid')
-        if( cline%defined('maxits') )then
-            maxits_user = cline%get_iarg('maxits')
-            if( maxits_user < 1 ) THROW_HARD('maxits must be >= 1 for REFINE3D_AUTO')
-            call cline%set('minits', maxits_user)
-        else if( cline%defined('minits') )then
-            call cline%set('minits', max(minits_default, cline%get_iarg('minits')))
-        else
-            call cline%set('minits', minits_default)
-        endif
-    end subroutine configure_refine3D_auto_defaults
-
-    !> Variant hook for options applied only to the shared global registration pass.
-    subroutine configure_refine3D_auto_registration_stage(self, cline)
-        class(commander_refine3D_auto), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-    end subroutine configure_refine3D_auto_registration_stage
-
-    !> Default main stage. Variants override this call, not the surrounding lifecycle.
-    subroutine execute_refine3D_auto_main_stage(self, params, cline, refine3D_executor)
-        class(commander_refine3D_auto), intent(inout) :: self
-        type(parameters), intent(in) :: params
-        class(cmdline), intent(inout) :: cline
-        class(commander_base), intent(inout) :: refine3D_executor
-
-        call cline%set('maxits', params%maxits)
-        call refine3D_executor%execute(cline)
-    end subroutine execute_refine3D_auto_main_stage
-
-    !> Extension point immediately before the shared final reconstruction.
-    subroutine before_refine3D_auto_final_reconstruction(self, cline, refine3D_executor)
-        class(commander_refine3D_auto), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-        class(commander_base), intent(inout) :: refine3D_executor
-    end subroutine before_refine3D_auto_final_reconstruction
 
     subroutine exec_refine3D_states( self, cline )
         use simple_final_rec,      only: calc_final_rec

@@ -3,7 +3,7 @@
 ! binoris_io / sp_project front doors.
 module simple_binoris_tester
 use simple_test_utils    ! assertions etc.
-use simple_defs_ori,     only: N_PTCL_ORIPARAMS
+use simple_defs_ori,     only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED
 use simple_type_defs,    only: MIC_SEG, STK_SEG, PTCL2D_SEG
 use simple_string,       only: string
 use simple_string_utils, only: int2str
@@ -37,6 +37,7 @@ contains
         call test_string_segment_roundtrip()
         call test_particle_segment_roundtrip()
         call test_legacy_narrow_particle_records()
+        call test_cartesian_record_slots()
         call test_write_segment_inside()
         call test_write_segment_inside_strings()
         call test_project_write_segment_inside()
@@ -216,6 +217,64 @@ contains
         call os2%kill
         call o%kill
     end subroutine test_legacy_narrow_particle_records
+
+    !> N17 (record layout O8, Phase 7 of the pose_cont refactoring): a 52-real particle record
+    !! round-trips corr_cart in slot 51 and the improved flag in slot 52; a 50-real record, from
+    !! before these slots, reads both as zero. Expected values: the hand-written payload.
+    subroutine test_cartesian_record_slots()
+        integer, parameter :: NARROW_VALUES = 50
+        type(binoris) :: bos
+        type(oris)    :: os, os2
+        type(ori)     :: o
+        real    :: prec(N_PTCL_ORIPARAMS)
+        integer :: i, funit, io_stat, width
+        integer(kind=8) :: pos
+        write(*,'(A)') 'test_cartesian_record_slots'
+        call assert_int(52, N_PTCL_ORIPARAMS, 'the particle record is 52 reals (O8)')
+        call assert_int(51, I_CORR_CART, 'corr_cart sits in slot 51 (O8)')
+        call assert_int(52, I_POSE_CONT_IMPROVED, 'the improved flag sits in slot 52 (O8)')
+        call make_ptcl_oris(os, NPTCLS)
+        do width = N_PTCL_ORIPARAMS, NARROW_VALUES, NARROW_VALUES - N_PTCL_ORIPARAMS
+            call bos%open(string(BIN_FILE), del_if_exists=.true.)
+            call bos%add_segment(PTCL2D_SEG, [1,NPTCLS], width*4)
+            call bos%update_byte_ranges
+            call bos%write_header
+            pos = bos%get_first_data_byte(PTCL2D_SEG)
+            call bos%close
+            open(newunit=funit, file=BIN_FILE, access='stream', form='unformatted', action='readwrite', status='old', &
+                &iostat=io_stat)
+            call assert_int(0, io_stat, 'record-slot file reopened for the raw payload')
+            if( io_stat /= 0 ) return
+            do i = 1,NPTCLS
+                call os%get_ori(i, o)
+                call o%ori2prec(prec)
+                prec(I_CORR_CART)          = 0.25 + 0.1*real(i)
+                prec(I_POSE_CONT_IMPROVED) = real(mod(i,2))
+                write(unit=funit, pos=pos) prec(1:width)
+                pos = pos + width*4
+            enddo
+            close(funit)
+            call bos%open(string(BIN_FILE))
+            call os2%new(NPTCLS, is_ptcl=.true.)
+            call bos%read_segment(PTCL2D_SEG, os2)
+            call bos%close
+            do i = 1,NPTCLS
+                if( width == N_PTCL_ORIPARAMS )then
+                    call assert_real(0.25 + 0.1*real(i), os2%get(i,'corr_cart'), TOL, '52-real record: slot 51 (corr_cart)')
+                    call assert_real(real(mod(i,2)), os2%get(i,'pose_cont_improved'), TOL, &
+                        &'52-real record: slot 52 (improved flag)')
+                else
+                    call assert_real(0., os2%get(i,'corr_cart'), TOL, '50-real record: corr_cart reads as zero')
+                    call assert_real(0., os2%get(i,'pose_cont_improved'), TOL, '50-real record: the improved flag reads as zero')
+                endif
+                call assert_real(os%get(i,'corr'), os2%get(i,'corr'), TOL, 'record: corr is untouched by the Cartesian slots')
+            enddo
+            call os2%kill
+        enddo
+        call del_file(BIN_FILE)
+        call os%kill
+        call o%kill
+    end subroutine test_cartesian_record_slots
 
     !---------------- in-place rewrite of one segment ----------------
 

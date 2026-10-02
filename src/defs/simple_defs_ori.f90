@@ -53,8 +53,8 @@ enum, bind(c)
     enumerator :: I_CONT_INPL_ATTEMPTED = 48
     enumerator :: I_CONT_INPL_IMPROVED  = 49
     enumerator :: I_RES05               = 50 ! resolution @ FSC=0.5 (formerly the spare slot I_EMPTY10)
-    enumerator :: I_POSE_CONT_ATTEMPTED = 51
-    enumerator :: I_POSE_CONT_IMPROVED  = 52
+    enumerator :: I_CORR_CART           = 51 ! score of the last Cartesian pass (cc or exp(-L); C14, O8)
+    enumerator :: I_POSE_CONT_IMPROVED  = 52 ! 1 when the last Cartesian pass improved the pose (O8)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 52
@@ -165,8 +165,8 @@ contains
                 get_oriparam_ind = I_CONT_INPL_ATTEMPTED
             case('cont_inpl_improved')
                 get_oriparam_ind = I_CONT_INPL_IMPROVED
-            case('pose_cont_attempted')
-                get_oriparam_ind = I_POSE_CONT_ATTEMPTED
+            case('corr_cart')
+                get_oriparam_ind = I_CORR_CART
             case('pose_cont_improved')
                 get_oriparam_ind = I_POSE_CONT_IMPROVED
         end select
@@ -274,8 +274,8 @@ contains
                 flag = 'cont_inpl_attempted'
             case(I_CONT_INPL_IMPROVED)
                 flag = 'cont_inpl_improved'
-            case(I_POSE_CONT_ATTEMPTED)
-                flag = 'pose_cont_attempted'
+            case(I_CORR_CART)
+                flag = 'corr_cart'
             case(I_POSE_CONT_IMPROVED)
                 flag = 'pose_cont_improved'
             case(I_RES05)
@@ -339,7 +339,7 @@ contains
                 oriparam_isthere = abs(val) > TINY    
             case(I_RES05)
                 oriparam_isthere = abs(val) > TINY
-            case(I_POSE_CONT_ATTEMPTED)
+            case(I_CORR_CART)
                 oriparam_isthere = abs(val) > TINY
             case(I_POSE_CONT_IMPROVED)
                 oriparam_isthere = abs(val) > TINY

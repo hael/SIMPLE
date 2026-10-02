@@ -157,8 +157,8 @@ subroutine new_abinitio3D_nano( prgtab )
         call refine3D_nano%add_input(UI_SRCH, sigma_est, &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_nano%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
-        &'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){neigh}', '', .false., 'neigh', &
-        &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', 'prob', 'prob_state', 'prob_neigh']), &
+        &'Refinement mode; cont refines the stored poses continuously(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|cont){neigh}', '', .false., 'neigh', &
+        &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', 'prob', 'prob_state', 'prob_neigh', 'cont']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_nano%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &

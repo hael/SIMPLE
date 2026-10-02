@@ -5,7 +5,7 @@ use simple_strategy3D_alloc, only: s3D, ref_state_from_index
 use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,      only: parameters
 use simple_oris,            only: oris
-use simple_strategy3D,      only: strategy3D
+use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
 implicit none
 
@@ -13,7 +13,7 @@ public :: strategy3D_shc
 private
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_shc
+type, extends(strategy3D_pftc) :: strategy3D_shc
 contains
     procedure :: new         => new_shc
     procedure :: srch        => srch_shc

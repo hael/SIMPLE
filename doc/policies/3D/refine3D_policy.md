@@ -475,6 +475,81 @@ The downscaled particle cache is a 2D-only feature: `refine3D` rejects
 `cache=yes` and both phases always read the original full-size stacks (see
 `doc/policies/particle_cache_policy.md`).
 
+### Continuous Cartesian pose policy
+
+`refine=cont` is a refinement mode of `refine3D` (contract of the pose_cont
+refactoring, `doc/refactoring_notes/completed/pose_cont_refactoring.md`). It
+refines the five pose parameters of every sampled particle (three rotation
+components, two shifts) continuously against Cartesian central sections of
+the reference, from the poses stored in `ptcl3D`. It runs none of the polar
+machinery: no projection grid, no polar reprojection model, no `prob_align`,
+no in-plane table. It is a continuation mode: every active particle must hold
+a pose from a discrete workflow (positive state, half-set, projection
+direction, finite angles and shifts); `check_cont_seeds` stops the run at
+entry otherwise, before the random-orientation fallback of an unsearched
+field.
+
+Ownership:
+
+- `src/main/cftc`: `cartft_calc` (reference slots per state and half,
+  particle slots of the batch, objective, gradient, normal terms, residual)
+  and `cartft_pose_opt` (one bounded Levenberg-Marquardt transaction per
+  particle, shift stage then joint stage; the only route, C16).
+- `simple_strategy3D_cont`: `strategy3D_cont`, the matcher's only
+  continuous-pose symbol; it extends `strategy3D` beside the polar parent
+  `strategy3D_pftc`.
+- The iteration strategy materializes the prepared real-space reference
+  volumes once per iteration (`cart_refvols_{even,odd}.bin`, section 6 of this
+  policy applies unchanged up to the polar projection); every matcher reads
+  them, pads them by 2 and gathers central sections on the fly with the
+  normalized KB stencil of the polar branch.
+- Particle preparation follows `prepimg4align` up to the soft mask (centred
+  on the stored shift, phase-flipped for `CTFFLAG_YES`) and multiplies by the
+  stencil's taper (`prepimg4align_cart`); `build_batch_particles3D` fills the
+  Cartesian slots of the batch from the same read.
+
+Objectives follow `objfun`: `cc` is `1 - cc` with uniform per-pixel weight and
+no sigma2 (a Cartesian `cc` pass reads, requires and writes none); `euclid` is
+the polar loss normalized by the particle's whitened power, stored as
+`exp(-L)`, and the sigma owner records the residual at the committed pose.
+The bounds are `trs` (total shift from the stored shift) and `athres_cont`
+(default 10 degrees: the halfwidth of the total rotation from the stored pose,
+the capture range for wrongly assigned orientations); `athres` and
+`prob_athres`, which size the polar searches, do not apply. The solve is the
+joint five-parameter Levenberg-Marquardt stage alone, about a third faster than
+a shift-only stage before it, which the internal `cont_route=shift_then_joint`
+restores for the single-pass capture tests (E25, N20 a-c); repeated passes
+supply what one joint pass misses. `inpl_cont` is overridden to `no` (the
+in-plane angle is part of the solve).
+
+Scores: a Cartesian pass writes `corr_cart` (slot 51 of the particle record)
+and the improved flag (slot 52) for every particle it processes and never
+writes `corr`, which keeps the value of the last polar pass. The two are not
+comparable (C9). The convergence report of a Cartesian pass shows the mean
+`corr_cart`, the attempts (the sampled particles) and the improved fraction;
+no convergence is declared under `refine=cont` (interim rule): the run goes to
+`maxits`.
+
+Polish: `pose_cont=yes` in a discrete mode makes the iteration strategy follow
+every discrete pass with a `refine=cont` pass over the same particle sample
+(`sample4update_reprod`), in shared memory and distributed. The discrete pass
+then writes no partial reconstructions; the polish writes them, so the
+iteration reconstructs once, from the polished poses. The polish writes pose,
+`corr_cart`, the improved flag and, under `euclid`, sigma2 into the sigma2
+transaction the discrete pass opened: it starts from the discrete pass's
+residual rows and replaces those of the particles it evaluates, so a particle
+whose Cartesian slot is invalid keeps the residual of its discrete pose. It
+leaves `corr` and the convergence fields of the discrete search (`dist`,
+`dist_inpl`, `shincarg`, `mi_proj`, `mi_state`, `frac`, `frac_greedy`), so
+convergence keeps measuring the discrete search. `refine=cont` with `pose_cont=yes` is the
+internal name of the polish pass and is refused on the command line.
+
+Tests: `unit_cart_align3D` (`cart calculator`, `pose optimizer`,
+`pose strategy`, `pose statistics`), `lib_cart_align3D` (1 000 simulated 1JYX
+particles through `strategy3D_cont`), and the high-level gate
+`cont_refine3D_1jxy` (shared memory, distributed, `refine3D_auto`, the polish),
+all gated on the simulation's ground-truth orientations.
+
 ## 9. Volume Assembly
 
 When `volrec=yes`, matcher workers write partition-local Cartesian partials and

@@ -5,8 +5,8 @@ use simple_builder,         only: builder
 use simple_parameters,      only: parameters
 use simple_cmdline,         only: cmdline
 use simple_image,           only: image
-use simple_refine3D_fnames, only: refine3D_reproj_model_fname
-use simple_pose_cont_refine3D_adapter, only: write_pose_cont_reference_artifact
+!$ use omp_lib, only: omp_get_max_threads
+use simple_refine3D_fnames, only: refine3D_reproj_model_fname, refine3D_cart_refvols_fname
 implicit none
 
 public :: read_mask_filter_reproject_refvols
@@ -15,6 +15,7 @@ public :: any_volume_source_defined, complete_volume_source_defined
 public :: complete_volume_source_available
 public :: reprojection_model_available, adopt_reprojection_model_range
 public :: read_reprojection_model, materialize_reprojection_model_from_volumes
+public :: read_cart_refvols
 public :: remove_ref_section_files
 private
 #include "simple_local_flags.inc"
@@ -69,10 +70,16 @@ contains
         l_available = reprojection_model_header_compatible(params, header)
     end function reprojection_model_available
 
+    !> Remove the derived references of an iteration: the polar reprojection model and the
+    !! prepared Cartesian reference volumes (plan section 6.6; nothing else deletes them).
     subroutine remove_ref_section_files
         type(string) :: refs_even, refs_odd
         refs_even = refine3D_reproj_model_fname('even')
         refs_odd  = refine3D_reproj_model_fname('odd')
+        if( file_exists(refs_even) ) call del_file(refs_even)
+        if( file_exists(refs_odd)  ) call del_file(refs_odd)
+        refs_even = refine3D_cart_refvols_fname('even')
+        refs_odd  = refine3D_cart_refvols_fname('odd')
         if( file_exists(refs_even) ) call del_file(refs_even)
         if( file_exists(refs_odd)  ) call del_file(refs_odd)
         call refs_even%kill
@@ -98,12 +105,19 @@ contains
         if( associated(build%spproj_field) ) call build%spproj_field%set_all2single('lp', params%lp)
     end subroutine adopt_reprojection_model_range
 
+    !> The matcher's reader of the references of its pass: the prepared Cartesian reference
+    !! volumes for a Cartesian pass (l_cart_refine; read_cart_refvols), the polar reprojection
+    !! model otherwise.
     subroutine read_reprojection_model( params, build, batchsz )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: batchsz
         integer :: nrefs
         type(string) :: refs_even, refs_odd
+        if( params%l_cart_refine )then
+            call read_cart_refvols(params, build)
+            return
+        endif
         call adopt_reprojection_model_range(params, build)
         if( build%eulspace%get_noris() /= params%nspace )then
             call build%eulspace%kill
@@ -120,6 +134,38 @@ contains
         call refs_odd%kill
     end subroutine read_reprojection_model
 
+    !> Build build%cftc from the prepared Cartesian reference volumes (cartft_calc%read checks
+    !! both headers against the run's box_crop, nstates and smpd_crop) and adopt the band limit
+    !! of their header, as adopt_reprojection_model_range does for the polar model: no other
+    !! source of kfromto exists in a Cartesian pass. One particle slot per thread of the
+    !! particle loop.
+    subroutine read_cart_refvols( params, build )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        type(string) :: refs_even, refs_odd
+        integer      :: nslots
+        nslots = max(1, params%nthr)
+        !$ nslots = max(nslots, omp_get_max_threads())
+        refs_even = refine3D_cart_refvols_fname('even')
+        refs_odd  = refine3D_cart_refvols_fname('odd')
+        call build%cftc%read(refs_even, refs_odd, params%nstates, params%box_crop, nslots, params%smpd_crop, params%kfromto)
+        params%lp = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
+        if( associated(build%spproj_field) ) call build%spproj_field%set_all2single('lp', params%lp)
+        call refs_even%kill
+        call refs_odd%kill
+    end subroutine read_cart_refvols
+
+    !> A Cartesian pass of the iteration reads the prepared reference volumes.
+    logical function cart_refs_needed( params )
+        class(parameters), intent(in) :: params
+        cart_refs_needed = params%l_cart_refine .or. trim(params%pose_cont) == 'yes'
+    end function cart_refs_needed
+
+    !> Prepare the references of an iteration once, for every matcher of it, and replace the
+    !! derived files after the preparation has succeeded: the polar reprojection model unless
+    !! the pass is Cartesian (l_cart_refine), and the prepared Cartesian reference volumes of
+    !! every state and half when a Cartesian pass reads them (l_cart_refine or the in-matcher
+    !! polish pose_cont=yes), with the band limit of the iteration in their header (6.6).
     subroutine materialize_reprojection_model_from_volumes( params, build, cline, cleanup_pftc )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
@@ -127,21 +173,24 @@ contains
         logical, optional, intent(in)    :: cleanup_pftc
         logical :: l_cleanup
         type(string) :: refs_even, refs_odd
-        if( trim(params%refine) == 'pose_cont' )then
-            call read_mask_filter_reproject_refvols(params, build, cline, &
-                &map_shift=.true., cartesian_only=.true.)
-        else
-            call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.true.)
-            ! Replace the derived PFTC files only after their in-memory
-            ! successors have been prepared successfully.
-            call remove_ref_section_files
+        call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.true.)
+        ! Replace the derived files only after their in-memory successors have been
+        ! prepared successfully.
+        call remove_ref_section_files
+        if( .not. params%l_cart_refine )then
             refs_even = refine3D_reproj_model_fname('even')
             refs_odd  = refine3D_reproj_model_fname('odd')
             call build%pftc%write_ref_pfts(refs_even, .true.)
             call build%pftc%write_ref_pfts(refs_odd,  .false.)
-            call refs_even%kill
-            call refs_odd%kill
         endif
+        if( cart_refs_needed(params) )then
+            refs_even = refine3D_cart_refvols_fname('even')
+            refs_odd  = refine3D_cart_refvols_fname('odd')
+            call build%cftc%write(refs_even, refs_odd, params%kfromto, params%smpd_crop)
+            call build%cftc%kill
+        endif
+        call refs_even%kill
+        call refs_odd%kill
         l_cleanup = .false.
         if( present(cleanup_pftc) ) l_cleanup = cleanup_pftc
         if( l_cleanup )then
@@ -522,20 +571,22 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_from_refs
 
-    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift, cartesian_only )
+    !> Prepare the references of every state from the volume sources: the polar reprojection
+    !! model in build%pftc unless the pass is Cartesian (l_cart_refine), and the prepared
+    !! real-space volumes staged in build%cftc when a Cartesian pass reads them.
+    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift )
         use simple_polarft_calc, only: vol_pad2ref_pfts_opt
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
         logical, optional, intent(in)    :: map_shift
-        logical, optional, intent(in)    :: cartesian_only
         real      :: xyz(3)
         integer   :: s, nrefs, state
-        logical   :: do_center, l_map_shift, l_cartesian_only
+        logical   :: do_center, l_map_shift, l_cartesian_only, l_cart_refs
         l_map_shift = .true.
         if( present(map_shift) ) l_map_shift = map_shift
-        l_cartesian_only = .false.
-        if( present(cartesian_only) ) l_cartesian_only = cartesian_only
+        l_cartesian_only = params%l_cart_refine
+        l_cart_refs      = cart_refs_needed(params)
         if( any_volume_source_defined(cline, params%nstates) &
             &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
             THROW_HARD('incomplete multi-state volume source; provide vol1..volN')
@@ -557,6 +608,7 @@ contains
             nrefs = params%nspace * params%nstates
             call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
         endif
+        if( l_cart_refs ) call build%cftc%new(params%nstates, params%box_crop, 1)
         do s = 1, params%nstates
             call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
                 & do_center, xyz, map_shift=l_map_shift)
@@ -567,8 +619,7 @@ contains
                 call build%vol%shift(xyz)
             endif
             call build%vol%ifft()
-            if( trim(params%pose_cont) == 'yes' .or. trim(params%refine) == 'pose_cont' ) &
-                &call write_pose_cont_reference_artifact(build%vol, s, 'even')
+            if( l_cart_refs ) call build%cftc%set_refvol(s, .true., build%vol%get_rmat())
             if( .not. l_cartesian_only )then
                 call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
                     &params%smpd_crop, wthreads=.true.)
@@ -583,8 +634,7 @@ contains
                 call build%vol_odd%shift(xyz)
             endif
             call build%vol_odd%ifft()
-            if( trim(params%pose_cont) == 'yes' .or. trim(params%refine) == 'pose_cont' ) &
-                &call write_pose_cont_reference_artifact(build%vol_odd, s, 'odd')
+            if( l_cart_refs ) call build%cftc%set_refvol(s, .false., build%vol_odd%get_rmat())
             if( .not. l_cartesian_only )then
                 call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
                     &params%smpd_crop, wthreads=.true.)

@@ -379,7 +379,8 @@ subroutine exec_test_single_workflow( self, cline )
     use single_commanders_trajectory,   only: commander_trajectory_denoise
     use simple_commanders_project_ptcl, only: commander_import_particles
     use simple_commanders_project_core, only: commander_new_project
-    use single_commanders_nano3D,       only: commander_autorefine3D_nano
+    use single_commanders_nano3D,       only: commander_autorefine3D_nano, commander_refine3D_nano
+    use simple_test_truth_metrics,      only: pair_pose_error
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
     type(cmdline)                         :: cline_sim, cline_reproject, cline_trajectory, cline_denoise
@@ -393,6 +394,15 @@ subroutine exec_test_single_workflow( self, cline )
     type(commander_import_particles)      :: ximptcls
     type(commander_analysis2D_nano)       :: xan2Dnano
     type(commander_autorefine3D_nano)     :: xaref3Dnano
+    type(commander_refine3D_nano)         :: xref3Dnano
+    type(cmdline)                         :: cline_cont
+    type(sp_project)                      :: run_proj
+    type(oris)                            :: truth_oris
+    type(string)                          :: cont_projfile
+    integer, allocatable                  :: pinds(:)
+    real                                  :: pair_polar, pair_cont, frac5, pair_nopolish, pair_polish
+    type(string)                          :: aref_projfile, nano_projfile
+    integer                               :: i, npairs_ptcls
     type(string)                          :: suite_name, projname, projfile, project_dir, startvol
     type(string)                          :: simulated_vol, reprojections, trajectory, denoised_trajectory
     type(string)                          :: autorefine_dir, final_volume
@@ -406,6 +416,18 @@ subroutine exec_test_single_workflow( self, cline )
     character(len=*), parameter           :: DENOISE_DIR       = '4_trajectory_denoise'
     character(len=*), parameter           :: IMPORT_DIR        = '5_import_particles'
     character(len=*), parameter           :: ANALYSIS2D_DIR    = '6_analysis2D_nano'
+    character(len=*), parameter           :: CONT_DIR          = '8_refine3D_nano_cont'
+    character(len=*), parameter           :: NOPOLISH_DIR      = '9_refine3D_nano_nopolish'
+    character(len=*), parameter           :: POLISH_DIR        = '10_refine3D_nano_polish'
+    ! N29, Phase 9 (declared before the first run): refine3D_nano pose_cont=yes and pose_cont=no
+    ! continue from the same autorefine3D_nano project; with the polish the pair pose error is no
+    ! worse than without, within the same 0.5 deg
+    ! N29 (pose_cont refactoring, Phase 8; ruling R5): refine3D_nano refine=cont continues from the
+    ! autorefine3D_nano project; its poses against the trajectory truth (frame- and
+    ! hand-independent pair metric, 20 000 pairs) are no worse than the polar result's, within
+    ! 0.5 deg (declared before the first run)
+    integer,          parameter           :: NCONT_ITERS = 2, NPAIRS = 20000, PAIR_SEED = 20261001
+    real,             parameter           :: MAX_PAIR_LOSS = 0.5
     integer,          parameter           :: NREPROJS = 1000, MASKDIAM = 40, NREFINE_ITERS = 5
     integer,          parameter           :: NFRAMES_PER_GROUP = 10
     integer                               :: chdir_status
@@ -533,6 +555,47 @@ subroutine exec_test_single_workflow( self, cline )
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)
     call return_to_project_dir
     if( .not. volume_ok ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: final-volume validation failed')
+    ! N29: refine3D_nano refine=cont on the autorefine3D_nano project (projfile, the last stage's
+    ! copy, which autorefine3D_nano updated in place)
+    call truth_oris%new(NREPROJS, is_ptcl=.false.)
+    call truth_oris%read(filepath(filepath(project_dir, REPROJECTION_DIR), TRAJECTORY_ORITAB), [1,NREPROJS])
+    cont_projfile = projfile
+    call run_proj%read(cont_projfile)
+    npairs_ptcls = min(NREPROJS, run_proj%os_ptcl3D%get_noris())
+    if( npairs_ptcls < 2 ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the autorefine3D_nano project holds no particles')
+    allocate(pinds(npairs_ptcls))
+    pinds = [(i, i=1,npairs_ptcls)]
+    pair_polar = pair_pose_error(run_proj%os_ptcl3D, truth_oris, pinds, pinds, NPAIRS, PAIR_SEED, frac5)
+    call enter_workflow_stage(CONT_DIR, cont_projfile)
+    call cline_cont%set('prg',      'refine3D_nano')
+    call cline_cont%set('mkdir',    'no')
+    call cline_cont%set('projfile', cont_projfile%to_char())
+    call cline_cont%set('vol1',     final_volume%to_char())
+    call cline_cont%set('refine',   'cont')
+    call cline_cont%set('smpd',     params%smpd)
+    call cline_cont%set('pgrp',     'c1')
+    call cline_cont%set('lp',       1.5)
+    call cline_cont%set('mskdiam',  MASKDIAM)
+    call cline_cont%set('maxits',   NCONT_ITERS)
+    call cline_cont%set('nthr',     params%nthr)
+    call xref3Dnano%execute(cline_cont)
+    call run_proj%read(cont_projfile)
+    pair_cont = pair_pose_error(run_proj%os_ptcl3D, truth_oris, pinds, pinds, NPAIRS, PAIR_SEED, frac5)
+    call return_to_project_dir
+    write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow pair pose error against the truth: autorefine3D_nano ', &
+        &pair_polar, ' deg, then refine3D_nano refine=cont ', pair_cont, ' deg'
+    if( pair_cont > pair_polar + MAX_PAIR_LOSS ) &
+        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: refine=cont worsened the poses of autorefine3D_nano')
+    ! N29, Phase 9: refine3D_nano with and without the polish from the autorefine3D_nano project
+    aref_projfile = projfile
+    call run_nano_refine(NOPOLISH_DIR, 'no',  pair_nopolish)
+    call run_nano_refine(POLISH_DIR,   'yes', pair_polish)
+    write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow pair pose error against the truth: refine3D_nano pose_cont=no ', &
+        &pair_nopolish, ' deg, pose_cont=yes ', pair_polish, ' deg'
+    if( pair_polish > pair_nopolish + MAX_PAIR_LOSS ) &
+        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the polish worsened the poses of refine3D_nano')
+    call run_proj%kill
+    call truth_oris%kill
     write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') &
         &'PASS: single_workflow ', suite_name%to_char(), ' docking correlation direct=', dock_corr_direct, &
         &', mirrored=', dock_corr_mirrored, &
@@ -541,6 +604,32 @@ subroutine exec_test_single_workflow( self, cline )
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')
 
 contains
+    !> NCONT_ITERS refine3D_nano iterations (refine=neigh, objfun=cc) from the autorefine3D_nano
+    !! project with pose_cont, in their own stage directory; the pair pose error of the result
+    subroutine run_nano_refine( dir, pose_cont, pair_err )
+        character(len=*), intent(in)  :: dir, pose_cont
+        real,             intent(out) :: pair_err
+        type(cmdline) :: cline_nano
+        nano_projfile = aref_projfile
+        call enter_workflow_stage(dir, nano_projfile)
+        call cline_nano%set('prg',       'refine3D_nano')
+        call cline_nano%set('mkdir',     'no')
+        call cline_nano%set('projfile',  nano_projfile%to_char())
+        call cline_nano%set('vol1',      final_volume%to_char())
+        call cline_nano%set('pose_cont', pose_cont)
+        call cline_nano%set('smpd',      params%smpd)
+        call cline_nano%set('pgrp',      'c1')
+        call cline_nano%set('lp',        1.5)
+        call cline_nano%set('mskdiam',   MASKDIAM)
+        call cline_nano%set('maxits',    NCONT_ITERS)
+        call cline_nano%set('nthr',      params%nthr)
+        call xref3Dnano%execute(cline_nano)
+        call cline_nano%kill
+        call run_proj%read(nano_projfile)
+        pair_err = pair_pose_error(run_proj%os_ptcl3D, truth_oris, pinds, pinds, NPAIRS, PAIR_SEED, frac5)
+        call return_to_project_dir
+    end subroutine run_nano_refine
+
     subroutine enter_workflow_stage( stage, stage_projfile )
         character(len=*), intent(in)    :: stage
         type(string),     intent(inout) :: stage_projfile

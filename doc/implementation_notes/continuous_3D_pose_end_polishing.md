@@ -1,5 +1,16 @@
 # Continuous five-parameter pose refinement numerical validation
 
+> **Superseded (2026-10-01).** The code this note describes (`refine=pose_cont`,
+> `pose_cont_route`, `simple_pose_cont_refine3D_adapter`, `simple_cartesian_pose_refiner`,
+> `simple_strategy3D_pose_cont`, `simple_pose_cont_run_stats`, the program
+> `refine3D_pose_cont`) was replaced by the pose_cont refactoring
+> (`doc/refactoring_notes/completed/pose_cont_refactoring.md`): `refine=cont`, the
+> `cftc` classes `cartft_calc` and `cartft_pose_opt`, `strategy3D_cont`, and the polish
+> as a scheduled pass (`pose_cont=yes`). The current policy is in
+> `doc/policies/3D/refine3D_policy.md` ("Continuous Cartesian pose policy") and
+> `refine3D_auto_policy.md` (section 7). This note is kept as the record of the earlier
+> design and its validation.
+
 **Contract status:** FINAL (FROZEN)
 
 **Execution plan status:** FINAL

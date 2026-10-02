@@ -702,6 +702,13 @@ contains
             case DEFAULT
                 THROW_HARD('internal cc_emit_sigma must be yes or no')
         end select
+        ! production runs the joint LM stage alone; the capture tests keep shift_then_joint
+        select case(trim(self%cont_route))
+            case('joint','shift_then_joint')
+            case DEFAULT
+                THROW_HARD('internal cont_route must be joint or shift_then_joint')
+        end select
+        self%l_cont_shift_first = trim(self%cont_route) == 'shift_then_joint'
         select case(trim(self%sigma_commit_deferred))
             case('yes','no')
             case DEFAULT
@@ -825,8 +832,7 @@ contains
                 ! reported once, by the workflow driver; every subprocess
                 ! applies the same rule silently
                 select case(trim(self%prg%to_char()))
-                    case('refine3D_auto','refine3D_pose_cont','abinitio3D','abinitio3D_cavgs', &
-                        &'refine3D_states','classify3D_refs')
+                    case('refine3D_auto','abinitio3D','abinitio3D_cavgs','refine3D_states','classify3D_refs')
                         write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> DENSITY ENVELOPE DILATION: ', binwidth_min, &
                             &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
                 end select
@@ -842,34 +848,16 @@ contains
             case DEFAULT
                 THROW_HARD('inpl_cont must be yes or no')
         end select
+        ! pose_cont: no|yes on refine3D (yes, the scheduled polish, from Phase 9 of the pose_cont
+        ! refactoring); only is the continuation switch of refine3D_auto (O7), which derives refine
         select case(trim(self%pose_cont))
             case('yes','no')
+            case('only')
+                if( trim(self%prg%to_char()) /= 'refine3D_auto' ) &
+                    &THROW_HARD('pose_cont=only is a refine3D_auto switch; refine3D takes refine=cont')
             case DEFAULT
-                THROW_HARD('pose_cont must be yes or no')
+                THROW_HARD('pose_cont must be no, yes or only')
         end select
-        select case(trim(self%pose_cont_route))
-            case('shift_then_joint','joint')
-            case DEFAULT
-                THROW_HARD('pose_cont_route must be shift_then_joint or joint')
-        end select
-        select case(trim(self%pose_cont_mode))
-            case('off','post_matcher','standalone_final')
-            case DEFAULT
-                THROW_HARD('pose_cont_mode must be off, post_matcher or standalone_final')
-        end select
-        if( trim(self%prg%to_char()) == 'refine3D_pose_cont' .and. &
-            &trim(self%pose_cont_mode) == 'off' ) &
-            THROW_HARD('refine3D_pose_cont requires pose_cont_mode')
-        if( trim(self%prg%to_char()) /= 'refine3D_pose_cont' .and. &
-            &trim(self%pose_cont_mode) /= 'off' ) &
-            THROW_HARD('pose_cont_mode is only valid for refine3D_pose_cont')
-        if( trim(self%prg%to_char()) == 'refine3D_pose_cont' )then
-            select case(trim(self%objfun))
-                case('euclid','cc')
-                case DEFAULT
-                    THROW_HARD('refine3D_pose_cont objfun must be euclid or cc')
-            end select
-        endif
         self%l_dose_weight = cline%defined('total_dose')
         if( self%fraction_dose_target < 0.01 )then
             THROW_HARD('Invalid : fraction_dose_target'//real2str(self%fraction_dose_target))
@@ -986,12 +974,23 @@ contains
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
-        ! Outer CC does not ordinarily emit the Euclidean residual sigma
-        ! contribution consumed by Cartesian pose refinement. Enable that
-        ! internal lifecycle only when pose_cont participates.
-        if( self%cc_objfun == OBJFUN_CC .and. &
-            &(trim(self%pose_cont) == 'yes' .or. trim(self%refine) == 'pose_cont') ) &
-            &self%cc_emit_sigma = 'yes'
+        ! the representation switch of a pass, derived once (plan section 6.4)
+        self%l_cart_refine = trim(self%refine) == 'cont'
+        self%l_cont_polish = .false.
+        if( self%l_cart_refine )then
+            ! a Cartesian pass refines the stored ptcl3D poses: the polar in-plane polish is
+            ! part of its five-parameter solve (inpl_cont=yes, the default, is overridden)
+            ! (children of a refine3D run, assembly and postprocessing on other segments, inherit
+            ! refine with the command line; the matcher's strategy checks its segment as well)
+            if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%oritype) /= 'ptcl3D' ) &
+                &THROW_HARD('refine=cont requires oritype=ptcl3D')
+            ! its own rotation bound: athres and prob_athres size the polar searches
+            if( .not. (self%athres_cont > 0. .and. self%athres_cont <= 180.) ) THROW_HARD('athres_cont must be in (0,180] degrees')
+            ! with pose_cont=yes it is the polish pass the iteration strategy schedules after a
+            ! discrete pass (C8, C19); the strategy refuses the pair on its own command line
+            self%l_cont_polish = trim(self%pose_cont) == 'yes'
+            self%inpl_cont = 'no'
+        endif
         select case(trim(self%prob_neigh_mode))
             case('state','geom','shc','snhc')
             case DEFAULT

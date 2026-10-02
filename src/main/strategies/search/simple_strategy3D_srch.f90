@@ -76,6 +76,9 @@ type strategy3D_srch
     procedure :: inpl_srch_peaks
     procedure :: refine_selected_continuously
     procedure :: refine_assignment_continuously
+    procedure, private :: refine_selected_continuously_impl
+    procedure, private :: refine_assignment_continuously_impl
+    procedure, private :: write_continuous_route_status
     procedure :: store_solution
     procedure :: store_continuous_solution
     procedure :: store_discrete_seed_solution
@@ -336,6 +339,13 @@ contains
     subroutine refine_selected_continuously( self, ref )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
+        call self%refine_selected_continuously_impl(ref)
+        call self%write_continuous_route_status
+    end subroutine refine_selected_continuously
+
+    subroutine refine_selected_continuously_impl( self, ref )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref
         real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
         real(dp) :: rotind_frac
         integer  :: irot, incoming_irot
@@ -394,7 +404,7 @@ contains
         endif
         call self%store_continuous_solution(ref, irot, rotind_frac, cxy(1), cxy(2:3))
         self%continuous_route_outcome = CONT_ROUTE_IMPROVED
-    end subroutine refine_selected_continuously
+    end subroutine refine_selected_continuously_impl
 
     !> Run the durable joint refinement after a probabilistic assignment has
     !! selected its state, projection, integer in-plane cell, and shift.  The
@@ -405,6 +415,17 @@ contains
     !! retains the incoming assignment untouched; a valid non-improving solve
     !! retains the pose with its re-scored objective value.
     subroutine refine_assignment_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref
+        integer,                intent(inout) :: inpl
+        real,                   intent(inout) :: corr, sh(2)
+        real,                   intent(out)   :: inpl_coord
+        logical,                intent(out)   :: inpl_valid
+        call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid)
+        call self%write_continuous_route_status
+    end subroutine refine_assignment_continuously
+
+    subroutine refine_assignment_continuously_impl( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
         integer,                intent(inout) :: inpl
@@ -479,7 +500,7 @@ contains
         inpl_coord = real(rotind_frac)
         inpl_valid = .true.
         self%continuous_route_outcome = CONT_ROUTE_IMPROVED
-    end subroutine refine_assignment_continuously
+    end subroutine refine_assignment_continuously_impl
 
     !> Commit an already accepted joint result without changing its selected
     !! state or projection reference.
@@ -520,6 +541,18 @@ contains
         logical,                intent(in) :: evaluation_valid
         joint_evaluation_invalid = self%continuous_active .and. .not. evaluation_valid
     end function joint_evaluation_invalid
+
+    !> The search object writes the outcome of the continuous in-plane route it ran into the
+    !! particle's record (cont_inpl_attempted, cont_inpl_improved) under inpl_cont=yes, where
+    !! the matcher clears both fields for every particle before the particle loop.
+    subroutine write_continuous_route_status( self )
+        class(strategy3D_srch), intent(inout) :: self
+        logical :: attempted, improved, no_improvement, invalid
+        if( trim(self%p_ptr%inpl_cont) /= 'yes' ) return
+        call self%get_continuous_route_status(attempted, improved, no_improvement, invalid)
+        call self%b_ptr%spproj_field%set(self%iptcl, 'cont_inpl_attempted', merge(1., 0., attempted))
+        call self%b_ptr%spproj_field%set(self%iptcl, 'cont_inpl_improved',  merge(1., 0., improved))
+    end subroutine write_continuous_route_status
 
     pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid )
         class(strategy3D_srch), intent(in)  :: self

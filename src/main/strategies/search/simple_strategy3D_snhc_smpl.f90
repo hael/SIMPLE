@@ -7,7 +7,7 @@ use simple_strategy3D_utils, only: extract_peak_ori
 use simple_decay_funs,       only: extremal_decay
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
-use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_pftc,   only: strategy3D_pftc
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
@@ -16,7 +16,7 @@ public :: strategy3D_snhc_smpl
 private
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_snhc_smpl
+type, extends(strategy3D_pftc) :: strategy3D_snhc_smpl
 contains
     procedure :: new         => new_snhc_smpl
     procedure :: srch        => srch_snhc_smpl

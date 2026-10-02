@@ -3,10 +3,13 @@ module simple_euclid_sigma2
 use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_core_module_api
 use simple_polarft_calc,   only: polarft_calc
+use simple_cartft_calc,    only: cartft_calc
 use simple_parameters,     only: parameters
+use simple_syslib,         only: simple_atomic_replace
 use simple_sigma2_state,   only: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
-    &sigma2_state_read_groups, sigma2_state_read_particles, sigma2_state_write_local_range
+    &sigma2_state_read_groups, sigma2_state_read_particles, sigma2_state_write_local_range, &
+    &sigma2_state_read_local_range
 use simple_starfile_wrappers
 implicit none
 private
@@ -39,10 +42,12 @@ type euclid_sigma2
     integer                       :: kfromto(2) = 0
     type(string)                  :: binfname
     logical                       :: exists     = .false.
+    logical                       :: replaces_range = .false. !< started from the open transaction's range (read_pending_range)
 contains
     ! constructor
-    procedure          :: new
-    procedure          :: new_cartesian
+    procedure, private :: new_pftc
+    procedure, private :: new_cart
+    generic            :: new => new_pftc, new_cart
     procedure, private :: init_from_group_header
     ! utils
     procedure          :: write_info
@@ -50,10 +55,14 @@ contains
     procedure          :: set_kfromto
     ! I/O
     procedure          :: read_part
+    procedure          :: read_pending_range
     procedure          :: read_groups
     procedure          :: allocate_ptcls
-    procedure          :: calc_sigma2
-    procedure          :: set_particle_contribution
+    procedure, private :: calc_sigma2_pftc
+    procedure, private :: calc_sigma2_cart
+    generic            :: calc_sigma2 => calc_sigma2_pftc, calc_sigma2_cart
+    procedure, private :: store_contribution
+    procedure          :: get_sigma2_part
     procedure          :: write_sigma2
     procedure          :: report_euclid_diag
     procedure, private :: read_sigma2_groups
@@ -70,7 +79,8 @@ contains
         if( matcher_completed ) group_iter = group_iter + 1
     end function sigma2_group_iter
 
-    subroutine new( self, params, pftc, binfname, box )
+    !> Polar pass: the noise table is shared with the polar calculator.
+    subroutine new_pftc( self, params, pftc, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
         ! set up fields for fast access to sigmas
@@ -79,25 +89,14 @@ contains
         class(polarft_calc),          intent(inout) :: pftc
         class(string),                intent(in)    :: binfname
         integer,                      intent(in)    :: box
-        call self%kill
-        self%p_ptr => params
-        self%kfromto = [1, fdim(box)-1]
-        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%p_ptr%fromp:self%p_ptr%top))
+        call self%new_cart(params, binfname, box)
         call pftc%assign_sigma2_noise(self%sigma2_noise)
-        self%binfname     =  binfname
-        self%fromp        =  self%p_ptr%fromp
-        self%top          =  self%p_ptr%top
-        self%sigma2_noise =  0.
-        ! scale diagnostics, filled by calc_sigma2, reported & reset by write_sigma2 (euclid_diag=yes)
-        if( self%p_ptr%l_euclid_diag )then
-            allocate(self%diag_ratio(NDIAG_BANDS,self%fromp:self%top), self%diag_v(self%fromp:self%top), source=-1.)
-        endif
-        self%exists       =  .true.
-    end subroutine new
+    end subroutine new_pftc
 
-    !> Initialize Euclidean sigma storage for a Cartesian matcher that does not
-    !! construct a polar-Fourier calculator.
-    subroutine new_cartesian( self, params, binfname, box )
+    !> The noise table of a pass: a Cartesian pass, which constructs no polar calculator, uses
+    !! it alone; the polar constructor shares it with the calculator. Diagnostics are filled by
+    !! calc_sigma2, reported and reset by write_sigma2 (euclid_diag=yes).
+    subroutine new_cart( self, params, binfname, box )
         class(euclid_sigma2), target, intent(inout) :: self
         class(parameters),    target, intent(in)    :: params
         class(string),                intent(in)    :: binfname
@@ -116,7 +115,7 @@ contains
                 &self%diag_v(self%fromp:self%top), source=-1.)
         endif
         self%exists = .true.
-    end subroutine new_cartesian
+    end subroutine new_cart
 
     !>  This is a minimal constructor to allow I/O of groups
     subroutine init_from_group_header( self, fname )
@@ -179,6 +178,32 @@ contains
         deallocate(state_part)
     end subroutine read_part
 
+    !> Replace this part's rows by the range an earlier pass of the open transaction wrote for it
+    !! (the discrete pass a polish follows), so a particle the later pass leaves untouched keeps
+    !! the residual of its current pose rather than the committed generation's.
+    subroutine read_pending_range( self )
+        class(euclid_sigma2), intent(inout) :: self
+        type(string) :: range_path
+        real(real32), allocatable :: spectra(:,:)
+        integer(int64) :: next_gen, generation, layout_digest
+        integer :: first_row, last_row, kfrom, kto, status
+        character(len=STDLEN) :: message
+        if( .not. allocated(self%sigma2_part) ) THROW_HARD('particle sigma2 storage is not allocated')
+        call sigma2_state_next_generation(self%binfname%to_char(), next_gen, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        range_path = sigma2_state_range_path(self%binfname%to_char(), next_gen, self%p_ptr%part, self%p_ptr%numlen)
+        call sigma2_state_read_local_range(range_path%to_char(), generation, layout_digest, first_row, last_row, &
+            &kfrom, kto, spectra, status, message)
+        if( status /= 0 ) THROW_HARD('no sigma2 range of the open transaction for this part: '//trim(message))
+        if( generation /= next_gen ) THROW_HARD('pending sigma2 range belongs to another transaction')
+        if( first_row /= self%fromp .or. last_row /= self%top ) THROW_HARD('pending sigma2 range does not cover this part')
+        if( kfrom /= self%kfromto(1) .or. kto /= self%kfromto(2) ) THROW_HARD('pending sigma2 range has incompatible shell bounds')
+        self%sigma2_part(:,:) = real(spectra)
+        self%replaces_range   = .true.
+        deallocate(spectra)
+        call range_path%kill
+    end subroutine read_pending_range
+
     subroutine read_groups( self, os )
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
@@ -236,15 +261,17 @@ contains
     end subroutine allocate_ptcls
 
     !>  Calculates and updates sigma2 within search resolution range
-    subroutine calc_sigma2( self, pftc, iptcl, o, refkind )
+    !> The sigma2 contribution of particle iptcl at its assigned polar orientation o.
+    subroutine calc_sigma2_pftc( self, pftc, iptcl, o, refkind )
         class(euclid_sigma2), intent(inout) :: self
         class(polarft_calc),  intent(inout) :: pftc
         integer,              intent(in)    :: iptcl
         class(ori),           intent(in)    :: o
         character(len=*),     intent(in)    :: refkind ! 'proj' or 'class'
-        integer :: iref, irot, kfromto(2), nk, ib, klo, khi
+        integer :: iref, irot, kfromto(2)
         real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-        real    :: shvec(2), v, rsum, psum
+        real    :: shvec(2), v
+        v = -1.
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
@@ -263,47 +290,80 @@ contains
         else
             call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         endif
-        self%sigma2_part(kfromto(1):kfromto(2),iptcl) = sigma_contrib
-        ! scale diagnostics
-        if( allocated(self%diag_v) )then
-            self%diag_v(iptcl) = v
-            nk = kfromto(2) - kfromto(1) + 1
-            do ib = 1, NDIAG_BANDS
-                klo  = kfromto(1) + nint(real(ib-1) * real(nk) / real(NDIAG_BANDS))
-                khi  = kfromto(1) + nint(real(ib)   * real(nk) / real(NDIAG_BANDS)) - 1
-                khi  = min(khi, kfromto(2))
-                if( khi < klo ) cycle
-                rsum = sum(ref_pow(klo:khi))
-                psum = sum(ptcl_pow(klo:khi))
-                if( psum > 0. ) self%diag_ratio(ib,iptcl) = sqrt(rsum / psum)
-            enddo
-        endif
+        call self%store_contribution(iptcl, sigma_contrib, ref_pow, ptcl_pow, v)
         deallocate(sigma_contrib)
         if( allocated(ref_pow)  ) deallocate(ref_pow)
         if( allocated(ptcl_pow) ) deallocate(ptcl_pow)
-    end subroutine calc_sigma2
+    end subroutine calc_sigma2_pftc
 
-    !> Store a Cartesian matcher's per-shell residual contribution.
-    subroutine set_particle_contribution( self, iptcl, sigma_contrib )
+    !> The sigma2 contribution of particle iptcl at the committed Cartesian pose, from particle
+    !! slot islot of the Cartesian calculator (prepared for objfun=euclid; sigma2 belongs to the
+    !! Euclidean objective only, C5): the mean squared residual over two per sample per shell
+    !! of the slot's shell range (cartft_calc%sigma_contribution). rotmat and shift (cropped
+    !! pixels, the model shift relative to the slot's observation) are the committed pose;
+    !! state and iseven select the reference. THROW_HARD when the slot's shell range is not the
+    !! pass's band.
+    subroutine calc_sigma2_cart( self, cftc, islot, iptcl, state, iseven, rotmat, shift )
+        class(euclid_sigma2), intent(inout) :: self
+        class(cartft_calc),   intent(in)    :: cftc
+        integer,              intent(in)    :: islot, iptcl, state
+        logical,              intent(in)    :: iseven
+        real(dp),             intent(in)    :: rotmat(3,3), shift(2)
+        real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
+        real :: v
+        if( .not.associated(self%p_ptr) )then
+            THROW_HARD('euclid_sigma2: params pointer is not set')
+        endif
+        if( .not. cftc%ptcl_is_valid(islot) ) return
+        call cftc%sigma_contribution(state, iseven, islot, rotmat, shift, sigma_contrib, ref_pow, ptcl_pow, v)
+        if( lbound(sigma_contrib,1) /= self%p_ptr%kfromto(1) .or. ubound(sigma_contrib,1) /= self%p_ptr%kfromto(2) ) &
+            &THROW_HARD('Cartesian sigma contribution does not span the band of the pass')
+        call self%store_contribution(iptcl, sigma_contrib, ref_pow, ptcl_pow, v)
+    end subroutine calc_sigma2_cart
+
+    !> The particle's sigma2 contribution of this part over the pass's band (as calc_sigma2 stored it).
+    function get_sigma2_part( self, iptcl ) result( sigma2 )
+        class(euclid_sigma2), intent(in) :: self
+        integer,              intent(in) :: iptcl
+        real, allocatable :: sigma2(:)
+        if( .not. allocated(self%sigma2_part) ) THROW_HARD('particle sigma2 storage is not allocated')
+        if( iptcl < lbound(self%sigma2_part,2) .or. iptcl > ubound(self%sigma2_part,2) ) &
+            &THROW_HARD('particle index is outside sigma2 storage')
+        sigma2 = self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl)
+    end function get_sigma2_part
+
+    !> Store one particle's per-shell contribution over the pass's band and its scale diagnostics.
+    subroutine store_contribution( self, iptcl, sigma_contrib, ref_pow, ptcl_pow, v )
         class(euclid_sigma2), intent(inout) :: self
         integer,              intent(in)    :: iptcl
         real,                 intent(in)    :: sigma_contrib(:)
-        integer :: active_range(2)
-
-        if( .not. allocated(self%sigma2_part) ) &
-            &THROW_HARD('particle sigma2 storage is not allocated')
+        real, allocatable,    intent(in)    :: ref_pow(:), ptcl_pow(:)
+        real,                 intent(in)    :: v
+        integer :: kfromto(2), nk, ib, klo, khi
+        real    :: rsum, psum
+        if( .not. allocated(self%sigma2_part) ) THROW_HARD('particle sigma2 storage is not allocated')
         if( iptcl < lbound(self%sigma2_part,2) .or. iptcl > ubound(self%sigma2_part,2) ) &
             &THROW_HARD('particle index is outside sigma2 storage')
-        active_range = self%p_ptr%kfromto
-        if( size(sigma_contrib) /= active_range(2)-active_range(1)+1 ) &
-            &THROW_HARD('Cartesian sigma contribution has incompatible shell bounds')
-        self%sigma2_part(active_range(1):active_range(2),iptcl) = sigma_contrib
-    end subroutine set_particle_contribution
+        kfromto = self%p_ptr%kfromto
+        self%sigma2_part(kfromto(1):kfromto(2),iptcl) = sigma_contrib
+        if( allocated(self%diag_v) .and. allocated(ref_pow) .and. allocated(ptcl_pow) )then
+            self%diag_v(iptcl) = v
+            nk = kfromto(2) - kfromto(1) + 1
+            do ib = 1, NDIAG_BANDS
+                klo  = nint(real(ib-1) * real(nk) / real(NDIAG_BANDS)) + 1
+                khi  = min(nint(real(ib) * real(nk) / real(NDIAG_BANDS)), nk)
+                if( khi < klo ) cycle
+                rsum = sum(ref_pow(lbound(ref_pow,1)+klo-1:lbound(ref_pow,1)+khi-1))
+                psum = sum(ptcl_pow(lbound(ptcl_pow,1)+klo-1:lbound(ptcl_pow,1)+khi-1))
+                if( psum > 0. ) self%diag_ratio(ib,iptcl) = sqrt(rsum / psum)
+            enddo
+        endif
+    end subroutine store_contribution
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self
         type(sigma2_state_header) :: header
-        type(string) :: candidate_path, range_path
+        type(string) :: candidate_path, range_path, staged_path
         integer(int64) :: next_gen
         integer :: status
         character(len=STDLEN) :: message
@@ -316,9 +376,21 @@ contains
         call sigma2_state_read_header(candidate_path%to_char(), header, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         if( header%generation /= next_gen ) THROW_HARD('canonical sigma2 candidate belongs to another transaction')
-        call sigma2_state_write_local_range(range_path%to_char(), header%generation, header%layout_digest, &
-            &self%fromp, real(self%sigma2_part,real32), self%kfromto(1), self%kfromto(2), status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
+        if( self%replaces_range )then
+            ! the range this pass started from stays until its successor is complete
+            staged_path = range_path%to_char()//'.tmp'
+            call del_file(staged_path)
+            call sigma2_state_write_local_range(staged_path%to_char(), header%generation, header%layout_digest, &
+                &self%fromp, real(self%sigma2_part,real32), self%kfromto(1), self%kfromto(2), status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            call simple_atomic_replace(staged_path, range_path, status)
+            if( status /= 0 ) THROW_HARD('cannot replace the pending sigma2 range')
+            call staged_path%kill
+        else
+            call sigma2_state_write_local_range(range_path%to_char(), header%generation, header%layout_digest, &
+                &self%fromp, real(self%sigma2_part,real32), self%kfromto(1), self%kfromto(2), status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+        endif
         call candidate_path%kill
         call range_path%kill
         call self%report_euclid_diag
@@ -601,6 +673,7 @@ contains
             self%top         = -1
             self%exists      = .false.
         endif
+        self%replaces_range = .false.
         self%p_ptr => null()
     end subroutine kill
 

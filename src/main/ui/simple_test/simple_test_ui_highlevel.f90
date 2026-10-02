@@ -9,6 +9,7 @@ type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
 type(ui_program), target :: abinitio3D_addon
 type(ui_program), target :: abinitio3D_addon_snapshots
+type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
@@ -24,6 +25,7 @@ contains
         call new_simulate_particles(tsttab)
         call new_abinitio3D_addon(tsttab)
         call new_abinitio3D_addon_snapshots(tsttab)
+        call new_cont_refine3D_1jxy(tsttab)
         call new_simulated_workflow(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
@@ -40,6 +42,7 @@ contains
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') abinitio3D_addon%name%to_char()
         write(logfhandle,'(A)') abinitio3D_addon_snapshots%name%to_char()
+        write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
@@ -124,6 +127,21 @@ contains
             &'Number of cumulative projects, including the base project', 'projects', .true., 0.)
         call add_ui_program('abinitio3D_addon_snapshots', abinitio3D_addon_snapshots, tsttab, UI_CATEGORY)
     end subroutine new_abinitio3D_addon_snapshots
+
+    subroutine new_cont_refine3D_1jxy( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call cont_refine3D_1jxy%new(&
+        &'cont_refine3D_1jxy',&                     ! name
+        &'validate continuous Cartesian pose refinement end to end on simulated 1JYX particles',&
+        &'refine3D refine=cont (euclid, cc, distributed) and refine3D_auto pose_cont=only on 1 000 simulated 1JYX '//&
+        &'particles from poses perturbed by 15 degrees and 2 pixels, and as the continuation of a polar refine3D_auto, '//&
+        &'checked against the simulation truth',&
+        &'simple_test_exec',&                       ! executable
+        &.false.)                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('cont_refine3D_1jxy', cont_refine3D_1jxy, tsttab, UI_CATEGORY)
+    end subroutine new_cont_refine3D_1jxy
 
     subroutine new_simulated_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab

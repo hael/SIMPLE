@@ -33,7 +33,7 @@ labels.
 |---|---|---|---|
 | `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 11 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
+| `highlevel` | 12 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
@@ -59,8 +59,9 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 30: 13 fast,
-5 library, 11 highlevel, 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 31: 13 fast,
+5 library, 12 highlevel, 1 platform; 30 until the `cont_refine3D_1jxy` entry of the
+pose_cont refactoring, an owner decision, contract C18) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -87,7 +88,7 @@ tester module (section 4.1).
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, sigma2 bootstrap, cavg registration |
-| `unit_cart_align3D` | Cartesian Fourier, pose refiner, pose adapter, pose strategy, pose statistics, pose workflow |
+| `unit_cart_align3D` | Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator |
 | `unit_parallel` | qsys control, qsys environment |
 | `unit_single` | atoms, cif2mrc, C-alpha finder |
@@ -100,7 +101,7 @@ convenience and deliberately not a CTest entry.
 | entry | label | what it runs |
 |---|---|---|
 | `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; addon report docking: the abinitio3D_addon report docks a map rotated by 90 degrees and recovers the rotation |
-| `lib_cart_align3D` | library | pose 1JYX recovery: 5 000 simulated 1JYX particles refined by the Cartesian pose refiner |
+| `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models |
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
@@ -110,6 +111,7 @@ convenience and deliberately not a CTest entry.
 | `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
 | `abinitio3D_addon` | highlevel | `abinitio3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `abinitio3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
+| `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_auto pose_cont=only`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 
@@ -770,8 +772,8 @@ written as `sub-suite` (entry).
 | `phshift_policy`, `ui_visibility` | `UI visibility` (`unit_ui`) |
 | `phshift_star` | `STAR project` (`unit_project`) |
 | `pick_extract` | `pick and extract` (`lib_stream`) |
-| `pose_cont_refine3D_adapter` | `pose adapter`, `pose strategy`, `pose statistics`, `pose workflow` (`unit_cart_align3D`) and `pose 1JYX recovery` (`lib_cart_align3D`) |
-| `pose_cont_refinement` | `pose refiner` (`unit_cart_align3D`) |
+| `pose_cont_refine3D_adapter` | the adapter is gone (pose_cont refactoring): `cart calculator`, `pose optimizer`, `pose strategy`, `pose statistics` (`unit_cart_align3D`), `pose 1JYX recovery` (`lib_cart_align3D`) and the workflow entry `cont_refine3D_1jxy`; the workflow sub-suite went with the removed program |
+| `pose_cont_refinement` | `cart calculator` and `pose optimizer` (`unit_cart_align3D`); the pose refiner was split into them |
 | `preproc` | the high-level workflow entry `stream_preproc` |
 | `project_merge` | `project merge` (`unit_project`) |
 | `projdir_accumulator` | `class-average accumulator` (`unit_reconstruction`) |

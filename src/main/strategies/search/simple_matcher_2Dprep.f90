@@ -1,5 +1,6 @@
 !@descr: common routines used by the high-level strategy 2D and 3D matchers
 module simple_matcher_2Dprep
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_pftc_srch_api
 use simple_timer
 use simple_builder,                 only: builder
@@ -8,10 +9,11 @@ use simple_matcher_ptcl_io,         only: prepimgbatch, killimgbatch
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, set_bp_range2D
 use simple_projector,               only: projector
 use simple_strategy2D_utils,        only: calc_cavg_offset
+use simple_memoize_ft_maps,         only: ft_map_get_farray_shape
 implicit none
 
 ! Particle image processing for alignment
-public :: prepimg4align, prepimg4align_cached
+public :: prepimg4align, prepimg4align_cached, prepimg4align_cart
 ! Reference processing for alignment
 public :: prep2Dref, calc_2Dref_offset
 private
@@ -88,6 +90,63 @@ contains
         ! fused IFFT, mask, FFT
         call img_out%ifft_mask_pad_fft(params%msk_crop, img_out_pd)
     end subroutine prepimg4align_cached
+
+    !> The Cartesian sibling of prepimg4align (plan section 6.4): the full-disk observation of one
+    !! particle as prepimg4align prepares the polar particle
+    !! up to its mask (O4): noise normalization, Fourier clip and the shift by minus the stored
+    !! shift (shift_crop, cropped pixels), the phase flip for CTFFLAG_YES at the cropped
+    !! sampling, the soft mask at mskrad; without the padding. The masked image is then
+    !! multiplied by the separable taper of the gather stencil (O5 (a); cartft_calc%get_ptcl_taper)
+    !! before its transform. ctfparms_out carries the cropped sampling. For CTFFLAG_YES the
+    !! caller memoizes the Fourier maps of the cropped box (memoize_ft_maps), as for
+    !! prepimg4align; THROW_HARD when they are absent.
+    subroutine prepimg4align_cart(raw_img, noise_mask, work_img, mskrad, smpd_crop, &
+        &shift_crop, taper, ctfparms_in, observed, ctfparms_out)
+        class(image), intent(inout) :: raw_img, work_img
+        logical, intent(in) :: noise_mask(:, :, :)
+        real, intent(in) :: mskrad, smpd_crop, shift_crop(2), taper(:)
+        type(ctfparams), intent(in) :: ctfparms_in
+        complex, allocatable, intent(out) :: observed(:, :)
+        type(ctfparams), intent(out) :: ctfparms_out
+        type(ctf) :: tfun
+        real, pointer :: rmat(:, :, :)
+        integer :: ldim(3), i, j
+
+        ldim = work_img%get_ldim()
+        if (ldim(3) /= 1 .or. ldim(1) < 2 .or. mod(ldim(1), 2) /= 0 .or. ldim(2) /= ldim(1)) &
+            &THROW_HARD('pose_cont observation workspace must be an even square image')
+        if (any(shape(noise_mask) /= raw_img%get_ldim())) &
+            &THROW_HARD('pose_cont observation noise mask has incompatible dimensions')
+        if (smpd_crop <= TINY .or. .not. ieee_is_finite(smpd_crop)) &
+            &THROW_HARD('pose_cont observation requires positive finite sampling')
+        if (size(taper) /= ldim(1)) THROW_HARD('pose_cont observation taper does not match the box')
+        ctfparms_out = ctfparms_in
+        ctfparms_out%smpd = smpd_crop
+        select case (ctfparms_in%ctfflag)
+        case (CTFFLAG_NO, CTFFLAG_FLIP)
+            call raw_img%norm_noise_fft_clip_shift(noise_mask, work_img, -shift_crop)
+        case (CTFFLAG_YES)
+            if (any(ft_map_get_farray_shape() /= [ldim(1)/2 + 1, ldim(2), 1])) &
+                &THROW_HARD('pose_cont observation requires the Fourier maps of the cropped box')
+            tfun = ctf(smpd_crop, ctfparms_in%kv, ctfparms_in%cs, ctfparms_in%fraca)
+            call raw_img%norm_noise_fft_clip_shift_ctf_flip(noise_mask, work_img, -shift_crop, tfun, ctfparms_out)
+        case default
+            THROW_HARD('unsupported CTF flag for pose_cont observation')
+        end select
+        call work_img%ifft_mask_fft(mskrad)
+        ! the stencil's taper on the masked image, centred at ldim/2+1 as the image is after ifft
+        call work_img%ifft()
+        call work_img%get_rmat_ptr(rmat)
+        do j = 1, ldim(2)
+            do i = 1, ldim(1)
+                rmat(i, j, 1) = rmat(i, j, 1)*taper(i)*taper(j)
+            end do
+        end do
+        nullify (rmat)
+        call work_img%fft()
+        allocate (observed(-ldim(1)/2:ldim(1)/2, -ldim(2)/2:ldim(2)/2))
+        observed = work_img%expand_ft()
+    end subroutine prepimg4align_cart
 
     !>  \brief  Calculates the centering offset of the input cavg
     !>          cavg & particles centering is not performed

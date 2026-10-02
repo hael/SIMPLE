@@ -1,7 +1,6 @@
 !@descr: module defining the user interfaces for 3D refinement programs in the simple_exec suite
 module simple_ui_refine3D
 use simple_ui_modules
-use simple_ui_refine3D_pose_cont, only: construct_refine3D_pose_cont_program
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine3d', 'Refine 3D Workflows', 60)
@@ -14,7 +13,6 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_refine3D(prgtab)
         call new_refine3D_auto(prgtab)
-        call construct_refine3D_pose_cont_program(prgtab, UI_CATEGORY)
     end subroutine construct_refine3D_programs
 
     subroutine new_refine3D( prgtab )
@@ -58,19 +56,16 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
-        &'Experimental five-parameter pose refinement', &
-        &'Run transactional Cartesian LM after the established matcher; mutually exclusive with '// &
-        &'refine=pose_cont(yes|no){no}', '', &
+        &'Continuous pose polish', &
+        &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &
+        &'particles; not with refine=cont(yes|no){no}', '', &
         &.false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'pose_cont_route', 'multi', &
-        &'Continuous pose LM route', &
-        &'LM route used by pose_cont=yes or '// &
-        &'refine=pose_cont(shift_then_joint|joint){shift_then_joint}', '', &
-        &.false., 'shift_then_joint', group="search", &
-        &choices=ui_choices([character(len=16) :: 'shift_then_joint', 'joint']), &
-        &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'athres_cont', 'num', 'Continuous pose rotation bound', &
+        &'Halfwidth of the total rotation a continuous Cartesian pose solve (refine=cont, pose_cont=yes) may '// &
+        &'move a particle from its seed: the capture range for wrongly assigned orientations', &
+        &'in degrees{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, maxits, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, update_frac, group="search", &
@@ -87,10 +82,10 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
-        &'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|pose_cont){shc}','',&
+        &'Refinement mode; cont refines the stored poses continuously(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|cont){shc}','',&
         &.false., 'shc', group="search", &
         &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', &
-        &'prob', 'prob_state', 'prob_neigh', 'pose_cont']), &
+        &'prob', 'prob_state', 'prob_neigh', 'cont']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}','', .false., 'state', &
@@ -210,6 +205,16 @@ contains
         &'When vol1 has independent provenance, run one fixed-reference CC pose-initialization pass at 15 Angstroms &
         &before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &
         &choices=ui_choices([character(len=4) :: 'cc', 'none']), visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'pose_cont', 'multi', 'Continuous pose refinement', &
+        &'How much continuous Cartesian pose refinement: no; yes, a continuous pass after every discrete '//&
+        &'iteration; only, continuous refinement alone, which continues from the 3D poses a discrete '//&
+        &'workflow left in the project and runs no discrete search(no|yes|only){no}', '', .false., 'no', &
+        &group='search', choices=ui_choices([character(len=4) :: 'no', 'yes', 'only']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'athres_cont', 'num', 'Continuous pose rotation bound', &
+        &'Halfwidth of the total rotation a continuous Cartesian pose solve (pose_cont=yes or only) may '// &
+        &'move a particle from its seed: the capture range for wrongly assigned orientations', &
+        &'in degrees{10}', .false., 10., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)

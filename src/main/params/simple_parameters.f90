@@ -139,6 +139,7 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
+    character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
     character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -289,9 +290,7 @@ type :: parameters
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement(yes|no){yes}
-    character(len=3)          :: pose_cont='no'       !< transactional Cartesian five-parameter LM(yes|no){no}
-    character(len=16)         :: pose_cont_route='shift_then_joint' !< pose_cont LM route
-    character(len=16)         :: pose_cont_mode='off' !< automated pose_cont workflow mode
+    character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose refinement(no|yes|only){no}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
@@ -320,7 +319,7 @@ type :: parameters
     ! class-average quality model preset(chunk100mics|sieve|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|shc_smpl|snhc_smpl|neigh|greedy|prob|prob_state|prob_neigh|pose_cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|shc_smpl|snhc_smpl|neigh|greedy|prob|prob_state|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='global'   !< sigma estimation kind (global|group){global}
@@ -506,6 +505,7 @@ type :: parameters
     real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
     real    :: athres=10.          !< angular threshold(in degrees)
+    real    :: athres_cont=10.     !< continuous Cartesian pose refinement: total rotation from the seed(in degrees){10}
     real    :: beta=0.0            !< Convenience parameter{0.0}
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
@@ -673,6 +673,9 @@ type :: parameters
     logical :: l_regpass         = .true.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
+    logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont)
+    logical :: l_cont_polish     = .false. !< the Cartesian pass the polish schedules after a discrete one
+    logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first
     logical :: l_sigma_glob      = .false.
     logical :: l_sticky_class_sampling = .false.
     logical :: l_trail_rec       = .false.

@@ -3,7 +3,7 @@ module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_utils, only: assign_ori
 use simple_parameters,      only: parameters
-use simple_strategy3D,      only: strategy3D
+use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_oris,            only: oris
 implicit none
@@ -13,7 +13,7 @@ private
 
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_prob
+type, extends(strategy3D_pftc) :: strategy3D_prob
     logical :: assignment_valid = .false.
 contains
     procedure :: new         => new_prob

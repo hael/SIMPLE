@@ -17,8 +17,7 @@ use simple_sigma2_state,        only: sigma2_state_candidate_path, sigma2_state_
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
-use simple_pose_cont_run_stats, only: aggregate_pose_cont_stats_files
-use simple_pose_cont_refine3D_adapter, only: pose_cont_config_from_route
+use simple_strategy3D_cont,     only: check_cont_seeds
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -65,6 +64,7 @@ type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(refine3D_bench_state), private :: bench
     type(cmdline)     :: cline_calc_group_sigmas
     type(convergence) :: conv
+    type(parameters)  :: params_polish   !< the parameters of the polish pass (pose_cont=yes)
     logical :: l_sigma
 contains
     procedure :: initialize         => inmem_initialize
@@ -144,13 +144,33 @@ end interface
 
 contains
 
+    !> The polish of C8 and C19 (pose_cont=yes) is a refine=cont pass this strategy schedules
+    !! after every discrete pass over the same particle sample (Phase 9 of the pose_cont
+    !! refactoring): refine=cont with pose_cont=yes on the command line of refine3D names that
+    !! internal pass.
+    subroutine check_polish_request( params )
+        type(parameters), intent(in) :: params
+        if( params%l_cont_polish ) &
+            &THROW_HARD('pose_cont=yes follows a discrete refine mode with a continuous pass; refine=cont runs the continuous pass alone')
+    end subroutine check_polish_request
+
+    !> Whether a polish pass follows the discrete pass of this iteration: pose_cont=yes in a
+    !! mode that searches (a residual-only sigma pass and an evaluation search nothing).
+    logical function polish_follows( params )
+        type(parameters), intent(in) :: params
+        polish_follows = trim(params%pose_cont) == 'yes' .and. .not. params%l_cart_refine
+        select case(trim(params%refine))
+            case('eval','sigma')
+                polish_follows = .false.
+        end select
+    end function polish_follows
+
     !> Remove refine3D matcher-only options before invoking child workflows.
     !! The parent and distributed matcher workers retain these options.
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
         call cline%delete('inpl_cont')
         call cline%delete('pose_cont')
-        call cline%delete('pose_cont_route')
     end subroutine strip_refine3D_search_only_args
 
     !> Strategy selection based on command-line shape.
@@ -571,6 +591,7 @@ contains
         logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
+        call check_polish_request(params)
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -594,7 +615,8 @@ contains
             THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
-        ! Initial orientation parameters
+        ! Initial orientation parameters; a Cartesian pass continues from existing poses (C11)
+        if( params%l_cart_refine ) call check_cont_seeds(build%spproj_field)
         if( build%spproj%is_virgin_field(params%oritype) )then
             call build%spproj_field%rnd_oris
             l_proj_dirty = .true.
@@ -647,11 +669,11 @@ contains
         type(commander_volassemble) :: xvolassemble
         type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
-        type(cmdline)                     :: cline_build
+        type(cmdline)                     :: cline_build, cline_polish
         integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
         logical                           :: l_prob_state_mode, l_prob_neigh_mode
-        logical                           :: l_write_partial_recs
+        logical                           :: l_write_partial_recs, l_polish
         type(string)                      :: volname
         601 format(A,1X,F12.3)
         if( L_BENCH_GLOB )then
@@ -735,7 +757,34 @@ contains
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
         if( self%l_sigma ) call prepare_canonical_sigma_update(params, build)
-        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
+        ! with the polish (pose_cont=yes) one reconstruction per iteration comes from the polished
+        ! poses: the discrete pass writes no partial reconstructions
+        l_polish = polish_follows(params)
+        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_polish)
+        ! a Cartesian pass draws its particle sample in the matcher (no prob_align child writes it),
+        ! and the assembly reads the sample of the iteration (trailing update fractions) from the
+        ! project file, so the matcher's field goes to disk before the assembly
+        if( params%l_cart_refine .and. l_write_partial_recs ) call build%spproj%write_segment_inside(params%oritype)
+        if( l_polish )then
+            ! the polish pass (C8, C19): refine=cont over the discrete pass's particle sample, from
+            ! the poses it committed, against the Cartesian references this iteration materialized;
+            ! its toolbox is built from the project the discrete pass leaves on disk
+            call build%spproj%write_segment_inside(params%oritype)
+            cline_polish = cline_build
+            call cline_polish%set('refine',    'cont')
+            call cline_polish%set('pose_cont', 'yes')
+            call build%kill_strategy3D_tbox
+            call build%kill_general_tbox
+            call build%init_params_and_build_strategy3D_tbox(cline_polish, self%params_polish)
+            self%params_polish%which_iter = iter
+            self%params_polish%extr_iter  = extr_iter
+            self%params_polish%outfile    = params%outfile
+            ! no new sigma2 transaction: the polish rewrites the discrete pass's ranges from them
+            call refine3D_exec(self%params_polish, build, cline_polish, iter, converged, l_write_partial_recs)
+            ! the assembly reads the polished poses from the project file
+            call build%spproj%write_segment_inside(params%oritype)
+            call cline_polish%kill
+        endif
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
@@ -871,6 +920,7 @@ contains
         self%l_multistates = cline%defined('nstates')
         ! init project
         call build%init_params_and_build_spproj(cline, params)
+        call check_polish_request(params)
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -1004,6 +1054,8 @@ contains
             do state = 1,params%nstates
                 if( .not. cline%defined('vol'//int2str(state)) ) vol_defined = .false.
             enddo
+            ! a Cartesian pass continues from existing poses (C11)
+            if( params%l_cart_refine ) call check_cont_seeds(build%spproj_field)
             self%have_oris = .not. build%spproj%is_virgin_field(params%oritype)
             if( .not. self%have_oris )then
                 call build%spproj_field%rnd_oris
@@ -1127,8 +1179,9 @@ contains
         type(string)  :: fname_vol, volpproc, vollp
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
+        type(chash) :: job_descr_pass
         integer :: state, iter
-        logical :: l_prob_state_mode, l_prob_neigh_mode
+        logical :: l_prob_state_mode, l_prob_neigh_mode, l_polish
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -1194,16 +1247,31 @@ contains
         if( sigma_update_enabled(params) )then
             call prepare_canonical_sigma_update(params, build)
         endif
-        ! schedule distributed jobs
-        call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
-        if (trim(params%pose_cont) == 'yes' .or. trim(params%refine) == 'pose_cont') then
-            call aggregate_pose_cont_stats_files( &
-                &pose_cont_config_from_route(params%pose_cont_route), iter, params%nparts)
-        end if
+        ! schedule distributed jobs; with the polish (pose_cont=yes) one reconstruction per
+        ! iteration comes from the polished poses, so the discrete pass writes no partial
+        ! reconstructions
+        l_polish       = polish_follows(params)
+        job_descr_pass = self%job_descr
+        if( l_polish ) call job_descr_pass%set('volrec', 'no')
+        call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs (a residual-only sigma pass, refine=sigma,
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) &
             &call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+        if( l_polish )then
+            ! the polish pass (C8, C19): refine=cont over the discrete pass's particle sample (the
+            ! workers reproduce it from the merged project), from the poses it committed, against
+            ! the Cartesian references this iteration materialized; it writes the partial
+            ! reconstructions and, under euclid, rewrites the discrete pass's sigma2 ranges of the
+            ! open transaction from them (no new transaction)
+            job_descr_pass = self%job_descr
+            call job_descr_pass%set('refine',    'cont')
+            call job_descr_pass%set('pose_cont', 'yes')
+            call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), &
+                &array=L_USE_SLURM_ARR, extra_params=params)
+            call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+        endif
+        call job_descr_pass%kill
         do state = 1, params%nstates
             call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
         enddo

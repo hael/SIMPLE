@@ -1,16 +1,17 @@
-!@descr: abstract base class defining the common strategy3D interface
+!@descr: abstract base class defining the common, representation-neutral strategy3D interface
 module simple_strategy3D
 use simple_builder,         only: builder
 use simple_oris,            only: oris
 use simple_parameters,      only: parameters
-use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
+use simple_strategy3D_srch, only: strategy3D_spec
 implicit none
 
 public :: strategy3D
 private
 
+!> The particle spec and the deferred interface of every 3D strategy; the polar search
+!! object belongs to strategy3D_pftc (simple_strategy3D_pftc).
 type, abstract :: strategy3D
-    type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
     procedure(generic_new),         deferred :: new

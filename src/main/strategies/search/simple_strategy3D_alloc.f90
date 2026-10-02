@@ -42,6 +42,8 @@ contains
         logical :: l_prob_mode
         ! clean all class arrays & types
         call clean_strategy3D()
+        ! a Cartesian pass (l_cart_refine) searches no projection grid: no polar search state
+        if( params%l_cart_refine ) return
         ! parameters
         nrefs     = params%nspace     * params%nstates
         nrefs_sub = params%nspace_sub * params%nstates

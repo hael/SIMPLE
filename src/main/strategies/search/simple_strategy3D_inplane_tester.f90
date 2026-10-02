@@ -5,7 +5,10 @@
 ! candidate resets it), the joint and the discrete-seed storage routes, the invalid
 ! joint-evaluation predicate, resolve_inplane_e3, and the inpl_cont policy: default
 ! yes, exposed with that default on the three refine3D programs, stripped from the
-! child command line.
+! child command line. Phase 5 of the pose_cont refactoring: the search object's previous
+! shift is the shift stored in the project before the search, the origin the matcher now
+! takes the shift increment from (N10; a small phantom written to the run directory and
+! removed).
 module simple_strategy3D_inplane_tester
 use simple_core_module_api,   only: dp
 use simple_cmdline,           only: cmdline
@@ -15,8 +18,12 @@ use simple_linked_list,       only: list_iterator
 use simple_ui,                only: make_ui, get_prg_ptr
 use simple_ui_program,        only: ui_program, ui_program_input
 use simple_refine3D_strategy, only: strip_refine3D_search_only_args
-use simple_strategy3D_alloc,  only: clean_strategy3D, s3D, seed_continuous_inplane_candidate
-use simple_strategy3D_srch,   only: strategy3D_srch
+use simple_strategy3D_alloc,  only: clean_strategy3D, prep_strategy3D, s3D, seed_continuous_inplane_candidate
+use simple_strategy3D_srch,   only: strategy3D_srch, strategy3D_spec
+use simple_builder,           only: builder
+use simple_image,             only: image
+use simple_syslib,            only: del_file
+use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_strategy3D_utils,  only: resolve_inplane_e3
 use simple_test_utils
 implicit none
@@ -34,6 +41,7 @@ contains
         call test_discrete_seed_storage_and_invalid_predicate()
         call test_resolve_inplane_e3()
         call test_inpl_cont_policy()
+        call test_previous_shift_is_stored_shift()
     end subroutine run_all_strategy3D_inplane_tests
 
     !> nrefs candidates, one thread; the continuous arrays only on request
@@ -206,5 +214,71 @@ contains
             call iterator%next()
         enddo
     end function has_search_input
+
+    !> N10: the matcher takes the shift increment of a search from the project orientation
+    !! before and after srch, where it formerly read the search object's previous shift
+    !! (s%prev_shvec). That shift is the one stored in the project before the search: both
+    !! preparations of the search object (prep4srch, prep4prob) set it from the stored record.
+    !! Fixture: a one-particle strategy3D toolbox on a small phantom. Expected value: the
+    !! stored shift.
+    subroutine test_previous_shift_is_stored_shift()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        integer,          parameter :: BOX = 32
+        real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75]
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)         :: cline
+        type(strategy3D_srch) :: srch
+        type(strategy3D_spec) :: spec
+        type(image)           :: vol
+        real, allocatable     :: rmat(:,:,:)
+        integer :: i, j, k
+        write(*,'(A)') 'test_previous_shift_is_stored_shift'
+        allocate(rmat(BOX,BOX,BOX))
+        do k = 1, BOX
+            do j = 1, BOX
+                do i = 1, BOX
+                    rmat(i,j,k) = exp(-real((i-14)**2 + (j-18)**2 + (k-16)**2)/18.) + &
+                        &0.5*exp(-real((i-20)**2 + (j-13)**2 + (k-19)**2)/12.)
+                end do
+            end do
+        end do
+        call vol%new([BOX,BOX,BOX], 1.5)
+        call vol%set_rmat(rmat, .false.)
+        call vol%write(string(PHANTOM), del_if_exists=.true.)
+        call vol%kill
+        call cline%set('vol1',    PHANTOM)
+        call cline%set('mskdiam', 36.)
+        call cline%set('smpd',    1.5)
+        call cline%set('lp',      6.)
+        call cline%set('nptcls',  1.)
+        call cline%set('nspace',  2)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'cc')
+        call cline%check
+        call b%init_params_and_build_strategy3D_tbox(cline, p)
+        call set_bp_range3D(p, b, cline)
+        call b%pftc%new(p, p%nspace, [1,1], p%kfromto)
+        call b%spproj_field%set_euler(1, [31., 57., 113.])
+        call b%spproj_field%set_shift(1, STORED_SHIFT)
+        call b%spproj_field%set_state(1, 1)
+        call prep_strategy3D(p, b)
+        spec%iptcl     = 1
+        spec%iptcl_map = 1
+        call srch%new(p, spec, b)
+        srch%ithr = 1
+        call srch%prep4prob
+        call assert_true(all(srch%prev_shvec == STORED_SHIFT), &
+            &'the previous shift of the search object is not the shift stored in the project')
+        call assert_true(all(b%spproj_field%get_2Dshift(1) == STORED_SHIFT), &
+            &'preparing the search changed the stored shift')
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_previous_shift_is_stored_shift
 
 end module simple_strategy3D_inplane_tester

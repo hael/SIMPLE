@@ -5,7 +5,7 @@ use simple_strategy3D_alloc, only: s3D, ref_state_from_index
 use simple_strategy3D_utils, only: extract_peak_ori, extract_peak_oris
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
-use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_pftc,   only: strategy3D_pftc
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
@@ -14,7 +14,7 @@ public :: strategy3D_greedy_sub
 private
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_greedy_sub
+type, extends(strategy3D_pftc) :: strategy3D_greedy_sub
 contains
     procedure :: new         => new_greedy_sub
     procedure :: srch        => srch_greedy_sub

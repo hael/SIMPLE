@@ -34,7 +34,7 @@ public :: refine3D_frozen_rec_fbody
 public :: refine3D_frozen_manifest_fname
 public :: refine3D_frozen_pcg_fname
 public :: refine3D_reproj_model_fname
-public :: refine3D_pose_cont_ref_fname
+public :: refine3D_cart_refvols_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
 public :: refine3D_volassemble_bench_fname
@@ -259,12 +259,12 @@ contains
         fname = string('reprojection_model')//half_suffix(half)//BIN_EXT
     end function refine3D_reproj_model_fname
 
-    !> Processed physical reference for one Cartesian pose state and half-set.
-    type(string) function refine3D_pose_cont_ref_fname( state, half ) result(fname)
-        integer,          intent(in) :: state
+    !> The prepared Cartesian reference volumes of every state for one half-set
+    !! (cart_refvols_even.bin, cart_refvols_odd.bin; plan section 6.6).
+    type(string) function refine3D_cart_refvols_fname( half ) result(fname)
         character(len=*), intent(in) :: half
-        fname = string('pose_cont_reference_state')//state_tag(state)//half_suffix(half)//MRC_EXT
-    end function refine3D_pose_cont_ref_fname
+        fname = string('cart_refvols')//half_suffix(half)//BIN_EXT
+    end function refine3D_cart_refvols_fname
 
     !> per-iteration bench record; with part present the collision-free per-partition
     !! record (REFINE3D_BENCH_ITERnnn_PARTppp.txt), the plain name stays partition 1's legacy file

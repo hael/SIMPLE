@@ -3,7 +3,7 @@ module simple_strategy3D_eval
 use simple_core_module_api
 use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,      only: parameters
-use simple_strategy3D,      only: strategy3D
+use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_oris,            only: oris
 implicit none
@@ -11,7 +11,7 @@ implicit none
 public :: strategy3D_eval
 private
 
-type, extends(strategy3D) :: strategy3D_eval
+type, extends(strategy3D_pftc) :: strategy3D_eval
 contains
     procedure :: new         => new_eval
     procedure :: srch        => srch_eval

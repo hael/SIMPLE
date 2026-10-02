@@ -200,11 +200,11 @@ contains
         &'unit_cart_align3D',&
         &'unit tests: Cartesian (continuous) 3D registration',&
         &'is the fast-gate unit suite for Cartesian 3D registration: Fourier operations, pose refinement, '//&
-        &'refine3D integration, reporting and workflow policy',&
+        &'refine3D integration and reporting',&
         &'simple_test_exec',&
         &.false.)
         call unit_cart_align3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (cartesian_fourier, pose_refiner, pose_adapter, pose_strategy, pose_statistics, pose_workflow)', '', .false., '')
+            &'One sub-suite of this area to run alone (cartesian_fourier, cart_calculator, pose_optimizer, pose_strategy, pose_statistics)', '', .false., '')
         call add_ui_program('unit_cart_align3D', unit_cart_align3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_cart_align3D
 
@@ -213,7 +213,7 @@ contains
         call lib_cart_align3D%new(&
         &'lib_cart_align3D',&
         &'library tests: Cartesian pose refinement on simulated 1JYX particles',&
-        &'is the nightly library suite for Cartesian 3D registration: 5000 simulated 1JYX particles refined from perturbed poses and reconstructed',&
+        &'is the nightly library suite for Cartesian 3D registration: 1000 simulated 1JYX particles refined by the Cartesian 3D strategy from perturbed poses under objfun cc and euclid at lp 8 and 4 A, and reconstructed',&
         &'simple_test_exec',&
         &.false.)
         call lib_cart_align3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &

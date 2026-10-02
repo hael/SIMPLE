@@ -10,6 +10,7 @@ use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 use simple_euclid_sigma2,    only: euclid_sigma2
 use simple_polarft_calc,     only: polarft_calc
+use simple_cartft_calc,      only: cartft_calc
 use simple_srchspace_map,    only: srchspace_map
 implicit none
 
@@ -25,6 +26,7 @@ type :: builder
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(euclid_sigma2)                 :: esig                   !< sigma2 noise variance
     type(polarft_calc)                  :: pftc                   !< object for polar Fourier transform calculations
+    type(cartft_calc)                   :: cftc                   !< Cartesian Fourier calculator of continuous pose refinement
     type(image)                         :: img                    !< individual image/projector objects
     type(image)                         :: img_crop               !< for cropped image
     type(image)                         :: img_pad                !< -"-
@@ -341,6 +343,7 @@ contains
             call self%vol_odd%kill_expanded
             call self%vol_odd_pad%kill_expanded
             call self%vol2%kill
+            call self%cftc%kill
             if( allocated(self%subspace_inds)         ) deallocate(self%subspace_inds)
             if( allocated(self%subspace_full2sub_map) ) deallocate(self%subspace_full2sub_map)
             if( allocated(self%fsc)                   ) deallocate(self%fsc)
@@ -373,6 +376,11 @@ contains
         real    :: rot
         call self%kill_strategy3D_tbox
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
+        if( params%l_cart_refine )then
+            ! a Cartesian pass refines continuous poses: no discrete in-plane rotation table
+            self%strategy3D_tbox_exists = .true.
+            return
+        endif
         rot = 0.
         params%nrots = 0
         do while( rot < 360. )
