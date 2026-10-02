@@ -5,7 +5,7 @@
 export SIMPLE_DEFAULT_PARTITION_TIME=true
 export SIMPLE_PATH=XXXSIMPLEPATHXXX
 export SIMPLE_EMAIL=''
-export SIMPLE_QSYS=slurm
+export SIMPLE_QSYS=slurm_worker
 
 echo $$ > nice.pid
 echo "Running on $HOSTNAME"
