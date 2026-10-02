@@ -5,11 +5,57 @@ use simple_image,       only: image
 use simple_eer_factory, only: eer_decoder
 implicit none
 
-public :: correct_gain, flip_gain, calc_eer_fraction
+public :: correct_gain, flip_gain, calc_eer_fraction, pix2polycoords, patch_poly, apply_patch_poly
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    !> Converts a pixel coordinate to the normalized stage coordinate
+    pure real(dp) function pix2polycoords( pixel_coord, image_dim )
+        real(dp), intent(in) :: pixel_coord
+        integer,  intent(in) :: image_dim
+        pix2polycoords = (pixel_coord-1.d0) / real(image_dim-1,dp) - 0.5d0
+    end function pix2polycoords
+
+    !> Polynomial basis for the 18-parameter local-motion model
+    pure function patch_poly( p, n ) result( res )
+        real(dp), intent(in) :: p(:)
+        integer,  intent(in) :: n
+        real(dp) :: res(n)
+        real(dp) :: x, y, t
+        x = p(1)
+        y = p(2)
+        t = p(3)
+        res(    1) = t
+        res(    2) = t**2
+        res(    3) = t**3
+        res( 4: 6) = x * res( 1: 3)  ! x   * {t,t^2,t^3}
+        res( 7: 9) = x * res( 4: 6)  ! x^2 * {t,t^2,t^3}
+        res(10:12) = y * res( 1: 3)  ! y   * {t,t^2,t^3}
+        res(13:15) = y * res(10:12)  ! y^2 * {t,t^2,t^3}
+        res(16:18) = y * res( 4: 6)  ! x*y * {t,t^2,t^3}
+    end function patch_poly
+
+    !> Evaluates the 18-parameter local-motion polynomial
+    pure function apply_patch_poly( c, x, y, t ) result( res_sp )
+        real(dp), intent(in) :: c(18), x, y, t
+        real(sp) :: res_sp
+        real(dp) :: res
+        real(dp) :: x2, y2, xy, t2, t3
+        x2 = x * x
+        y2 = y * y
+        xy = x * y
+        t2 = t * t
+        t3 = t2 * t
+        res =       c( 1) * t      + c( 2) * t2      + c( 3) * t3
+        res = res + c( 4) * t * x  + c( 5) * t2 * x  + c( 6) * t3 * x
+        res = res + c( 7) * t * x2 + c( 8) * t2 * x2 + c( 9) * t3 * x2
+        res = res + c(10) * t * y  + c(11) * t2 * y  + c(12) * t3 * y
+        res = res + c(13) * t * y2 + c(14) * t2 * y2 + c(15) * t3 * y2
+        res = res + c(16) * t * xy + c(17) * t2 * xy + c(18) * t3 * xy
+        res_sp = real(res)
+    end function apply_patch_poly
 
     ! gain correction, calculate image sum and identify outliers
     subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range )

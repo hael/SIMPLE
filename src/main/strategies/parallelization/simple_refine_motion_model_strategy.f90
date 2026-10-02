@@ -153,11 +153,14 @@ contains
         count_fractioned_stacks = (nframes + stepf - 1) / stepf
     end function count_fractioned_stacks
 
-    pure integer function fraction_last_frame( index, fromf, tof, stepf )
+    ! Full frame blocks; anchor a final partial block at tof, overlapping its predecessor.
+    ! If the entire selected range is shorter than stepf, use that range once.
+    pure function fraction_frame_range( index, fromf, tof, stepf ) result( frames )
         integer, intent(in) :: index, fromf, tof, stepf
-        fraction_last_frame = fromf - 1 + index * stepf
-        fraction_last_frame = min(fraction_last_frame, tof)
-    end function fraction_last_frame
+        integer :: frames(2)
+        frames(2) = min(fromf - 1 + index * stepf, tof)
+        frames(1) = max(fromf, frames(2) - stepf + 1)
+    end function fraction_frame_range
 
     function fraction_output_dir( fromf, tof ) result( dirname )
         integer, intent(in) :: fromf, tof
@@ -198,12 +201,13 @@ contains
         real    :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2)
         real    :: prev_center_sc(2), stk_min, stk_max, stk_mean, stk_sdev
         integer :: prev_pos(2), new_pos(2), ishift(2), prev_center(2), new_center(2)
-        integer :: f, i,ind, imov, iptcl, nmovs, prev_box, box_foo, cnt, nmovies_tot, stk_ind
+        integer :: ffromto(2), i,ind, imov, iptcl, nmovs, prev_box, box_foo, cnt, nmovies_tot, stk_ind
         integer :: fromp, top, istk, nptcls2extract, nptcls, nfractioned_stacks, imov_local
-        logical :: l_write16bits
+        logical :: l_write16bits, l_from3D
         call validate_input
         params%msk    = RADFRAC_NORM_EXTRACT * real(params%box/2)
         l_write16bits = trim(params%wfloat16).eq.'yes'
+        l_from3D      = trim(params%oritype).eq.'ptcl3D'
         ! proceed
         nfractioned_stacks = 0
         if( params%tof > 0 )then
@@ -259,13 +263,19 @@ contains
                     if( spproj_in%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     if( spproj_in%os_ptcl3D%get_state(iptcl) == 0 ) cycle
                     call spproj_in%get_boxcoords(iptcl, prev_pos)
-                    prev_shift = spproj_in%os_ptcl3D%get_2Dshift(iptcl)
+                    shift2d = spproj_in%os_ptcl2D%get_2Dshift(iptcl)
+                    shift3d = spproj_in%os_ptcl3D%get_2Dshift(iptcl)
+                    if( l_from3D ) then
+                        prev_shift = shift3d
+                    else
+                        prev_shift = shift2d
+                    endif
                     ishift      = nint(prev_shift)
                     new_pos     = prev_pos - ishift
                     translation = -real(ishift)
+                    shift2d     = shift2d + translation
+                    shift3d     = shift3d + translation
                     if( prev_box /= params%box ) new_pos = new_pos + (prev_box-params%box)/2
-                    shift2d = spproj_in%os_ptcl2D%get_2Dshift(iptcl) + translation
-                    shift3d = prev_shift                             + translation
                     call spproj_in%set_boxcoords(iptcl, new_pos)
                     call spproj_in%os_ptcl2D%set_shift(iptcl, shift2d)
                     call spproj_in%os_ptcl3D%set_shift(iptcl, shift3d)
@@ -293,16 +303,16 @@ contains
                     ! extract all frames particles
                     call extractor%extract_all_particles_frames(coords, [params%fromf, params%tof], 1)
                     deallocate(coords)
-                    ! Generate cumulative stacks
+                    ! Generate stacks for individual frame blocks
                     do ind = 1, nfractioned_stacks
-                        f = fraction_last_frame(ind, params%fromf, params%tof, params%stepf)
+                        ffromto = fraction_frame_range(ind, params%fromf, params%tof, params%stepf)
                         ! accumulate
                         call extractor%generate_cumulative_particles_stack(nptcls2extract, build%imgbatch,&
-                            &[params%fromf, f], stk_min, stk_max, stk_mean, stk_sdev)
-                        ! write cumulative stack to disk
-                        frame_dir = fraction_output_dir(params%fromf, f)
+                            &ffromto, stk_min, stk_max, stk_mean, stk_sdev)
+                        ! write frame-block stack to disk
+                        frame_dir = fraction_output_dir(ffromto(1), ffromto(2))
                         call simple_mkdir(frame_dir, verbose=.false.)
-                        range = '_'//int2str(params%fromf)//'_'//int2str(f)
+                        range = '_'//int2str(ffromto(1))//'_'//int2str(ffromto(2))
                         stack = string(EXTRACT_STK_FBODY)//get_fbody(basename(mov_name), ext)//range//STK_EXT
                         stack = filepath(frame_dir, stack)
                         call stkio_w%open(stack, params%smpd, 'write', box=params%box, wfloat16=l_write16bits)
@@ -334,8 +344,8 @@ contains
         if( allocated(fraction_projects) )then
             do ind = 1, nfractioned_stacks
                 if( size(fraction_mask) > 0 ) call fraction_projects(ind)%os_stk%compress(fraction_mask)
-                f     = fraction_last_frame(ind, params%fromf, params%tof, params%stepf)
-                range = int2str(params%fromf)//'-'//int2str(f)//'_part'//int2str(params%part)
+                ffromto = fraction_frame_range(ind, params%fromf, params%tof, params%stepf)
+                range = int2str(ffromto(1))//'-'//int2str(ffromto(2))//'_part'//int2str(params%part)
                 str   = trim(PTCLS_FRACTIONS_FBODY)//range%to_char()//METADATA_EXT
                 call fraction_projects(ind)%write(str)
                 call fraction_projects(ind)%kill
@@ -533,14 +543,14 @@ contains
         type(string),     allocatable :: stktab(:)
         type(oris)   :: os_stk
         type(string) :: ptcl_project, mic_project, frame_project, stk_project, range, frame_dir
-        integer      :: numlen, f, ipart, imic, istk, ind, nfractioned_stacks
+        integer      :: numlen, ffromto(2), ipart, imic, istk, ind, nfractioned_stacks
         integer      :: nmovs, cnt, nstks, nptcls, i, stkind
         if( self%skip_run ) return
         call validate_fraction_range(params%fromf, params%tof, params%stepf)
         nfractioned_stacks = count_fractioned_stacks(params%fromf, params%tof, params%stepf)
         do ind = 1, nfractioned_stacks
-            f = fraction_last_frame(ind, params%fromf, params%tof, params%stepf)
-            frame_dir = fraction_output_dir(params%fromf, f)
+            ffromto = fraction_frame_range(ind, params%fromf, params%tof, params%stepf)
+            frame_dir = fraction_output_dir(ffromto(1), ffromto(2))
             call simple_mkdir(frame_dir, verbose=.false.)
         enddo
         ! schedule & run
@@ -550,7 +560,7 @@ contains
         allocate(spproj_parts(params%nparts))
         numlen = len(int2str(params%nparts))
         do ind = 1, nfractioned_stacks
-            f = fraction_last_frame(ind, params%fromf, params%tof, params%stepf)
+            ffromto = fraction_frame_range(ind, params%fromf, params%tof, params%stepf)
             call self%spproj%os_mic%kill
             call self%spproj%os_stk%kill
             call self%spproj%os_ptcl2D%kill
@@ -575,7 +585,7 @@ contains
                     enddo
                     call spproj_parts(ipart)%kill
                     ! stacks
-                    range = int2str(params%fromf)//'-'//int2str(f)//'_part'//int2str(ipart)
+                    range = int2str(ffromto(1))//'-'//int2str(ffromto(2))//'_part'//int2str(ipart)
                     stk_project = trim(PTCLS_FRACTIONS_FBODY)//range%to_char()//METADATA_EXT
                     call spproj_parts(ipart)%read_segment('stk', stk_project)
                     nstks = nstks + spproj_parts(ipart)%os_stk%get_noris()
@@ -619,7 +629,7 @@ contains
                 enddo
             endif
             ! Write frame range project
-            frame_dir     = fraction_output_dir(params%fromf, f)
+            frame_dir     = fraction_output_dir(ffromto(1), ffromto(2))
             frame_project = filepath(frame_dir, basename(params%projfile))
             call self%spproj%projinfo%set(1, 'projname', &
                 &get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.))
@@ -627,7 +637,7 @@ contains
             call self%spproj%write(frame_project)
             ! Remove per-part fraction projects
             do ipart = 1, params%nparts
-                range = int2str(params%fromf)//'-'//int2str(f)//'_part'//int2str(ipart)
+                range = int2str(ffromto(1))//'-'//int2str(ffromto(2))//'_part'//int2str(ipart)
                 stk_project = trim(PTCLS_FRACTIONS_FBODY)//range%to_char()//METADATA_EXT
                 if( file_exists(stk_project) ) call del_file(stk_project)
             enddo

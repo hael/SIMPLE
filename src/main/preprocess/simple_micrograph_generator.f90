@@ -178,7 +178,7 @@ contains
             end select
         endif
         call self%gain%kill
-        ! downscale frames & dose-weighing
+        ! downscale frames
         !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
         do iframe = self%fromtof(1),self%fromtof(2)
             call self%frames(iframe)%fft

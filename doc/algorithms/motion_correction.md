@@ -1,4 +1,4 @@
-# Motion Correction
+# Reference-free Motion Correction
 
 ## Problem
 
@@ -79,11 +79,6 @@ solution (by SVD) against the measured patch trajectories. Quadratic in space
 captures the dome-like doming of the support film under the beam; cubic in
 time captures the fast initial burst and slow later drift. This is the
 MotionCor2 model (Zheng et al., Nature Methods 14, 331 (2017)).
-
-**Robust variant.** `patch_refine` first fits on a padded grid, trims the 10
-percent of points with the largest residuals, refits, evaluates the fitted
-field at the patch centers to seed a second patch alignment, and fits the
-final model to that.
 
 ## Model acceptance
 

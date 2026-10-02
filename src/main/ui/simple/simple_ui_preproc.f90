@@ -191,7 +191,7 @@ contains
         & 'Final movie frame for particle re-extraction(0=all)', 'frame index{0}', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, 'stepf', 'num', 'Incremental frame step size', &
-        & 'Incremental frame step size', 'frame increment{5}', .false., 5.0, &
+        & 'Frames per output stack; the final block ends at tof and overlaps if needed', 'frame increment{5}', .false., 5.0, &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, wfloat16, group="refine3D", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>

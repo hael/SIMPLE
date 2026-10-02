@@ -1,4 +1,4 @@
-!@descr: unit tests for binary persistence of simple_motion_model
+!@descr: unit tests for binary persistence and polynomial refitting of simple_motion_model
 module simple_motion_model_tester
 use, intrinsic :: iso_fortran_env, only: int8, int32, int64
 use simple_core_module_api
@@ -19,7 +19,97 @@ contains
         call test_binary_roundtrip_with_optional_arrays()
         call test_binary_roundtrip_with_rejected_patch()
         call test_binary_roundtrip_without_optional_arrays()
+        call test_refit_polynomial_known_coefficients()
     end subroutine run_all_motion_model_tests
+
+    subroutine test_refit_polynomial_known_coefficients()
+        integer, parameter :: NFRAMES_TEST = 7, NGRID = 3, REF_FRAMES(2) = [1,4]
+        ! Three samples per spatial axis and six nonzero times give full rank.
+        ! Dyadic coordinates/coefficients keep the fixture exact in single precision.
+        real(dp), parameter :: GRID(NGRID) = [-0.5_dp, 0.0_dp, 0.5_dp]
+        real(dp), parameter :: COEFF_TOL = 1.e-10_dp
+        real, parameter :: RMSD_TOL = 32.0 * epsilon(1.0) ! single-precision evaluation/accumulation
+        real(dp), parameter :: RESIDUAL_SCALE = 1.0_dp / 65536.0_dp
+        type(motion_model) :: model
+        real(dp) :: coeffs(3,6,2), expected(3,6,2), spatial(6), tau, delta, value(2)
+        real(dp) :: residual(NFRAMES_TEST), expected_rmsd
+        real :: local_x(NFRAMES_TEST,NGRID,NGRID), local_y(NFRAMES_TEST,NGRID,NGRID)
+        integer :: i, j, iframe, itest, ref_frame, term, axis
+        character(len=96) :: message
+        write(*,'(A)') 'test_refit_polynomial_known_coefficients'
+        ! Every temporal/spatial coefficient is nonzero; X and Y are independent.
+        coeffs(:,:,1) = reshape([ &
+            & 3, -2,  1,   5,  3, -2,  -4,  2,  3, &
+            & 7, -3,  2,  -5,  4, -1,   6, -2, -3], [3,6]) / 1024.0_dp
+        coeffs(:,:,2) = reshape([ &
+            &-2,  5, -3,   4, -1,  2,   7, -4,  1, &
+            &-6,  2,  3,   3, -5,  2,  -1,  4, -2], [3,6]) / 1024.0_dp
+        model%nframes = NFRAMES_TEST
+        model%ldim = [129,97] ! non-square dimensions catch an X/Y normalization mix-up
+        model%nx_patch = NGRID
+        model%ny_patch = NGRID
+        model%npatch = NGRID*NGRID
+        model%fixed_frame = 1
+        allocate(model%patch_coords(NGRID,NGRID,2))
+        ! This in-memory fixture needs neither movie images nor parameter parsing.
+        model%exists = .true.
+        do j = 1,NGRID
+            do i = 1,NGRID
+                model%patch_coords(i,j,:) = real(1.0_dp + (GRID([i,j])+0.5_dp)*real(model%ldim-1,dp))
+                spatial = [1.0_dp, GRID(i), GRID(i)**2, GRID(j), GRID(j)**2, GRID(i)*GRID(j)]
+                do iframe = 1,NFRAMES_TEST
+                    tau = real(iframe-1,dp)
+                    ! Independent Horner evaluation of the separable cubic field;
+                    ! do not use patch_poly/apply_patch_poly to generate the truth.
+                    do axis = 1,2
+                        value(axis) = sum(spatial * &
+                            &((coeffs(3,:,axis)*tau + coeffs(2,:,axis))*tau + coeffs(1,:,axis))) * tau
+                    enddo
+                    local_x(iframe,i,j) = real(value(1))
+                    local_y(iframe,i,j) = real(value(2))
+                enddo
+            enddo
+        enddo
+        call model%set_local_offsets(local_x, local_y)
+        do itest = 1,size(REF_FRAMES)
+            ref_frame = REF_FRAMES(itest)
+            delta = real(ref_frame-1,dp)
+            ! For q(t)=a*t+b*t^2+c*t^3, q(t+d)-q(d) has coefficients
+            ! [a+2*b*d+3*c*d^2, b+3*c*d, c]. Apply this to each spatial monomial.
+            expected(1,:,:) = coeffs(1,:,:) + 2.0_dp*delta*coeffs(2,:,:) + 3.0_dp*delta**2*coeffs(3,:,:)
+            expected(2,:,:) = coeffs(2,:,:) + 3.0_dp*delta*coeffs(3,:,:)
+            expected(3,:,:) = coeffs(3,:,:)
+            call model%refit_polynomial(ref_frame)
+            do term = 1,6
+                write(message,'(A,I0,A,I0)') 'refit recovers X cubic coefficients, spatial term ',term,', reference ',ref_frame
+                call assert_true(all(abs(model%model_coeffs_x(3*term-2:3*term)-expected(:,term,1)) <= COEFF_TOL), message)
+                write(message,'(A,I0,A,I0)') 'refit recovers Y cubic coefficients, spatial term ',term,', reference ',ref_frame
+                call assert_true(all(abs(model%model_coeffs_y(3*term-2:3*term)-expected(:,term,2)) <= COEFF_TOL), message)
+            enddo
+            call assert_true(all(abs(model%rmsd_fit) <= RMSD_TOL), 'an exact cubic motion field has zero refit RMSD')
+            call assert_true(all(model%local_offsets_x == local_x) .and. all(model%local_offsets_y == local_y), &
+                &'refitting preserves the measured local offsets')
+            call assert_int(1, model%fixed_frame, 'refitting leaves stored reference-frame metadata unchanged')
+        enddo
+        ! Add a known residual orthogonal to t, t^2 and t^3 on t=-3,...,3.
+        ! sum(t^4)=196 and sum(t^6)=1588, so r=49*t^4-397*t^2 is orthogonal
+        ! to t^2; symmetry handles odd powers. r(0)=0 preserves re-referencing.
+        do iframe = 1,NFRAMES_TEST
+            tau = real(iframe-REF_FRAMES(2),dp)
+            residual(iframe) = (49.0_dp*tau**4 - 397.0_dp*tau**2) * RESIDUAL_SCALE
+            model%local_offsets_x(iframe,:,:) = local_x(iframe,:,:) + real(residual(iframe))
+            model%local_offsets_y(iframe,:,:) = local_y(iframe,:,:) - real(2.0_dp*residual(iframe))
+        enddo
+        call model%refit_polynomial(REF_FRAMES(2))
+        call assert_true(all(abs(model%model_coeffs_x-reshape(expected(:,:,1),[18])) <= COEFF_TOL), &
+            &'orthogonal residuals leave the fitted X coefficients unchanged')
+        call assert_true(all(abs(model%model_coeffs_y-reshape(expected(:,:,2),[18])) <= COEFF_TOL), &
+            &'orthogonal residuals leave the fitted Y coefficients unchanged')
+        expected_rmsd = sqrt(2.0_dp*(348.0_dp**2+804.0_dp**2+396.0_dp**2)/7.0_dp) * RESIDUAL_SCALE
+        call assert_real(real(expected_rmsd), model%rmsd_fit(1), RMSD_TOL, 'X fit RMSD matches the known residual')
+        call assert_real(real(2.0_dp*expected_rmsd), model%rmsd_fit(2), RMSD_TOL, 'Y fit RMSD matches the known residual')
+        call model%kill()
+    end subroutine test_refit_polynomial_known_coefficients
 
     subroutine test_binary_roundtrip_with_optional_arrays()
         write(*,'(A)') 'test_binary_roundtrip_with_optional_arrays'

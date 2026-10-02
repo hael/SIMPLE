@@ -182,8 +182,8 @@ contains
 
 subroutine set_ui_params
     call algorithm%set_param(      'algorithm',       'multi',  'Algorithm for motion correction', &
-                                   'Algorithm for motion correction(iso|patch|patch_refine){patch}','', .false., 'patch', &
-    &choices=ui_choices([character(len=12) :: 'iso', 'patch', 'patch_refine']))
+                                   'Algorithm for motion correction(iso|patch){patch}','', .false., 'patch', &
+    &choices=ui_choices([character(len=5) :: 'iso', 'patch']))
 
     call angerr%set_param(         'angerr',          'num',    'Rotation angle error half-width', &
                                    'Uniform rotation angle shift error half-width(in degrees)', &

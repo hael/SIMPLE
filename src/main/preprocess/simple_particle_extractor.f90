@@ -4,7 +4,7 @@ module simple_particle_extractor
 use simple_core_module_api
 use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
-use simple_motion_correct_utils, only: correct_gain
+use simple_motion_correct_utils, only: correct_gain, pix2polycoords, apply_patch_poly
 use simple_starfile_wrappers
 use simple_motion_model,         only: motion_model
 implicit none
@@ -63,7 +63,6 @@ type :: ptcl_extractor
     procedure, private :: cure_outliers
     procedure, private :: add_eer_gain_defects
     procedure, private :: cure_outliers_from_coords, cure_outlier_coords
-    procedure, private :: pix2polycoords
     procedure, private :: evaluate_local_shift
     procedure          :: get_nframes
     ! Destructor
@@ -137,11 +136,12 @@ contains
             if( self%align_frame < 1 .or. self%align_frame > self%nframes )then
                 THROW_HARD('Motion model reference frame is out of range!')
             endif
+            call self%mmodel%refit_polynomial( self%align_frame )
             self%polyx = self%mmodel%model_coeffs_x
             self%polyy = self%mmodel%model_coeffs_y
         endif
         write(logfhandle,'(A,A)')'>> PARSED MODEL: ',self%docname%to_char()
-        ! Standardize offsets. No scaling need be applied as they stage drift and local
+        ! Standardize offsets. No scaling need be applied as stage drift and local
         ! offsets are determined and written as scaled, unlike in the star format.
         self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
         self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
@@ -196,6 +196,9 @@ contains
             enddo
             !$omp end parallel do
         endif
+        ! dose weighing, dev only
+        ! call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
+        !         & [1,self%nframes], self%total_dose, self%kv)
         ! Per-thread particle buffers and normalization mask
         self%box_pd = find_larger_magic_box(self%box+1)
         allocate(self%frame_particle(nthr_glob), self%particle(nthr_glob))
@@ -607,7 +610,7 @@ contains
         !$omp end parallel do
     end subroutine extract_all_particles_frames
 
-    ! Output is unweighted, unfiltered cumulative particles stack
+    ! Sum the supplied inclusive frame range; output is unweighted and unfiltered, then post-processed.
     subroutine generate_cumulative_particles_stack( self, nptcls, particles, ffromto, vmin, vmax, vmean, vsdev )
         class(ptcl_extractor), intent(inout) :: self
         integer,               intent(in)    :: nptcls
@@ -676,7 +679,7 @@ contains
             shift = shift - aniso_shift
         endif
         pos   = nint(shift)         ! extraction coordinate
-        shift = (shift - real(pos)) ! sub-pixel
+        shift = shift - real(pos)   ! sub-pixel
         ! extract particle frame
         foo = 0
         call self%particle(ithr)%set_ft(.false.)
@@ -719,7 +722,7 @@ contains
                 shift = shift - aniso_shift
             endif
             pos   = nint(shift)         ! extraction coordinate
-            shift = (shift - real(pos)) ! sub-pixel
+            shift = shift - real(pos)   ! sub-pixel
             ! extract particle frame
             foo = 0
             call self%frame_particle(ithr)%set_ft(.false.)
@@ -936,15 +939,6 @@ contains
         deallocate(new_vals)
     end subroutine cure_outlier_coords
 
-    !>  pixels to coordinates for polynomial evaluation (scaled in/out)
-    elemental subroutine pix2polycoords( self, xin, yin, x, y )
-        class(ptcl_extractor), intent(in)  :: self
-        real(dp),              intent(in)  :: xin, yin
-        real(dp),              intent(out) :: x, y
-        x = (xin-1.d0) / real(self%ldim_sc(1)-1,dp) - 0.5d0
-        y = (yin-1.d0) / real(self%ldim_sc(2)-1,dp) - 0.5d0
-    end subroutine pix2polycoords
-
     pure subroutine evaluate_local_shift( self, iframe, x, y, shift )
         class(ptcl_extractor), intent(in)  :: self
         integer,               intent(in)  :: iframe
@@ -952,27 +946,16 @@ contains
         real,                  intent(out) :: shift(2)
         real(dp) :: t, xx, yy
         t = real(iframe-self%align_frame, dp)
-        call self%pix2polycoords(x,y, xx,yy)
-        shift(1) = polyfun(self%polyx(:), xx,yy,t)
-        shift(2) = polyfun(self%polyy(:), xx,yy,t)
+        xx = pix2polycoords(x, self%ldim_sc(1))
+        yy = pix2polycoords(y, self%ldim_sc(2))
+        shift(1) = apply_patch_poly(self%polyx(:), xx,yy,t)
+        shift(2) = apply_patch_poly(self%polyy(:), xx,yy,t)
     end subroutine evaluate_local_shift
 
     pure integer function get_nframes(self)
         class(ptcl_extractor), intent(in) :: self
         get_nframes = self%nframes
     end function get_nframes
-
-    pure real function polyfun(c, x, y, t)
-        real(dp), intent(in) :: c(POLYDIM), x, y, t
-        real(dp) :: res, t2, t3
-        t2 = t * t
-        t3 = t2 * t
-        res =       dot_product( c(1:3),         [t,t2,t3])
-        res = res + dot_product( c(4:6),     x * [t,t2,t3]) + dot_product( c(7:9),   x*x * [t,t2,t3])
-        res = res + dot_product( c(10:12),   y * [t,t2,t3]) + dot_product( c(13:15), y*y * [t,t2,t3])
-        res = res + dot_product( c(16:18), x*y * [t,t2,t3])
-        polyfun = real(res)
-    end function polyfun
 
     integer function parse_int( table, emdl_id, err )
         class(starfile_table_type) :: table
