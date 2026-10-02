@@ -281,10 +281,54 @@ assignment and may therefore invoke the separate terminal missing-update pass.
 `sample_ptcls4update3D` applies the normal 3D subset policy:
 
 - if fractional update is off, select all active particles
-- if `balance=yes`, use class-balanced sampling. If the sampling had been setup
-  with `partition=yes`, the class-balancing is based of the clustering of the
-  underlying classes as materialized by `cluster_cavgs`
+- if `balance=yes`, use class-balanced sampling over the groups of the class
+  sampling file: every group gets the same quota, capped at its population.
+  In `abinitio3D` the groups are the selected 2D classes, or with
+  `partition=yes` view groups of them (see below)
 - otherwise use update-count-biased sampling
+
+### View-balanced sampling (`partition=yes`)
+
+Per-class quotas equalise 2D classes, not views: 2D classification spreads a
+preferred view over many classes, so that view keeps its excess in proportion
+to its class count. With `partition=yes`, `abinitio3D` writes the class
+sampling file from view groups instead (`make_view_partition_class_samples`,
+`simple_view_partition_sampling`). The groups are formed once, before the
+first stage, and used by every stage; the stages read only the sampling file
+and their command lines are stripped of `partition`, `nclust` and
+`clust_crit`:
+
+- the selected class averages (`cls2D` state > 0) are aligned pairwise under
+  their own parameters (`objfun=cc`, no CTF, `lp=6`, `trs=10`, as
+  `cluster_cavgs`) and the distance of `clust_crit` is formed, `cc` by default:
+  the in-plane, shift and mirror invariant correlation (mirror images are
+  opposite projection directions, which carry the same central section)
+- the distance matrix is computed on the master before any stage dispatches,
+  so on local execution it takes the idle workers' cores: `nparts*nthr`
+  threads capped at the cores the process owns (the rec3D master-phase
+  budget); on a cluster it keeps `nthr`
+- they are clustered into `nclust` groups (default 20) by average linkage,
+  which merges the most similar classes first, so a tight preferred view
+  becomes one group however many classes it has; with no more selected classes
+  than `nclust` every class is its own group
+- each group is one sampling group holding the active particles of its
+  classes, ordered by their rank fraction inside their own class (2D `corr`,
+  descending), so the greedy and `frac_best` selections take the same top
+  fraction of every member class rather than the classes with the highest 2D
+  correlations
+- the groups are written as `view_partitionNN_cavgs` stacks and the
+  class-to-group table `view_partition.txt` for inspection, and logged in the
+  NU report layout as `>>> VIEW PARTITION SAMPLING GROUPS`: a table of the
+  active particles per group against the particles each iteration samples
+  from it (each also as a percentage of its total), preceded by the max/min
+  group share of both; the project's `cluster` labels are not used or changed
+- under the full-sampling switch (`nsample` above 90% of the active
+  particles) every particle is updated each iteration, no groups are formed
+  and a `>>> VIEW PARTITION:` line says so; every partition log line carries
+  the `VIEW PARTITION` tag
+
+`classify3D_refs` still reads `partition=yes` groups from the `cls2D` `cluster`
+labels written by `cluster_cavgs`.
 
 `sample_ptcls4fillin` is a separate late-stage coverage policy. Its purpose is
 to update particles with insufficient history, not to preserve the normal

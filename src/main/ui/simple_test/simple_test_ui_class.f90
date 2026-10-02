@@ -112,7 +112,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, average_linkage, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 

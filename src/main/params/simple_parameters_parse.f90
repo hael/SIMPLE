@@ -384,6 +384,7 @@ contains
         call reg%add_int('ncls_sub', self%ncls_sub)
         call reg%add_int('ncls_coarse', self%ncls_coarse)
         call reg%add_int('ncls_fine', self%ncls_fine)
+        call reg%add_int('nclust', self%nclust)
         call reg%add_int('nptcls_coarse', self%nptcls_coarse)
         call reg%add_int('nptcls_fine', self%nptcls_fine)
         call reg%add_int('npreimages', self%npreimages)

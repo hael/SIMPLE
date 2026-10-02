@@ -11,6 +11,7 @@ use simple_commanders_reproject,                   only: commander_reproject
 use simple_commanders_refine3D,                    only: commander_refine3D, commander_refine3D_states, commander_bootstrap_rec3D
 use simple_commanders_rec,                         only: commander_rec3D
 use simple_cluster_seed,                           only: gen_labelling
+use simple_view_partition_sampling,                only: make_view_partition_class_samples
 use simple_refine3D_fnames,                        only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname, refine3D_frozen_context_fname, refine3D_fsc_fname
 use simple_halfmap_diagnostics,                    only: rename_support_provenance
@@ -773,19 +774,20 @@ contains
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         ! other
-        integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:), cls_states(:)
+        integer,            allocatable :: clsinds(:), pinds(:)
         type(class_sample), allocatable :: clssmp(:)
         type(string),       allocatable :: external_refs(:), external_checkpoint(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(gui_communicator)          :: gui_comm
         real    :: lprange(2)
-        integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
+        integer :: state, istage, start_stage, nptcls2update, noris, nstates_on_cline
         integer :: nstates_in_project, split_stage, last_stage, pose_init_iter
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
         logical :: l_states_handoff_complete
+        integer :: nthr_view
         real    :: sampled_active_frac
         real    :: update_frac_post_split
         ! run manifest: the command line as given and the emitted stage ladder
@@ -842,6 +844,9 @@ contains
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
         if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
+        ! partition=yes requires balance=yes
+        if( cline%get_carg('partition') .eq. 'yes' ) call cline%set('balance', 'yes')
+        if( .not. cline%defined('clust_crit')  ) call cline%set('clust_crit',                'cc')
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
@@ -1049,30 +1054,28 @@ contains
                 write(logfhandle,'(A,F8.4,A,F8.4,A)') &
                     &'>>> ABINITIO3D NSAMPLE/ACTIVE FRACTION ', sampled_active_frac, ' > ', &
                     &abinitio_full_sample_switch_frac(), ' -> FORCING FULL ACTIVE SAMPLING (NO FRACTIONAL OR TRAILING UPDATE)'
+                if( trim(params%partition).eq.'yes' ) write(logfhandle,'(A)') &
+                    &'>>> VIEW PARTITION: no groups formed; full active sampling updates every particle each iteration'
             else
                 update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 update_frac = min(abinitio_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
                 ! generate a data structure for class sampling on disk
                 if( trim(params%partition).eq.'yes' )then
-                    if( .not. spproj%os_cls2D%isthere('cluster') )then
-                        THROW_HARD('Missing CLUSTER metadata in CLS2D field needed for PARTITION=YES')
+                    ! workers are idle before the first stage: nparts*nthr threads on local execution
+                    nthr_view = params%nthr
+                    if( trim(params%qsys_name) == 'local' .and. cline%defined('nparts') )then
+                        nthr_view = max(1, params%nparts) * params%nthr
+                        !$ nthr_view = min(omp_get_num_procs(), nthr_view)
+                        nthr_view = max(params%nthr, nthr_view)
                     endif
-                    cls_states = nint(spproj%os_cls2D%get_all('state'))
-                    tmpinds    = nint(spproj%os_cls2D%get_all('cluster'))
-                    where( cls_states == 0 ) tmpinds = 0
-                    clsinds = (/(icls,icls=1,maxval(tmpinds))/)
-                    do icls = 1,size(clsinds)
-                        if(count(tmpinds==icls) == 0) clsinds(icls) = 0
-                    enddo
-                    clsinds = pack(clsinds, mask=clsinds>0)
-                    call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
-                    deallocate(cls_states,tmpinds)
+                    call make_view_partition_class_samples(params, spproj, nint(update_frac * real(nptcls_eff)), &
+                        &nthr_view, clssmp)
                 else
                     clsinds = spproj%get_selected_clsinds()
                     call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+                    deallocate(clsinds)
                 endif
                 call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
-                deallocate(clsinds)
             endif
             if( spproj%os_ptcl3D%has_been_sampled() )then
                 ! the ptcl3D field should be clean of sampling at this stage
@@ -1776,6 +1779,7 @@ contains
             cline_selection = cline
             call cline_selection%set('prg',      'selection')
             call strip_pcg_backend_keys(cline_selection)
+            call strip_view_partition_keys(cline_selection)
             call cline_selection%set('projfile', work_projfile)
             call cline_selection%set('projname', work_projname)
             call cline_selection%set('oritype',  'ptcl3D')
@@ -1891,7 +1895,6 @@ contains
             call cline_missing%set('which_iter',    iter_missing)
             call cline_missing%set('extr_iter',     iter_missing)
             call cline_missing%delete('endit')
-            call cline_missing%delete('partition')
             call xrefine3D%execute(cline_missing)
             call del_files(DIST_FBODY,      params%nparts, ext='.dat')
             call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
@@ -1920,6 +1923,7 @@ contains
             ! Particle-stage PCG policy belongs to the outer abinitio3D run;
             ! class-average initialization retains its gridding workflow
             call strip_pcg_backend_keys(cline_ini3D)
+            call strip_view_partition_keys(cline_ini3D)
             call cline_ini3D%set('nstages', abinitio_nstages_ini3D())
             ! Resolution limits
             if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', abinitio_lpstart_ini3D())

@@ -103,7 +103,7 @@ type :: parameters
     character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
-    character(len=3)          :: partition='no'
+    character(len=3)          :: partition='no'       !< balanced sampling over view clusters of the class averages(yes|no){no}
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
@@ -395,6 +395,7 @@ type :: parameters
     integer :: ncls_sub=10         !< # sub-clusters
     integer :: ncls_coarse=0       !< # coarse clusters
     integer :: ncls_fine=0         !< # fine clusters
+    integer :: nclust=20           !< # view clusters of the class averages for partition=yes sampling{20}
     integer :: nptcls_coarse=0     !< # coarse particles
     integer :: nptcls_fine=0       !< # fine particles
     integer :: nsubcls_min=3       !< minimum subclasses per parent class for class splitting

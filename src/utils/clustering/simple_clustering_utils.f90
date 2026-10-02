@@ -1,8 +1,9 @@
 !@descr: tools and metrics for clustering analysis
 module simple_clustering_utils
-use simple_kmedoids, only: kmedoids
-use simple_aff_prop, only: aff_prop
-use simple_stat,     only: calc_ap_pref
+use simple_kmedoids,    only: kmedoids
+use simple_aff_prop,    only: aff_prop
+use simple_avg_linkage, only: avg_linkage
+use simple_stat,        only: calc_ap_pref
 use simple_core_module_api
 implicit none
 
@@ -22,6 +23,7 @@ contains
         real,    allocatable :: smat(:,:)
         type(kmedoids)       :: kmed
         type(aff_prop)       :: aprop
+        type(avg_linkage)    :: avglink
         integer :: n
         real    :: pref, simsum
         n = size(dmat, dim=1)
@@ -40,6 +42,11 @@ contains
                 nclust = size(i_medoids)
                 write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
                 call merge_if_necessary
+            case('avglink')
+                write(logfhandle,'(A,I0,A)') '>>> CLUSTERING DISTANCE MATRIX WITH AVERAGE LINKAGE INTO ', nclust, ' CLUSTERS'
+                call avglink%new(n, dmat, nclust)
+                call avglink%cluster(i_medoids, labels)
+                call avglink%kill
             case('kmed')
                 if( allocated(labels) ) deallocate(labels)
                 write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH K-MEDOIDS'

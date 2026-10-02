@@ -90,6 +90,7 @@ use simple_ftexp_shsrch_tester,              only: run_all_ftexp_shsrch_tests
 use simple_bspline_smoother_tester,          only: run_all_bspline_smoother_tests
 use simple_online_var_tester,                only: run_all_online_var_tests
 use simple_aff_prop_tester,                  only: run_all_aff_prop_tests
+use simple_avg_linkage_tester,               only: run_all_avg_linkage_tests
 use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
@@ -287,6 +288,7 @@ contains
         call add_suite(s, n, 'online variance',         run_all_online_var_tests)
         call add_suite(s, n, 'random draws',            run_all_rnd_tests)
         call add_suite(s, n, 'affinity propagation',    run_all_aff_prop_tests)
+        call add_suite(s, n, 'average linkage',         run_all_avg_linkage_tests)
         call add_suite(s, n, 'statistics',              run_all_stat_tests)
         call add_suite(s, n, 'linear algebra',          run_all_linalg_tests)
         call add_suite(s, n, 'Kaiser-Bessel kernel',    run_all_kbinterpol_tests)

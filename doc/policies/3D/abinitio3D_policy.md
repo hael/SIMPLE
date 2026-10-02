@@ -50,6 +50,8 @@ When unset, it supplies:
 - `filt_mode=nonuniform`
 - `automsk=no`
 - `gauref=yes`
+- `partition=no`
+- `clust_crit=cc` (used only by `partition=yes`)
 
 For `multivol_mode=independent`, it also supplies conservative inspection
 defaults when the user has not overridden them:
@@ -115,6 +117,22 @@ each iteration by suppressing fractional controls (`update_frac`, `nsample`,
 `fillin`) in emitted child `refine3D` commands. This also disables trailing
 reconstruction for staged `abinitio3D` commands, and startup class-biased
 sampling setup is bypassed in favor of all-active sampling.
+
+### Class-balanced sampling
+
+Every stage runs with `balance=yes`. Below the full-sampling switch,
+`abinitio3D` writes the class sampling file once at startup, and every
+fractional update gives each of its groups the same quota, capped at the
+group's population. The groups are the selected 2D classes; with
+`partition=yes` they are `nclust` (default 20) view groups of the selected
+class averages, formed by average linkage on the `clust_crit` distance
+(default `cc`), so a preferred view spread over many classes no longer
+dominates the sample. The groups are written as `view_partitionNN_cavgs`
+stacks with the table `view_partition.txt`. The clustering runs once, before
+the first stage, and its groups serve the whole run: the stages only read the
+class sampling file, and no child command line carries `partition`, `nclust`
+or `clust_crit`. The details are in
+`doc/policies/importance_sampling_fractional_update_policy.md`.
 
 The emitted child command line owns `startit` and `which_iter` for the current
 stage. `refine3D` then treats `maxits` as the run length for that stage.
