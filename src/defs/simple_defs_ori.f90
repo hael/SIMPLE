@@ -55,9 +55,10 @@ enum, bind(c)
     enumerator :: I_RES05               = 50 ! resolution @ FSC=0.5 (formerly the spare slot I_EMPTY10)
     enumerator :: I_CORR_CART           = 51 ! score of the last Cartesian pass (cc or exp(-L); C14, O8)
     enumerator :: I_POSE_CONT_IMPROVED  = 52 ! 1 when the last Cartesian pass improved the pose (O8)
+    enumerator :: I_CFAR                = 53 ! conical FSC area ratio of the state's latest half-map pair
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 52
+integer, parameter :: N_PTCL_ORIPARAMS = 53
 
 contains
 
@@ -111,6 +112,8 @@ contains
                 get_oriparam_ind = I_RES
             case('res05')
                 get_oriparam_ind = I_RES05
+            case('cfar')
+                get_oriparam_ind = I_CFAR
             case('state')
                 get_oriparam_ind = I_STATE
             case('stkind')
@@ -280,6 +283,8 @@ contains
                 flag = 'pose_cont_improved'
             case(I_RES05)
                 flag = 'res05'
+            case(I_CFAR)
+                flag = 'cfar'
             case DEFAULT
                 flag = 'unknown'
         end select
@@ -338,6 +343,8 @@ contains
             case(I_CLASS_MATCH)
                 oriparam_isthere = abs(val) > TINY    
             case(I_RES05)
+                oriparam_isthere = abs(val) > TINY
+            case(I_CFAR)
                 oriparam_isthere = abs(val) > TINY
             case(I_CORR_CART)
                 oriparam_isthere = abs(val) > TINY

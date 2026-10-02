@@ -396,7 +396,7 @@ contains
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt, eonames(2)
         type(halfmap_diagnostics_result) :: hm_diag
-        real, allocatable :: fsc(:), res0143s(:), res05s(:), align_lps(:)
+        real, allocatable :: fsc(:), res0143s(:), res05s(:), cfars(:), align_lps(:)
         real, allocatable :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
         integer, allocatable :: nrep(:), nsmp(:)
         logical, allocatable :: state_written(:)
@@ -482,6 +482,7 @@ contains
         endif
         allocate(res0143s(params%nstates), source=0.0)
         allocate(res05s(params%nstates),   source=0.0)
+        allocate(cfars(params%nstates),    source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         do state = 1, params%nstates
             l_bootstrap = .false.
@@ -582,6 +583,7 @@ contains
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             res05s(state)   = hm_diag%res_fsc05
+            cfars(state)    = hm_diag%cfar
             call arr2file(fsc, fname_fsc)
             fname_restxt = resolve_pcg_fsc_txt_fname(params, cline, state)
             call write_halfmap_diagnostics(hm_diag, params%box_crop, params%smpd_crop, fname_restxt)
@@ -732,6 +734,7 @@ contains
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res',   res0143s(1))
             call build%spproj_field%set_all2single('res05', res05s(1))
+            call build%spproj_field%set_all2single('cfar',  cfars(1))
         else
             do iptcl = 1, build%spproj_field%get_noris()
                 istate = build%spproj_field%get_state(iptcl)
@@ -739,6 +742,7 @@ contains
                     if( state_written(istate) )then
                         call build%spproj_field%set(iptcl, 'res',   res0143s(istate))
                         call build%spproj_field%set(iptcl, 'res05', res05s(istate))
+                        call build%spproj_field%set(iptcl, 'cfar',  cfars(istate))
                     endif
                 endif
             enddo
@@ -766,7 +770,7 @@ contains
         call raw_fname%kill
         call state_support_msk%kill_bimg
         call frozen_ctx%kill
-        deallocate(res0143s, res05s, state_written, realized_fractions, update_weights, align_lps)
+        deallocate(res0143s, res05s, cfars, state_written, realized_fractions, update_weights, align_lps)
         deallocate(chain_weights, current_scales)
         if( allocated(nrep) ) deallocate(nrep, nsmp)
         !$ call omp_set_num_threads(params%nthr)

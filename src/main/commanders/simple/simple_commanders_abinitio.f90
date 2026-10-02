@@ -843,6 +843,7 @@ contains
         l_automsk_off = (cline%defined('automsk') .and. cline%get_carg('automsk') .eq. 'no')
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
+        if( .not. cline%defined('balance')     ) call cline%set('balance',                  'yes')
         if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
         ! partition=yes requires balance=yes
         if( cline%get_carg('partition') .eq. 'yes' ) call cline%set('balance', 'yes')

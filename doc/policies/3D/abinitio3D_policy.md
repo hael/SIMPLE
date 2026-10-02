@@ -87,6 +87,9 @@ Stage policy includes:
 - staged translation limits
 - staged ML regularization
 - staged fractional update with a fixed `nsample` target while `nsample/active_particles <= 0.9`
+- class-balanced fractional-update selection by default; `balance=no` instead
+  selects globally from the lowest `updatecnt` tiers (`partition=yes` still
+  requires balanced sampling)
 - mode-specific stochastic sampling start
 - early Gaussian reference filtering
 - optional trailing reconstruction by stage and multivol mode

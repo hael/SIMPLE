@@ -8,7 +8,8 @@ use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
 use simple_chash,     only: chash
-use simple_defs_ori,  only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, get_oriparam_ind, get_oriparam_flag
+use simple_defs_ori,  only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, &
+    &get_oriparam_ind, get_oriparam_flag
 use json_kinds
 use json_module
 implicit none
@@ -899,8 +900,7 @@ contains
         call o%kill()
     end subroutine test_ctfvars_roundtrip
 
-    !> N18 (record layout O8): corr_cart and the improved flag set and get, round-trip through
-    !! the particle record in slots 51 and 52, and carry their flag names; corr stays separate.
+    !> The Cartesian fields and cFAR round-trip through their particle-record slots.
     subroutine test_cartesian_score_fields()
         type(ori) :: o, o2
         real      :: prec(N_PTCL_ORIPARAMS)
@@ -909,19 +909,25 @@ contains
         call o%set('corr', 0.42)
         call o%set('corr_cart', 0.731)
         call o%set('pose_cont_improved', 1.)
+        call o%set('cfar', 0.625)
         call assert_real(0.731, o%get('corr_cart'), EPS, 'corr_cart set and get')
         call assert_real(1., o%get('pose_cont_improved'), EPS, 'improved flag set and get')
+        call assert_real(0.625, o%get('cfar'), EPS, 'cfar set and get')
         call assert_real(0.42, o%get('corr'), EPS, 'corr is separate from corr_cart')
         call o%ori2prec(prec)
         call assert_real(0.731, prec(I_CORR_CART), EPS, 'corr_cart in slot 51 of the record')
         call assert_real(1., prec(I_POSE_CONT_IMPROVED), EPS, 'improved flag in slot 52 of the record')
+        call assert_real(0.625, prec(I_CFAR), EPS, 'cfar in slot 53 of the record')
         call o2%new(.true.)
         call o2%prec2ori(prec)
         call assert_real(0.731, o2%get('corr_cart'), EPS, 'corr_cart record round trip')
         call assert_real(1., o2%get('pose_cont_improved'), EPS, 'improved flag record round trip')
+        call assert_real(0.625, o2%get('cfar'), EPS, 'cfar record round trip')
         call assert_int(I_CORR_CART, get_oriparam_ind('corr_cart'), 'flag corr_cart names slot 51')
         call assert_true(trim(get_oriparam_flag(I_CORR_CART)) == 'corr_cart' .and. &
             &trim(get_oriparam_flag(I_POSE_CONT_IMPROVED)) == 'pose_cont_improved', 'slots 51 and 52 carry their flag names')
+        call assert_int(I_CFAR, get_oriparam_ind('cfar'), 'flag cfar names slot 53')
+        call assert_true(trim(get_oriparam_flag(I_CFAR)) == 'cfar', 'slot 53 carries the cfar flag name')
         call o%kill
         call o2%kill
     end subroutine test_cartesian_score_fields

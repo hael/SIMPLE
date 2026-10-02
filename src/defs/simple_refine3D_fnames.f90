@@ -39,7 +39,6 @@ public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
 public :: refine3D_volassemble_bench_fname
 public :: refine3D_oris_heatmap_fname
-public :: refine3D_cfar_summary_fname
 
 contains
 
@@ -295,10 +294,5 @@ contains
         integer, intent(in) :: state
         fname = string('orientations_distribution_state')//state_tag(state)//JPG_EXT
     end function refine3D_oris_heatmap_fname
-
-    type(string) function refine3D_cfar_summary_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('CFAR_SUMMARY_ITER')//iter_tag(iter)//TXT_EXT
-    end function refine3D_cfar_summary_fname
 
 end module simple_refine3D_fnames

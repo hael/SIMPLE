@@ -340,6 +340,7 @@ contains
             call img%new(DIMS(:,id), SMPD, wthreads=.false.)
             do imode = 1,size(MODES)
                 tag = int2str(nx)//'x'//int2str(ny)//' flip '//trim(MODES(imode))
+                expected = original
                 select case(MODES(imode))
                 case('X','x')
                     expected = original(nx:1:-1,:,:)

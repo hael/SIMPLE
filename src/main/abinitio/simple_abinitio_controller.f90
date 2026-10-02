@@ -236,7 +236,7 @@ contains
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_balance_policy( cfg )
+        call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
@@ -360,9 +360,11 @@ contains
         endif
     end subroutine set_refine3D_backend_policy
 
-    subroutine set_refine3D_balance_policy( cfg )
+    subroutine set_refine3D_balance_policy( cfg, params )
         type(refine3D_stage_cfg), intent(inout) :: cfg
-        cfg%balance = 'yes'
+        class(parameters),        intent(in)    :: params
+        cfg%balance   = trim(params%balance)
+        cfg%partition = trim(params%partition)
     end subroutine set_refine3D_balance_policy
 
     subroutine set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )

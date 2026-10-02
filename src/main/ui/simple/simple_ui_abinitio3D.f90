@@ -88,6 +88,10 @@ contains
         call abinitio3D%add_input(UI_SRCH, pgrp_start, group="model", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
+        call abinitio3D%add_input(UI_SRCH, 'balance', 'binary', 'Balance fractional updates across 2D classes', &
+            &'Balance each fractional-update sample across the selected 2D classes; no samples globally from the lowest update-count particles(yes|no){yes}', &
+            &'', .false., 'yes', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+            &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'partition', 'binary', 'View-balanced particle sampling', &
         &'Give every group of similar views, not every 2D class, the same share of the per-iteration particle sample: '//&
         &'the selected class averages are clustered into nclust groups by average linkage on clust_crit, and a '//&

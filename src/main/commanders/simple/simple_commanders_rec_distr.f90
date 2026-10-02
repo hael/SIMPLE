@@ -4,7 +4,7 @@ use simple_commanders_api
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_fsc_fname, &
     &refine3D_volassemble_bench_fname, refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
-    &refine3D_trail_rho_fname, refine3D_trail_manifest_fname, refine3D_cfar_summary_fname
+    &refine3D_trail_rho_fname, refine3D_trail_manifest_fname
 use simple_frozen_accum,    only: frozen_accum
 use simple_oris,            only: population_blend_weights
 use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, &
@@ -916,7 +916,6 @@ contains
         call collect_restore_timings()
         if( L_BENCH_GLOB ) t_upd_proj = tic()
         call update_project_resolution_metadata()
-        call write_cfars_txt()
         if( L_BENCH_GLOB ) rt_upd_proj = toc(t_upd_proj)
         if( L_BENCH_GLOB ) t_cleanup = tic()
         call cleanup_context()
@@ -1166,34 +1165,20 @@ contains
             if( params%nstates == 1 )then
                 call build%spproj_field%set_all2single('res',   res0143s(1))
                 call build%spproj_field%set_all2single('res05', res05s(1))
+                call build%spproj_field%set_all2single('cfar',  cfars(1))
             else
                 do iptcl = 1, build%spproj_field%get_noris()
                     istate = build%spproj_field%get_state(iptcl)
                     if( istate > 0 .and. istate <= params%nstates )then
                         call build%spproj_field%set(iptcl, 'res',   res0143s(istate))
                         call build%spproj_field%set(iptcl, 'res05', res05s(istate))
+                        call build%spproj_field%set(iptcl, 'cfar',  cfars(istate))
                     endif
                 enddo
             endif 
             call update_project_nu_alignment_lowpass()
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         end subroutine update_project_resolution_metadata
-
-        subroutine write_cfars_txt()
-            type(string) :: fname
-            integer      :: funit, istate, io_stat
-            fname = refine3D_cfar_summary_fname(params%which_iter)
-            call fopen(funit, file=fname, status='REPLACE', action='WRITE', iostat=io_stat)
-            if( io_stat /= 0 )then
-                THROW_WARN('failed to write cFAR summary file: '//fname%to_char())
-                return
-            endif
-            do istate = 1, params%nstates
-                write(funit,'(A,I3,A,F8.4)') 'STATE ', istate, ' CFAR ', cfars(istate)
-            enddo
-            call fclose(funit)
-            call fname%kill
-        end subroutine write_cfars_txt
 
         subroutine update_project_nu_alignment_lowpass()
             logical :: l_included(params%nstates)
