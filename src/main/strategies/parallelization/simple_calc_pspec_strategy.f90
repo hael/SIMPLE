@@ -8,7 +8,6 @@ use simple_cmdline,        only: cmdline
 use simple_qsys_funs,      only: qsys_job_finished
 use simple_image,          only: image, unmemoize_powspec_coords
 use simple_sigma2_binfile, only: sigma2_binfile
-use simple_ran_tabu,       only: ran_tabu
 implicit none
 
 public :: calc_pspec_strategy, calc_pspec_inmem_strategy, calc_pspec_partitioned_strategy, create_calc_pspec_strategy
@@ -449,7 +448,6 @@ contains
     subroutine write_sigma2_bootstrap_selection(params, build)
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        type(ran_tabu) :: rt
         integer, allocatable :: candidates(:,:), pinds(:)
         integer :: nactive(2), nsample(2), nfilled(2), nselected, iptcl, eo, i, ios, fd, offset
         logical :: is_open
@@ -481,9 +479,8 @@ contains
         do eo = 1,2
             if( nsample(eo) == 0 ) cycle
             if( nsample(eo) < nactive(eo) )then
-                rt = ran_tabu(nactive(eo))
-                call rt%shuffle(candidates(:nactive(eo),eo))
-                call rt%kill
+                ! Only the sampled prefix is retained; the remaining order is irrelevant.
+                call partial_shuffle(candidates(:nactive(eo),eo), nsample(eo))
             endif
             pinds(offset+1:offset+nsample(eo)) = candidates(:nsample(eo),eo)
             offset = offset + nsample(eo)
