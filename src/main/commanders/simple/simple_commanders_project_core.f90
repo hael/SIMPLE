@@ -426,7 +426,7 @@ contains
         integer :: nprojs, nptcls, nstates, inferred_nstates, iproj, iptcl, label
         integer :: best_label, best_votes, best_score
         logical :: nstates_inputted
-        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not.cline%defined('prune') ) call cline%set('prune', 'no')
         if( .not.cline%defined('projtab') )then
             THROW_HARD('ptcl3D_state_consensus requires projtab with one SIMPLE project file per line')

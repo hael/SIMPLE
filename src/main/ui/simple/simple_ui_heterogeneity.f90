@@ -352,7 +352,7 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         &'is a program that builds a consensus particle state assignment from a file table of SIMPLE projects &
         &and writes it to the target project ptcl3D field', &           ! help
         &'simple_exec',&                                                ! executable
-        &.false.)                                                       ! requires sp_project
+        &.true.)                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ptcl3D_state_consensus%add_input(UI_FILE, projtab,&
