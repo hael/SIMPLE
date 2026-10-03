@@ -453,8 +453,9 @@ An independent review of the change set found seven issues. All are resolved.
   accumulator chain, both backends still blend finished half maps (restored,
   regularised volumes) with the previous ones for one iteration. The
   maintainer ruled that this must go: "No trailing should ever happen on
-  finished halfmaps." A missing chain is to be built by one full
-  reconstruction instead. The design is in
+  finished halfmaps." Instead, that iteration will seed the chain from the
+  current sample at full mass (as the code already does) and ship the
+  current sample's map, with no extra reconstruction. The design is in
   `doc/refactoring_notes/planned/trailing_reconstruction_without_halfmap_blend.md`;
   its implementation is deferred.
 - **Streaming and NICE clean-ups.** Dead routines, stale constants, unused

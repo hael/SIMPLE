@@ -1,8 +1,9 @@
 # Trailing reconstruction without the finished-halfmap blend
 
-Date: 2026-10-03
+Date: 2026-10-03 (revised the same day).
 
-Status: proposed; implementation not started. Release 4 cleanup item C6.
+Status: proposed; implementation not started. It is the last open
+design item of the release 4 legacy cleanup.
 
 Validation level: static source inspection only. No source code was changed,
 compiled or executed while preparing this note. Line references are to the
@@ -11,259 +12,416 @@ working tree of 2026-10-03 and will drift.
 This is the single living design record for this refactor. Update it as the
 implementation and validation land rather than creating companion plans.
 
-## 1. Ruling
+## 1. Background
 
-The developer's ruling of 2026-10-03:
+**Fractional update.** With `update_frac` below 1, each 3D refinement
+iteration aligns and reconstructs only a sample of the particles: a fraction
+`f` of the pool that has been updated so far.
+
+**Trailing reconstruction** (`trail_rec=yes`) blends that sample with what came
+before, so the map does not rest on the sample alone.
+
+**The accumulator chain.** Since the recent rework, the "before" is kept as an
+accumulator chain: per state and per even/odd half, the unregularized Fourier
+sums and sampling densities of the particles, stored on disk between
+iterations at the mass of the full updated pool. Each iteration blends the
+current sample's sums with the chain's sums and then restores (density
+correction, regularization, deapodization) once. Blending sums before
+restoration is what makes the result a single consistent estimator.
+
+**Finished half maps.** "Finished" half maps are maps after that restoration.
+Blending them is a different and inconsistent estimator, because restoration
+is not linear.
+
+**Gridding and PCG.** The two 3D reconstruction backends. Gridding is the
+default; PCG solves the reconstruction iteratively by the preconditioned
+conjugate-gradient method. Each keeps its own chain.
+
+## 2. Ruling
+
+The maintainer's ruling of 2026-10-03:
 
 > Trailing needs to be done consistently across using the newly implemented
 > approach. No trailing should ever happen on finished halfmaps. If the
 > solution to correct weighting and consistent application is one
 > reconstruction, I am ok with it.
 
-"The newly implemented approach" is the accumulator-domain trailing chain:
-blended, unregularized even/odd Fourier sums and sampling densities at
-full-dataset mass, restored once after the blend. "Finished halfmaps" are
-restored maps after sampling-density correction, regularization and
-deapodization. The ruling removes every path that blends such maps.
+A first version of this note satisfied the ruling with one extra full
+reconstruction of every particle whenever a blend was due and no chain existed.
+For a data set of 2.5 million particles, that pass costs about as much as several
+ordinary iterations. The revised design below needs no extra reconstruction.
+It removes the finished-map blend by starting the chain from the current
+sample.
 
-## 2. Current behaviour
+## 3. Current behaviour
 
-### 2.1 The accumulator chain (kept)
+### 3.1 Normal iterations (kept)
 
-For `trail_rec=yes`, `volassemble` keeps one chain per state
-(`trailrec_stateNN_{even,odd}` plus rho files plus the `trailrec_stateNN.txt`
-manifest). With the realized fraction `f` of the current partials and the
-applied update weight `u` (`ufrac_trec` for a single state, otherwise `f`), the
-population rule (`population_blend_weights`) scales the current partials by
-`u/f` and the chain by `(1-u)N/M`. One restoration of the blended sums yields
-halves whose current-map coefficient is exactly `u`, and the FSC is estimated
-after the blend. When `u >= 0.99`, nothing is blended: the chain is rewritten
-from the current partials at full mass. Code:
-`simple_commanders_rec_distr.f90::restore_state_from_parts`,
-`blend_trailing_accumulators`. The PCG backend keeps an equivalent raw
-accumulator chain pair (`refine3D_pcg_trail_accum_fname`) with the same
-population rule (`simple_rec3D_pcg_strategy.f90::set_chain_blend_weights`).
+Notation:
 
-### 2.2 The bootstrap blend (to be removed)
+- `N`: the number of particles updated so far in a state;
+- `n`: the number in the current sample, so `f = n/N`;
+- `u`: the applied update weight (`ufrac_trec` for a single state, otherwise
+  `f`);
+- `M`: the mass stored in the chain.
 
-When no valid chain exists and `u < 0.99`, both backends fall back to a
-volume-domain bootstrap:
+The population rule (`population_blend_weights`) scales the current partial
+sums by `u/f` and the chain by `(1-u)N/M`. One restoration then yields halves in
+which the current sample has weight exactly `u`, and the FSC is estimated from
+those halves. When `u >= 0.99`, nothing is blended: the chain is rewritten from
+the current sums scaled to full mass.
 
-- **Gridding** (`simple_commanders_rec_distr.f90`):
-  - `restore_eos_and_write_fsc` reads the previous half maps from
-    `vol1..N` on the command line (`read_previous_halfmaps`). Their FSC drives
-    the ML regularization of the new halves.
+Code:
+
+- gridding: `simple_commanders_rec_distr.f90`, `restore_state_from_parts` and
+  `blend_trailing_accumulators`;
+- PCG: `simple_rec3D_pcg_strategy.f90`, `set_chain_blend_weights` and the
+  chain branch of the half reduction (around lines 1125-1150).
+
+### 3.2 The start without a chain (to change)
+
+When a blend is due (`u < 0.99`) but no valid chain exists, both backends
+already do the consistent thing with the accumulators:
+
+- they write the current sample's sums, scaled by `1/f`, as the new chain at
+  full mass;
+- they scale the current sums back by `f`, so that this iteration is
+  reconstructed from the current sample alone.
+
+They then add a step on finished maps:
+
+- **Gridding.**
+  - `restore_eos_and_write_fsc` reads the previous half maps from `vol<state>`
+    on the command line (`read_previous_halfmaps`), and uses their FSC to
+    regularize the new halves.
   - `trail_restored_halves_if_needed` then writes
-    `u*new + (1-u)*previous` for the restored halves, the NU base and auxiliary
-    inputs, and, under `lp` set, the merged volume.
-  - `blend_trailing_accumulators` meanwhile seeds the chain from the current
-    partials scaled by `1/f`.
-- **PCG** (`simple_rec3D_pcg_strategy.f90::execute_rec3D_pcg_distributed_master`):
-  - with `l_bootstrap`, the FSC pair is the previous shipped pair
-    (`load_previous_state_halves`);
-  - `blend_bootstrap_half` blends the solved halves, the ML pair and the
-    solvent pair with the previous pair;
-  - the support provenance of the blend is combined from both contributions;
-  - the chain is seeded from the current raw accumulators (around line 1084).
-  - `trail_bootstrap_states` reports the bootstrap per state to
+    `u * new + (1-u) * previous` for the restored halves, for the inputs of
+    the nonuniform filter, and, when `lp` is set, for the merged volume.
+- **PCG** (`execute_rec3D_pcg_distributed_master`, with `l_bootstrap` set).
+  - The FSC is computed from the previous shipped half maps
+    (`load_previous_state_halves`).
+  - `blend_bootstrap_half` blends the solved halves, the regularized pair and
+    the solvent-weighted pair with the previous pair.
+  - The support provenance of the blend is combined from both contributions.
+  - `trail_bootstrap_states` reports this per state to
     `filter_pcg_nonuniform_maps`, which only checks the array's size.
 
-### 2.3 When the bootstrap runs
+So the chain is already built consistently. Only the map of this one
+iteration is a blend of finished maps, and that is the part the ruling
+removes.
 
-The bootstrap needs both an absent or invalid chain and `u < 0.99`. In a fresh
-run, the first trailing iteration has `f = 1`: the updated pool is the current
-sample. The chain is then seeded with nothing blended. The bootstrap therefore
-runs only when the updated pool is larger than the current sample and no valid
-chain exists:
+### 3.3 When the start without a chain happens
 
-- a refine3D run with `trail_rec=yes` that starts on a project that already has
-  update history but has no chain in its directory (for example probabilistic
-  modes, which keep `updatecnt`; or `startit > 1`);
-- refine3D_auto and other commanders that switch `trail_rec` on mid-run
-  (`simple_commanders_refine3D.f90`, the per-iteration `l_trail_rec` updates);
-- a chain discarded on validation (particle population, state layout, larger
-  grid, physical extent, or corrupt or mixed-generation files);
-- a state whose realized fraction is about zero (`realized_update_frac < 0.001`
-  routes that state to the bootstrap path).
+A blend is due with no chain in these cases:
 
-solve3D normally avoids the bootstrap: the full reconstruction at each stage
-boundary seeds the chain with `trail_seed=yes` before a trailing stage
-(`simple_solve3D_utils.f90::calc_rec`). So does the distributed refine3D start
-with PCG and `objfun=cc` when no volume is given
-(`simple_refine3D_strategy.f90::distr_initialize`).
+- **solve3D, once per run**, when trailing switches on. Single-state runs
+  switch it on at stage 5 (`TRAILREC_STAGE_SINGLE`), multi-state runs at
+  `TRAILREC_STAGE_MULTI`. solve3D's full stage reconstruction (`calc_rec`)
+  runs only at the start stage, at state splits and at add-on boundaries. It
+  seeds a chain only if the stage it feeds trails, which the start stage does
+  not. Once a chain exists, it survives later stage boundaries: a chain from a
+  smaller grid is zero-padded to the current one.
+- **refine3D with `trail_rec=yes`**, started on a project with update history
+  but without a chain in its directory (for example probabilistic modes,
+  which keep the update counts, or `startit > 1`).
+- **refine3D_auto and other commanders** that switch trailing on mid-run.
+- **A chain discarded on validation** (particle population, state layout, a
+  larger grid, physical extent, or corrupt or mixed-generation files).
 
-### 2.4 Why it is inconsistent
+A state that received no sample at all (`f` about 0) also takes this path
+today. Its output is then the previous maps, because `u` is about 0.
 
-- **Two different blends in one trailing run.** The bootstrap iteration blends
-  finished maps, after regularization and deapodization, which are not linear
-  operations. Every later iteration blends raw sums before restoration. The
-  results are not the same estimator.
-- **A different FSC source.** On the bootstrap iteration, the regularization
-  FSC comes from the previous half maps, not from the data being restored.
-- **The chain loses the previous model.** The bootstrap output contains `1-u`
-  of the previous maps, but the chain seeded at the same moment holds only the
-  current sample, scaled by `1/f` to full mass. From the next iteration on,
-  the previous model's information is gone from the chain, and the chain claims
-  the mass of `N` particles with the noise of `n = f*N`.
-- **A hidden command-line dependency.** The bootstrap requires the previous
-  volumes on the command line; volassemble stops if `vol<state>` is missing.
+In a fresh run the first trailing iteration has `f = 1` (the updated pool is
+the sample itself), so no blend is due and the chain is simply seeded.
 
-## 3. Proposed design
+## 4. Proposed design
 
-### 3.1 Principle
+### 4.1 Principle
 
-A blend (`u < 0.99`) always uses a valid chain. When the chain that a blend
-needs is missing, it is created by one full reconstruction, never by blending
-maps.
+Every blend happens in the accumulator domain. When a blend is due but the
+chain is missing, the iteration does not blend: it seeds the chain from the
+current sample at full mass and ships the map of the current sample alone.
+From the next iteration on, every blend uses the chain.
 
-### 3.2 Seeding at assembly time
+### 4.2 Why this is enough
 
-1. **Decide after matching, in the strategy.** After matching (the sample, and
-   thus `f`, is known only then), the refine3D strategy decides before
-   assembly. Both the shared-memory and the distributed strategy do this, at
-   the point where they now call `volassemble` or `assemble_refine3D_pcg`.
-   For each populated state:
-   - compute the updated pool `N`, the sample `n`, `f` and `u`, exactly as
-     volassemble does (`get_group_update_counts`, `get_state_update_fracs`,
-     `ufrac_trec`);
-   - check the backend's chain for validity.
+- **No extra I/O or reconstruction.** The current sample has already been
+  reconstructed by the matcher, and the chain seed is written today.
+- **No regression in the transition.** The first trailing iteration's map
+  rests on the current sample only. That is exactly what every iteration did
+  before trailing switched on: with `update_frac` below 1 and trailing off,
+  each map is reconstructed from the current sample alone.
+- **The chain fills over about `1/f` iterations** (10 at `f = 0.1`), the same
+  way it does in a run that starts trailing from a fresh project.
+- **The FSC always describes the data that was restored**, and nothing needs
+  the previous volumes on the command line.
 
-   Seeding is needed when any populated state has `u < 0.99` and no valid
-   chain.
-2. **Seed with one full reconstruction.** When seeding is needed, the strategy
-   runs reconstruct3D in-process instead of assembling the partials. Its
-   command line is the iteration command line with:
-   - `prg=reconstruct3D` and `mkdir=no`;
-   - `trail_rec`, `update_frac`, `ufrac_trec` and `fillin` deleted;
-   - `trail_seed=yes`;
-   - `which_iter` set.
+### 4.3 The trade-off
 
-   reconstruct3D already supports this on both backends: its partials come from
-   `sample4rec`, which takes every active row with `updatecnt > 0`, at its
-   current pose, including this iteration's updates. That is exactly the
-   population the chain represents, so the chain is written at full mass
-   (`TC_NSEED` from `get_state_rec_pops`). The distributed strategy's command
-   line carries `nparts`, so the seed is distributed as well.
-3. **Outputs.** The seed reconstruction writes the iteration's output volumes,
-   half maps and FSC files under the names assembly would have used. The rest
-   of the iteration (volume naming, postprocess, NU low-pass handoff,
-   convergence, sigma2 commit) proceeds unchanged. On this iteration the map is
-   the full reconstruction, so there is no lag and no weighting decision; from
-   the next iteration on, every blend uses the chain.
-4. **Cost.** One extra full particle pass in the seeding iteration only. The
-   matcher's partials of that iteration go unused (they are written before `f`
-   is known). This is a deliberate, approved exception to the single-read I/O
-   contract.
-5. **Sigma2 consistency.** The canonical sigma2 commit happens after assembly,
-   so the seed reconstruction reads the same committed state as the matcher's
-   partials did. The seed uses the run's objective (`objfun`), not the forced
-   `cc` of the start-up reconstruction.
+Compared with today's blend, the first trailing iteration's map is noisier
+for one iteration, because the previous maps no longer contribute. Compared
+with a full-reconstruction seed (section 5.1), the chain reaches full-dataset
+statistics only after about `1/f` iterations instead of at once. The full
+reconstruction is still used where one runs anyway: solve3D's add-on
+boundaries and state splits already seed the chain when the next stage
+trails.
 
-### 3.3 Backend changes
+## 5. Alternatives considered
 
-- **Gridding (`simple_commanders_rec_distr.f90`):**
-  - remove `read_previous_halfmaps`, `trail_restored_halves_if_needed`, the
-    bootstrap branch of `restore_eos_and_write_fsc` (the FSC is always
-    estimated post-blend), the `vol_prev_even`, `vol_prev_odd` and `vol_merged`
-    arguments, and the bootstrap seeding comment;
-  - in `blend_trailing_accumulators`, keep the `u >= 0.99` branch that rewrites
-    the chain from the current partials;
-  - make "trail_rec, `u < 0.99`, no valid chain" a hard error naming the
-    strategy contract;
-  - for a state with `realized_update_frac < 0.001` and a valid chain, carry
-    the chain unchanged and restore from it, as the solve3D_addon cohort path
-    already does.
-- **Chain validity for both callers.** Move the chain validation
-  (`validate_trail_chain` and the helpers it uses) out of the contained scope
-  into a public module procedure that has no side effects. Its result is the
-  validity plus the generation and stored mass, and volassemble discards the
-  set on failure as now. The same procedure serves the strategy's decision.
-- **PCG (`simple_rec3D_pcg_strategy.f90`):**
-  - remove the `l_bootstrap` branches: the previous FSC pair,
-    `load_previous_state_halves`, `blend_bootstrap_half`, the support
-    combination for blended pairs, and the bootstrap chain seeding;
-  - a missing chain pair where a blend is needed becomes a hard error;
-  - expose a side-effect-free chain-validity check, built from
-    `discard_stale_trail_chain_pair` and the pair-existence test;
-  - remove the `trail_bootstrap_states` argument, and the `l_trail_bootstrap`
-    argument of `filter_pcg_nonuniform_maps` together with its callers in
-    `simple_refine3D_strategy.f90` and `simple_rec3D_strategy.f90`.
-- **Strategies (`simple_refine3D_strategy.f90`):** a shared private helper
-  takes the seeding decision (3.2.1) and builds and runs the seed command line
-  (3.2.2). The in-memory strategy writes the particle segment before seeding,
-  so that reconstruct3D reads the current poses from the project file.
+### 5.1 Seed the chain by one full reconstruction (the first version)
 
-### 3.4 What does not change
+When a blend is due and no chain exists, run reconstruct3D with
+`trail_seed=yes` over every updated particle instead of assembling the
+partials. That gives a full-dataset chain at once, but it reads and grids
+every particle again, and it discards the matcher's partials of that
+iteration. At 2.5 million particles this costs about as much as several
+ordinary iterations, for a gain of one or a few iterations of smoothing.
+Rejected on cost.
 
-- The population rule, the `u/f` scaling, the chain manifest and the
-  integrity checks.
-- The carry-over of complete chains on `continue=yes`.
-- solve3D stage-boundary seeding.
-- The solve3D_addon frozen paths, which already require a seeded chain.
-- The `u >= 0.99` path.
+### 5.2 Seed before matching
 
-## 4. Alternative considered: seeding at the start of the iteration
+Run the full reconstruction at the start of the iteration instead, so that
+the first trailing iteration can blend with weight `u` against it. This has
+the cost of 5.1. Worse, reconstruct3D writes the same volume, half-map and FSC
+files that the iteration is about to use as matching references, so it would
+silently replace them. Rejected.
 
-Seeding before matching would let the first trailing iteration blend with the
-proper weight `u` against a full reconstruction at the previous poses. It is
-not recommended: reconstruct3D writes the same state volumes, half maps and FSC
-files that the iteration is about to use as matching references, so the seed
-would silently replace them. The decision would also have to be made before `f`
-is known, so seeds would be taken in iterations that need no blend.
+## 6. Changes
 
-## 5. Documents and skills to update
+### 6.1 Gridding (`simple_commanders_rec_distr.f90`)
 
-- `.github/skills/simple-frac-update-trailing/SKILL.md` and
-  `references/frac-update-contract.md`: replace the bootstrap paragraph with
-  the seeding contract.
-- `.github/skills/simple-refine3d/SKILL.md`: one line on the seeding exception
-  to the single-read contract.
+**Remove:**
+
+- `read_previous_halfmaps`;
+- the start-without-chain branch of `restore_eos_and_write_fsc`; the FSC is
+  then always estimated from the restored halves;
+- `trail_restored_halves_if_needed` and its call;
+- the `vol_prev_even`, `vol_prev_odd` and `vol_merged` arguments of
+  `restore_state_from_parts`, and their declarations in `exec_volassemble`;
+- the requirement that `vol<state>` be on the command line under
+  `trail_rec=yes`.
+
+**Keep:**
+
+- in `blend_trailing_accumulators`, the branch that seeds or rewrites the chain
+  at full mass and scales the current sums back by `f`; it now serves both the
+  start without a chain and `u >= 0.99`;
+- the log line, reworded: "SEEDED FULL-MASS TRAILING CHAIN ...; THIS
+  ITERATION USES THE CURRENT SAMPLE ONLY".
+
+**A state with no sample** (`f` below 0.001):
+
+- with a valid chain, carry the chain unchanged and restore this iteration
+  from it, as the solve3D_addon cohort path already does;
+- without a chain, there is nothing to restore. Carry the previous volume
+  forward and skip the state, as volassemble already does for a state without
+  partial reconstructions (`determine_dropped_states`).
+
+### 6.2 PCG (`simple_rec3D_pcg_strategy.f90`)
+
+**Remove:**
+
+- the `l_bootstrap` branches: the previous FSC pair
+  (`load_previous_state_halves`), `blend_bootstrap_half`, and the combination
+  of support provenance for blended pairs. The FSC pair is always the current
+  base pair.
+- the `trail_bootstrap_states` output of
+  `execute_rec3D_pcg_distributed_master`;
+- the `l_trail_bootstrap` argument of `filter_pcg_nonuniform_maps`, which only
+  checks its size;
+- the matching arguments in the callers, `simple_refine3D_strategy.f90`
+  (`assemble_refine3D_pcg`) and `simple_rec3D_strategy.f90`.
+
+**Keep** the existing chain seeding at full mass and the scale-back by `f` for
+the start without a chain. A state with no sample follows the gridding rules.
+
+### 6.3 What does not change
+
+- The population rule, the `u/f` scaling, the chain manifest, the integrity
+  checks and the carry-over of chains on `continue=yes`.
+- solve3D's full reconstructions and their chain seeding (`trail_seed`), and
+  the solve3D_addon paths, which already require a seeded chain.
+- The matcher, the strategies and the single-read particle I/O.
+
+## 7. Documents and skills to update
+
+- `.github/skills/simple-frac-update-trailing/SKILL.md` and its
+  `references/frac-update-contract.md`: replace the bootstrap paragraph, which
+  describes the finished-map blend and the mandatory previous half maps, with
+  the start-without-chain rule of section 4.1.
 - `doc/policies/importance_sampling_fractional_update_policy.md` and
-  `doc/policies/3D/reconstruct3D_pcg_policy.md`: remove the bootstrap blend
-  and the lag-one FSC pair; describe the seed.
-- `doc/policies/3D/refine3D_policy.md`: the strategy's assembly step.
-- The release 4 inventory: set C6 to done when this lands.
+  `doc/policies/3D/reconstruct3D_pcg_policy.md`: remove the bootstrap blend and
+  the lag-one FSC pair.
+- `doc/refactoring_notes/planned/release4_legacy_cleanup_inventory.md`: remove
+  the item when this lands.
 
-## 6. Tests
+## 8. Tests
 
-- `src/main/image/simple_accum_blend_tester.f90`
-  (`run_bootstrap_then_update`, "post-bootstrap effective update weight equals
-  realized fraction f"): replace with a seed test. A full-reconstruction seed
-  of mass `N`, followed by an update with `f` and `u`, restores with
-  current-map coefficient `u`. Keep the chain-mode recurrence cases.
-- A strategy-level unit test of the seeding decision on synthetic oris:
-  - `f = 1` and no chain: no seed;
-  - `f < 1` and a valid chain: no seed;
-  - `f < 1` and no chain: seed;
-  - `f` about 0 and a valid chain: no seed, chain carried.
-- Run `scripts/check_test_registry.py` after the test changes.
+- `src/main/image/simple_accum_blend_tester.f90`. Keep
+  `run_bootstrap_then_update` ("post-bootstrap effective update weight equals
+  realized fraction f"): it checks the full-mass seed, which this design keeps.
+  Rename it to describe a chain start rather than a bootstrap. Add one case:
+  the seeding iteration's own restored map equals the current sample's map.
+- A gridding check that a trailing iteration without a chain neither reads
+  nor needs `vol<state>` and ships the current-sample map.
+- Run `scripts/check_test_registry.py` if test names change.
 
-## 7. Validation plan (developer runs)
+## 9. Validation plan (maintainer runs)
 
-On the Dell, with ground truth per the validation memory (orientation errors
-against truth for small noisy sets, FSC for larger ones):
+On the Oracle Linux test machine, with ground truth: orientation errors
+against truth for small noisy sets, FSC for larger ones.
 
-1. **refine3D, `trail_rec=yes`, `update_frac=0.2`, gridding**, started from a
-   project with update history and no chain. Expect one seeding iteration (log
-   line), then accumulator blends. Compare orientation error and FSC per
-   iteration with the same run before the change.
+1. **solve3D end to end, single state.** At the stage where trailing switches
+   on, expect one "seeded ... current sample only" log line per state and no
+   blend log line; accumulator blends follow. Compare orientation error and
+   FSC per iteration with the same run before the change. A small dip in that
+   one iteration is expected; no lasting difference should be.
 2. **The same run with `rec_backend=pcg`.**
-3. **refine3D_auto switching `trail_rec` on mid-run.** Expect exactly one seed.
-4. **A multi-state run where one state receives no sample in some iteration.**
-   Expect that state's chain to be carried unchanged.
-5. **solve3D end to end.** Expect no seeding iteration, because the stage
-   boundaries seed, and maps unchanged within noise.
+3. **refine3D, `trail_rec=yes`, `update_frac=0.2`**, started from a project
+   with update history and no chain.
+4. **A multi-state run in which one state receives no sample** in some
+   iteration, with and without an existing chain.
 
-## 8. Open questions
+## 10. Open questions
 
-- **Re-seeding scope.** reconstruct3D seeds all states together, so a seeding
-  iteration also replaces the valid chains of the other states with full
-  reconstructions. That is acceptable because seeding is rare, but it could be
-  narrowed per state later.
-- **States with active particles but none ever updated.** Such a state gets no
-  rows from `sample4rec` and therefore no chain. Its next sampled iteration has
-  `f = 1` and seeds itself through the `u >= 0.99` path, so no loop arises, but
-  this should be confirmed in the multi-state run.
-- **Seed log and accounting.** Whether the seeding iteration should be marked
-  in the convergence output (`TRAIL_REC_UPDATE_FRACTION`), so the jump to a
-  full update is visible in run reports.
+- **Marking the seeding iteration** in the convergence output
+  (`TRAIL_REC_UPDATE_FRACTION`), so the one-iteration change of behaviour is
+  visible in run reports.
+- **Seeding solve3D's chain earlier.** If the first-iteration dip turns out to
+  matter, solve3D could seed the chain at the full reconstruction it already
+  runs at its start stage, when a later stage will trail. That costs nothing
+  extra, but the chain would then carry early, low-resolution alignments that
+  decay only slowly (by `1-u` per iteration). The current code deliberately
+  avoids this ("seeding earlier would park stale full-weight alignments in the
+  chain"). Decide on evidence from run 1.
+
+## 11. Execution
+
+This plan is carried out as an unattended run on the Oracle Linux test machine
+(arun run `trailing_halfmap`), in three phases. Nothing is committed; the
+maintainer reviews the complete diff when all phases are done. Every phase
+records itself in section 12.
+
+### 11.1 Phase 0: baseline on the current code
+
+No source file changes in this phase.
+
+1. Build the tree as it is (`./compile_debug.sh`, which also runs the fast
+   gate) and record how SIMPLE is built on this machine.
+2. Find the beta-galactosidase single-state set (5,513 particles) on this
+   machine and copy or link what is needed into the run's scratch directory.
+   Never write to the original.
+3. Run the cases below. For each, record per iteration from the last
+   non-trailing stage to the end:
+   - FSC 0.5 and 0.143 resolution;
+   - mean orientation and shift change;
+   - the trailing log lines of volassemble, or of the PCG master for case B;
+   - the wall time.
+
+   In every case, identify the iteration where trailing starts without a
+   chain: today it logs "USING LEGACY PREVIOUS-HALFMAP BLEND". Record which
+   states take that path and how often.
+
+   The cases:
+   - **A.** `solve3D` single state on beta-gal, gridding backend, default
+     stage plan (trailing switches on at stage 5). Run it twice, so that the
+     run-to-run spread is known; a third time if the machine allows.
+   - **B.** The same with `rec_backend=pcg`. Twice if time allows, otherwise
+     once.
+   - **C.** `refine3D` with `trail_rec=yes` and `update_frac=0.2`, five
+     iterations, starting from the final project of a case A run. Use a
+     setting that keeps the update history, so that the first iteration
+     starts trailing without a chain; a probabilistic refine mode keeps it.
+     Confirm from the log that the start-without-chain path is taken.
+   - **D, optional.** A multi-state case in which one state receives no sample
+     in some iteration, if one can be set up at reasonable cost (for example
+     with small `update_frac` on a two-state split). If not, record why.
+4. If the simulated high-level workflows (`simulated_workflow_1jxy`,
+   `simulated_workflow_6vxx`) reach a trailing stage, record their
+   ground-truth metrics (orientation and shift errors against the simulated
+   truth). If they do not, record that.
+
+Exit criteria:
+
+- the build and the fast gate pass;
+- cases A to C are recorded, with the start-without-chain iteration
+  identified in each;
+- the spread of case A is known from at least two runs;
+- all numbers are in the "Phase 0 baseline" subsection of section 12.
+
+### 11.2 Phase 1: implementation
+
+Make the changes of section 6, the tests of section 8 and the document and
+skill updates of section 7. Do not change the matcher, the strategies'
+iteration logic or the population rule.
+
+Exit criteria:
+
+- the build and the fast gate pass, including the `unit_image` trailing-blend
+  tests;
+- `python3 scripts/check_test_registry.py .` passes;
+- the source contains none of `read_previous_halfmaps`,
+  `trail_restored_halves_if_needed`, `blend_bootstrap_half`,
+  `load_previous_state_halves`, `trail_bootstrap_states` and
+  `l_trail_bootstrap`;
+- volassemble no longer reads `vol<state>` from its command line under
+  `trail_rec=yes`.
+
+### 11.3 Phase 2: validation and close
+
+1. Repeat cases A to C (and D if it was run) on the Phase 1 build, with the
+   same settings and data.
+   - At the iteration where trailing starts without a chain, expect the new
+     log line ("seeded full-mass trailing chain ... current sample only") and
+     no blend.
+   - From the next iteration on, expect accumulator blends.
+   - For case D, expect the unsampled state's chain to be carried, or its
+     volume carried forward when it has no chain.
+2. Acceptance: the final FSC 0.143 resolution of each case lies within the
+   larger of the Phase 0 spread and 3 % of its Phase 0 value. The resolution
+   at the start-without-chain iteration itself may dip; report it, but it is
+   not a criterion. Where the simulated workflows reach a trailing stage,
+   their ground-truth errors must lie within their Phase 0 values plus the
+   same margin.
+3. Remove this item from
+   `doc/refactoring_notes/planned/release4_legacy_cleanup_inventory.md`, and
+   update the trailing-reconstruction paragraph under "What remains" in
+   `doc/refactoring_notes/completed/release4_legacy_cleanup_report.md` to say
+   that the change is done.
+4. Do not regenerate `doc/code_overview/fortran-indexes`; the maintainer does
+   that.
+5. Move this plan to `doc/refactoring_notes/completed/` with `mv`, and write
+   the review report beside it. The report must be readable on its own:
+   - say what changed and why, in plain words;
+   - give the evidence against the Phase 0 baseline in tables;
+   - list any decision taken during the run and where it is recorded;
+   - define every SIMPLE term and spell out every acronym on first use;
+   - use no references to run-internal labels.
+
+Exit criteria:
+
+- the acceptance of step 2 holds;
+- steps 3 to 5 are done.
+
+### File table
+
+| File | Change | Phases |
+| --- | --- | --- |
+| `src/main/commanders/simple/simple_commanders_rec_distr.f90` | Section 6.1. | 1 |
+| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | Section 6.2. | 1 |
+| `src/main/strategies/parallelization/simple_refine3D_strategy.f90` | Section 6.2: caller arguments only. | 1 |
+| `src/main/strategies/parallelization/simple_rec3D_strategy.f90` | Section 6.2: caller arguments only. | 1 |
+| `src/main/image/simple_accum_blend_tester.f90` | Section 8. | 1 |
+| `src/main/commanders/test/simple_commanders_test_class.f90` | Only if a test name changes (section 8). | 1 |
+| `src/main/ui/simple_test/simple_test_ui_class.f90` | Only if a sub-suite name changes (section 8). | 1 |
+| `.github/skills/simple-frac-update-trailing/SKILL.md` | Section 7. | 1 |
+| `.github/skills/simple-frac-update-trailing/references/frac-update-contract.md` | Section 7. | 1 |
+| `doc/policies/importance_sampling_fractional_update_policy.md` | Section 7. | 1 |
+| `doc/policies/3D/reconstruct3D_pcg_policy.md` | Section 7. | 1 |
+| `doc/refactoring_notes/planned/release4_legacy_cleanup_inventory.md` | Section 11.3, step 3. | 2 |
+| `doc/refactoring_notes/completed/release4_legacy_cleanup_report.md` | Section 11.3, step 3. | 2 |
+
+## 12. Progress
+
+(One row per phase, newest last, written by the run. Phase 0 adds a "Phase 0
+baseline" subsection with its tables.)
