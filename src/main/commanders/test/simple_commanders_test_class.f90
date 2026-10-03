@@ -33,6 +33,7 @@ use simple_accum_blend_tester,               only: run_all_accum_blend_tests
 use simple_ctf_tester,                       only: run_all_ctf_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_starproject_tester,               only: run_all_starproject_tests
+use simple_starproject_stream_tester,        only: run_all_starproject_stream_tests
 use simple_binoris_tester,                   only: run_all_binoris_tests
 use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
@@ -78,6 +79,7 @@ use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
 use simple_http_post_tester,                 only: run_all_http_post_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
 use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
+use simple_stream_pipe_tester,               only: run_all_stream_pipe_tests
 use simple_forked_process_tester,            only: run_all_forked_process_tests
 use simple_imghead_tester,                   only: run_all_imghead_tests
 use simple_image_tester,                     only: run_all_image_tests
@@ -100,11 +102,21 @@ use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
+use simple_stream_stage_preprocess_tester,   only: run_all_stream_stage_preprocess_tests
+use simple_stream_stage_optics_tester,       only: run_all_stream_stage_optics_tests
+use simple_stream_stage_initial_analysis_tester, only: run_all_stream_stage_initial_analysis_tests
+use simple_stream_stage_refpick_tester,      only: run_all_stream_stage_refpick_tests
+use simple_stream_stage_sieve_tester,        only: run_all_stream_stage_sieve_tests
+use simple_stream_stage_pool2D_tester,       only: run_all_stream_stage_pool2D_tests
+use simple_stream_stage_solve3D_tester,   only: run_all_stream_stage_solve3D_tests
+use simple_stream_master_tester,             only: run_all_stream_master_tests
+use simple_stream_job_sets_tester,           only: run_all_stream_job_sets_tests
+use simple_stream_watcher_tester,            only: run_all_stream_watcher_tests
 use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! Fast gate: the thirteen test=unit_<area> suites, one CTest entry each, label `fast`
+! Fast gate: the fourteen test=unit_<area> suites, one CTest entry each, label `fast`
 ! (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, section 5.1): assertions
 ! through simple_test_utils, localhost only, no downloads or user data, one OpenMP thread.
 ! suite=<name> runs one sub-suite (suite=list names them); test=units runs every area (not the gate);
@@ -186,6 +198,11 @@ type, extends(commander_base) :: commander_test_lib_single
   contains
     procedure :: execute      => exec_test_lib_single
 end type commander_test_lib_single
+
+type, extends(commander_base) :: commander_test_unit_stream
+  contains
+    procedure :: execute      => exec_test_unit_stream
+end type commander_test_unit_stream
 
 type, extends(commander_base) :: commander_test_lib_stream
   contains
@@ -307,6 +324,7 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'STAR file',               run_all_starfile_tests)
         call add_suite(s, n, 'STAR project',            run_all_starproject_tests)
+        call add_suite(s, n, 'STAR stream export',      run_all_starproject_stream_tests)
         call add_suite(s, n, 'binoris',                 run_all_binoris_tests)
         call add_suite(s, n, 'project records',         run_all_sp_project_tests)
         call add_suite(s, n, 'project merge',           run_all_project_merge_tests)
@@ -337,6 +355,7 @@ contains
         call add_suite(s, n, 'HTTP POST',                 run_all_http_post_tests)
         call add_suite(s, n, 'persistent worker message', run_all_persistent_worker_message_tests)
         call add_suite(s, n, 'persistent worker server',  run_all_persistent_worker_server_tests)
+        call add_suite(s, n, 'stream pipe',               run_all_stream_pipe_tests)
     end subroutine suites_ipc
 
     subroutine suites_reconstruction( s, n )
@@ -399,6 +418,25 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'pdb2mrc', run_all_pdb2mrc_tests)
     end subroutine suites_lib_single
+
+    !> STREAM stages (src/main/stream/stages), step by step without a queue or waits:
+    !! preprocessing, optics assignment, initial analysis, reference picking, particle sieving,
+    !! pool 2D, solve 3D, the job sets preprocessing and reference picking run on, the
+    !! master's GUI commands, metadata store and stage pipes, and the watcher's history
+    subroutine suites_stream( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'preprocessing',      run_all_stream_stage_preprocess_tests)
+        call add_suite(s, n, 'optics assignment',  run_all_stream_stage_optics_tests)
+        call add_suite(s, n, 'initial analysis',   run_all_stream_stage_initial_analysis_tests)
+        call add_suite(s, n, 'reference picking',  run_all_stream_stage_refpick_tests)
+        call add_suite(s, n, 'particle sieving',   run_all_stream_stage_sieve_tests)
+        call add_suite(s, n, 'pool 2D',            run_all_stream_stage_pool2D_tests)
+        call add_suite(s, n, 'solve 3D',        run_all_stream_stage_solve3D_tests)
+        call add_suite(s, n, 'stream master',      run_all_stream_master_tests)
+        call add_suite(s, n, 'job sets',           run_all_stream_job_sets_tests)
+        call add_suite(s, n, 'stream watcher',     run_all_stream_watcher_tests)
+    end subroutine suites_stream
 
     !> nightly: the stream stages that run in-process, with the arguments the stream gives them
     !! (Ruben's stream tests; optics assignment waits a minute for the stream watcher);
@@ -478,6 +516,7 @@ contains
         call suites_heterogeneity(s, n)
         call suites_parallel(s, n)
         call suites_single(s, n)
+        call suites_stream(s, n)
         call run_unit_suites('units', cline, s(1:n))
     end subroutine exec_test_units
 
@@ -610,6 +649,16 @@ contains
         call suites_lib_single(s, n)
         call run_unit_suites('lib_single', cline, s(1:n))
     end subroutine exec_test_lib_single
+
+    subroutine exec_test_unit_stream( self, cline )
+        class(commander_test_unit_stream), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_stream(s, n)
+        call run_unit_suites('unit_stream', cline, s(1:n))
+    end subroutine exec_test_unit_stream
 
     subroutine exec_test_lib_stream( self, cline )
         class(commander_test_lib_stream), intent(inout) :: self

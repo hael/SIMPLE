@@ -11,8 +11,11 @@ use simple_gui_metadata_base, only: gui_metadata_base
 implicit none
 
 public :: gui_metadata_micrograph
+public :: MAX_MIC_COORDINATES
 private
 #include "simple_local_flags.inc"
+
+integer, parameter :: MAX_MIC_COORDINATES = 5000 ! box centres a micrograph holds
 
 type, extends( gui_metadata_base ) :: gui_metadata_micrograph
   private
@@ -26,8 +29,8 @@ type, extends( gui_metadata_base ) :: gui_metadata_micrograph
   integer                   :: xdim          = 0     ! micrograph width in pixels
   integer                   :: ydim          = 0     ! micrograph height in pixels
   integer                   :: n_coordinates = 0     ! number of populated coordinate entries
-  integer(kind=2)           :: x_coordinates(5000)   ! particle box centre x (int16, limits transfer size)
-  integer(kind=2)           :: y_coordinates(5000)   ! particle box centre y (int16, limits transfer size)
+  integer(kind=2)           :: x_coordinates(MAX_MIC_COORDINATES) ! particle box centre x (int16, limits transfer size)
+  integer(kind=2)           :: y_coordinates(MAX_MIC_COORDINATES) ! particle box centre y (int16, limits transfer size)
 contains
   procedure :: set
   procedure :: set_coordinate

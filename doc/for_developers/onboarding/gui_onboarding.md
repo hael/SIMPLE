@@ -140,7 +140,7 @@ Important stream files:
 - `nice/nice_lite/templates/nice_stream/`
 - `nice/nice_lite_dev/data_structures/streamjob.py`
 - `nice/nice_lite_dev/data_structures/simple.py`
-- `src/main/stream/simple_stream_p00_master.f90`
+- `src/main/commanders/stream/simple_commanders_stream_p00_master.f90`
 - `src/utils/gui/simple_gui_assembler.f90`
 - `src/utils/comm/simple_stream_communicator.f90`
 - `src/utils/gui/metadata/stream/`

@@ -1,7 +1,7 @@
 !@descr: unit tests for simple_forked_process (lifecycle, signals, restart, timestamps, I/O)
 ! Children run the default execute_test, which exits 0 on SIGTERM: terminate() must end in
 ! STOPPED, kill() (SIGKILL) in FAILED. test_logfile_redirection hashes execute_test's sentinel
-! line. Skipped on Windows.
+! line. test_fork_with_running_monitor forks under a running memory monitor. Skipped on Windows.
 module simple_forked_process_tester
   use unix,                  only: c_pid_t, c_usleep
   use simple_forked_process, only: forked_process,         &
@@ -10,9 +10,12 @@ module simple_forked_process_tester
                                    FORK_STATUS_FAILED,     &
                                    FORK_STATUS_RESTARTING, &
                                    FORK_POLL_TIME
+  use simple_cmdline,        only: cmdline
+  use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish, mem_monitor_is_enabled
   use simple_string,         only: string
+  use simple_string_utils,   only: int2str
   use simple_test_utils,     only: assert_true, assert_int, assert_char
-  use simple_syslib,         only: file_exists, del_file
+  use simple_syslib,         only: file_exists, del_file, get_process_id
 
   implicit none
 
@@ -34,6 +37,7 @@ contains
     call test_fail_timestamps()
     call test_destroy()
     call test_logfile_redirection()
+    call test_fork_with_running_monitor()
 #endif
   end subroutine run_all_forked_process_tests
 
@@ -165,5 +169,53 @@ contains
     call assert_char(log_hash%to_char(), '0A8F18CBEE2D2351', 'logfile content hash matches')
     call del_file(log_fname)
   end subroutine test_logfile_redirection
+
+  ! Fork while this process's memory monitor runs, as the stream master restarts a stage: the
+  ! child starts its own monitor (its command line asks for one), runs and stops, and the
+  ! parent's monitor still runs. A child stopping the inherited monitor would join a sampler
+  ! thread it does not have and never return, so the wait has a deadline.
+  subroutine test_fork_with_running_monitor()
+    integer, parameter    :: MAX_POLLS = 200 ! 20 s; execute_test sleeps 2 s
+    type(forked_process)  :: proc
+    type(cmdline)         :: cline
+    type(string)          :: log_fname, child_telemetry
+    integer(kind=c_pid_t) :: pid
+    integer               :: rc, ipoll, stat
+    logical               :: l_own_monitor
+    write(*,'(A)') 'test_fork_with_running_monitor'
+    call cline%set('memreport', 'yes')
+    ! the runner's own monitor, when it runs with memreport=yes, serves as well
+    l_own_monitor = .not. mem_monitor_is_enabled()
+    if( l_own_monitor ) call mem_monitor_init(cline, 'forked process tester')
+    if( .not. mem_monitor_is_enabled() )then
+      write(*,'(A)') 'memory telemetry is unsupported here; test skipped'
+      return
+    endif
+    log_fname = 'test_fork_with_running_monitor.log'
+    call proc%start(name=string('TEST_FORK_WITH_RUNNING_MONITOR'), logfile=log_fname, cline=cline)
+    pid   = proc%get_pid()
+    stat  = proc%status()
+    ipoll = 0
+    do while( stat == FORK_STATUS_RUNNING .and. ipoll < MAX_POLLS )
+      rc    = c_usleep(FORK_POLL_TIME)
+      stat  = proc%status()
+      ipoll = ipoll + 1
+    end do
+    if( stat == FORK_STATUS_RUNNING )then
+      call proc%kill()
+      call proc%await_final_status()
+    endif
+    call assert_int(stat, FORK_STATUS_STOPPED, 'child forked under a running monitor stops by itself')
+    child_telemetry = 'memory_usage_'//int2str(pid)//'.csv'
+    call assert_true(file_exists(child_telemetry), 'child writes its own memory telemetry')
+    call assert_true(mem_monitor_is_enabled(),     'parent monitor still runs after the fork')
+    call del_file(child_telemetry)
+    call del_file(log_fname)
+    if( l_own_monitor )then
+      call mem_monitor_finish()
+      call del_file('memory_usage_'//int2str(get_process_id())//'.csv')
+    endif
+    call cline%kill()
+  end subroutine test_fork_with_running_monitor
 
 end module simple_forked_process_tester

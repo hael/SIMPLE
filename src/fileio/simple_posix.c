@@ -1107,6 +1107,41 @@ static void *memory_monitor_sampler(void *unused)
     pthread_mutex_unlock(&memory_monitor.mutex);
     return NULL;
 }
+
+/* fork() copies the monitor's state but not its sampler thread, so a child
+ * stopping the inherited monitor would join a thread it does not have.  These
+ * handlers make the child forget the parent's monitor; a child may then start
+ * its own.  Holding the mutex across the fork means no sample is half written
+ * and the child's copy of the mutex is not left locked by the sampler. */
+static pthread_once_t memory_monitor_atfork_once = PTHREAD_ONCE_INIT;
+
+static void memory_monitor_atfork_prepare(void)
+{
+    pthread_mutex_lock(&memory_monitor.mutex);
+}
+
+static void memory_monitor_atfork_parent(void)
+{
+    pthread_mutex_unlock(&memory_monitor.mutex);
+}
+
+static void memory_monitor_atfork_child(void)
+{
+    /* every sample is flushed, so this drops only the child's copy of the descriptor */
+    if (memory_monitor.stream != NULL) fclose(memory_monitor.stream);
+    memory_monitor.stream         = NULL;
+    memory_monitor.running        = 0;
+    memory_monitor.stop_requested = 0;
+    /* the copied condition still counts the parent's sampler as a waiter */
+    pthread_cond_init(&memory_monitor.condition, NULL);
+    pthread_mutex_unlock(&memory_monitor.mutex);
+}
+
+static void memory_monitor_register_atfork(void)
+{
+    pthread_atfork(memory_monitor_atfork_prepare, memory_monitor_atfork_parent,
+                   memory_monitor_atfork_child);
+}
 #endif
 
 int simple_memory_monitor_start_c(const char *filename, int filename_length,
@@ -1122,6 +1157,7 @@ int simple_memory_monitor_start_c(const char *filename, int filename_length,
     char filename_buffer[4096];
     int file_is_empty, thread_status;
     memory_monitor_copy_safe(filename_buffer, sizeof(filename_buffer), filename, filename_length);
+    pthread_once(&memory_monitor_atfork_once, memory_monitor_register_atfork);
     pthread_mutex_lock(&memory_monitor.mutex);
     if (memory_monitor.running) {
         pthread_mutex_unlock(&memory_monitor.mutex);

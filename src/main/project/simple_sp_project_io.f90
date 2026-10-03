@@ -1072,7 +1072,7 @@ contains
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
         if( l_tmp )then
-            tmpfile = swap_suffix(projfile, string(METADATA_EXT), string('.tmp'))
+            tmpfile = swap_suffix(projfile, string('.tmp'), string(METADATA_EXT))
             call self%bos%open(tmpfile, del_if_exists=.true.)
         else
             call self%bos%open(projfile, del_if_exists=.true.)
@@ -1266,14 +1266,24 @@ contains
         call star%complete()
     end subroutine write_ptcl2D_star
 
+    ! The map's optics segment (<prefix>.simple) and its import index to group table (<prefix>.txt).
+    ! Readers find maps by their .txt and then read both files, so the .simple is written first and
+    ! the .txt last, each under a temporary name a reader cannot match, then renamed: a map that can
+    ! be found is complete.
     module subroutine write_optics_map( self, fname_prefix )
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: fname_prefix
         type(sp_project) :: spproj_optics
         type(nrtxtfile)  :: map_file
+        type(string)     :: txt, txt_tmp
         real             :: mapline(2)
         integer          :: imic
-        call map_file%new(string(fname_prefix//TXT_EXT), 2, 2)
+        call spproj_optics%os_optics%copy(self%os_optics, is_ptcl=.false.)
+        call spproj_optics%write(string(fname_prefix//METADATA_EXT), tempfile=.true.)
+        call spproj_optics%kill
+        txt     = fname_prefix//TXT_EXT
+        txt_tmp = fname_prefix//TXT_EXT//'.tmp'
+        call map_file%new(txt_tmp, 2, 2)
         do imic=1, self%os_mic%get_noris()
             if(self%os_mic%isthere(imic, 'importind') .and. self%os_mic%isthere(imic, 'ogid')) then
                mapline(1) = self%os_mic%get_int(imic, 'importind')
@@ -1282,9 +1292,7 @@ contains
             end if
         end do
         call map_file%kill
-        call spproj_optics%os_optics%copy(self%os_optics, is_ptcl=.false.)
-        call spproj_optics%write(string(fname_prefix//METADATA_EXT))
-        call spproj_optics%kill
+        call simple_rename(txt_tmp, txt)
     end subroutine write_optics_map
 
     !------ Private Non-type-bound helpers ------

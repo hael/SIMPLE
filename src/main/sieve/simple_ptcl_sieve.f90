@@ -1,7 +1,8 @@
 !@descr: multi-tier particle sieve with coarse/fine 2D chunking and rejection
 ! cycle() = collect_and_reject -> generate_chunks_coarse -> generate_chunks_fine (unless single_pass)
 ! -> submit (fine first). Restart state comes from per-chunk sentinels
-! (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE).
+! (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE, and FINAL_INGESTION for a chunk final
+! ingestion staged without coarse 2D).
 ! Contract: doc/policies/sieving_and_rejection/ptcl_sieve_policy.md
 module simple_ptcl_sieve
   use unix,                               only: c_time, c_long
@@ -12,16 +13,17 @@ module simple_ptcl_sieve
   use simple_fileio,                      only: swap_suffix, simple_copy_file, write_filetable, simple_touch, basename, simple_list_files
   use simple_string,                      only: string
   use simple_syslib,                      only: simple_mkdir, simple_abspath, simple_chdir, &
-                                                simple_getcwd, file_exists, del_file, dir_exists
+                                                simple_getcwd, file_exists, del_file, dir_exists, simple_rename
   use simple_cmdline,                     only: cmdline
   use simple_qsys_env,                    only: qsys_env
   use simple_rec_list,                    only: rec_list
   use simple_image_bin,                   only: image_bin
   use simple_gui_utils,                   only: mrc2jpeg_tiled
   use simple_defs_fname,                  only: METADATA_EXT, SOLVE2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
+  use simple_defs_environment,            only: SIMPLE_STREAM_CHUNK_PARTITION
   use simple_parameters,                  only: parameters
   use simple_sp_project,                  only: sp_project
-  use simple_imgarr_utils,                only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr
+  use simple_imgarr_utils,                only: dealloc_imgarr, write_imgarr
   use simple_string_utils,                only: int2str
   use simple_projfile_utils,              only: merge_chunk_projfiles, merge_chunk_projfiles_without_sigma2
   use simple_commanders_cavgs,            only: commander_cluster_cavgs
@@ -32,9 +34,10 @@ module simple_ptcl_sieve
                                                 CAVG_REJECT_REASON_MODEL
   use simple_class_compatibility,         only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
-  use simple_cavg_quality_analysis,       only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality
+  use simple_cavg_quality_selection,      only: score_project_cavgs
   use simple_cavg_quality_feats,          only: I_BP40_100_CENTER_EDGE_VAR, SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
   use simple_segmentation,                only: otsu_img
+  use simple_optics_maps,                 only: copy_project_with_optics_map
 
   implicit none
   public :: ptcl_sieve
@@ -48,6 +51,8 @@ module simple_ptcl_sieve
   public :: DEFAULT_LPSTART
   public :: DEFAULT_COARSE_LP
   public :: DEFAULT_FINE_LP
+  public :: FINAL_INGESTION_MARKER
+  public :: sieve_lpstart
 
   private
 #include "simple_local_flags.inc"
@@ -70,6 +75,9 @@ module simple_ptcl_sieve
   character(len=*), parameter :: LABEL_COARSE     = 'COARSE CHUNK'
   character(len=*), parameter :: LABEL_FINE       = 'FINE CHUNK'
   character(len=*), parameter :: REJECTION_FAILED = 'REJECTION_FAILED'
+  ! in the folder of a coarse chunk final ingestion staged for pass 2 without coarse 2D: on a
+  ! restart the chunk counts as classified and rejection-complete, as it did when staged
+  character(len=*), parameter :: FINAL_INGESTION_MARKER = 'FINAL_INGESTION'
 
   type :: chunk2D_state
     private
@@ -121,6 +129,7 @@ module simple_ptcl_sieve
     type(string)                      :: outdir_chunks_coarse
     type(string)                      :: outdir_chunks_fine
     type(string)                      :: completedir
+    type(string)                      :: optics_dir              ! optics maps for the handed-off chunks; empty: none
     type(string)                      :: latest_jpeg
     type(string)                      :: latest_stkname
     logical                           :: coarse_only             = .false.
@@ -175,6 +184,7 @@ module simple_ptcl_sieve
     procedure :: collect_and_reject
     procedure :: reject_cavgs
     procedure :: cleanup_chunk
+    procedure :: hand_off
   end type ptcl_sieve
 
 contains
@@ -186,13 +196,15 @@ contains
   ! Initializes from params (concurrency, mask, threads, per-tier defaults); re-imports chunks
   ! from a previous run, then creates the two chunk directories under the CWD; starts the queue
   ! environment and pretrains the compatibility models when params%refs exists.
-  subroutine new( self, params, completedir, pre_chunked )
+  subroutine new( self, params, completedir, pre_chunked, optics_dir )
     class(ptcl_sieve), intent(inout) :: self
     type(parameters),           intent(in)    :: params
     type(string),               intent(in)    :: completedir
     logical,          optional, intent(in)    :: pre_chunked
+    class(string),    optional, intent(in)    :: optics_dir
     type(string)                              :: cwd
     integer(timer_int_kind)                   :: t0
+    real                                      :: lpstart
     t0 = timer_start()
     call self%kill()
     call simple_getcwd(cwd)
@@ -203,11 +215,14 @@ contains
     self%nthr        = params%nthr
     self%nparts      = params%nparts
     if( present(pre_chunked)        ) self%pre_chunked             = pre_chunked
+    if( present(optics_dir)         ) self%optics_dir              = optics_dir
     if( params%single_pass == 'yes' ) self%coarse_only             = .true.
     if( params%use_model   == 'no ' ) self%model_rejection_enabled = .false.
-    if( params%lpstart > 0.0 ) then
-      if( self%coarse_defaults%lpstart /= params%lpstart ) self%coarse_defaults%lpstart = params%lpstart
-      if( self%fine_defaults%lpstart   /= params%lpstart ) self%fine_defaults%lpstart   = params%lpstart
+    ! a starting low-pass limit only when one was given: the chunks' solve2D derives it otherwise
+    lpstart = sieve_lpstart(params)
+    if( lpstart > 0.0 ) then
+      self%coarse_defaults%lpstart = lpstart
+      self%fine_defaults%lpstart   = lpstart
     end if
     if( params%lpstop_coarse  > 0.0 .and. self%coarse_defaults%lpstop   /= params%lpstop_coarse ) self%coarse_defaults%lpstop   = params%lpstop_coarse
     if( params%lpstop_fine    > 0.0 .and. self%fine_defaults%lpstop     /= params%lpstop_fine   ) self%fine_defaults%lpstop     = params%lpstop_fine
@@ -273,6 +288,7 @@ contains
     self%pre_chunked             = .false.
     self%final_ingestion         = .false.
     self%model_rejection_enabled = .true.
+    call self%optics_dir%kill
     call timer_stop(t0, string('kill'))
   end subroutine kill
 
@@ -295,7 +311,9 @@ contains
 
   ! Scans the coarse output directory for existing chunk subdirectories and
   ! populates the coarse array with chunk records whose state is inferred from
-  ! sentinel files (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE).
+  ! sentinel files (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE). A chunk
+  ! final ingestion staged (FINAL_INGESTION_MARKER) is classified and
+  ! rejection-complete, as when it was staged.
   ! Regenerates the cline for any chunk that has not yet completed solve2D,
   ! so that interrupted chunks can be resubmitted after a restart.
   subroutine import_existing_chunks_coarse( self )
@@ -305,6 +323,7 @@ contains
     type(string)                         :: chunk_folder
     integer(timer_int_kind)              :: t0
     integer                              :: chunk_id
+    logical                              :: l_staged
     t0       = timer_start()
     chunk_id = 0
     do
@@ -323,10 +342,12 @@ contains
       call chunk_project%read(new_chunk%projfile)
       new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
-      new_chunk%solve2D_running     = .false.
-      new_chunk%solve2D_complete = file_exists(new_chunk%folder%to_char() // '/' // SOLVE2D_FINISHED)
+      l_staged                      = file_exists(new_chunk%folder%to_char() // '/' // FINAL_INGESTION_MARKER)
+      new_chunk%solve2D_running  = .false.
+      new_chunk%solve2D_complete = file_exists(new_chunk%folder%to_char() // '/' // SOLVE2D_FINISHED) .or. l_staged
       new_chunk%failed              = file_exists(new_chunk%folder%to_char() // '/' // REJECTION_FAILED)
-      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed
+      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed&
+                                      &.or. l_staged
       new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE') .or. new_chunk%failed
       call chunk_project%kill()
       if( .not. new_chunk%solve2D_complete .and. .not. new_chunk%failed ) call self%generate_chunk_coarse_cline(new_chunk, new_chunk%nptcls_selected)
@@ -621,7 +642,7 @@ contains
   ! each holding up to coarse_defaults%pop_threshold particles. For each chunk:
   ! creates its subdirectory, accumulates micrographs until the threshold is
   ! reached, builds and writes a project file, applies any
-  ! SIMPLE_CHUNK_PARTITION environment override, configures the command line,
+  ! SIMPLE_STREAM_CHUNK_PARTITION environment override, configures the command line,
   ! marks the consumed records as included in project_list, and updates the
   ! imported_projects.txt file table with all currently included project files.
   subroutine generate_chunks_coarse( self, project_list )
@@ -736,7 +757,7 @@ contains
       call chunk_project%update_compenv(new_chunk%cline)
 
       ! Apply queue partition override if the environment variable is set
-      call get_environment_variable('SIMPLE_CHUNK_PARTITION', chunk_part_env, envlen)
+      call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
       if( envlen > 0 ) call chunk_project%compenv%set(1, 'qsys_partition', trim(chunk_part_env))
 
       call chunk_project%write(new_chunk%projfile)
@@ -760,7 +781,8 @@ contains
 
     ! Final ingestion: sweep any remaining sub-threshold un-included particles
     ! into a coarse chunk flagged as rejection-complete so the fine-tier final
-    ! flush consumes them without running 2D classification.
+    ! flush consumes them without a coarse 2D classification. The flags are
+    ! recorded by FINAL_INGESTION_MARKER so a restart restores them.
     if( self%final_ingestion ) then
       included = project_list%get_included_flags()
       ids      = pack(project_list%get_ids(),    .not. included)
@@ -784,6 +806,7 @@ contains
         call chunk_project%update_compenv(new_chunk%cline)
         call chunk_project%write(new_chunk%projfile)
         call chunk_project%kill()
+        call simple_touch(new_chunk%folder%to_char() // '/' // FINAL_INGESTION_MARKER)
         new_chunk%solve2D_complete = .true.
         new_chunk%rejection_complete  = .true.
         call self%append_chunk_coarse(new_chunk)
@@ -938,6 +961,16 @@ contains
   ! --------------------------------------------------------------------------
   ! COMMAND-LINE BUILDERS
   ! --------------------------------------------------------------------------
+
+  ! The starting low-pass limit (A) the sieve gives its chunks' solve2D: the one given, or 0 when
+  ! none was, and solve2D then derives it from the mask diameter. Parameter validation lifts an
+  ! unset lpstart (0) to Nyquist (fny, twice the pixel size), so only a limit above Nyquist counts
+  ! as given; testing for a positive value passed Nyquist to every chunk as its starting limit.
+  pure real function sieve_lpstart( params )
+    type(parameters), intent(in) :: params
+    sieve_lpstart = 0.
+    if( params%lpstart > params%fny ) sieve_lpstart = params%lpstart
+  end function sieve_lpstart
 
   ! Populates the solve2D command line for a coarse chunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
@@ -1100,7 +1133,7 @@ contains
     do i = 1, self%get_n_chunks_fine()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%chunks_fine(i) )
-        if( chunk%failed ) cycle
+        if( chunk%failed .or. chunk%complete ) cycle
         if( chunk%solve2D_running .or. chunk%solve2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
@@ -1116,7 +1149,9 @@ contains
     do i = 1, self%get_n_chunks_coarse()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%chunks_coarse(i) )
-        if( chunk%failed ) cycle
+        ! a complete chunk has been consumed and is never classified (a guard: one is normally
+        ! classified already)
+        if( chunk%failed .or. chunk%complete ) cycle
         if( chunk%solve2D_running .or. chunk%solve2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
@@ -1182,7 +1217,7 @@ contains
           deallocate(cls_msk)
           end if
           call spproj%kill()
-          call simple_copy_file(chunk%projfile, self%completedir // '/' // basename(chunk%projfile))
+          call self%hand_off(chunk%projfile)
           call simple_touch(chunk%folder%to_char() // '/COMPLETE')
           chunk%complete = .true.
           write(logfhandle,'(A,I6)') '>>> FINALISED COARSE CHUNK # ', chunk%id
@@ -1255,7 +1290,7 @@ contains
             deallocate(cls_msk)
           end if
           call spproj%kill()
-          call simple_copy_file(chunk%projfile, self%completedir // '/' // basename(chunk%projfile))
+          call self%hand_off(chunk%projfile)
           call simple_touch(chunk%folder%to_char() // '/COMPLETE')
           chunk%complete = .true.
           write(logfhandle,'(A,I6)') '>>> FINALISED FINE CHUNK # ', chunk%id
@@ -1279,8 +1314,6 @@ contains
     type(cavg_quality_result)          :: quality
     type(cavg_quality_model)           :: model
     type(sp_project)                   :: spproj
-    type(parameters)                   :: relation_params
-    type(cmdline)                      :: relation_cline
     type(string)                       :: stkname, jpgname
     integer(timer_int_kind)            :: t0
     integer                            :: iimg, nout, non_zero_ptcls, n_total_ptcls
@@ -1294,25 +1327,17 @@ contains
     t0 = timer_start()
 
     call spproj%read(chunk%projfile)
-    cavg_imgs = read_cavgs_into_imgarr(spproj)
-    ! generate the relation parameters for the coarse/fine quality model
-    call relation_cline%set('box', cavg_imgs(1)%get_box())
-    call relation_cline%set('oritype',            'cls2D')
-    call relation_cline%set('ctf',                   'no')
-    call relation_cline%set('objfun',                'cc')
-    call relation_cline%set('mskdiam',                0.0)
-    call relation_params%new(relation_cline)
     ! Initialize the coarse/fine quality model and evaluate the class averages.
     call model%init_preset(CAVG_QUALITY_MODEL_SIEVE_DEFAULT)
     write(logfhandle,'(A,A,A,I6,A,L1,A,A,A,A)') '>>> ', label%to_char(), ' # ', chunk%id, &
       ' USING REJECTION MODEL=', self%model_rejection_enabled, ' NAME=', trim(model%name), ' CONTEXT=', trim(model%context)
+    if( self%model_rejection_enabled ) then
+      call score_project_cavgs(spproj, model, 0.0, cavg_imgs, quality)
+    else
+      call score_project_cavgs(spproj, model, 0.0, cavg_imgs, quality, hard_gate_context=CAVG_QUALITY_CONTEXT_SIEVE)
+    end if
 
     if( label == LABEL_COARSE ) then
-      if( self%model_rejection_enabled ) then
-          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, relation_params)
-      else
-          call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
-      end if
       do iimg = 1, size(cavg_imgs)
           if( quality%states(iimg) == 0 ) then
               call spproj%os_cls2D%set(iimg, 'state', 0)
@@ -1337,11 +1362,6 @@ contains
       end if
       call self%coarse_compatibility_model%infer(spproj)
     else
-      if( self%model_rejection_enabled ) then
-          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, relation_params)
-      else
-          call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
-      end if
       do iimg = 1, size(cavg_imgs)
           if( quality%states(iimg) == 0 ) then
               call spproj%os_cls2D%set(iimg, 'state', 0)
@@ -1522,6 +1542,7 @@ contains
       if( fname == string('REJECTION_FINISHED') ) cycle
       if( fname == string('COMPLETE') ) cycle
       if( fname == string(REJECTION_FAILED) ) cycle
+      if( fname == string(FINAL_INGESTION_MARKER) ) cycle
       if( fname == string(FRCS_FILE) ) cycle
       if( fname == string(SIGMA2_STATE_FNAME) ) cycle
       if( fname_keep_last_iter_jpeg%strlen() > 0 .and. fname == fname_keep_last_iter_jpeg ) cycle
@@ -1959,7 +1980,7 @@ contains
   ! output directory, updates projinfo and compenv from cline, kills stale 2D
   ! orientation sets and output oris, and removes intermediate files (FRCs,
   ! class-average stacks, sigma2 star file) carried over from the merge.
-  ! Applies any SIMPLE_CHUNK_PARTITION environment override to the queue
+  ! Applies any SIMPLE_STREAM_CHUNK_PARTITION environment override to the queue
   ! partition.
   subroutine merge_and_clear( projfiles, outdir, chunk_project, cline )
     type(string),     intent(in)    :: projfiles(:)
@@ -1980,7 +2001,7 @@ contains
     if( file_exists(string(outdir%to_char() // '/cavgs_odd.mrc'))        ) call del_file(string(outdir%to_char() // '/cavgs_odd.mrc'))
     if( file_exists(string(outdir%to_char() // '/cavgs_even.mrc'))       ) call del_file(string(outdir%to_char() // '/cavgs_even.mrc'))
     if( file_exists(string(outdir%to_char() // '/sigma2_combined.star')) ) call del_file(string(outdir%to_char() // '/sigma2_combined.star'))
-    call get_environment_variable('SIMPLE_CHUNK_PARTITION', chunk_part_env, envlen)
+    call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
     if( envlen > 0 ) call chunk_project%compenv%set(1, 'qsys_partition', trim(chunk_part_env))
   end subroutine merge_and_clear
 
@@ -2026,5 +2047,24 @@ contains
     write(logfhandle,'(A,A,A,F8.1)') 'simple_ptcl_sieve->', routine_name%to_char(), ' execution time:', elapsed
     call flush(logfhandle)
   end subroutine timer_stop
+
+  ! Hands a finished chunk's project to the next stage: a copy in completedir, with the groups of
+  ! the newest optics map applied by import index when the sieve was given an optics directory
+  ! (the chunks themselves carry no optics groups; merged fine chunks would offset them). Either
+  ! way the copy is written as <stem>.tmp and renamed, so the stage watching completedir for
+  ! *.simple never reads a partial project.
+  subroutine hand_off( self, projfile )
+    class(ptcl_sieve), intent(in) :: self
+    type(string),      intent(in) :: projfile
+    type(string) :: dst, tmp
+    dst = self%completedir // '/' // basename(projfile)
+    if( self%optics_dir%strlen() > 0 )then
+      call copy_project_with_optics_map(projfile, dst, self%optics_dir)
+    else
+      tmp = swap_suffix(dst, '.tmp', METADATA_EXT)
+      call simple_copy_file(projfile, tmp)
+      call simple_rename(tmp, dst)
+    endif
+  end subroutine hand_off
 
 end module simple_ptcl_sieve

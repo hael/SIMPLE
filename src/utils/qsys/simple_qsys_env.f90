@@ -466,15 +466,17 @@ contains
 
     !> Generate and submit one script without blocking; caller is responsible for monitoring.
     !! When base=.true. the script is routed through base_qscripts (the underlying
-    !! scheduler) rather than through the dispatch (TCP worker) path.
-    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin, base )
+    !! scheduler) rather than through the dispatch (TCP worker) path. When
+    !! exit_code_fname is present the script writes the program's exit status there.
+    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin, base, exit_code_fname )
         use simple_cmdline, only: cmdline
         class(qsys_env),         intent(inout) :: self
-        class(cmdline),          intent(in)    :: cline        !< command-line parameters for the job
-        class(string),           intent(in)    :: script_name  !< path of the script to generate and submit
-        class(string),           intent(in)    :: outfile      !< stdout/stderr log path for the job
-        class(string), optional, intent(in)    :: exec_bin     !< override submission executable
-        logical,       optional, intent(in)    :: base         !< .true. to route via base (not dispatch) controller
+        class(cmdline),          intent(in)    :: cline           !< command-line parameters for the job
+        class(string),           intent(in)    :: script_name     !< path of the script to generate and submit
+        class(string),           intent(in)    :: outfile         !< stdout/stderr log path for the job
+        class(string), optional, intent(in)    :: exec_bin        !< override submission executable
+        logical,       optional, intent(in)    :: base            !< .true. to route via base (not dispatch) controller
+        class(string), optional, intent(in)    :: exit_code_fname !< write the program's exit status here
         type(chash) :: job_descr
         logical     :: l_base
         l_base = .false.
@@ -482,15 +484,19 @@ contains
         call cline%gen_job_descr(job_descr)
         if( present(exec_bin) ) then
             if( l_base ) then
-                call self%base_qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile)
+                call self%base_qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile,&
+                    &exit_code_fname=exit_code_fname)
             else
-                call self%qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile)
+                call self%qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile,&
+                    &exit_code_fname=exit_code_fname)
             end if
         else
             if( l_base ) then
-                call self%base_qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile=outfile)
+                call self%base_qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
+                    &outfile=outfile, exit_code_fname=exit_code_fname)
             else
-                call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile=outfile)
+                call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
+                    &outfile=outfile, exit_code_fname=exit_code_fname)
             end if
         end if
         call wait_for_closure(script_name)

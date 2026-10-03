@@ -12,10 +12,12 @@ private
 character(len=*), parameter :: WATCHER_HISTORY = 'watcher_history.txt'
 character(len=*), parameter :: WATCHER_DIRS    = 'watcher_dirs.txt'
 integer,          parameter :: RATE_INTERVAL   = 3600 ! 1 hour
+integer,          parameter :: HISTORY_CAPACITY0 = 1024 ! first capacity of the history; doubled when full
 
 type stream_watcher
     private
-    type(string),    allocatable :: history(:)             !< history of movies detected
+    type(string),    allocatable :: history(:)             !< basenames of the files reported, in the order added (the first n_history)
+    integer,         allocatable :: history_order(:)       !< history indices in lexical order, for is_past's binary search
     type(string),    allocatable :: watch_dirs(:)          !< directories to watch
     type(string)                 :: watch_dir              !< movies directory to watch
     type(string)                 :: regexp                 !< movies extensions
@@ -41,6 +43,7 @@ contains
     generic            :: add2history => add2history_1, add2history_2
     procedure          :: clear_history
     procedure          :: is_past
+    procedure, private :: history_pos
     procedure          :: detect_and_add_dirs
     procedure          :: add2watchdirs
     ! destructor
@@ -114,7 +117,7 @@ contains
         if( self%exists )then
             str_watcher_dirs = WATCHER_DIRS
             if( self%n_history == 0 ) return
-            call write_filetable(string(WATCHER_HISTORY), self%history)
+            call write_filetable(string(WATCHER_HISTORY), self%history(:self%n_history))
             if( allocated(self%watch_dirs))then
                 call write_filetable(str_watcher_dirs, [self%watch_dir, self%watch_dirs(:)])
             else
@@ -163,12 +166,12 @@ contains
                 ! maximum required of new movies reached
                 if( cnt >= max_nmovies ) exit
             endif
-            fname           = farray(i)
-            is_new_movie(i) = .not. self%is_past(fname)
-            if( .not.is_new_movie(i) )cycle
+            fname = farray(i)
+            if( self%is_past(fname) )cycle
             call simple_file_stat(fname, io_stat, fileinfo)
             if( io_stat.eq.0 )then
-                ! new movie
+                ! not seen before: reported only once untouched for report_time seconds,
+                ! otherwise left for a later watch
                 last_accessed      = tnow - fileinfo( 9)
                 last_modified      = tnow - fileinfo(10)
                 last_status_change = tnow - fileinfo(11)
@@ -202,7 +205,9 @@ contains
             self%ratehistory = [self%ratehistory, self%rate]
             self%ratetime = self%ratetime + RATE_INTERVAL
             self%raten    = self%n_history
-        else
+        ! on the first watch, or a second one in the same second, no time has passed since
+        ! ratetime: the rate is left as it is rather than divided by zero
+        else if( tnow > self%ratetime )then
             self%rate = nint(3600.0 * (self%n_history - self%raten) / (tnow - self%ratetime))
             self%ratehistory(size(self%ratehistory)) = self%rate
         endif
@@ -221,31 +226,74 @@ contains
     end subroutine add2history_1
 
     !>  \brief  is for adding to the history of already reported files
-    !>          absolute path is implied
+    !>          absolute path is implied; a file already in the history is not added again
+    !>  The history grows by doubling and keeps a lexically sorted index (history_order), so
+    !>  adding and looking up cost O(log n) comparisons instead of a pass over the history.
     subroutine add2history_2( self, fname )
         class(stream_watcher), intent(inout) :: self
-        class(string),       intent(in)    :: fname
+        class(string),         intent(in)    :: fname
         type(string), allocatable :: tmp_farr(:)
-        integer :: n
+        integer,      allocatable :: tmp_order(:)
+        type(string) :: name
+        integer      :: n, pos
+        logical      :: l_found
         if( .not.file_exists(fname) )return ! petty triple checking
+        name = basename(fname)
+        pos  = self%history_pos(name, l_found)
+        if( l_found ) return
+        n = self%n_history
         if( .not.allocated(self%history) )then
-            n = 0
-            allocate(self%history(1))
-        else
-            n = size(self%history)
+            allocate(self%history(HISTORY_CAPACITY0), self%history_order(HISTORY_CAPACITY0))
+        else if( n == size(self%history) )then
             call move_alloc(self%history, tmp_farr)
-            allocate(self%history(n+1))
+            allocate(self%history(2 * n))
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
+            call move_alloc(self%history_order, tmp_order)
+            allocate(self%history_order(2 * n))
+            self%history_order(:n) = tmp_order
+            deallocate(tmp_order)
         endif
-        self%history(n+1) = basename(fname)
-        self%n_history    = self%n_history + 1
+        self%history(n+1) = name
+        ! insert into the sorted index
+        self%history_order(pos+1:n+1) = self%history_order(pos:n)
+        self%history_order(pos)       = n + 1
+        self%n_history                = n + 1
     end subroutine add2history_2
+
+    !>  \brief  the position of @p name in the sorted history index: where it is (@p l_found) or
+    !>          where it would be inserted
+    integer function history_pos( self, name, l_found )
+        class(stream_watcher), intent(in)  :: self
+        class(string),         intent(in)  :: name
+        logical,               intent(out) :: l_found
+        character(len=:), allocatable :: key, entry
+        integer :: lo, hi, mid
+        l_found = .false.
+        key = name%to_char()
+        lo  = 1
+        hi  = self%n_history
+        do while( lo <= hi )
+            mid   = (lo + hi) / 2
+            entry = self%history(self%history_order(mid))%to_char()
+            if( entry == key )then
+                l_found     = .true.
+                history_pos = mid
+                return
+            else if( llt(entry, key) )then
+                lo = mid + 1
+            else
+                hi = mid - 1
+            endif
+        enddo
+        history_pos = lo
+    end function history_pos
 
     !>  \brief  is for clearing the history of imported files
     subroutine clear_history( self )
         class(stream_watcher), intent(inout) :: self
-        if( allocated(self%history) ) deallocate(self%history)
+        if( allocated(self%history)       ) deallocate(self%history)
+        if( allocated(self%history_order) ) deallocate(self%history_order)
         self%n_history = 0
     end subroutine clear_history
 
@@ -254,25 +302,10 @@ contains
     logical function is_past( self, fname )
         class(stream_watcher), intent(in) :: self
         class(string),       intent(in) :: fname
-        type(string) :: fname1
-        integer :: i
-        is_past = .false.
-        if( allocated(self%history) )then
-            ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
-            ! which would cause all movies to be declared as new because of the path mismatch
-            fname1 = basename(fname)
-            !$omp parallel do private(i) default(shared) proc_bind(close)
-            do i = 1, size(self%history)
-                if( .not.is_past )then
-                    if( fname1 .eq. self%history(i) )then
-                        !$omp critical
-                        is_past = .true.
-                        !$omp end critical
-                    endif
-                endif
-            enddo
-            !$omp end parallel do
-        endif
+        integer :: pos
+        ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
+        ! which would cause all movies to be declared as new because of the path mismatch
+        pos = self%history_pos(basename(fname), is_past)
     end function is_past
 
     subroutine detect_and_add_dirs( self, rootdir, SJdirstruct )
@@ -391,6 +424,7 @@ contains
         self%watch_dir = ''
         self%regexp    = ''
         if( allocated(self%history)    ) deallocate(self%history)
+        if( allocated(self%history_order)) deallocate(self%history_order)
         if( allocated(self%ratehistory)) deallocate(self%ratehistory)
         if( allocated(self%watch_dirs) ) deallocate(self%watch_dirs)
         self%rate           = 0

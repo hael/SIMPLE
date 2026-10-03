@@ -1,0 +1,1 @@
+!@descr: the stream pipeline commanders: the master (p00) that runs the stages for the GUI, and one commander per stage (p01-p07)

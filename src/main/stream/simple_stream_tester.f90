@@ -32,13 +32,13 @@ contains
         call test_pick_extract_three_particles()
     end subroutine run_all_stream_pick_extract_tests
 
-    !> the optics-assignment stage (stream_p02_assign_optics) on a completed preprocessing batch
+    !> the optics-assignment stage (commander_stream_p02_assign_optics) on a completed preprocessing batch
     !! of five micrographs whose beam-image shifts form two clusters, near (0,0) twice and near
     !! (5,5) three times: two optics groups with those populations and centroids, every
     !! micrograph in its cluster's group, and the STAR files and the optics map written. The
     !! stage imports a project only once it is LONGTIME (60 s) old, so this takes a minute.
     subroutine test_assign_optics_two_shift_clusters()
-        use simple_stream_p02_assign_optics_new, only: stream_p02_assign_optics
+        use simple_commanders_stream_p02_assign_optics, only: commander_stream_p02_assign_optics
         character(len=*), parameter :: TEST_PROJFILE = 'test_assign_optics.simple'
         character(len=*), parameter :: TEST_OUTDIR   = 'stream_assign_optics'
         real,             parameter :: SMPD  = 1.3
@@ -48,7 +48,7 @@ contains
         real,             parameter :: SHIFT_X(STREAM_NMOVS_SET) = [0.0, 0.1, 5.0, 5.1, 4.9]
         real,             parameter :: SHIFT_Y(STREAM_NMOVS_SET) = [0.0,-0.1, 5.0, 4.9, 5.1]
         integer,          parameter :: TILT_GROUP(STREAM_NMOVS_SET) = [1, 1, 2, 2, 2]
-        type(stream_p02_assign_optics) :: xassign_optics
+        type(commander_stream_p02_assign_optics) :: xassign_optics
         type(cmdline)                  :: cline_assign
         type(sp_project)               :: upstream, result
         type(string)                   :: cwd_saved, fixture_root, preproc_root, completed_dir
@@ -355,30 +355,5 @@ contains
         call cline_pick_extract%kill
         call leave_fixture(cwd_saved, fixture_root, nfail0)
     end subroutine test_pick_extract_three_particles
-
-    ! ---- fixture directories ---------------------------------------------------
-
-    !> makes and enters a fresh directory for one test under the working directory
-    subroutine enter_fixture( tag, cwd_saved, fixture_root )
-        character(len=*), intent(in)    :: tag
-        type(string),     intent(inout) :: cwd_saved, fixture_root
-        call simple_getcwd(cwd_saved)
-        fixture_root = filepath(cwd_saved, tag//'_'//int2str(get_process_id()))
-        if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
-        call simple_mkdir(fixture_root)
-        call simple_chdir(fixture_root)
-    end subroutine enter_fixture
-
-    !> returns to the working directory; the fixture goes when no check failed since nfail_before
-    subroutine leave_fixture( cwd_saved, fixture_root, nfail_before )
-        type(string), intent(in) :: cwd_saved, fixture_root
-        integer,      intent(in) :: nfail_before
-        call simple_chdir(cwd_saved)
-        if( tests_failed == nfail_before )then
-            call simple_rmdir(fixture_root)
-        else
-            write(logfhandle,'(A)') '>>> a check failed; the fixture is kept: '//fixture_root%to_char()
-        endif
-    end subroutine leave_fixture
 
 end module simple_stream_tester

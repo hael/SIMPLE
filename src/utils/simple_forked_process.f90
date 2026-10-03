@@ -7,8 +7,8 @@ module simple_forked_process
   use unix,                  only: c_pid_t, c_int, c_long, c_null_char, &
                                   c_fork, c_kill, c_exit, c_time,     &
                                   c_waitpid, c_usleep, c_perror,      &
-                                  SIGTERM, SIGKILL, EXIT_SUCCESS,     &
-                                  WNOHANG
+                                  SIGTERM, SIGKILL, SIGINT, EXIT_SUCCESS, &
+                                  WNOHANG, c_signal, c_funptr, c_null_funptr
   use simple_defs,           only: logfhandle
   use simple_error,          only: simple_exception
   use simple_fileio,         only: fclose                  
@@ -78,6 +78,7 @@ contains
     type(string),          optional, intent(in)    :: name, logfile
     type(cmdline),         optional, intent(in)    :: cline
     integer(kind=c_int)                            :: ios
+    type(c_funptr)                                 :: prev_handler
     if( present(restart) ) self%restart = restart
     if( present(logfile) ) self%logfile = logfile
     if( present(name)    ) self%name    = name
@@ -98,6 +99,11 @@ contains
       THROW_HARD('Failed to fork process')
     else if( self%pid == 0 ) then
       ! Child process: optionally redirect log output, execute, then exit.
+      ! Default SIGTERM/SIGINT first: handlers inherited from the parent act on the
+      ! parent's state and threads, which the child does not have; execute()
+      ! installs its own.
+      prev_handler = c_signal(SIGTERM, c_null_funptr)
+      prev_handler = c_signal(SIGINT,  c_null_funptr)
       if( .not. self%logfile%is_blank() ) then
         if( file_exists(self%logfile%to_char()) ) then
           open(UNIT=logfhandle, FILE=self%logfile%to_char(), IOSTAT=ios, &

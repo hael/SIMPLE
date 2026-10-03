@@ -34,8 +34,14 @@ Public API surface (type-bound methods on `ptcl_sieve`):
 
 Constructor policy (`new`):
 
-- `new(params, completedir, pre_chunked)` derives mode and tuning from `params`.
+- `new(params, completedir, pre_chunked, optics_dir)` derives mode and tuning from `params`.
+- `optics_dir=<dir>` (optional) is where stream optics assignment publishes its optics maps;
+  chunks handed to `completedir` then carry the newest map's groups (section 9).
 - `single_pass=yes` enables coarse-only terminal semantics.
+- `lpstart` reaches the chunks' `solve2D` only when it was given (`sieve_lpstart`); otherwise
+  their command lines carry none and `solve2D` derives the starting limit from the mask
+  diameter (`min(max(mskdiam/12, 15), 20)` Å). Parameter validation lifts an unset `lpstart`
+  to Nyquist (`fny`), so "given" means above Nyquist, not above 0.
 - `use_model=yes` enables learned class-average rejection in both tiers.
 - `refs=<file>` pre-seeds coarse/fine compatibility models when the file exists.
 - missing `refs` is warning-and-skip (non-fatal).
@@ -80,6 +86,8 @@ Sentinel files define state transitions:
 - `REJECTION_FINISHED`  -> `rejection_complete`
 - `COMPLETE`            -> terminalized chunk
 - `REJECTION_FAILED`    -> failed terminal chunk
+- `FINAL_INGESTION`     -> a coarse chunk final ingestion staged (section 6.3):
+  `solve2D_complete` and `rejection_complete`
 
 Import policy from previous runs:
 
@@ -120,6 +128,30 @@ Fine chunk generation is a merge/promote stage from eligible coarse outputs.
 Only coarse chunks that passed rejection and are not already terminalized are
 eligible inputs.
 
+### 6.3 Final ingestion
+
+Final ingestion flushes the particles left below the coarse threshold once no
+more input is expected. It is by design that they skip the coarse pass.
+
+1. Trigger: the driving stage calls `set_final_ingestion`. The particle-sieving
+   stage (p05) does so after `FINAL_INGESTION_IDLE_TIME` (10 minutes) without an
+   imported set, and undoes it (`unset_final_ingestion`) when a set arrives. The
+   initial analysis (p03) does so once its "all" set is picked and every
+   extraction of it is collected.
+2. Staging: `generate_chunks_coarse` puts every record not yet included into
+   one more coarse chunk. It flags that chunk `solve2D_complete` and
+   `rejection_complete` without running 2D or rejection, and writes
+   `FINAL_INGESTION` in its folder, so a restart restores the flags (section 4)
+   instead of submitting the chunk for a coarse 2D run.
+3. Two-tier mode: the staged chunk feeds the fine tier with all its particles,
+   so they get the fine 2D and rejection only. Once final ingestion is set and
+   every coarse chunk is complete or failed, the last fine chunk is flushed
+   below the fine threshold and marked `sieve_final=yes` in its `os_out`. The
+   2D pool then runs to its final iteration.
+4. Coarse-only mode (`single_pass=yes`, the initial analysis): the staged
+   chunk is handed off as it is, with no screening. The initial analysis
+   classifies and selects over the combined set in its cycle 2.
+
 ## 7. Submission and Scheduling Policy
 
 Submission policy:
@@ -132,8 +164,10 @@ Submission policy:
 
 Queue partition override policy:
 
-- `SIMPLE_CHUNK_PARTITION` may override per-chunk partition metadata where
-  implemented in generation/merge helpers.
+- `SIMPLE_STREAM_CHUNK_PARTITION` (`simple_defs_environment`) overrides the queue
+  partition of the coarse chunks and the merged fine chunks; it is the variable the
+  particle-sieving stage's queue reads. The former name `SIMPLE_CHUNK_PARTITION` is no
+  longer read.
 
 ## 8. Rejection Policy
 
@@ -163,7 +197,7 @@ Cleanup retention policy (`cleanup_chunk`):
 1. cleanup runs after rejection completes;
 2. keep lifecycle sentinels used by restart/import recovery:
   `SOLVE2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`,
-  `REJECTION_FAILED`;
+  `REJECTION_FAILED`, `FINAL_INGESTION`;
 3. keep chunk project metadata file and `frcs.bin`;
 4. keep selected/rejected JPEG renderings;
 5. keep all-reasons reason-overlay JPEG and its sidecar key file;
@@ -195,6 +229,21 @@ Chunk completion accounting:
 3. if `coarse_only`, this is terminal;
 4. if not coarse-only and no fine chunks exist, coarse completion is terminal;
 5. otherwise all fine chunks must be complete or failed.
+
+Hand-off policy:
+
+- a terminal chunk (a rejection-complete coarse chunk in coarse-only mode, otherwise a
+  rejection-complete fine chunk) is handed to the next stage as a copy of its project in
+  `completedir`, before its `COMPLETE` sentinel is written;
+- with an `optics_dir`, the copy gets the groups of the newest optics map in that directory,
+  applied by import index to its micrographs, stacks and particles, with the map's optics
+  segment; without a map yet, or without an `optics_dir`, it is an exact copy;
+- the chunk's own project is never given optics groups: fine chunks merge coarse chunks, and
+  the merge offsets each source's group ids, so the groups are applied only on the hand-off copy;
+- the copy is written as `<stem>.tmp` in `completedir` and renamed to `<stem>.simple`, so the
+  stage watching `completedir` for `*.simple` never reads a partial project and needs no long
+  settle time. Keep the temporary name off the `.simple` suffix and in `completedir` (a rename
+  is atomic only within one file system).
 
 ## 10. Combination Policy
 
@@ -238,11 +287,13 @@ one imported chunk project among many).
 Policy-level tests for `ptcl_sieve` must cover:
 
 1. lifecycle defaults and idempotent reset;
-2. import recovery from sentinel files;
+2. import recovery from sentinel files, including a chunk final ingestion staged;
 3. tier counters and running-count semantics;
 4. `get_finished` behavior across coarse-only and two-tier modes;
 5. empty-cycle behavior on empty record lists;
-6. latest-payload safe false-path.
+6. latest-payload safe false-path;
+7. the hand-off copy in `completedir`, with the newest optics map's groups when an
+   `optics_dir` is given, and no `.tmp` left behind.
 
 Reference tester module:
 [../../src/main/sieve/simple_ptcl_sieve_tester.f90](../../src/main/sieve/simple_ptcl_sieve_tester.f90).

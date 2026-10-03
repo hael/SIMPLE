@@ -88,7 +88,7 @@ If fractional update or probabilistic sampling is involved, also read
 
 ## Nearby Skills
 
-- For stream microchunk rejection, read `.github/skills/simple-microchunk-rejection/SKILL.md`.
+- For stream particle sieving, read the Particle Sieving section of `.github/skills/simple-main-stream/SKILL.md`.
 - For shared fractional-update contracts, read `.github/skills/simple-frac-update-trailing/SKILL.md`.
 
 ## Common Traps

@@ -12,7 +12,6 @@ Select the narrowest applicable skill before editing code:
 - `simple-architecture`: broad repository orientation and cross-cutting workflows.
 - `simple-modern-fortran`: Fortran style, lifecycle, generated-source, and module guidance.
 - `simple-solve2d`, `simple-refine3d`, `simple-cluster-cavgs-quality`: workflow-specific behavior.
-- `simple-microchunk-rejection`: streaming microchunk class-average rejection, lifecycle sentinels, pass-2 skipping, and model-backend boundaries.
 - `simple-solve2d`: solve2D orchestration, refine2D stages, 2D probabilistic sampling, online class-average restoration, and even/odd conventions.
 - `simple-refine3d`: probabilistic 3D refinement, matcher I/O, assembly handoffs, automasking, nonuniform filtering, and multi-state 3D behavior.
 - `simple-solve3d-importance-sampling`: solve3D `update_frac`/`nsample*`, `sampled`/`updatecnt`, `prob_align` reuse, and trailing-reconstruction coupling.
@@ -30,9 +29,13 @@ For refine3D or solve3D sampling/reconstruction questions, prefer
 `simple-refine3d` and then the narrower sampling, fractional-update, or
 nonuniform skill when the task touches those contracts.
 For 2D workflow or class-average restoration work, read `simple-solve2d`.
-For streaming microchunk rejection or `model_cavgs_rejection` integration questions,
-read `simple-microchunk-rejection` before changing stream lifecycle or particle-state
-cleanup behavior.
+For streaming particle sieving or sieve rejection, read `simple-main-stream` and
+`doc/policies/sieving_and_rejection/ptcl_sieve_policy.md` before changing sieve
+lifecycle or particle-state cleanup behavior. For other stream pipeline changes,
+read `simple-main-stream` and the matching policy in `doc/policies/stream/`
+(reference generation, 3D ingestion, pool 2D, IPC, restart) before changing that
+contract. For `model_cavgs_rejection` and the
+class-average quality backend, read `simple-cluster-cavgs-quality`.
 
 `solve3D` is de novo map determination (ab initio 3D reconstruction coupled
 with initial 3D refinement); `solve2D` is its 2D equivalent. Before 2026-10-03
@@ -79,7 +82,11 @@ living docs and leave the old ones in dated history docs.
 - `src/main/ui`: command and parameter metadata exposed to CLI/NICE.
 - `src/main/params`: typed `parameters` object, parsing, derived settings, and validation.
 - `src/main/exec`: execution routers.
-- `src/main/commanders`: high-level workflow command objects.
+- `src/main/commanders`: high-level workflow command objects; `commanders/stream` holds the
+  stream pipeline's (the p00 master and p01-p07), driving the stage types of
+  `src/main/stream/stages` (the master's parts are in `src/main/stream/master`, the modules
+  the stages share in `src/main/stream/shared`, the 2D pool and chunk layer in
+  `src/main/stream/pool2D`).
 - `src/main/strategies`: algorithm and execution-policy layers.
 - `src/main/nu_filt`: nonuniform filtering implementation used by volume assembly.
 - `doc/`: architecture, policy, and refactoring notes that may be more current than comments.

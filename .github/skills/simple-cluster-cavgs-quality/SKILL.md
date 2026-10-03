@@ -1,6 +1,6 @@
 ---
 name: simple-cluster-cavgs-quality
-description: Use when working on SIMPLE's model_cavgs_rejection application, simple_cavg_quality feature-space selector, class-average quality selection, quality_mode=analyze outputs, cavgs_quality feature/reference tables, chunk vs pool rejection tuning, or microchunk quality-vector integration.
+description: Use when working on SIMPLE's model_cavgs_rejection application, simple_cavg_quality feature-space selector, class-average quality selection, quality_mode=analyze outputs, cavgs_quality feature/reference tables, chunk vs pool rejection tuning, or model-based rejection inside the stream particle sieve.
 ---
 
 # SIMPLE `model_cavgs_rejection`
@@ -28,8 +28,8 @@ The application reads class averages from an input SIMPLE project, evaluates fea
 - `src/main/cavg_quality/simple_cavg_quality_analysis.f90`: analyze-mode reporting, feature tables, threshold scans, and reference summaries.
 - `src/main/cavg_quality/simple_cavg_quality_learn.f90`: learn/evaluate mode model fitting and reporting.
 - `src/main/cavg_quality/simple_cavg_quality_types.f90`: shared result/model data structures.
-- `doc/microchunk_and_rejection/model_cavgs_rejection.md`: current model behavior, feature bank, built-ins, reports, learning, and promotion.
-- `doc/microchunk_and_rejection/microchunk_rejection_model_integration.md`: current stream/model boundary.
+- `doc/policies/sieving_and_rejection/model_cavgs_rejection.md`: current model behavior, feature bank, built-ins, reports, learning, and promotion.
+- `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`: how the stream particle sieve calls this backend.
 
 ## Parameters
 
@@ -40,7 +40,7 @@ The application reads class averages from an input SIMPLE project, evaluates fea
 - `quality_mode=promote`: emits Fortran snippets for promoting a model into built-in presets.
 - `rejection_type=chunk`: stricter stream-partition operating point for high-junk chunks.
 - `rejection_type=pool`: more recall-preserving operating point for larger pooled or batch sets.
-- `quality_model`: built-ins currently include `chunk_default_v2`, `chunk_lp4`, `pool_default_v2`, `microchunk_p1`, and `microchunk_p2`.
+- `quality_model`: built-ins currently include `chunk100mics`, `sieve`, and `pool` (`CAVG_QUALITY_MODEL_*_DEFAULT` in `simple_cavg_quality_model.f90`).
 
 ## Analyze Outputs
 
@@ -75,13 +75,12 @@ Then inspect the reported false positives, false negatives, best thresholds, wea
 6. For chunk validation, compare `rejection_type=chunk` against `pool` only when the same project/manual states were used.
 7. Use the MRC stacks when numeric diagnostics disagree with visual quality.
 
-## Chunk-Branch Guidance
+## Stream Sieve Integration
 
-For `cluster2D_microchunked`, preserve the chunk lifecycle and sentinel behavior described in `.github/skills/simple-microchunk-rejection/SKILL.md`. The live stream path still uses `simple_cluster2D_rejector`; `model_cavgs_rejection` is a separate backend unless an integration task explicitly changes that boundary.
+The stream particle sieve (`src/main/sieve/simple_ptcl_sieve.f90`) calls this backend directly: `evaluate_cavg_quality_hard_reject`, then `class_compatibility` filtering, and model scoring via `evaluate_cavg_quality` with the `sieve` preset when `use_model=yes`. When changing rejection here, preserve the sieve chunk lifecycle and sentinels described in `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md` and the Particle Sieving section of `.github/skills/simple-main-stream/SKILL.md`.
 
 Prefer small local changes:
 
 - share or extract project annotation/state-mapping code before changing rejection policy;
-- keep `simple_cluster2D_rejector` temporarily as a comparison backend;
 - avoid exposing calibration margins as casual CLI knobs;
 - introduce stage-aware quality profiles only if validation data clearly requires pass/ref/match-specific behavior.

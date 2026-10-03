@@ -15,8 +15,7 @@ name + description stay in context; the skill body loads on demand.
 - `simple-modern-fortran`: Fortran style, lifecycle, generated sources, modules.
 - Workflow skills: `simple-solve2d`, `simple-refine3d`,
   `simple-solve3d-importance-sampling`, `simple-cluster-cavgs-quality`,
-  `simple-microchunk-rejection`, `simple-frac-update-trailing`,
-  `simple-nonuniform-regularization`.
+  `simple-frac-update-trailing`, `simple-nonuniform-regularization`.
 - Subsystem skills: `simple-main-*` for `ui`, `root`, `commanders`,
   `strategies`, `project`, `ori`, `pftc`, `image`, `params`, `nu-filt`,
   `volume`, `ctf`, `motion`, `opt`, `pca`, `pick`, `star`, `stream`, `nano`,
@@ -28,9 +27,14 @@ Routing:
   narrower sampling / fractional-update / nonuniform skill if the task touches
   those contracts.
 - 2D workflow or class-average restoration → `simple-solve2d`.
-- Streaming microchunk rejection / `model_cavgs_rejection` → read
-  `simple-microchunk-rejection` before changing stream lifecycle or
-  particle-state cleanup.
+- Streaming particle sieving / sieve rejection → read `simple-main-stream`
+  and `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md` before
+  changing sieve lifecycle or particle-state cleanup.
+- Other stream pipeline changes → read `simple-main-stream` and the matching
+  policy in `doc/policies/stream/` (reference generation, 3D ingestion, pool 2D,
+  IPC, restart) before changing that contract.
+- `model_cavgs_rejection` / class-average quality backend →
+  `simple-cluster-cavgs-quality`.
 
 Do not guess ownership from filenames. Follow the flow:
 `ui -> exec -> commander -> strategy/domain object`.
@@ -55,7 +59,11 @@ living docs and leave the old ones in dated history docs.
 - `src/main/ui`: command/parameter metadata exposed to CLI/NICE.
 - `src/main/params`: typed `parameters` object, parsing, derived settings, validation.
 - `src/main/exec`: execution routers.
-- `src/main/commanders`: high-level workflow command objects.
+- `src/main/commanders`: high-level workflow command objects; `commanders/stream` holds the
+  stream pipeline's (the p00 master and p01-p07), driving the stage types of
+  `src/main/stream/stages` (the master's parts are in `src/main/stream/master`, the modules
+  the stages share in `src/main/stream/shared`, the 2D pool and chunk layer in
+  `src/main/stream/pool2D`).
 - `src/main/strategies`: algorithm and execution-policy layers.
 - `src/main/nu_filt`: nonuniform filtering used by volume assembly.
 - `doc/`: architecture, policy, and refactoring notes — often more current than

@@ -3,7 +3,8 @@ module simple_motion_gain_tester
 use simple_core_module_api
 use simple_image,                        only: image
 use simple_motion_gain_analysis,         only: gain_flip_analyzer
-use simple_motion_gain_helpers, only: read_movies_and_sum_frames, normalized_inverse_average_intensity
+use simple_motion_gain_helpers, only: read_movies_and_sum_frames, normalized_inverse_average_intensity,&
+                                     &add_movies_to_gain_sum, write_gain_from_sum
 use simple_test_utils
 implicit none
 private
@@ -18,6 +19,9 @@ contains
         call test_read_movies_and_sum_frames_counts()
         call test_gain_flip_analyzer_batch_updates()
         call test_normalized_inverse_average_intensity()
+        call test_add_movies_to_gain_sum_accumulates()
+        call test_write_gain_from_sum()
+        call test_gain_flip_mode_mapping()
     end subroutine run_all_motion_gain_tests
 
     subroutine test_read_movies_and_sum_frames_counts()
@@ -117,6 +121,72 @@ contains
         call sum_img%kill
         call gain_img%kill
     end subroutine test_normalized_inverse_average_intensity
+
+    !> two batches, of one 3-frame and one 2-frame movie, summed into one running sum
+    subroutine test_add_movies_to_gain_sum_accumulates()
+        type(string) :: batch1(1), batch2(1)
+        type(image)  :: gain_sum
+        integer      :: nmovies, nframes
+        real         :: smpd
+        write(*,'(A)') 'test_add_movies_to_gain_sum_accumulates'
+        smpd      = 1.5
+        batch1(1) = 'motion_gain_test_batch1.mrcs'
+        batch2(1) = 'motion_gain_test_batch2.mrcs'
+        call create_movie_stack(batch1(1), [4,4,1], smpd, [1.0, 2.0, 3.0])
+        call create_movie_stack(batch2(1), [4,4,1], smpd, [4.0, 5.0])
+        nmovies = 0
+        nframes = 0
+        call add_movies_to_gain_sum(batch1, smpd, gain_sum, nmovies, nframes)
+        call assert_true(gain_sum%exists(), 'gain sum: the first batch creates the running sum')
+        call assert_int(1, nmovies, 'gain sum: movies after the first batch')
+        call assert_int(3, nframes, 'gain sum: frames after the first batch')
+        call assert_real(6.0, gain_sum%get_rmat_at(1,1,1), 1.0e-6, 'gain sum: pixel after the first batch')
+        call add_movies_to_gain_sum(batch2, smpd, gain_sum, nmovies, nframes)
+        call assert_int(2, nmovies, 'gain sum: movies accumulate across batches')
+        call assert_int(5, nframes, 'gain sum: frames accumulate across batches')
+        call assert_real(15.0, gain_sum%get_rmat_at(1,1,1), 1.0e-6, 'gain sum: pixels accumulate across batches')
+        call gain_sum%kill()
+        call del_file(batch1(1))
+        call del_file(batch2(1))
+    end subroutine test_add_movies_to_gain_sum_accumulates
+
+    !> a uniform sum gives a gain of 1 everywhere, read back from the written file
+    subroutine test_write_gain_from_sum()
+        integer, parameter :: NFRAMES = 4
+        type(image)  :: sum_img, gain_img
+        type(string) :: fname
+        integer      :: ldim(3), n
+        write(*,'(A)') 'test_write_gain_from_sum'
+        fname = 'motion_gain_test_written_gain.mrc'
+        call create_constant_image(sum_img, [8,8,1], 1.0, 3. * real(NFRAMES))
+        call write_gain_from_sum(sum_img, NFRAMES, fname)
+        call assert_true(file_exists(fname), 'written gain: the file exists')
+        call find_ldim_nptcls(fname, ldim, n)
+        call assert_int(8, ldim(1), 'written gain: box x')
+        call assert_int(8, ldim(2), 'written gain: box y')
+        call gain_img%new([8,8,1], 1.0, wthreads=.false.)
+        call gain_img%read(fname)
+        call assert_real(1.0, gain_img%get_rmat_at(1,1,1), 1.0e-6, 'written gain: 1 on a uniform sum')
+        call assert_real(1.0, gain_img%get_rmat_at(8,8,1), 1.0e-6, 'written gain: 1 in the far corner')
+        call sum_img%kill()
+        call gain_img%kill()
+        call del_file(fname)
+    end subroutine test_write_gain_from_sum
+
+    !> best_idx 1..4 are the unflipped, x, y and xy variants; 0 is before any analysis
+    subroutine test_gain_flip_mode_mapping()
+        type(gain_flip_analyzer) :: analyzer
+        write(*,'(A)') 'test_gain_flip_mode_mapping'
+        call assert_char('no', analyzer%get_flip_mode(), 'flip mode before any analysis')
+        analyzer%best_idx = 1
+        call assert_char('no', analyzer%get_flip_mode(), 'flip mode when the unflipped reference is best')
+        analyzer%best_idx = 2
+        call assert_char('x',  analyzer%get_flip_mode(), 'flip mode for the x variant')
+        analyzer%best_idx = 3
+        call assert_char('y',  analyzer%get_flip_mode(), 'flip mode for the y variant')
+        analyzer%best_idx = 4
+        call assert_char('xy', analyzer%get_flip_mode(), 'flip mode for the xy variant')
+    end subroutine test_gain_flip_mode_mapping
 
     subroutine create_movie_stack(fname, ldim, smpd, frame_values)
         type(string), intent(in) :: fname

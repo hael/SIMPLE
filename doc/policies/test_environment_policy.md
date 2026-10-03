@@ -31,7 +31,7 @@ labels.
 
 | label | entries | when | what |
 |---|---|---|---|
-| `fast` | 13 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
+| `fast` | 14 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `highlevel` | 12 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
@@ -83,17 +83,18 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, average linkage, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
-| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, solve3D manifest, project superset, solve3D addon report |
+| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, solve3D manifest, project superset, solve3D addon report |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
-| `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
+| `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, sigma2 bootstrap, cavg registration |
 | `unit_cart_align3D` | Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator |
 | `unit_parallel` | qsys control, qsys environment |
 | `unit_single` | atoms, cif2mrc, C-alpha finder |
+| `unit_stream` | preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D, solve 3D (the steps of the stream stages, without a queue or waits), job sets, stream master, stream watcher |
 
-`simple_test_exec test=units` runs all thirteen in one process. It is a
+`simple_test_exec test=units` runs all fourteen in one process. It is a
 convenience and deliberately not a CTest entry.
 
 ### 1.2 Long-running CTest entries
@@ -794,5 +795,5 @@ written as `sub-suite` (entry).
 | `subproject_distr`, `ptcls_ppca_subproject_distr` | deleted with the subproject scheduling code, which had no other caller |
 | `trail_rec_blend` | `trailing-reconstruction blend` (`unit_image`) |
 | `ui_hash_test` | `UI hash` (`unit_ui`) |
-| `units` | `simple_test_exec test=units` (all thirteen area suites, not a CTest entry) |
+| `units` | `simple_test_exec test=units` (all fourteen area suites, not a CTest entry) |
 | the `unit_<area>` suites | unchanged names, CTest label `fast` |

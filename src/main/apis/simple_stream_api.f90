@@ -24,7 +24,7 @@ use simple_starproject_stream,     only: starproject_stream
 use simple_stream_chunk,           only: stream_chunk
 use simple_stream_chunk2D_utils,   only: init_chunk_clustering, analyze2D_new_chunks, memoize_chunks, update_chunks
 use simple_stream_refine2D_utils, only: cleanup_root_folder, setup_downscaling, terminate_chunks, terminate_stream2D,&
-                                  &test_repick, tidy_2Dstream_iter, update_user_params2D, write_project_stream2D, write_repick_refs
+                                  &test_repick, tidy_2Dstream_iter, write_project_stream2D, write_repick_refs
 use simple_stream_communicator,    only: stream_http_communicator 
 use simple_stream_utils,           only: update_user_params, wait_for_folder, stream_datestr, process_selected_refs, process_selected_refs_2,&
                                   &get_latest_optics_map_id, create_stream_project, init_stream_qenv, import_new_projects,&

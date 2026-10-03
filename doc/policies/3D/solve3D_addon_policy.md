@@ -302,7 +302,7 @@ rejecting it is the user's call.
 
 ## 12. Streaming Integration
 
-For `stream_p07_solve3D_multistate` or any driver that grows a pool:
+For `commander_stream_p07_solve3D_multistate` or any driver that grows a pool:
 
 - **Pool per update.** Build each update's current project as the previous
   solution's project (all its rows, in order) with the new classified sets

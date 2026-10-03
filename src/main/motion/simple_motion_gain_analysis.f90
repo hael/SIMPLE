@@ -47,6 +47,7 @@ contains
     procedure :: new => analyzer_new
     procedure :: analyze_if_due
     procedure :: get_converged
+    procedure :: get_flip_mode
     procedure :: kill => analyzer_kill
 end type gain_flip_analyzer
 
@@ -236,6 +237,23 @@ contains
         class(gain_flip_analyzer), intent(in) :: self
         is_converged = self%converged
     end function get_converged
+
+    !> The flipgain mode of the best-matching gain variant: 'x', 'y', 'xy', or 'no'
+    !! when the unflipped reference matches best or no analysis has run yet.
+    function get_flip_mode(self) result(mode)
+        class(gain_flip_analyzer), intent(in) :: self
+        character(len=:), allocatable :: mode
+        select case(self%best_idx)
+        case(2)
+            mode = 'x'
+        case(3)
+            mode = 'y'
+        case(4)
+            mode = 'xy'
+        case DEFAULT
+            mode = 'no'
+        end select
+    end function get_flip_mode
 
 
     subroutine analyzer_kill(self)

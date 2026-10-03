@@ -25,7 +25,7 @@ subroutine exec_test_stream_preproc( self, cline )
         &starfile_table__read, starfile_table__firstobject, starfile_table__nextobject, &
         &starfile_table__numberofobjects, starfile_table__getValue_double, &
         &starfile_table__delete, EMDL_MICROGRAPH_SHIFT_X, EMDL_MICROGRAPH_SHIFT_Y
-    use simple_stream_p01_preprocess_new, only: stream_p01_preprocess
+    use simple_commanders_stream_p01_preprocess,    only: commander_stream_p01_preprocess
     use simple_ui,                        only: make_ui
     use, intrinsic :: iso_c_binding,      only: C_long, C_double
     use, intrinsic :: ieee_arithmetic,    only: ieee_is_finite
@@ -50,7 +50,7 @@ subroutine exec_test_stream_preproc( self, cline )
     integer,          parameter :: NPARTICLES       = 12
     integer,          parameter :: MOVIE_DIM        = 512
     integer,          parameter :: NFRAMES          = 8
-    type(stream_p01_preprocess)  :: xpreproc
+    type(commander_stream_p01_preprocess)  :: xpreproc
     type(commander_simulate_movie) :: xsimov
     type(cmdline)                :: cline_preproc, cline_sim_mov
     type(image)                  :: particle, feature, integrated, optimal, wrong_optimal

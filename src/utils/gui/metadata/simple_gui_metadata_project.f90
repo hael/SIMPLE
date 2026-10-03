@@ -17,7 +17,7 @@ module simple_gui_metadata_project
   use simple_gui_metadata_base,       only: gui_metadata_base
   use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE, GUI_METADATA_PTCL_TYPE, &
                                             &GUI_METADATA_VOL3D_TYPE
-  use simple_gui_metadata_micrograph, only: gui_metadata_micrograph
+  use simple_gui_metadata_micrograph, only: gui_metadata_micrograph, MAX_MIC_COORDINATES
   use simple_gui_metadata_ptcl,       only: gui_metadata_ptcl
   use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D, sprite_sheet_pos
   use simple_gui_metadata_vol3D,      only: gui_metadata_vol3D
@@ -32,7 +32,6 @@ module simple_gui_metadata_project
   use simple_gui_utils,               only: mrc2jpeg_tiled
   use simple_syslib,                  only: del_file, simple_abspath, simple_rename, get_process_id
   use simple_refine3D_fnames,         only: refine3D_oris_heatmap_fname
-  use simple_linalg,                  only: rad2deg
 
   implicit none
 
@@ -125,8 +124,7 @@ contains
     type(string)                                   :: reprojpath, reprojpath_stage, oridistpath, oridistpath_stage
     type(gui_metadata_cavg2D)                      :: reproj_tiles3D(3)
     integer,                            parameter  :: NTILES3D = 3
-    integer                                        :: itile3D, iptcl3D, ix3D, iy3D, oridist_hist3D(72,36)
-    real                                            :: normal3D(3), azimuth3D, elevation3D
+    integer                                        :: itile3D, iptcl3D
     real,                            allocatable   :: fsc_arr(:), res_arr(:), invres_arr(:)
     integer                                        :: istate3D, n_valid_states3D, box3D, pop3D, fsc_box, n_fsc_pts, k
     real                                            :: smpd3D, res0143, res05, cfar
@@ -245,7 +243,8 @@ contains
                     nlines = boxfile%get_ndatalines()
                     if( nrecs >= 4 ) then
                         allocate(boxdata(nrecs))
-                        do j = 1, nlines
+                        ! at most the picks the micrograph's metadata holds
+                        do j = 1, min(nlines, MAX_MIC_COORDINATES)
                             call boxfile%readNextDataLine(boxdata)
                             x = nint(boxdata(1) + boxdata(3)/2)
                             y = nint(boxdata(2) + boxdata(4)/2)
@@ -489,7 +488,7 @@ contains
                 end if
                 if( .not. file_exists(lppath) ) lppath = string('')
                 ! orthogonal reprojections + orientation-distribution heatmap jpegs, written
-                ! alongside the volume (mirrors simple_stream_p07_solve3D_multistate's locate_state_jpeg)
+                ! alongside the volume (as simple_stream_stage_solve3D%send_volumes finds them)
                 reprojpath = get_fpath(volpath) // string('orthogonal_reprojs_state') // int2str_pad(istate3D,2) // JPG_EXT
                 if( .not. file_exists(reprojpath) ) then
                     reprojpath = string('')
@@ -573,19 +572,8 @@ contains
                     end do
                     call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_reprojtiles(reproj_tiles3D)
                 end if
-                ! bin this state's particle orientations into the azimuth/elevation
-                ! histogram (mirrors simple_stream_p07_solve3D_multistate's compute_oridist_for_state)
-                oridist_hist3D = 0
-                do iptcl3D = 1, spproj%os_ptcl3D%get_noris()
-                    if( spproj%os_ptcl3D%get_state(iptcl3D) /= istate3D ) cycle
-                    normal3D    = spproj%os_ptcl3D%get_normal(iptcl3D)
-                    azimuth3D   = rad2deg(atan2(normal3D(2), normal3D(1)))
-                    elevation3D = rad2deg(asin(max(-1.0, min(1.0, normal3D(3)))))
-                    ix3D = min(72, max(1, floor((azimuth3D   + 180.0) / 5.0) + 1))
-                    iy3D = min(36, max(1, floor((elevation3D + 90.0)  / 5.0) + 1))
-                    oridist_hist3D(ix3D, iy3D) = oridist_hist3D(ix3D, iy3D) + 1
-                end do
-                call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_oridist(oridist_hist3D)
+                ! this state's particle orientations as the azimuth/elevation histogram
+                call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_oridist_from_oris(spproj%os_ptcl3D, istate3D)
             end do
             ! trim unused (unassigned) slots left by states with no volume yet
             if( n_valid_states3D < self%nstates3D ) then

@@ -1,0 +1,1 @@
+!@descr: the stream pipeline stages as types (new, iterate, finished, finalize, kill), each driven by its commander in src/main/commanders/stream

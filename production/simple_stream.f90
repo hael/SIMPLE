@@ -9,27 +9,27 @@ use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_ui,             only: make_ui, list_stream_prgs_in_ui
 use simple_persistent_worker_server,   only: persistent_worker
 use simple_memory_monitor,             only: mem_monitor_init, mem_monitor_finish
-use simple_stream_p00_master,          only: stream_p00_master
-use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
-use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
-use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
-use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
-use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
-use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
-use simple_stream_p07_solve3D_multistate,  only: stream_p07_solve3D_multistate
+use simple_commanders_stream_p00_master,          only: commander_stream_p00_master
+use simple_commanders_stream_p01_preprocess,      only: commander_stream_p01_preprocess
+use simple_commanders_stream_p02_assign_optics,   only: commander_stream_p02_assign_optics
+use simple_commanders_stream_p03_initial_analysis,    only: commander_stream_p03_initial_analysis
+use simple_commanders_stream_p04_refpick_extract, only: commander_stream_p04_refpick_extract
+use simple_commanders_stream_p05_sieve_cavgs,     only: commander_stream_p05_sieve_cavgs
+use simple_commanders_stream_p06_pool2D,          only: commander_stream_p06_pool2D
+use simple_commanders_stream_p07_solve3D_multistate, only: commander_stream_p07_solve3D_multistate
 
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
-type(stream_p00_master)           :: xmaster
-type(stream_p01_preprocess)       :: xpreprocess
-type(stream_p02_assign_optics)    :: xassign_optics
-type(stream_p03_initial_analysis) :: xinitial_analysis
-type(stream_p04_refpick_extract)  :: xpick_extract
-type(stream_p05_sieve_cavgs)      :: xsieve_cavgs 
-type(stream_p06_pool2D)           :: xpool2D
-type(stream_p07_solve3D_multistate) :: xsolve3D_multistate
+type(commander_stream_p00_master)           :: xmaster
+type(commander_stream_p01_preprocess)       :: xpreprocess
+type(commander_stream_p02_assign_optics)    :: xassign_optics
+type(commander_stream_p03_initial_analysis) :: xinitial_analysis
+type(commander_stream_p04_refpick_extract)  :: xpick_extract
+type(commander_stream_p05_sieve_cavgs)      :: xsieve_cavgs 
+type(commander_stream_p06_pool2D)           :: xpool2D
+type(commander_stream_p07_solve3D_multistate) :: xsolve3D_multistate
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)             :: xarg, prg

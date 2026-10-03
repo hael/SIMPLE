@@ -11,6 +11,8 @@ use simple_string,             only: string
 use simple_gui_metadata_base,  only: gui_metadata_base
 use simple_gui_metadata_types, only: GUI_METADATA_VOL3D_TYPE
 use simple_gui_metadata_cavg2D, only: gui_metadata_cavg2D
+use simple_oris,               only: oris
+use simple_linalg,             only: rad2deg
 
 implicit none
 
@@ -63,6 +65,7 @@ contains
   procedure :: set
   procedure :: set_fsc
   procedure :: set_oridist
+  procedure :: set_oridist_from_oris
   procedure :: set_reprojtiles
   procedure :: set_minmax
   procedure :: get
@@ -71,10 +74,35 @@ contains
   procedure :: get_state
   procedure :: get_i
   procedure :: get_i_max
+  procedure :: serialise => serialise_override
   procedure :: jsonise => jsonise_override
 end type gui_metadata_vol3D
 
 contains
+
+  !---------------- serialisation ----------------
+
+  ! The base serialisation copies the object's bytes. For the allocatable
+  ! reprojtiles those would be a descriptor of this process's memory, which the
+  ! receiving process's transfer would then follow (and free); so the copy that
+  ! is sent never holds them. Tiles travel as their own messages, and the
+  ! in-process reprojtiles are jsonised, not serialised.
+  subroutine serialise_override( self, buffer )
+    class(gui_metadata_vol3D),             intent(in)    :: self
+    character(len=:),         allocatable, intent(inout) :: buffer
+    type(gui_metadata_vol3D) :: sent
+    if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    select type( self )
+      type is( gui_metadata_vol3D )
+        sent = self
+      class default
+        THROW_HARD('serialise: an extension of gui_metadata_vol3D needs its own serialisation')
+    end select
+    if( allocated(sent%reprojtiles) ) deallocate(sent%reprojtiles)
+    if( allocated(buffer) ) deallocate(buffer)
+    allocate(character(len=sizeof(sent)) :: buffer)
+    buffer = transfer(sent, buffer)
+  end subroutine serialise_override
 
   !---------------- setters ----------------
 
@@ -138,6 +166,28 @@ contains
     self%l_oridist  = .true.
     self%oridist    = hist
   end subroutine set_oridist
+
+  ! Bin the projection directions of the particles of @p state in @p os into the
+  ! orientation distribution histogram (azimuth -180..180 x elevation -90..90) and
+  ! store it as set_oridist does.
+  subroutine set_oridist_from_oris( self, os, state )
+    class(gui_metadata_vol3D), intent(inout) :: self
+    class(oris),               intent(in)    :: os
+    integer,                   intent(in)    :: state
+    integer :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y), iptcl, ix, iy
+    real    :: normal(3), azimuth, elevation
+    hist = 0
+    do iptcl = 1,os%get_noris()
+      if( os%get_state(iptcl) /= state ) cycle
+      normal    = os%get_normal(iptcl)
+      azimuth   = rad2deg(atan2(normal(2), normal(1)))
+      elevation = rad2deg(asin(max(-1.0, min(1.0, normal(3)))))
+      ix = min(ORIDIST_NBINS_X, max(1, floor((azimuth   + 180.0) / real(ORIDIST_BINWIDTH)) + 1))
+      iy = min(ORIDIST_NBINS_Y, max(1, floor((elevation +  90.0) / real(ORIDIST_BINWIDTH)) + 1))
+      hist(ix, iy) = hist(ix, iy) + 1
+    enddo
+    call self%set_oridist(hist)
+  end subroutine set_oridist_from_oris
 
   ! Store the orthogonal reprojection sprite-sheet tiles for this state, nested
   ! as a 'reprojtiles' array by jsonise_override; matches the streaming assembler's

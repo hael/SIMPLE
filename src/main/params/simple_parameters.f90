@@ -400,6 +400,7 @@ type :: parameters
     integer :: nparts=1            !< # partitions in distributed execution
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
     integer :: nparts_pool =1      !< # partitions for pool distributed execution
+    integer :: nparts3D=0          !< # partitions of the stream's 3D jobs (0: the stage's default)
     integer :: npeaks=NPEAKS_DEFAULT !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
     integer :: npeaks_inpl=NPEAKS_INPL_DEFAULT !< # multi-neighborhood search peaks to refine with L-BFGS
     integer :: npix=0              !< # pixles/voxels in binary representation
@@ -436,6 +437,7 @@ type :: parameters
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: nthr2D=1            !< # OpenMP threads{1}
     integer :: nthr_ini3D=1        !< # OpenMP threads{1}
+    integer :: nthr3D=0            !< # OpenMP threads of the stream's 3D jobs (0: the stage's default)
     integer :: numlen=0            !< length of number string
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}

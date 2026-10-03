@@ -115,7 +115,7 @@ this workflow. Test code may create and clean them up explicitly.
 
 ## 7. Batch Execution Policy
 
-The batch runner, stream preprocessing (`simple_stream_p01_preprocess_new`;
+The batch runner, stream preprocessing (`simple_stream_stage_preprocess`;
 formerly also the standalone `simple_test_search_gain_flips`), processes movies
 in fixed-size batches (`10` movies per batch), and for each batch:
 

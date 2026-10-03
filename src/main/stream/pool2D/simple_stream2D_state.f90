@@ -6,7 +6,6 @@ use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_stream_chunk,       only: stream_chunk
 use simple_starproject,        only: starproject
-use json_module,               only: json_value
 implicit none
 
 !===========================
@@ -20,7 +19,11 @@ type(cmdline)           :: cline_refine2D_pool
 ! 2. Projects & dimensions
 !===========================
 type(sp_project), target        :: pool_proj
-type(sp_project), allocatable   :: pool_proj_history(:)
+! the last POOL_NHISTORY completed iterations, for snapshots: a ring indexed by iteration
+! (pool_history_slot); the same iterations' class-average and FRC files are kept on disk
+integer, parameter              :: POOL_NHISTORY = 5
+type(sp_project)                :: pool_proj_history(POOL_NHISTORY)
+integer                         :: pool_history_iter(POOL_NHISTORY) = 0 ! the iteration each slot holds (0: none)
 type(starproject)               :: starproj
 type(scaled_dims)               :: chunk_dims
 type(scaled_dims)               :: pool_dims
@@ -62,14 +65,6 @@ real,    allocatable      :: pool_jpeg_res(:)
 type(string)              :: projfile4gui
 
 !===========================
-! 7. Snapshot / interactive
-!===========================
-integer                   :: snapshot_iteration   = 0
-integer                   :: snapshot_last_nptcls = 0
-integer, allocatable      :: snapshot_selection(:)
-type(json_value), pointer :: snapshot_json => null()
-
-!===========================
 ! 8. Match classes rejection/selection
 !===========================
 integer, allocatable      :: match_selection(:)
@@ -80,4 +75,13 @@ logical                   :: l_match_selection_update = .false.
 !===========================
 type(string)              :: refs_glob
 type(string)              :: orig_projfile
+
+contains
+
+    !> The history slot of pool iteration @p iter (pool_proj_history, pool_history_iter).
+    pure integer function pool_history_slot( iter )
+        integer, intent(in) :: iter
+        pool_history_slot = modulo(iter - 1, POOL_NHISTORY) + 1
+    end function pool_history_slot
+
 end module simple_stream2D_state

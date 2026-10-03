@@ -65,5 +65,5 @@ motion correction. The low-passed candidates exist only for the decision.
 - Scoring and convergence: `src/main/motion/simple_motion_gain_analysis.f90`.
 - Frame summation: `src/main/motion/simple_motion_gain_helpers.f90`.
 - Gain materialization and application: `src/main/motion/simple_motion_correct_utils.f90`.
-- Stream integration: `src/main/stream/simple_stream_p01_preprocess_new.f90`.
+- Stream integration: `src/main/stream/stages/simple_stream_stage_preprocess.f90`.
 - Policy: `doc/policies/motion_gain_analysis_policy.md`.

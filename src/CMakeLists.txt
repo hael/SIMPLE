@@ -147,10 +147,8 @@ set(SIMPLE_INTENTIONAL_HELPER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_motion_align_hybrid.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori_utils.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_refine2D_utils.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_p03_initial_analysis.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_p04_refpick_extract_new.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_pool2D_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/pool2D/simple_stream_refine2D_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/pool2D/simple_stream_pool2D_utils.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/comm/simple_ipc_tcp_socket_tester.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/persistent_worker/simple_persistent_worker_server_tester.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/image_processing/simple_segmentation.f90"
@@ -192,6 +190,10 @@ set(SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject_stream.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_cls_split_strategy.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_watcher.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_initial_analysis.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_pool2D.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_refpick.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_sieve.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_pcg.f90"
 )
 set_property(SOURCE ${SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES} APPEND

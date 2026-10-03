@@ -21,6 +21,7 @@ type(ui_program), target :: unit_heterogeneity
 type(ui_program), target :: unit_parallel
 type(ui_program), target :: unit_single
 type(ui_program), target :: lib_single
+type(ui_program), target :: unit_stream
 type(ui_program), target :: lib_stream
 type(ui_program), target :: lib_heterogeneity
 type(ui_program), target :: openmp_offload
@@ -48,6 +49,7 @@ contains
         call new_unit_parallel(tsttab)
         call new_unit_single(tsttab)
         call new_lib_single(tsttab)
+        call new_unit_stream(tsttab)
         call new_lib_stream(tsttab)
         call new_openmp_offload(tsttab)
         call new_forked_process(tsttab)
@@ -125,7 +127,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -147,11 +149,11 @@ contains
         call unit_ipc%new(&
         &'unit_ipc',&
         &'unit tests: localhost IPC: sockets, HTTP POST and persistent-worker messaging',&
-        &'is the fast-gate unit suite for localhost IPC: sockets, HTTP POST and persistent-worker messaging',&
+        &'is the fast-gate unit suite for localhost IPC: sockets, HTTP POST, persistent-worker messaging and the stream pipes',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: IPC')
         call unit_ipc%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (ipc_tcp_socket, http_post, persistent_worker_message, persistent_worker_server)', '', .false., '')
+            &'One sub-suite of this area to run alone (ipc_tcp_socket, http_post, persistent_worker_message, persistent_worker_server, stream_pipe)', '', .false., '')
         call add_ui_program('unit_ipc', unit_ipc, tsttab, UI_CATEGORY)
     end subroutine new_unit_ipc
 
@@ -246,6 +248,19 @@ contains
             &'One sub-suite of this suite to run alone (pdb2mrc)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
+    
+    subroutine new_unit_stream( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_stream%new(&
+        &'unit_stream',&
+        &'unit tests: STREAM (in-process) stages',&
+        &'is the fast-gate unit suite for the steps of the stream stages, without a queue or waits: preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D, solve 3D, their job sets, and the stream master',&
+        &'simple_test_exec',&
+        &.false., display_name='Unit Tests: STREAM')
+        call unit_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (preprocessing, optics_assignment, initial_analysis, reference_picking, particle_sieving, pool_2d, solve_3d, stream_master, job_sets, stream_watcher)', '', .false., '')
+        call add_ui_program('unit_stream', unit_stream, tsttab, UI_CATEGORY)
+    end subroutine new_unit_stream
 
     subroutine new_lib_stream( tsttab )
         class(ui_hash), intent(inout) :: tsttab

@@ -13,24 +13,27 @@ use simple_gui_metadata_base, only: gui_metadata_base
 implicit none
 
 public :: gui_metadata_stream_update
+public :: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: MAX_PICKREFS_SELECTION   = 500  ! classes a picking-reference selection holds
+integer, parameter :: MAX_SNAPSHOT2D_SELECTION = 1000 ! classes a 2D snapshot selection holds
+
 type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
-  integer(kind=2)       :: pickrefs_selection(500)      = 0    ! selected class indices
+  integer(kind=2)       :: pickrefs_selection(MAX_PICKREFS_SELECTION)     = 0 ! selected class indices
   integer               :: pickrefs_cycle               = 0    ! current pickrefs cycle
   integer               :: pickrefs_selection_length    = 0    ! number of classes in the selection
   integer(kind=2)       :: sieverefs_selection(1000)    = 0    ! selected match-class indices (read by pool2D)
   integer               :: sieverefs_selection_length   = 0    ! number of sieve-ref classes in the selection
-  integer               :: increase_nmics               = 0    ! additional micrographs requested before re-picking; 0 = no request
   real                  :: ctfresupdate                 = 0.0  ! CTF resolution threshold (A); 0 = unset
   real                  :: astigmatismupdate            = 0.0  ! astigmatism threshold (A);   0 = unset
   real                  :: icescoreupdate               = 0.0  ! ice-contamination score;      0 = unset
   real                  :: mskdiam2D                    = 0.0  ! mask diameter for 2D classification (pixels); 0 = unset
   integer               :: snapshot2D_id                = 0    ! snapshot set ID; 0 = unset
   integer               :: snapshot2D_iteration         = 0    ! 2D classification iteration to snapshot; 0 = unset
-  integer(kind=2)       :: snapshot2D_selection(1000)   = 0    ! class indices included in the snapshot
+  integer(kind=2)       :: snapshot2D_selection(MAX_SNAPSHOT2D_SELECTION) = 0 ! class indices included in the snapshot
   integer               :: snapshot2D_selection_length  = 0    ! number of valid entries in snapshot2D_selection
   character(len=STDLEN) :: snapshot2D_filename          = ''   ! project file name for the snapshot
 contains
@@ -40,8 +43,6 @@ contains
   procedure :: get_astigmatism_update
   procedure :: set_icescore_update
   procedure :: get_icescore_update
-  procedure :: set_increase_nmics
-  procedure :: get_increase_nmics
   procedure :: set_pickrefs_selection
   procedure :: get_pickrefs_selection
   procedure :: set_pickrefs_cycle
@@ -50,7 +51,6 @@ contains
   procedure :: get_pickrefs_selection_length
   procedure :: set_sieverefs_selection
   procedure :: get_sieverefs_selection
-  procedure :: set_sieverefs_selection_length
   procedure :: get_sieverefs_selection_length
   procedure :: set_mskdiam2D_update
   procedure :: get_mskdiam2D_update
@@ -108,22 +108,6 @@ contains
     real                                          :: icescoreupdate
     icescoreupdate = self%icescoreupdate
   end function get_icescore_update
-
-  ! Set the number of additional micrographs requested before re-picking.
-  subroutine set_increase_nmics( self, increase_nmics )
-    class(gui_metadata_stream_update), intent(inout) :: self
-    integer,                           intent(in)    :: increase_nmics
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    self%l_assigned     = .true.
-    self%increase_nmics = increase_nmics
-  end subroutine set_increase_nmics
-
-  ! Retrieve the number of additional micrographs requested before re-picking.
-  function get_increase_nmics( self ) result( increase_nmics )
-    class(gui_metadata_stream_update), intent(in) :: self
-    integer                                       :: increase_nmics
-    increase_nmics = self%increase_nmics
-  end function get_increase_nmics
 
   ! Store the user's class selection as an integer array
   subroutine set_pickrefs_selection( self, selection )
@@ -208,17 +192,6 @@ contains
     allocate(selection(n))
     selection = self%sieverefs_selection(1:n)
   end function get_sieverefs_selection
-
-  ! Set the number of sieve-reference classes in the selection.
-  subroutine set_sieverefs_selection_length( self, n )
-    class(gui_metadata_stream_update), intent(inout) :: self
-    integer,                           intent(in)    :: n
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    if( n < 0 ) THROW_HARD('sieverefs_selection_length must be non-negative')
-    if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection_length exceeds maximum size')
-    self%l_assigned                 = .true.
-    self%sieverefs_selection_length = n
-  end subroutine set_sieverefs_selection_length
 
   ! Retrieve the number of sieve-reference classes in the selection.
   function get_sieverefs_selection_length( self ) result( n )

@@ -8,6 +8,7 @@ character(len=*), parameter :: DIR_STREAM_COMPLETED       = './spprojs_completed
 character(len=*), parameter :: MICSPPROJ_FNAME            = './streamdata.simple'
 character(len=*), parameter :: MULTISTATE3D_JOB_NAME      = 'solve3D_multistate'      ! name of solve3D multistate job. also used for folder name
 character(len=*), parameter :: OPENING2D_JOB_NAME         = 'opening_2D'              ! name of opening 2D job. also used for folder name
+character(len=*), parameter :: OPENING2D_PICKREFS         = 'selected_references.mrcs' ! picking references the opening 2D job publishes in its folder
 character(len=*), parameter :: OPTICS_JOB_NAME            = 'optics_assignment'       ! name of optics assignment job. also used for folder name
 character(len=*), parameter :: POOL_DIR                   = ''                        ! should be './pool/' for tidyness but difficult with gui
 character(len=*), parameter :: POOL_DISTR_EXEC_FNAME      = './distr_refine2D_pool'

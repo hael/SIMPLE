@@ -10,7 +10,7 @@ use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_cart_align3D, commander_test_lib_cart_align3D, &
                                         commander_test_unit_heterogeneity, commander_test_lib_heterogeneity, &
                                         commander_test_unit_parallel, commander_test_unit_single, commander_test_lib_single, &
-                                        commander_test_lib_stream, &
+                                        commander_test_unit_stream, commander_test_lib_stream, &
                                         commander_test_openmp_offload
 implicit none
 
@@ -33,6 +33,7 @@ type(commander_test_lib_cart_align3D)    :: xlib_cart_align3D
 type(commander_test_unit_heterogeneity)  :: xunit_heterogeneity
 type(commander_test_unit_parallel)       :: xunit_parallel
 type(commander_test_unit_single)         :: xunit_single
+type(commander_test_unit_stream)         :: xunit_stream
 type(commander_test_lib_single)          :: xlib_single
 type(commander_test_lib_stream)          :: xlib_stream
 type(commander_test_lib_heterogeneity)   :: xlib_heterogeneity
@@ -84,6 +85,8 @@ contains
                 call xunit_single%execute(cline)
             case( 'lib_single' )
                 call xlib_single%execute(cline)
+            case( 'unit_stream' )
+                call xunit_stream%execute(cline)
             case( 'lib_stream' )
                 call xlib_stream%execute(cline)
             case( 'lib_heterogeneity' )

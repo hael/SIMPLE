@@ -1,9 +1,12 @@
 !@descr: reusable assertion, suite tracking, and reporting utilities for tests
 module simple_test_utils
 use, intrinsic :: iso_fortran_env, only: output_unit
-use simple_string, only: string
-use simple_defs,   only: dp, STDLEN, longer
-use simple_rnd,    only: seed_rnd_fixed
+use simple_string,       only: string
+use simple_string_utils, only: int2str
+use simple_defs,         only: dp, STDLEN, longer, logfhandle
+use simple_rnd,          only: seed_rnd_fixed
+use simple_fileio,       only: filepath, simple_chdir, simple_getcwd, simple_rmdir
+use simple_syslib,       only: dir_exists, get_process_id, simple_mkdir
 implicit none
 private
 
@@ -11,6 +14,7 @@ public :: assert_true, assert_int, assert_real, assert_char, assert_string_eq, a
 public :: begin_test_suite, end_test_suite, reset_test_report, report_summary
 public :: tests_run, tests_failed
 public :: set_fixed_seed
+public :: enter_fixture, leave_fixture
 
 type :: test_suite_result
     character(len=STDLEN) :: name = ''
@@ -313,5 +317,30 @@ contains
         endif
         write(unit,'(A)') '========================================='
     end subroutine write_summary
+
+    ! ---- fixture directories ---------------------------------------------------
+
+    !> makes and enters a fresh directory for one test under the working directory
+    subroutine enter_fixture( tag, cwd_saved, fixture_root )
+        character(len=*), intent(in)    :: tag
+        type(string),     intent(inout) :: cwd_saved, fixture_root
+        call simple_getcwd(cwd_saved)
+        fixture_root = filepath(cwd_saved, tag//'_'//int2str(get_process_id()))
+        if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
+        call simple_mkdir(fixture_root)
+        call simple_chdir(fixture_root)
+    end subroutine enter_fixture
+
+    !> returns to the working directory; the fixture goes when no check failed since nfail_before
+    subroutine leave_fixture( cwd_saved, fixture_root, nfail_before )
+        type(string), intent(in) :: cwd_saved, fixture_root
+        integer,      intent(in) :: nfail_before
+        call simple_chdir(cwd_saved)
+        if( tests_failed == nfail_before )then
+            call simple_rmdir(fixture_root)
+        else
+            write(logfhandle,'(A)') '>>> a check failed; the fixture is kept: '//fixture_root%to_char()
+        endif
+    end subroutine leave_fixture
 
 end module simple_test_utils

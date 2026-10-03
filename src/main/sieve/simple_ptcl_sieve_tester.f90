@@ -4,15 +4,25 @@ use simple_test_utils
 use simple_core_module_api
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
-use simple_ptcl_sieve, only: ptcl_sieve
+use simple_ptcl_sieve, only: ptcl_sieve, FINAL_INGESTION_MARKER, sieve_lpstart
 use simple_sp_project, only: sp_project
 use simple_image,      only: image
 use simple_rec_list,   only: rec_list
 use simple_string,     only: string
 use simple_defs_fname, only: METADATA_EXT, SOLVE2D_FINISHED
+use simple_optics_maps, only: publish_optics_map
 implicit none
 private
 public :: run_all_ptcl_sieve_tests
+
+! the completed coarse chunk of test_collect_and_reject_hard_gates and test_hand_off_applies_optics_map
+character(len=*), parameter :: CHUNK_STEM = 'chunk_coarse_1'
+character(len=*), parameter :: CAVG_STACK = 'cavgs_iter001'//MRC_EXT
+real,             parameter :: SMPD       = 2.0
+integer,          parameter :: CAVG_BOX   = 64
+integer,          parameter :: NCLASSES   = 2
+integer,          parameter :: NPARTICLES = 8
+integer,          parameter :: NPER_CLASS = NPARTICLES / NCLASSES
 
 contains
 
@@ -20,11 +30,14 @@ contains
         write(*,'(A)') '**** running all ptcl_sieve tests ****'
         call test_new_kill_and_empty_queries()
         call test_import_existing_chunks_and_counts()
+        call test_import_restores_final_ingestion_chunk()
         call test_finished_semantics()
         call test_single_pass_ignores_incomplete_fine()
         call test_new_accepts_tuning_overrides()
+        call test_lpstart_given_or_derived()
         call test_cycle_empty_project_list()
         call test_collect_and_reject_hard_gates()
+        call test_hand_off_applies_optics_map()
     end subroutine run_all_ptcl_sieve_tests
 
     subroutine test_new_kill_and_empty_queries()
@@ -100,6 +113,33 @@ contains
         call sieve%kill()
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_import_existing_chunks_and_counts
+
+    !> a coarse chunk final ingestion staged for pass 2 is restored on a restart as it was staged:
+    !! classified and rejection-complete, so its particles wait for the fine tier instead of a
+    !! coarse 2D run
+    subroutine test_import_restores_final_ingestion_chunk()
+        type(ptcl_sieve) :: sieve
+        type(parameters) :: params
+        type(string)     :: ws_dir, cwd_saved
+
+        write(*,'(A)') 'test_import_restores_final_ingestion_chunk'
+
+        call setup_workspace(string('final_ingestion'), ws_dir, cwd_saved)
+
+        ! staged by final ingestion: every particle selected, no 2D or rejection markers
+        call make_chunk_project('coarse', 1, 7, 7, 1)
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // FINAL_INGESTION_MARKER))
+
+        call init_test_params(params)
+        call sieve%new(params, string('completed'))
+
+        call assert_int(1, sieve%get_n_chunks_coarse(),             'the staged chunk is imported')
+        call assert_int(7, sieve%get_n_pass_1_non_rejected_ptcls(), 'its particles wait for the fine tier, as when staged')
+        call assert_int(0, sieve%get_n_chunks_running(),            'and it is not running')
+
+        call sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_import_restores_final_ingestion_chunk
 
     subroutine test_finished_semantics()
         type(ptcl_sieve) :: sieve
@@ -200,6 +240,24 @@ contains
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_new_accepts_tuning_overrides
 
+    !> a starting low-pass limit given on the command line reaches the chunks; without one the
+    !! chunks get none (their solve2D derives it from the mask diameter), although parameter
+    !! validation has lifted the unset value to Nyquist
+    subroutine test_lpstart_given_or_derived()
+        type(parameters) :: params
+        type(string)     :: ws_dir, cwd_saved
+
+        write(*,'(A)') 'test_lpstart_given_or_derived'
+
+        call setup_workspace(string('lpstart_rule'), ws_dir, cwd_saved)
+        call init_test_params(params)
+        call assert_real(params%fny, params%lpstart, 1.e-6, 'validation lifts an unset lpstart to Nyquist')
+        call assert_real(0., sieve_lpstart(params), 1.e-6, 'which the sieve does not pass on')
+        call init_test_params(params, lpstart=12.0)
+        call assert_real(12., sieve_lpstart(params), 1.e-6, 'a given lpstart is passed on')
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_lpstart_given_or_derived
+
     subroutine test_cycle_empty_project_list()
         type(ptcl_sieve) :: sieve
         type(parameters) :: params
@@ -224,29 +282,163 @@ contains
     !! a class average with a strong centred component passes the hard gates, a blank one is
     !! rejected, and the selection reaches particles, sentinels, export, previews and latest product
     subroutine test_collect_and_reject_hard_gates()
-        character(len=*), parameter :: CHUNK_STEM = 'chunk_coarse_1'
-        character(len=*), parameter :: CAVG_STACK = 'cavgs_iter001'//MRC_EXT
-        real,             parameter :: SMPD       = 2.0
-        integer,          parameter :: CAVG_BOX   = 64
-        integer,          parameter :: NCLASSES   = 2
-        integer,          parameter :: NPARTICLES = 8
-        integer,          parameter :: NPER_CLASS = NPARTICLES / NCLASSES
         type(ptcl_sieve)     :: sieve
         type(parameters)     :: params_sieve
         type(cmdline)        :: cline_sieve
-        type(image)          :: cavg_good, cavg_bad, feature
-        type(sp_project)     :: chunk_project, result
-        type(string)         :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, cavg_path
+        type(sp_project)     :: result
+        type(string)         :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
         type(string)         :: completed_projfile, rejection_reason, latest_jpeg, latest_stk
         type(string)         :: selected_jpeg, rejected_jpeg, reasons_jpeg, reasons_key
         integer, allocatable :: latest_inds(:), latest_pops(:), latest_selection(:)
         real,    allocatable :: latest_res(:)
-        integer              :: i, icls, ldim(3), nimages, xtiles, ytiles
+        integer              :: ldim(3), nimages, xtiles, ytiles
         logical              :: has_latest
 
         write(*,'(A)') 'test_collect_and_reject_hard_gates'
 
-        call setup_workspace(string('collect_reject'), ws_dir, cwd_saved)
+        call make_completed_coarse_chunk(string('collect_reject'), ws_dir, cwd_saved, chunk_dir, completed_path,&
+            &chunk_projfile, cline_sieve)
+        call params_sieve%new(cline_sieve)
+        call sieve%new(params_sieve, completed_path)
+        call sieve%collect_and_reject()
+
+        ! the collector's counters
+        call assert_int(1,          sieve%get_n_chunks_coarse(),         'the completed coarse chunk is imported')
+        call assert_int(NPER_CLASS, sieve%get_n_coarse_accepted_ptcls(), 'coarse accepted particles = the class that passes')
+        call assert_int(NPER_CLASS, sieve%get_n_coarse_rejected_ptcls(), 'coarse rejected particles = the blank class')
+        call assert_int(NPER_CLASS, sieve%get_n_accepted_ptcls(),        'final accepted particles')
+        call assert_int(NPER_CLASS, sieve%get_n_rejected_ptcls(),        'final rejected particles')
+        call assert_int(NPARTICLES, sieve%get_n_total_particles(),       'total particles')
+        call assert_int(1,          sieve%get_n_accepted_micrographs(),  'accepted micrographs')
+        call assert_true(sieve%get_finished(),                           'the coarse-only sieve finishes')
+        call assert_true(file_exists(filepath(chunk_dir, 'REJECTION_FINISHED')), 'the rejection sentinel exists')
+        call assert_true(file_exists(filepath(chunk_dir, 'COMPLETE')),           'the completion sentinel exists')
+
+        ! the selection in the chunk project, mapped to the particles
+        call result%read(chunk_projfile)
+        call assert_true(all(result%os_cls2D%get_all_asint('state') == [1, 0]), 'class 1 selected, class 2 rejected')
+        call assert_int(NPER_CLASS, result%os_ptcl2D%count_state_gt_zero(), 'the selection reaches the 2D particles')
+        call assert_int(NPER_CLASS, result%os_ptcl3D%count_state_gt_zero(), 'the selection reaches the 3D particles')
+        ! the orientation reader splits character values at blanks, so the round-tripped part of
+        ! the reason is its tier prefix
+        rejection_reason = result%os_cls2D%get_str(2, 'rejection_reason')
+        call assert_true(rejection_reason%has_substr('coarse_reject'), 'the rejected class records the coarse rejection')
+        call result%kill()
+
+        ! the exported project and the previews
+        completed_projfile = filepath(completed_path, CHUNK_STEM//METADATA_EXT)
+        selected_jpeg      = filepath(chunk_dir, CHUNK_STEM//'_selected'//JPG_EXT)
+        rejected_jpeg      = filepath(chunk_dir, CHUNK_STEM//'_rejected'//JPG_EXT)
+        reasons_jpeg       = filepath(chunk_dir, CHUNK_STEM//'_all_reasons'//JPG_EXT)
+        reasons_key        = reasons_jpeg//'.key.txt'
+        call assert_true(file_exists(completed_projfile), 'the chunk project is exported to the completed directory')
+        call assert_false(file_exists(filepath(completed_path, CHUNK_STEM//'.tmp')), 'its temporary copy is renamed into place')
+        call assert_true(file_exists(selected_jpeg),      'the selected-classes preview exists')
+        call assert_true(file_exists(rejected_jpeg),      'the rejected-classes preview exists')
+        call assert_true(file_exists(reasons_jpeg),       'the rejection-reason report exists')
+        call assert_true(file_exists(reasons_key),        'the rejection-reason key exists')
+
+        ! the latest product the GUI shows
+        has_latest = sieve%get_latest(latest_inds, latest_pops, latest_res, latest_jpeg, latest_stk, &
+            &xtiles, ytiles, latest_selection)
+        call assert_true(has_latest, 'the latest class-average product is available')
+        if( has_latest )then
+            call assert_int(NCLASSES, size(latest_inds), 'latest product: two classes')
+            if( size(latest_inds) == NCLASSES )then
+                call assert_true(all(latest_inds      == [1, 2]),                 'latest product: class indices')
+                call assert_true(all(latest_pops      == [NPER_CLASS, NPER_CLASS]), 'latest product: populations')
+                call assert_true(all(latest_selection == [1, 0]),                 'latest product: selection')
+                call assert_true(all(abs(latest_res - 10.0) <= 0.01),             'latest product: resolutions')
+            endif
+            call assert_true(xtiles * ytiles >= NCLASSES, 'latest product: the preview tiles hold every class')
+            call assert_true(file_exists(latest_jpeg), 'latest product: the preview exists')
+            call assert_true(file_exists(latest_stk),  'latest product: the retained stack exists')
+            if( file_exists(latest_stk) )then
+                call find_ldim_nptcls(latest_stk, ldim, nimages)
+                call assert_int(NCLASSES, nimages, 'latest product: the retained stack holds every class')
+                call assert_true(all(ldim(1:2) == [CAVG_BOX, CAVG_BOX]), 'latest product: the retained stack keeps the box')
+            endif
+        endif
+
+        if( allocated(latest_inds)      ) deallocate(latest_inds)
+        if( allocated(latest_pops)      ) deallocate(latest_pops)
+        if( allocated(latest_res)       ) deallocate(latest_res)
+        if( allocated(latest_selection) ) deallocate(latest_selection)
+        call sieve%kill()
+        call cline_sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_collect_and_reject_hard_gates
+
+    !> with an optics directory, the chunk handed to the completed directory carries the groups of
+    !! the newest optics map (import index 1 in group 2 of two), while the chunk's own project
+    !! stays without them
+    subroutine test_hand_off_applies_optics_map()
+        type(ptcl_sieve) :: sieve
+        type(parameters) :: params_sieve
+        type(cmdline)    :: cline_sieve
+        type(sp_project) :: map_proj, exported, chunk_proj
+        type(string)     :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, optics_dir, exported_projfile
+        integer          :: igroup
+
+        write(*,'(A)') 'test_hand_off_applies_optics_map'
+
+        call make_completed_coarse_chunk(string('hand_off_optics'), ws_dir, cwd_saved, chunk_dir, completed_path,&
+            &chunk_projfile, cline_sieve, l_extracted=.true.)
+        optics_dir = filepath(ws_dir, 'optics')
+        call simple_mkdir(optics_dir)
+        call map_proj%os_mic%new(1, is_ptcl=.false.)
+        call map_proj%os_mic%set(1, 'importind', 1)
+        call map_proj%os_mic%set(1, 'ogid',      2)
+        call map_proj%os_optics%new(2, is_ptcl=.false.)
+        do igroup = 1,2
+            call map_proj%os_optics%set(igroup, 'ogid',  igroup)
+            call map_proj%os_optics%set(igroup, 'state', 1)
+        enddo
+        call publish_optics_map(map_proj, optics_dir, 1, 5)
+        call map_proj%kill()
+        call params_sieve%new(cline_sieve)
+        call sieve%new(params_sieve, completed_path, optics_dir=optics_dir)
+        call sieve%collect_and_reject()
+
+        exported_projfile = filepath(completed_path, CHUNK_STEM//METADATA_EXT)
+        call assert_true(file_exists(exported_projfile), 'the chunk project is handed to the completed directory')
+        call assert_false(file_exists(filepath(completed_path, CHUNK_STEM//'.tmp')), 'its temporary copy is renamed into place')
+        if( file_exists(exported_projfile) )then
+            call exported%read(exported_projfile)
+            call assert_int(2, exported%os_optics%get_noris(),        'the handed-off project holds the map''s optics groups')
+            call assert_int(2, exported%os_mic%get_int(1, 'ogid'),    'its micrograph takes the map''s group')
+            call assert_int(2, exported%os_ptcl2D%get_int(1, 'ogid'), 'its particles follow their stack')
+            call assert_int(NCLASSES, exported%os_cls2D%get_noris(),  'the classification is handed off with it')
+            call exported%kill()
+        endif
+        call chunk_proj%read_segment('optics', chunk_projfile)
+        call assert_int(0, chunk_proj%os_optics%get_noris(), 'the chunk''s own project stays without optics groups')
+        call chunk_proj%kill()
+
+        call sieve%kill()
+        call cline_sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_hand_off_applies_optics_map
+
+    ! a completed coarse solve2D chunk awaiting rejection, in a fresh workspace: two class averages
+    ! (a strong centred square on weak noise, and blank), one micrograph with NPARTICLES particles in
+    ! two classes, the solve2D sentinel, and the collector's command line in coarse-only mode with
+    ! the learned model off; with l_extracted the micrograph has import index 1 and the chunk a
+    ! stack, as chunks built from extracted micrographs have
+    subroutine make_completed_coarse_chunk( tag, ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile,&
+            &cline_sieve, l_extracted )
+        type(string),      intent(in)    :: tag
+        type(string),      intent(inout) :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
+        type(cmdline),     intent(inout) :: cline_sieve
+        logical, optional, intent(in)    :: l_extracted
+        type(image)      :: cavg_good, cavg_bad, feature
+        type(sp_project) :: chunk_project
+        type(string)     :: cavg_path
+        integer          :: i, icls
+        logical          :: l_stack
+        l_stack = .false.
+        if( present(l_extracted) ) l_stack = l_extracted
+        call setup_workspace(tag, ws_dir, cwd_saved)
         completed_path = filepath(ws_dir, 'completed')
         chunk_dir      = filepath(ws_dir, 'chunks_coarse')
         call simple_mkdir(chunk_dir)
@@ -276,6 +468,12 @@ contains
         call chunk_project%os_mic%set(1, 'imgkind', 'mic')
         call chunk_project%os_mic%set(1, 'nptcls',  NPARTICLES)
         call chunk_project%os_mic%set(1, 'smpd',    SMPD)
+        if( l_stack )then
+            call chunk_project%os_mic%set(1, 'importind', 1)
+            call chunk_project%os_stk%new(1, is_ptcl=.false.)
+            call chunk_project%os_stk%set(1, 'fromp', 1)
+            call chunk_project%os_stk%set(1, 'top',   NPARTICLES)
+        endif
         call chunk_project%os_ptcl2D%new(NPARTICLES, is_ptcl=.true.)
         do i = 1, NPARTICLES
             icls = 1 + (i - 1) / NPER_CLASS
@@ -323,75 +521,7 @@ contains
         call chunk_project%write(chunk_projfile)
         call chunk_project%kill()
         call simple_touch(filepath(chunk_dir, SOLVE2D_FINISHED))
-        call params_sieve%new(cline_sieve)
-        call sieve%new(params_sieve, completed_path)
-        call sieve%collect_and_reject()
-
-        ! the collector's counters
-        call assert_int(1,          sieve%get_n_chunks_coarse(),         'the completed coarse chunk is imported')
-        call assert_int(NPER_CLASS, sieve%get_n_coarse_accepted_ptcls(), 'coarse accepted particles = the class that passes')
-        call assert_int(NPER_CLASS, sieve%get_n_coarse_rejected_ptcls(), 'coarse rejected particles = the blank class')
-        call assert_int(NPER_CLASS, sieve%get_n_accepted_ptcls(),        'final accepted particles')
-        call assert_int(NPER_CLASS, sieve%get_n_rejected_ptcls(),        'final rejected particles')
-        call assert_int(NPARTICLES, sieve%get_n_total_particles(),       'total particles')
-        call assert_int(1,          sieve%get_n_accepted_micrographs(),  'accepted micrographs')
-        call assert_true(sieve%get_finished(),                           'the coarse-only sieve finishes')
-        call assert_true(file_exists(filepath(chunk_dir, 'REJECTION_FINISHED')), 'the rejection sentinel exists')
-        call assert_true(file_exists(filepath(chunk_dir, 'COMPLETE')),           'the completion sentinel exists')
-
-        ! the selection in the chunk project, mapped to the particles
-        call result%read(chunk_projfile)
-        call assert_true(all(result%os_cls2D%get_all_asint('state') == [1, 0]), 'class 1 selected, class 2 rejected')
-        call assert_int(NPER_CLASS, result%os_ptcl2D%count_state_gt_zero(), 'the selection reaches the 2D particles')
-        call assert_int(NPER_CLASS, result%os_ptcl3D%count_state_gt_zero(), 'the selection reaches the 3D particles')
-        ! the orientation reader splits character values at blanks, so the round-tripped part of
-        ! the reason is its tier prefix
-        rejection_reason = result%os_cls2D%get_str(2, 'rejection_reason')
-        call assert_true(rejection_reason%has_substr('coarse_reject'), 'the rejected class records the coarse rejection')
-        call result%kill()
-
-        ! the exported project and the previews
-        completed_projfile = filepath(completed_path, CHUNK_STEM//METADATA_EXT)
-        selected_jpeg      = filepath(chunk_dir, CHUNK_STEM//'_selected'//JPG_EXT)
-        rejected_jpeg      = filepath(chunk_dir, CHUNK_STEM//'_rejected'//JPG_EXT)
-        reasons_jpeg       = filepath(chunk_dir, CHUNK_STEM//'_all_reasons'//JPG_EXT)
-        reasons_key        = reasons_jpeg//'.key.txt'
-        call assert_true(file_exists(completed_projfile), 'the chunk project is exported to the completed directory')
-        call assert_true(file_exists(selected_jpeg),      'the selected-classes preview exists')
-        call assert_true(file_exists(rejected_jpeg),      'the rejected-classes preview exists')
-        call assert_true(file_exists(reasons_jpeg),       'the rejection-reason report exists')
-        call assert_true(file_exists(reasons_key),        'the rejection-reason key exists')
-
-        ! the latest product the GUI shows
-        has_latest = sieve%get_latest(latest_inds, latest_pops, latest_res, latest_jpeg, latest_stk, &
-            &xtiles, ytiles, latest_selection)
-        call assert_true(has_latest, 'the latest class-average product is available')
-        if( has_latest )then
-            call assert_int(NCLASSES, size(latest_inds), 'latest product: two classes')
-            if( size(latest_inds) == NCLASSES )then
-                call assert_true(all(latest_inds      == [1, 2]),                 'latest product: class indices')
-                call assert_true(all(latest_pops      == [NPER_CLASS, NPER_CLASS]), 'latest product: populations')
-                call assert_true(all(latest_selection == [1, 0]),                 'latest product: selection')
-                call assert_true(all(abs(latest_res - 10.0) <= 0.01),             'latest product: resolutions')
-            endif
-            call assert_true(xtiles * ytiles >= NCLASSES, 'latest product: the preview tiles hold every class')
-            call assert_true(file_exists(latest_jpeg), 'latest product: the preview exists')
-            call assert_true(file_exists(latest_stk),  'latest product: the retained stack exists')
-            if( file_exists(latest_stk) )then
-                call find_ldim_nptcls(latest_stk, ldim, nimages)
-                call assert_int(NCLASSES, nimages, 'latest product: the retained stack holds every class')
-                call assert_true(all(ldim(1:2) == [CAVG_BOX, CAVG_BOX]), 'latest product: the retained stack keeps the box')
-            endif
-        endif
-
-        if( allocated(latest_inds)      ) deallocate(latest_inds)
-        if( allocated(latest_pops)      ) deallocate(latest_pops)
-        if( allocated(latest_res)       ) deallocate(latest_res)
-        if( allocated(latest_selection) ) deallocate(latest_selection)
-        call sieve%kill()
-        call cline_sieve%kill()
-        call teardown_workspace(ws_dir, cwd_saved)
-    end subroutine test_collect_and_reject_hard_gates
+    end subroutine make_completed_coarse_chunk
 
     subroutine init_test_params(params, single_pass, lpstart, lpstop_coarse, lpstop_fine, box_coarse, box_fine, &
                                 nsample_coarse, nsample_fine, ncls_coarse, ncls_fine)

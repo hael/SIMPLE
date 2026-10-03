@@ -11,7 +11,9 @@ private
 integer, parameter  :: EER_THUMB_UPSAMPLING = 1
 
 public :: read_movies_and_sum_frames
+public :: add_movies_to_gain_sum
 public :: normalized_inverse_average_intensity
+public :: write_gain_from_sum
 public :: gainref_to_jpg
 
 contains
@@ -88,6 +90,32 @@ contains
         endif
     end subroutine read_movies_and_sum_frames
 
+    !> Sums the frames of one batch of movies into the running sum gain_sum, which the
+    !> first call creates; nmovies and nframes accumulate across calls.
+    subroutine add_movies_to_gain_sum(movie_fnames, smpd, gain_sum, nmovies, nframes)
+        class(string), intent(in)    :: movie_fnames(:)
+        real,          intent(in)    :: smpd
+        type(image),   intent(inout) :: gain_sum
+        integer,       intent(inout) :: nmovies, nframes
+        type(image) :: batch_sum
+        integer     :: batch_movies, batch_frames, ldim_sum(3), ldim_batch(3)
+
+        call read_movies_and_sum_frames(movie_fnames, smpd, batch_sum, batch_movies, batch_frames)
+        if( gain_sum%exists() )then
+            ldim_sum   = gain_sum%get_ldim()
+            ldim_batch = batch_sum%get_ldim()
+            if( any(ldim_sum /= ldim_batch) )then
+                THROW_HARD('Movie batch dimensions differ from the running gain sum; add_movies_to_gain_sum')
+            endif
+            call gain_sum%add_workshare(batch_sum)
+        else
+            call gain_sum%copy(batch_sum)
+        endif
+        nmovies = nmovies + batch_movies
+        nframes = nframes + batch_frames
+        call batch_sum%kill()
+    end subroutine add_movies_to_gain_sum
+
     subroutine normalized_inverse_average_intensity(sum_img, nframes, inv_avg_img, avg_value)
         class(image), intent(in)    :: sum_img
         integer,      intent(in)    :: nframes
@@ -128,6 +156,20 @@ contains
         deallocate(rmat)
 
     end subroutine normalized_inverse_average_intensity
+
+    !> Writes the gain reference estimated from gain_sum, the sum of nframes movie frames,
+    !> to fname: the normalised inverse average intensity.
+    subroutine write_gain_from_sum(gain_sum, nframes, fname)
+        class(image),  intent(in) :: gain_sum
+        integer,       intent(in) :: nframes
+        class(string), intent(in) :: fname
+        type(image) :: gain_img
+        real        :: avg_value
+
+        call normalized_inverse_average_intensity(gain_sum, nframes, gain_img, avg_value)
+        call gain_img%write(fname, del_if_exists=.true.)
+        call gain_img%kill()
+    end subroutine write_gain_from_sum
 
     !> Reads a gain reference from disk and writes a normalized jpeg preview
     !> resized to the standard GUI micrograph thumbnail size.

@@ -7,6 +7,7 @@ use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_ca
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_BUILTIN_MODELS, &
     cavg_quality_model, write_cavg_quality_model_builtin_code
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
+use simple_cavg_quality_selection, only: write_cavg_selection_stacks
 use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
 use simple_strategy2D_utils
@@ -623,8 +624,8 @@ contains
             call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
                 params%projfile%to_char())
         endif
-        call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
-        call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
+        call write_cavg_selection_stacks(cavg_imgs, quality%states, string('quality_selected_cavgs'//MRC_EXT),&
+            &string('quality_rejected_cavgs'//MRC_EXT))
         call write_hard_gate_stack(string('hard_gate_rejections'//MRC_EXT))
         call write_ranked_quality_stack(string('quality_ranked_cavgs'//MRC_EXT), 'quality_ranked_cavgs.txt')
         if( quality_mode == QUALITY_MODE_ANALYZE .or. quality_mode == QUALITY_MODE_EVALUATE )then
@@ -771,21 +772,6 @@ contains
                 endif
             enddo
         end subroutine annotate_project
-
-        subroutine write_quality_stack( fname, selected )
-            type(string), intent(in) :: fname
-            logical,      intent(in) :: selected
-            integer :: icls, istk
-            if( file_exists(fname) ) call del_file(fname)
-            istk = 0
-            do icls = 1, ncls
-                if( selected .eqv. (quality%states(icls) > 0) )then
-                    istk = istk + 1
-                    call cavg_imgs(icls)%write(fname, istk)
-                endif
-            enddo
-            write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
-        end subroutine write_quality_stack
 
         subroutine write_hard_gate_stack( fname )
             type(string), intent(in) :: fname

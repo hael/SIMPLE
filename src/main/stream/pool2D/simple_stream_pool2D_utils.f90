@@ -41,7 +41,6 @@ integer                 :: ncls_max                         ! maximum allowed cl
 integer                 :: ncls_rejected_glob               ! number of rejected classes
 integer                 :: nptcls_glob                      ! total particles in pool
 integer                 :: nptcls_rejected_glob             ! rejected particles in pool
-integer(8), allocatable :: pool_proj_history_timestamps(:)  ! timestamps (e.g. from time8()) for history entries
 logical,    allocatable :: pool_stacks_mask(:)              ! subset of stacks undergoing 2D analysis
 real                    :: current_jpeg_scale               ! tile scaling factor
 real                    :: current_resolution=999.          ! current estimated resolution
@@ -67,7 +66,6 @@ contains
         character(len=STDLEN) :: pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
         integer               :: envlen
         call seed_rnd
-        nullify(snapshot_json)
         ! reference generation: used for generating references from raw particles
         l_no_chunks = .false.
         if( present(reference_generation) ) l_no_chunks = reference_generation
@@ -194,15 +192,14 @@ contains
     subroutine iterate_pool( params )
         class(parameters), intent(inout) :: params
         logical, parameter            :: L_BENCH = .false.
-        type(sp_project)              :: spproj, spproj_history
-        type(sp_project), allocatable :: pool_proj_history_tmp(:)
+        type(sp_project)              :: spproj
         integer(timer_int_kind)       :: t_tot
         integer,          allocatable :: nptcls_per_stk(:), prev_eo_pops(:,:), prev_eo_pops_thread(:,:), clspops(:)
         type(cmdline), allocatable :: pool_clines(:)
         type(string) :: stkname
         real         :: frac_update, smpd
-        integer      :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, npool
-        integer      :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
+        integer      :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, islot
+        integer      :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls, ncls_drawn
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available  ) return
         if( l_no_chunks ) THROW_HARD('Designed for pre-clustered/matched particles!')
@@ -211,49 +208,19 @@ contains
         nptcls_glob          = nptcls_tot
         nptcls_rejected_glob = 0
         if( nptcls_tot == 0 ) return
-        ! save pool project to history
+        ! the completed iteration goes into the history, replacing the iteration POOL_NHISTORY
+        ! before it, whose files tidy_2Dstream_iter removes below: history and files keep the
+        ! same iterations
         if(pool_iter .gt. 0) then
-            call spproj_history%copy(pool_proj)
+            islot = pool_history_slot(pool_iter)
+            call pool_proj_history(islot)%kill
+            call pool_proj_history(islot)%copy(pool_proj)
             call simple_copy_file(string(POOL_DIR)//FRCS_FILE, string(POOL_DIR)//swap_suffix(FRCS_FILE,"_iter"//int2str_pad(pool_iter, 3)//".bin",".bin"))
-            call spproj_history%get_cavgs_stk(stkname, ncls, smpd)
-            call spproj_history%os_out%kill
-            call spproj_history%add_cavgs2os_out(stkname, smpd, 'cavg')
-            call spproj_history%add_frcs2os_out(string(POOL_DIR)//swap_suffix(FRCS_FILE,"_iter"//int2str_pad(pool_iter, 3)//".bin",".bin"),'frc2D')
-            if( allocated(pool_proj_history) )then
-                ! copy history
-                npool = size(pool_proj_history)
-                allocate(pool_proj_history_tmp(npool))
-                do i = 1, npool
-                    pool_proj_history_tmp(i) =  pool_proj_history(i)
-                    call pool_proj_history(i)%kill
-                end do
-                deallocate(pool_proj_history)
-                ! reallocate & copy
-                allocate(pool_proj_history(npool + 1))
-                do i = 1, npool
-                    pool_proj_history(i) =  pool_proj_history_tmp(i)
-                    call pool_proj_history_tmp(i)%kill
-                end do
-                deallocate(pool_proj_history_tmp)
-                ! add new element
-                pool_proj_history(npool + 1) = spproj_history
-            else
-                allocate(pool_proj_history(1))
-                pool_proj_history(1) = spproj_history
-            endif
-            if( allocated(pool_proj_history_timestamps) )then
-                pool_proj_history_timestamps = [pool_proj_history_timestamps(:), time8()]
-            else
-                allocate(pool_proj_history_timestamps(1), source=time8())
-            endif
-            do i=1, size(pool_proj_history_timestamps)
-                ! remove history older than 5 minutes
-                if(pool_proj_history_timestamps(i) > 0 .and. pool_proj_history_timestamps(i) < time8() - 300) then
-                    call pool_proj_history(i)%kill()
-                    pool_proj_history_timestamps(i) = 0
-                end if
-            end do
-            call spproj_history%kill
+            call pool_proj_history(islot)%get_cavgs_stk(stkname, ncls, smpd)
+            call pool_proj_history(islot)%os_out%kill
+            call pool_proj_history(islot)%add_cavgs2os_out(stkname, smpd, 'cavg')
+            call pool_proj_history(islot)%add_frcs2os_out(string(POOL_DIR)//swap_suffix(FRCS_FILE,"_iter"//int2str_pad(pool_iter, 3)//".bin",".bin"),'frc2D')
+            pool_history_iter(islot) = pool_iter
         end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
         call cline_refine2D_pool%set('ncls',     ncls_glob)
@@ -343,21 +310,25 @@ contains
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
         spproj%os_cls2D = pool_proj%os_cls2D
-        ! making sure the new particles are asigned a populated class
+        ! making sure the new particles are asigned a populated class; when none is populated
+        ! (every class rejected) they keep the class they have rather than draw forever
         if( pool_iter >= 2 )then
-            clspops = spproj%os_cls2D%get_all_asint('pop')
-            !$omp parallel do private(iptcl,icls) proc_bind(close) default(shared) schedule(static)
-            do iptcl = 1,nptcls2update
-                if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-                if( spproj%os_ptcl2D%get_updatecnt(iptcl) == 0 )then
-                    icls = irnd_uni(ncls_glob)
-                    do while( clspops(icls) == 0 )
-                        icls = irnd_uni(ncls_glob)
-                    enddo
-                    call spproj%os_ptcl2D%set_class(iptcl, icls)
-                endif
-            enddo
-            !$omp end parallel do
+            clspops    = spproj%os_cls2D%get_all_asint('pop')
+            ncls_drawn = min(ncls_glob, size(clspops))
+            if( any(clspops(:ncls_drawn) > 0) )then
+                !$omp parallel do private(iptcl,icls) proc_bind(close) default(shared) schedule(static)
+                do iptcl = 1,nptcls2update
+                    if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+                    if( spproj%os_ptcl2D%get_updatecnt(iptcl) == 0 )then
+                        icls = irnd_uni(ncls_drawn)
+                        do while( clspops(icls) == 0 )
+                            icls = irnd_uni(ncls_drawn)
+                        enddo
+                        call spproj%os_ptcl2D%set_class(iptcl, icls)
+                    endif
+                enddo
+                !$omp end parallel do
+            endif
         endif
         ! update command line with fractional update parameters
         call cline_refine2D_pool%delete('update_frac')
@@ -410,7 +381,8 @@ contains
         if( allocated(prev_eo_pops) )        deallocate(prev_eo_pops)
         if( allocated(prev_eo_pops_thread) ) deallocate(prev_eo_pops_thread)
         if( allocated(clspops) )             deallocate(clspops)
-        call tidy_2Dstream_iter
+        ! the files of the iteration that has just left the history
+        call tidy_2Dstream_iter(pool_iter - 1 - POOL_NHISTORY)
 
       contains
 
@@ -494,6 +466,7 @@ contains
         get_pool_assigned = nptcls_glob - nptcls_rejected_glob
     end function get_pool_assigned
 
+    ! absolute path of the current pool class-average JPEG ('' before the first)
     type(string) function get_pool_cavgs_jpeg()
         get_pool_cavgs_jpeg = current_jpeg
     end function get_pool_cavgs_jpeg
@@ -510,8 +483,14 @@ contains
         get_pool_cavgs_jpeg_ntilesy = current_jpeg_ntilesy
     end function get_pool_cavgs_jpeg_ntilesy
 
+    ! absolute path of the current pool class averages ('' before the first); refs_glob itself
+    ! stays relative to the stage's directory, where the pool workers find it
     type(string) function get_pool_cavgs_mrc()
-        get_pool_cavgs_mrc = refs_glob
+        type(string) :: cwd
+        get_pool_cavgs_mrc = ''
+        if( refs_glob%strlen() == 0 ) return
+        call simple_getcwd(cwd)
+        get_pool_cavgs_mrc = cwd//'/'//refs_glob
     end function get_pool_cavgs_mrc
 
     ! returns current pool iteration
@@ -590,12 +569,20 @@ contains
 
     ! UPDATERS
 
+    ! A new mask diameter (A) for the next pool iterations. The pool command line also carries
+    ! the cropped mask radius (pixels), which the workers take over the one parameters would
+    ! derive from mskdiam, so it is updated with it; before the pool has dimensions
+    ! init_pool_clustering derives it from params%mskdiam.
     subroutine update_mskdiam( params, new_mskdiam )
         class(parameters), intent(inout) :: params
         integer, intent(in) :: new_mskdiam
         write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO', new_mskdiam ,'Å'
         params%mskdiam = real(new_mskdiam)
-        call cline_refine2D_pool%set('mskdiam',    params%mskdiam)
+        call cline_refine2D_pool%set('mskdiam',   params%mskdiam)
+        if( pool_dims%smpd > 0. )then
+            pool_dims%msk = round2even(params%mskdiam / pool_dims%smpd / 2.)
+            call cline_refine2D_pool%set('msk_crop', pool_dims%msk)
+        endif
     end subroutine update_mskdiam
 
     !> Queues a GUI-driven match-class selection update for the next pool iteration.
@@ -666,7 +653,7 @@ contains
         type(sp_project) :: spproj
         type(oris)       :: os
         type(class_frcs) :: frcs
-        type(string)     :: fname
+        type(string)     :: fname, cwd
         integer          :: i, it, jptcl, iptcl, istk
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available  ) return
@@ -683,9 +670,11 @@ contains
                 conv_score    = os%get(1,'SCORE')
                 ! new
                 last_complete_iter = it
-                current_jpeg = CAVGS_ITER_FBODY//int2str_pad(it, 3)//'.jpg'
+                call simple_getcwd(cwd)
+                current_jpeg = cwd//'/'//CAVGS_ITER_FBODY//int2str_pad(it, 3)//'.jpg'
                 current_jpeg_ntiles  = pool_proj%os_cls2D%get_noris()
-                current_jpeg_ntilesx = floor(sqrt(real(current_jpeg_ntiles)))
+                ! no classes yet after the first iteration (they are transferred below)
+                current_jpeg_ntilesx = max(1, floor(sqrt(real(current_jpeg_ntiles))))
                 current_jpeg_ntilesy = ceiling(real(current_jpeg_ntiles)/real(current_jpeg_ntilesx))
                 ! end new
                 write(logfhandle,'(A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> POOL         ITERATION ',it,&

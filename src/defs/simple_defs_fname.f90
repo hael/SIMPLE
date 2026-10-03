@@ -112,7 +112,6 @@ character(len=*), parameter :: PAUSE_STREAM                  = './SIMPLE_PAUSE_S
 character(len=*), parameter :: STREAM_SELECTED_REFS          = './selected_references'
 character(len=*), parameter :: STREAM_DESELECTED_REFS        = './deselected_references'
 character(len=*), parameter :: STREAM_MOLDIAM                = 'moldiam.txt'
-character(len=*), parameter :: STREAM_NMICS                  = 'nmics.txt'
 character(len=*), parameter :: CALCPSPEC_FINISHED            = 'CALCPSPEC_FINISHED'
 character(len=*), parameter :: SOLVE3D_FINISHED              = 'SOLVE3D_FINISHED'
 character(len=*), parameter :: DIR_SNAPSHOT                  = './snapshots/'

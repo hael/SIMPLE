@@ -132,11 +132,12 @@ estimate.
 
 ## Implementation
 
-- Stages: `src/main/stream/simple_stream_p01_preprocess_new.f90` through
-  `src/main/stream/simple_stream_p06_pool2D_new.f90`,
-  `src/main/stream/simple_stream_p03_initial_analysis.f90`.
+- Stages: the commanders `src/main/commanders/stream/simple_commanders_stream_p01_preprocess.f90`
+  through `simple_commanders_stream_p07_solve3D_multistate.f90`, each driving a stage type
+  (`simple_stream_*_stage.f90` in the same folder); the master that runs them for the GUI is
+  `src/main/commanders/stream/simple_commanders_stream_p00_master.f90`.
 - Sieve and chunking: `src/main/sieve/simple_ptcl_sieve.f90`.
 - Class-quality features and model: `src/main/cavg_quality/simple_cavg_quality_*.f90`.
-- Pool schedule: `src/main/stream/simple_stream_pool2D_utils.f90`.
+- Pool schedule: `src/main/stream/pool2D/simple_stream_pool2D_utils.f90`.
 - Diameter consensus: `src/main/stream/simple_mini_stream_utils.f90`.
 - Policies: `doc/policies/sieving_and_rejection/`.

@@ -1635,670 +1635,13 @@ Uses:
 - `simple_type_defs`
 
 Public symbols:
-- `add2fbody_1` — function
-- `add2fbody_2` — function
-- `add2fbody_3` — function
-- `add_error` — subroutine
-- `add_to_stream_stack` — subroutine
-- `add_to_streaming` — subroutine
-- `addDefaultNS` — subroutine
-- `addPrefixedNS` — subroutine
-- `adoptNode` — function
-- `alloc_chash` — subroutine
-- `alloc_hash` — subroutine
-- `analyze_smat` — subroutine
-- `ang2vox` — function
-- `append2basename_1` — function
-- `append2basename_2` — function
-- `appendChild` — function
-- `appendData` — subroutine
-- `arg` — function
-- `arpack_stop` — subroutine
-- `arr2file_dp` — subroutine
-- `arr2file_sp` — subroutine
-- `arr2txtfile_1` — subroutine
-- `arr2txtfile_2` — subroutine
-- `assert_eq2` — function
-- `assert_eq3` — function
-- `assert_eq4` — function
-- `assert_eqn` — function
-- `augment_partition_job_descr` — subroutine
-- `autoscale` — subroutine
-- `avg_frac_smallest` — function
-- `avg_sdev_1` — subroutine
-- `avg_sdev_2` — subroutine
-- `avg_sdev_3` — subroutine
-- `avg_sdev_4` — subroutine
-- `balanced` — subroutine
-- `basename` — function
-- `bounds_from_mask3D` — subroutine
-- `c_f_str_chars` — subroutine
-- `c_f_str_ptr` — subroutine
-- `c_int32_to_uint16` — function
-- `c_int64_to_uint32` — function
-- `c_uint16_to_int32` — function
-- `c_uint32_to_int64` — function
-- `calc_ap_pref` — function
-- `calc_graphene_mask` — function
-- `calc_score_thres` — function
-- `calc_stats` — subroutine
-- `chash2str` — function
-- `check4nans2D_1` — subroutine
-- `check4nans2D_2` — subroutine
-- `check4nans3D_1` — subroutine
-- `check4nans3D_2` — subroutine
-- `check4nans_1` — subroutine
-- `check4nans_2` — subroutine
-- `clear_partition_job_descr` — subroutine
-- `clear_stack` — subroutine
-- `cloneNode` — function
-- `cmlEndMolecule` — subroutine
-- `cmlStartMolecule` — subroutine
-- `constructor` — function
-- `constructor` — function
-- `constructor_1` — function
-- `constructor_1` — function
-- `constructor_2` — function
-- `constructor_2` — function
-- `conv2rank_weights` — subroutine
-- `copy` — subroutine
-- `copy` — subroutine
-- `copyDOMConfig` — subroutine
-- `corrs2weights` — function
-- `create_hist_vector` — subroutine
-- `createAttribute` — function
-- `createAttributeNS` — function
-- `createCdataSection` — function
-- `createComment` — function
-- `createDocument` — function
-- `createDocumentFragment` — function
-- `createDocumentType` — function
-- `createElement` — function
-- `createElementNS` — function
-- `createEmptyDocument` — function
-- `createEmptyEntityReference` — function
-- `createEntity` — function
-- `createEntityReference` — function
-- `createNamespaceNode` — function
-- `createNotation` — function
-- `createProcessingInstruction` — function
-- `createTextNode` — function
-- `cross` — function
-- `csq_1` — function
-- `csq_2` — function
-- `cyci_1d` — function
-- `cyci_1d_static` — function
-- `dealloc_chash` — subroutine
-- `dealloc_hash` — subroutine
-- `declare_coarray_jobs_finished` — subroutine
-- `decode_rfc6901` — function
-- `deg2rad_dp` — function
-- `deg2rad_sp` — function
-- `del_files_1` — subroutine
-- `del_files_2` — subroutine
-- `delete` — subroutine
-- `delete` — subroutine
-- `deleteData` — subroutine
-- `destroy_error_stack` — subroutine
-- `destroyAllNodesRecursively` — subroutine
-- `destroyDocument` — subroutine
-- `destroyNamedNodeMap` — subroutine
-- `destroyNodeList` — subroutine
-- `dgelsy` — subroutine
-- `dgesvd` — subroutine
-- `dgetrf` — subroutine
-- `dgetri` — subroutine
-- `dispatch_task_to_persistent_worker` — subroutine
-- `dists2order` — function
-- `dists2scores_percen` — subroutine
-- `dmat2smat` — function
-- `dnrm2` — function
-- `dsyev` — subroutine
-- `dumpnsdict` — subroutine
-- `eigh_sp` — subroutine
-- `eigsrt_dp` — subroutine
-- `eigsrt_sp` — subroutine
-- `elim_dup` — subroutine
-- `encode_rfc6901` — function
-- `equispaced_vals` — function
-- `escape_string` — subroutine
-- `euclid_dp` — function
-- `euclid_sp_1` — function
-- `euclid_sp_2` — function
-- `f_c_str_chars` — subroutine
-- `f_readdir` — function
-- `f_strerror` — function
-- `fclose` — subroutine
-- `fdim` — function
-- `file2drarr` — function
-- `file2imat` — subroutine
-- `file2lmat` — subroutine
-- `file2rarr` — function
-- `file2rmat` — subroutine
-- `fileiochk` — subroutine
-- `filelength` — function
-- `filepath_1` — function
-- `filepath_2` — function
-- `filepath_3` — function
-- `filepath_4` — function
-- `find_1` — subroutine
-- `find_2` — subroutine
-- `find_larger_magic_box` — function
-- `find_magic_box` — function
-- `find_magic_boxes4scale` — function
-- `find_medoids` — subroutine
-- `fit_lsq_plane` — subroutine
-- `fit_straight_line` — subroutine
-- `fname2ext` — function
-- `fname2format` — function
-- `fname_new_ext_1` — function
-- `fname_new_ext_2` — function
-- `fopen` — subroutine
-- `FoX_error_base` — subroutine
-- `FoX_fatal_base` — subroutine
-- `FoX_get_fatal_errors` — function
-- `FoX_get_fatal_warnings` — function
-- `FoX_set_fatal_errors` — subroutine
-- `FoX_set_fatal_warnings` — subroutine
-- `FoX_warning_base` — subroutine
-- `fplane_get_cmplx` — function
-- `fplane_get_ctfsq` — function
-- `free_all_cunits` — subroutine
-- `funcs` — function
-- `funcs` — function
-- `funcs` — function
-- `funcs` — function
-- `funit_size` — function
-- `gasdev_2` — function
-- `gasdev_3` — function
-- `gauwfun` — function
-- `gcd` — function
-- `gemm_tn` — subroutine
-- `gen_job_descr` — subroutine
-- `generate_array_script` — subroutine
-- `generate_script_1` — subroutine
-- `generate_script_2` — subroutine
-- `generate_script_3` — subroutine
-- `generate_script_4` — subroutine
-- `get_1` — function
-- `get_2` — function
-- `get_fbody_1` — function
-- `get_fbody_2` — function
-- `get_find_at_crit` — function
-- `get_find_at_res` — function
-- `get_fpath` — function
-- `get_jobs_status` — subroutine
-- `get_key` — function
-- `get_key` — function
-- `get_keys` — function
-- `get_open_funits` — subroutine
-- `get_pixel_pos` — subroutine
-- `get_relative_path` — function
-- `get_resarr` — function
-- `get_static` — subroutine
-- `get_stream_done_stack` — subroutine
-- `get_stream_fail_stack` — subroutine
-- `getAttribute` — function
-- `getAttributeNode` — function
-- `getAttributeNodeNS` — function
-- `getAttributeNS` — function
-- `getAttributes` — function
-- `getBaseURI` — function
-- `getchildNodes` — function
-- `getdata` — function
-- `getdocType` — function
-- `getdocumentElement` — function
-- `getdocumentURI` — function
-- `getdomConfig` — function
-- `getElementById` — function
-- `getElementsByTagName` — function
-- `getElementsByTagNameNS` — function
-- `getEntities` — function
-- `getEntityByIndex` — function
-- `getEntityByName` — function
-- `getfirstChild` — function
-- `getFoX_checks` — function
-- `getillFormed` — function
-- `getImplementation` — function
-- `getInputEncoding` — function
-- `getInternalSubset` — function
-- `getisElementContentWhitespace` — function
-- `getlastChild` — function
-- `getliveNodeLists` — function
-- `getLocalName` — function
-- `getname` — function
-- `getNamedItem` — function
-- `getNamedItemNS` — function
-- `getnamespaceNodes` — function
-- `getNamespaceURI` — function
-- `getnextSibling` — function
-- `getnodeName` — function
-- `getNodePath` — function
-- `getnodeType` — function
-- `getNodeValue` — function
-- `getnotationName` — function
-- `getNotations` — function
-- `getNumberOfPrefixes` — function
-- `getOwnerDocument` — function
-- `getownerElement` — function
-- `getParameter` — function
-- `getParameterNames` — function
-- `getparentNode` — function
-- `getPrefix` — function
-- `getPrefixByIndex` — function
-- `getpreviousSibling` — function
-- `getpublicId` — function
-- `getreadonly` — function
-- `getspecified` — function
-- `getstrictErrorChecking` — function
-- `getstringValue` — function
-- `getsystemId` — function
-- `gettagName` — function
-- `getTarget` — function
-- `getter_1` — subroutine
-- `getter_2` — subroutine
-- `getter_3` — subroutine
-- `getTextContent` — function
-- `getXds` — function
-- `getXmlEncoding` — function
-- `getxmlStandalone` — function
-- `getXmlVersion` — function
-- `great_circle_samples` — function
-- `greedy_sampling_1` — function
-- `greedy_sampling_2` — function
-- `hac_1d` — subroutine
-- `hac_1d_fast` — subroutine
-- `hac_med_thres` — subroutine
-- `haloween_end` — subroutine
-- `hasAttribute` — function
-- `hasAttributeNS` — function
-- `hasAttributes` — function
-- `hasChildNodes` — function
-- `hasFeature` — function
-- `hash2str` — function
-- `hpsort_1` — subroutine
-- `hpsort_2` — subroutine
-- `hpsort_3` — subroutine
-- `hpsort_4` — subroutine
-- `hpsort_5` — subroutine
-- `hpsort_6` — subroutine
-- `imat2file` — subroutine
-- `importNode` — function
-- `in_error` — function
-- `init_error_stack` — subroutine
-- `insert` — subroutine
-- `insertBefore` — function
-- `insertData` — subroutine
-- `integer_to_string` — subroutine
-- `irnd` — function
-- `irnd_gasdev` — function
-- `irnd_gau` — function
-- `irnd_pair` — subroutine
-- `irnd_uni` — function
-- `irnd_uni_pair` — function
-- `is` — function
-- `is_even_2` — function
-- `isDefaultNamespace` — function
-- `isDefaultNSInForce` — function
-- `isEqualNode` — function
-- `isPrefixInForce` — function
-- `isSameNode` — function
-- `isSupported` — function
-- `isthere` — function
-- `jacobi_dp` — subroutine
-- `jacobi_sp` — subroutine
-- `kill` — subroutine
-- `kill` — subroutine
-- `kill` — subroutine
-- `kill` — subroutine
-- `kmlAddLegend` — subroutine
-- `kmlCloseInnerBoundaryIs` — subroutine
-- `kmlCloseLinearRing` — subroutine
-- `kmlCloseLineString` — subroutine
-- `kmlCloseouterBoundaryIs` — subroutine
-- `kmlClosePolygon` — subroutine
-- `kmlCloseStyle` — subroutine
-- `kmlCreateLineStyle` — subroutine
-- `kmlCreatePolygonStyle` — subroutine
-- `kmlEndRegion` — subroutine
-- `kmlGetColorHex` — function
-- `kmlMakeColorMap` — function
-- `kmlOpenInnerBoundaryIs` — subroutine
-- `kmlOpenLinearRing` — subroutine
-- `kmlOpenLineString` — subroutine
-- `kmlOpenOuterBoundaryIs` — subroutine
-- `kmlOpenPolygon` — subroutine
-- `kmlOpenStyle` — subroutine
-- `kmlSetCustomColor` — subroutine
-- `kstwo` — subroutine
-- `lapack_stop` — subroutine
-- `lcg` — function
-- `lmat2file` — subroutine
-- `locate_1` — function
-- `locate_2` — function
-- `lookup` — function
-- `lookupNamespaceURI` — function
-- `lookupPrefix` — function
-- `lowercase_string` — function
-- `make_dirnames` — function
-- `make_filenames` — function
-- `mask2inds` — function
-- `masked_swap_rm` — subroutine
-- `masked_swap_rs` — subroutine
-- `masked_swap_rv` — subroutine
-- `matinv_dp` — subroutine
-- `matinv_sp` — subroutine
-- `maxnloc` — function
-- `median` — function
-- `median_nocopy` — function
-- `medoid_from_dmat` — subroutine
-- `medoid_from_smat` — subroutine
-- `medoid_ranking_from_smat` — subroutine
-- `merge_dmats_1` — function
-- `merge_dmats_2` — function
-- `merge_smats` — function
-- `min3` — function
-- `minnloc` — function
-- `mnomal` — function
-- `mnorm_smp` — function
-- `mode` — subroutine
-- `moment_1` — subroutine
-- `moment_2` — subroutine
-- `moment_3` — subroutine
-- `moment_4` — subroutine
-- `moment_serial` — subroutine
-- `move_files2dir` — subroutine
-- `move_files_in_cwd` — subroutine
-- `move_key_to_front_1` — subroutine
-- `move_key_to_front_2` — subroutine
-- `multinomal` — function
-- `myacos_dp` — function
-- `myacos_sp` — function
-- `mycabs` — function
-- `namespaceFixup` — subroutine
-- `ne_mnomal_iarr` — subroutine
-- `ne_ran_iarr` — subroutine
-- `neigh_4_3D_1` — subroutine
-- `neigh_4_3D_2` — subroutine
-- `neigh_8_1` — subroutine
-- `neigh_8_2` — subroutine
-- `neigh_8_3` — subroutine
-- `neigh_8_3D_0` — subroutine
-- `neigh_8_3D_1` — subroutine
-- `neigh_8_3D_2` — subroutine
-- `new` — subroutine
-- `new_1` — subroutine
-- `new_1` — subroutine
-- `new_2` — subroutine
-- `new_2` — subroutine
-- `newDOMConfig` — function
-- `nextPow2` — function
-- `nlines` — function
-- `norm_2_dp` — function
-- `norm_2_sp` — function
-- `norm_corr` — function
-- `norm_corr_8` — function
-- `normalize` — subroutine
-- `normalize_1` — subroutine
-- `normalize_2` — subroutine
-- `normalize_3` — subroutine
-- `normalize_4` — subroutine
-- `normalize_minmax_1` — subroutine
-- `normalize_minmax_2` — subroutine
-- `normalize_sigm_1` — subroutine
-- `normalize_sigm_2` — subroutine
-- `normalize_sigm_3` — subroutine
-- `normalizeDocument` — subroutine
-- `otsu_1` — subroutine
-- `otsu_2` — subroutine
-- `otsu_3` — subroutine
-- `p1_lt_p2` — function
-- `parse_cmdline` — subroutine
-- `partial_shuffle_1` — subroutine
-- `partial_shuffle_2` — subroutine
-- `peakfinder` — function
-- `pearsn_1` — function
-- `pearsn_2` — function
-- `pearsn_3` — function
-- `pearsn_serial` — function
-- `pearsn_serial_8` — function
-- `phase_angle` — function
-- `pixels_dist_1` — function
-- `pixels_dist_2` — function
-- `plane_from_points` — function
-- `pop_nl` — function
-- `power_sampling` — subroutine
-- `prep_part_jobs` — subroutine
-- `prepare_tree_sub_distmat` — subroutine
-- `print` — subroutine
-- `print_gpu_specs` — subroutine
-- `print_jobs_status` — subroutine
-- `print_key_val_pair_1` — subroutine
-- `print_key_val_pair_2` — subroutine
-- `print_key_val_pairs` — subroutine
-- `print_magic_box_range` — subroutine
-- `probks` — function
-- `progress` — subroutine
-- `progress_gfortran` — subroutine
-- `projz` — subroutine
-- `push_1` — subroutine
-- `push_1` — subroutine
-- `push_2` — subroutine
-- `push_2` — subroutine
-- `push_3` — subroutine
-- `put_fixed_seed` — subroutine
-- `put_last` — subroutine
-- `pythag_dp` — function
-- `pythag_sp` — function
-- `qr_solve` — subroutine
-- `qsys_cleanup` — subroutine
-- `qsys_declare_part_finished` — subroutine
-- `qsys_watcher_1` — subroutine
-- `qsys_watcher_2` — subroutine
-- `qsys_watcher_diag` — subroutine
-- `quadri` — function
-- `quantize_vec` — subroutine
-- `quantize_vec_serial` — subroutine
-- `r8po_fa` — subroutine
-- `rad2deg_1` — function
-- `rad2deg_2` — function
-- `ran3` — function
-- `ran3arr_1` — subroutine
-- `ran3arr_2` — subroutine
-- `randn_1` — function
-- `randn_2` — function
-- `rank_centroid_weights` — subroutine
-- `rank_exponent_weights` — subroutine
-- `rank_inverse_weights` — subroutine
-- `rank_sum_weights` — subroutine
-- `read_exit_code` — subroutine
-- `read_filetable` — subroutine
-- `real_to_string` — subroutine
-- `realloc_chash` — subroutine
-- `realloc_hash` — subroutine
-- `remove` — subroutine
-- `remove_nl` — function
-- `removeAttribute` — subroutine
-- `removeAttributeNode` — function
-- `removeAttributeNodeNS` — function
-- `removeAttributeNS` — subroutine
-- `removeChild` — function
-- `removeDefaultNS` — subroutine
-- `removeNamedItem` — function
-- `removeNamedItemNS` — function
-- `removePrefixedNS` — subroutine
-- `renameNode` — function
-- `reorder_1` — subroutine
-- `reorder_2` — subroutine
-- `replace_string` — subroutine
-- `replaceChild` — function
-- `replaceData` — subroutine
-- `report_phase_completion` — subroutine
-- `resample_sigma2` — subroutine
-- `resang` — function
-- `reset` — subroutine
-- `reverse_drarr` — subroutine
-- `reverse_f` — subroutine
-- `reverse_iarr` — subroutine
-- `reverse_rarr` — subroutine
-- `reverselookup` — function
-- `rm_from_fbody` — function
-- `rmat2file` — subroutine
-- `rnd_4dim_sphere_pnt` — function
-- `rnd_inds` — function
-- `robust_normalization` — subroutine
-- `robust_normalize_minmax` — subroutine
-- `robust_scaling` — subroutine
-- `robust_sigma_thres` — function
-- `robust_z_scores` — function
-- `rotate_vec` — function
-- `rotmat2d` — subroutine
-- `round2even` — function
-- `round2odd` — function
-- `savgol` — subroutine
-- `SavitzkyGolay_filter` — subroutine
-- `schedule_array_jobs` — subroutine
-- `schedule_jobs` — subroutine
-- `schedule_streaming` — subroutine
-- `scores2order` — function
-- `scores2scores_percen` — subroutine
-- `seed_rnd` — subroutine
-- `seed_rnd_fixed` — subroutine
-- `service_persistent_worker_warmup` — subroutine
-- `set_1` — subroutine
-- `set_1` — subroutine
-- `set_2` — subroutine
-- `set_2` — subroutine
-- `set_3` — subroutine
-- `set_3` — subroutine
-- `set_jobs_status` — subroutine
-- `set_offload_device_1` — subroutine
-- `set_offload_device_2` — subroutine
-- `setAttribute` — subroutine
-- `setAttributeNode` — function
-- `setAttributeNodeNS` — function
-- `setAttributeNS` — subroutine
-- `setData` — subroutine
-- `setDocType` — subroutine
-- `setDocumentElement` — subroutine
-- `setdocumentURI` — subroutine
-- `setdomConfig` — subroutine
-- `setFoX_checks` — subroutine
-- `setGCstate` — subroutine
-- `setIdAttribute` — subroutine
-- `setIdAttributeNode` — subroutine
-- `setIdAttributeNS` — subroutine
-- `setillFormed` — subroutine
-- `setIsElementContentWhitespace` — subroutine
-- `setliveNodeLists` — subroutine
-- `setNamedItem` — function
-- `setNamedItemNS` — function
-- `setNodeValue` — subroutine
-- `setParameter` — subroutine
-- `setPrefix` — subroutine
-- `setReadOnlyMap` — subroutine
-- `setReadOnlyNode` — subroutine
-- `setspecified` — subroutine
-- `setstrictErrorChecking` — subroutine
-- `setstringValue` — subroutine
-- `setTextContent` — subroutine
-- `setValue` — subroutine
-- `setXds` — subroutine
-- `setxmlStandalone` — subroutine
-- `setXmlVersion` — subroutine
-- `sgemm` — subroutine
-- `sgesvd` — subroutine
-- `sgetrf` — subroutine
-- `sgetri` — subroutine
-- `shcloc` — function
-- `shell_quote` — function
-- `shft` — subroutine
-- `shuffle_1` — subroutine
-- `shuffle_1` — subroutine
-- `shuffle_2` — subroutine
-- `shuffle_2` — subroutine
-- `simple_copy_file` — subroutine
-- `simple_end` — subroutine
-- `simple_error_check` — subroutine
-- `simple_exception_hard` — subroutine
-- `simple_exception_opt` — subroutine
-- `simple_print_git_version` — subroutine
-- `simple_print_timer` — subroutine
-- `sinc` — function
-- `smat2dmat` — function
-- `sort` — subroutine
-- `sortmeans` — subroutine
-- `sparse_eigh` — subroutine
-- `spear` — function
-- `splitText` — function
-- `squared_sampling` — subroutine
-- `ssaupd` — subroutine
-- `sseupd` — subroutine
-- `ssyev` — subroutine
-- `ssyevr` — subroutine
-- `stage_coarray_jobs` — subroutine
-- `stemname` — function
-- `str_to_int_10` — function
-- `str_to_int_16` — function
-- `str_vs` — function
-- `string` — type
-- `string_to_integer` — subroutine
-- `string_to_real` — subroutine
-- `submit_coarray_jobs` — subroutine
-- `submit_script` — subroutine
-- `submit_scripts` — subroutine
-- `subStringData` — function
-- `svbksb_dp` — subroutine
-- `svbksb_sp` — subroutine
-- `svd_multifit_dp` — subroutine
-- `svd_multifit_sp` — subroutine
-- `svdcmp_dp` — subroutine
-- `svdcmp_sp` — subroutine
-- `svdfit_dp` — subroutine
-- `svdfit_sp` — subroutine
-- `swap_c` — subroutine
-- `swap_cm` — subroutine
-- `swap_cv` — subroutine
-- `swap_i` — subroutine
-- `swap_r` — subroutine
-- `swap_rv` — subroutine
-- `swap_suffix_1` — function
-- `swap_suffix_2` — function
-- `trace` — function
-- `unescape_string` — subroutine
-- `unique` — subroutine
-- `update_queue` — subroutine
-- `updatestack` — subroutine
-- `vabs_dp` — function
-- `vabs_sp` — function
-- `valid_json_hex` — function
-- `vector_angle_norm` — function
-- `vis_2Dinteger_mat` — subroutine
-- `vis_2Dreal_mat` — subroutine
-- `vis_3Dinteger_mat` — subroutine
-- `vis_3Dreal_mat` — subroutine
-- `vox2ang` — function
-- `vs_str` — function
-- `vs_str_alloc` — function
-- `vs_vs_alloc` — function
-- `wait_for_closure` — subroutine
-- `write_filetable` — subroutine
-- `write_singlelineoftext` — subroutine
-- `z_scores` — function
-
-Private symbols:
-- `add2history_1` — subroutine
-- `add2history_2` — subroutine
-- `add2watchdirs` — subroutine
 - `add_attribute` — function
 - `add_element` — function
 - `add_entity` — subroutine
-- `add_entry` — subroutine
-- `add_eol` — subroutine
+- `add_error` — subroutine
 - `add_external_entity` — subroutine
 - `add_internal_entity` — subroutine
 - `add_item_to_dict` — subroutine
-- `add_string` — subroutine
 - `add_to_buffer` — subroutine
 - `add_to_path` — subroutine
 - `addBondArray` — subroutine
@@ -2310,141 +1653,44 @@ Private symbols:
 - `addcoords_xyz3_sp` — subroutine
 - `addcoords_xyzfrac_dp` — subroutine
 - `addcoords_xyzfrac_sp` — subroutine
+- `addDefaultNS` — subroutine
 - `addDlpolyMatrix_3_dp` — subroutine
 - `addDlpolyMatrix_3_sp` — subroutine
 - `addDlpolyMatrix_dp` — subroutine
 - `addDlpolyMatrix_sp` — subroutine
 - `addPrefix` — subroutine
+- `addPrefixedNS` — subroutine
 - `addPrefixedURI` — subroutine
-- `alloc_imgarr` — subroutine
+- `adoptNode` — function
 - `alloc_str` — type
-- `angle_sampling_1` — function
-- `angle_sampling_2` — function
 - `annotate_invalid_json` — subroutine
-- `apod` — function
-- `apod_fast` — function
-- `apod_fast_device` — function
-- `apod_fast_value_deriv` — subroutine
-- `apod_kb15_a2` — function
-- `apod_mat_2d` — subroutine
-- `apod_mat_2d_fast` — subroutine
-- `apod_mat_3d` — subroutine
-- `apod_mat_3d_fast` — subroutine
-- `apod_mat_3d_fast_grad` — subroutine
 - `append` — function
-- `append_candidate` — subroutine
-- `append_limited_char` — subroutine
-- `append_nl` — subroutine
-- `append_nnm` — subroutine
-- `append_or_replace_candidate` — subroutine
-- `append_ori` — subroutine
 - `append_text` — subroutine
-- `appendNSNode` — subroutine
-- `apply2all` — subroutine
-- `apply_1` — subroutine
-- `apply_2` — subroutine
-- `apply_convention` — subroutine
-- `apply_refine3D_search_overrides` — subroutine
-- `apply_sym_with_shift` — subroutine
-- `arraytocomplexdp` — subroutine
-- `arraytocomplexsp` — subroutine
-- `arraytointeger` — subroutine
-- `arraytological` — subroutine
-- `arraytorealdp` — subroutine
-- `arraytorealsp` — subroutine
-- `arraytostring` — subroutine
-- `assign` — subroutine
+- `appendChild` — function
+- `appendData` — subroutine
 - `att_value_normalize` — function
 - `att_value_normalize_len` — function
 - `attribute_has_default` — function
-- `AttributeArrayCh` — subroutine
-- `AttributeArrayCmplxDp` — subroutine
-- `AttributeArrayCmplxSp` — subroutine
-- `AttributeArrayInt` — subroutine
-- `AttributeArrayLg` — subroutine
-- `AttributeArrayRealDp` — subroutine
-- `AttributeArrayRealSp` — subroutine
 - `attributeDecl_handler` — subroutine
-- `AttributeMatrixCh` — subroutine
-- `AttributeMatrixCmplxDp` — subroutine
-- `AttributeMatrixCmplxSp` — subroutine
-- `AttributeMatrixInt` — subroutine
-- `AttributeMatrixLg` — subroutine
-- `AttributeMatrixRealDp` — subroutine
-- `AttributeMatrixRealSp` — subroutine
-- `AttributeScalarCmplxDp` — subroutine
-- `AttributeScalarCmplxSp` — subroutine
-- `AttributeScalarInt` — subroutine
-- `AttributeScalarLg` — subroutine
-- `AttributeScalarRealDp` — subroutine
-- `AttributeScalarRealSp` — subroutine
-- `automatic_thresh_sobel` — subroutine
-- `bessi0` — function
-- `bman_apod` — function
-- `bman_instr` — function
 - `buffer_length` — function
 - `buffer_to_chararray` — function
 - `buffer_to_str` — function
-- `build_eullims` — subroutine
-- `build_pind_lookup` — subroutine
-- `build_refine3D_stage_cfg` — subroutine
-- `build_refspiral` — subroutine
-- `butterworth` — function
-- `butterworth_filter_1` — subroutine
-- `butterworth_filter_2` — subroutine
-- `butterworth_filter_3` — subroutine
-- `butterworth_filter_4` — subroutine
-- `butterworth_filter_5` — subroutine
-- `calc_athres` — function
-- `calc_cartesian_corrmat_1` — subroutine
-- `calc_cartesian_corrmat_2` — subroutine
-- `calc_inpl_invariant_cc_nomirr` — function
-- `calc_num2sample` — subroutine
-- `calc_offset2D` — subroutine
-- `canny` — subroutine
-- `canny_edge` — subroutine
-- `canSetParameter_ch` — function
-- `canSetParameter_log` — function
-- `cast_str_types` — function
-- `char2str` — function
-- `CharactersArrayCh` — subroutine
-- `CharactersArrayCmplxDp` — subroutine
-- `CharactersArrayCmplxSp` — subroutine
-- `CharactersArrayInt` — subroutine
-- `CharactersArrayLg` — subroutine
-- `CharactersArrayRealDp` — subroutine
-- `CharactersArrayRealSp` — subroutine
-- `CharactersMatrixCh` — subroutine
-- `CharactersMatrixCmplxDp` — subroutine
-- `CharactersMatrixCmplxSp` — subroutine
-- `CharactersMatrixInt` — subroutine
-- `CharactersMatrixLg` — subroutine
-- `CharactersMatrixRealDp` — subroutine
-- `CharactersMatrixRealSp` — subroutine
-- `CharactersScalarCmplxDp` — subroutine
-- `CharactersScalarCmplxSp` — subroutine
-- `CharactersScalarInt` — subroutine
-- `CharactersScalarLg` — subroutine
-- `CharactersScalarRealDp` — subroutine
-- `CharactersScalarRealSp` — subroutine
-- `chash2ori` — subroutine
+- `c_f_str_chars` — subroutine
+- `c_f_str_ptr` — subroutine
+- `c_int32_to_uint16` — function
+- `c_int64_to_uint32` — function
+- `c_uint16_to_int32` — function
+- `c_uint32_to_int64` — function
 - `check_buffer` — subroutine
 - `check_duplicates` — function
 - `check_if_valid` — subroutine
-- `check_xf` — subroutine
 - `checkBondIdRefs` — subroutine
-- `checkColorHex` — function
 - `checkContentModel` — function
 - `checkContentModelToEnd` — function
 - `checkEndNamespaces` — subroutine
-- `checkExistingRefs` — function
-- `checkExistingRefsInAttValue` — function
-- `checkFmt` — function
 - `checkNamespaces` — subroutine
 - `checkNamespacesWriting` — subroutine
-- `checkParsedRefsInAttValue` — function
-- `clear_history` — subroutine
-- `close_start_tag` — subroutine
+- `cloneNode` — function
 - `cmlAddAngle_dp` — subroutine
 - `cmlAddAngle_sp` — subroutine
 - `cmlAddAtoms_3_dp` — subroutine
@@ -2496,94 +1742,38 @@ Private symbols:
 - `cmlAddTorsion_sp` — subroutine
 - `cmlEndBand` — subroutine
 - `cmlEndKpoint` — subroutine
+- `cmlEndMolecule` — subroutine
 - `cmlStartBand` — subroutine
 - `cmlStartKPointdp` — subroutine
 - `cmlStartKPointsp` — subroutine
-- `cnt_recs_per_line` — function
-- `comp_addr_logi` — function
-- `comp_addr_phys1` — function
-- `comp_addr_phys2` — function
-- `comp_addr_phys3` — function
-- `compact` — subroutine
+- `cmlStartMolecule` — subroutine
 - `compact_real_string` — subroutine
-- `compeuler` — subroutine
-- `compose2dshift3d` — subroutine
-- `compose3d2d` — subroutine
-- `concat_complex_dp_str` — function
-- `concat_complex_sp_str` — function
-- `concat_int_str` — function
-- `concat_logical_str` — function
-- `concat_real_dp_str` — function
-- `concat_real_sp_str` — function
-- `concat_str_complex_dp` — function
-- `concat_str_complex_sp` — function
-- `concat_str_int` — function
-- `concat_str_logical` — function
-- `concat_str_real_dp` — function
-- `concat_str_real_sp` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
 - `convert` — subroutine
-- `copy` — subroutine
-- `copy` — subroutine
-- `copy_imgarr` — function
+- `copyDOMConfig` — subroutine
 - `copyURIMapping` — subroutine
-- `cosedge_1` — function
-- `cosedge_2` — function
-- `cosedge_inner_1` — function
-- `cosedge_inner_2` — function
-- `cosedge_r2_2d` — function
-- `cosedge_r2_3d` — function
-- `countcomplexdp` — function
-- `countcomplexsp` — function
-- `countinteger` — function
-- `countlogical` — function
-- `countrealdp` — function
-- `countrealsp` — function
-- `countstring` — function
-- `createEmptyElement` — function
-- `createEmptyElementNS` — function
-- `createNode` — function
-- `csv_field` — function
-- `curl_easy_escape` — function
-- `curl_easy_getinfo_char` — function
-- `curl_easy_getinfo_double` — function
-- `curl_easy_getinfo_int` — function
-- `curl_easy_getinfo_long` — function
-- `curl_easy_getinfo_ptr` — function
-- `curl_easy_setopt_char` — function
-- `curl_easy_setopt_funptr` — function
-- `curl_easy_setopt_int` — function
-- `curl_easy_setopt_long` — function
-- `curl_easy_setopt_ptr` — function
-- `curl_easy_strerror` — function
-- `curl_easy_unescape` — function
-- `curl_escape` — function
-- `curl_global_init` — function
-- `curl_mime_encoder` — function
-- `curl_mime_filedata` — function
-- `curl_mime_filename` — function
-- `curl_mime_name` — function
-- `curl_mime_type` — function
-- `curl_slist_append` — function
-- `curl_unescape` — function
-- `curl_version` — function
-- `curl_version_info` — function
-- `dble2str` — function
-- `dealloc_imgarr` — subroutine
+- `createAttribute` — function
+- `createAttributeNS` — function
+- `createCdataSection` — function
+- `createComment` — function
+- `createDocument` — function
+- `createDocumentFragment` — function
+- `createDocumentType` — function
+- `createElement` — function
+- `createElementNS` — function
+- `createEmptyDocument` — function
+- `createEmptyEntityReference` — function
+- `createEntity` — function
+- `createEntityReference` — function
+- `createNamespaceNode` — function
+- `createNotation` — function
+- `createProcessingInstruction` — function
+- `createTextNode` — function
 - `declared_element` — function
+- `decode_rfc6901` — function
 - `default_comp_ucs4` — function
 - `default_join_ucs4` — function
 - `default_neq_ucs4` — function
-- `delete_2Dclustering` — subroutine
-- `delete_3Dalignment` — subroutine
-- `delete_entry` — subroutine
+- `deleteData` — subroutine
 - `destroy_attribute_list` — subroutine
 - `destroy_attribute_t` — subroutine
 - `destroy_dict` — subroutine
@@ -2592,54 +1782,27 @@ Private symbols:
 - `destroy_elstack` — subroutine
 - `destroy_entity` — subroutine
 - `destroy_entity_list` — subroutine
+- `destroy_error_stack` — subroutine
 - `destroy_json_core` — subroutine
 - `destroy_json_data` — subroutine
-- `destroy_string_list` — subroutine
-- `destroy_vs` — subroutine
-- `destroyDocumentType` — subroutine
-- `destroyDOMConfig` — subroutine
-- `destroyElementOrAttribute` — subroutine
-- `destroyEntityOrNotation` — subroutine
+- `destroyAllNodesRecursively` — subroutine
+- `destroyDocument` — subroutine
+- `destroyNamedNodeMap` — subroutine
 - `destroyNamespaceDictionary` — subroutine
-- `destroyNode` — subroutine
-- `destroyNodeContents` — subroutine
-- `detect_and_add_dirs` — subroutine
-- `detect_peak_thres_1` — subroutine
-- `detect_peak_thres_2` — subroutine
-- `detect_peak_thres_fdr` — subroutine
-- `detect_peak_thres_for_npeaks` — subroutine
-- `discrete_read_imgbatch` — subroutine
-- `dist_eval_fun` — function
-- `double_thresh` — subroutine
+- `destroyNodeList` — subroutine
 - `dump_buffer` — subroutine
+- `dumpnsdict` — subroutine
 - `duplicate_key_func` — subroutine
-- `dynfind` — function
-- `e1get` — function
-- `e1set` — subroutine
-- `e2get` — function
-- `e2set` — subroutine
-- `e3get` — function
-- `e3set` — subroutine
 - `elementContent` — function
-- `ellipse` — subroutine
-- `emit_refine3D_stage_cfg` — subroutine
 - `emptyContent` — function
+- `encode_rfc6901` — function
 - `end_prefix_handler` — subroutine
 - `end_prefix_handler` — subroutine
 - `ensure_capacity` — subroutine
-- `estimate_lplim3D` — subroutine
-- `estimate_lplim_1` — subroutine
-- `estimate_lplim_2` — subroutine
-- `estimate_lplims2D` — subroutine
-- `euldist` — function
-- `eulprob_corr_switch` — function
-- `eulprob_dist_switch` — function
-- `eval_apod` — function
-- `eval_instr` — function
+- `escape_string` — subroutine
 - `existing_attribute` — function
 - `existing_element` — function
 - `existing_entity` — function
-- `exists` — function
 - `expand_char_entity` — function
 - `expand_char_entity_len` — function
 - `expand_entity` — function
@@ -2648,85 +1811,17 @@ Private symbols:
 - `expand_entity_text_len` — function
 - `express_att_decl_len` — function
 - `express_attribute_declaration` — function
-- `extract_imgarr` — function
-- `extractDataAttNSChArr` — subroutine
-- `extractDataAttNSChMat` — subroutine
-- `extractDataAttNSChSca` — subroutine
-- `extractDataAttNSCmplxDpArr` — subroutine
-- `extractDataAttNSCmplxDpMat` — subroutine
-- `extractDataAttNSCmplxDpSca` — subroutine
-- `extractDataAttNSCmplxSpArr` — subroutine
-- `extractDataAttNSCmplxSpMat` — subroutine
-- `extractDataAttNSCmplxSpSca` — subroutine
-- `extractDataAttNSIntArr` — subroutine
-- `extractDataAttNSIntMat` — subroutine
-- `extractDataAttNSIntSca` — subroutine
-- `extractDataAttNSLgArr` — subroutine
-- `extractDataAttNSLgMat` — subroutine
-- `extractDataAttNSLgSca` — subroutine
-- `extractDataAttNSRealDpArr` — subroutine
-- `extractDataAttNSRealDpMat` — subroutine
-- `extractDataAttNSRealDpSca` — subroutine
-- `extractDataAttNSRealSpArr` — subroutine
-- `extractDataAttNSRealSpMat` — subroutine
-- `extractDataAttNSRealSpSca` — subroutine
-- `extractDataAttributeChArr` — subroutine
-- `extractDataAttributeChMat` — subroutine
-- `extractDataAttributeChSca` — subroutine
-- `extractDataAttributeCmplxDpArr` — subroutine
-- `extractDataAttributeCmplxDpMat` — subroutine
-- `extractDataAttributeCmplxDpSca` — subroutine
-- `extractDataAttributeCmplxSpArr` — subroutine
-- `extractDataAttributeCmplxSpMat` — subroutine
-- `extractDataAttributeCmplxSpSca` — subroutine
-- `extractDataAttributeIntArr` — subroutine
-- `extractDataAttributeIntMat` — subroutine
-- `extractDataAttributeIntSca` — subroutine
-- `extractDataAttributeLgArr` — subroutine
-- `extractDataAttributeLgMat` — subroutine
-- `extractDataAttributeLgSca` — subroutine
-- `extractDataAttributeRealDpArr` — subroutine
-- `extractDataAttributeRealDpMat` — subroutine
-- `extractDataAttributeRealDpSca` — subroutine
-- `extractDataAttributeRealSpArr` — subroutine
-- `extractDataAttributeRealSpMat` — subroutine
-- `extractDataAttributeRealSpSca` — subroutine
-- `extractDataContentChArr` — subroutine
-- `extractDataContentChMat` — subroutine
-- `extractDataContentChSca` — subroutine
-- `extractDataContentCmplxDpArr` — subroutine
-- `extractDataContentCmplxDpMat` — subroutine
-- `extractDataContentCmplxDpSca` — subroutine
-- `extractDataContentCmplxSpArr` — subroutine
-- `extractDataContentCmplxSpMat` — subroutine
-- `extractDataContentCmplxSpSca` — subroutine
-- `extractDataContentIntArr` — subroutine
-- `extractDataContentIntMat` — subroutine
-- `extractDataContentIntSca` — subroutine
-- `extractDataContentLgArr` — subroutine
-- `extractDataContentLgMat` — subroutine
-- `extractDataContentLgSca` — subroutine
-- `extractDataContentRealDpArr` — subroutine
-- `extractDataContentRealDpMat` — subroutine
-- `extractDataContentRealDpSca` — subroutine
-- `extractDataContentRealSpArr` — subroutine
-- `extractDataContentRealSpMat` — subroutine
-- `extractDataContentRealSpSca` — subroutine
-- `find_closest_proj` — function
-- `findloc_str_1` — function
-- `findloc_str_2` — function
-- `fmtsymstr` — function
-- `forget_stk_dims` — subroutine
-- `fortran_logical` — function
-- `fortran_quote` — function
-- `fortran_symbol_from_string` — function
+- `f_c_str_chars` — subroutine
+- `f_readdir` — function
+- `f_strerror` — function
 - `FoX_error` — subroutine
-- `gau_rnd_shift` — subroutine
-- `gen_c1` — subroutine
-- `geodesic_dist_trace` — function
-- `get_2Dshift` — function
-- `get_3Dshift` — function
-- `get_all_subgrps_descr` — function
+- `FoX_error_base` — subroutine
+- `FoX_fatal_base` — subroutine
+- `FoX_get_fatal_errors` — function
+- `FoX_get_fatal_warnings` — function
+- `FoX_set_fatal_errors` — subroutine
+- `FoX_set_fatal_warnings` — subroutine
+- `FoX_warning_base` — subroutine
 - `get_att_index_pointer` — subroutine
 - `get_att_type_enum` — function
 - `get_attdecl_by_index` — function
@@ -2735,49 +1830,27 @@ Private symbols:
 - `get_attribute` — function
 - `get_chars_from_array` — subroutine
 - `get_chars_from_array` — subroutine
-- `get_ctfvars` — function
-- `get_ctfvars` — function
 - `get_current_line_from_file_sequential` — subroutine
 - `get_current_line_from_file_stream` — subroutine
 - `get_double_from_array` — subroutine
 - `get_element` — function
-- `get_euler` — function
-- `get_eullims` — function
-- `get_find` — function
 - `get_int_from_array` — subroutine
 - `get_json_core_in_file` — subroutine
 - `get_key` — function
 - `get_key_index` — function
 - `get_key_index_ns` — function
 - `get_key_len` — function
-- `get_keys` — function
-- `get_last_string` — function
-- `get_ldim` — function
-- `get_lfny` — function
-- `get_lhp` — function
 - `get_localName_by_index` — function
 - `get_localName_by_keyname` — function
 - `get_localname_by_keyname_len` — function
 - `get_logical_from_array` — subroutine
-- `get_lp` — function
-- `get_mat` — function
-- `get_normal` — function
-- `get_nsubgrp` — function
 - `get_nsURI_by_index` — function
 - `get_nsURI_by_keyname` — function
 - `get_nsURI_by_keyname_len` — function
-- `get_pgrp` — function
 - `get_prefix_by_index` — function
 - `get_prefix_by_keyname` — function
 - `get_prefix_by_keyname_len` — function
-- `get_spat_freq` — function
-- `get_static` — subroutine
-- `get_str` — function
 - `get_string_lengths` — subroutine
-- `get_subgrp` — function
-- `get_subgrp_descr` — function
-- `get_sym_rmat` — subroutine
-- `get_symori` — subroutine
 - `get_top_elstack` — function
 - `get_value_by_index` — function
 - `get_value_by_index_len` — function
@@ -2785,66 +1858,88 @@ Private symbols:
 - `get_value_by_key_len` — function
 - `get_value_by_key_ns` — function
 - `get_value_by_key_ns_len` — function
-- `get_Whalf` — function
-- `getAttribute_len` — function
-- `getAttributesNS_len` — function
+- `getAttribute` — function
+- `getAttributeNode` — function
+- `getAttributeNodeNS` — function
+- `getAttributeNS` — function
+- `getAttributes` — function
 - `getBase` — function
 - `getBase_len` — function
-- `getdata_len` — function
-- `getdocumentURI_len` — function
+- `getBaseURI` — function
+- `getchildNodes` — function
+- `getdata` — function
+- `getdocType` — function
+- `getdocumentElement` — function
+- `getdocumentURI` — function
+- `getdomConfig` — function
+- `getElementById` — function
+- `getElementsByTagName` — function
+- `getElementsByTagNameNS` — function
+- `getEntities` — function
+- `getEntityByIndex` — function
+- `getEntityByName` — function
 - `getEntityNameByIndex` — function
-- `getevensym` — subroutine
-- `getGCstate` — function
-- `getInputEncoding_len` — function
-- `getInternalSubset_len` — function
+- `getfirstChild` — function
+- `getFoX_checks` — function
+- `getillFormed` — function
+- `getImplementation` — function
+- `getInputEncoding` — function
+- `getInternalSubset` — function
+- `getisElementContentWhitespace` — function
 - `getIsId_by_index` — function
-- `getisId_DOM` — function
+- `getlastChild` — function
 - `getLength` — function
-- `getLength_characterdata` — function
-- `getLength_nl` — function
-- `getLength_nnm` — function
-- `getLocalName_len` — function
-- `getname_len` — function
-- `getNamespaceURI_len` — function
-- `getnodeName_len` — function
-- `getNodeValue_len` — function
-- `getnotationName_len` — function
-- `getPrefix_len` — function
+- `getliveNodeLists` — function
+- `getLocalName` — function
+- `getname` — function
+- `getNamedItem` — function
+- `getNamedItemNS` — function
+- `getnamespaceNodes` — function
+- `getNamespaceURI` — function
+- `getnextSibling` — function
+- `getnodeName` — function
+- `getNodePath` — function
+- `getnodeType` — function
+- `getNodeValue` — function
+- `getnotationName` — function
+- `getNotations` — function
+- `getNumberOfPrefixes` — function
+- `getOwnerDocument` — function
+- `getownerElement` — function
+- `getParameter` — function
+- `getParameterNames` — function
+- `getparentNode` — function
+- `getPrefix` — function
+- `getPrefixByIndex` — function
 - `getPrefixIndex` — function
-- `getpublicId_len` — function
-- `getstringValue_len` — function
-- `getsystemId_len` — function
-- `gettagName_len` — function
-- `getTarget_len` — function
-- `getter_1` — subroutine
-- `getter_2` — subroutine
-- `getter_3` — subroutine
-- `getTextContent_len` — function
+- `getpreviousSibling` — function
+- `getpublicId` — function
+- `getreadonly` — function
+- `getspecified` — function
+- `getstrictErrorChecking` — function
+- `getstringValue` — function
+- `getsystemId` — function
+- `gettagName` — function
+- `getTarget` — function
+- `getTextContent` — function
 - `getType_by_index` — function
 - `getType_by_index_len` — function
 - `getType_by_keyname` — function
 - `getType_by_keyname_len` — function
 - `getURIofDefaultNS` — function
 - `getURIofPrefixedNS` — function
-- `getValue_DOM` — function
 - `getWhitespaceHandling` — function
-- `getXmlEncoding_len` — function
-- `getXmlVersionEnum` — function
-- `hann_apod` — function
-- `hann_instr` — function
-- `hardedge_1` — function
-- `hardedge_2` — function
-- `hardedge_3` — function
-- `hardedge_4` — function
-- `hardedge_inner_1` — function
-- `hardedge_inner_2` — function
-- `hardedge_inner_3` — function
-- `hardedge_inner_4` — function
-- `hardedge_r2_2d` — function
-- `hardedge_r2_3d` — function
+- `getXds` — function
+- `getXmlEncoding` — function
+- `getxmlStandalone` — function
+- `getXmlVersion` — function
 - `has_key` — function
 - `has_key_ns` — function
-- `has_subgrp` — function
+- `hasAttribute` — function
+- `hasAttributeNS` — function
+- `hasAttributes` — function
+- `hasChildNodes` — function
+- `hasFeature` — function
 - `hist` — subroutine
 - `image_1` — subroutine
 - `image_2` — subroutine
@@ -2852,42 +1947,39 @@ Private symbols:
 - `image_4` — subroutine
 - `image_5` — subroutine
 - `image_6` — subroutine
-- `image_stack` — type
-- `init` — subroutine
+- `importNode` — function
+- `in_error` — function
 - `init_attribute_list` — subroutine
 - `init_dict` — subroutine
 - `init_element_list` — subroutine
 - `init_elstack` — subroutine
 - `init_entity_list` — subroutine
-- `init_refine3D_iteration` — subroutine
-- `init_string_list` — subroutine
+- `init_error_stack` — subroutine
 - `initialize_json_core` — function
 - `initialize_json_core_in_file` — subroutine
 - `initialize_json_file` — function
 - `initialize_json_file_v2` — function
 - `initNamespaceDictionary` — subroutine
-- `inplrotdist` — function
-- `instr` — function
-- `int2str` — function
-- `int2str` — function
-- `int2str_pad` — function
+- `insertBefore` — function
+- `insertData` — subroutine
+- `integer_to_string` — subroutine
 - `is_child_of_callback` — subroutine
 - `is_empty_elstack` — function
 - `is_external_entity` — function
-- `is_particle` — function
 - `is_unparsed_entity_` — function
 - `is_unparsed_entity_from_list` — function
-- `isCharData` — function
 - `isDeclared_by_index` — function
 - `isDeclared_by_key` — function
 - `isDeclared_by_keyNS` — function
+- `isDefaultNamespace` — function
+- `isDefaultNSInForce` — function
+- `isEqualNode` — function
+- `isPrefixInForce` — function
+- `isSameNode` — function
 - `isSpecified_by_index` — function
 - `isSpecified_by_key` — function
 - `isSpecified_by_keyNS` — function
-- `isthere` — function
-- `item_nl` — function
-- `item_nnm` — function
-- `join_imgarrs` — function
+- `isSupported` — function
 - `json_add_double_by_path` — subroutine
 - `json_add_double_vec_by_path` — subroutine
 - `json_add_integer_by_path` — subroutine
@@ -3056,8 +2148,914 @@ Private symbols:
 - `json_value_to_string` — subroutine
 - `json_value_to_string_fast` — subroutine
 - `json_value_validate` — subroutine
+- `kmlAddLegend` — subroutine
+- `kmlCloseInnerBoundaryIs` — subroutine
+- `kmlCloseLinearRing` — subroutine
+- `kmlCloseLineString` — subroutine
+- `kmlCloseouterBoundaryIs` — subroutine
+- `kmlClosePolygon` — subroutine
+- `kmlCloseStyle` — subroutine
+- `kmlCreateLineStyle` — subroutine
+- `kmlCreatePolygonStyle` — subroutine
+- `kmlEndRegion` — subroutine
+- `kmlGetColorHex` — function
+- `kmlMakeColorMap` — function
+- `kmlOpenInnerBoundaryIs` — subroutine
+- `kmlOpenLinearRing` — subroutine
+- `kmlOpenLineString` — subroutine
+- `kmlOpenOuterBoundaryIs` — subroutine
+- `kmlOpenPolygon` — subroutine
+- `kmlOpenStyle` — subroutine
+- `kmlSetCustomColor` — subroutine
+- `lookupNamespaceURI` — function
+- `lookupPrefix` — function
+- `lowercase_string` — function
+- `make_token_group` — function
+- `make_token_group_len` — function
+- `my_date_and_time` — function
+- `name_equal` — function
+- `name_strings_equal` — function
+- `namespaceFixup` — subroutine
+- `newDOMConfig` — function
+- `normalize` — subroutine
+- `normalizeDocument` — subroutine
+- `number_of_items` — function
+- `output_terminal` — function
+- `parameterChArrSh` — subroutine
+- `parameterChArrSi` — subroutine
+- `parameterChMatSh` — subroutine
+- `parameterChMatSi` — subroutine
+- `parameterChSca` — subroutine
+- `parameterCmplxDpArrSh` — subroutine
+- `parameterCmplxDpArrSi` — subroutine
+- `parameterCmplxDpMatSh` — subroutine
+- `parameterCmplxDpMatSi` — subroutine
+- `parameterCmplxDpSca` — subroutine
+- `parameterCmplxSpArrSh` — subroutine
+- `parameterCmplxSpArrSi` — subroutine
+- `parameterCmplxSpMatSh` — subroutine
+- `parameterCmplxSpMatSi` — subroutine
+- `parameterCmplxSpSca` — subroutine
+- `parameterIntArrSh` — subroutine
+- `parameterIntArrSi` — subroutine
+- `parameterIntMatSh` — subroutine
+- `parameterIntMatSi` — subroutine
+- `parameterIntSca` — subroutine
+- `parameterLgArrSh` — subroutine
+- `parameterLgArrSi` — subroutine
+- `parameterLgMatSh` — subroutine
+- `parameterLgMatSi` — subroutine
+- `parameterLgSca` — subroutine
+- `parameterRealDpArrSh` — subroutine
+- `parameterRealDpArrSi` — subroutine
+- `parameterRealDpMatSh` — subroutine
+- `parameterRealDpMatSi` — subroutine
+- `parameterRealDpSca` — subroutine
+- `parameterRealSpArrSh` — subroutine
+- `parameterRealSpArrSi` — subroutine
+- `parameterRealSpMatSh` — subroutine
+- `parameterRealSpMatSi` — subroutine
+- `parameterRealSpSca` — subroutine
+- `parse_array` — subroutine
+- `parse_dtd_attlist` — subroutine
+- `parse_dtd_element` — subroutine
+- `parse_for_chars` — subroutine
+- `parse_number` — subroutine
+- `parse_object` — subroutine
+- `parse_string` — subroutine
+- `parse_value` — subroutine
+- `plot3d` — subroutine
+- `plot_1` — subroutine
+- `plot_2` — subroutine
+- `plot_3` — subroutine
+- `plot_4` — subroutine
+- `pop_char` — subroutine
+- `pop_elstack` — function
+- `pop_entity_list` — function
+- `pop_nl` — function
+- `print_buffer` — subroutine
+- `print_dict` — subroutine
+- `print_elstack` — subroutine
+- `print_entity_list` — subroutine
+- `propertyChArrSh` — subroutine
+- `propertyChArrSi` — subroutine
+- `propertyChMatSh` — subroutine
+- `propertyChMatSi` — subroutine
+- `propertyChSca` — subroutine
+- `propertyCmplxDpArrSh` — subroutine
+- `propertyCmplxDpArrSi` — subroutine
+- `propertyCmplxDpMatSh` — subroutine
+- `propertyCmplxDpMatSi` — subroutine
+- `propertyCmplxDpSca` — subroutine
+- `propertyCmplxSpArrSh` — subroutine
+- `propertyCmplxSpArrSi` — subroutine
+- `propertyCmplxSpMatSh` — subroutine
+- `propertyCmplxSpMatSi` — subroutine
+- `propertyCmplxSpSca` — subroutine
+- `propertyIntArrSh` — subroutine
+- `propertyIntArrSi` — subroutine
+- `propertyIntMatSh` — subroutine
+- `propertyIntMatSi` — subroutine
+- `propertyIntSca` — subroutine
+- `propertyLgArrSh` — subroutine
+- `propertyLgArrSi` — subroutine
+- `propertyLgMatSh` — subroutine
+- `propertyLgMatSi` — subroutine
+- `propertyLgSca` — subroutine
+- `propertyRealDpArrSh` — subroutine
+- `propertyRealDpArrSi` — subroutine
+- `propertyRealDpMatSh` — subroutine
+- `propertyRealDpMatSi` — subroutine
+- `propertyRealDpSca` — subroutine
+- `propertyRealSpArrSh` — subroutine
+- `propertyRealSpArrSi` — subroutine
+- `propertyRealSpMatSh` — subroutine
+- `propertyRealSpMatSi` — subroutine
+- `propertyRealSpSca` — subroutine
+- `push_char` — subroutine
+- `push_elstack` — subroutine
+- `real_to_string` — subroutine
+- `remove_key_by_index` — subroutine
+- `remove_nl` — function
+- `removeAttribute` — subroutine
+- `removeAttributeNode` — function
+- `removeAttributeNodeNS` — function
+- `removeAttributeNS` — subroutine
+- `removeChild` — function
+- `removeDefaultNS` — subroutine
+- `removeNamedItem` — function
+- `removeNamedItemNS` — function
+- `removePrefix` — subroutine
+- `removePrefixedNS` — subroutine
+- `removePrefixedURI` — subroutine
+- `renameNode` — function
+- `replace_string` — subroutine
+- `replaceChild` — function
+- `replaceData` — subroutine
+- `report_declarations` — subroutine
+- `reset_buffer` — subroutine
+- `reset_dict` — subroutine
+- `reset_elstack` — subroutine
+- `reset_entity_list` — subroutine
+- `resize_elstack` — subroutine
+- `run_gnuplot` — subroutine
+- `set_json_core_in_file` — subroutine
+- `set_localName_by_index_s` — subroutine
+- `set_localName_by_index_vs` — subroutine
+- `set_nsURI_by_index` — subroutine
+- `set_prefix_by_index` — subroutine
+- `setAttribute` — subroutine
+- `setAttributeNode` — function
+- `setAttributeNodeNS` — function
+- `setAttributeNS` — subroutine
+- `setBase` — subroutine
+- `setData` — subroutine
+- `setDeclared` — subroutine
+- `setDocType` — subroutine
+- `setDocumentElement` — subroutine
+- `setdocumentURI` — subroutine
+- `setdomConfig` — subroutine
+- `setFoX_checks` — subroutine
+- `setGCstate` — subroutine
+- `setIdAttribute` — subroutine
+- `setIdAttributeNode` — subroutine
+- `setIdAttributeNS` — subroutine
+- `setillFormed` — subroutine
+- `setIsElementContentWhitespace` — subroutine
+- `setIsId_by_index` — subroutine
+- `setliveNodeLists` — subroutine
+- `setNamedItem` — function
+- `setNamedItemNS` — function
+- `setNodeValue` — subroutine
+- `setParameter` — subroutine
+- `setPrefix` — subroutine
+- `setReadOnlyMap` — subroutine
+- `setReadOnlyNode` — subroutine
+- `setSpecified` — subroutine
+- `setspecified` — subroutine
+- `setstrictErrorChecking` — subroutine
+- `setstringValue` — subroutine
+- `setTextContent` — subroutine
+- `setValue` — subroutine
+- `setXds` — subroutine
+- `setxmlStandalone` — subroutine
+- `setXmlVersion` — subroutine
+- `shallow_copy_entity` — function
+- `size_el` — function
+- `sortAttrs` — subroutine
+- `splitText` — function
+- `start_prefix_handler` — subroutine
+- `stmAddChArr` — subroutine
+- `stmAddChMat` — subroutine
+- `stmAddChSca` — subroutine
+- `stmAddCmplxDpArr` — subroutine
+- `stmAddCmplxDpMat` — subroutine
+- `stmAddCmplxDpSca` — subroutine
+- `stmAddCmplxSpArr` — subroutine
+- `stmAddCmplxSpMat` — subroutine
+- `stmAddCmplxSpSca` — subroutine
+- `stmAddIntArr` — subroutine
+- `stmAddIntMat` — subroutine
+- `stmAddIntSca` — subroutine
+- `stmAddLgArr` — subroutine
+- `stmAddLgMat` — subroutine
+- `stmAddLgSca` — subroutine
+- `stmAddRealDpArr` — subroutine
+- `stmAddRealDpMat` — subroutine
+- `stmAddRealDpSca` — subroutine
+- `stmAddRealSpArr` — subroutine
+- `stmAddRealSpMat` — subroutine
+- `stmAddRealSpSca` — subroutine
+- `str_to_int_10` — function
+- `str_to_int_16` — function
+- `str_vs` — function
+- `string_to_dble` — function
+- `string_to_int` — function
+- `string_to_integer` — subroutine
+- `string_to_real` — subroutine
+- `strip_spaces` — function
+- `subStringData` — function
+- `surf_1` — subroutine
+- `surf_2` — subroutine
+- `surf_3` — subroutine
+- `swap_pointers` — subroutine
+- `to_array` — subroutine
+- `to_double` — subroutine
+- `to_integer` — subroutine
+- `to_logical` — subroutine
+- `to_null` — subroutine
+- `to_object` — subroutine
+- `to_string` — subroutine
+- `to_uni` — function
+- `to_uni_vec` — function
+- `traverse` — subroutine
+- `ucs4_comp_default` — function
+- `ucs4_join_default` — function
+- `ucs4_neq_default` — function
+- `unescape_string` — subroutine
+- `valid_json_hex` — function
+- `vs_str` — function
+- `vs_str_alloc` — function
+- `vs_vs_alloc` — function
+- `wrap_json_add_double_by_path` — subroutine
+- `wrap_json_add_double_vec_by_path` — subroutine
+- `wrap_json_add_integer_by_path` — subroutine
+- `wrap_json_add_integer_vec_by_path` — subroutine
+- `wrap_json_add_logical_by_path` — subroutine
+- `wrap_json_add_logical_vec_by_path` — subroutine
+- `wrap_json_add_member_by_path` — subroutine
+- `wrap_json_add_string_by_path` — subroutine
+- `wrap_json_add_string_vec_by_path` — subroutine
+- `wrap_json_create_by_path` — subroutine
+- `wrap_json_file_add_double` — subroutine
+- `wrap_json_file_add_double_vec` — subroutine
+- `wrap_json_file_add_integer` — subroutine
+- `wrap_json_file_add_integer_vec` — subroutine
+- `wrap_json_file_add_logical` — subroutine
+- `wrap_json_file_add_logical_vec` — subroutine
+- `wrap_json_file_add_object` — subroutine
+- `wrap_json_file_add_string` — subroutine
+- `wrap_json_file_add_string_vec` — subroutine
+- `wrap_json_file_get_alloc_string_vec` — subroutine
+- `wrap_json_file_get_double` — subroutine
+- `wrap_json_file_get_double_vec` — subroutine
+- `wrap_json_file_get_integer` — subroutine
+- `wrap_json_file_get_integer_vec` — subroutine
+- `wrap_json_file_get_logical` — subroutine
+- `wrap_json_file_get_logical_vec` — subroutine
+- `wrap_json_file_get_object` — subroutine
+- `wrap_json_file_get_string` — subroutine
+- `wrap_json_file_get_string_vec` — subroutine
+- `wrap_json_file_load_from_string` — subroutine
+- `wrap_json_file_remove` — subroutine
+- `wrap_json_file_rename` — subroutine
+- `wrap_json_file_update_integer` — subroutine
+- `wrap_json_file_update_logical` — subroutine
+- `wrap_json_file_update_real` — subroutine
+- `wrap_json_file_update_string` — subroutine
+- `wrap_json_file_valid_path` — function
+- `wrap_json_file_valid_path_op` — function
+- `wrap_json_file_variable_info` — subroutine
+- `wrap_json_file_variable_matrix_info` — subroutine
+- `wrap_json_get_alloc_string_vec_by_path` — subroutine
+- `wrap_json_get_array_by_path` — subroutine
+- `wrap_json_get_by_path` — subroutine
+- `wrap_json_get_double_by_path` — subroutine
+- `wrap_json_get_double_vec_by_path` — subroutine
+- `wrap_json_get_integer_by_path` — subroutine
+- `wrap_json_get_integer_vec_by_path` — subroutine
+- `wrap_json_get_logical_by_path` — subroutine
+- `wrap_json_get_logical_vec_by_path` — subroutine
+- `wrap_json_get_path` — subroutine
+- `wrap_json_get_string_by_path` — subroutine
+- `wrap_json_get_string_vec_by_path` — subroutine
+- `wrap_json_info_by_path` — subroutine
+- `wrap_json_matrix_info_by_path` — subroutine
+- `wrap_json_parse_string` — subroutine
+- `wrap_json_rename_by_path` — subroutine
+- `wrap_json_throw_exception` — subroutine
+- `wrap_json_update_double` — subroutine
+- `wrap_json_update_integer` — subroutine
+- `wrap_json_update_logical` — subroutine
+- `wrap_json_update_string` — subroutine
+- `wrap_json_valid_path` — function
+- `wrap_json_value_add_double` — subroutine
+- `wrap_json_value_add_double_vec` — subroutine
+- `wrap_json_value_add_integer` — subroutine
+- `wrap_json_value_add_integer_vec` — subroutine
+- `wrap_json_value_add_logical` — subroutine
+- `wrap_json_value_add_logical_vec` — subroutine
+- `wrap_json_value_add_null` — subroutine
+- `wrap_json_value_add_string` — subroutine
+- `wrap_json_value_add_string_vec` — subroutine
+- `wrap_json_value_create_array` — subroutine
+- `wrap_json_value_create_double` — subroutine
+- `wrap_json_value_create_integer` — subroutine
+- `wrap_json_value_create_logical` — subroutine
+- `wrap_json_value_create_null` — subroutine
+- `wrap_json_value_create_object` — subroutine
+- `wrap_json_value_create_string` — subroutine
+- `wrap_json_value_get_child_by_name` — subroutine
+- `wrap_json_value_remove_if_present` — subroutine
+- `wrap_json_value_rename` — subroutine
+- `write_it` — subroutine
+- `write_it_fast` — subroutine
+
+Private symbols:
+- `add2fbody_1` — function
+- `add2fbody_2` — function
+- `add2fbody_3` — function
+- `add2history_1` — subroutine
+- `add2history_2` — subroutine
+- `add2watchdirs` — subroutine
+- `add_entry` — subroutine
+- `add_eol` — subroutine
+- `add_string` — subroutine
+- `add_to_stream_stack` — subroutine
+- `add_to_streaming` — subroutine
+- `alloc_chash` — subroutine
+- `alloc_hash` — subroutine
+- `alloc_imgarr` — subroutine
+- `analyze_smat` — subroutine
+- `ang2vox` — function
+- `angle_sampling_1` — function
+- `angle_sampling_2` — function
+- `apod` — function
+- `apod_fast` — function
+- `apod_fast_device` — function
+- `apod_fast_value_deriv` — subroutine
+- `apod_kb15_a2` — function
+- `apod_mat_2d` — subroutine
+- `apod_mat_2d_fast` — subroutine
+- `apod_mat_3d` — subroutine
+- `apod_mat_3d_fast` — subroutine
+- `apod_mat_3d_fast_grad` — subroutine
+- `append2basename_1` — function
+- `append2basename_2` — function
+- `append_candidate` — subroutine
+- `append_limited_char` — subroutine
+- `append_nl` — subroutine
+- `append_nnm` — subroutine
+- `append_or_replace_candidate` — subroutine
+- `append_ori` — subroutine
+- `appendNSNode` — subroutine
+- `apply2all` — subroutine
+- `apply_1` — subroutine
+- `apply_2` — subroutine
+- `apply_convention` — subroutine
+- `apply_refine3D_search_overrides` — subroutine
+- `apply_sym_with_shift` — subroutine
+- `arg` — function
+- `arpack_stop` — subroutine
+- `arr2file_dp` — subroutine
+- `arr2file_sp` — subroutine
+- `arr2txtfile_1` — subroutine
+- `arr2txtfile_2` — subroutine
+- `arraytocomplexdp` — subroutine
+- `arraytocomplexsp` — subroutine
+- `arraytointeger` — subroutine
+- `arraytological` — subroutine
+- `arraytorealdp` — subroutine
+- `arraytorealsp` — subroutine
+- `arraytostring` — subroutine
+- `assert_eq2` — function
+- `assert_eq3` — function
+- `assert_eq4` — function
+- `assert_eqn` — function
+- `assign` — subroutine
+- `AttributeArrayCh` — subroutine
+- `AttributeArrayCmplxDp` — subroutine
+- `AttributeArrayCmplxSp` — subroutine
+- `AttributeArrayInt` — subroutine
+- `AttributeArrayLg` — subroutine
+- `AttributeArrayRealDp` — subroutine
+- `AttributeArrayRealSp` — subroutine
+- `AttributeMatrixCh` — subroutine
+- `AttributeMatrixCmplxDp` — subroutine
+- `AttributeMatrixCmplxSp` — subroutine
+- `AttributeMatrixInt` — subroutine
+- `AttributeMatrixLg` — subroutine
+- `AttributeMatrixRealDp` — subroutine
+- `AttributeMatrixRealSp` — subroutine
+- `AttributeScalarCmplxDp` — subroutine
+- `AttributeScalarCmplxSp` — subroutine
+- `AttributeScalarInt` — subroutine
+- `AttributeScalarLg` — subroutine
+- `AttributeScalarRealDp` — subroutine
+- `AttributeScalarRealSp` — subroutine
+- `augment_partition_job_descr` — subroutine
+- `automatic_thresh_sobel` — subroutine
+- `autoscale` — subroutine
+- `avg_frac_smallest` — function
+- `avg_sdev_1` — subroutine
+- `avg_sdev_2` — subroutine
+- `avg_sdev_3` — subroutine
+- `avg_sdev_4` — subroutine
+- `balanced` — subroutine
+- `basename` — function
+- `bessi0` — function
+- `bman_apod` — function
+- `bman_instr` — function
+- `bounds_from_mask3D` — subroutine
+- `build_eullims` — subroutine
+- `build_pind_lookup` — subroutine
+- `build_refine3D_stage_cfg` — subroutine
+- `build_refspiral` — subroutine
+- `butterworth` — function
+- `butterworth_filter_1` — subroutine
+- `butterworth_filter_2` — subroutine
+- `butterworth_filter_3` — subroutine
+- `butterworth_filter_4` — subroutine
+- `butterworth_filter_5` — subroutine
+- `calc_ap_pref` — function
+- `calc_athres` — function
+- `calc_cartesian_corrmat_1` — subroutine
+- `calc_cartesian_corrmat_2` — subroutine
+- `calc_graphene_mask` — function
+- `calc_inpl_invariant_cc_nomirr` — function
+- `calc_num2sample` — subroutine
+- `calc_offset2D` — subroutine
+- `calc_score_thres` — function
+- `calc_stats` — subroutine
+- `canny` — subroutine
+- `canny_edge` — subroutine
+- `canSetParameter_ch` — function
+- `canSetParameter_log` — function
+- `cast_str_types` — function
+- `char2str` — function
+- `CharactersArrayCh` — subroutine
+- `CharactersArrayCmplxDp` — subroutine
+- `CharactersArrayCmplxSp` — subroutine
+- `CharactersArrayInt` — subroutine
+- `CharactersArrayLg` — subroutine
+- `CharactersArrayRealDp` — subroutine
+- `CharactersArrayRealSp` — subroutine
+- `CharactersMatrixCh` — subroutine
+- `CharactersMatrixCmplxDp` — subroutine
+- `CharactersMatrixCmplxSp` — subroutine
+- `CharactersMatrixInt` — subroutine
+- `CharactersMatrixLg` — subroutine
+- `CharactersMatrixRealDp` — subroutine
+- `CharactersMatrixRealSp` — subroutine
+- `CharactersScalarCmplxDp` — subroutine
+- `CharactersScalarCmplxSp` — subroutine
+- `CharactersScalarInt` — subroutine
+- `CharactersScalarLg` — subroutine
+- `CharactersScalarRealDp` — subroutine
+- `CharactersScalarRealSp` — subroutine
+- `chash2ori` — subroutine
+- `chash2str` — function
+- `check4nans2D_1` — subroutine
+- `check4nans2D_2` — subroutine
+- `check4nans3D_1` — subroutine
+- `check4nans3D_2` — subroutine
+- `check4nans_1` — subroutine
+- `check4nans_2` — subroutine
+- `check_xf` — subroutine
+- `checkColorHex` — function
+- `checkExistingRefs` — function
+- `checkExistingRefsInAttValue` — function
+- `checkFmt` — function
+- `checkParsedRefsInAttValue` — function
+- `clear_history` — subroutine
+- `clear_partition_job_descr` — subroutine
+- `clear_stack` — subroutine
+- `close_start_tag` — subroutine
+- `cnt_recs_per_line` — function
+- `comp_addr_logi` — function
+- `comp_addr_phys1` — function
+- `comp_addr_phys2` — function
+- `comp_addr_phys3` — function
+- `compact` — subroutine
+- `compeuler` — subroutine
+- `compose2dshift3d` — subroutine
+- `compose3d2d` — subroutine
+- `concat_complex_dp_str` — function
+- `concat_complex_sp_str` — function
+- `concat_int_str` — function
+- `concat_logical_str` — function
+- `concat_real_dp_str` — function
+- `concat_real_sp_str` — function
+- `concat_str_complex_dp` — function
+- `concat_str_complex_sp` — function
+- `concat_str_int` — function
+- `concat_str_logical` — function
+- `concat_str_real_dp` — function
+- `concat_str_real_sp` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor_1` — function
+- `constructor_1` — function
+- `constructor_2` — function
+- `constructor_2` — function
+- `conv2rank_weights` — subroutine
+- `copy` — subroutine
+- `copy` — subroutine
+- `copy` — subroutine
+- `copy` — subroutine
+- `copy_imgarr` — function
+- `corrs2weights` — function
+- `cosedge_1` — function
+- `cosedge_2` — function
+- `cosedge_inner_1` — function
+- `cosedge_inner_2` — function
+- `cosedge_r2_2d` — function
+- `cosedge_r2_3d` — function
+- `countcomplexdp` — function
+- `countcomplexsp` — function
+- `countinteger` — function
+- `countlogical` — function
+- `countrealdp` — function
+- `countrealsp` — function
+- `countstring` — function
+- `create_hist_vector` — subroutine
+- `createEmptyElement` — function
+- `createEmptyElementNS` — function
+- `createNode` — function
+- `cross` — function
+- `csq_1` — function
+- `csq_2` — function
+- `csv_field` — function
+- `curl_easy_escape` — function
+- `curl_easy_getinfo_char` — function
+- `curl_easy_getinfo_double` — function
+- `curl_easy_getinfo_int` — function
+- `curl_easy_getinfo_long` — function
+- `curl_easy_getinfo_ptr` — function
+- `curl_easy_setopt_char` — function
+- `curl_easy_setopt_funptr` — function
+- `curl_easy_setopt_int` — function
+- `curl_easy_setopt_long` — function
+- `curl_easy_setopt_ptr` — function
+- `curl_easy_strerror` — function
+- `curl_easy_unescape` — function
+- `curl_escape` — function
+- `curl_global_init` — function
+- `curl_mime_encoder` — function
+- `curl_mime_filedata` — function
+- `curl_mime_filename` — function
+- `curl_mime_name` — function
+- `curl_mime_type` — function
+- `curl_slist_append` — function
+- `curl_unescape` — function
+- `curl_version` — function
+- `curl_version_info` — function
+- `cyci_1d` — function
+- `cyci_1d_static` — function
+- `dble2str` — function
+- `dealloc_chash` — subroutine
+- `dealloc_hash` — subroutine
+- `dealloc_imgarr` — subroutine
+- `declare_coarray_jobs_finished` — subroutine
+- `deg2rad_dp` — function
+- `deg2rad_sp` — function
+- `del_files_1` — subroutine
+- `del_files_2` — subroutine
+- `delete` — subroutine
+- `delete` — subroutine
+- `delete_2Dclustering` — subroutine
+- `delete_3Dalignment` — subroutine
+- `delete_entry` — subroutine
+- `destroy_string_list` — subroutine
+- `destroy_vs` — subroutine
+- `destroyDocumentType` — subroutine
+- `destroyDOMConfig` — subroutine
+- `destroyElementOrAttribute` — subroutine
+- `destroyEntityOrNotation` — subroutine
+- `destroyNode` — subroutine
+- `destroyNodeContents` — subroutine
+- `detect_and_add_dirs` — subroutine
+- `detect_peak_thres_1` — subroutine
+- `detect_peak_thres_2` — subroutine
+- `detect_peak_thres_fdr` — subroutine
+- `detect_peak_thres_for_npeaks` — subroutine
+- `dgelsy` — subroutine
+- `dgesvd` — subroutine
+- `dgetrf` — subroutine
+- `dgetri` — subroutine
+- `discrete_read_imgbatch` — subroutine
+- `dispatch_task_to_persistent_worker` — subroutine
+- `dist_eval_fun` — function
+- `dists2order` — function
+- `dists2scores_percen` — subroutine
+- `dmat2smat` — function
+- `dnrm2` — function
+- `double_thresh` — subroutine
+- `dsyev` — subroutine
+- `dynfind` — function
+- `e1get` — function
+- `e1set` — subroutine
+- `e2get` — function
+- `e2set` — subroutine
+- `e3get` — function
+- `e3set` — subroutine
+- `eigh_sp` — subroutine
+- `eigsrt_dp` — subroutine
+- `eigsrt_sp` — subroutine
+- `elim_dup` — subroutine
+- `ellipse` — subroutine
+- `emit_refine3D_stage_cfg` — subroutine
+- `equispaced_vals` — function
+- `estimate_lplim3D` — subroutine
+- `estimate_lplim_1` — subroutine
+- `estimate_lplim_2` — subroutine
+- `estimate_lplims2D` — subroutine
+- `euclid_dp` — function
+- `euclid_sp_1` — function
+- `euclid_sp_2` — function
+- `euldist` — function
+- `eulprob_corr_switch` — function
+- `eulprob_dist_switch` — function
+- `eval_apod` — function
+- `eval_instr` — function
+- `exists` — function
+- `extract_imgarr` — function
+- `extractDataAttNSChArr` — subroutine
+- `extractDataAttNSChMat` — subroutine
+- `extractDataAttNSChSca` — subroutine
+- `extractDataAttNSCmplxDpArr` — subroutine
+- `extractDataAttNSCmplxDpMat` — subroutine
+- `extractDataAttNSCmplxDpSca` — subroutine
+- `extractDataAttNSCmplxSpArr` — subroutine
+- `extractDataAttNSCmplxSpMat` — subroutine
+- `extractDataAttNSCmplxSpSca` — subroutine
+- `extractDataAttNSIntArr` — subroutine
+- `extractDataAttNSIntMat` — subroutine
+- `extractDataAttNSIntSca` — subroutine
+- `extractDataAttNSLgArr` — subroutine
+- `extractDataAttNSLgMat` — subroutine
+- `extractDataAttNSLgSca` — subroutine
+- `extractDataAttNSRealDpArr` — subroutine
+- `extractDataAttNSRealDpMat` — subroutine
+- `extractDataAttNSRealDpSca` — subroutine
+- `extractDataAttNSRealSpArr` — subroutine
+- `extractDataAttNSRealSpMat` — subroutine
+- `extractDataAttNSRealSpSca` — subroutine
+- `extractDataAttributeChArr` — subroutine
+- `extractDataAttributeChMat` — subroutine
+- `extractDataAttributeChSca` — subroutine
+- `extractDataAttributeCmplxDpArr` — subroutine
+- `extractDataAttributeCmplxDpMat` — subroutine
+- `extractDataAttributeCmplxDpSca` — subroutine
+- `extractDataAttributeCmplxSpArr` — subroutine
+- `extractDataAttributeCmplxSpMat` — subroutine
+- `extractDataAttributeCmplxSpSca` — subroutine
+- `extractDataAttributeIntArr` — subroutine
+- `extractDataAttributeIntMat` — subroutine
+- `extractDataAttributeIntSca` — subroutine
+- `extractDataAttributeLgArr` — subroutine
+- `extractDataAttributeLgMat` — subroutine
+- `extractDataAttributeLgSca` — subroutine
+- `extractDataAttributeRealDpArr` — subroutine
+- `extractDataAttributeRealDpMat` — subroutine
+- `extractDataAttributeRealDpSca` — subroutine
+- `extractDataAttributeRealSpArr` — subroutine
+- `extractDataAttributeRealSpMat` — subroutine
+- `extractDataAttributeRealSpSca` — subroutine
+- `extractDataContentChArr` — subroutine
+- `extractDataContentChMat` — subroutine
+- `extractDataContentChSca` — subroutine
+- `extractDataContentCmplxDpArr` — subroutine
+- `extractDataContentCmplxDpMat` — subroutine
+- `extractDataContentCmplxDpSca` — subroutine
+- `extractDataContentCmplxSpArr` — subroutine
+- `extractDataContentCmplxSpMat` — subroutine
+- `extractDataContentCmplxSpSca` — subroutine
+- `extractDataContentIntArr` — subroutine
+- `extractDataContentIntMat` — subroutine
+- `extractDataContentIntSca` — subroutine
+- `extractDataContentLgArr` — subroutine
+- `extractDataContentLgMat` — subroutine
+- `extractDataContentLgSca` — subroutine
+- `extractDataContentRealDpArr` — subroutine
+- `extractDataContentRealDpMat` — subroutine
+- `extractDataContentRealDpSca` — subroutine
+- `extractDataContentRealSpArr` — subroutine
+- `extractDataContentRealSpMat` — subroutine
+- `extractDataContentRealSpSca` — subroutine
+- `fclose` — subroutine
+- `fdim` — function
+- `file2drarr` — function
+- `file2imat` — subroutine
+- `file2lmat` — subroutine
+- `file2rarr` — function
+- `file2rmat` — subroutine
+- `fileiochk` — subroutine
+- `filelength` — function
+- `filepath_1` — function
+- `filepath_2` — function
+- `filepath_3` — function
+- `filepath_4` — function
+- `find_1` — subroutine
+- `find_2` — subroutine
+- `find_closest_proj` — function
+- `find_larger_magic_box` — function
+- `find_magic_box` — function
+- `find_magic_boxes4scale` — function
+- `find_medoids` — subroutine
+- `findloc_str_1` — function
+- `findloc_str_2` — function
+- `fit_lsq_plane` — subroutine
+- `fit_straight_line` — subroutine
+- `fmtsymstr` — function
+- `fname2ext` — function
+- `fname2format` — function
+- `fname_new_ext_1` — function
+- `fname_new_ext_2` — function
+- `fopen` — subroutine
+- `forget_stk_dims` — subroutine
+- `fortran_logical` — function
+- `fortran_quote` — function
+- `fortran_symbol_from_string` — function
+- `fplane_get_cmplx` — function
+- `fplane_get_ctfsq` — function
+- `free_all_cunits` — subroutine
+- `funcs` — function
+- `funcs` — function
+- `funcs` — function
+- `funcs` — function
+- `funit_size` — function
+- `gasdev_2` — function
+- `gasdev_3` — function
+- `gau_rnd_shift` — subroutine
+- `gauwfun` — function
+- `gcd` — function
+- `gemm_tn` — subroutine
+- `gen_c1` — subroutine
+- `gen_job_descr` — subroutine
+- `generate_array_script` — subroutine
+- `generate_script_1` — subroutine
+- `generate_script_2` — subroutine
+- `generate_script_3` — subroutine
+- `generate_script_4` — subroutine
+- `geodesic_dist_trace` — function
+- `get_1` — function
+- `get_2` — function
+- `get_2Dshift` — function
+- `get_3Dshift` — function
+- `get_all_subgrps_descr` — function
+- `get_ctfvars` — function
+- `get_ctfvars` — function
+- `get_euler` — function
+- `get_eullims` — function
+- `get_fbody_1` — function
+- `get_fbody_2` — function
+- `get_find` — function
+- `get_find_at_crit` — function
+- `get_find_at_res` — function
+- `get_fpath` — function
+- `get_jobs_status` — subroutine
+- `get_key` — function
+- `get_key` — function
+- `get_keys` — function
+- `get_keys` — function
+- `get_last_string` — function
+- `get_ldim` — function
+- `get_lfny` — function
+- `get_lhp` — function
+- `get_lp` — function
+- `get_mat` — function
+- `get_normal` — function
+- `get_nsubgrp` — function
+- `get_open_funits` — subroutine
+- `get_pgrp` — function
+- `get_pixel_pos` — subroutine
+- `get_relative_path` — function
+- `get_resarr` — function
+- `get_spat_freq` — function
+- `get_static` — subroutine
+- `get_static` — subroutine
+- `get_str` — function
+- `get_stream_done_stack` — subroutine
+- `get_stream_fail_stack` — subroutine
+- `get_subgrp` — function
+- `get_subgrp_descr` — function
+- `get_sym_rmat` — subroutine
+- `get_symori` — subroutine
+- `get_Whalf` — function
+- `getAttribute_len` — function
+- `getAttributesNS_len` — function
+- `getdata_len` — function
+- `getdocumentURI_len` — function
+- `getevensym` — subroutine
+- `getGCstate` — function
+- `getInputEncoding_len` — function
+- `getInternalSubset_len` — function
+- `getisId_DOM` — function
+- `getLength_characterdata` — function
+- `getLength_nl` — function
+- `getLength_nnm` — function
+- `getLocalName_len` — function
+- `getname_len` — function
+- `getNamespaceURI_len` — function
+- `getnodeName_len` — function
+- `getNodeValue_len` — function
+- `getnotationName_len` — function
+- `getPrefix_len` — function
+- `getpublicId_len` — function
+- `getstringValue_len` — function
+- `getsystemId_len` — function
+- `gettagName_len` — function
+- `getTarget_len` — function
+- `getter_1` — subroutine
+- `getter_1` — subroutine
+- `getter_2` — subroutine
+- `getter_2` — subroutine
+- `getter_3` — subroutine
+- `getter_3` — subroutine
+- `getTextContent_len` — function
+- `getValue_DOM` — function
+- `getXmlEncoding_len` — function
+- `getXmlVersionEnum` — function
+- `great_circle_samples` — function
+- `greedy_sampling_1` — function
+- `greedy_sampling_2` — function
+- `hac_1d` — subroutine
+- `hac_1d_fast` — subroutine
+- `hac_med_thres` — subroutine
+- `haloween_end` — subroutine
+- `hann_apod` — function
+- `hann_instr` — function
+- `hardedge_1` — function
+- `hardedge_2` — function
+- `hardedge_3` — function
+- `hardedge_4` — function
+- `hardedge_inner_1` — function
+- `hardedge_inner_2` — function
+- `hardedge_inner_3` — function
+- `hardedge_inner_4` — function
+- `hardedge_r2_2d` — function
+- `hardedge_r2_3d` — function
+- `has_subgrp` — function
+- `hash2str` — function
+- `hpsort_1` — subroutine
+- `hpsort_2` — subroutine
+- `hpsort_3` — subroutine
+- `hpsort_4` — subroutine
+- `hpsort_5` — subroutine
+- `hpsort_6` — subroutine
+- `image_stack` — type
+- `imat2file` — subroutine
+- `init` — subroutine
+- `init_refine3D_iteration` — subroutine
+- `init_string_list` — subroutine
+- `inplrotdist` — function
+- `insert` — subroutine
+- `instr` — function
+- `int2str` — function
+- `int2str` — function
+- `int2str_pad` — function
+- `irnd` — function
+- `irnd_gasdev` — function
+- `irnd_gau` — function
+- `irnd_pair` — subroutine
+- `irnd_uni` — function
+- `irnd_uni_pair` — function
+- `is` — function
+- `is_even_2` — function
+- `is_particle` — function
+- `isCharData` — function
+- `isthere` — function
+- `isthere` — function
+- `item_nl` — function
+- `item_nnm` — function
+- `jacobi_dp` — subroutine
+- `jacobi_sp` — subroutine
+- `join_imgarrs` — function
 - `kb_apod` — function
 - `kb_instr` — function
+- `kill` — subroutine
+- `kill` — subroutine
+- `kill` — subroutine
+- `kill` — subroutine
 - `kill` — subroutine
 - `kill` — subroutine
 - `kill` — subroutine
@@ -3308,27 +3306,40 @@ Private symbols:
 - `kmlStartPolygon_1d_sp` — subroutine
 - `kmlStartPolygon_2d_dp` — subroutine
 - `kmlStartPolygon_2d_sp` — subroutine
+- `kstwo` — subroutine
+- `lapack_stop` — subroutine
+- `lcg` — function
 - `lex_sort_1` — subroutine
 - `lex_sort_2` — subroutine
 - `lin_apod` — function
 - `lin_instr` — function
 - `list_of_ints2arr` — function
+- `lmat2file` — subroutine
+- `locate_1` — function
+- `locate_2` — function
+- `lookup` — function
 - `lookupNamespaceURI_len` — function
 - `lookupPrefix_len` — function
 - `loop_lims` — function
 - `lowercase` — function
 - `make_c_and_d` — subroutine
+- `make_dirnames` — function
+- `make_filenames` — function
 - `make_i_relion` — subroutine
 - `make_i_spider` — subroutine
 - `make_o` — subroutine
 - `make_t` — subroutine
-- `make_token_group` — function
-- `make_token_group_len` — function
 - `map3dshift22d` — subroutine
 - `map_str_nrs` — function
+- `mask2inds` — function
+- `masked_swap_rm` — subroutine
+- `masked_swap_rs` — subroutine
+- `masked_swap_rv` — subroutine
 - `matcreate` — function
 - `materialize_seed_shift` — subroutine
 - `matextract` — function
+- `matinv_dp` — subroutine
+- `matinv_sp` — subroutine
 - `matrixtocomplexdp` — subroutine
 - `matrixtocomplexsp` — subroutine
 - `matrixtointeger` — subroutine
@@ -3337,140 +3348,133 @@ Private symbols:
 - `matrixtorealsp` — subroutine
 - `matrixtostring` — subroutine
 - `maxheap_sift_down` — subroutine
+- `maxnloc` — function
+- `median` — function
+- `median_nocopy` — function
+- `medoid_from_dmat` — subroutine
+- `medoid_from_smat` — subroutine
+- `medoid_ranking_from_smat` — subroutine
+- `merge_dmats_1` — function
+- `merge_dmats_2` — function
 - `merge_idx` — subroutine
 - `merge_idx` — subroutine
+- `merge_smats` — function
 - `mergesort_idx` — subroutine
 - `mergesort_idx` — subroutine
+- `min3` — function
+- `minnloc` — function
 - `mirror2d` — subroutine
 - `mirror3d` — subroutine
+- `mnomal` — function
+- `mnorm_smp` — function
+- `mode` — subroutine
+- `moment_1` — subroutine
+- `moment_2` — subroutine
+- `moment_3` — subroutine
+- `moment_4` — subroutine
+- `moment_serial` — subroutine
 - `mostOfLineStyle` — subroutine
 - `mostOfPointStyle` — subroutine
-- `my_date_and_time` — function
-- `name_equal` — function
-- `name_strings_equal` — function
+- `move_files2dir` — subroutine
+- `move_files_in_cwd` — subroutine
+- `move_key_to_front_1` — subroutine
+- `move_key_to_front_2` — subroutine
+- `multinomal` — function
+- `myacos_dp` — function
+- `myacos_sp` — function
+- `mycabs` — function
+- `ne_mnomal_iarr` — subroutine
+- `ne_ran_iarr` — subroutine
 - `nearest_proj_neighbors_1` — subroutine
 - `nearest_proj_neighbors_2` — subroutine
 - `nearest_sym_neighbors` — subroutine
+- `neigh_4_3D_1` — subroutine
+- `neigh_4_3D_2` — subroutine
+- `neigh_8_1` — subroutine
+- `neigh_8_2` — subroutine
+- `neigh_8_3` — subroutine
+- `neigh_8_3D_0` — subroutine
+- `neigh_8_3D_1` — subroutine
+- `neigh_8_3D_2` — subroutine
 - `new` — subroutine
 - `new` — subroutine
 - `new` — subroutine
+- `new` — subroutine
+- `new_1` — subroutine
+- `new_1` — subroutine
+- `new_2` — subroutine
+- `new_2` — subroutine
 - `new_fixed_candidate_store` — subroutine
 - `new_ori` — subroutine
 - `new_ragged_candidate_store` — subroutine
+- `nextPow2` — function
+- `nlines` — function
 - `nn_apod` — function
 - `nn_instr` — function
 - `non_max_supp` — subroutine
+- `norm_2_dp` — function
+- `norm_2_sp` — function
+- `norm_corr` — function
+- `norm_corr_8` — function
 - `norm_key` — function
-- `number_of_items` — function
+- `normalize_1` — subroutine
+- `normalize_2` — subroutine
+- `normalize_3` — subroutine
+- `normalize_4` — subroutine
+- `normalize_minmax_1` — subroutine
+- `normalize_minmax_2` — subroutine
+- `normalize_sigm_1` — subroutine
+- `normalize_sigm_2` — subroutine
+- `normalize_sigm_3` — subroutine
 - `ori2chash` — function
 - `ori2json` — subroutine
 - `ori2prec` — subroutine
 - `ori2str` — function
 - `ori_from_rotmat` — subroutine
+- `otsu_1` — subroutine
+- `otsu_2` — subroutine
+- `otsu_3` — subroutine
 - `otsu_img` — subroutine
 - `otsu_robust_fast` — subroutine
-- `output_terminal` — function
 - `outputContourLines` — subroutine
 - `outputContourRegions` — subroutine
+- `p1_lt_p2` — function
 - `pack_imgarr` — function
-- `parameterChArrSh` — subroutine
-- `parameterChArrSi` — subroutine
-- `parameterChMatSh` — subroutine
-- `parameterChMatSi` — subroutine
-- `parameterChSca` — subroutine
-- `parameterCmplxDpArrSh` — subroutine
-- `parameterCmplxDpArrSi` — subroutine
-- `parameterCmplxDpMatSh` — subroutine
-- `parameterCmplxDpMatSi` — subroutine
-- `parameterCmplxDpSca` — subroutine
-- `parameterCmplxSpArrSh` — subroutine
-- `parameterCmplxSpArrSi` — subroutine
-- `parameterCmplxSpMatSh` — subroutine
-- `parameterCmplxSpMatSi` — subroutine
-- `parameterCmplxSpSca` — subroutine
-- `parameterIntArrSh` — subroutine
-- `parameterIntArrSi` — subroutine
-- `parameterIntMatSh` — subroutine
-- `parameterIntMatSi` — subroutine
-- `parameterIntSca` — subroutine
-- `parameterLgArrSh` — subroutine
-- `parameterLgArrSi` — subroutine
-- `parameterLgMatSh` — subroutine
-- `parameterLgMatSi` — subroutine
-- `parameterLgSca` — subroutine
-- `parameterRealDpArrSh` — subroutine
-- `parameterRealDpArrSi` — subroutine
-- `parameterRealDpMatSh` — subroutine
-- `parameterRealDpMatSi` — subroutine
-- `parameterRealDpSca` — subroutine
-- `parameterRealSpArrSh` — subroutine
-- `parameterRealSpArrSi` — subroutine
-- `parameterRealSpMatSh` — subroutine
-- `parameterRealSpMatSi` — subroutine
-- `parameterRealSpSca` — subroutine
-- `parse_array` — subroutine
-- `parse_dtd_attlist` — subroutine
-- `parse_dtd_element` — subroutine
-- `parse_for_chars` — subroutine
-- `parse_number` — subroutine
-- `parse_object` — subroutine
-- `parse_string` — subroutine
-- `parse_value` — subroutine
+- `parse_cmdline` — subroutine
 - `parsestr` — subroutine
-- `plot3d` — subroutine
-- `plot_1` — subroutine
-- `plot_2` — subroutine
-- `plot_3` — subroutine
-- `plot_4` — subroutine
-- `pop_char` — subroutine
-- `pop_elstack` — function
-- `pop_entity_list` — function
+- `partial_shuffle_1` — subroutine
+- `partial_shuffle_2` — subroutine
+- `peakfinder` — function
+- `pearsn_1` — function
+- `pearsn_2` — function
+- `pearsn_3` — function
+- `pearsn_serial` — function
+- `pearsn_serial_8` — function
+- `phase_angle` — function
+- `pixels_dist_1` — function
+- `pixels_dist_2` — function
+- `plane_from_points` — function
+- `power_sampling` — subroutine
 - `pparms2str` — function
 - `prec2ori` — subroutine
+- `prep_part_jobs` — subroutine
 - `prep_rec_observation` — subroutine
+- `prepare_tree_sub_distmat` — subroutine
 - `prepimgbatch` — subroutine
 - `print` — subroutine
-- `print_buffer` — subroutine
-- `print_dict` — subroutine
-- `print_elstack` — subroutine
-- `print_entity_list` — subroutine
+- `print` — subroutine
+- `print_gpu_specs` — subroutine
+- `print_jobs_status` — subroutine
+- `print_key_val_pair_1` — subroutine
+- `print_key_val_pair_2` — subroutine
+- `print_key_val_pairs` — subroutine
+- `print_magic_box_range` — subroutine
 - `print_mat` — subroutine
 - `print_ori` — subroutine
-- `propertyChArrSh` — subroutine
-- `propertyChArrSi` — subroutine
-- `propertyChMatSh` — subroutine
-- `propertyChMatSi` — subroutine
-- `propertyChSca` — subroutine
-- `propertyCmplxDpArrSh` — subroutine
-- `propertyCmplxDpArrSi` — subroutine
-- `propertyCmplxDpMatSh` — subroutine
-- `propertyCmplxDpMatSi` — subroutine
-- `propertyCmplxDpSca` — subroutine
-- `propertyCmplxSpArrSh` — subroutine
-- `propertyCmplxSpArrSi` — subroutine
-- `propertyCmplxSpMatSh` — subroutine
-- `propertyCmplxSpMatSi` — subroutine
-- `propertyCmplxSpSca` — subroutine
-- `propertyIntArrSh` — subroutine
-- `propertyIntArrSi` — subroutine
-- `propertyIntMatSh` — subroutine
-- `propertyIntMatSi` — subroutine
-- `propertyIntSca` — subroutine
-- `propertyLgArrSh` — subroutine
-- `propertyLgArrSi` — subroutine
-- `propertyLgMatSh` — subroutine
-- `propertyLgMatSi` — subroutine
-- `propertyLgSca` — subroutine
-- `propertyRealDpArrSh` — subroutine
-- `propertyRealDpArrSi` — subroutine
-- `propertyRealDpMatSh` — subroutine
-- `propertyRealDpMatSi` — subroutine
-- `propertyRealDpSca` — subroutine
-- `propertyRealSpArrSh` — subroutine
-- `propertyRealSpArrSi` — subroutine
-- `propertyRealSpMatSh` — subroutine
-- `propertyRealSpMatSi` — subroutine
-- `propertyRealSpSca` — subroutine
+- `probks` — function
+- `progress` — subroutine
+- `progress_gfortran` — subroutine
+- `projz` — subroutine
 - `PseudoAttributeArrayCh` — subroutine
 - `PseudoAttributeArrayCmplxDp` — subroutine
 - `PseudoAttributeArrayCmplxSp` — subroutine
@@ -3491,12 +3495,42 @@ Private symbols:
 - `PseudoAttributeScalarLg` — subroutine
 - `PseudoAttributeScalarRealDp` — subroutine
 - `PseudoAttributeScalarRealSp` — subroutine
-- `push_char` — subroutine
-- `push_elstack` — subroutine
+- `push_1` — subroutine
+- `push_1` — subroutine
+- `push_2` — subroutine
+- `push_2` — subroutine
+- `push_3` — subroutine
+- `put_fixed_seed` — subroutine
+- `put_last` — subroutine
 - `putNodesInDocument` — subroutine
+- `pythag_dp` — function
+- `pythag_sp` — function
+- `qr_solve` — subroutine
+- `qsys_cleanup` — subroutine
+- `qsys_declare_part_finished` — subroutine
+- `qsys_watcher_1` — subroutine
+- `qsys_watcher_2` — subroutine
+- `qsys_watcher_diag` — subroutine
+- `quadri` — function
+- `quantize_vec` — subroutine
+- `quantize_vec_serial` — subroutine
+- `r8po_fa` — subroutine
+- `rad2deg_1` — function
+- `rad2deg_2` — function
+- `ran3` — function
+- `ran3arr_1` — subroutine
+- `ran3arr_2` — subroutine
+- `randn_1` — function
+- `randn_2` — function
+- `rank_centroid_weights` — subroutine
+- `rank_exponent_weights` — subroutine
+- `rank_inverse_weights` — subroutine
+- `rank_sum_weights` — subroutine
 - `raw` — function
 - `read` — subroutine
 - `read_cavgs_into_imgarr` — function
+- `read_exit_code` — subroutine
+- `read_filetable` — subroutine
 - `read_imgbatch_1` — subroutine
 - `read_imgbatch_2` — subroutine
 - `read_imgbatch_3` — subroutine
@@ -3508,29 +3542,37 @@ Private symbols:
 - `real_dp_str` — function
 - `real_sp_str` — function
 - `realdp2str` — function
+- `realloc_chash` — subroutine
+- `realloc_hash` — subroutine
 - `realsp2str` — function
 - `refine_peak_thres_sortmeans` — subroutine
 - `registered_string` — function
 - `reject` — subroutine
-- `remove_key_by_index` — subroutine
+- `remove` — subroutine
 - `remove_last_string` — subroutine
 - `remove_node_nl` — subroutine
 - `removeNodesFromDocument` — subroutine
-- `removePrefix` — subroutine
-- `removePrefixedURI` — subroutine
 - `removepunct` — subroutine
 - `removesp` — subroutine
-- `report_declarations` — subroutine
+- `reorder_1` — subroutine
+- `reorder_2` — subroutine
+- `report_phase_completion` — subroutine
+- `resample_sigma2` — subroutine
+- `resang` — function
 - `reset` — subroutine
-- `reset_buffer` — subroutine
-- `reset_dict` — subroutine
-- `reset_elstack` — subroutine
-- `reset_entity_list` — subroutine
+- `reset` — subroutine
 - `reset_pparms` — subroutine
 - `resetParameter` — subroutine
-- `resize_elstack` — subroutine
+- `reverse_drarr` — subroutine
+- `reverse_f` — subroutine
+- `reverse_iarr` — subroutine
+- `reverse_rarr` — subroutine
+- `reverselookup` — function
 - `ring_stats` — subroutine
+- `rm_from_fbody` — function
 - `rm_substr` — subroutine
+- `rmat2file` — subroutine
+- `rnd_4dim_sphere_pnt` — function
 - `rnd_euler_1` — subroutine
 - `rnd_euler_1` — subroutine
 - `rnd_euler_2` — subroutine
@@ -3539,14 +3581,23 @@ Private symbols:
 - `rnd_euler_3` — subroutine
 - `rnd_euler_4` — subroutine
 - `rnd_euler_5` — subroutine
+- `rnd_inds` — function
 - `rnd_inpl` — subroutine
 - `rnd_ori` — subroutine
 - `rnd_shift` — subroutine
+- `robust_normalization` — subroutine
+- `robust_normalize_minmax` — subroutine
+- `robust_scaling` — subroutine
+- `robust_sigma_thres` — function
+- `robust_z_scores` — function
 - `rot_to_asym` — subroutine
 - `rotall_to_asym` — subroutine
+- `rotate_vec` — function
+- `rotmat2d` — subroutine
+- `round2even` — function
+- `round2odd` — function
 - `round_shifts` — subroutine
 - `rpl_substr` — subroutine
-- `run_gnuplot` — subroutine
 - `sample_bounded_dist` — subroutine
 - `sample_likelihood_dist` — subroutine
 - `sample_likelihood_index` — subroutine
@@ -3554,6 +3605,8 @@ Private symbols:
 - `sauron_ori_parser_1` — subroutine
 - `sauron_ori_parser_2` — subroutine
 - `sauvola` — subroutine
+- `savgol` — subroutine
+- `SavitzkyGolay_filter` — subroutine
 - `scalartocomplexdp` — subroutine
 - `scalartocomplexsp` — subroutine
 - `scalartointeger` — subroutine
@@ -3561,8 +3614,22 @@ Private symbols:
 - `scalartorealdp` — subroutine
 - `scalartorealsp` — subroutine
 - `scalartostring` — subroutine
+- `schedule_array_jobs` — subroutine
+- `schedule_jobs` — subroutine
+- `schedule_streaming` — subroutine
+- `scores2order` — function
+- `scores2scores_percen` — subroutine
+- `seed_rnd` — subroutine
+- `seed_rnd_fixed` — subroutine
+- `service_persistent_worker_warmup` — subroutine
+- `set_1` — subroutine
+- `set_1` — subroutine
 - `set_1` — subroutine
 - `set_2` — subroutine
+- `set_2` — subroutine
+- `set_2` — subroutine
+- `set_3` — subroutine
+- `set_3` — subroutine
 - `set_3` — subroutine
 - `set_4` — subroutine
 - `set_5` — subroutine
@@ -3573,12 +3640,10 @@ Private symbols:
 - `set_dfy` — subroutine
 - `set_euler` — subroutine
 - `set_int` — subroutine
-- `set_json_core_in_file` — subroutine
-- `set_localName_by_index_s` — subroutine
-- `set_localName_by_index_vs` — subroutine
-- `set_nsURI_by_index` — subroutine
+- `set_jobs_status` — subroutine
+- `set_offload_device_1` — subroutine
+- `set_offload_device_2` — subroutine
 - `set_ogid` — subroutine
-- `set_prefix_by_index` — subroutine
 - `set_real` — subroutine
 - `set_refine3D_automsk_policy` — subroutine
 - `set_refine3D_backend_policy` — subroutine
@@ -3595,56 +3660,58 @@ Private symbols:
 - `set_state` — subroutine
 - `set_stkind` — subroutine
 - `set_subgrps` — subroutine
-- `setBase` — subroutine
-- `setDeclared` — subroutine
-- `setIsId_by_index` — subroutine
 - `setisId_DOM` — subroutine
 - `setnamespaceURI` — subroutine
 - `setownerDocument` — subroutine
-- `setSpecified` — subroutine
-- `shallow_copy_entity` — function
+- `sgemm` — subroutine
+- `sgesvd` — subroutine
+- `sgetrf` — subroutine
+- `sgetri` — subroutine
+- `shcloc` — function
+- `shell_quote` — function
+- `shft` — subroutine
 - `shift` — subroutine
+- `shuffle_1` — subroutine
+- `shuffle_1` — subroutine
+- `shuffle_2` — subroutine
+- `shuffle_2` — subroutine
 - `sigma_array` — type
+- `simple_copy_file` — subroutine
+- `simple_end` — subroutine
+- `simple_error_check` — subroutine
+- `simple_exception_hard` — subroutine
+- `simple_exception_opt` — subroutine
+- `simple_print_git_version` — subroutine
+- `simple_print_timer` — subroutine
+- `sinc` — function
 - `sinc_apod` — function
 - `sinc_instr` — function
 - `sinhc` — function
-- `size_el` — function
+- `smat2dmat` — function
 - `sniff_folders_SJ` — subroutine
 - `sobel` — subroutine
-- `sortAttrs` — subroutine
+- `sort` — subroutine
+- `sortmeans` — subroutine
 - `spaces` — function
+- `sparse_eigh` — subroutine
+- `spear` — function
 - `split_1` — subroutine
 - `split_2` — subroutine
 - `split_str` — subroutine
+- `squared_sampling` — subroutine
 - `sqwin_1d_1` — subroutine
 - `sqwin_1d_2` — subroutine
 - `sqwin_2d_1` — subroutine
 - `sqwin_2d_2` — subroutine
 - `sqwin_3d_1` — subroutine
 - `sqwin_3d_2` — subroutine
-- `start_prefix_handler` — subroutine
+- `ssaupd` — subroutine
+- `sseupd` — subroutine
+- `ssyev` — subroutine
+- `ssyevr` — subroutine
+- `stage_coarray_jobs` — subroutine
+- `stemname` — function
 - `stk_dims` — subroutine
-- `stmAddChArr` — subroutine
-- `stmAddChMat` — subroutine
-- `stmAddChSca` — subroutine
-- `stmAddCmplxDpArr` — subroutine
-- `stmAddCmplxDpMat` — subroutine
-- `stmAddCmplxDpSca` — subroutine
-- `stmAddCmplxSpArr` — subroutine
-- `stmAddCmplxSpMat` — subroutine
-- `stmAddCmplxSpSca` — subroutine
-- `stmAddIntArr` — subroutine
-- `stmAddIntMat` — subroutine
-- `stmAddIntSca` — subroutine
-- `stmAddLgArr` — subroutine
-- `stmAddLgMat` — subroutine
-- `stmAddLgSca` — subroutine
-- `stmAddRealDpArr` — subroutine
-- `stmAddRealDpMat` — subroutine
-- `stmAddRealDpSca` — subroutine
-- `stmAddRealSpArr` — subroutine
-- `stmAddRealSpMat` — subroutine
-- `stmAddRealSpSca` — subroutine
 - `str2format_1` — subroutine
 - `str2format_2` — subroutine
 - `str2ori` — subroutine
@@ -3736,150 +3803,82 @@ Private symbols:
 - `str_string_array_len` — function
 - `str_string_matrix` — function
 - `str_string_matrix_len` — function
-- `string_to_dble` — function
-- `string_to_int` — function
-- `strip_spaces` — function
+- `string` — type
+- `submit_coarray_jobs` — subroutine
+- `submit_script` — subroutine
+- `submit_scripts` — subroutine
 - `substr_remove` — function
 - `substr_replace` — subroutine
-- `surf_1` — subroutine
-- `surf_2` — subroutine
-- `surf_3` — subroutine
-- `swap_pointers` — subroutine
+- `svbksb_dp` — subroutine
+- `svbksb_sp` — subroutine
+- `svd_multifit_dp` — subroutine
+- `svd_multifit_sp` — subroutine
+- `svdcmp_dp` — subroutine
+- `svdcmp_sp` — subroutine
+- `svdfit_dp` — subroutine
+- `svdfit_sp` — subroutine
+- `swap_c` — subroutine
+- `swap_cm` — subroutine
+- `swap_cv` — subroutine
+- `swap_i` — subroutine
+- `swap_r` — subroutine
+- `swap_rv` — subroutine
+- `swap_suffix_1` — function
+- `swap_suffix_2` — function
 - `swape1e3` — subroutine
 - `sym_dists_1` — subroutine
 - `sym_dists_2` — subroutine
 - `symrandomize` — subroutine
 - `threshold_for_no_peaks` — subroutine
 - `threshold_for_npeaks` — subroutine
-- `to_array` — subroutine
 - `to_char_1` — function
 - `to_char_2` — function
 - `to_cstring` — function
-- `to_double` — subroutine
 - `to_fnv1a_hash64` — function
-- `to_integer` — subroutine
-- `to_logical` — subroutine
 - `to_lower` — function
-- `to_null` — subroutine
-- `to_object` — subroutine
 - `to_static_1` — subroutine
 - `to_static_2` — subroutine
-- `to_string` — subroutine
-- `to_uni` — function
-- `to_uni_vec` — function
 - `tokenize_and_add_strings` — subroutine
 - `tokenize_to_string_list` — function
+- `trace` — function
 - `transfer_2Dparams` — subroutine
 - `transfer_3Dparams` — subroutine
 - `transfmat2inpls` — subroutine
 - `transp` — subroutine
-- `traverse` — subroutine
-- `ucs4_comp_default` — function
-- `ucs4_join_default` — function
-- `ucs4_neq_default` — function
+- `unique` — subroutine
 - `unmemoize_mask_coords` — subroutine
 - `unmemoize_powspec_coords` — subroutine
+- `update_queue` — subroutine
 - `updateNodeLists` — subroutine
+- `updatestack` — subroutine
 - `updateTextContentLength` — subroutine
 - `uppercase` — function
+- `vabs_dp` — function
+- `vabs_sp` — function
+- `vector_angle_norm` — function
+- `vis_2Dinteger_mat` — subroutine
+- `vis_2Dreal_mat` — subroutine
+- `vis_3Dinteger_mat` — subroutine
+- `vis_3Dreal_mat` — subroutine
+- `vox2ang` — function
 - `vs_s_concat` — function
+- `wait_for_closure` — subroutine
 - `watch` — subroutine
 - `watchdirs` — subroutine
 - `which` — function
 - `workout_directory_structure` — subroutine
-- `wrap_json_add_double_by_path` — subroutine
-- `wrap_json_add_double_vec_by_path` — subroutine
-- `wrap_json_add_integer_by_path` — subroutine
-- `wrap_json_add_integer_vec_by_path` — subroutine
-- `wrap_json_add_logical_by_path` — subroutine
-- `wrap_json_add_logical_vec_by_path` — subroutine
-- `wrap_json_add_member_by_path` — subroutine
-- `wrap_json_add_string_by_path` — subroutine
-- `wrap_json_add_string_vec_by_path` — subroutine
-- `wrap_json_create_by_path` — subroutine
-- `wrap_json_file_add_double` — subroutine
-- `wrap_json_file_add_double_vec` — subroutine
-- `wrap_json_file_add_integer` — subroutine
-- `wrap_json_file_add_integer_vec` — subroutine
-- `wrap_json_file_add_logical` — subroutine
-- `wrap_json_file_add_logical_vec` — subroutine
-- `wrap_json_file_add_object` — subroutine
-- `wrap_json_file_add_string` — subroutine
-- `wrap_json_file_add_string_vec` — subroutine
-- `wrap_json_file_get_alloc_string_vec` — subroutine
-- `wrap_json_file_get_double` — subroutine
-- `wrap_json_file_get_double_vec` — subroutine
-- `wrap_json_file_get_integer` — subroutine
-- `wrap_json_file_get_integer_vec` — subroutine
-- `wrap_json_file_get_logical` — subroutine
-- `wrap_json_file_get_logical_vec` — subroutine
-- `wrap_json_file_get_object` — subroutine
-- `wrap_json_file_get_string` — subroutine
-- `wrap_json_file_get_string_vec` — subroutine
-- `wrap_json_file_load_from_string` — subroutine
-- `wrap_json_file_remove` — subroutine
-- `wrap_json_file_rename` — subroutine
-- `wrap_json_file_update_integer` — subroutine
-- `wrap_json_file_update_logical` — subroutine
-- `wrap_json_file_update_real` — subroutine
-- `wrap_json_file_update_string` — subroutine
-- `wrap_json_file_valid_path` — function
-- `wrap_json_file_valid_path_op` — function
-- `wrap_json_file_variable_info` — subroutine
-- `wrap_json_file_variable_matrix_info` — subroutine
-- `wrap_json_get_alloc_string_vec_by_path` — subroutine
-- `wrap_json_get_array_by_path` — subroutine
-- `wrap_json_get_by_path` — subroutine
-- `wrap_json_get_double_by_path` — subroutine
-- `wrap_json_get_double_vec_by_path` — subroutine
-- `wrap_json_get_integer_by_path` — subroutine
-- `wrap_json_get_integer_vec_by_path` — subroutine
-- `wrap_json_get_logical_by_path` — subroutine
-- `wrap_json_get_logical_vec_by_path` — subroutine
-- `wrap_json_get_path` — subroutine
-- `wrap_json_get_string_by_path` — subroutine
-- `wrap_json_get_string_vec_by_path` — subroutine
-- `wrap_json_info_by_path` — subroutine
-- `wrap_json_matrix_info_by_path` — subroutine
-- `wrap_json_parse_string` — subroutine
-- `wrap_json_rename_by_path` — subroutine
-- `wrap_json_throw_exception` — subroutine
-- `wrap_json_update_double` — subroutine
-- `wrap_json_update_integer` — subroutine
-- `wrap_json_update_logical` — subroutine
-- `wrap_json_update_string` — subroutine
-- `wrap_json_valid_path` — function
-- `wrap_json_value_add_double` — subroutine
-- `wrap_json_value_add_double_vec` — subroutine
-- `wrap_json_value_add_integer` — subroutine
-- `wrap_json_value_add_integer_vec` — subroutine
-- `wrap_json_value_add_logical` — subroutine
-- `wrap_json_value_add_logical_vec` — subroutine
-- `wrap_json_value_add_null` — subroutine
-- `wrap_json_value_add_string` — subroutine
-- `wrap_json_value_add_string_vec` — subroutine
-- `wrap_json_value_create_array` — subroutine
-- `wrap_json_value_create_double` — subroutine
-- `wrap_json_value_create_integer` — subroutine
-- `wrap_json_value_create_logical` — subroutine
-- `wrap_json_value_create_null` — subroutine
-- `wrap_json_value_create_object` — subroutine
-- `wrap_json_value_create_string` — subroutine
-- `wrap_json_value_get_child_by_name` — subroutine
-- `wrap_json_value_remove_if_present` — subroutine
-- `wrap_json_value_rename` — subroutine
 - `write` — subroutine
 - `write2bild` — subroutine
 - `write_attributes` — subroutine
 - `write_checkpoint` — subroutine
+- `write_filetable` — subroutine
 - `write_imgarr_1` — subroutine
 - `write_imgarr_2` — subroutine
 - `write_imgarr_3` — subroutine
-- `write_it` — subroutine
-- `write_it_fast` — subroutine
 - `write_junk_cavgs` — subroutine
 - `write_seed_shift_table` — subroutine
 - `write_selected_cavgs` — subroutine
+- `write_singlelineoftext` — subroutine
 - `writeline` — subroutine
 - `wxml_error_xf` — subroutine
 - `wxml_fatal_xf` — subroutine
@@ -3912,6 +3911,7 @@ Private symbols:
 - `xmlf_opentag` — function
 - `xmlf_opentag_len` — function
 - `xmlf_SetPretty_print` — subroutine
+- `z_scores` — function
 
 ---
 ## Module: pure
@@ -4941,6 +4941,58 @@ Private symbols:
 - `test_promoted_feature` — subroutine
 
 ---
+## Module: simple_cavg_quality_selection
+
+Files:
+- `main/cavg_quality/simple_cavg_quality_selection.f90`
+
+Uses:
+- `simple_cavg_quality_analysis`
+- `simple_cavg_quality_model`
+- `simple_cavg_quality_types`
+- `simple_cmdline`
+- `simple_defs`
+- `simple_error`
+- `simple_fileio`
+- `simple_image`
+- `simple_imgarr_utils`
+- `simple_parameters`
+- `simple_sp_project`
+- `simple_string`
+
+Public symbols:
+- `score_project_cavgs` — subroutine
+- `write_cavg_selection_stacks` — subroutine
+- `write_cavg_stack` — subroutine
+
+---
+## Module: simple_cavg_quality_selection_tester
+
+Files:
+- `main/cavg_quality/simple_cavg_quality_selection_tester.f90`
+
+Uses:
+- `simple_cavg_quality_selection`
+- `simple_fileio`
+- `simple_image`
+- `simple_imghead`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_cavg_quality_selection_tests` — subroutine
+
+Private symbols:
+- `check_stack` — subroutine
+- `cleanup` — subroutine
+- `make_imgs` — subroutine
+- `stack_names` — subroutine
+- `test_selection_stacks_replace_existing` — subroutine
+- `test_selection_stacks_split_and_order` — subroutine
+
+---
 ## Module: simple_cavg_quality_stats
 
 Files:
@@ -5586,6 +5638,7 @@ Uses:
 - `simple_cavg_quality_learn`
 - `simple_cavg_quality_model`
 - `simple_cavg_quality_relations`
+- `simple_cavg_quality_selection`
 - `simple_cavg_quality_types`
 - `simple_clustering_utils`
 - `simple_commanders_api`
@@ -5623,7 +5676,6 @@ Public symbols:
 - `score_cls3d_state_groups` — subroutine
 - `update_project` — subroutine
 - `write_hard_gate_stack` — subroutine
-- `write_quality_stack` — subroutine
 - `write_ranked_quality_stack` — subroutine
 
 ---
@@ -6673,6 +6725,220 @@ Public symbols:
 - `handle_state_class_selection` — subroutine
 
 ---
+## Module: simple_commanders_stream_p00_master
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p00_master.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_commanders_stream_p01_preprocess`
+- `simple_commanders_stream_p02_assign_optics`
+- `simple_commanders_stream_p03_initial_analysis`
+- `simple_commanders_stream_p04_refpick_extract`
+- `simple_commanders_stream_p05_sieve_cavgs`
+- `simple_commanders_stream_p06_pool2d`
+- `simple_commanders_stream_p07_solve3d_multistate`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_fileio`
+- `simple_gui_assembler`
+- `simple_gui_metadata_utils`
+- `simple_http_post`
+- `simple_memory_monitor`
+- `simple_parameters`
+- `simple_qsys_env`
+- `simple_stream_master_gui_commands`
+- `simple_stream_master_meta_store`
+- `simple_stream_master_stage`
+- `simple_stream_master_stage_ids`
+- `simple_stream_sigterm`
+- `simple_string`
+- `simple_syslib`
+- `simple_timer`
+- `unix`
+
+Public symbols:
+- `commander_stream_p00_master` — type
+
+Private symbols:
+- `apply_commands` — subroutine
+- `exec_stream_p00_master` — subroutine
+- `lock` — subroutine
+- `log_memory` — subroutine
+- `make_stage_clines` — subroutine
+- `master_shared` — type
+- `metadata_listener` — subroutine
+- `stage_commander` — function
+- `stop_stages` — subroutine
+- `unlock` — subroutine
+- `wait_for_stop` — subroutine
+
+---
+## Module: simple_commanders_stream_p01_preprocess
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p01_preprocess.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_defs_environment`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_jiffys`
+- `simple_stream_sigterm`
+- `simple_stream_stage_preprocess`
+- `simple_string`
+- `simple_string_utils`
+
+Public symbols:
+- `commander_stream_p01_preprocess` — type
+
+Private symbols:
+- `exec_stream_p01_preprocess` — subroutine
+- `set_flipgain` — subroutine
+- `set_preprocess_stream_cline` — subroutine
+
+---
+## Module: simple_commanders_stream_p02_assign_optics
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p02_assign_optics.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_error`
+- `simple_jiffys`
+- `simple_stream_sigterm`
+- `simple_stream_stage_optics`
+
+Public symbols:
+- `commander_stream_p02_assign_optics` — type
+
+Private symbols:
+- `exec_stream_p02_assign_optics` — subroutine
+
+---
+## Module: simple_commanders_stream_p03_initial_analysis
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p03_initial_analysis.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_error`
+- `simple_jiffys`
+- `simple_stream_sigterm`
+- `simple_stream_stage_initial_analysis`
+
+Public symbols:
+- `commander_stream_p03_initial_analysis` — type
+
+Private symbols:
+- `exec_stream_p03_initial_analysis` — subroutine
+- `set_initial_analysis_cline` — subroutine
+
+---
+## Module: simple_commanders_stream_p04_refpick_extract
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p04_refpick_extract.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_defs_environment`
+- `simple_error`
+- `simple_jiffys`
+- `simple_stream_sigterm`
+- `simple_stream_stage_refpick`
+- `simple_string_utils`
+
+Public symbols:
+- `commander_stream_p04_refpick_extract` — type
+
+Private symbols:
+- `exec_stream_p04_refpick_extract` — subroutine
+- `set_refpick_cline` — subroutine
+
+---
+## Module: simple_commanders_stream_p05_sieve_cavgs
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p05_sieve_cavgs.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_jiffys`
+- `simple_ptcl_sieve`
+- `simple_stream_sigterm`
+- `simple_stream_stage_sieve`
+
+Public symbols:
+- `commander_stream_p05_sieve_cavgs` — type
+
+Private symbols:
+- `exec_stream_p05_sieve_cavgs` — subroutine
+- `set_sieve_cline` — subroutine
+
+---
+## Module: simple_commanders_stream_p06_pool2D
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p06_pool2D.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_jiffys`
+- `simple_stream_sigterm`
+- `simple_stream_stage_pool2d`
+
+Public symbols:
+- `commander_stream_p06_pool2D` — type
+
+Private symbols:
+- `exec_stream_p06_pool2D` — subroutine
+- `set_pool2D_cline` — subroutine
+
+---
+## Module: simple_commanders_stream_p07_solve3D_multistate
+
+Files:
+- `main/commanders/stream/simple_commanders_stream_p07_solve3D_multistate.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_jiffys`
+- `simple_stream_sigterm`
+- `simple_stream_stage_solve3d`
+
+Public symbols:
+- `commander_stream_p07_solve3D_multistate` — type
+
+Private symbols:
+- `exec_stream_p07_solve3D_multistate` — subroutine
+- `set_solve3D_cline` — subroutine
+
+---
 ## Module: simple_commanders_test_class
 
 Files:
@@ -6759,12 +7025,24 @@ Uses:
 - `simple_srch_sort_loc_tester`
 - `simple_stack_io_tester`
 - `simple_starfile_tester`
+- `simple_starproject_stream_tester`
 - `simple_starproject_tester`
 - `simple_stat_tester`
 - `simple_strategy3d_cont_1jyx_tester`
 - `simple_strategy3d_cont_tester`
 - `simple_strategy3d_inplane_tester`
+- `simple_stream_job_sets_tester`
+- `simple_stream_master_tester`
+- `simple_stream_pipe_tester`
+- `simple_stream_stage_initial_analysis_tester`
+- `simple_stream_stage_optics_tester`
+- `simple_stream_stage_pool2d_tester`
+- `simple_stream_stage_preprocess_tester`
+- `simple_stream_stage_refpick_tester`
+- `simple_stream_stage_sieve_tester`
+- `simple_stream_stage_solve3d_tester`
 - `simple_stream_tester`
+- `simple_stream_watcher_tester`
 - `simple_string_tester`
 - `simple_sym_tester`
 - `simple_syslib_tester`
@@ -6798,6 +7076,7 @@ Public symbols:
 - `commander_test_unit_project` — type
 - `commander_test_unit_reconstruction` — type
 - `commander_test_unit_single` — type
+- `commander_test_unit_stream` — type
 - `commander_test_unit_ui` — type
 - `commander_test_units` — type
 - `exec_test_forked_process` — subroutine
@@ -6819,6 +7098,7 @@ Public symbols:
 - `exec_test_unit_project` — subroutine
 - `exec_test_unit_reconstruction` — subroutine
 - `exec_test_unit_single` — subroutine
+- `exec_test_unit_stream` — subroutine
 - `exec_test_unit_ui` — subroutine
 - `exec_test_units` — subroutine
 - `no_arg_test` — subroutine
@@ -6842,6 +7122,7 @@ Public symbols:
 - `suites_project` — subroutine
 - `suites_reconstruction` — subroutine
 - `suites_single` — subroutine
+- `suites_stream` — subroutine
 - `suites_ui` — subroutine
 - `test_euler_shift` — subroutine
 - `unit_suite` — type
@@ -6996,9 +7277,9 @@ Files:
 Uses:
 - `simple_commanders_api`
 - `simple_commanders_sim`
+- `simple_commanders_stream_p01_preprocess`
 - `simple_oris`
 - `simple_starfile_wrappers`
-- `simple_stream_p01_preprocess_new`
 - `simple_ui`
 
 Public symbols:
@@ -9901,8 +10182,11 @@ Files:
 - `utils/simple_forked_process_tester.f90`
 
 Uses:
+- `simple_cmdline`
 - `simple_forked_process`
+- `simple_memory_monitor`
 - `simple_string`
+- `simple_string_utils`
 - `simple_syslib`
 - `simple_test_utils`
 - `unix`
@@ -9913,6 +10197,7 @@ Public symbols:
 Private symbols:
 - `test_destroy` — subroutine
 - `test_fail_timestamps` — subroutine
+- `test_fork_with_running_monitor` — subroutine
 - `test_kill` — subroutine
 - `test_logfile_redirection` — subroutine
 - `test_restart` — subroutine
@@ -10518,7 +10803,6 @@ Uses:
 - `simple_gui_utils`
 - `simple_image`
 - `simple_imghead`
-- `simple_linalg`
 - `simple_math`
 - `simple_math_ft`
 - `simple_motion_gain_helpers`
@@ -10775,7 +11059,6 @@ Private symbols:
 - `get_astigmatism_update` — function
 - `get_ctfres_update` — function
 - `get_icescore_update` — function
-- `get_increase_nmics` — function
 - `get_mskdiam2D_update` — function
 - `get_pickrefs_cycle` — function
 - `get_pickrefs_selection` — function
@@ -10787,13 +11070,11 @@ Private symbols:
 - `set_astigmatism_update` — subroutine
 - `set_ctfres_update` — subroutine
 - `set_icescore_update` — subroutine
-- `set_increase_nmics` — subroutine
 - `set_mskdiam2D_update` — subroutine
 - `set_pickrefs_cycle` — subroutine
 - `set_pickrefs_selection` — subroutine
 - `set_pickrefs_selection_length` — subroutine
 - `set_sieverefs_selection` — subroutine
-- `set_sieverefs_selection_length` — subroutine
 - `set_snapshot2D_update` — subroutine
 
 ---
@@ -10913,6 +11194,8 @@ Uses:
 - `simple_gui_metadata_base`
 - `simple_gui_metadata_cavg2d`
 - `simple_gui_metadata_types`
+- `simple_linalg`
+- `simple_oris`
 - `simple_string`
 
 Public symbols:
@@ -10926,10 +11209,12 @@ Private symbols:
 - `get_oridist` — function
 - `get_state` — function
 - `jsonise_override` — function
+- `serialise_override` — subroutine
 - `set` — subroutine
 - `set_fsc` — subroutine
 - `set_minmax` — subroutine
 - `set_oridist` — subroutine
+- `set_oridist_from_oris` — subroutine
 - `set_reprojtiles` — subroutine
 
 ---
@@ -12316,6 +12601,86 @@ Private symbols:
 - `start_monitor` — subroutine
 
 ---
+## Module: simple_mic_import
+
+Files:
+- `main/stream/shared/simple_mic_import.f90`
+
+Uses:
+- `simple_oris`
+- `simple_sp_project`
+- `simple_string`
+
+Public symbols:
+- `append_mics_from_projects` — subroutine
+
+---
+## Module: simple_mic_import_tester
+
+Files:
+- `main/stream/shared/simple_mic_import_tester.f90`
+
+Uses:
+- `simple_fileio`
+- `simple_mic_import`
+- `simple_oris`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_mic_import_tests` — subroutine
+
+Private symbols:
+- `delete_fixtures` — subroutine
+- `test_append_accepted_only` — subroutine
+- `test_append_all_in_file_order` — subroutine
+- `test_append_to_existing_and_empty_list` — subroutine
+- `write_fixtures` — subroutine
+
+---
+## Module: simple_mic_selection
+
+Files:
+- `main/stream/shared/simple_mic_selection.f90`
+
+Uses:
+- `simple_fileio`
+- `simple_oris`
+- `simple_string`
+
+Public symbols:
+- `reject_mics_by_thresholds` — subroutine
+- `reject_mics_without_particles` — subroutine
+
+---
+## Module: simple_mic_selection_tester
+
+Files:
+- `main/stream/shared/simple_mic_selection_tester.f90`
+
+Uses:
+- `simple_fileio`
+- `simple_mic_selection`
+- `simple_oris`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_mic_selection_tests` — subroutine
+
+Private symbols:
+- `make_mics` — subroutine
+- `test_absent_thresholds_and_missing_keys` — subroutine
+- `test_each_threshold_rejects` — subroutine
+- `test_reject_mics_without_particles` — subroutine
+- `test_rejected_mics_stay_rejected_and_uncounted` — subroutine
+
+---
 ## Module: simple_micproc
 
 Files:
@@ -12389,13 +12754,10 @@ Uses:
 - `simple_nrtxtfile`
 - `simple_parameters`
 - `simple_picksegdiam`
+- `simple_segdiam_bin_picker`
 - `simple_sp_project`
 
 Public symbols:
-- `ensure_real_capacity` — subroutine
-- `ensure_real_capacity` — subroutine
-- `print_diam_stats` — subroutine
-- `print_diam_stats` — subroutine
 - `segdiampick_mics` — subroutine
 - `segdiampick_mics_multi` — subroutine
 - `segdiampick_mics_multi_fixed_bins` — subroutine
@@ -12626,6 +12988,7 @@ Private symbols:
 - `analyze_if_due` — subroutine
 - `analyzer_kill` — subroutine
 - `analyzer_new` — subroutine
+- `get_flip_mode` — function
 
 ---
 ## Module: simple_motion_gain_helpers
@@ -12639,9 +13002,11 @@ Uses:
 - `simple_image`
 
 Public symbols:
+- `add_movies_to_gain_sum` — subroutine
 - `gainref_to_jpg` — subroutine
 - `normalized_inverse_average_intensity` — subroutine
 - `read_movies_and_sum_frames` — subroutine
+- `write_gain_from_sum` — subroutine
 
 ---
 ## Module: simple_motion_gain_tester
@@ -12663,9 +13028,12 @@ Private symbols:
 - `create_constant_image` — subroutine
 - `create_gainref` — subroutine
 - `create_movie_stack` — subroutine
+- `test_add_movies_to_gain_sum_accumulates` — subroutine
 - `test_gain_flip_analyzer_batch_updates` — subroutine
+- `test_gain_flip_mode_mapping` — subroutine
 - `test_normalized_inverse_average_intensity` — subroutine
 - `test_read_movies_and_sum_frames_counts` — subroutine
+- `test_write_gain_from_sum` — subroutine
 
 ---
 ## Module: simple_motion_model
@@ -13355,6 +13723,96 @@ Private symbols:
 - `test_lbfgsb_rosenbrock` — subroutine
 - `test_simplex_quadratic` — subroutine
 - `test_spec_bookkeeping` — subroutine
+
+---
+## Module: simple_optics_groups
+
+Files:
+- `main/stream/shared/simple_optics_groups.f90`
+
+Uses:
+- `simple_defs`
+- `simple_math`
+- `simple_ori`
+- `simple_sp_project`
+- `simple_starproject_utils`
+- `simple_string_utils`
+
+Public symbols:
+- `assign_optics_groups` — subroutine
+
+---
+## Module: simple_optics_groups_tester
+
+Files:
+- `main/stream/shared/simple_optics_groups_tester.f90`
+
+Uses:
+- `simple_optics_groups`
+- `simple_sp_project`
+- `simple_string`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_optics_groups_tests` — subroutine
+
+Private symbols:
+- `check_two_groups` — subroutine
+- `make_mics` — subroutine
+- `test_ctf_constants_from_first_accepted` — subroutine
+- `test_group_offset` — subroutine
+- `test_two_shift_clusters_with_beamtilt` — subroutine
+- `test_two_shift_clusters_without_beamtilt` — subroutine
+
+---
+## Module: simple_optics_maps
+
+Files:
+- `main/stream/shared/simple_optics_maps.f90`
+
+Uses:
+- `simple_defs_fname`
+- `simple_fileio`
+- `simple_sp_project`
+- `simple_stream_utils`
+- `simple_string`
+- `simple_string_utils`
+
+Public symbols:
+- `copy_project_with_optics_map` — subroutine
+- `import_latest_optics_map` — function
+- `latest_optics_map_id` — function
+- `publish_optics_map` — subroutine
+
+Private symbols:
+- `map_prefix` — function
+
+---
+## Module: simple_optics_maps_tester
+
+Files:
+- `main/stream/shared/simple_optics_maps_tester.f90`
+
+Uses:
+- `simple_defs_fname`
+- `simple_fileio`
+- `simple_optics_maps`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_optics_maps_tests` — subroutine
+
+Private symbols:
+- `make_grouped_mics` — subroutine
+- `new_test_dir` — function
+- `test_copy_with_optics_map` — subroutine
+- `test_empty_directory` — subroutine
+- `test_import_latest` — subroutine
+- `test_publish_keeps_newest` — subroutine
 
 ---
 ## Module: simple_optimizer
@@ -14820,15 +15278,16 @@ Files:
 - `main/sieve/simple_ptcl_sieve.f90`
 
 Uses:
-- `simple_cavg_quality_analysis`
 - `simple_cavg_quality_feats`
 - `simple_cavg_quality_helpers`
 - `simple_cavg_quality_model`
+- `simple_cavg_quality_selection`
 - `simple_cavg_quality_types`
 - `simple_class_compatibility`
 - `simple_cmdline`
 - `simple_commanders_cavgs`
 - `simple_defs`
+- `simple_defs_environment`
 - `simple_defs_fname`
 - `simple_error`
 - `simple_fileio`
@@ -14836,6 +15295,7 @@ Uses:
 - `simple_image`
 - `simple_image_bin`
 - `simple_imgarr_utils`
+- `simple_optics_maps`
 - `simple_parameters`
 - `simple_projfile_utils`
 - `simple_qsys_env`
@@ -14867,6 +15327,7 @@ Private symbols:
 - `generate_chunk_fine_cline` — subroutine
 - `generate_chunks_coarse` — subroutine
 - `generate_chunks_fine` — subroutine
+- `hand_off` — subroutine
 - `import_existing_chunks_coarse` — subroutine
 - `import_existing_chunks_fine` — subroutine
 - `kill` — subroutine
@@ -14893,6 +15354,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_defs_fname`
 - `simple_image`
+- `simple_optics_maps`
 - `simple_parameters`
 - `simple_ptcl_sieve`
 - `simple_rec_list`
@@ -14906,12 +15368,16 @@ Public symbols:
 Private symbols:
 - `init_test_params` — subroutine
 - `make_chunk_project` — subroutine
+- `make_completed_coarse_chunk` — subroutine
 - `setup_workspace` — subroutine
 - `teardown_workspace` — subroutine
 - `test_collect_and_reject_hard_gates` — subroutine
 - `test_cycle_empty_project_list` — subroutine
 - `test_finished_semantics` — subroutine
+- `test_hand_off_applies_optics_map` — subroutine
 - `test_import_existing_chunks_and_counts` — subroutine
+- `test_import_restores_final_ingestion_chunk` — subroutine
+- `test_lpstart_given_or_derived` — subroutine
 - `test_new_accepts_tuning_overrides` — subroutine
 - `test_new_kill_and_empty_queries` — subroutine
 - `test_single_pass_ignores_incomplete_fine` — subroutine
@@ -14934,6 +15400,29 @@ Uses:
 
 Public symbols:
 - `generate_sieve_projects` — subroutine
+
+---
+## Module: simple_qsys_async_job
+
+Files:
+- `utils/qsys/simple_qsys_async_job.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs`
+- `simple_fileio`
+- `simple_qsys_env`
+- `simple_string`
+- `simple_syslib`
+
+Public symbols:
+- `qsys_async_job` — type
+
+Private symbols:
+- `get_dir` — function
+- `get_log` — function
+- `kill` — subroutine
+- `start` — subroutine
 
 ---
 ## Module: simple_qsys_base
@@ -16009,6 +16498,32 @@ Uses:
 - `simple_string_utils`
 
 ---
+## Module: simple_segdiam_bin_picker
+
+Files:
+- `main/pick/simple_segdiam_bin_picker.f90`
+
+Uses:
+- `simple_core_module_api`
+- `simple_gui_utils`
+- `simple_image`
+- `simple_micproc`
+- `simple_nrtxtfile`
+- `simple_picksegdiam`
+- `simple_sp_project`
+
+Public symbols:
+- `segdiam_bin_picker` — type
+
+Private symbols:
+- `ensure_real_capacity` — subroutine
+- `get_accepted_bins` — function
+- `kill` — subroutine
+- `new` — subroutine
+- `pick` — subroutine
+- `print_diam_stats` — subroutine
+
+---
 ## Module: simple_segmentation
 
 Files:
@@ -16919,7 +17434,6 @@ Private symbols:
 - `get_relative_path_here` — function
 - `get_relative_path_here` — function
 - `get_relative_path_here` — function
-- `get_relative_path_here` — function
 - `h_clust` — subroutine
 - `starfile_deinit` — subroutine
 - `starfile_init` — subroutine
@@ -16927,16 +17441,39 @@ Private symbols:
 - `starfile_set_micrographs_table` — subroutine
 - `starfile_set_optics_group_table` — subroutine
 - `starfile_set_optics_table` — subroutine
-- `starfile_set_particles2D_subtable` — subroutine
 - `starfile_set_particles2D_table` — subroutine
 - `starfile_set_pick_diameters_table` — subroutine
 - `starfile_write_table` — subroutine
-- `starpart` — type
 - `stream_export_micrographs` — subroutine
 - `stream_export_optics` — subroutine
 - `stream_export_particles_2D` — subroutine
 - `stream_export_pick_diameters` — subroutine
 - `stream_export_picking_references` — subroutine
+- `stream_write_optics` — subroutine
+
+---
+## Module: simple_starproject_stream_tester
+
+Files:
+- `main/star/simple_starproject_stream_tester.f90`
+
+Uses:
+- `simple_fileio`
+- `simple_parameters`
+- `simple_sp_project`
+- `simple_starproject_stream`
+- `simple_string`
+- `simple_string_utils`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_starproject_stream_tests` — subroutine
+
+Private symbols:
+- `field_with` — function
+- `make_two_stack_project` — subroutine
+- `read_particle_rows` — subroutine
+- `test_particles2D_names` — subroutine
 
 ---
 ## Module: simple_starproject_tester
@@ -17961,10 +18498,9 @@ Public symbols:
 ## Module: simple_stream2D_state
 
 Files:
-- `main/stream/simple_stream2D_state.f90`
+- `main/stream/pool2D/simple_stream2D_state.f90`
 
 Uses:
-- `json_module`
 - `simple_cmdline`
 - `simple_core_module_api`
 - `simple_qsys_env`
@@ -18011,7 +18547,7 @@ Uses:
 ## Module: simple_stream_chunk
 
 Files:
-- `main/stream/simple_stream_chunk.f90`
+- `main/stream/pool2D/simple_stream_chunk.f90`
 
 Uses:
 - `simple_cmdline`
@@ -18045,7 +18581,7 @@ Private symbols:
 ## Module: simple_stream_chunk2D_utils
 
 Files:
-- `main/stream/simple_stream_chunk2D_utils.f90`
+- `main/stream/pool2D/simple_stream_chunk2D_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -18111,340 +18647,302 @@ Private symbols:
 - `update_json_4` — subroutine
 
 ---
-## Module: simple_stream_p00_master
+## Module: simple_stream_gui_senders
 
 Files:
-- `main/stream/simple_stream_p00_master.f90`
+- `main/stream/shared/simple_stream_gui_senders.f90`
 
 Uses:
-- `simple_forked_process`
+- `simple_defs`
+- `simple_fileio`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_micrograph`
+- `simple_nrtxtfile`
+- `simple_oris`
+- `simple_stream_pipe`
+- `simple_string`
+
+Public symbols:
+- `send_cavgs` — subroutine
+- `send_recent_micrographs` — subroutine
+- `send_reproj_tiles` — subroutine
+
+---
+## Module: simple_stream_job_sets
+
+Files:
+- `main/stream/shared/simple_stream_job_sets.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_fileio`
+- `simple_qsys_env`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+
+Public symbols:
+- `stream_job_sets` — type
+
+Private symbols:
+- `collect` — subroutine
+- `complete` — subroutine
+- `get_completed_dir` — function
+- `get_job_dir` — function
+- `kill` — subroutine
+- `make_job_dir` — subroutine
+- `new` — subroutine
+- `restore` — subroutine
+- `schedule` — subroutine
+- `submit` — subroutine
+- `write_set` — subroutine
+
+---
+## Module: simple_stream_job_sets_tester
+
+Files:
+- `main/stream/shared/simple_stream_job_sets_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_fileio`
+- `simple_sp_project`
+- `simple_stream_job_sets`
+- `simple_string`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_stream_job_sets_tests` — subroutine
+
+Private symbols:
+- `test_complete` — subroutine
+- `test_new_makes_folders` — subroutine
+- `test_restore` — subroutine
+- `test_write_set` — subroutine
+
+---
+## Module: simple_stream_master_gui_commands
+
+Files:
+- `main/stream/master/simple_stream_master_gui_commands.f90`
+
+Uses:
+- `json_kinds`
+- `json_module`
+- `simple_defs`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_types`
+- `simple_stream_master_stage_ids`
+- `simple_string`
+
+Public symbols:
+- `stream_master_gui_commands` — type
+
+Private symbols:
+- `kill` — subroutine
+- `parse` — function
+- `warn_dropped` — subroutine
+
+---
+## Module: simple_stream_master_meta_store
+
+Files:
+- `main/stream/master/simple_stream_master_meta_store.f90`
+
+Uses:
+- `simple_defs`
+- `simple_error`
 - `simple_gui_assembler`
 - `simple_gui_metadata_api`
-- `simple_gui_metadata_utils`
-- `simple_http_post`
-- `simple_memory_monitor`
-- `simple_stream_api`
-- `simple_stream_p01_preprocess_new`
-- `simple_stream_p02_assign_optics_new`
-- `simple_stream_p03_initial_analysis`
-- `simple_stream_p04_refpick_extract_new`
-- `simple_stream_p05_sieve_cavgs_new`
-- `simple_stream_p06_pool2d_new`
-- `simple_stream_p07_solve3d_multistate`
-- `simple_stream_state`
-- `simple_syslib`
-- `unix`
 
 Public symbols:
-- `stream_p00_master` — type
+- `stream_master_meta_store` — type
 
 Private symbols:
-- `append_pending` — subroutine
-- `assign_optics_fork` — type
-- `close_child_pipe_fds` — subroutine
-- `close_fd_silent` — subroutine
-- `close_pipe_except_fd` — subroutine
-- `drain_and_reset_pipe_state` — subroutine
-- `exec_stream_p00_master` — subroutine
-- `init_cline_assign_optics` — subroutine
-- `init_cline_multistate3D` — subroutine
-- `init_cline_opening2D` — subroutine
-- `init_cline_particle_sieving` — subroutine
-- `init_cline_pool2D` — subroutine
-- `init_cline_preprocess` — subroutine
-- `init_cline_reference_picking` — subroutine
-- `init_ipc_pipe` — subroutine
-- `init_metadata_assign_optics` — subroutine
-- `init_metadata_multistate3D` — subroutine
-- `init_metadata_opening2D` — subroutine
-- `init_metadata_particle_sieving` — subroutine
-- `init_metadata_pool2D` — subroutine
-- `init_metadata_preprocess` — subroutine
-- `init_metadata_reference_picking` — subroutine
-- `initial_analysis_fork` — type
-- `kill_ipc_pipe` — subroutine
-- `log_master_memory_state` — subroutine
-- `metadata_listener` — subroutine
-- `particle_sieving_fork` — type
-- `pool2D_fork` — type
-- `preprocess_fork` — type
-- `reference_picking_fork` — type
-- `safe_destroy_json_ptr` — subroutine
-- `send_framed_to_pipe` — subroutine
-- `send_update_to_stage_pipes` — subroutine
-- `sigint_handler` — subroutine
-- `sigterm_handler` — subroutine
-- `solve3D_multistate_fork` — type
-- `trim_pending_capacity` — subroutine
-- `try_extract_framed_message` — subroutine
-- `try_read_from_fd` — subroutine
-- `wait_for_fork_termination` — subroutine
-- `xassign_optics` — subroutine
-- `xinitial_analysis` — subroutine
-- `xparticle_sieving` — subroutine
-- `xpool2D` — subroutine
-- `xpreprocess` — subroutine
-- `xreference_picking` — subroutine
-- `xsolve3D_multistate` — subroutine
+- `assemble` — subroutine
+- `kill` — subroutine
+- `log_state` — subroutine
+- `new` — subroutine
+- `place_cavg2D` — subroutine
+- `place_micrograph` — subroutine
+- `place_optics_group` — subroutine
+- `place_vol3D` — subroutine
+- `store` — subroutine
 
 ---
-## Module: simple_stream_p01_preprocess_new
+## Module: simple_stream_master_stage
 
 Files:
-- `main/stream/simple_stream_p01_preprocess_new.f90`
+- `main/stream/master/simple_stream_master_stage.f90`
 
 Uses:
-- `simple_gui_metadata_api`
-- `simple_gui_metadata_utils`
-- `simple_histogram`
-- `simple_image`
-- `simple_motion_correct_utils`
-- `simple_motion_gain_analysis`
-- `simple_motion_gain_helpers`
-- `simple_stream_api`
-- `simple_stream_state`
-- `unix`
-
-Public symbols:
-- `stream_p01_preprocess` — type
-
-Private symbols:
-- `auto_detect_gain_flip` — subroutine
-- `create_movies_set_project` — subroutine
-- `exec_stream_p01_preprocess` — subroutine
-- `generate_gain_from_movies` — subroutine
-- `import_previous_projects` — subroutine
-- `mics_window_stats` — subroutine
-- `send_to_preprocess_in_pipe` — subroutine
-- `set_stat_thresholds` — subroutine
-- `sigterm_handler` — subroutine
-- `test_stat_thresholds` — subroutine
-- `update_projects_list` — subroutine
-- `write_mic_star_and_field` — subroutine
-
----
-## Module: simple_stream_p02_assign_optics_new
-
-Files:
-- `main/stream/simple_stream_p02_assign_optics_new.f90`
-
-Uses:
-- `simple_gui_metadata_api`
-- `simple_stream_api`
-- `simple_stream_state`
-- `unix`
-
-Public symbols:
-- `stream_p02_assign_optics` — type
-
-Private symbols:
-- `exec_stream_p02_assign_optics` — subroutine
-- `send_to_assign_optics_in_pipe` — subroutine
-- `sigterm_handler` — subroutine
-- `wait_for_stream_folder` — subroutine
-
----
-## Module: simple_stream_p03_initial_analysis
-
-Files:
-- `main/stream/simple_stream_p03_initial_analysis.f90`
-
-Uses:
-- `simple_cavg_quality_analysis`
-- `simple_cavg_quality_model`
-- `simple_cavg_quality_types`
-- `simple_class_compatibility`
-- `simple_commanders_cavgs`
-- `simple_commanders_denoise`
-- `simple_commanders_mkcavgs`
-- `simple_commanders_pick`
-- `simple_commanders_reproject`
-- `simple_commanders_sieve`
-- `simple_commanders_solve2d`
-- `simple_commanders_solve3d`
+- `simple_cmdline`
+- `simple_commander_base`
 - `simple_defs`
-- `simple_defs_fname`
+- `simple_error`
+- `simple_forked_process`
+- `simple_stream_master_stage_ids`
+- `simple_stream_pipe`
+- `simple_string`
+
+Public symbols:
+- `stream_master_stage` — type
+- `stream_master_stage_fork` — type
+
+Private symbols:
+- `discard_pipes` — subroutine
+- `execute_stage` — subroutine
+- `force_stop` — subroutine
+- `get_label` — function
+- `kill` — subroutine
+- `new` — subroutine
+- `request_stop` — subroutine
+- `send_update` — subroutine
+- `skip` — subroutine
+- `start` — subroutine
+
+---
+## Module: simple_stream_master_stage_ids
+
+Files:
+- `main/stream/master/simple_stream_master_stage_ids.f90`
+
+Uses:
 - `simple_defs_stream`
-- `simple_fileio`
+- `simple_error`
+- `simple_stream_state`
+- `unix`
+
+Public symbols:
+- `close_other_pipe_ends` — subroutine
+- `close_stage_pipes` — subroutine
+- `master_fds` — subroutine
+- `open_stage_pipes` — subroutine
+- `stage_fds` — subroutine
+- `stage_gui_key` — function
+- `stage_job_name` — function
+- `stage_label` — function
+
+Private symbols:
+- `apply` — subroutine
+- `pipe_op` — subroutine
+- `stage_pipes` — subroutine
+
+---
+## Module: simple_stream_master_tester
+
+Files:
+- `main/stream/master/simple_stream_master_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
 - `simple_gui_metadata_api`
+- `simple_gui_metadata_stream_update`
 - `simple_gui_metadata_utils`
-- `simple_image_bin`
-- `simple_image_msk`
-- `simple_imgarr_utils`
-- `simple_imghead`
-- `simple_mini_stream_utils`
-- `simple_procimgstk`
-- `simple_projfile_utils`
-- `simple_ptcl_sieve`
-- `simple_qsys_env`
-- `simple_solve3d_utils`
-- `simple_stream_api`
-- `simple_stream_state`
-- `unix`
+- `simple_stream_master_gui_commands`
+- `simple_stream_master_meta_store`
+- `simple_stream_master_stage`
+- `simple_stream_master_stage_ids`
+- `simple_stream_pipe`
+- `simple_string`
+- `simple_string_utils`
+- `simple_test_utils`
 
 Public symbols:
-- `stream_p03_initial_analysis` — type
+- `run_all_stream_master_tests` — subroutine
 
 Private symbols:
-- `balance_classes` — subroutine
-- `duplicate_balanced_stack` — subroutine
-- `exec_stream_p03_initial_analysis` — subroutine
-- `find_final_solve3D_cavgs_dir` — subroutine
-- `finish_extract` — subroutine
-- `finish_solve2D` — subroutine
-- `finish_solve3D` — subroutine
-- `micimporter` — subroutine
-- `run_cavg_quality_selection` — subroutine
-- `run_cavg_quality_selection_2` — subroutine
-- `run_cavg_size_selection` — subroutine
-- `save_pickrefs_selection` — subroutine
-- `send_available_cavgs2D` — subroutine
-- `send_cavg2D_meta` — subroutine
-- `send_meta` — subroutine
-- `send_meta2D` — subroutine
-- `send_micrograph_meta` — subroutine
-- `send_micrograph_meta_part` — subroutine
-- `send_pickref_meta` — subroutine
-- `send_selected_pickrefs` — subroutine
-- `send_to_initial_analysis_in_pipe` — subroutine
-- `sigterm_handler` — subroutine
-- `start_extract` — subroutine
-- `start_solve2D` — subroutine
-- `start_solve3D` — subroutine
-- `update_os_out_stk` — subroutine
-- `write_quality_stack` — subroutine
+- `cavg_message` — function
+- `execute_noop` — subroutine
+- `int_list` — function
+- `noop_commander` — type
+- `test_gui_commands` — subroutine
+- `test_gui_commands_fresh_each_answer` — subroutine
+- `test_gui_commands_invalid` — subroutine
+- `test_gui_commands_oversized` — subroutine
+- `test_stage_names` — subroutine
+- `test_stage_pipes` — subroutine
+- `test_store_list` — subroutine
+- `test_store_status` — subroutine
+- `test_store_volume` — subroutine
 
 ---
-## Module: simple_stream_p04_refpick_extract_new
+## Module: simple_stream_meta_plots
 
 Files:
-- `main/stream/simple_stream_p04_refpick_extract_new.f90`
+- `main/stream/shared/simple_stream_meta_plots.f90`
 
 Uses:
-- `simple_commanders_pick`
-- `simple_gui_metadata_api`
-- `simple_ptcl_sieve`
-- `simple_stream_api`
-- `simple_stream_state`
-- `simple_timer`
-- `unix`
+- `simple_gui_metadata_histogram`
+- `simple_gui_metadata_timeplot`
+- `simple_histogram`
+- `simple_oris`
+- `simple_string`
 
 Public symbols:
-- `stream_p04_refpick_extract` — type
-
-Private symbols:
-- `create_individual_project` — subroutine
-- `exec_stream_pick_extract` — subroutine
-- `import_previous_mics` — subroutine
-- `send_cavg2D_meta` — subroutine
-- `send_meta` — subroutine
-- `send_micrograph_meta` — subroutine
-- `send_pickrefs` — subroutine
-- `send_to_refpick_in_pipe` — subroutine
-- `sigterm_handler` — subroutine
-- `update_projects_list` — subroutine
-- `validate_ptcl2D_star_inputs` — subroutine
-- `write_micrographs_starfile` — subroutine
-- `write_project` — subroutine
+- `recent_shifts_by_optics_group` — subroutine
+- `set_histogram_from_oris` — subroutine
+- `set_rate_timeplot` — subroutine
+- `set_timeplot_from_oris` — subroutine
 
 ---
-## Module: simple_stream_p05_sieve_cavgs_new
+## Module: simple_stream_pipe
 
 Files:
-- `main/stream/simple_stream_p05_sieve_cavgs_new.f90`
+- `main/stream/shared/simple_stream_pipe.f90`
 
 Uses:
-- `simple_fileio`
-- `simple_gui_metadata_api`
-- `simple_ptcl_sieve`
-- `simple_stream_api`
-- `simple_stream_pool2d_utils`
-- `simple_stream_state`
+- `simple_error`
+- `simple_gui_metadata_base`
 - `unix`
 
 Public symbols:
-- `stream_p05_sieve_cavgs` — type
+- `stream_pipe` — type
 
 Private symbols:
-- `exec_stream_p05_sieve_cavgs` — subroutine
-- `send_cavg2D_meta` — subroutine
-- `send_cavgs2D_batch` — subroutine
+- `consume` — subroutine
+- `discard` — subroutine
+- `extract_frame` — function
+- `kill` — subroutine
+- `new` — subroutine
+- `receive` — function
+- `send` — subroutine
 - `send_meta` — subroutine
-- `send_to_sieve_cavgs_in_pipe` — subroutine
-- `sigterm_handler` — subroutine
 
 ---
-## Module: simple_stream_p06_pool2D_new
+## Module: simple_stream_pipe_tester
 
 Files:
-- `main/stream/simple_stream_p06_pool2D_new.f90`
+- `main/stream/shared/simple_stream_pipe_tester.f90`
 
 Uses:
-- `simple_gui_metadata_api`
-- `simple_gui_metadata_utils`
-- `simple_stream2d_state`
-- `simple_stream_api`
-- `simple_stream_pool2d_utils`
-- `simple_stream_state`
+- `simple_stream_pipe`
+- `simple_test_utils`
 - `unix`
 
 Public symbols:
-- `stream_p06_pool2D` — type
+- `run_all_stream_pipe_tests` — subroutine
 
 Private symbols:
-- `cleanup4restart` — subroutine
-- `exec_stream_p06_pool2D` — subroutine
-- `import_sets_into_pool` — subroutine
-- `send_cavg2D_meta` — subroutine
-- `send_cavgs2D` — subroutine
-- `send_meta` — subroutine
-- `send_meta_snapshot2D` — subroutine
-- `send_snapshot_cavg2D_meta` — subroutine
-- `send_snapshot_cavgs2D` — subroutine
-- `send_to_pool2D_in_pipe` — subroutine
-- `sigterm_handler` — subroutine
-- `unpause_pool` — subroutine
-
----
-## Module: simple_stream_p07_solve3D_multistate
-
-Files:
-- `main/stream/simple_stream_p07_solve3D_multistate.f90`
-
-Uses:
-- `simple_commanders_cavgs`
-- `simple_gui_metadata_api`
-- `simple_gui_utils`
-- `simple_imghead`
-- `simple_qsys_env`
-- `simple_refine3d_fnames`
-- `simple_stream_api`
-- `simple_stream_state`
-- `unix`
-
-Public symbols:
-- `stream_p07_solve3D_multistate` — type
-
-Private symbols:
-- `build_and_send_vol3D_states` — subroutine
-- `compute_oridist_for_state` — subroutine
-- `exec_stream_p07_solve3D_multistate` — subroutine
-- `finish_solve3D` — subroutine
-- `finish_solve3D_addon` — subroutine
-- `import_sets_into_pool` — subroutine
-- `locate_state_jpeg` — subroutine
-- `send_meta_solve3D_multistate` — subroutine
-- `send_state_reprojtiles` — subroutine
-- `send_to_solve3D_multistate_in_pipe` — subroutine
-- `sigterm_handler` — subroutine
-- `start_solve3D` — subroutine
-- `start_solve3D_addon` — subroutine
+- `close_loopback` — subroutine
+- `open_loopback` — subroutine
+- `test_bad_length_resyncs` — subroutine
+- `test_discard` — subroutine
+- `test_empty_and_closed_ends` — subroutine
+- `test_frame_split_across_writes` — subroutine
+- `test_queued_frames_all_delivered` — subroutine
+- `test_single_frame_round_trip` — subroutine
 
 ---
 ## Module: simple_stream_pool2D_utils
 
 Files:
-- `main/stream/simple_stream_pool2D_utils.f90`
+- `main/stream/pool2D/simple_stream_pool2D_utils.f90`
 
 Uses:
 - `simple_classaverager`
@@ -18479,16 +18977,15 @@ Private symbols:
 ## Module: simple_stream_refine2D_utils
 
 Files:
-- `main/stream/simple_stream_refine2D_utils.f90`
+- `main/stream/pool2D/simple_stream_refine2D_utils.f90`
 
 Uses:
-- `json_kinds`
-- `json_module`
 - `simple_class_frcs`
 - `simple_cmdline`
 - `simple_commanders_refine2d`
 - `simple_core_module_api`
 - `simple_image`
+- `simple_optics_maps`
 - `simple_parameters`
 - `simple_qsys_funs`
 - `simple_rec_list`
@@ -18500,29 +18997,46 @@ Uses:
 - `simple_syslib`
 
 Public symbols:
+- `build_pool_publication` — subroutine
 - `cleanup_root_folder` — subroutine
+- `delete_pool_publication` — subroutine
+- `publish_pool_state` — subroutine
 - `setup_downscaling` — subroutine
 - `terminate_chunks` — subroutine
 - `terminate_stream2D` — subroutine
 - `tidy_2Dstream_iter` — subroutine
-- `update_user_params2D` — subroutine
+- `write_pool_snapshot` — subroutine
 - `write_project_stream2D` — subroutine
 - `write_repick_refs` — subroutine
 
 Private symbols:
 - `apply_snapshot_selection` — subroutine
 - `debug_print` — subroutine
-- `get_latest_optics_map` — subroutine
-- `get_latest_optics_map` — subroutine
-- `get_snapshot_cavgs_meta` — subroutine
 - `log_rss` — subroutine
+- `pool_publication_names` — subroutine
 - `rank_cavgs` — subroutine
 - `rescale_cavgs` — subroutine
 - `rescale_refs` — subroutine
 - `set_dimensions` — subroutine
 - `set_resolution_limits` — subroutine
-- `set_snapshot_time` — subroutine
+- `snapshot_cavgs_meta` — subroutine
 - `write_raw_project` — subroutine
+
+---
+## Module: simple_stream_sigterm
+
+Files:
+- `main/stream/shared/simple_stream_sigterm.f90`
+
+Uses:
+- `unix`
+
+Public symbols:
+- `install_sigterm_handler` — subroutine
+- `restore_sigterm_handler` — subroutine
+
+Private symbols:
+- `on_sigterm` — subroutine
 
 ---
 ## Module: simple_stream_solve2D_chunks
@@ -18542,10 +19056,823 @@ Public symbols:
 - `stream_solve2D_chunks` — type
 
 ---
+## Module: simple_stream_stage_initial_analysis
+
+Files:
+- `main/stream/stages/simple_stream_stage_initial_analysis.f90`
+
+Uses:
+- `simple_cavg_quality_model`
+- `simple_cavg_quality_selection`
+- `simple_cavg_quality_types`
+- `simple_class_compatibility`
+- `simple_cmdline`
+- `simple_commanders_reproject`
+- `simple_core_module_api`
+- `simple_defs_environment`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_micrograph`
+- `simple_gui_metadata_stream_opening2d`
+- `simple_gui_metadata_stream_picking`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_gui_metadata_vol3d`
+- `simple_gui_utils`
+- `simple_image`
+- `simple_image_bin`
+- `simple_imgarr_utils`
+- `simple_imghead`
+- `simple_mic_import`
+- `simple_mic_selection`
+- `simple_parameters`
+- `simple_procimgstk`
+- `simple_ptcl_sieve`
+- `simple_qsys_async_job`
+- `simple_qsys_env`
+- `simple_rec_list`
+- `simple_segdiam_bin_picker`
+- `simple_sp_project`
+- `simple_stream_gui_senders`
+- `simple_stream_pipe`
+- `simple_stream_sigterm`
+- `simple_stream_state`
+- `simple_stream_utils`
+- `simple_stream_watcher`
+
+Public symbols:
+- `stream_stage_initial_analysis` — type
+
+Private symbols:
+- `all_projfile` — function
+- `apply_gui_updates` — subroutine
+- `attach_upstream` — subroutine
+- `balance_classes` — subroutine
+- `collect_extractions` — subroutine
+- `cycle_projfile` — function
+- `duplicate_balanced_stack` — subroutine
+- `finalize` — subroutine
+- `find_final_solve3D_cavgs_dir` — subroutine
+- `finish_extract` — subroutine
+- `finish_solve3D` — subroutine
+- `import_projects` — subroutine
+- `init_gui` — subroutine
+- `init_params` — subroutine
+- `init_queue` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `pick_extract_all` — subroutine
+- `publish_pickrefs` — subroutine
+- `rebuild_init_mics` — subroutine
+- `restore_pickrefs` — subroutine
+- `run_cycle1` — subroutine
+- `run_cycle2` — subroutine
+- `save_pickrefs_selection` — subroutine
+- `select_and_send` — subroutine
+- `select_project_cavgs` — subroutine
+- `send_opening2D_status` — subroutine
+- `send_picking_status` — subroutine
+- `send_pickrefs` — subroutine
+- `start_extract` — subroutine
+- `start_sieve` — subroutine
+- `start_solve2D` — subroutine
+- `start_solve3D` — subroutine
+- `unique_projnames` — function
+- `update_os_out_stk` — subroutine
+
+---
+## Module: simple_stream_stage_initial_analysis_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_initial_analysis_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_stream_picking`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_image`
+- `simple_imghead`
+- `simple_qsys_async_job`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_stage_initial_analysis`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_initial_analysis_tests` — subroutine
+
+Private symbols:
+- `check_stack_size` — subroutine
+- `close_loopback` — subroutine
+- `make_test_stage` — subroutine
+- `make_upstream` — subroutine
+- `open_loopback` — subroutine
+- `set_test_cline` — subroutine
+- `swap_ext` — function
+- `test_attach_upstream_waits` — subroutine
+- `test_balance_classes` — subroutine
+- `test_cycle1_setup_waits` — subroutine
+- `test_find_final_solve3D_dir` — subroutine
+- `test_finished` — subroutine
+- `test_gui_selection_ends_stage` — subroutine
+- `test_import_projects` — subroutine
+- `test_init_params` — subroutine
+- `test_iterate_passes` — subroutine
+- `test_paths` — subroutine
+- `test_published_pickrefs_are_final` — subroutine
+- `test_rebuild_init_mics` — subroutine
+- `test_status_messages` — subroutine
+- `write_cavgs_project` — subroutine
+- `write_class_stack` — subroutine
+- `write_completed_project` — subroutine
+
+---
+## Module: simple_stream_stage_optics
+
+Files:
+- `main/stream/stages/simple_stream_stage_optics.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_optics_group`
+- `simple_gui_metadata_stream_optics_assignment`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_mic_import`
+- `simple_optics_groups`
+- `simple_optics_maps`
+- `simple_parameters`
+- `simple_sp_project`
+- `simple_starproject_stream`
+- `simple_stream_meta_plots`
+- `simple_stream_pipe`
+- `simple_stream_state`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_syslib`
+- `simple_timer`
+
+Public symbols:
+- `stream_stage_optics` — type
+
+Private symbols:
+- `assign_and_publish` — subroutine
+- `attach_upstream` — subroutine
+- `finalize` — subroutine
+- `import_new_projects` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `send_group_shifts` — subroutine
+- `send_status` — subroutine
+
+---
+## Module: simple_stream_stage_optics_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_optics_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_optics_group`
+- `simple_gui_metadata_stream_optics_assignment`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_stage_optics`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_optics_tests` — subroutine
+
+Private symbols:
+- `check_two_groups` — subroutine
+- `close_loopback` — subroutine
+- `make_test_stage` — subroutine
+- `make_upstream` — subroutine
+- `map_file` — function
+- `open_loopback` — subroutine
+- `set_test_cline` — subroutine
+- `test_assign_and_publish` — subroutine
+- `test_attach_upstream_waits` — subroutine
+- `test_beamtilt_from_command_line` — subroutine
+- `test_finished` — subroutine
+- `test_import_new_projects` — subroutine
+- `test_iterate_passes` — subroutine
+- `test_map_ids_continue_after_restart` — subroutine
+- `test_new_starts_empty` — subroutine
+- `test_restart_removes_termination_file` — subroutine
+- `test_send_group_shifts` — subroutine
+- `test_send_status` — subroutine
+- `write_completed_project` — subroutine
+- `write_mic_project` — subroutine
+
+---
+## Module: simple_stream_stage_pool2D
+
+Files:
+- `main/stream/stages/simple_stream_stage_pool2D.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_fileio`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_stream_pool2d`
+- `simple_gui_metadata_stream_pool2d_snapshot`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_parameters`
+- `simple_rec_list`
+- `simple_sp_project`
+- `simple_stream2d_state`
+- `simple_stream_gui_senders`
+- `simple_stream_pipe`
+- `simple_stream_pool2d_utils`
+- `simple_stream_refine2d_utils`
+- `simple_stream_state`
+- `simple_stream_utils`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+
+Public symbols:
+- `stream_stage_pool2D` — type
+
+Private symbols:
+- `apply_final_mskdiam` — subroutine
+- `apply_gui_updates` — subroutine
+- `apply_pause_policy` — subroutine
+- `attach_upstream` — subroutine
+- `clean_previous_run` — subroutine
+- `export_pool_state` — subroutine
+- `finalize` — subroutine
+- `import_sets` — subroutine
+- `init_gui` — subroutine
+- `init_params` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `publication_fname` — function
+- `read_final_mskdiam` — subroutine
+- `restore_export_id` — subroutine
+- `run_iteration` — subroutine
+- `send_pool_cavgs` — subroutine
+- `send_snapshot` — subroutine
+- `send_status` — subroutine
+- `start_pool` — subroutine
+- `transfer_sets` — subroutine
+- `unpause` — subroutine
+- `update_pool_progress` — subroutine
+- `watch_sets` — subroutine
+- `write_snapshot` — subroutine
+
+---
+## Module: simple_stream_stage_pool2D_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_pool2D_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_stream_pool2d`
+- `simple_gui_metadata_stream_pool2d_snapshot`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_refine2d_utils`
+- `simple_stream_stage_pool2d`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_pool2D_tests` — subroutine
+
+Private symbols:
+- `close_loopback` — subroutine
+- `make_test_stage` — subroutine
+- `make_upstream` — subroutine
+- `open_loopback` — subroutine
+- `set_test_cline` — subroutine
+- `test_attach_and_watch` — subroutine
+- `test_export_numbering` — subroutine
+- `test_finished` — subroutine
+- `test_gui_mskdiam_update` — subroutine
+- `test_init_params` — subroutine
+- `test_iterate_waits` — subroutine
+- `test_pause_rules` — subroutine
+- `test_publication_holds_classified_stacks` — subroutine
+- `test_restart_cleans` — subroutine
+- `test_send_snapshot` — subroutine
+- `test_send_status` — subroutine
+- `test_sieve_final_set` — subroutine
+- `test_transfer_sets` — subroutine
+- `test_transfer_stepwise` — subroutine
+- `write_sieved_set` — function
+
+---
+## Module: simple_stream_stage_preprocess
+
+Files:
+- `main/stream/stages/simple_stream_stage_preprocess.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs`
+- `simple_defs_environment`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_fileio`
+- `simple_gui_metadata_histogram`
+- `simple_gui_metadata_micrograph`
+- `simple_gui_metadata_stream_preprocess`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_timeplot`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_image`
+- `simple_mic_import`
+- `simple_mic_selection`
+- `simple_motion_correct_utils`
+- `simple_motion_gain_analysis`
+- `simple_motion_gain_helpers`
+- `simple_oris`
+- `simple_parameters`
+- `simple_qsys_env`
+- `simple_qsys_funs`
+- `simple_sp_project`
+- `simple_starproject_stream`
+- `simple_stream_job_sets`
+- `simple_stream_meta_plots`
+- `simple_stream_pipe`
+- `simple_stream_sigterm`
+- `simple_stream_state`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_syslib`
+- `simple_timer`
+- `simple_type_defs`
+
+Public symbols:
+- `stream_stage_preprocess` — type
+
+Private symbols:
+- `apply_gui_updates` — subroutine
+- `apply_thresholds` — subroutine
+- `build_worker_cline` — subroutine
+- `collect_jobs` — subroutine
+- `create_movies_set_project` — subroutine
+- `detect_gain_flip` — function
+- `finalize` — subroutine
+- `generate_gain_from_movies` — function
+- `idle` — subroutine
+- `import_completed` — subroutine
+- `import_previous_projects` — subroutine
+- `init_gui` — subroutine
+- `init_job_dirs` — subroutine
+- `init_movie_watcher` — subroutine
+- `init_params` — subroutine
+- `init_queue` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `new_movie_watcher` — subroutine
+- `next_movie_batch` — subroutine
+- `process_imports` — subroutine
+- `resolve_gain` — subroutine
+- `resume_previous_run` — subroutine
+- `schedule_jobs` — subroutine
+- `send_plots` — subroutine
+- `send_status` — subroutine
+- `set_threshold` — subroutine
+- `submit_new_movies` — subroutine
+- `write_mic_star_and_field` — subroutine
+
+---
+## Module: simple_stream_stage_preprocess_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_preprocess_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_stream_update`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_image`
+- `simple_oris`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_stage_preprocess`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_preprocess_tests` — subroutine
+
+Private symbols:
+- `close_loopback` — subroutine
+- `make_test_stage` — subroutine
+- `open_loopback` — subroutine
+- `set_mic` — subroutine
+- `set_test_cline` — subroutine
+- `test_apply_gui_updates` — subroutine
+- `test_build_worker_cline` — subroutine
+- `test_create_movies_set_project` — subroutine
+- `test_finished` — subroutine
+- `test_import_completed` — subroutine
+- `test_import_previous_projects` — subroutine
+- `test_init_params_split_mode` — subroutine
+- `test_process_imports` — subroutine
+- `test_resolve_gain_static_flip` — subroutine
+- `test_send_status` — subroutine
+- `write_gainref` — subroutine
+- `write_mic_project` — subroutine
+- `write_movie` — subroutine
+
+---
+## Module: simple_stream_stage_refpick
+
+Files:
+- `main/stream/stages/simple_stream_stage_refpick.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commanders_pick`
+- `simple_defs`
+- `simple_defs_environment`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_fileio`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_micrograph`
+- `simple_gui_metadata_stream_picking`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_gui_utils`
+- `simple_mic_import`
+- `simple_optics_maps`
+- `simple_oris`
+- `simple_parameters`
+- `simple_ptcl_sieve`
+- `simple_qsys_env`
+- `simple_qsys_funs`
+- `simple_sp_project`
+- `simple_starproject_stream`
+- `simple_stream_gui_senders`
+- `simple_stream_job_sets`
+- `simple_stream_pipe`
+- `simple_stream_state`
+- `simple_stream_utils`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_syslib`
+- `simple_timer`
+
+Public symbols:
+- `stream_stage_refpick` — type
+
+Private symbols:
+- `attach_upstream` — subroutine
+- `build_worker_cline` — subroutine
+- `collect_jobs` — subroutine
+- `create_set_project` — subroutine
+- `finalize` — subroutine
+- `idle` — subroutine
+- `import_finished_sets` — subroutine
+- `import_previous_sets` — subroutine
+- `import_sets` — subroutine
+- `init_gui` — subroutine
+- `init_job_dirs` — subroutine
+- `init_params` — subroutine
+- `init_queue` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `prepare_pickrefs` — subroutine
+- `process_imports` — subroutine
+- `reset_dir` — subroutine
+- `resume_previous_run` — subroutine
+- `schedule_jobs` — subroutine
+- `send_status` — subroutine
+- `submit_new_projects` — subroutine
+- `write_mic_star` — subroutine
+- `write_project` — subroutine
+
+---
+## Module: simple_stream_stage_refpick_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_refpick_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_stream_picking`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_optics_maps`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_stage_refpick`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_refpick_tests` — subroutine
+
+Private symbols:
+- `close_loopback` — subroutine
+- `make_extracted_set` — subroutine
+- `make_test_stage` — subroutine
+- `make_upstream` — subroutine
+- `open_loopback` — subroutine
+- `publish_test_optics_map` — subroutine
+- `set_test_cline` — subroutine
+- `test_attach_upstream` — subroutine
+- `test_create_set_project` — subroutine
+- `test_finished` — subroutine
+- `test_import_finished_sets` — subroutine
+- `test_init_params` — subroutine
+- `test_iterate_waits` — subroutine
+- `test_optics_map_applied` — subroutine
+- `test_pickrefs_available` — subroutine
+- `test_restart_clear` — subroutine
+- `test_restart_history` — subroutine
+- `test_send_status` — subroutine
+- `test_without_optics_map` — subroutine
+- `test_write_project` — subroutine
+- `write_upstream_project` — function
+
+---
+## Module: simple_stream_stage_sieve
+
+Files:
+- `main/stream/stages/simple_stream_stage_sieve.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs`
+- `simple_defs_environment`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_fileio`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_stream_particle_sieving`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_oris`
+- `simple_parameters`
+- `simple_ptcl_sieve`
+- `simple_qsys_env`
+- `simple_rec_list`
+- `simple_sp_project`
+- `simple_stream_gui_senders`
+- `simple_stream_pipe`
+- `simple_stream_state`
+- `simple_stream_utils`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_syslib`
+- `simple_timer`
+
+Public symbols:
+- `stream_stage_sieve` — type
+
+Private symbols:
+- `attach_upstream` — subroutine
+- `finalize` — subroutine
+- `import_projects` — subroutine
+- `init_gui` — subroutine
+- `init_params` — subroutine
+- `init_queue` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `new` — subroutine
+- `read_mask_diameter` — subroutine
+- `restore_imports` — subroutine
+- `send_latest_cavgs` — subroutine
+- `send_status` — subroutine
+- `start_sieve` — subroutine
+
+---
+## Module: simple_stream_stage_sieve_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_sieve_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_stream_particle_sieving`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_oris`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_stage_sieve`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_sieve_tests` — subroutine
+
+Private symbols:
+- `close_loopback` — subroutine
+- `make_test_stage` — subroutine
+- `make_upstream` — subroutine
+- `open_loopback` — subroutine
+- `set_test_cline` — subroutine
+- `test_finished` — subroutine
+- `test_import_projects` — subroutine
+- `test_init_params` — subroutine
+- `test_iterate_waits` — subroutine
+- `test_read_mask_diameter` — subroutine
+- `test_restart_removes_term_stream` — subroutine
+- `test_restore_and_attach` — subroutine
+- `test_send_status` — subroutine
+- `test_start_sieve` — subroutine
+- `write_completed_set` — function
+- `write_moldiam` — subroutine
+
+---
+## Module: simple_stream_stage_solve3D
+
+Files:
+- `main/stream/stages/simple_stream_stage_solve3D.f90`
+
+Uses:
+- `simple_cavg_quality_model`
+- `simple_cavg_quality_selection`
+- `simple_cavg_quality_types`
+- `simple_cmdline`
+- `simple_defs`
+- `simple_defs_environment`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_error`
+- `simple_estimate_ssnr`
+- `simple_fileio`
+- `simple_gui_metadata_cavg2d`
+- `simple_gui_metadata_stream_solve3d_multistate`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_gui_metadata_vol3d`
+- `simple_gui_utils`
+- `simple_image`
+- `simple_imgarr_utils`
+- `simple_imghead`
+- `simple_math`
+- `simple_math_ft`
+- `simple_parameters`
+- `simple_qsys_async_job`
+- `simple_qsys_env`
+- `simple_qsys_funs`
+- `simple_rec_list`
+- `simple_refine3d_fnames`
+- `simple_sp_project`
+- `simple_stream_gui_senders`
+- `simple_stream_pipe`
+- `simple_stream_state`
+- `simple_stream_utils`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+
+Public symbols:
+- `stream_stage_solve3D` — type
+
+Private symbols:
+- `advance_jobs` — subroutine
+- `attach_upstream` — subroutine
+- `finalize` — subroutine
+- `finish_run` — subroutine
+- `import_sets` — subroutine
+- `init_gui` — subroutine
+- `init_params` — subroutine
+- `init_queue` — subroutine
+- `iterate` — subroutine
+- `kill` — subroutine
+- `merge_publication` — subroutine
+- `new` — subroutine
+- `read_mskdiam` — subroutine
+- `select_cavgs` — subroutine
+- `send_status` — subroutine
+- `send_volumes` — subroutine
+- `start_addon` — subroutine
+- `start_solve3D` — subroutine
+- `watch_sets` — subroutine
+- `write_stage_project` — subroutine
+
+---
+## Module: simple_stream_stage_solve3D_tester
+
+Files:
+- `main/stream/stages/simple_stream_stage_solve3D_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_defs_fname`
+- `simple_defs_stream`
+- `simple_fileio`
+- `simple_gui_metadata_stream_solve3d_multistate`
+- `simple_gui_metadata_types`
+- `simple_gui_metadata_utils`
+- `simple_gui_metadata_vol3d`
+- `simple_image`
+- `simple_math_ft`
+- `simple_rec_list`
+- `simple_sp_project`
+- `simple_stream_pipe`
+- `simple_stream_stage_solve3d`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `unix`
+
+Public symbols:
+- `run_all_stream_stage_solve3D_tests` — subroutine
+
+Private symbols:
+- `close_loopback` — subroutine
+- `make_set` — subroutine
+- `make_test_stage` — subroutine
+- `open_loopback` — subroutine
+- `set_test_cline` — subroutine
+- `test_finished` — subroutine
+- `test_init_params` — subroutine
+- `test_iterate_waits` — subroutine
+- `test_merge_publications` — subroutine
+- `test_restart_removes_term_stream` — subroutine
+- `test_rules` — subroutine
+- `test_send_status` — subroutine
+- `test_send_volumes` — subroutine
+- `test_watch_order_and_mskdiam` — subroutine
+- `write_export` — subroutine
+
+---
 ## Module: simple_stream_state
 
 Files:
-- `main/stream/simple_stream_state.f90`
+- `main/stream/shared/simple_stream_state.f90`
 
 ---
 ## Module: simple_stream_tester
@@ -18556,10 +19883,10 @@ Files:
 Uses:
 - `simple_cmdline`
 - `simple_commanders_pick`
+- `simple_commanders_stream_p02_assign_optics`
 - `simple_core_module_api`
 - `simple_image`
 - `simple_sp_project`
-- `simple_stream_p02_assign_optics_new`
 - `simple_test_utils`
 
 Public symbols:
@@ -18568,8 +19895,6 @@ Public symbols:
 - `run_all_stream_pickrefs_tests` — subroutine
 
 Private symbols:
-- `enter_fixture` — subroutine
-- `leave_fixture` — subroutine
 - `test_assign_optics_two_shift_clusters` — subroutine
 - `test_make_pickrefs_expansion` — subroutine
 - `test_pick_extract_three_particles` — subroutine
@@ -18618,6 +19943,26 @@ Files:
 Uses:
 - `simple_core_module_api`
 - `simple_progress`
+
+---
+## Module: simple_stream_watcher_tester
+
+Files:
+- `main/stream/simple_stream_watcher_tester.f90`
+
+Uses:
+- `simple_fileio`
+- `simple_stream_watcher`
+- `simple_string`
+- `simple_string_utils`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_stream_watcher_tests` — subroutine
+
+Private symbols:
+- `test_history_growth` — subroutine
+- `test_history_lookup` — subroutine
 
 ---
 ## Module: simple_string
@@ -19029,6 +20374,7 @@ Public symbols:
 - `new_unit_project` — subroutine
 - `new_unit_reconstruction` — subroutine
 - `new_unit_single` — subroutine
+- `new_unit_stream` — subroutine
 - `new_unit_ui` — subroutine
 - `new_units` — subroutine
 
@@ -19065,8 +20411,11 @@ Files:
 
 Uses:
 - `simple_defs`
+- `simple_fileio`
 - `simple_rnd`
 - `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
 
 Public symbols:
 - `assert_char` — subroutine
@@ -19078,6 +20427,8 @@ Public symbols:
 - `assert_true` — subroutine
 - `begin_test_suite` — subroutine
 - `end_test_suite` — subroutine
+- `enter_fixture` — subroutine
+- `leave_fixture` — subroutine
 - `report_summary` — subroutine
 - `reset_test_report` — subroutine
 - `set_fixed_seed` — subroutine
