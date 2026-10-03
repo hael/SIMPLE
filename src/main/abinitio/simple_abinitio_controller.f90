@@ -60,7 +60,7 @@ integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, envfsc
-    type(string) :: balance, filt_mode, automsk, greedy_sampling, prob_neigh_mode
+    type(string) :: balance, partition, filt_mode, automsk, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -610,6 +610,7 @@ contains
             call cline_refine3D%delete('prob_neigh_mode')
         endif
         call cline_refine3D%set('balance',                cfg%balance)
+        call cline_refine3D%set('partition',              cfg%partition)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%delete('lpstart')
